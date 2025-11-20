@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { CheckCircle2, X } from "lucide-react";
@@ -9,9 +10,9 @@ import { PurchaseHeader } from "./_components/PurchaseHeader";
 import { PurchaseStats } from "./_components/PurchaseStats";
 import { PurchaseFilters } from "./_components/PurchaseFilters";
 import { PurchaseTable } from "./_components/PurchaseTable";
-import { PurchaseDialogs } from "./_components/PurchaseDialogs";
 import { Purchase, PurchaseFormData, SortField, SortOrder } from "./types";
 
+// Updated Mock Data with correct fields
 const mockPurchases: Purchase[] = [
   {
     id: "1",
@@ -19,11 +20,13 @@ const mockPurchases: Purchase[] = [
     supplierId: "S1",
     supplierName: "Lanka Builders Pvt Ltd",
     invoiceNo: "INV-2023-001",
-    date: "2023-11-01",
+    purchaseDate: "2023-11-01",
+    billingDate: "2023-11-02",
+    arrivalDate: "2023-11-05",
     status: "Received",
     paymentStatus: "Paid",
     totalAmount: 450000,
-    paidAmount: 450000, // Fully Paid
+    paidAmount: 450000,
     items: [],
   },
   {
@@ -32,11 +35,13 @@ const mockPurchases: Purchase[] = [
     supplierId: "S2",
     supplierName: "Colombo Cement Corp",
     invoiceNo: "CCC-882",
-    date: "2023-11-05",
+    purchaseDate: "2023-11-05",
+    billingDate: "",
+    arrivalDate: "",
     status: "Ordered",
     paymentStatus: "Unpaid",
     totalAmount: 1200000,
-    paidAmount: 0, // Unpaid
+    paidAmount: 0,
     items: [],
   },
   {
@@ -45,34 +50,43 @@ const mockPurchases: Purchase[] = [
     supplierId: "S3",
     supplierName: "Tokyo Cement",
     invoiceNo: "-",
-    date: "2023-11-10",
+    purchaseDate: "2023-11-10",
+    billingDate: "",
+    arrivalDate: "",
     status: "Ordered",
     paymentStatus: "Partial",
     totalAmount: 850000,
-    paidAmount: 400000, // Partially Paid
+    paidAmount: 400000,
     items: [],
   },
 ];
 
 export default function PurchasesPage() {
+  const router = useRouter();
   const [purchases, setPurchases] = useState<Purchase[]>(mockPurchases);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [sortField, setSortField] = useState<SortField>("date");
+  // Fix: Use correct sort field
+  const [sortField, setSortField] = useState<SortField>("purchaseDate");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Dialog States
+  // Dialog States (Only for Edit/Delete now, Create is a page)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(
     null
   );
+
+  // Fix: Updated initial state to match PurchaseFormData type
   const [formData, setFormData] = useState<PurchaseFormData>({
+    supplierId: "",
     supplierName: "",
     invoiceNo: "",
-    date: new Date().toISOString().split("T")[0],
+    purchaseDate: new Date().toISOString().split("T")[0],
+    billingDate: "",
+    arrivalDate: "",
     status: "Ordered",
     paymentStatus: "Unpaid",
     items: [],
@@ -105,7 +119,6 @@ export default function PurchasesPage() {
     const aVal = a[sortField];
     const bVal = b[sortField];
 
-    // Handle potentially undefined values for safety
     if (aVal === undefined || aVal === null) return 1;
     if (bVal === undefined || bVal === null) return -1;
 
@@ -114,32 +127,21 @@ export default function PurchasesPage() {
     return 0;
   });
 
-  const handleSave = () => {
+  // This handleSave is now only used for EDITING via the dialog
+  const handleEditSave = () => {
     if (!formData.supplierName) return alert("Supplier name is required");
 
     if (selectedPurchase) {
-      // Update logic
       setPurchases(
         purchases.map((p) =>
           p.id === selectedPurchase.id ? { ...p, ...formData } : p
         )
       );
       setSuccessMessage("Purchase updated successfully");
-    } else {
-      // Create logic
-      const newPurchase: Purchase = {
-        id: Date.now().toString(),
-        purchaseId: `PO-${1000 + purchases.length + 1}`,
-        supplierId: "TEMP",
-        paidAmount: 0,
-        ...formData,
-      };
-      setPurchases([newPurchase, ...purchases]);
-      setSuccessMessage("Purchase order created");
+      setIsAddDialogOpen(false);
+      setShowSuccessAlert(true);
+      setTimeout(() => setShowSuccessAlert(false), 3000);
     }
-    setIsAddDialogOpen(false);
-    setShowSuccessAlert(true);
-    setTimeout(() => setShowSuccessAlert(false), 3000);
   };
 
   const handleDelete = () => {
@@ -174,17 +176,8 @@ export default function PurchasesPage() {
 
       <PurchaseHeader
         onAddClick={() => {
-          setFormData({
-            supplierName: "",
-            invoiceNo: "",
-            date: new Date().toISOString().split("T")[0],
-            status: "Ordered",
-            paymentStatus: "Unpaid",
-            items: [],
-            totalAmount: 0,
-          });
-          setSelectedPurchase(null);
-          setIsAddDialogOpen(true);
+          // Navigate to the new create page instead of opening dialog
+          router.push("/dashboard/admin/purchases/create");
         }}
         onExportExcel={() => {}}
         onExportPDF={() => {}}
@@ -211,9 +204,12 @@ export default function PurchasesPage() {
             onEdit={(p) => {
               setSelectedPurchase(p);
               setFormData({
+                supplierId: p.supplierId,
                 supplierName: p.supplierName,
                 invoiceNo: p.invoiceNo || "",
-                date: p.date,
+                purchaseDate: p.purchaseDate,
+                billingDate: p.billingDate || "",
+                arrivalDate: p.arrivalDate || "",
                 status: p.status,
                 paymentStatus: p.paymentStatus,
                 items: p.items,
@@ -231,18 +227,6 @@ export default function PurchasesPage() {
           />
         </CardContent>
       </Card>
-
-      <PurchaseDialogs
-        isAddDialogOpen={isAddDialogOpen}
-        setIsAddDialogOpen={setIsAddDialogOpen}
-        formData={formData}
-        setFormData={setFormData}
-        onSave={handleSave}
-        selectedPurchase={selectedPurchase}
-        isDeleteDialogOpen={isDeleteDialogOpen}
-        setIsDeleteDialogOpen={setIsDeleteDialogOpen}
-        onDeleteConfirm={handleDelete}
-      />
     </div>
   );
 }

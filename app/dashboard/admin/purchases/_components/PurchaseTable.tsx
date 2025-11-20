@@ -94,7 +94,8 @@ export function PurchaseTable({
                 const unpaid = purchase.totalAmount - purchase.paidAmount;
                 return (
                   <TableRow key={purchase.id}>
-                    <TableCell>{purchase.date}</TableCell>
+                    {/* Fix: Used purchaseDate instead of date */}
+                    <TableCell>{purchase.purchaseDate}</TableCell>
                     <TableCell>
                       <div className="flex flex-col">
                         <span className="font-medium">

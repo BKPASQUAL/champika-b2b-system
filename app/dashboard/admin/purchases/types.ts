@@ -8,7 +8,9 @@ export interface PurchaseItem {
   productId: string;
   productName: string;
   quantity: number;
+  mrp: number; // Added MRP
   unitCost: number;
+  discount: number; // Added Discount %
   totalCost: number;
 }
 
@@ -18,16 +20,22 @@ export interface Purchase {
   supplierId: string;
   supplierName: string;
   invoiceNo?: string; // External Bill Number
-  date: string;
+
+  // Date Fields
+  purchaseDate: string;
+  billingDate?: string;
+  arrivalDate?: string;
+
   status: PurchaseStatus;
   paymentStatus: PaymentStatus;
+
   totalAmount: number;
   paidAmount: number;
-  items: PurchaseItem[]; // Bill details
+  items: PurchaseItem[];
 }
 
 export type SortField =
-  | "date"
+  | "purchaseDate"
   | "supplierName"
   | "totalAmount"
   | "status"
@@ -36,11 +44,17 @@ export type SortField =
 export type SortOrder = "asc" | "desc";
 
 export interface PurchaseFormData {
+  supplierId: string;
   supplierName: string;
   invoiceNo: string;
-  date: string;
+
+  purchaseDate: string;
+  billingDate: string;
+  arrivalDate: string;
+
   status: PurchaseStatus;
   paymentStatus: PaymentStatus;
+
   items: PurchaseItem[];
-  totalAmount: number; // Calculated from items
+  totalAmount: number;
 }
