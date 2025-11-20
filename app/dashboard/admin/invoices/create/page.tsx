@@ -8,6 +8,7 @@ import {
   Plus,
   Trash2,
   Save,
+  Package,
   Loader2,
   Check,
   ChevronsUpDown,
@@ -126,6 +127,12 @@ const MOCK_CUSTOMERS = [
   { id: "C3", name: "Lanka Traders" },
 ];
 
+const MOCK_REPS = [
+  { id: "R1", name: "Ajith Bandara" },
+  { id: "R2", name: "Chathura Perera" },
+  { id: "R3", name: "Dilshan Silva" },
+];
+
 export default function CreateInvoicePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -135,14 +142,15 @@ export default function CreateInvoicePage() {
   const [customers, setCustomers] = useState<{ id: string; name: string }[]>(
     []
   );
+  const [reps, setReps] = useState<{ id: string; name: string }[]>([]);
 
   // Form State
   const [customerId, setCustomerId] = useState<string | null>(null);
   const [invoiceDate, setInvoiceDate] = useState(
     new Date().toISOString().split("T")[0]
   );
-  const [dueDate, setDueDate] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("INV-NEW");
+  const [salesRepId, setSalesRepId] = useState<string>(""); // Added Sales Rep State
 
   // Extra Discount State
   const [extraDiscount, setExtraDiscount] = useState<number>(0);
@@ -168,6 +176,7 @@ export default function CreateInvoicePage() {
     setTimeout(() => {
       setProducts(MOCK_PRODUCTS);
       setCustomers(MOCK_CUSTOMERS);
+      setReps(MOCK_REPS);
       setLoading(false);
     }, 500);
   }, []);
@@ -258,6 +267,10 @@ export default function CreateInvoicePage() {
       alert("Please select a customer.");
       return;
     }
+    if (!salesRepId) {
+      alert("Please select a sales representative.");
+      return;
+    }
     if (items.length === 0) {
       alert("Please add items to the invoice.");
       return;
@@ -267,6 +280,7 @@ export default function CreateInvoicePage() {
 
     const invoiceData = {
       customerId,
+      salesRepId,
       items,
       invoiceNumber,
       subTotal: subtotal,
@@ -285,7 +299,7 @@ export default function CreateInvoicePage() {
   };
 
   // --- Totals Calculation ---
-  const subtotal = items.reduce((sum, item) => sum + item.total, 0); // This is (Price * Qty) - Item Discount
+  const subtotal = items.reduce((sum, item) => sum + item.total, 0);
   const totalItemDiscount = items.reduce(
     (sum, item) => sum + item.discountAmount,
     0
@@ -324,7 +338,7 @@ export default function CreateInvoicePage() {
   }
 
   return (
-    <div className="space-y-4 mx-auto ">
+    <div className="space-y-4 mx-auto">
       <div className="flex items-center gap-4">
         <Button
           variant="ghost"
@@ -399,13 +413,22 @@ export default function CreateInvoicePage() {
                   <Label>Invoice No (Auto)</Label>
                   <Input value={invoiceNumber} disabled className="bg-muted" />
                 </div>
+
+                {/* Replaced Due Date with Sales Representative Dropdown */}
                 <div className="space-y-2">
-                  <Label>Due Date</Label>
-                  <Input
-                    type="date"
-                    value={dueDate}
-                    onChange={(e) => setDueDate(e.target.value)}
-                  />
+                  <Label>Sales Representative</Label>
+                  <Select value={salesRepId} onValueChange={setSalesRepId}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select Representative" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {reps.map((r) => (
+                        <SelectItem key={r.id} value={r.id}>
+                          {r.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </CardContent>
@@ -741,7 +764,6 @@ export default function CreateInvoicePage() {
                   </div>
                 )}
 
-                {/* Subtotal after Item Discounts */}
                 <div className="flex justify-between text-sm font-medium pt-1">
                   <span>Subtotal:</span>
                   <span>LKR {subtotal.toLocaleString()}</span>
