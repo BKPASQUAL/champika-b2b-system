@@ -70,7 +70,7 @@ export function ProductTable({
 
   return (
     <>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto px-4">
         <Table>
           <TableHeader>
             <TableRow>
