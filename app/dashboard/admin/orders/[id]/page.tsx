@@ -130,7 +130,7 @@ export default function ViewOrderPage() {
   const grandTotal = subtotal - totalDiscount;
 
   return (
-    <div className="space-y-6  mx-auto pb-10">
+    <div className="space-y-4  mx-auto pb-10">
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -170,7 +170,7 @@ export default function ViewOrderPage() {
 
       <div className="grid gap-6 lg:grid-cols-3 ">
         {/* LEFT COLUMN: Details & Items */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-4">
           {/* 1. Customer & Billing Information (Read Only) */}
           <Card>
             <CardHeader>
@@ -182,7 +182,7 @@ export default function ViewOrderPage() {
                 Customer and billing information
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6 ">
+            <CardContent className="space-y-3 ">
               {/* Row 1: Customer & Rep */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
