@@ -8,7 +8,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 
 // UI Components
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 import {
   Supplier,
@@ -18,13 +18,10 @@ import {
   SupplierFormData,
 } from "./types";
 import { SupplierStats } from "./_components/SupplierStats";
-import { SupplierToolbar } from "./_components/SupplierToolbar";
+import { SupplierHeader } from "./_components/SupplierHeader";
+import { SupplierFilters } from "./_components/SupplierFilters";
 import { SupplierTable } from "./_components/SupplierTable";
 import { SupplierDialogs } from "./_components/SupplierDialogs";
-// import { SupplierStats } from "./_components/SupplierStats";
-// import { SupplierToolbar } from "./_components/SupplierToolbar";
-// import { SupplierTable } from "./_components/SupplierTable";
-// import { SupplierDialogs } from "./_components/SupplierDialogs";
 
 // Mock Data
 const initialMockSuppliers: Supplier[] = [
@@ -294,11 +291,50 @@ export default function SuppliersPage() {
     setSelectedSupplier(null);
   };
 
+  // --- Reports ---
   const generateExcel = () => {
-    /* ... existing excel logic ... */
+    if (sortedSuppliers.length === 0) {
+      alert("No data to export");
+      return;
+    }
+    const excelData = sortedSuppliers.map((s) => ({
+      ID: s.supplierId,
+      Name: s.name,
+      Category: s.category,
+      Contact: s.contactPerson,
+      Phone: s.phone,
+      Status: s.status,
+      "Due Payment": s.duePayment,
+    }));
+    const ws = XLSX.utils.json_to_sheet(excelData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Suppliers");
+    XLSX.writeFile(
+      wb,
+      `Suppliers_${new Date().toISOString().split("T")[0]}.xlsx`
+    );
   };
+
   const generatePDF = () => {
-    /* ... existing pdf logic ... */
+    if (sortedSuppliers.length === 0) {
+      alert("No data to export");
+      return;
+    }
+    const doc = new jsPDF();
+    doc.text("Suppliers Report", 14, 15);
+    autoTable(doc, {
+      head: [["ID", "Name", "Contact", "Phone", "Status", "Due"]],
+      body: sortedSuppliers.map((s) => [
+        s.supplierId,
+        s.name,
+        s.contactPerson,
+        s.phone,
+        s.status,
+        s.duePayment.toLocaleString(),
+      ]),
+      startY: 20,
+    });
+    doc.save(`Suppliers_${new Date().toISOString().split("T")[0]}.pdf`);
   };
 
   return (
@@ -321,52 +357,54 @@ export default function SuppliersPage() {
         </div>
       )}
 
+      {/* Header Section */}
+      <SupplierHeader
+        onAddClick={() => {
+          resetForm();
+          setIsAddDialogOpen(true);
+        }}
+        onExportExcel={generateExcel}
+        onExportPDF={generatePDF}
+      />
+
+      {/* Stats Section */}
       <SupplierStats suppliers={suppliers} />
 
-      {/* This Wrapper mimics the Product page structure where filters + table are in one card */}
-      <div className="space-y-4">
-        <SupplierToolbar
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-          categoryFilter={categoryFilter}
-          setCategoryFilter={setCategoryFilter}
-          statusFilter={statusFilter}
-          setStatusFilter={setStatusFilter}
-          categories={categories}
-          onAddClick={() => {
-            resetForm();
-            setIsAddDialogOpen(true);
-          }}
-          onExportExcel={generateExcel}
-          onExportPDF={generatePDF}
-        />
-
-        <Card>
-          <CardContent className="p-0">
-            {" "}
-            {/* Removed padding to let table fill card like Product page */}
-            <SupplierTable
-              suppliers={paginatedSuppliers}
-              loading={loading}
-              sortField={sortField}
-              sortOrder={sortOrder}
-              onSort={handleSort}
-              onEdit={(s) => {
-                setFormData(s);
-                setSelectedSupplier(s);
-                setIsAddDialogOpen(true);
-              }}
-              onDelete={(s) => {
-                setSelectedSupplier(s);
-                setIsDeleteDialogOpen(true);
-              }}
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={setCurrentPage}
-            />
-          </CardContent>
-        </Card>
-      </div>
+      {/* Combined Card for Filters & Table */}
+      <Card>
+        <CardHeader>
+          <SupplierFilters
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            categoryFilter={categoryFilter}
+            setCategoryFilter={setCategoryFilter}
+            statusFilter={statusFilter}
+            setStatusFilter={setStatusFilter}
+            categories={categories}
+          />
+        </CardHeader>
+        <CardContent>
+          <SupplierTable
+            suppliers={paginatedSuppliers}
+            loading={loading}
+            sortField={sortField}
+            sortOrder={sortOrder}
+            onSort={handleSort}
+            onEdit={(s) => {
+              setFormData(s);
+              setSelectedSupplier(s);
+              setIsAddDialogOpen(true);
+            }}
+            onDelete={(s) => {
+              setSelectedSupplier(s);
+              setIsDeleteDialogOpen(true);
+            }}
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+          />
+        </CardContent>
+      </Card>
 
       <SupplierDialogs
         isAddDialogOpen={isAddDialogOpen}
