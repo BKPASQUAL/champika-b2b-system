@@ -38,8 +38,8 @@ export function AppSidebar({ role }: AppSidebarProps) {
   return (
     <div className="hidden lg:flex w-64 border-r bg-card h-screen sticky top-0 flex-col shadow-sm z-40">
       {/* Logo Header */}
-      <div className="h-16 flex items-center border-b px-6 flex-shrink-0">
-        <Package className="h-6 w-6 text-primary flex-shrink-0" />
+      <div className="h-16 flex items-center border-b px-6 shrink-0">
+        <Package className="h-6 w-6 text-primary shrink-0" />
         <span className="ml-2 text-lg font-semibold truncate">
           Champiks B2B
         </span>
@@ -75,7 +75,7 @@ export function AppSidebar({ role }: AppSidebarProps) {
                             : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                         )}
                       >
-                        <Icon className="h-4 w-4 flex-shrink-0" />
+                        <Icon className="h-4 w-4 shrink-0" />
                         <span className="truncate text-sm">{item.name}</span>
                       </Button>
                     </Link>
@@ -88,9 +88,9 @@ export function AppSidebar({ role }: AppSidebarProps) {
       </nav>
 
       {/* User Profile & Logout - Fixed Bottom */}
-      <div className="border-t p-4 flex-shrink-0 bg-card">
+      <div className="border-t p-4 shrink-0 bg-card">
         <div className="flex items-center gap-3 mb-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground flex-shrink-0">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shrink-0">
             <span className="text-sm font-medium">
               {user.name.charAt(0).toUpperCase()}
             </span>
@@ -109,7 +109,7 @@ export function AppSidebar({ role }: AppSidebarProps) {
           onClick={handleLogout}
           disabled={isLoggingOut}
         >
-          <LogOut className="h-4 w-4 mr-2 flex-shrink-0" />
+          <LogOut className="h-4 w-4 mr-2 shrink-0" />
           {isLoggingOut ? "Logging out..." : "Logout"}
         </Button>
       </div>

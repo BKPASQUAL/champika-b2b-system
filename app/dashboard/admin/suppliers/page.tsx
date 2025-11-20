@@ -158,9 +158,9 @@ export default function SuppliersPage() {
       // Create new
       const newId = `SUP-${String(suppliers.length + 1).padStart(3, "0")}`;
       const newSupplier: Supplier = {
+        ...(formData as Supplier), // Spread first to avoid overwriting specific keys below
         id: newId,
         lastOrder: "-", // Default for new
-        ...(formData as Supplier),
       };
       setSuppliers([...suppliers, newSupplier]);
     }

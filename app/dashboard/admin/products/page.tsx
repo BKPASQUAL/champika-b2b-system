@@ -26,13 +26,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -83,10 +77,142 @@ interface Product {
   sellingPrice: number;
   costPrice: number;
   discountPercent: number;
-  totalValue: number;
-  totalCost: number;
+  totalValue: number; // stock * sellingPrice
+  totalCost: number; // stock * costPrice
   profitMargin: number;
 }
+
+// --- Mock Data ---
+const initialMockProducts: Product[] = [
+  {
+    id: "PROD-001",
+    sku: "SKU-829102",
+    name: "Holcim Cement 50kg",
+    category: "Construction",
+    supplier: "Lanka Builders Pvt Ltd",
+    stock: 150,
+    minStock: 50,
+    mrp: 2800,
+    sellingPrice: 2750,
+    costPrice: 2600,
+    discountPercent: 1.79,
+    totalValue: 412500,
+    totalCost: 390000,
+    profitMargin: 5.77,
+  },
+  {
+    id: "PROD-002",
+    sku: "SKU-192834",
+    name: "Dulux Weather Shield 10L",
+    category: "Paints",
+    supplier: "Global Paints & Coatings",
+    stock: 25,
+    minStock: 30,
+    mrp: 18500,
+    sellingPrice: 18500,
+    costPrice: 16000,
+    discountPercent: 0,
+    totalValue: 462500,
+    totalCost: 400000,
+    profitMargin: 15.63,
+  },
+  {
+    id: "PROD-003",
+    sku: "SKU-773812",
+    name: "Orange Electric Switch Socket",
+    category: "Electrical",
+    supplier: "Ruhuna Hardware Suppliers",
+    stock: 500,
+    minStock: 100,
+    mrp: 450,
+    sellingPrice: 420,
+    costPrice: 350,
+    discountPercent: 6.67,
+    totalValue: 210000,
+    totalCost: 175000,
+    profitMargin: 20.0,
+  },
+  {
+    id: "PROD-004",
+    sku: "SKU-992101",
+    name: "PVC Pipe 4 inch (Type 600)",
+    category: "Plumbing",
+    supplier: "S-Lon Lanka",
+    stock: 0,
+    minStock: 40,
+    mrp: 1200,
+    sellingPrice: 1200,
+    costPrice: 950,
+    discountPercent: 0,
+    totalValue: 0,
+    totalCost: 0,
+    profitMargin: 26.32,
+  },
+  {
+    id: "PROD-005",
+    sku: "SKU-332190",
+    name: "Roofing Sheet (Asbestos) 8ft",
+    category: "Roofing",
+    supplier: "Colombo Cement Corp",
+    stock: 85,
+    minStock: 100,
+    mrp: 3200,
+    sellingPrice: 3100,
+    costPrice: 2800,
+    discountPercent: 3.13,
+    totalValue: 263500,
+    totalCost: 238000,
+    profitMargin: 10.71,
+  },
+  {
+    id: "PROD-006",
+    sku: "SKU-554123",
+    name: 'Door Hinge Stainless Steel 4"',
+    category: "Hardware",
+    supplier: "Ruhuna Hardware Suppliers",
+    stock: 200,
+    minStock: 50,
+    mrp: 350,
+    sellingPrice: 350,
+    costPrice: 250,
+    discountPercent: 0,
+    totalValue: 70000,
+    totalCost: 50000,
+    profitMargin: 40.0,
+  },
+  {
+    id: "PROD-007",
+    sku: "SKU-112233",
+    name: "Nippolac Enamel Paint Black 1L",
+    category: "Paints",
+    supplier: "Global Paints & Coatings",
+    stock: 60,
+    minStock: 20,
+    mrp: 1800,
+    sellingPrice: 1750,
+    costPrice: 1500,
+    discountPercent: 2.78,
+    totalValue: 105000,
+    totalCost: 90000,
+    profitMargin: 16.67,
+  },
+  {
+    id: "PROD-008",
+    sku: "SKU-445566",
+    name: "Water Tank 1000L",
+    category: "Plumbing",
+    supplier: "S-Lon Lanka",
+    stock: 5,
+    minStock: 10,
+    mrp: 25000,
+    sellingPrice: 24000,
+    costPrice: 21000,
+    discountPercent: 4.0,
+    totalValue: 120000,
+    totalCost: 105000,
+    profitMargin: 14.29,
+  },
+];
 
 type SortField =
   | "name"
@@ -100,8 +226,9 @@ type SortField =
 type SortOrder = "asc" | "desc";
 
 export default function ChampikaBB2ProductsPage() {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Initialize with mock data
+  const [products, setProducts] = useState<Product[]>(initialMockProducts);
+  const [loading, setLoading] = useState(false); // Set to false as we have local data
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [supplierFilter, setSupplierFilter] = useState("all");
@@ -131,35 +258,7 @@ export default function ChampikaBB2ProductsPage() {
   const itemsPerPage = 7;
 
   // -----------------------------------------------------------
-  // 1. Data Fetching
-  // -----------------------------------------------------------
-  const fetchProducts = async () => {
-    setLoading(true);
-    try {
-      // Replace with your API endpoint
-      const response = await fetch("/api/products");
-      const data = await response.json();
-
-      if (response.ok && data.products) {
-        setProducts(data.products);
-      } else {
-        console.error("Failed to fetch products:", data.error);
-        setProducts([]);
-      }
-    } catch (error) {
-      console.error("Network error fetching products:", error);
-      setProducts([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchProducts();
-  }, []);
-
-  // -----------------------------------------------------------
-  // 2. CRUD Handlers
+  // 2. CRUD Handlers (Local State Only)
   // -----------------------------------------------------------
 
   const handleAddProduct = async () => {
@@ -179,60 +278,67 @@ export default function ChampikaBB2ProductsPage() {
     const finalSellingPrice =
       formData.sellingPrice > 0 ? formData.sellingPrice : formData.mrp;
 
-    const payload = {
-      name: formData.name,
-      category: formData.category,
-      supplier: formData.supplier,
-      unit_price: finalSellingPrice,
-      selling_price: finalSellingPrice,
-      cost_price: formData.costPrice,
-      stock_quantity: formData.stock,
-      reorder_level: formData.minStock,
-      is_active: true,
-      mrp: formData.mrp,
-    };
+    // Calculations for the new/updated product
+    const discount =
+      formData.mrp > 0
+        ? ((formData.mrp - finalSellingPrice) / formData.mrp) * 100
+        : 0;
+    const margin =
+      finalSellingPrice > 0
+        ? ((finalSellingPrice - formData.costPrice) / finalSellingPrice) * 100
+        : 0;
+    const totalVal = formData.stock * finalSellingPrice;
+    const totalCst = formData.stock * formData.costPrice;
 
-    try {
-      let response;
-      if (selectedProduct) {
-        response = await fetch(`/api/products/${selectedProduct.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-
-        if (!response.ok) throw new Error("Failed to update product");
-        setSuccessMessage(`Product "${formData.name}" updated successfully!`);
-      } else {
-        const insertPayload = {
-          ...payload,
-          sku: `SKU-${Date.now().toString().slice(-6)}`,
-        };
-
-        response = await fetch("/api/products", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(insertPayload),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          console.error("API Error Response:", errorData);
-          throw new Error(errorData.error || "Failed to add new product");
-        }
-        setSuccessMessage(`Product "${formData.name}" added successfully!`);
-      }
-
-      setShowSuccessAlert(true);
-      setTimeout(() => {
-        setShowSuccessAlert(false);
-      }, 3000);
-
-      await fetchProducts();
-    } catch (error) {
-      console.error("Error saving product:", error);
-      alert(`Error saving product: ${(error as Error).message}`);
+    if (selectedProduct) {
+      // Update existing
+      const updatedProducts = products.map((p) =>
+        p.id === selectedProduct.id
+          ? {
+              ...p,
+              name: formData.name,
+              category: formData.category,
+              supplier: formData.supplier,
+              stock: formData.stock,
+              minStock: formData.minStock,
+              mrp: formData.mrp,
+              sellingPrice: finalSellingPrice,
+              costPrice: formData.costPrice,
+              discountPercent: parseFloat(discount.toFixed(2)),
+              profitMargin: parseFloat(margin.toFixed(2)),
+              totalValue: totalVal,
+              totalCost: totalCst,
+            }
+          : p
+      );
+      setProducts(updatedProducts);
+      setSuccessMessage(`Product "${formData.name}" updated successfully!`);
+    } else {
+      // Add New
+      const newProduct: Product = {
+        id: `PROD-${(products.length + 1).toString().padStart(3, "0")}`, // Simple ID generation
+        sku: `SKU-${Date.now().toString().slice(-6)}`,
+        name: formData.name,
+        category: formData.category,
+        supplier: formData.supplier,
+        stock: formData.stock,
+        minStock: formData.minStock,
+        mrp: formData.mrp,
+        sellingPrice: finalSellingPrice,
+        costPrice: formData.costPrice,
+        discountPercent: parseFloat(discount.toFixed(2)),
+        profitMargin: parseFloat(margin.toFixed(2)),
+        totalValue: totalVal,
+        totalCost: totalCst,
+      };
+      setProducts([newProduct, ...products]);
+      setSuccessMessage(`Product "${formData.name}" added successfully!`);
     }
+
+    setShowSuccessAlert(true);
+    setTimeout(() => {
+      setShowSuccessAlert(false);
+    }, 3000);
 
     setIsAddDialogOpen(false);
     setSelectedProduct(null);
@@ -242,26 +348,17 @@ export default function ChampikaBB2ProductsPage() {
   const handleDeleteProduct = async () => {
     if (!selectedProduct) return;
 
-    try {
-      const response = await fetch(`/api/products/${selectedProduct.id}`, {
-        method: "DELETE",
-      });
+    // Filter out the deleted product
+    const updatedProducts = products.filter((p) => p.id !== selectedProduct.id);
+    setProducts(updatedProducts);
 
-      if (!response.ok) throw new Error("Failed to delete product");
-
-      setSuccessMessage(
-        `Product "${selectedProduct.name}" deleted successfully!`
-      );
-      setShowSuccessAlert(true);
-      setTimeout(() => {
-        setShowSuccessAlert(false);
-      }, 3000);
-
-      await fetchProducts();
-    } catch (error) {
-      console.error("Error deleting product:", error);
-      alert(`Error deleting product. See console for details.`);
-    }
+    setSuccessMessage(
+      `Product "${selectedProduct.name}" deleted successfully!`
+    );
+    setShowSuccessAlert(true);
+    setTimeout(() => {
+      setShowSuccessAlert(false);
+    }, 3000);
 
     setIsDeleteDialogOpen(false);
     setSelectedProduct(null);
@@ -368,10 +465,6 @@ export default function ChampikaBB2ProductsPage() {
   const totalProducts = products.length;
   const totalStockValue = products.reduce((sum, p) => sum + p.totalValue, 0);
   const totalCostValue = products.reduce((sum, p) => sum + p.totalCost, 0);
-  const lowStockProducts = products.filter(
-    (p) => p.stock > 0 && p.stock < p.minStock
-  ).length;
-  const outOfStockProducts = products.filter((p) => p.stock === 0).length;
 
   // Pagination calculations
   const totalPages = Math.ceil(sortedProducts.length / itemsPerPage);
