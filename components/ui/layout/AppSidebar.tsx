@@ -46,13 +46,13 @@ export function AppSidebar({ role }: AppSidebarProps) {
       </div>
 
       {/* Navigation - Scrollable */}
-      <nav className="flex-1 overflow-y-auto px-4 py-4">
-        <div className="space-y-6">
+      <nav className="flex-1 overflow-y-auto px-4 py-2">
+        <div className="space-y-3">
           {navSections.map((section, sectionIdx) => (
             <div key={sectionIdx}>
               {/* Section Title */}
               {section.title && (
-                <h3 className="mb-2 px-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                <h3 className="mb-1 px-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   {section.title}
                 </h3>
               )}
@@ -69,7 +69,7 @@ export function AppSidebar({ role }: AppSidebarProps) {
                         variant="ghost"
                         size="sm"
                         className={cn(
-                          "w-full justify-start gap-3 h-9 px-3",
+                          "w-full justify-start gap-3 h-7 px-3",
                           isActive
                             ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
                             : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
