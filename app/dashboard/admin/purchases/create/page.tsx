@@ -354,8 +354,8 @@ export default function CreatePurchasePage() {
   }
 
   return (
-    <div className="space-y-6  mx-auto pb-10">
-      <div className="flex items-center gap-4">
+    <div className="space-y-4  mx-auto pb-10">
+      <div className="flex items-center gap-2">
         <Button
           variant="ghost"
           size="icon"
@@ -384,9 +384,9 @@ export default function CreatePurchasePage() {
         </Button>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-3">
         {/* LEFT COLUMN - Forms */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-3">
           {/* 1. Purchase Details Card */}
           <Card>
             <CardHeader>
