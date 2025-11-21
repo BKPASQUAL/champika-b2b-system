@@ -6,12 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Sprout, // Using Sprout icon for Zavora Farm
-  Loader2,
-  Eye,
-  EyeOff,
-} from "lucide-react";
+import { Sprout, Loader2, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 
 export default function LoginPage() {
@@ -27,26 +22,46 @@ export default function LoginPage() {
     e.preventDefault();
     setIsLoading(true);
 
-    // Simulate API authentication delay
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      // Call the Login API
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
 
-      if (formData.email && formData.password) {
-        // Mock Redirection Logic
-        if (formData.email.includes("office")) {
-          router.push("/dashboard/office");
-        } else if (formData.email.includes("rep")) {
-          router.push("/dashboard/rep");
-        } else if (formData.email.includes("driver")) {
-          router.push("/dashboard/delivery");
-        } else {
-          router.push("/dashboard/admin");
-        }
-        toast.success("Welcome to Zavora Farm");
-      } else {
-        toast.error("Please check your credentials.");
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Login failed");
       }
-    }, 1500);
+
+      // Successful Login
+      toast.success(`Welcome back to Zavora Farm`);
+
+      // Redirect based on Role
+      switch (data.role) {
+        case "office":
+          router.push("/dashboard/office");
+          break;
+        case "rep":
+          router.push("/dashboard/rep");
+          break;
+        case "delivery":
+          router.push("/dashboard/delivery");
+          break;
+        case "admin":
+        case "super_admin":
+          router.push("/dashboard/admin");
+          break;
+        default:
+          router.push("/dashboard");
+      }
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -55,7 +70,6 @@ export default function LoginPage() {
       <div className="w-full max-w-[440px] space-y-8">
         {/* 1. Logo & Brand Header */}
         <div className="flex flex-col items-center text-center space-y-4">
-          {/* Black square with a farm-related icon */}
           <div className="h-14 w-14 bg-black rounded-2xl flex items-center justify-center shadow-xl shadow-black/5">
             <Sprout className="h-7 w-7 text-white stroke-[1.5]" />
           </div>

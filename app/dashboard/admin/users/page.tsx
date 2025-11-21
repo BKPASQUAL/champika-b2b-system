@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, Users } from "lucide-react";
+import { Plus, Search, Users, Loader2, RefreshCw } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,63 +20,14 @@ import { UserTable } from "./_components/UserTable";
 import { UserDialogs } from "./_components/UserDialogs";
 import { toast } from "sonner";
 
-// Initial Mock Data
-const MOCK_USERS: User[] = [
-  {
-    id: "1",
-    fullName: "Admin User",
-    username: "admin",
-    email: "admin@champiks.com",
-    role: "admin",
-    status: "Active",
-    lastActive: "Just now",
-  },
-  {
-    id: "2",
-    fullName: "Kasun Perera",
-    username: "kasunp",
-    email: "kasun@champiks.com",
-    role: "office",
-    status: "Active",
-    lastActive: "2 hours ago",
-  },
-  {
-    id: "3",
-    fullName: "Ajith Bandara",
-    username: "ajithb",
-    email: "ajith@champiks.com",
-    role: "rep",
-    status: "Active",
-    lastActive: "1 day ago",
-  },
-  {
-    id: "4",
-    fullName: "Saman Driver",
-    username: "samand",
-    email: "saman.d@champiks.com",
-    role: "delivery",
-    status: "Inactive",
-    lastActive: "1 week ago",
-  },
-  // Add a few more mock users to test pagination if needed
-  {
-    id: "5",
-    fullName: "Nimal Accounts",
-    username: "nimala",
-    email: "nimal@champiks.com",
-    role: "office",
-    status: "Active",
-    lastActive: "3 hours ago",
-  },
-];
-
 export default function UsersPage() {
-  const [users, setUsers] = useState<User[]>(MOCK_USERS);
+  const [users, setUsers] = useState<User[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 8; // Adjust this number as needed
+  const itemsPerPage = 5;
 
   // Dialog States
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -96,7 +47,30 @@ export default function UsersPage() {
     status: "Active",
   });
 
-  // Filter Users
+  // --- 1. DATA FETCHING (MAPPING DB TO TABLE) ---
+  const fetchUsers = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch("/api/users"); // Calls the GET API
+
+      if (!response.ok) throw new Error("Failed to fetch users");
+
+      const data = await response.json();
+      setUsers(data); // The API already maps DB columns to User type
+    } catch (error) {
+      toast.error("Failed to load users");
+      console.error(error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Initial Load
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
+
+  // --- 2. FILTERING & PAGINATION ---
   const filteredUsers = users.filter(
     (user) =>
       user.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -104,19 +78,18 @@ export default function UsersPage() {
       user.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Calculate Pagination
   const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
   const paginatedUsers = filteredUsers.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
 
-  // Reset to page 1 when search changes
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery]);
 
-  // Handlers
+  // --- 3. HANDLERS ---
+
   const handleAddNew = () => {
     setSelectedUser(null);
     setFormData({
@@ -148,31 +121,10 @@ export default function UsersPage() {
     setIsDeleteDialogOpen(true);
   };
 
-  // --- Status Toggle Handlers ---
-  const handleStatusClick = (user: User, checked: boolean) => {
-    setSelectedUser(user);
-    setPendingStatus(checked);
-    setIsStatusDialogOpen(true);
-  };
+  // --- 4. API ACTIONS ---
 
-  const confirmStatusChange = () => {
-    if (selectedUser && pendingStatus !== null) {
-      const newStatus = pendingStatus ? "Active" : "Inactive";
-
-      setUsers(
-        users.map((u) =>
-          u.id === selectedUser.id ? { ...u, status: newStatus } : u
-        )
-      );
-
-      toast.success(`User marked as ${newStatus}`);
-      setIsStatusDialogOpen(false);
-      setSelectedUser(null);
-      setPendingStatus(null);
-    }
-  };
-
-  const handleSaveUser = () => {
+  const handleSaveUser = async () => {
+    // Validation
     if (!formData.fullName || !formData.username || !formData.email) {
       toast.error("Please fill in all required fields");
       return;
@@ -183,44 +135,96 @@ export default function UsersPage() {
       return;
     }
 
-    if (selectedUser) {
-      setUsers(
-        users.map((u) =>
-          u.id === selectedUser.id
-            ? {
-                ...u,
-                fullName: formData.fullName,
-                username: formData.username,
-                email: formData.email,
-                role: formData.role,
-                status: formData.status,
-              }
-            : u
-        )
-      );
-      toast.success("User updated successfully");
-    } else {
-      const newUser: User = {
-        id: Date.now().toString(),
-        fullName: formData.fullName,
-        username: formData.username,
-        email: formData.email,
-        role: formData.role,
-        status: formData.status,
-        lastActive: "Never",
-      };
-      setUsers([...users, newUser]);
-      toast.success("User created successfully");
-    }
+    try {
+      let response;
 
-    setIsAddDialogOpen(false);
+      if (selectedUser) {
+        // UPDATE User
+        response = await fetch(`/api/users/${selectedUser.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
+        });
+      } else {
+        // CREATE User
+        response = await fetch("/api/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
+        });
+      }
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Operation failed");
+      }
+
+      toast.success(
+        selectedUser ? "User updated successfully" : "User created successfully"
+      );
+      setIsAddDialogOpen(false);
+      fetchUsers(); // Refresh table
+    } catch (error: any) {
+      toast.error(error.message);
+    }
   };
 
-  const confirmDelete = () => {
-    if (selectedUser) {
-      setUsers(users.filter((u) => u.id !== selectedUser.id));
+  const confirmDelete = async () => {
+    if (!selectedUser) return;
+
+    try {
+      const response = await fetch(`/api/users/${selectedUser.id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error || "Delete failed");
+      }
+
       toast.success("User deleted successfully");
       setIsDeleteDialogOpen(false);
+      fetchUsers(); // Refresh table
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
+  // Status Toggle Logic
+  const handleStatusClick = (user: User, checked: boolean) => {
+    setSelectedUser(user);
+    setPendingStatus(checked);
+    setIsStatusDialogOpen(true);
+  };
+
+  const confirmStatusChange = async () => {
+    if (selectedUser && pendingStatus !== null) {
+      try {
+        const response = await fetch(`/api/users/${selectedUser.id}/status`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isActive: pendingStatus }),
+        });
+
+        if (!response.ok) throw new Error("Status update failed");
+
+        const newStatus = pendingStatus ? "Active" : "Inactive";
+        toast.success(`User marked as ${newStatus}`);
+
+        // Optimistic Update (Update UI immediately)
+        setUsers(
+          users.map((u) =>
+            u.id === selectedUser.id ? { ...u, status: newStatus } : u
+          )
+        );
+      } catch (error) {
+        toast.error("Failed to update status");
+      } finally {
+        setIsStatusDialogOpen(false);
+        setSelectedUser(null);
+        setPendingStatus(null);
+      }
     }
   };
 
@@ -233,9 +237,21 @@ export default function UsersPage() {
             Manage access and user roles for the system.
           </p>
         </div>
-        <Button onClick={handleAddNew}>
-          <Plus className="w-4 h-4 mr-2" /> Create User
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={fetchUsers}
+            title="Refresh Data"
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
+            />
+          </Button>
+          <Button onClick={handleAddNew}>
+            <Plus className="w-4 h-4 mr-2" /> Create User
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -256,15 +272,21 @@ export default function UsersPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <UserTable
-            users={paginatedUsers}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            onStatusChange={handleStatusClick}
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={setCurrentPage}
-          />
+          {isLoading && users.length === 0 ? (
+            <div className="flex justify-center py-10">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <UserTable
+              users={paginatedUsers}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              onStatusChange={handleStatusClick}
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+            />
+          )}
         </CardContent>
       </Card>
 
