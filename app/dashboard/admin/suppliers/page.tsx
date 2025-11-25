@@ -1,155 +1,27 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { CheckCircle2, X } from "lucide-react";
 import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { toast } from "sonner";
 
 // UI Components
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
-import {
-  Supplier,
-  SortField,
-  SortOrder,
-  SupplierStatus,
-  SupplierFormData,
-} from "./types";
+// Local Imports (paths relative to this file)
+import { Supplier, SortField, SortOrder, SupplierFormData } from "./types";
 import { SupplierStats } from "./_components/SupplierStats";
 import { SupplierHeader } from "./_components/SupplierHeader";
 import { SupplierFilters } from "./_components/SupplierFilters";
 import { SupplierTable } from "./_components/SupplierTable";
 import { SupplierDialogs } from "./_components/SupplierDialogs";
 
-// Mock Data
-const initialMockSuppliers: Supplier[] = [
-  {
-    id: "SUP-001",
-    supplierId: "S-1001",
-    name: "Lanka Builders Pvt Ltd",
-    contactPerson: "Kamal Perera",
-    email: "kamal@lankabuilders.lk",
-    phone: "077 123 4567",
-    address: "No. 45, High Level Rd, Nugegoda",
-    category: "Construction",
-    status: "Active",
-    lastOrderDate: "2023-10-25",
-    totalOrders: 12,
-    totalOrderValue: 1540000,
-    duePayment: 250000,
-  },
-  {
-    id: "SUP-002",
-    supplierId: "S-1002",
-    name: "Colombo Cement Corp",
-    contactPerson: "Nimal Silva",
-    email: "sales@colombocement.com",
-    phone: "011 234 5678",
-    address: "Industrial Zone, Peliyagoda",
-    category: "Construction",
-    status: "Active",
-    lastOrderDate: "2023-10-20",
-    totalOrders: 45,
-    totalOrderValue: 8900000,
-    duePayment: 1200000,
-  },
-  {
-    id: "SUP-003",
-    supplierId: "S-1003",
-    name: "Ruhuna Hardware Suppliers",
-    contactPerson: "Sunil Das",
-    email: "info@ruhunahw.lk",
-    phone: "071 987 6543",
-    address: "Matara Road, Galle",
-    category: "Hardware",
-    status: "Inactive",
-    lastOrderDate: "2023-09-15",
-    totalOrders: 5,
-    totalOrderValue: 320000,
-    duePayment: 0,
-  },
-  {
-    id: "SUP-004",
-    supplierId: "S-1004",
-    name: "Global Paints & Coatings",
-    contactPerson: "Sarah Jones",
-    email: "s.jones@globalpaints.lk",
-    phone: "076 555 4444",
-    address: "Union Place, Colombo 02",
-    category: "Paints",
-    status: "Pending",
-    lastOrderDate: "-",
-    totalOrders: 0,
-    totalOrderValue: 0,
-    duePayment: 0,
-  },
-  {
-    id: "SUP-005",
-    supplierId: "S-1005",
-    name: "S-Lon Lanka",
-    contactPerson: "Mahesh Kumara",
-    email: "orders@slon.lk",
-    phone: "011 456 7890",
-    address: "Rathemalana Industrial Estate",
-    category: "Plumbing",
-    status: "Active",
-    lastOrderDate: "2023-10-28",
-    totalOrders: 28,
-    totalOrderValue: 2150000,
-    duePayment: 450000,
-  },
-  {
-    id: "SUP-006",
-    supplierId: "S-1006",
-    name: "Orange Electric",
-    contactPerson: "Duminda Rajapakshe",
-    email: "duminda@orange.lk",
-    phone: "077 788 9900",
-    address: "Maharagama",
-    category: "Electrical",
-    status: "Active",
-    lastOrderDate: "2023-10-22",
-    totalOrders: 34,
-    totalOrderValue: 3400000,
-    duePayment: 820000,
-  },
-  {
-    id: "SUP-007",
-    supplierId: "S-1007",
-    name: "Kelani Cables PLC",
-    contactPerson: "Anura Bandara",
-    email: "anura@kelanicables.com",
-    phone: "011 290 4567",
-    address: "Kelaniya",
-    category: "Electrical",
-    status: "Active",
-    lastOrderDate: "2023-10-18",
-    totalOrders: 18,
-    totalOrderValue: 1200000,
-    duePayment: 150000,
-  },
-  {
-    id: "SUP-008",
-    supplierId: "S-1008",
-    name: "Tokyo Cement",
-    contactPerson: "Sales Desk",
-    email: "orders@tokyocement.lk",
-    phone: "011 250 6789",
-    address: "Colombo 03",
-    category: "Construction",
-    status: "Active",
-    lastOrderDate: "2023-10-27",
-    totalOrders: 60,
-    totalOrderValue: 12500000,
-    duePayment: 2100000,
-  },
-];
-
 export default function SuppliersPage() {
-  const [suppliers, setSuppliers] = useState<Supplier[]>(initialMockSuppliers);
-  const [loading, setLoading] = useState(false);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [loading, setLoading] = useState(true);
 
   // Filters & Sort
   const [searchQuery, setSearchQuery] = useState("");
@@ -181,12 +53,31 @@ export default function SuppliersPage() {
     duePayment: 0,
   });
 
-  // Alerts
-  const [showSuccessAlert, setShowSuccessAlert] = useState(false);
-  const [successMessage, setSuccessMessage] = useState("");
+  // --- Fetch Data ---
+  const fetchSuppliers = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await fetch("/api/suppliers");
+      if (!response.ok) throw new Error("Failed to fetch suppliers");
+      const data = await response.json();
+      setSuppliers(data);
+    } catch (error) {
+      toast.error("Error loading suppliers");
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSuppliers();
+  }, [fetchSuppliers]);
 
   // --- Logic ---
-  const categories = ["all", ...new Set(suppliers.map((s) => s.category))];
+  const categories = [
+    "all",
+    ...new Set(suppliers.map((s) => s.category || "Uncategorized")),
+  ];
 
   const filteredSuppliers = suppliers.filter((supplier) => {
     const matchesSearch =
@@ -194,7 +85,8 @@ export default function SuppliersPage() {
       supplier.contactPerson
         .toLowerCase()
         .includes(searchQuery.toLowerCase()) ||
-      supplier.email.toLowerCase().includes(searchQuery.toLowerCase());
+      (supplier.email &&
+        supplier.email.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesCategory =
       categoryFilter === "all" || supplier.category === categoryFilter;
     const matchesStatus =
@@ -234,47 +126,57 @@ export default function SuppliersPage() {
     }
   };
 
-  const handleSaveSupplier = () => {
-    if (!formData.name || !formData.contactPerson) {
-      alert("Required fields missing");
+  const handleSaveSupplier = async () => {
+    if (!formData.name || !formData.contactPerson || !formData.phone) {
+      toast.error("Please fill in all required fields (Name, Contact, Phone)");
       return;
     }
 
-    if (selectedSupplier) {
-      setSuppliers(
-        suppliers.map((s) =>
-          s.id === selectedSupplier.id ? { ...s, ...formData } : s
-        )
-      );
-      setSuccessMessage("Supplier updated!");
-    } else {
-      setSuppliers([
-        ...suppliers,
-        {
-          id: `SUP-${Date.now()}`,
-          supplierId: `S-${suppliers.length + 1000}`,
-          ...formData,
-          lastOrderDate: "-",
-          totalOrders: 0,
-          totalOrderValue: 0,
-        },
-      ]);
-      setSuccessMessage("Supplier added!");
+    try {
+      if (selectedSupplier) {
+        // UPDATE
+        const res = await fetch(`/api/suppliers/${selectedSupplier.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
+        });
+        if (!res.ok) throw new Error("Failed to update supplier");
+        toast.success("Supplier updated successfully!");
+      } else {
+        // CREATE
+        const res = await fetch("/api/suppliers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to create supplier");
+        toast.success("Supplier created successfully!");
+      }
+
+      setIsAddDialogOpen(false);
+      resetForm();
+      fetchSuppliers();
+    } catch (error: any) {
+      toast.error(error.message);
     }
-    setShowSuccessAlert(true);
-    setIsAddDialogOpen(false);
-    resetForm();
-    setTimeout(() => setShowSuccessAlert(false), 3000);
   };
 
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = async () => {
     if (!selectedSupplier) return;
-    setSuppliers(suppliers.filter((s) => s.id !== selectedSupplier.id));
-    setSuccessMessage("Supplier deleted!");
-    setShowSuccessAlert(true);
-    setIsDeleteDialogOpen(false);
-    setSelectedSupplier(null);
-    setTimeout(() => setShowSuccessAlert(false), 3000);
+    try {
+      const res = await fetch(`/api/suppliers/${selectedSupplier.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete supplier");
+
+      toast.success("Supplier deleted successfully");
+      setIsDeleteDialogOpen(false);
+      setSelectedSupplier(null);
+      fetchSuppliers();
+    } catch (error: any) {
+      toast.error(error.message);
+    }
   };
 
   const resetForm = () => {
@@ -294,7 +196,7 @@ export default function SuppliersPage() {
   // --- Reports ---
   const generateExcel = () => {
     if (sortedSuppliers.length === 0) {
-      alert("No data to export");
+      toast.error("No data to export");
       return;
     }
     const excelData = sortedSuppliers.map((s) => ({
@@ -317,7 +219,7 @@ export default function SuppliersPage() {
 
   const generatePDF = () => {
     if (sortedSuppliers.length === 0) {
-      alert("No data to export");
+      toast.error("No data to export");
       return;
     }
     const doc = new jsPDF();
@@ -339,24 +241,6 @@ export default function SuppliersPage() {
 
   return (
     <div className="space-y-6">
-      {showSuccessAlert && (
-        <div className="fixed top-4 right-4 z-50 w-96 animate-in slide-in-from-right">
-          <Alert className="bg-green-50 border-green-200">
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
-            <AlertTitle className="text-green-800">Success!</AlertTitle>
-            <AlertDescription className="text-green-700">
-              {successMessage}
-            </AlertDescription>
-            <button
-              onClick={() => setShowSuccessAlert(false)}
-              className="absolute top-2 right-2 p-1 hover:bg-green-100 rounded"
-            >
-              <X className="h-4 w-4 text-green-600" />
-            </button>
-          </Alert>
-        </div>
-      )}
-
       {/* Header Section */}
       <SupplierHeader
         onAddClick={() => {
@@ -391,7 +275,16 @@ export default function SuppliersPage() {
             sortOrder={sortOrder}
             onSort={handleSort}
             onEdit={(s) => {
-              setFormData(s);
+              setFormData({
+                name: s.name,
+                contactPerson: s.contactPerson,
+                email: s.email,
+                phone: s.phone,
+                address: s.address,
+                category: s.category,
+                status: s.status,
+                duePayment: s.duePayment,
+              });
               setSelectedSupplier(s);
               setIsAddDialogOpen(true);
             }}
