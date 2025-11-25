@@ -1,4 +1,5 @@
-// app/dashboard/admin/suppliers/_components/SupplierDialogs.tsx
+"use client";
+
 import {
   Dialog,
   DialogContent,
@@ -28,6 +29,9 @@ interface SupplierDialogsProps {
   onSave: () => void;
   selectedSupplier: Supplier | null;
 
+  // New Prop for Categories
+  categoryOptions: { id: string; name: string }[];
+
   // Delete Dialog
   isDeleteDialogOpen: boolean;
   setIsDeleteDialogOpen: (open: boolean) => void;
@@ -41,6 +45,7 @@ export function SupplierDialogs({
   setFormData,
   onSave,
   selectedSupplier,
+  categoryOptions,
   isDeleteDialogOpen,
   setIsDeleteDialogOpen,
   onDeleteConfirm,
@@ -104,15 +109,35 @@ export function SupplierDialogs({
                 }
               />
             </div>
+
+            {/* Category Dropdown with w-full */}
             <div className="space-y-2">
               <Label>Category</Label>
-              <Input
+              <Select
                 value={formData.category}
-                onChange={(e) =>
-                  setFormData({ ...formData, category: e.target.value })
+                onValueChange={(val) =>
+                  setFormData({ ...formData, category: val })
                 }
-              />
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categoryOptions.length === 0 ? (
+                    <SelectItem value="General" disabled>
+                      No categories found
+                    </SelectItem>
+                  ) : (
+                    categoryOptions.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.name}>
+                        {cat.name}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
             </div>
+
             <div className="space-y-2">
               <Label>Due Payment (LKR)</Label>
               <Input
@@ -126,6 +151,8 @@ export function SupplierDialogs({
                 }
               />
             </div>
+
+            {/* Status Dropdown with w-full */}
             <div className="space-y-2">
               <Label>Status</Label>
               <Select
@@ -134,7 +161,7 @@ export function SupplierDialogs({
                   setFormData({ ...formData, status: v as SupplierStatus })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

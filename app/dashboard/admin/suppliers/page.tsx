@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { CheckCircle2, X } from "lucide-react";
+import { CheckCircle2, X, Loader2 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -11,7 +11,6 @@ import { toast } from "sonner";
 // UI Components
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
-// Local Imports (paths relative to this file)
 import { Supplier, SortField, SortOrder, SupplierFormData } from "./types";
 import { SupplierStats } from "./_components/SupplierStats";
 import { SupplierHeader } from "./_components/SupplierHeader";
@@ -21,6 +20,9 @@ import { SupplierDialogs } from "./_components/SupplierDialogs";
 
 export default function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [categoryOptions, setCategoryOptions] = useState<
+    { id: string; name: string }[]
+  >([]); // <--- New State
   const [loading, setLoading] = useState(true);
 
   // Filters & Sort
@@ -53,7 +55,7 @@ export default function SuppliersPage() {
     duePayment: 0,
   });
 
-  // --- Fetch Data ---
+  // --- 1. Fetch Suppliers ---
   const fetchSuppliers = useCallback(async () => {
     try {
       setLoading(true);
@@ -69,12 +71,27 @@ export default function SuppliersPage() {
     }
   }, []);
 
+  // --- 2. Fetch Categories (New) ---
+  const fetchCategories = useCallback(async () => {
+    try {
+      const response = await fetch("/api/settings/categories?type=supplier");
+      if (response.ok) {
+        const data = await response.json();
+        setCategoryOptions(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch categories", error);
+    }
+  }, []);
+
   useEffect(() => {
     fetchSuppliers();
-  }, [fetchSuppliers]);
+    fetchCategories(); // Call category fetch on mount
+  }, [fetchSuppliers, fetchCategories]);
 
   // --- Logic ---
-  const categories = [
+  // Filter drop-down based on current data
+  const availableCategories = [
     "all",
     ...new Set(suppliers.map((s) => s.category || "Uncategorized")),
   ];
@@ -128,7 +145,7 @@ export default function SuppliersPage() {
 
   const handleSaveSupplier = async () => {
     if (!formData.name || !formData.contactPerson || !formData.phone) {
-      toast.error("Please fill in all required fields (Name, Contact, Phone)");
+      toast.error("Please fill in all required fields");
       return;
     }
 
@@ -241,7 +258,6 @@ export default function SuppliersPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header Section */}
       <SupplierHeader
         onAddClick={() => {
           resetForm();
@@ -251,10 +267,8 @@ export default function SuppliersPage() {
         onExportPDF={generatePDF}
       />
 
-      {/* Stats Section */}
       <SupplierStats suppliers={suppliers} />
 
-      {/* Combined Card for Filters & Table */}
       <Card>
         <CardHeader>
           <SupplierFilters
@@ -264,7 +278,7 @@ export default function SuppliersPage() {
             setCategoryFilter={setCategoryFilter}
             statusFilter={statusFilter}
             setStatusFilter={setStatusFilter}
-            categories={categories}
+            categories={availableCategories}
           />
         </CardHeader>
         <CardContent>
@@ -306,6 +320,7 @@ export default function SuppliersPage() {
         setFormData={setFormData}
         onSave={handleSaveSupplier}
         selectedSupplier={selectedSupplier}
+        categoryOptions={categoryOptions} // <--- Passed here
         isDeleteDialogOpen={isDeleteDialogOpen}
         setIsDeleteDialogOpen={setIsDeleteDialogOpen}
         onDeleteConfirm={handleDeleteConfirm}
