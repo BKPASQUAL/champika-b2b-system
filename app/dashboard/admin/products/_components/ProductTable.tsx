@@ -228,7 +228,7 @@ export function ProductTable({
       </div>
 
       {!loading && products.length > 0 && (
-        <div className="flex items-center justify-between px-2 py-4 border-t">
+        <div className="flex items-center justify-between px-6 py-4 border-t ">
           <div className="text-sm text-muted-foreground">
             Showing {(currentPage - 1) * 7 + 1} to{" "}
             {Math.min(currentPage * 7, totalPages * 7)} of {totalPages * 7}{" "}

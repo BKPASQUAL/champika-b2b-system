@@ -1,13 +1,13 @@
-// app/dashboard/admin/products/page.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { CheckCircle2, X } from "lucide-react";
+import { CheckCircle2, X, Loader2 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { toast } from "sonner";
 
 import { Product, SortField, SortOrder, ProductFormData } from "./types";
 import { ProductStats } from "./_components/ProductStats";
@@ -16,93 +16,15 @@ import { ProductFilters } from "./_components/ProductFilters";
 import { ProductTable } from "./_components/ProductTable";
 import { ProductDialogs } from "./_components/ProductDialogs";
 
-// Mock Data
-const initialMockProducts: Product[] = [
-  {
-    id: "PROD-001",
-    sku: "SKU-829102",
-    name: "Holcim Cement 50kg",
-    category: "Construction",
-    supplier: "Lanka Builders Pvt Ltd",
-    stock: 150,
-    minStock: 50,
-    mrp: 2800,
-    sellingPrice: 2750,
-    costPrice: 2600,
-    discountPercent: 1.79,
-    totalValue: 412500,
-    totalCost: 390000,
-    profitMargin: 5.77,
-  },
-  {
-    id: "PROD-002",
-    sku: "SKU-192834",
-    name: "Dulux Weather Shield 10L",
-    category: "Paints",
-    supplier: "Global Paints & Coatings",
-    stock: 25,
-    minStock: 30,
-    mrp: 18500,
-    sellingPrice: 18500,
-    costPrice: 16000,
-    discountPercent: 0,
-    totalValue: 462500,
-    totalCost: 400000,
-    profitMargin: 15.63,
-  },
-  {
-    id: "PROD-003",
-    sku: "SKU-773812",
-    name: "Orange Electric Switch Socket",
-    category: "Electrical",
-    supplier: "Ruhuna Hardware Suppliers",
-    stock: 500,
-    minStock: 100,
-    mrp: 450,
-    sellingPrice: 420,
-    costPrice: 350,
-    discountPercent: 6.67,
-    totalValue: 210000,
-    totalCost: 175000,
-    profitMargin: 20.0,
-  },
-  {
-    id: "PROD-004",
-    sku: "SKU-992101",
-    name: "PVC Pipe 4 inch (Type 600)",
-    category: "Plumbing",
-    supplier: "S-Lon Lanka",
-    stock: 0,
-    minStock: 40,
-    mrp: 1200,
-    sellingPrice: 1200,
-    costPrice: 950,
-    discountPercent: 0,
-    totalValue: 0,
-    totalCost: 0,
-    profitMargin: 26.32,
-  },
-  {
-    id: "PROD-005",
-    sku: "SKU-332190",
-    name: "Roofing Sheet (Asbestos) 8ft",
-    category: "Roofing",
-    supplier: "Colombo Cement Corp",
-    stock: 85,
-    minStock: 100,
-    mrp: 3200,
-    sellingPrice: 3100,
-    costPrice: 2800,
-    discountPercent: 3.13,
-    totalValue: 263500,
-    totalCost: 238000,
-    profitMargin: 10.71,
-  },
-];
-
 export default function ProductsPage() {
-  const [products, setProducts] = useState<Product[]>(initialMockProducts);
-  const [loading, setLoading] = useState(false);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>(
+    []
+  );
+  const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>(
+    []
+  );
+  const [loading, setLoading] = useState(true);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -136,19 +58,42 @@ export default function ProductsPage() {
   const [showSuccessAlert, setShowSuccessAlert] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
 
-  // --- Logic ---
-  const categories = ["all", ...new Set(products.map((p) => p.category))];
-  const suppliers = ["all", ...new Set(products.map((p) => p.supplier))];
+  // --- Fetch Data ---
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [prodRes, catRes, supRes] = await Promise.all([
+        fetch("/api/products"),
+        fetch("/api/settings/categories?type=product"),
+        fetch("/api/suppliers"),
+      ]);
 
+      if (prodRes.ok) setProducts(await prodRes.json());
+      if (catRes.ok) setCategories(await catRes.json());
+      if (supRes.ok) setSuppliers(await supRes.json());
+    } catch (error) {
+      toast.error("Failed to load product data");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // --- Filter Logic ---
   const filteredProducts = products.filter((product) => {
     const matchesSearch =
       product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       product.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
       product.supplier.toLowerCase().includes(searchQuery.toLowerCase());
+
     const matchesCategory =
       categoryFilter === "all" || product.category === categoryFilter;
     const matchesSupplier =
       supplierFilter === "all" || product.supplier === supplierFilter;
+
     let matchesStock = true;
     if (stockFilter === "out-of-stock") matchesStock = product.stock === 0;
     else if (stockFilter === "low")
@@ -191,67 +136,56 @@ export default function ProductsPage() {
     }
   };
 
-  const handleSaveProduct = () => {
-    if (
-      !formData.name ||
-      !formData.category ||
-      !formData.supplier ||
-      formData.mrp <= 0
-    ) {
-      alert("Please fill required fields and ensure positive values.");
+  const handleSaveProduct = async () => {
+    if (!formData.name || !formData.category || !formData.supplier) {
+      toast.error("Please fill required fields (Name, Category, Supplier)");
       return;
     }
 
-    const finalSP =
-      formData.sellingPrice > 0 ? formData.sellingPrice : formData.mrp;
-    const totalVal = formData.stock * finalSP;
-    const totalCst = formData.stock * formData.costPrice;
+    try {
+      if (selectedProduct) {
+        // UPDATE
+        const res = await fetch(`/api/products/${selectedProduct.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
+        });
+        if (!res.ok) throw new Error("Failed update");
+        toast.success("Product updated successfully");
+      } else {
+        // CREATE
+        const res = await fetch("/api/products", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
+        });
+        if (!res.ok) throw new Error("Failed create");
+        toast.success("Product created successfully");
+      }
 
-    if (selectedProduct) {
-      setProducts(
-        products.map((p) =>
-          p.id === selectedProduct.id
-            ? {
-                ...p,
-                ...formData,
-                sellingPrice: finalSP,
-                totalValue: totalVal,
-                totalCost: totalCst,
-              }
-            : p
-        )
-      );
-      setSuccessMessage("Product updated!");
-    } else {
-      setProducts([
-        {
-          id: `PROD-${Date.now()}`,
-          sku: `SKU-${Date.now().toString().slice(-6)}`,
-          ...formData,
-          sellingPrice: finalSP,
-          totalValue: totalVal,
-          totalCost: totalCst,
-          discountPercent: 0,
-          profitMargin: 0,
-        },
-        ...products,
-      ]);
-      setSuccessMessage("Product added!");
+      setIsAddDialogOpen(false);
+      resetForm();
+      fetchData(); // Refresh data
+    } catch (error) {
+      toast.error("Operation failed");
     }
-    setShowSuccessAlert(true);
-    setIsAddDialogOpen(false);
-    resetForm();
-    setTimeout(() => setShowSuccessAlert(false), 3000);
   };
 
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = async () => {
     if (!selectedProduct) return;
-    setProducts(products.filter((p) => p.id !== selectedProduct.id));
-    setSuccessMessage("Product deleted!");
-    setShowSuccessAlert(true);
-    setIsDeleteDialogOpen(false);
-    setSelectedProduct(null);
-    setTimeout(() => setShowSuccessAlert(false), 3000);
+    try {
+      const res = await fetch(`/api/products/${selectedProduct.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed delete");
+
+      toast.success("Product deleted");
+      setIsDeleteDialogOpen(false);
+      setSelectedProduct(null);
+      fetchData();
+    } catch (error) {
+      toast.error("Delete failed");
+    }
   };
 
   const resetForm = () => {
@@ -268,29 +202,50 @@ export default function ProductsPage() {
     setSelectedProduct(null);
   };
 
-  const generateExcel = () => console.log("Export Excel");
-  const generatePDF = () => console.log("Export PDF");
+  const generateExcel = () => {
+    if (sortedProducts.length === 0) {
+      toast.error("No data to export");
+      return;
+    }
+    const data = sortedProducts.map((p) => ({
+      SKU: p.sku,
+      Name: p.name,
+      Category: p.category,
+      Supplier: p.supplier,
+      Stock: p.stock,
+      MRP: p.mrp,
+      "Selling Price": p.sellingPrice,
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Products");
+    XLSX.writeFile(wb, "products.xlsx");
+  };
+
+  const generatePDF = () => {
+    if (sortedProducts.length === 0) {
+      toast.error("No data to export");
+      return;
+    }
+    const doc = new jsPDF();
+    doc.text("Product Catalog", 14, 15);
+    autoTable(doc, {
+      head: [["SKU", "Name", "Category", "Supplier", "Stock", "Price"]],
+      body: sortedProducts.map((p) => [
+        p.sku,
+        p.name,
+        p.category,
+        p.supplier,
+        p.stock,
+        p.sellingPrice,
+      ]),
+      startY: 20,
+    });
+    doc.save("products.pdf");
+  };
 
   return (
     <div className="space-y-6">
-      {showSuccessAlert && (
-        <div className="fixed top-4 right-4 z-50 w-96 animate-in slide-in-from-right">
-          <Alert className="bg-green-50 border-green-200">
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
-            <AlertTitle className="text-green-800">Success!</AlertTitle>
-            <AlertDescription className="text-green-700">
-              {successMessage}
-            </AlertDescription>
-            <button
-              onClick={() => setShowSuccessAlert(false)}
-              className="absolute top-2 right-2 p-1 hover:bg-green-100 rounded"
-            >
-              <X className="h-4 w-4 text-green-600" />
-            </button>
-          </Alert>
-        </div>
-      )}
-
       <ProductHeader
         onAddClick={() => {
           resetForm();
@@ -312,8 +267,15 @@ export default function ProductsPage() {
             setSupplierFilter={setSupplierFilter}
             stockFilter={stockFilter}
             setStockFilter={setStockFilter}
-            categories={categories}
-            suppliers={suppliers}
+            // FIX: Deduplicate names using Set to prevent duplicate key errors
+            categories={[
+              "all",
+              ...Array.from(new Set(categories.map((c) => c.name))),
+            ]}
+            suppliers={[
+              "all",
+              ...Array.from(new Set(suppliers.map((s) => s.name))),
+            ]}
           />
         </CardHeader>
         <CardContent className="p-0">
@@ -349,6 +311,9 @@ export default function ProductsPage() {
         isDeleteDialogOpen={isDeleteDialogOpen}
         setIsDeleteDialogOpen={setIsDeleteDialogOpen}
         onDeleteConfirm={handleDeleteConfirm}
+        // Pass dynamic data to dialogs
+        categories={categories}
+        suppliers={suppliers}
       />
     </div>
   );

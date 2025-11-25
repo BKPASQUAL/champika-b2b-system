@@ -1,4 +1,5 @@
-// app/dashboard/admin/products/_components/ProductDialogs.tsx
+"use client";
+
 import {
   Dialog,
   DialogContent,
@@ -10,6 +11,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Product, ProductFormData } from "../types";
 
 interface ProductDialogsProps {
@@ -22,6 +30,10 @@ interface ProductDialogsProps {
   isDeleteDialogOpen: boolean;
   setIsDeleteDialogOpen: (open: boolean) => void;
   onDeleteConfirm: () => void;
+
+  // New props for dropdowns
+  categories: { id: string; name: string }[];
+  suppliers: { id: string; name: string }[];
 }
 
 export function ProductDialogs({
@@ -34,6 +46,8 @@ export function ProductDialogs({
   isDeleteDialogOpen,
   setIsDeleteDialogOpen,
   onDeleteConfirm,
+  categories,
+  suppliers,
 }: ProductDialogsProps) {
   return (
     <>
@@ -58,24 +72,51 @@ export function ProductDialogs({
                 }
               />
             </div>
+
+            {/* Category Dropdown */}
             <div className="space-y-2">
               <Label>Category *</Label>
-              <Input
+              <Select
                 value={formData.category}
-                onChange={(e) =>
-                  setFormData({ ...formData, category: e.target.value })
+                onValueChange={(val) =>
+                  setFormData({ ...formData, category: val })
                 }
-              />
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.name}>
+                      {cat.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+
+            {/* Supplier Dropdown */}
             <div className="space-y-2">
               <Label>Supplier *</Label>
-              <Input
+              <Select
                 value={formData.supplier}
-                onChange={(e) =>
-                  setFormData({ ...formData, supplier: e.target.value })
+                onValueChange={(val) =>
+                  setFormData({ ...formData, supplier: val })
                 }
-              />
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select Supplier" />
+                </SelectTrigger>
+                <SelectContent>
+                  {suppliers.map((sup) => (
+                    <SelectItem key={sup.id} value={sup.name}>
+                      {sup.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+
             <div className="space-y-2">
               <Label>Cost Price (LKR)</Label>
               <Input
