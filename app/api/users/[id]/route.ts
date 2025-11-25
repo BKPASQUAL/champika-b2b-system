@@ -2,7 +2,41 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { updateUserSchema } from "@/lib/validations/user";
 
-// PATCH: Update user details
+// 1. GET: Fetch single user by ID (This was missing)
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+
+  try {
+    const { data: profile, error } = await supabaseAdmin
+      .from("profiles")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (error || !profile) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    // Return data matching the UserProfile interface in your View Page
+    return NextResponse.json({
+      id: profile.id,
+      full_name: profile.full_name,
+      username: profile.username,
+      email: profile.email,
+      role: profile.role,
+      is_active: profile.is_active,
+      created_at: profile.created_at,
+      updated_at: profile.updated_at,
+    });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+// 2. PATCH: Update user details
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -12,14 +46,13 @@ export async function PATCH(
     const body = await request.json();
     const validatedData = updateUserSchema.parse(body);
 
-    // 1. Update Profile Data
+    // Update Profile Data
     const profileUpdates: any = {};
     if (validatedData.fullName)
       profileUpdates.full_name = validatedData.fullName;
     if (validatedData.username)
       profileUpdates.username = validatedData.username;
     if (validatedData.role) profileUpdates.role = validatedData.role;
-    // Only update status here if sent (status toggle has its own route usually)
     if (validatedData.status)
       profileUpdates.is_active = validatedData.status === "Active";
 
@@ -30,7 +63,7 @@ export async function PATCH(
 
     if (profileError) throw profileError;
 
-    // 2. Update Auth Data (Email/Password)
+    // Update Auth Data (Email/Password)
     const authUpdates: any = {};
     if (validatedData.email) authUpdates.email = validatedData.email;
     if (validatedData.password && validatedData.password.trim() !== "") {
@@ -52,7 +85,7 @@ export async function PATCH(
   }
 }
 
-// DELETE: Remove user (Cascades to Profile)
+// 3. DELETE: Remove user
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

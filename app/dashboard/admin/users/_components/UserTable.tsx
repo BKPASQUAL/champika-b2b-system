@@ -1,5 +1,4 @@
-"use client";
-
+// app/dashboard/admin/users/_components/UserTable.tsx
 import {
   Table,
   TableBody,
@@ -12,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Edit, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Edit, Trash2, ChevronLeft, ChevronRight, Eye } from "lucide-react"; // Add Eye icon
 import { User } from "../types";
 
 interface UserTableProps {
@@ -20,7 +19,7 @@ interface UserTableProps {
   onEdit: (user: User) => void;
   onDelete: (user: User) => void;
   onStatusChange: (user: User, checked: boolean) => void;
-  // Pagination Props
+  onView: (user: User) => void; // NEW PROP
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
@@ -31,10 +30,12 @@ export function UserTable({
   onEdit,
   onDelete,
   onStatusChange,
+  onView, // Destructure new prop
   currentPage,
   totalPages,
   onPageChange,
 }: UserTableProps) {
+  // ... (Keep existing helper functions like getRoleBadgeColor) ...
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
       case "admin":
@@ -128,10 +129,19 @@ export function UserTable({
                     </div>
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">
-                    {user.lastActive}
+                    {new Date(user.lastActive).toLocaleDateString()}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
+                      {/* NEW VIEW BUTTON */}
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => onView(user)}
+                        title="View Activity"
+                      >
+                        <Eye className="w-4 h-4 text-blue-600" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon-sm"
@@ -157,8 +167,7 @@ export function UserTable({
           </TableBody>
         </Table>
       </div>
-
-      {/* Pagination Controls */}
+      {/* Pagination Controls (Existing code) */}
       {users.length > 0 && (
         <div className="flex items-center justify-between px-2 py-4">
           <div className="text-sm text-muted-foreground">

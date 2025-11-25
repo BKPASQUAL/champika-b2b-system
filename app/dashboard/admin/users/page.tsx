@@ -19,6 +19,7 @@ import { User, UserFormData } from "./types";
 import { UserTable } from "./_components/UserTable";
 import { UserDialogs } from "./_components/UserDialogs";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation"; // Import router
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -36,7 +37,11 @@ export default function UsersPage() {
 
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [pendingStatus, setPendingStatus] = useState<boolean | null>(null);
+  const router = useRouter();
 
+  const handleViewUser = (user: User) => {
+    router.push(`/dashboard/admin/users/${user.id}`);
+  };
   // Form State
   const [formData, setFormData] = useState<UserFormData>({
     fullName: "",
@@ -267,6 +272,7 @@ export default function UsersPage() {
               onEdit={handleEdit}
               onDelete={handleDelete}
               onStatusChange={handleStatusClick}
+              onView={handleViewUser} // Pass the handler here
               currentPage={currentPage}
               totalPages={totalPages}
               onPageChange={setCurrentPage}
