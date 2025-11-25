@@ -11,10 +11,9 @@ export async function GET() {
       .select("*")
       .order("created_at", { ascending: false });
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+    if (error) throw error;
 
+    // Map DB fields to Frontend "User" type
     const users = profiles.map((profile) => ({
       id: profile.id,
       fullName: profile.full_name,
@@ -26,11 +25,8 @@ export async function GET() {
     }));
 
     return NextResponse.json(users);
-  } catch (error) {
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 }
-    );
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
@@ -38,9 +34,9 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-
     const validatedData = createUserSchema.parse(body);
 
+    // 1. Create User in Supabase Auth
     const { data: authData, error: authError } =
       await supabaseAdmin.auth.admin.createUser({
         email: validatedData.email,
@@ -52,27 +48,27 @@ export async function POST(request: NextRequest) {
         },
       });
 
-    if (authError) {
+    if (authError)
       return NextResponse.json({ error: authError.message }, { status: 400 });
-    }
-
-    if (!authData.user) {
+    if (!authData.user)
       return NextResponse.json(
         { error: "Failed to create user" },
         { status: 500 }
       );
-    }
 
+    // 2. Create Profile Record (Use INSERT, not UPDATE)
     const { error: profileError } = await supabaseAdmin
       .from("profiles")
-      .update({
+      .insert({
+        id: authData.user.id,
         full_name: validatedData.fullName,
         username: validatedData.username,
+        email: validatedData.email,
         role: validatedData.role,
         is_active: validatedData.status === "Active",
-      })
-      .eq("id", authData.user.id);
+      });
 
+    // Rollback Auth user if profile creation fails
     if (profileError) {
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
       return NextResponse.json(
@@ -87,7 +83,6 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     if (error instanceof ZodError) {
-      // CHANGE: Use .issues instead of .errors
       return NextResponse.json(
         { error: "Validation Error", details: error.issues },
         { status: 400 }

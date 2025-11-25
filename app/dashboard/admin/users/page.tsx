@@ -27,7 +27,7 @@ export default function UsersPage() {
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5;
+  const itemsPerPage = 10;
 
   // Dialog States
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -47,30 +47,26 @@ export default function UsersPage() {
     status: "Active",
   });
 
-  // --- 1. DATA FETCHING (MAPPING DB TO TABLE) ---
+  // --- 1. FETCH USERS ---
   const fetchUsers = useCallback(async () => {
     try {
       setIsLoading(true);
-      const response = await fetch("/api/users"); // Calls the GET API
-
+      const response = await fetch("/api/users");
       if (!response.ok) throw new Error("Failed to fetch users");
-
       const data = await response.json();
-      setUsers(data); // The API already maps DB columns to User type
+      setUsers(data);
     } catch (error) {
       toast.error("Failed to load users");
-      console.error(error);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  // Initial Load
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
 
-  // --- 2. FILTERING & PAGINATION ---
+  // --- 2. FILTERING ---
   const filteredUsers = users.filter(
     (user) =>
       user.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -88,7 +84,7 @@ export default function UsersPage() {
     setCurrentPage(1);
   }, [searchQuery]);
 
-  // --- 3. HANDLERS ---
+  // --- 3. ACTION HANDLERS ---
 
   const handleAddNew = () => {
     setSelectedUser(null);
@@ -109,7 +105,7 @@ export default function UsersPage() {
       fullName: user.fullName,
       username: user.username,
       email: user.email,
-      password: "",
+      password: "", // Keep blank unless changing
       role: user.role,
       status: user.status,
     });
@@ -121,15 +117,14 @@ export default function UsersPage() {
     setIsDeleteDialogOpen(true);
   };
 
-  // --- 4. API ACTIONS ---
+  // --- 4. API INTEGRATION ---
 
   const handleSaveUser = async () => {
-    // Validation
+    // Simple Validation
     if (!formData.fullName || !formData.username || !formData.email) {
       toast.error("Please fill in all required fields");
       return;
     }
-
     if (!selectedUser && !formData.password) {
       toast.error("Password is required for new users");
       return;
@@ -137,16 +132,15 @@ export default function UsersPage() {
 
     try {
       let response;
-
       if (selectedUser) {
-        // UPDATE User
+        // UPDATE
         response = await fetch(`/api/users/${selectedUser.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(formData),
         });
       } else {
-        // CREATE User
+        // CREATE
         response = await fetch("/api/users", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -155,16 +149,11 @@ export default function UsersPage() {
       }
 
       const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Operation failed");
 
-      if (!response.ok) {
-        throw new Error(result.error || "Operation failed");
-      }
-
-      toast.success(
-        selectedUser ? "User updated successfully" : "User created successfully"
-      );
+      toast.success(selectedUser ? "User updated!" : "User created!");
       setIsAddDialogOpen(false);
-      fetchUsers(); // Refresh table
+      fetchUsers(); // Refresh List
     } catch (error: any) {
       toast.error(error.message);
     }
@@ -172,26 +161,23 @@ export default function UsersPage() {
 
   const confirmDelete = async () => {
     if (!selectedUser) return;
-
     try {
       const response = await fetch(`/api/users/${selectedUser.id}`, {
         method: "DELETE",
       });
-
       if (!response.ok) {
-        const result = await response.json();
-        throw new Error(result.error || "Delete failed");
+        const res = await response.json();
+        throw new Error(res.error || "Delete failed");
       }
-
-      toast.success("User deleted successfully");
+      toast.success("User deleted");
       setIsDeleteDialogOpen(false);
-      fetchUsers(); // Refresh table
+      fetchUsers();
     } catch (error: any) {
       toast.error(error.message);
     }
   };
 
-  // Status Toggle Logic
+  // Status Switch Logic
   const handleStatusClick = (user: User, checked: boolean) => {
     setSelectedUser(user);
     setPendingStatus(checked);
@@ -212,7 +198,7 @@ export default function UsersPage() {
         const newStatus = pendingStatus ? "Active" : "Inactive";
         toast.success(`User marked as ${newStatus}`);
 
-        // Optimistic Update (Update UI immediately)
+        // Optimistic Update
         setUsers(
           users.map((u) =>
             u.id === selectedUser.id ? { ...u, status: newStatus } : u
@@ -222,7 +208,6 @@ export default function UsersPage() {
         toast.error("Failed to update status");
       } finally {
         setIsStatusDialogOpen(false);
-        setSelectedUser(null);
         setPendingStatus(null);
       }
     }
@@ -230,19 +215,18 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">System Users</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage access and user roles for the system.
-          </p>
+          <p className="text-muted-foreground mt-1">Manage access and roles.</p>
         </div>
         <div className="flex gap-2">
           <Button
             variant="outline"
             size="icon"
             onClick={fetchUsers}
-            title="Refresh Data"
+            title="Refresh"
           >
             <RefreshCw
               className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
@@ -254,6 +238,7 @@ export default function UsersPage() {
         </div>
       </div>
 
+      {/* Table Card */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -272,7 +257,7 @@ export default function UsersPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {isLoading && users.length === 0 ? (
+          {isLoading ? (
             <div className="flex justify-center py-10">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
@@ -290,6 +275,7 @@ export default function UsersPage() {
         </CardContent>
       </Card>
 
+      {/* Dialogs */}
       <UserDialogs
         isAddDialogOpen={isAddDialogOpen}
         setIsAddDialogOpen={setIsAddDialogOpen}
@@ -302,6 +288,7 @@ export default function UsersPage() {
         onDeleteConfirm={confirmDelete}
       />
 
+      {/* Status Confirmation Alert */}
       <AlertDialog
         open={isStatusDialogOpen}
         onOpenChange={setIsStatusDialogOpen}
@@ -319,24 +306,13 @@ export default function UsersPage() {
                     : "text-red-600 font-bold"
                 }
               >
-                {" "}
-                {pendingStatus ? "Active" : "Inactive"}
+                {pendingStatus ? " Active" : " Inactive"}
               </span>
               ?
-              {!pendingStatus && (
-                <span className="block mt-2 text-xs text-muted-foreground">
-                  Inactive users will not be able to log in to the system.
-                </span>
-              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel
-              onClick={() => {
-                setIsStatusDialogOpen(false);
-                setPendingStatus(null);
-              }}
-            >
+            <AlertDialogCancel onClick={() => setIsStatusDialogOpen(false)}>
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction onClick={confirmStatusChange}>
