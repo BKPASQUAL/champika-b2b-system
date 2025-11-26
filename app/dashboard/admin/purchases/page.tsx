@@ -1,110 +1,71 @@
-// app/dashboard/admin/purchases/page.tsx
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { CheckCircle2, X } from "lucide-react";
+import { toast } from "sonner";
+
 import { PurchaseHeader } from "./_components/PurchaseHeader";
 import { PurchaseStats } from "./_components/PurchaseStats";
 import { PurchaseFilters } from "./_components/PurchaseFilters";
 import { PurchaseTable } from "./_components/PurchaseTable";
-import { Purchase, PurchaseFormData, SortField, SortOrder } from "./types";
-
-// Updated Mock Data with correct fields
-const mockPurchases: Purchase[] = [
-  {
-    id: "1",
-    purchaseId: "PO-1001",
-    supplierId: "S1",
-    supplierName: "Lanka Builders Pvt Ltd",
-    invoiceNo: "INV-2023-001",
-    purchaseDate: "2023-11-01",
-    billingDate: "2023-11-02",
-    arrivalDate: "2023-11-05",
-    status: "Received",
-    paymentStatus: "Paid",
-    totalAmount: 450000,
-    paidAmount: 450000,
-    items: [],
-  },
-  {
-    id: "2",
-    purchaseId: "PO-1002",
-    supplierId: "S2",
-    supplierName: "Colombo Cement Corp",
-    invoiceNo: "CCC-882",
-    purchaseDate: "2023-11-05",
-    billingDate: "",
-    arrivalDate: "",
-    status: "Ordered",
-    paymentStatus: "Unpaid",
-    totalAmount: 1200000,
-    paidAmount: 0,
-    items: [],
-  },
-  {
-    id: "3",
-    purchaseId: "PO-1003",
-    supplierId: "S3",
-    supplierName: "Tokyo Cement",
-    invoiceNo: "-",
-    purchaseDate: "2023-11-10",
-    billingDate: "",
-    arrivalDate: "",
-    status: "Ordered",
-    paymentStatus: "Partial",
-    totalAmount: 850000,
-    paidAmount: 400000,
-    items: [],
-  },
-];
+import { Purchase, SortField, SortOrder } from "./types";
 
 export default function PurchasesPage() {
   const router = useRouter();
-  const [purchases, setPurchases] = useState<Purchase[]>(mockPurchases);
-  const [loading, setLoading] = useState(false);
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  // Fix: Use correct sort field
+
+  // Sort & Pagination
   const [sortField, setSortField] = useState<SortField>("purchaseDate");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
-  // Dialog States (Only for Edit/Delete now, Create is a page)
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(
-    null
-  );
+  // --- 1. Fetch Real Data from API ---
+  const fetchPurchases = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await fetch("/api/purchases");
+      if (!response.ok) throw new Error("Failed to fetch purchases");
+      const data = await response.json();
 
-  // Fix: Updated initial state to match PurchaseFormData type
-  const [formData, setFormData] = useState<PurchaseFormData>({
-    supplierId: "",
-    supplierName: "",
-    invoiceNo: "",
-    purchaseDate: new Date().toISOString().split("T")[0],
-    billingDate: "",
-    arrivalDate: "",
-    status: "Ordered",
-    paymentStatus: "Unpaid",
-    items: [],
-    totalAmount: 0,
-  });
+      // Map API response to Frontend Type
+      // Note: The list API doesn't return 'items' array to save bandwidth, so we set it to empty []
+      const mappedData: Purchase[] = data.map((p: any) => ({
+        id: p.id,
+        purchaseId: p.purchaseId,
+        supplierId: p.supplierId,
+        supplierName: p.supplierName,
+        invoiceNo: p.invoiceNo || "-",
+        purchaseDate: p.purchaseDate,
+        arrivalDate: p.arrivalDate,
+        billingDate: p.arrivalDate, // Fallback
+        status: p.status,
+        paymentStatus: p.paymentStatus,
+        totalAmount: p.totalAmount,
+        paidAmount: p.paidAmount,
+        items: [], // Empty for list view
+      }));
 
-  // Success Alert
-  const [showSuccessAlert, setShowSuccessAlert] = useState(false);
-  const [successMessage, setSuccessMessage] = useState("");
-
-  const handleSort = (field: SortField) => {
-    if (sortField === field) setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-    else {
-      setSortField(field);
-      setSortOrder("asc");
+      setPurchases(mappedData);
+    } catch (error) {
+      toast.error("Error loading purchases");
+      console.error(error);
+    } finally {
+      setLoading(false);
     }
-  };
+  }, []);
 
+  useEffect(() => {
+    fetchPurchases();
+  }, [fetchPurchases]);
+
+  // --- 2. Filter Logic ---
   const filteredPurchases = purchases.filter((p) => {
     const matchesSearch =
       p.purchaseId.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -115,6 +76,7 @@ export default function PurchasesPage() {
     return matchesSearch && matchesStatus;
   });
 
+  // --- 3. Sort Logic ---
   const sortedPurchases = [...filteredPurchases].sort((a, b) => {
     const aVal = a[sortField];
     const bVal = b[sortField];
@@ -127,62 +89,41 @@ export default function PurchasesPage() {
     return 0;
   });
 
-  // This handleSave is now only used for EDITING via the dialog
-  const handleEditSave = () => {
-    if (!formData.supplierName) return alert("Supplier name is required");
+  // --- 4. Pagination Logic ---
+  const totalPages = Math.ceil(sortedPurchases.length / itemsPerPage);
+  const paginatedPurchases = sortedPurchases.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
-    if (selectedPurchase) {
-      setPurchases(
-        purchases.map((p) =>
-          p.id === selectedPurchase.id ? { ...p, ...formData } : p
-        )
-      );
-      setSuccessMessage("Purchase updated successfully");
-      setIsAddDialogOpen(false);
-      setShowSuccessAlert(true);
-      setTimeout(() => setShowSuccessAlert(false), 3000);
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter]);
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    else {
+      setSortField(field);
+      setSortOrder("asc");
     }
   };
 
-  const handleDelete = () => {
-    if (selectedPurchase) {
-      setPurchases(purchases.filter((p) => p.id !== selectedPurchase.id));
-      setIsDeleteDialogOpen(false);
-      setSuccessMessage("Purchase deleted");
-      setShowSuccessAlert(true);
-      setTimeout(() => setShowSuccessAlert(false), 3000);
-    }
+  const handleDelete = async (purchase: Purchase) => {
+    if (!confirm(`Are you sure you want to delete ${purchase.purchaseId}?`))
+      return;
+    // Ideally you should implement DELETE /api/purchases/[id]
+    toast.info("Delete functionality requires backend implementation.");
   };
 
   return (
     <div className="space-y-6">
-      {showSuccessAlert && (
-        <div className="fixed top-4 right-4 z-50 w-96 animate-in slide-in-from-right">
-          <Alert className="bg-green-50 border-green-200">
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
-            <AlertTitle className="text-green-800">Success!</AlertTitle>
-            <AlertDescription className="text-green-700">
-              {successMessage}
-            </AlertDescription>
-            <button
-              onClick={() => setShowSuccessAlert(false)}
-              className="absolute top-2 right-2 p-1 hover:bg-green-100 rounded"
-            >
-              <X className="h-4 w-4 text-green-600" />
-            </button>
-          </Alert>
-        </div>
-      )}
-
       <PurchaseHeader
-        onAddClick={() => {
-          // Navigate to the new create page instead of opening dialog
-          router.push("/dashboard/admin/purchases/create");
-        }}
-        onExportExcel={() => {}}
-        onExportPDF={() => {}}
+        onAddClick={() => router.push("/dashboard/admin/purchases/create")}
+        onExportExcel={() => toast.info("Export coming soon")}
+        onExportPDF={() => toast.info("Export coming soon")}
       />
 
+      {/* Stats using real data */}
       <PurchaseStats purchases={purchases} />
 
       <Card>
@@ -196,33 +137,18 @@ export default function PurchasesPage() {
         </CardHeader>
         <CardContent>
           <PurchaseTable
-            purchases={sortedPurchases}
+            purchases={paginatedPurchases}
             loading={loading}
             sortField={sortField}
             sortOrder={sortOrder}
             onSort={handleSort}
             onEdit={(p) => {
-              setSelectedPurchase(p);
-              setFormData({
-                supplierId: p.supplierId,
-                supplierName: p.supplierName,
-                invoiceNo: p.invoiceNo || "",
-                purchaseDate: p.purchaseDate,
-                billingDate: p.billingDate || "",
-                arrivalDate: p.arrivalDate || "",
-                status: p.status,
-                paymentStatus: p.paymentStatus,
-                items: p.items,
-                totalAmount: p.totalAmount,
-              });
-              setIsAddDialogOpen(true);
+              // Navigate to edit page or show dialog (mock for now)
+              toast.info("Edit feature coming soon");
             }}
-            onDelete={(p) => {
-              setSelectedPurchase(p);
-              setIsDeleteDialogOpen(true);
-            }}
+            onDelete={handleDelete}
             currentPage={currentPage}
-            totalPages={1}
+            totalPages={totalPages}
             onPageChange={setCurrentPage}
           />
         </CardContent>

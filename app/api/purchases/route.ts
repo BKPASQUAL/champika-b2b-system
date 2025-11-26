@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
 
-// Validation for Purchase Items
+// --- Validation Schemas ---
+
 const itemSchema = z.object({
   productId: z.string(),
   quantity: z.number().min(1),
@@ -12,26 +13,69 @@ const itemSchema = z.object({
   sellingPrice: z.number(),
   discountPercent: z.number(),
   discountAmount: z.number(),
-  finalPrice: z.number(), // Net Cost Price
+  finalPrice: z.number(), // Net Unit Cost
   total: z.number(),
 });
 
-// Validation for Purchase Header
 const purchaseSchema = z.object({
-  supplier_id: z.string(),
+  supplier_id: z.string().min(1, "Supplier is required"),
   invoice_number: z.string().optional().or(z.literal("")),
   purchase_date: z.string(),
   arrival_date: z.string().optional().or(z.literal("")),
   total_amount: z.number(),
-  items: z.array(itemSchema),
+  items: z.array(itemSchema).min(1, "At least one item is required"),
 });
 
+// --- GET: Fetch All Purchases ---
+export async function GET() {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("purchases")
+      .select(
+        `
+        *,
+        suppliers (
+          name,
+          contact_person
+        )
+      `
+      )
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    // Map to frontend format
+    const purchases = data.map((p) => ({
+      id: p.id,
+      purchaseId: p.purchase_id,
+      supplierId: p.supplier_id,
+      supplierName: p.suppliers?.name || "Unknown",
+      invoiceNo: p.invoice_no,
+      purchaseDate: p.purchase_date,
+      arrivalDate: p.arrival_date,
+      status: p.status,
+      paymentStatus: p.payment_status,
+      totalAmount: p.total_amount,
+      paidAmount: p.paid_amount,
+      // We usually don't fetch full items list for the main table to save bandwidth,
+      // but you can add a separate endpoint for fetching details if needed.
+      itemsCount: 0,
+    }));
+
+    return NextResponse.json(purchases);
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+// --- POST: Create New Purchase ---
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const val = purchaseSchema.parse(body);
 
     // 1. Generate Purchase ID (PO-XXXX)
+    // Note: In high concurrency, use a database sequence or function instead.
     const { count } = await supabaseAdmin
       .from("purchases")
       .select("*", { count: "exact", head: true });
@@ -57,18 +101,18 @@ export async function POST(request: NextRequest) {
 
     if (purchaseError) throw purchaseError;
 
-    // 3. Prepare and Insert Purchase Items
+    // 3. Insert Purchase Items
     const itemsData = val.items.map((item) => ({
       purchase_id: purchase.id,
       product_id: item.productId,
       quantity: item.quantity,
       free_quantity: item.freeQuantity,
-      unit_cost: item.finalPrice, // Net cost after discount
+      unit_cost: item.unitPrice, // Gross Cost
       mrp: item.mrp,
       selling_price: item.sellingPrice,
       discount_percent: item.discountPercent,
       discount_amount: item.discountAmount,
-      total_cost: item.total,
+      total_cost: item.total, // Net Total
     }));
 
     const { error: itemsError } = await supabaseAdmin
@@ -76,46 +120,34 @@ export async function POST(request: NextRequest) {
       .insert(itemsData);
 
     if (itemsError) {
-      console.error("Error inserting items:", itemsError);
-      // In a real production app, you might want to delete the header here to rollback
+      // Rollback: Delete the header if items fail (basic transaction simulation)
+      await supabaseAdmin.from("purchases").delete().eq("id", purchase.id);
       throw itemsError;
     }
 
-    // 4. Update Inventory & Product Prices
-    // This loop updates the stock and prices for every item purchased
+    // 4. Update Product Inventory & Prices
+    // This ensures your product catalog always reflects the latest cost/price and stock
     for (const item of val.items) {
-      // A. Increment Stock (Qty + Free Qty)
-      const totalQtyToAdd = item.quantity + item.freeQuantity;
+      // A. Get current product data to increment stock safely
+      const { data: currentProduct } = await supabaseAdmin
+        .from("products")
+        .select("stock_quantity")
+        .eq("id", item.productId)
+        .single();
 
-      const { error: rpcError } = await supabaseAdmin.rpc("increment_stock", {
-        p_id: item.productId,
-        qty: totalQtyToAdd,
-      });
+      const currentStock = currentProduct?.stock_quantity || 0;
+      const newStock = currentStock + item.quantity + item.freeQuantity;
 
-      if (rpcError) {
-        console.error(
-          `Failed to update stock for product ${item.productId}:`,
-          rpcError
-        );
-      }
-
-      // B. Update Product Master Data (Cost, MRP, Selling Price)
-      // We update the product with the latest prices from this purchase
-      const { error: updateError } = await supabaseAdmin
+      // B. Update Product
+      await supabaseAdmin
         .from("products")
         .update({
-          cost_price: item.finalPrice, // Update Cost Price to latest Net Cost
+          stock_quantity: newStock,
+          cost_price: item.finalPrice, // Update Cost to latest Net Cost
           mrp: item.mrp, // Update MRP
           selling_price: item.sellingPrice, // Update Selling Price
         })
         .eq("id", item.productId);
-
-      if (updateError) {
-        console.error(
-          `Failed to update prices for product ${item.productId}`,
-          updateError
-        );
-      }
     }
 
     return NextResponse.json(
