@@ -8,14 +8,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Edit,
   Trash2,
   Phone,
-  ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  ArrowUpDown,
   ChevronLeft,
   ChevronRight,
   Loader2,
@@ -23,7 +23,6 @@ import {
   CheckCircle2,
   XCircle,
   AlertOctagon,
-  Eye,
 } from "lucide-react";
 import { Customer, SortField, SortOrder, CustomerStatus } from "../types";
 
@@ -162,9 +161,14 @@ export function CustomerTable({
                         <span className="font-medium text-sm">
                           {customer.shopName}
                         </span>
-                        <span className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Phone className="w-3 h-3" /> {customer.phone}
-                        </span>
+                        <div className="text-xs text-muted-foreground flex flex-col">
+                          <span className="flex items-center gap-1">
+                            <Phone className="w-3 h-3" /> {customer.phone}
+                          </span>
+                          {customer.ownerName && (
+                            <span>{customer.ownerName}</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </TableCell>
@@ -197,13 +201,6 @@ export function CustomerTable({
                         size="icon-sm"
                         onClick={() => onEdit(customer)}
                       >
-                        <Eye className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => onEdit(customer)}
-                      >
                         <Edit className="w-4 h-4" />
                       </Button>
                       <Button
@@ -221,12 +218,13 @@ export function CustomerTable({
           </TableBody>
         </Table>
       </div>
+
       {/* Pagination */}
       {!loading && customers.length > 0 && (
         <div className="flex items-center justify-between px-2 py-4 border-t">
           <div className="text-sm text-muted-foreground">
-            Showing {(currentPage - 1) * 7 + 1} to{" "}
-            {Math.min(currentPage * 7, totalPages * 7)} of {totalPages * 7}{" "}
+            Showing {(currentPage - 1) * 10 + 1} to{" "}
+            {Math.min(currentPage * 10, totalPages * 10)} of {totalPages * 10}{" "}
             entries
           </div>
           <div className="flex items-center gap-2">
@@ -238,11 +236,6 @@ export function CustomerTable({
             >
               <ChevronLeft className="h-4 w-4 mr-1" /> Previous
             </Button>
-            <div className="flex items-center gap-1">
-              <Button variant="default" size="sm" className="w-9">
-                {currentPage}
-              </Button>
-            </div>
             <Button
               variant="outline"
               size="sm"

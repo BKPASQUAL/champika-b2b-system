@@ -1,11 +1,7 @@
-// app/dashboard/admin/customers/page.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import React, { useState, useEffect, useCallback } from "react";
 import {
-  CheckCircle2,
-  X,
   Download,
   Plus,
   FileSpreadsheet,
@@ -14,6 +10,8 @@ import {
   Users,
   TrendingUp,
   Wallet,
+  Loader2,
+  RefreshCw,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,63 +29,19 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { toast } from "sonner";
+import * as XLSX from "xlsx";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 
 import { Customer, SortField, SortOrder, CustomerFormData } from "./types";
 import { CustomerTable } from "./_components/CustomerTable";
 import { CustomerDialogs } from "./_components/CustomerDialogs";
 
-// Mock Data
-const initialMockCustomers: Customer[] = [
-  {
-    id: "C-001",
-    customerId: "CUS-1001",
-    shopName: "Saman Electronics",
-    ownerName: "Saman Kumara",
-    phone: "077 123 4567",
-    email: "saman@gmail.com",
-    address: "No 12, Main St, Galle",
-    route: "Galle Town",
-    status: "Active",
-    creditLimit: 100000,
-    outstandingBalance: 25000,
-    lastOrderDate: "2023-11-15",
-    totalOrders: 12,
-  },
-  {
-    id: "C-002",
-    customerId: "CUS-1002",
-    shopName: "City Hardware",
-    ownerName: "Nimal Perera",
-    phone: "071 987 6543",
-    email: "cityhw@yahoo.com",
-    address: "Matara Rd, Ahangama",
-    route: "Ahangama",
-    status: "Active",
-    creditLimit: 200000,
-    outstandingBalance: 154000,
-    lastOrderDate: "2023-11-18",
-    totalOrders: 45,
-  },
-  {
-    id: "C-003",
-    customerId: "CUS-1003",
-    shopName: "Lanka Traders",
-    ownerName: "Kamal Silva",
-    phone: "076 555 4444",
-    email: "",
-    address: "Temple Rd, Unawatuna",
-    route: "Unawatuna",
-    status: "Blocked",
-    creditLimit: 50000,
-    outstandingBalance: 62000,
-    lastOrderDate: "2023-10-01",
-    totalOrders: 8,
-  },
-];
-
 export default function CustomersPage() {
-  const [customers, setCustomers] = useState<Customer[]>(initialMockCustomers);
-  const [loading, setLoading] = useState(false);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -98,7 +52,7 @@ export default function CustomersPage() {
   const [sortField, setSortField] = useState<SortField>("shopName");
   const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 7;
+  const itemsPerPage = 10;
 
   // Dialogs
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -106,8 +60,6 @@ export default function CustomersPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
     null
   );
-  const [showSuccessAlert, setShowSuccessAlert] = useState(false);
-  const [successMessage, setSuccessMessage] = useState("");
 
   // Form Data
   const [formData, setFormData] = useState<CustomerFormData>({
@@ -121,14 +73,35 @@ export default function CustomersPage() {
     creditLimit: 0,
   });
 
-  // Derived Data
-  const routes = ["all", ...new Set(customers.map((c) => c.route))];
+  // --- 1. API: Fetch Customers ---
+  const fetchCustomers = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await fetch("/api/customers");
+      if (!res.ok) throw new Error("Failed to fetch customers");
+      const data = await res.json();
+      setCustomers(data);
+    } catch (error) {
+      toast.error("Error loading customer data");
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCustomers();
+  }, [fetchCustomers]);
+
+  // --- 2. Derived Data for Stats & Filters ---
+  const routes = ["all", ...Array.from(new Set(customers.map((c) => c.route)))];
+
   const totalOutstanding = customers.reduce(
-    (sum, c) => sum + c.outstandingBalance,
+    (sum, c) => sum + (c.outstandingBalance || 0),
     0
   );
 
-  // Logic
+  // --- 3. Filter & Sort Logic ---
   const filteredCustomers = customers.filter((customer) => {
     const matchesSearch =
       customer.shopName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -159,7 +132,8 @@ export default function CustomersPage() {
     currentPage * itemsPerPage
   );
 
-  // Actions
+  // --- 4. Handlers ---
+
   const handleSort = (field: SortField) => {
     if (sortField === field) setSortOrder(sortOrder === "asc" ? "desc" : "asc");
     else {
@@ -168,46 +142,70 @@ export default function CustomersPage() {
     }
   };
 
-  const handleSaveCustomer = () => {
-    if (!formData.shopName || !formData.phone) {
-      alert("Please fill required fields");
+  const handleSaveCustomer = async () => {
+    if (!formData.shopName || !formData.phone || !formData.route) {
+      toast.error("Please fill required fields (Shop Name, Phone, Route)");
       return;
     }
 
-    if (selectedCustomer) {
-      setCustomers(
-        customers.map((c) =>
-          c.id === selectedCustomer.id ? { ...c, ...formData } : c
-        )
-      );
-      setSuccessMessage("Customer updated successfully!");
-    } else {
-      setCustomers([
-        ...customers,
-        {
-          id: `C-${Date.now()}`,
-          customerId: `CUS-${1000 + customers.length + 1}`,
-          ...formData,
-          outstandingBalance: 0,
-          lastOrderDate: "-",
-          totalOrders: 0,
-        },
-      ]);
-      setSuccessMessage("Customer added successfully!");
+    setIsSubmitting(true);
+
+    try {
+      if (selectedCustomer) {
+        // UPDATE (PATCH)
+        const res = await fetch(`/api/customers/${selectedCustomer.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to update customer");
+
+        toast.success("Customer updated successfully");
+      } else {
+        // CREATE (POST)
+        const res = await fetch("/api/customers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to create customer");
+
+        toast.success("Customer created successfully");
+      }
+
+      setIsAddDialogOpen(false);
+      resetForm();
+      fetchCustomers(); // Refresh list
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsAddDialogOpen(false);
-    resetForm();
-    setShowSuccessAlert(true);
-    setTimeout(() => setShowSuccessAlert(false), 3000);
   };
 
-  const handleDeleteConfirm = () => {
-    if (selectedCustomer) {
-      setCustomers(customers.filter((c) => c.id !== selectedCustomer.id));
+  const handleDeleteConfirm = async () => {
+    if (!selectedCustomer) return;
+
+    try {
+      const res = await fetch(`/api/customers/${selectedCustomer.id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to delete customer");
+      }
+
+      toast.success("Customer deleted successfully");
       setIsDeleteDialogOpen(false);
-      setSuccessMessage("Customer deleted!");
-      setShowSuccessAlert(true);
-      setTimeout(() => setShowSuccessAlert(false), 3000);
+      setSelectedCustomer(null);
+      fetchCustomers(); // Refresh list
+    } catch (error: any) {
+      toast.error(error.message);
     }
   };
 
@@ -225,28 +223,53 @@ export default function CustomersPage() {
     setSelectedCustomer(null);
   };
 
+  // --- 5. Reports ---
+  const generateExcel = () => {
+    if (sortedCustomers.length === 0) {
+      toast.error("No data to export");
+      return;
+    }
+    const data = sortedCustomers.map((c) => ({
+      ID: c.customerId,
+      Shop: c.shopName,
+      Owner: c.ownerName,
+      Phone: c.phone,
+      Route: c.route,
+      Status: c.status,
+      "Outstanding (LKR)": c.outstandingBalance,
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Customers");
+    XLSX.writeFile(wb, "customers.xlsx");
+  };
+
+  const generatePDF = () => {
+    if (sortedCustomers.length === 0) {
+      toast.error("No data to export");
+      return;
+    }
+    const doc = new jsPDF();
+    doc.text("Customer List", 14, 15);
+    autoTable(doc, {
+      head: [["ID", "Shop Name", "Phone", "Route", "Status", "Balance"]],
+      body: sortedCustomers.map((c) => [
+        c.customerId,
+        c.shopName,
+        c.phone,
+        c.route,
+        c.status,
+        c.outstandingBalance.toLocaleString(),
+      ]),
+      startY: 20,
+    });
+    doc.save("customers.pdf");
+  };
+
   useEffect(() => setCurrentPage(1), [searchQuery, routeFilter, statusFilter]);
 
   return (
     <div className="space-y-6">
-      {showSuccessAlert && (
-        <div className="fixed top-4 right-4 z-50 w-96 animate-in slide-in-from-right">
-          <Alert className="bg-green-50 border-green-200">
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
-            <AlertTitle className="text-green-800">Success!</AlertTitle>
-            <AlertDescription className="text-green-700">
-              {successMessage}
-            </AlertDescription>
-            <button
-              onClick={() => setShowSuccessAlert(false)}
-              className="absolute top-2 right-2 p-1 hover:bg-green-100 rounded"
-            >
-              <X className="h-4 w-4 text-green-600" />
-            </button>
-          </Alert>
-        </div>
-      )}
-
       {/* Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
@@ -256,6 +279,15 @@ export default function CustomersPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={fetchCustomers}
+            disabled={loading}
+            title="Refresh Data"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
@@ -263,11 +295,11 @@ export default function CustomersPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={generateExcel}>
                 <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" />{" "}
                 Export Excel
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={generatePDF}>
                 <FileText className="w-4 h-4 mr-2 text-red-600" /> Export PDF
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -316,7 +348,8 @@ export default function CustomersPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {routes.length - 1}
+              {/* Subtract 1 if "all" is included in the count logic above, but here we count unique routes directly */}
+              {new Set(customers.map((c) => c.route)).size}
             </div>
           </CardContent>
         </Card>
@@ -370,7 +403,16 @@ export default function CustomersPage() {
             sortOrder={sortOrder}
             onSort={handleSort}
             onEdit={(c) => {
-              setFormData(c);
+              setFormData({
+                shopName: c.shopName,
+                ownerName: c.ownerName,
+                phone: c.phone,
+                email: c.email,
+                address: c.address,
+                route: c.route,
+                status: c.status,
+                creditLimit: c.creditLimit,
+              });
               setSelectedCustomer(c);
               setIsAddDialogOpen(true);
             }}

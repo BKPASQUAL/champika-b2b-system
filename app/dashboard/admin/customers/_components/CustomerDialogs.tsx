@@ -1,3 +1,4 @@
+// app/dashboard/admin/customers/_components/CustomerDialogs.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -19,30 +20,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { MapPin } from "lucide-react";
+import { MapPin, Loader2 } from "lucide-react";
 import { Customer, CustomerFormData, CustomerStatus } from "../types";
-
-// --- Helper Hook to Fetch Routes ---
-const useRoutes = () => {
-  const [routes, setRoutes] = useState<{ id: string; name: string }[]>([]);
-
-  useEffect(() => {
-    const fetchRoutes = async () => {
-      try {
-        const res = await fetch("/api/settings/categories?type=route");
-        if (res.ok) {
-          const data = await res.json();
-          setRoutes(data);
-        }
-      } catch (err) {
-        console.error("Failed to load routes", err);
-      }
-    };
-    fetchRoutes();
-  }, []);
-
-  return routes;
-};
 
 interface CustomerDialogsProps {
   isAddDialogOpen: boolean;
@@ -67,8 +46,29 @@ export function CustomerDialogs({
   setIsDeleteDialogOpen,
   onDeleteConfirm,
 }: CustomerDialogsProps) {
-  // 1. Fetch Routes for the Dropdown
-  const routes = useRoutes();
+  const [routes, setRoutes] = useState<{ id: string; name: string }[]>([]);
+  const [loadingRoutes, setLoadingRoutes] = useState(false);
+
+  // Fetch Routes from Settings API for the dropdown
+  useEffect(() => {
+    const fetchRoutes = async () => {
+      if (!isAddDialogOpen) return;
+      try {
+        setLoadingRoutes(true);
+        const res = await fetch("/api/settings/categories?type=route");
+        if (res.ok) {
+          const data = await res.json();
+          setRoutes(data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch routes", error);
+      } finally {
+        setLoadingRoutes(false);
+      }
+    };
+
+    fetchRoutes();
+  }, [isAddDialogOpen]);
 
   return (
     <>
@@ -81,8 +81,8 @@ export function CustomerDialogs({
             </DialogTitle>
             <DialogDescription>
               {selectedCustomer
-                ? "Update customer details"
-                : "Enter new customer information"}
+                ? "Update customer details."
+                : "Enter new customer information below."}
             </DialogDescription>
           </DialogHeader>
 
@@ -101,12 +101,13 @@ export function CustomerDialogs({
 
             {/* Owner Name */}
             <div className="space-y-2">
-              <Label>Owner / Contact Person *</Label>
+              <Label>Owner / Contact Person</Label>
               <Input
                 value={formData.ownerName}
                 onChange={(e) =>
                   setFormData({ ...formData, ownerName: e.target.value })
                 }
+                placeholder="e.g. Mr. Perera"
               />
             </div>
 
@@ -124,7 +125,7 @@ export function CustomerDialogs({
 
             {/* Email */}
             <div className="col-span-2 space-y-2">
-              <Label>Email</Label>
+              <Label>Email (Optional)</Label>
               <Input
                 value={formData.email}
                 onChange={(e) =>
@@ -142,11 +143,11 @@ export function CustomerDialogs({
                 onChange={(e) =>
                   setFormData({ ...formData, address: e.target.value })
                 }
-                placeholder="Street address"
+                placeholder="Full Street address"
               />
             </div>
 
-            {/* --- Route / Area Dropdown --- */}
+            {/* Route Dropdown */}
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
                 <MapPin className="w-3 h-3" /> Route / Area *
@@ -158,21 +159,19 @@ export function CustomerDialogs({
                 }
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select Route" />
+                  <SelectValue
+                    placeholder={loadingRoutes ? "Loading..." : "Select Route"}
+                  />
                 </SelectTrigger>
                 <SelectContent>
-                  {routes.length === 0 ? (
-                    <SelectItem value="default" disabled>
-                      No routes found. Add in Settings.
-                    </SelectItem>
-                  ) : (
-                    // Map the fetched routes to Dropdown Items
-                    routes.map((r) => (
-                      <SelectItem key={r.id} value={r.name}>
-                        {r.name}
-                      </SelectItem>
-                    ))
+                  {routes.length === 0 && !loadingRoutes && (
+                    <SelectItem value="General">General (Default)</SelectItem>
                   )}
+                  {routes.map((r) => (
+                    <SelectItem key={r.id} value={r.name}>
+                      {r.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -225,7 +224,7 @@ export function CustomerDialogs({
         </DialogContent>
       </Dialog>
 
-      {/* Delete Dialog */}
+      {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>

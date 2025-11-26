@@ -10,7 +10,7 @@ export interface Customer {
   phone: string;
   email: string;
   address: string;
-  route: string; // e.g., "Galle Road", "Matara Town"
+  route: string; // e.g., "Galle Road"
   status: CustomerStatus;
   creditLimit: number;
   outstandingBalance: number;
