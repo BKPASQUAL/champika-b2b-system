@@ -5,9 +5,7 @@ import {
   Plus,
   Trash2,
   ChevronRight,
-  FolderTree,
-  Layers,
-  Tag,
+  MapPin, // Icon for Route
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +16,7 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -35,10 +33,10 @@ export function CategorySettings() {
   const [loading, setLoading] = useState(true);
   const [newName, setNewName] = useState("");
 
-  // We use specific types for the tabs
+  // Added "route" and "supplier" to the types
   const [activeType, setActiveType] = useState<
-    "category" | "brand" | "model" | "spec"
-  >("category");
+    "category" | "brand" | "model" | "spec" | "supplier" | "route"
+  >("route"); // Defaulting to route since you are working on it
 
   // For adding sub-items
   const [selectedParent, setSelectedParent] = useState<string | null>(null);
@@ -76,7 +74,7 @@ export function CategorySettings() {
     try {
       const payload = {
         name: newName,
-        type: activeType, // 'category', 'brand', 'model', 'spec'
+        type: activeType,
         parent_id: selectedParent, // If adding a sub-item
       };
 
@@ -143,6 +141,7 @@ export function CategorySettings() {
                 {root.name}
               </div>
               <div className="flex items-center gap-2">
+                {/* Only show "Add Sub" if strictly necessary, usually routes don't have subs but the logic is here if you need it */}
                 <Button
                   variant="ghost"
                   size="sm"
@@ -191,9 +190,9 @@ export function CategorySettings() {
   return (
     <Card className="h-full">
       <CardHeader>
-        <CardTitle>Product Classifications</CardTitle>
+        <CardTitle>System Configurations</CardTitle>
         <CardDescription>
-          Manage Categories, Brands, Models and Specs hierarchy.
+          Manage Categories, Brands, Routes, and other drop-downs.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -202,11 +201,16 @@ export function CategorySettings() {
           onValueChange={(v) => setActiveType(v as any)}
           className="w-full"
         >
-          <TabsList className="grid w-full grid-cols-4 mb-6">
+          {/* Updated Grid to fit Routes and Supplier */}
+          <TabsList className="grid w-full grid-cols-3 lg:grid-cols-6 mb-6 h-auto">
+            <TabsTrigger value="route" className="flex gap-2">
+              <MapPin className="h-4 w-4" /> Route
+            </TabsTrigger>
             <TabsTrigger value="category">Category</TabsTrigger>
             <TabsTrigger value="brand">Brand</TabsTrigger>
-            <TabsTrigger value="model">Models</TabsTrigger>
-            <TabsTrigger value="spec">Specs/Size</TabsTrigger>
+            <TabsTrigger value="model">Model</TabsTrigger>
+            <TabsTrigger value="spec">Spec</TabsTrigger>
+            <TabsTrigger value="supplier">Supplier</TabsTrigger>
           </TabsList>
 
           {/* Add Input Area */}

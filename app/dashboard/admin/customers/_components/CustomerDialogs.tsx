@@ -1,4 +1,6 @@
-// app/dashboard/admin/customers/_components/CustomerDialogs.tsx
+"use client";
+
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -17,18 +19,38 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { MapPin } from "lucide-react";
 import { Customer, CustomerFormData, CustomerStatus } from "../types";
 
+// --- Helper Hook to Fetch Routes ---
+const useRoutes = () => {
+  const [routes, setRoutes] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    const fetchRoutes = async () => {
+      try {
+        const res = await fetch("/api/settings/categories?type=route");
+        if (res.ok) {
+          const data = await res.json();
+          setRoutes(data);
+        }
+      } catch (err) {
+        console.error("Failed to load routes", err);
+      }
+    };
+    fetchRoutes();
+  }, []);
+
+  return routes;
+};
+
 interface CustomerDialogsProps {
-  // Add/Edit Dialog
   isAddDialogOpen: boolean;
   setIsAddDialogOpen: (open: boolean) => void;
   formData: CustomerFormData;
   setFormData: (data: CustomerFormData) => void;
   onSave: () => void;
   selectedCustomer: Customer | null;
-
-  // Delete Dialog
   isDeleteDialogOpen: boolean;
   setIsDeleteDialogOpen: (open: boolean) => void;
   onDeleteConfirm: () => void;
@@ -45,6 +67,9 @@ export function CustomerDialogs({
   setIsDeleteDialogOpen,
   onDeleteConfirm,
 }: CustomerDialogsProps) {
+  // 1. Fetch Routes for the Dropdown
+  const routes = useRoutes();
+
   return (
     <>
       {/* Add/Edit Dialog */}
@@ -60,7 +85,9 @@ export function CustomerDialogs({
                 : "Enter new customer information"}
             </DialogDescription>
           </DialogHeader>
+
           <div className="grid grid-cols-2 gap-4 py-4">
+            {/* Shop Name */}
             <div className="col-span-2 space-y-2">
               <Label>Shop Name *</Label>
               <Input
@@ -71,6 +98,8 @@ export function CustomerDialogs({
                 placeholder="e.g. Singer Plus - Galle"
               />
             </div>
+
+            {/* Owner Name */}
             <div className="space-y-2">
               <Label>Owner / Contact Person *</Label>
               <Input
@@ -80,6 +109,8 @@ export function CustomerDialogs({
                 }
               />
             </div>
+
+            {/* Phone */}
             <div className="space-y-2">
               <Label>Phone Number *</Label>
               <Input
@@ -90,6 +121,8 @@ export function CustomerDialogs({
                 placeholder="077xxxxxxx"
               />
             </div>
+
+            {/* Email */}
             <div className="col-span-2 space-y-2">
               <Label>Email</Label>
               <Input
@@ -97,8 +130,11 @@ export function CustomerDialogs({
                 onChange={(e) =>
                   setFormData({ ...formData, email: e.target.value })
                 }
+                placeholder="email@example.com"
               />
             </div>
+
+            {/* Address */}
             <div className="col-span-2 space-y-2">
               <Label>Address</Label>
               <Input
@@ -106,18 +142,42 @@ export function CustomerDialogs({
                 onChange={(e) =>
                   setFormData({ ...formData, address: e.target.value })
                 }
+                placeholder="Street address"
               />
             </div>
+
+            {/* --- Route / Area Dropdown --- */}
             <div className="space-y-2">
-              <Label>Route / Area</Label>
-              <Input
+              <Label className="flex items-center gap-2">
+                <MapPin className="w-3 h-3" /> Route / Area *
+              </Label>
+              <Select
                 value={formData.route}
-                onChange={(e) =>
-                  setFormData({ ...formData, route: e.target.value })
+                onValueChange={(val) =>
+                  setFormData({ ...formData, route: val })
                 }
-                placeholder="e.g. Matara Road"
-              />
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select Route" />
+                </SelectTrigger>
+                <SelectContent>
+                  {routes.length === 0 ? (
+                    <SelectItem value="default" disabled>
+                      No routes found. Add in Settings.
+                    </SelectItem>
+                  ) : (
+                    // Map the fetched routes to Dropdown Items
+                    routes.map((r) => (
+                      <SelectItem key={r.id} value={r.name}>
+                        {r.name}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
             </div>
+
+            {/* Credit Limit */}
             <div className="space-y-2">
               <Label>Credit Limit (LKR)</Label>
               <Input
@@ -132,6 +192,8 @@ export function CustomerDialogs({
                 }
               />
             </div>
+
+            {/* Status */}
             <div className="space-y-2">
               <Label>Status</Label>
               <Select
@@ -141,8 +203,6 @@ export function CustomerDialogs({
                 }
               >
                 <SelectTrigger className="w-full">
-                  {" "}
-                  {/* Matches other inputs */}
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -153,6 +213,7 @@ export function CustomerDialogs({
               </Select>
             </div>
           </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
               Cancel

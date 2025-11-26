@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
 
+// Added "route" to the list of allowed types
 const schema = z.object({
   name: z.string().min(1),
-  type: z.enum(["category", "brand", "model", "spec", "supplier"]), // Extended types
+  type: z.enum(["category", "brand", "model", "spec", "supplier", "route"]),
   parent_id: z.string().nullable().optional(),
 });
 
