@@ -5,6 +5,11 @@ export interface Product {
   sku: string;
   name: string;
   category: string;
+  subCategory?: string; // New
+  brand?: string; // New
+  subBrand?: string; // New
+  modelType?: string; // New
+  sizeSpec?: string; // New
   supplier: string;
   stock: number;
   minStock: number;
@@ -20,6 +25,7 @@ export interface Product {
 export type SortField =
   | "name"
   | "category"
+  | "brand"
   | "supplier"
   | "stock"
   | "costPrice"
@@ -32,6 +38,11 @@ export type SortOrder = "asc" | "desc";
 export interface ProductFormData {
   name: string;
   category: string;
+  subCategory: string; // New
+  brand: string; // New
+  subBrand: string; // New
+  modelType: string; // New
+  sizeSpec: string; // New
   supplier: string;
   stock: number;
   minStock: number;
