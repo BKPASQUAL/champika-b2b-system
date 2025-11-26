@@ -42,8 +42,8 @@ export default function InvoicesPage() {
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [repFilter, setRepFilter] = useState("all"); // NEW: Rep Filter
-  const [reps, setReps] = useState<string[]>([]); // NEW: Rep List
+  const [repFilter, setRepFilter] = useState("all");
+  const [reps, setReps] = useState<string[]>([]);
 
   // Sort & Pagination
   const [sortField, setSortField] = useState<SortField>("date");
@@ -84,18 +84,16 @@ export default function InvoicesPage() {
     }
   }, []);
 
-  // --- 2. Fetch Reps for Dropdown ---
+  // --- 2. Fetch Reps ---
   useEffect(() => {
     const fetchReps = async () => {
       try {
         const res = await fetch("/api/users");
         if (res.ok) {
           const users = await res.json();
-          // Filter users with role 'rep' and get their names
           const repNames = users
             .filter((u: any) => u.role === "rep")
             .map((u: any) => u.fullName);
-          // Remove duplicates just in case
           setReps(Array.from(new Set(repNames)));
         }
       } catch (error) {
@@ -114,8 +112,6 @@ export default function InvoicesPage() {
       inv.salesRepName.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesStatus = statusFilter === "all" || inv.status === statusFilter;
-
-    // NEW: Rep Filter Check
     const matchesRep = repFilter === "all" || inv.salesRepName === repFilter;
 
     return matchesSearch && matchesStatus && matchesRep;
@@ -154,6 +150,11 @@ export default function InvoicesPage() {
       setSortField(field);
       setSortOrder("desc");
     }
+  };
+
+  // --- 6. Action Handlers ---
+  const handleEdit = (id: string) => {
+    router.push(`/dashboard/admin/invoices/${id}/edit`);
   };
 
   useEffect(() => {
@@ -219,7 +220,7 @@ export default function InvoicesPage() {
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search invoice, customer..."
-                className="pl-9 w-1/2"
+                className="pl-9 w-full"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -244,7 +245,7 @@ export default function InvoicesPage() {
                 </SelectContent>
               </Select>
 
-              {/* NEW: Representative Filter */}
+              {/* Representative Filter */}
               <Select value={repFilter} onValueChange={setRepFilter}>
                 <SelectTrigger className="w-full md:w-[180px]">
                   <div className="flex items-center gap-2 text-muted-foreground">
@@ -272,6 +273,7 @@ export default function InvoicesPage() {
             sortField={sortField}
             sortOrder={sortOrder}
             onSort={handleSort}
+            onEdit={handleEdit} // <--- THIS WAS MISSING
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={setCurrentPage}

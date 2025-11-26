@@ -6,11 +6,11 @@ const productSchema = z.object({
   sku: z.string().optional(),
   name: z.string().min(2, "Name required"),
   category: z.string().min(1, "Category required"),
-  subCategory: z.string().optional(), // New
-  brand: z.string().optional(), // New
-  subBrand: z.string().optional(), // New
-  modelType: z.string().optional(), // New
-  sizeSpec: z.string().optional(), // New
+  subCategory: z.string().optional(),
+  brand: z.string().optional(),
+  subBrand: z.string().optional(),
+  modelType: z.string().optional(),
+  sizeSpec: z.string().optional(),
   supplier: z.string().min(1, "Supplier required"),
   stock: z.number().min(0),
   minStock: z.number().min(0),
@@ -34,17 +34,24 @@ export async function GET() {
       sku: p.sku,
       name: p.name,
       category: p.category,
-      subCategory: p.sub_category, // DB column
+      subCategory: p.sub_category,
       brand: p.brand,
       subBrand: p.sub_brand,
       modelType: p.model_type,
       sizeSpec: p.size_spec,
       supplier: p.supplier_name,
-      stock: p.stock_quantity || 0,
+
+      // --- FIX: Return BOTH keys to satisfy all pages ---
+      stock: p.stock_quantity || 0, // Used by Product Page Table
+      stock_quantity: p.stock_quantity || 0, // Used by Invoice Edit Page
+
       minStock: p.min_stock_level || 0,
       mrp: p.mrp || 0,
       sellingPrice: p.selling_price || 0,
       costPrice: p.cost_price || 0,
+
+      unitOfMeasure: p.unit_of_measure || "unit",
+
       // Derived
       discountPercent:
         p.mrp > 0 ? ((p.mrp - p.selling_price) / p.mrp) * 100 : 0,
@@ -78,7 +85,7 @@ export async function POST(request: NextRequest) {
         sku: sku,
         name: val.name,
         category: val.category,
-        sub_category: val.subCategory, // Mapping
+        sub_category: val.subCategory,
         brand: val.brand,
         sub_brand: val.subBrand,
         model_type: val.modelType,
