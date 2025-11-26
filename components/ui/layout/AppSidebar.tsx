@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { LogOut, Package } from "lucide-react";
 import { roleNavItems, UserRole } from "@/app/config/nav-config";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface AppSidebarProps {
   role: UserRole;
@@ -17,17 +17,35 @@ export function AppSidebar({ role }: AppSidebarProps) {
   const router = useRouter();
   const navSections = roleNavItems[role];
 
-  // Mock user data - frontend only
-  const [user] = useState({
-    name: "Admin User",
-    email: "admin@champiks.com",
-    role: role,
+  // --- STATE FOR USER INFO ---
+  const [user, setUser] = useState({
+    name: "Loading...",
+    email: "",
+    initials: "..",
   });
+
+  useEffect(() => {
+    // Load user data from localStorage when component mounts
+    if (typeof window !== "undefined") {
+      const storedUser = localStorage.getItem("currentUser");
+      if (storedUser) {
+        try {
+          setUser(JSON.parse(storedUser));
+        } catch (e) {
+          console.error("Failed to parse user data");
+        }
+      }
+    }
+  }, []);
+  // ---------------------------
 
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
+    // Clear user data on logout
+    localStorage.removeItem("currentUser");
+
     // Simulate logout delay
     setTimeout(() => {
       router.push("/login");
@@ -40,9 +58,7 @@ export function AppSidebar({ role }: AppSidebarProps) {
       {/* Logo Header */}
       <div className="h-16 flex items-center border-b px-6 shrink-0">
         <Package className="h-6 w-6 text-primary shrink-0" />
-        <span className="ml-2 text-lg font-semibold truncate">
-          Champiks B2B
-        </span>
+        <span className="ml-2 text-lg font-semibold truncate">Champika HW</span>
       </div>
 
       {/* Navigation - Scrollable */}
@@ -91,9 +107,7 @@ export function AppSidebar({ role }: AppSidebarProps) {
       <div className="border-t p-4 shrink-0 bg-card">
         <div className="flex items-center gap-3 mb-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shrink-0">
-            <span className="text-sm font-medium">
-              {user.name.charAt(0).toUpperCase()}
-            </span>
+            <span className="text-sm font-medium">{user.initials}</span>
           </div>
           <div className="flex-1 overflow-hidden min-w-0">
             <p className="text-sm font-medium truncate">{user.name}</p>

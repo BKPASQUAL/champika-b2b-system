@@ -74,6 +74,13 @@ interface OrderItem {
   total: number;
 }
 
+interface UserData {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+}
+
 export default function CreateOrderPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -85,15 +92,14 @@ export default function CreateOrderPage() {
     []
   );
 
+  // User State (For actual login info)
+  const [currentUser, setCurrentUser] = useState<UserData | null>(null);
+
   // Form State
   const [customerId, setCustomerId] = useState<string | null>(null);
   const [orderDate, setOrderDate] = useState(
     new Date().toISOString().split("T")[0]
   );
-
-  // Mocking the logged-in Rep
-  const currentRepName = "Ajith Bandara";
-  const currentRepId = "REP-001";
 
   // Items State
   const [items, setItems] = useState<OrderItem[]>([]);
@@ -121,7 +127,15 @@ export default function CreateOrderPage() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // Fetch Products
+        // 1. Load Current User from Local Storage
+        if (typeof window !== "undefined") {
+          const storedUser = localStorage.getItem("currentUser");
+          if (storedUser) {
+            setCurrentUser(JSON.parse(storedUser));
+          }
+        }
+
+        // 2. Fetch Products
         const productsRes = await fetch("/api/products");
         const productsData = await productsRes.json();
         setProducts(
@@ -136,7 +150,7 @@ export default function CreateOrderPage() {
           }))
         );
 
-        // Fetch Customers
+        // 3. Fetch Customers
         const customersRes = await fetch("/api/customers");
         const customersData = await customersRes.json();
         setCustomers(
@@ -147,7 +161,7 @@ export default function CreateOrderPage() {
         );
       } catch (error) {
         console.error("Error fetching data:", error);
-        toast.error("Failed to load catalog data");
+        toast.error("Failed to load data");
       } finally {
         setLoading(false);
       }
@@ -241,15 +255,18 @@ export default function CreateOrderPage() {
       toast.error("Please add items to the order.");
       return;
     }
+    if (!currentUser?.id) {
+      toast.error("User session invalid. Please re-login.");
+      return;
+    }
 
     setSubmitting(true);
 
-    // Construct payload compatible with your Invoice/Order API
     const orderData = {
       customerId,
-      salesRepId: currentRepId, // Use logged-in rep ID
+      salesRepId: currentUser.id, // <--- USING ACTUAL LOGIN ID
       invoiceDate: orderDate,
-      orderStatus: "Pending", // Default status for Reps
+      orderStatus: "Pending",
       items,
       subTotal: subtotal,
       extraDiscountPercent: extraDiscount,
@@ -259,8 +276,6 @@ export default function CreateOrderPage() {
     };
 
     try {
-      // Using the invoices API which creates an Order + Invoice
-      // If you want just an order, you'd target a separate /api/orders endpoint
       const res = await fetch("/api/invoices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -293,7 +308,6 @@ export default function CreateOrderPage() {
     0
   );
 
-  // Extra Discount Calculation
   const extraDiscountAmount = (subtotal * extraDiscount) / 100;
   const grandTotal = subtotal - extraDiscountAmount;
 
@@ -424,7 +438,7 @@ export default function CreateOrderPage() {
                 </div>
               </div>
 
-              {/* Read-Only Info Row */}
+              {/* Dynamic User Info Row */}
               <div className="grid grid-cols-2 gap-4 pt-2">
                 <div className="flex items-center gap-3 p-3 rounded-md border bg-muted/20">
                   <User className="h-5 w-5 text-muted-foreground" />
@@ -432,8 +446,9 @@ export default function CreateOrderPage() {
                     <span className="text-xs text-muted-foreground uppercase">
                       Sales Rep
                     </span>
+                    {/* Display Real User Name */}
                     <span className="font-medium text-sm">
-                      {currentRepName}
+                      {currentUser ? currentUser.name : "Loading..."}
                     </span>
                   </div>
                 </div>
@@ -459,7 +474,7 @@ export default function CreateOrderPage() {
               <CardDescription>Select items from the catalog</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Product Selection - Searchable */}
+              {/* Product Selection */}
               <div className="space-y-2">
                 <Label>Product</Label>
                 <Popover open={productOpen} onOpenChange={setProductOpen}>
@@ -521,7 +536,7 @@ export default function CreateOrderPage() {
                 </Popover>
               </div>
 
-              {/* Quantity and Free Quantity Row */}
+              {/* Quantity & Pricing Inputs (Same as previous) */}
               <div className="grid grid-cols-4 gap-4">
                 <div className="space-y-2">
                   <Label>Quantity</Label>
@@ -576,7 +591,6 @@ export default function CreateOrderPage() {
                 </div>
               </div>
 
-              {/* Price Row */}
               <div className="grid grid-cols-4 gap-4">
                 <div className="space-y-2">
                   <Label>Unit Price</Label>
@@ -623,7 +637,6 @@ export default function CreateOrderPage() {
                 </div>
               </div>
 
-              {/* Add Button */}
               <Button
                 onClick={handleAddItem}
                 className="w-full h-11 text-base"
@@ -668,7 +681,7 @@ export default function CreateOrderPage() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      items.map((item) => (
+                      items.map((item, idx) => (
                         <TableRow key={item.id}>
                           <TableCell>
                             <div className="font-medium">

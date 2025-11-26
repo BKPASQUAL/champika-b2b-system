@@ -36,8 +36,28 @@ export default function LoginPage() {
         throw new Error(data.error || "Login failed");
       }
 
+      // --- SAVE USER DATA ---
+      if (typeof window !== "undefined") {
+        localStorage.setItem(
+          "currentUser",
+          JSON.stringify({
+            name: data.user.name,
+            email: data.user.email,
+            role: data.role,
+            // Create simple initials from name (e.g. "Ajith Bandara" -> "AB")
+            initials: data.user.name
+              .split(" ")
+              .map((n: string) => n[0])
+              .join("")
+              .substring(0, 2)
+              .toUpperCase(),
+          })
+        );
+      }
+      // ---------------------
+
       // Successful Login
-      toast.success(`Welcome back to Zavora Farm`);
+      toast.success(`Welcome back, ${data.user.name}`);
 
       // Redirect based on Role
       switch (data.role) {
@@ -113,7 +133,6 @@ export default function LoginPage() {
             {/* Password Field */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                {/* Fixed: Changed classID to className */}
                 <Label
                   htmlFor="password"
                   className="text-sm font-medium text-black"

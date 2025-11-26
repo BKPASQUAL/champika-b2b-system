@@ -2,7 +2,8 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-// Initialize Supabase Client (Service Role is safer for backend auth checks)
+// Initialize Supabase Client
+// Note: Using Service Role key to bypass RLS for login checks
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -41,10 +42,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. Fetch User Role from Profiles Table
+    // 3. Fetch User Role & Details from Profiles Table
+    // UPDATED: Selecting full_name and username
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("role, is_active")
+      .select("role, is_active, full_name, username")
       .eq("id", authData.user.id)
       .single();
 
@@ -62,10 +64,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Return Success
+    // 4. Return Success with Role, Session, and User Info
     return NextResponse.json({
       message: "Login successful",
       role: profile.role,
+      user: {
+        id: authData.user.id,
+        email: authData.user.email,
+        name: profile.full_name || "User",
+        username: profile.username || "",
+      },
       session: authData.session,
     });
   } catch (error) {
