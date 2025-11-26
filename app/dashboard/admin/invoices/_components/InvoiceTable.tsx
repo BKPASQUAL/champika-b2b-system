@@ -142,7 +142,7 @@ export function InvoiceTable({
                 </div>
               </TableHead>
 
-              {/* 7. Payment Status */}
+              {/* 7. Payment Status (All Status) */}
               <TableHead
                 onClick={() => onSort("status")}
                 className="text-center cursor-pointer hover:bg-muted/50"
@@ -152,7 +152,7 @@ export function InvoiceTable({
                 </div>
               </TableHead>
 
-              {/* 8. Representative Name */}
+              {/* 8. Representative Name (Sorting Added) */}
               <TableHead
                 onClick={() => onSort("salesRepName")}
                 className="cursor-pointer hover:bg-muted/50 hidden md:table-cell"
@@ -179,32 +179,26 @@ export function InvoiceTable({
             ) : (
               invoices.map((invoice) => (
                 <TableRow key={invoice.id}>
-                  {/* 1. Date */}
                   <TableCell className="whitespace-nowrap">
                     {new Date(invoice.date).toLocaleDateString()}
                   </TableCell>
 
-                  {/* 2. Customer */}
                   <TableCell className="font-medium">
                     {invoice.customerName}
                   </TableCell>
 
-                  {/* 3. Invoice No */}
                   <TableCell className="font-mono text-xs">
                     {invoice.invoiceNo}
                   </TableCell>
 
-                  {/* 4. Total */}
                   <TableCell className="text-right font-medium">
                     LKR {invoice.totalAmount.toLocaleString()}
                   </TableCell>
 
-                  {/* 5. Paid */}
                   <TableCell className="text-right text-muted-foreground">
                     LKR {invoice.paidAmount.toLocaleString()}
                   </TableCell>
 
-                  {/* 6. Due Amount */}
                   <TableCell className="text-right">
                     <span
                       className={
@@ -217,12 +211,10 @@ export function InvoiceTable({
                     </span>
                   </TableCell>
 
-                  {/* 7. Payment Status */}
                   <TableCell className="text-center">
                     {renderStatusBadge(invoice.status)}
                   </TableCell>
 
-                  {/* 8. Representative Name */}
                   <TableCell className="hidden md:table-cell">
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <User className="w-3 h-3" />
@@ -230,7 +222,6 @@ export function InvoiceTable({
                     </div>
                   </TableCell>
 
-                  {/* 9. Action */}
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
                       <Button variant="ghost" size="icon-sm">
