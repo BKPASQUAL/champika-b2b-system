@@ -1,4 +1,6 @@
 // app/dashboard/admin/invoices/_components/InvoiceTable.tsx
+"use client";
+
 import {
   Table,
   TableBody,
@@ -16,11 +18,14 @@ import {
   Eye,
   Download,
   User,
+  Printer,
+  Loader2,
   ChevronLeft,
   ChevronRight,
-  Loader2,
 } from "lucide-react";
 import { Invoice, SortField, SortOrder, PaymentStatus } from "../types";
+import { printInvoice } from "../print-utils"; // Import the new utility
+import { useState } from "react";
 
 interface InvoiceTableProps {
   invoices: Invoice[];
@@ -43,6 +48,14 @@ export function InvoiceTable({
   totalPages,
   onPageChange,
 }: InvoiceTableProps) {
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  const handleDownload = async (id: string) => {
+    setDownloadingId(id);
+    await printInvoice(id);
+    setDownloadingId(null);
+  };
+
   const getSortIcon = (field: SortField) => {
     if (sortField !== field)
       return <ArrowUpDown className="w-4 h-4 ml-1 opacity-40" />;
@@ -82,7 +95,6 @@ export function InvoiceTable({
         <Table>
           <TableHeader>
             <TableRow>
-              {/* 1. Date */}
               <TableHead
                 onClick={() => onSort("date")}
                 className="cursor-pointer hover:bg-muted/50"
@@ -92,7 +104,6 @@ export function InvoiceTable({
                 </div>
               </TableHead>
 
-              {/* 2. Customer */}
               <TableHead
                 onClick={() => onSort("customerName")}
                 className="cursor-pointer hover:bg-muted/50"
@@ -102,7 +113,6 @@ export function InvoiceTable({
                 </div>
               </TableHead>
 
-              {/* 3. Invoice No */}
               <TableHead
                 onClick={() => onSort("invoiceNo")}
                 className="cursor-pointer hover:bg-muted/50"
@@ -112,7 +122,6 @@ export function InvoiceTable({
                 </div>
               </TableHead>
 
-              {/* 4. Total */}
               <TableHead
                 onClick={() => onSort("totalAmount")}
                 className="text-right cursor-pointer hover:bg-muted/50"
@@ -122,7 +131,6 @@ export function InvoiceTable({
                 </div>
               </TableHead>
 
-              {/* 5. Paid */}
               <TableHead
                 onClick={() => onSort("paidAmount")}
                 className="text-right cursor-pointer hover:bg-muted/50"
@@ -132,7 +140,6 @@ export function InvoiceTable({
                 </div>
               </TableHead>
 
-              {/* 6. Due Amount */}
               <TableHead
                 onClick={() => onSort("dueAmount")}
                 className="text-right cursor-pointer hover:bg-muted/50"
@@ -142,7 +149,6 @@ export function InvoiceTable({
                 </div>
               </TableHead>
 
-              {/* 7. Payment Status (All Status) */}
               <TableHead
                 onClick={() => onSort("status")}
                 className="text-center cursor-pointer hover:bg-muted/50"
@@ -152,7 +158,6 @@ export function InvoiceTable({
                 </div>
               </TableHead>
 
-              {/* 8. Representative Name (Sorting Added) */}
               <TableHead
                 onClick={() => onSort("salesRepName")}
                 className="cursor-pointer hover:bg-muted/50 hidden md:table-cell"
@@ -162,7 +167,6 @@ export function InvoiceTable({
                 </div>
               </TableHead>
 
-              {/* 9. Action */}
               <TableHead className="text-right">Action</TableHead>
             </TableRow>
           </TableHeader>
@@ -182,23 +186,18 @@ export function InvoiceTable({
                   <TableCell className="whitespace-nowrap">
                     {new Date(invoice.date).toLocaleDateString()}
                   </TableCell>
-
                   <TableCell className="font-medium">
                     {invoice.customerName}
                   </TableCell>
-
                   <TableCell className="font-mono text-xs">
                     {invoice.invoiceNo}
                   </TableCell>
-
                   <TableCell className="text-right font-medium">
                     LKR {invoice.totalAmount.toLocaleString()}
                   </TableCell>
-
                   <TableCell className="text-right text-muted-foreground">
                     LKR {invoice.paidAmount.toLocaleString()}
                   </TableCell>
-
                   <TableCell className="text-right">
                     <span
                       className={
@@ -210,25 +209,39 @@ export function InvoiceTable({
                       LKR {invoice.dueAmount.toLocaleString()}
                     </span>
                   </TableCell>
-
                   <TableCell className="text-center">
                     {renderStatusBadge(invoice.status)}
                   </TableCell>
-
                   <TableCell className="hidden md:table-cell">
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <User className="w-3 h-3" />
                       {invoice.salesRepName}
                     </div>
                   </TableCell>
-
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <Button variant="ghost" size="icon-sm">
+                      {/* View Details (Placeholder) */}
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        title="View Details"
+                      >
                         <Eye className="w-4 h-4 text-muted-foreground" />
                       </Button>
-                      <Button variant="ghost" size="icon-sm">
-                        <Download className="w-4 h-4 text-muted-foreground" />
+
+                      {/* Print/Download Button */}
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => handleDownload(invoice.id)}
+                        disabled={downloadingId === invoice.id}
+                        title="Download/Print Invoice"
+                      >
+                        {downloadingId === invoice.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Printer className="w-4 h-4 text-muted-foreground" />
+                        )}
                       </Button>
                     </div>
                   </TableCell>
