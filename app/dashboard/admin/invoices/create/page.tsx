@@ -30,13 +30,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import {
   Command,
@@ -80,59 +73,6 @@ interface InvoiceItem {
   total: number;
 }
 
-// --- Mock Data ---
-
-const MOCK_PRODUCTS: Product[] = [
-  {
-    id: "P1",
-    sku: "SKU-001",
-    name: "Copper Wire 2.5mm",
-    selling_price: 180,
-    mrp: 200,
-    stock_quantity: 500,
-    unit_of_measure: "m",
-  },
-  {
-    id: "P2",
-    sku: "SKU-002",
-    name: "PVC Pipe 4 inch",
-    selling_price: 850,
-    mrp: 900,
-    stock_quantity: 120,
-    unit_of_measure: "unit",
-  },
-  {
-    id: "P3",
-    sku: "SKU-003",
-    name: "Cement 50kg",
-    selling_price: 2900,
-    mrp: 3000,
-    stock_quantity: 45,
-    unit_of_measure: "bag",
-  },
-  {
-    id: "P4",
-    sku: "SKU-004",
-    name: "Orange Switch",
-    selling_price: 450,
-    mrp: 480,
-    stock_quantity: 0,
-    unit_of_measure: "unit",
-  },
-];
-
-const MOCK_CUSTOMERS = [
-  { id: "C1", name: "Saman Electronics" },
-  { id: "C2", name: "City Hardware" },
-  { id: "C3", name: "Lanka Traders" },
-];
-
-const MOCK_REPS = [
-  { id: "R1", name: "Ajith Bandara" },
-  { id: "R2", name: "Chathura Perera" },
-  { id: "R3", name: "Dilshan Silva" },
-];
-
 export default function CreateInvoicePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -150,16 +90,18 @@ export default function CreateInvoicePage() {
     new Date().toISOString().split("T")[0]
   );
   const [invoiceNumber, setInvoiceNumber] = useState("INV-NEW");
-  const [salesRepId, setSalesRepId] = useState<string>(""); // Added Sales Rep State
+  const [salesRepId, setSalesRepId] = useState<string>("");
 
-  // Extra Discount State
+  // Items State
+  const [items, setItems] = useState<InvoiceItem[]>([]);
   const [extraDiscount, setExtraDiscount] = useState<number>(0);
 
-  // Item State
-  const [items, setItems] = useState<InvoiceItem[]>([]);
-  const [productSearchOpen, setProductSearchOpen] = useState(false);
+  // Popover States
+  const [customerOpen, setCustomerOpen] = useState(false);
+  const [salesRepOpen, setSalesRepOpen] = useState(false);
+  const [productOpen, setProductOpen] = useState(false);
 
-  // Current Item State
+  // Current Item Being Added
   const [currentItem, setCurrentItem] = useState({
     productId: "",
     sku: "",
@@ -172,46 +114,79 @@ export default function CreateInvoicePage() {
     stockAvailable: 0,
   });
 
+  // --- Fetch Data on Mount ---
   useEffect(() => {
-    setTimeout(() => {
-      setProducts(MOCK_PRODUCTS);
-      setCustomers(MOCK_CUSTOMERS);
-      setReps(MOCK_REPS);
-      setLoading(false);
-    }, 500);
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        // Fetch Products
+        const productsRes = await fetch("/api/products");
+        const productsData = await productsRes.json();
+        setProducts(
+          productsData.map((p: any) => ({
+            id: p.id,
+            sku: p.sku,
+            name: p.name,
+            selling_price: p.sellingPrice,
+            mrp: p.mrp,
+            stock_quantity: p.stock,
+            unit_of_measure: p.unitOfMeasure || "unit",
+          }))
+        );
+
+        // Fetch Customers
+        const customersRes = await fetch("/api/customers");
+        const customersData = await customersRes.json();
+        setCustomers(
+          customersData.map((c: any) => ({
+            id: c.id,
+            name: c.shopName,
+          }))
+        );
+
+        // Fetch Sales Reps
+        const usersRes = await fetch("/api/users");
+        const usersData = await usersRes.json();
+        const salesReps = usersData
+          .filter((u: any) => u.role === "sales_rep")
+          .map((u: any) => ({
+            id: u.id,
+            name: u.fullName,
+          }));
+        setReps(salesReps);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+        alert("Failed to load data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
   }, []);
 
-  // --- Handlers ---
-
+  // --- Product Selection Handler ---
   const handleProductSelect = (productId: string) => {
     const product = products.find((p) => p.id === productId);
-    if (product) {
-      setCurrentItem({
-        ...currentItem,
-        productId: productId,
-        sku: product.sku,
-        mrp: product.mrp,
-        unitPrice: product.selling_price,
-        stockAvailable: product.stock_quantity,
-        unit: product.unit_of_measure,
-        quantity: 1,
-        freeQuantity: 0,
-        discountPercent: 0,
-      });
-      setProductSearchOpen(false);
-    }
-  };
+    if (!product) return;
 
-  const handleDiscountChange = (newDiscount: number) => {
     setCurrentItem({
-      ...currentItem,
-      discountPercent: Math.min(100, Math.max(0, newDiscount)),
+      productId: product.id,
+      sku: product.sku,
+      quantity: 1,
+      freeQuantity: 0,
+      unit: product.unit_of_measure,
+      mrp: product.mrp,
+      unitPrice: product.selling_price,
+      discountPercent: 0,
+      stockAvailable: product.stock_quantity,
     });
   };
 
+  // --- Add Item to Invoice ---
   const handleAddItem = () => {
-    if (!currentItem.productId || currentItem.quantity <= 0) {
-      alert("Please select a valid product and quantity.");
+    if (!currentItem.productId) {
+      alert("Please select a product");
       return;
     }
 
@@ -262,7 +237,7 @@ export default function CreateInvoicePage() {
     setItems(items.filter((item) => item.id !== id));
   };
 
-  const handleSaveInvoice = () => {
+  const handleSaveInvoice = async () => {
     if (!customerId) {
       alert("Please select a customer.");
       return;
@@ -283,6 +258,7 @@ export default function CreateInvoicePage() {
       salesRepId,
       items,
       invoiceNumber,
+      invoiceDate,
       subTotal: subtotal,
       extraDiscountPercent: extraDiscount,
       extraDiscountAmount: extraDiscountAmount,
@@ -291,11 +267,26 @@ export default function CreateInvoicePage() {
 
     console.log("Saving Invoice...", invoiceData);
 
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      const res = await fetch("/api/invoices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(invoiceData),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to create invoice");
+      }
+
       alert("Invoice Created Successfully!");
       router.push("/dashboard/admin/invoices");
-    }, 1000);
+    } catch (error: any) {
+      alert(error.message || "Failed to create invoice");
+    } finally {
+      setLoading(false);
+    }
   };
 
   // --- Totals Calculation ---
@@ -316,11 +307,6 @@ export default function CreateInvoicePage() {
   const availableProducts = products.filter(
     (p) => !items.some((i) => i.productId === p.id)
   );
-
-  const getSelectedProductName = () => {
-    const p = products.find((prod) => prod.id === currentItem.productId);
-    return p ? `${p.name}` : "Select product";
-  };
 
   const currentDiscountAmt =
     (currentItem.unitPrice *
@@ -383,21 +369,54 @@ export default function CreateInvoicePage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Customer</Label>
-                  <Select
-                    value={customerId || ""}
-                    onValueChange={setCustomerId}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select Customer" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {customers.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover open={customerOpen} onOpenChange={setCustomerOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={customerOpen}
+                        className="w-full justify-between"
+                      >
+                        {customerId
+                          ? customers.find((c) => c.id === customerId)?.name
+                          : "Select Customer"}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      className="w-[var(--radix-popover-trigger-width)] p-0"
+                      align="start"
+                    >
+                      <Command>
+                        <CommandInput placeholder="Search customer..." />
+                        <CommandList>
+                          <CommandEmpty>No customer found.</CommandEmpty>
+                          <CommandGroup>
+                            {customers.map((customer) => (
+                              <CommandItem
+                                key={customer.id}
+                                value={customer.name}
+                                onSelect={() => {
+                                  setCustomerId(customer.id);
+                                  setCustomerOpen(false);
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    customerId === customer.id
+                                      ? "opacity-100"
+                                      : "opacity-0"
+                                  )}
+                                />
+                                {customer.name}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 <div className="space-y-2">
                   <Label>Invoice Date</Label>
@@ -414,21 +433,57 @@ export default function CreateInvoicePage() {
                   <Input value={invoiceNumber} disabled className="bg-muted" />
                 </div>
 
-                {/* Replaced Due Date with Sales Representative Dropdown */}
+                {/* Sales Representative - Searchable */}
                 <div className="space-y-2">
                   <Label>Sales Representative</Label>
-                  <Select value={salesRepId} onValueChange={setSalesRepId}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select Representative" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {reps.map((r) => (
-                        <SelectItem key={r.id} value={r.id}>
-                          {r.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover open={salesRepOpen} onOpenChange={setSalesRepOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={salesRepOpen}
+                        className="w-full justify-between"
+                      >
+                        {salesRepId
+                          ? reps.find((r) => r.id === salesRepId)?.name
+                          : "Select Representative"}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      className="w-[var(--radix-popover-trigger-width)] p-0"
+                      align="start"
+                    >
+                      <Command>
+                        <CommandInput placeholder="Search representative..." />
+                        <CommandList>
+                          <CommandEmpty>No representative found.</CommandEmpty>
+                          <CommandGroup>
+                            {reps.map((rep) => (
+                              <CommandItem
+                                key={rep.id}
+                                value={rep.name}
+                                onSelect={() => {
+                                  setSalesRepId(rep.id);
+                                  setSalesRepOpen(false);
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    salesRepId === rep.id
+                                      ? "opacity-100"
+                                      : "opacity-0"
+                                  )}
+                                />
+                                {rep.name}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
             </CardContent>
@@ -437,267 +492,258 @@ export default function CreateInvoicePage() {
           {/* 2. Add Items */}
           <Card>
             <CardHeader>
-              <CardTitle>Add Items</CardTitle>
-              <CardDescription>Select products to bill</CardDescription>
+              <CardTitle>Add Products</CardTitle>
+              <CardDescription>
+                Search and add products to the invoice
+              </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="w-full">
-                  <Label className="mb-2 block">Product Search</Label>
-                  <Popover
-                    open={productSearchOpen}
-                    onOpenChange={setProductSearchOpen}
-                  >
+            <CardContent className="space-y-4">
+              {/* Product Selection - Searchable */}
+              <div className="grid grid-cols-4 gap-4">
+                <div className="col-span-4 space-y-2">
+                  <Label>Product</Label>
+                  <Popover open={productOpen} onOpenChange={setProductOpen}>
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
                         role="combobox"
+                        aria-expanded={productOpen}
                         className="w-full justify-between"
                       >
-                        <span className="truncate">
-                          {currentItem.productId
-                            ? getSelectedProductName()
-                            : "Select product by Name or SKU"}
-                        </span>
+                        {currentItem.productId
+                          ? products.find((p) => p.id === currentItem.productId)
+                              ?.name
+                          : "Select Product"}
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-[500px] p-0" align="start">
+                    <PopoverContent
+                      className="w-[var(--radix-popover-trigger-width)] p-0"
+                      align="start"
+                    >
                       <Command>
                         <CommandInput placeholder="Search product..." />
                         <CommandList>
                           <CommandEmpty>No product found.</CommandEmpty>
                           <CommandGroup>
-                            {availableProducts.length === 0 ? (
-                              <div className="p-4 text-center text-sm text-muted-foreground">
-                                All products added
-                              </div>
-                            ) : (
-                              availableProducts.map((product) => (
-                                <CommandItem
-                                  key={product.id}
-                                  value={`${product.name} ${product.sku}`}
-                                  onSelect={() =>
-                                    handleProductSelect(product.id)
-                                  }
-                                  disabled={product.stock_quantity === 0}
-                                  className={
-                                    product.stock_quantity === 0
-                                      ? "opacity-50"
-                                      : ""
-                                  }
-                                >
-                                  <Check
-                                    className={cn(
-                                      "mr-2 h-4 w-4",
-                                      currentItem.productId === product.id
-                                        ? "opacity-100"
-                                        : "opacity-0"
-                                    )}
-                                  />
-                                  <div className="flex flex-col">
-                                    <span className="font-medium">
-                                      {product.name}
-                                    </span>
-                                    <span className="text-xs text-muted-foreground">
-                                      Code: {product.sku} | Stock:{" "}
-                                      {product.stock_quantity}{" "}
-                                      {product.unit_of_measure}
-                                    </span>
+                            {availableProducts.map((product) => (
+                              <CommandItem
+                                key={product.id}
+                                value={product.name}
+                                onSelect={() => {
+                                  handleProductSelect(product.id);
+                                  setProductOpen(false);
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    currentItem.productId === product.id
+                                      ? "opacity-100"
+                                      : "opacity-0"
+                                  )}
+                                />
+                                <div className="flex-1">
+                                  <div className="font-medium">
+                                    {product.name}
                                   </div>
-                                </CommandItem>
-                              ))
-                            )}
+                                  <div className="text-xs text-muted-foreground">
+                                    {product.sku} • Stock:{" "}
+                                    {product.stock_quantity} • LKR{" "}
+                                    {product.selling_price}
+                                  </div>
+                                </div>
+                              </CommandItem>
+                            ))}
                           </CommandGroup>
                         </CommandList>
                       </Command>
                     </PopoverContent>
                   </Popover>
                 </div>
+              </div>
 
-                {/* Input Row */}
-                <div className="grid grid-cols-2 md:grid-cols-6 gap-3 items-end">
-                  <div className="col-span-1">
-                    <Label className="mb-2 block text-xs">Code</Label>
-                    <Input
-                      value={currentItem.sku}
-                      disabled
-                      className="h-9 bg-muted"
-                      placeholder="Auto"
-                    />
-                  </div>
-                  <div className="col-span-1">
-                    <Label className="mb-2 block text-xs">MRP</Label>
-                    <Input
-                      value={currentItem.mrp}
-                      disabled
-                      className="h-9 bg-muted"
-                    />
-                  </div>
-                  <div className="col-span-1">
-                    <Label className="mb-2 block text-xs font-semibold text-blue-600">
-                      Price
-                    </Label>
-                    <Input
-                      type="number"
-                      value={currentItem.unitPrice}
-                      onChange={(e) =>
-                        setCurrentItem({
-                          ...currentItem,
-                          unitPrice: parseFloat(e.target.value) || 0,
-                        })
-                      }
-                      className="h-9 border-blue-200"
-                    />
-                  </div>
-
-                  <div className="col-span-1">
-                    <Label className="mb-2 block text-xs">Quantity</Label>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={currentItem.quantity}
-                      onChange={(e) =>
-                        setCurrentItem({
-                          ...currentItem,
-                          quantity: parseInt(e.target.value) || 1,
-                        })
-                      }
-                      className="h-9"
-                    />
-                  </div>
-
-                  <div className="col-span-1">
-                    <Label className="mb-2 block text-xs">Unit</Label>
-                    <Input
-                      value={currentItem.unit}
-                      disabled
-                      className="h-9 bg-muted"
-                      placeholder="Unit"
-                    />
-                  </div>
-
-                  <div className="col-span-1">
-                    <Label className="mb-2 block text-xs text-muted-foreground">
-                      Stock: {currentItem.stockAvailable}
-                    </Label>
-                    <Input
-                      value={currentItem.stockAvailable}
-                      disabled
-                      className="h-9 bg-muted"
-                    />
-                  </div>
-
-                  <div className="col-span-1">
-                    <Label className="mb-2 block text-xs">Disc (%)</Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={currentItem.discountPercent}
-                      onChange={(e) =>
-                        handleDiscountChange(parseFloat(e.target.value) || 0)
-                      }
-                      className="h-9"
-                    />
-                  </div>
-                  <div className="col-span-1">
-                    <Label className="mb-2 block text-xs">D. Amount</Label>
-                    <Input
-                      value={currentDiscountAmt.toFixed(2)}
-                      disabled
-                      className="h-9 bg-muted"
-                    />
-                  </div>
-                  <div className="col-span-1">
-                    <Label className="mb-2 block text-xs text-green-600">
-                      Free Qty
-                    </Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      value={currentItem.freeQuantity}
-                      onChange={(e) =>
-                        setCurrentItem({
-                          ...currentItem,
-                          freeQuantity: parseInt(e.target.value) || 0,
-                        })
-                      }
-                      className="h-9 border-green-200"
-                    />
-                  </div>
-                  <div className="col-span-3 md:col-span-3">
-                    <Button
-                      onClick={handleAddItem}
-                      className="w-full h-9"
-                      disabled={!currentItem.productId}
-                    >
-                      <Plus className="w-4 h-4 mr-2" /> Add Item
-                    </Button>
-                  </div>
+              {/* Quantity and Free Quantity Row - ALWAYS VISIBLE */}
+              <div className="grid grid-cols-4 gap-4">
+                <div className="space-y-2">
+                  <Label>Quantity</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={currentItem.quantity}
+                    onChange={(e) =>
+                      setCurrentItem({
+                        ...currentItem,
+                        quantity: Number(e.target.value),
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Free Qty</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={currentItem.freeQuantity}
+                    onChange={(e) =>
+                      setCurrentItem({
+                        ...currentItem,
+                        freeQuantity: Number(e.target.value),
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Unit</Label>
+                  <Input
+                    value={currentItem.unit || "-"}
+                    disabled
+                    className="bg-muted"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Stock</Label>
+                  <Input
+                    value={currentItem.stockAvailable || "-"}
+                    disabled
+                    className={
+                      currentItem.stockAvailable > 0 &&
+                      currentItem.stockAvailable < 10
+                        ? "text-destructive font-bold bg-muted"
+                        : "bg-muted"
+                    }
+                  />
                 </div>
               </div>
+
+              {/* Price Row - ALWAYS VISIBLE */}
+              <div className="grid grid-cols-4 gap-4">
+                <div className="space-y-2">
+                  <Label>MRP</Label>
+                  <Input
+                    type="number"
+                    value={currentItem.mrp || ""}
+                    onChange={(e) =>
+                      setCurrentItem({
+                        ...currentItem,
+                        mrp: Number(e.target.value),
+                      })
+                    }
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Unit Price</Label>
+                  <Input
+                    type="number"
+                    value={currentItem.unitPrice || ""}
+                    onChange={(e) =>
+                      setCurrentItem({
+                        ...currentItem,
+                        unitPrice: Number(e.target.value),
+                      })
+                    }
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Discount %</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={currentItem.discountPercent || ""}
+                    onChange={(e) =>
+                      setCurrentItem({
+                        ...currentItem,
+                        discountPercent: Number(e.target.value),
+                      })
+                    }
+                    placeholder="0"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Total</Label>
+                  <Input
+                    value={(
+                      currentItem.unitPrice * currentItem.quantity -
+                      currentDiscountAmt
+                    ).toFixed(2)}
+                    disabled
+                    className="font-bold bg-muted"
+                  />
+                </div>
+              </div>
+
+              {/* Add Button - ALWAYS VISIBLE */}
+              <Button
+                onClick={handleAddItem}
+                className="w-full"
+                variant="default"
+                disabled={!currentItem.productId}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add to Invoice
+              </Button>
             </CardContent>
           </Card>
 
-          {/* 3. Item List Table */}
+          {/* 3. Items Table */}
           <Card>
             <CardHeader>
               <CardTitle>Invoice Items</CardTitle>
-              <CardDescription>Items included in this bill</CardDescription>
+              <CardDescription>{items.length} item(s) added</CardDescription>
             </CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
+            <CardContent>
+              <div className="border rounded-md">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Code</TableHead>
-                      <TableHead>Item Name</TableHead>
-                      <TableHead className="text-right">Unit</TableHead>
-                      <TableHead className="text-right">MRP</TableHead>
-                      <TableHead className="text-right">Price</TableHead>
-                      <TableHead className="text-right">Qty</TableHead>
-                      <TableHead className="text-right">Free</TableHead>
-                      <TableHead className="text-right">Disc</TableHead>
-                      <TableHead className="text-right">Total</TableHead>
-                      <TableHead className="w-[50px]"></TableHead>
+                      <TableHead className="w-12">#</TableHead>
+                      <TableHead>Product</TableHead>
+                      <TableHead className="text-center w-20">Qty</TableHead>
+                      <TableHead className="text-center w-20">Free</TableHead>
+                      <TableHead className="text-right w-24">
+                        Unit Price
+                      </TableHead>
+                      <TableHead className="text-center w-20">Disc%</TableHead>
+                      <TableHead className="text-right w-28">Total</TableHead>
+                      <TableHead className="w-12"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {items.length === 0 ? (
                       <TableRow>
                         <TableCell
-                          colSpan={10}
-                          className="text-center py-8 text-muted-foreground"
+                          colSpan={8}
+                          className="text-center text-muted-foreground py-8"
                         >
-                          No items added
+                          <Package className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                          No items added yet
                         </TableCell>
                       </TableRow>
                     ) : (
-                      items.map((item) => (
+                      items.map((item, idx) => (
                         <TableRow key={item.id}>
-                          <TableCell className="font-mono text-xs">
-                            {item.sku}
+                          <TableCell>{idx + 1}</TableCell>
+                          <TableCell>
+                            <div className="font-medium">
+                              {item.productName}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {item.sku}
+                            </div>
                           </TableCell>
-                          <TableCell className="font-medium">
-                            {item.productName}
+                          <TableCell className="text-center">
+                            {item.quantity} {item.unit}
                           </TableCell>
-                          <TableCell className="text-right">
-                            {item.unit}
-                          </TableCell>
-                          <TableCell className="text-right text-muted-foreground">
-                            {item.mrp}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {item.unitPrice}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {item.quantity}
-                          </TableCell>
-                          <TableCell className="text-right text-green-600">
+                          <TableCell className="text-center">
                             {item.freeQuantity || "-"}
                           </TableCell>
-                          <TableCell className="text-right text-red-500">
+                          <TableCell className="text-right">
+                            {item.unitPrice.toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-center">
                             {item.discountPercent > 0
                               ? `${item.discountPercent}%`
                               : "-"}
@@ -739,83 +785,65 @@ export default function CreateInvoicePage() {
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Date:</span>
+                  <span className="text-muted-foreground">Sales Rep:</span>
+                  <span className="font-medium">
+                    {reps.find((r) => r.id === salesRepId)?.name || "-"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Invoice Date:</span>
                   <span className="font-medium">{invoiceDate}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Status:</span>
-                  <span className="text-red-600 font-medium">Unpaid</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Total Items:</span>
-                  <span className="font-medium">{items.length}</span>
                 </div>
               </div>
 
               <div className="border-t pt-4 space-y-2">
                 <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Items:</span>
+                  <span>{items.length}</span>
+                </div>
+                <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Gross Total:</span>
                   <span>LKR {grossTotal.toLocaleString()}</span>
                 </div>
-                {totalItemDiscount > 0 && (
-                  <div className="flex justify-between text-sm text-green-600">
-                    <span>Item Discount:</span>
-                    <span>- LKR {totalItemDiscount.toLocaleString()}</span>
-                  </div>
-                )}
-
-                <div className="flex justify-between text-sm font-medium pt-1">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Item Discounts:</span>
+                  <span className="text-destructive">
+                    - LKR {totalItemDiscount.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm font-medium">
                   <span>Subtotal:</span>
                   <span>LKR {subtotal.toLocaleString()}</span>
                 </div>
+              </div>
 
-                {/* Extra Discount Section */}
-                <div className="flex items-center justify-between text-sm pt-2">
-                  <span className="text-muted-foreground">Extra Disc (%):</span>
+              <div className="border-t pt-4 space-y-3">
+                <div className="space-y-2">
+                  <Label className="text-xs">Extra Discount %</Label>
                   <Input
                     type="number"
                     min="0"
                     max="100"
                     value={extraDiscount}
-                    onChange={(e) =>
-                      setExtraDiscount(parseFloat(e.target.value) || 0)
-                    }
-                    className="w-20 h-8 text-right"
+                    onChange={(e) => setExtraDiscount(Number(e.target.value))}
                   />
                 </div>
-                {extraDiscount > 0 && (
-                  <div className="flex justify-between text-sm text-green-600">
-                    <span>Extra Disc Amt:</span>
-                    <span>
-                      - LKR{" "}
-                      {extraDiscountAmount.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                    </span>
-                  </div>
-                )}
-
-                {/* Final Grand Total */}
-                <div className="flex justify-between items-center pt-2 border-t mt-2">
-                  <span className="font-bold text-lg">Grand Total:</span>
-                  <span className="font-bold text-2xl text-primary">
-                    LKR{" "}
-                    {grandTotal.toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Extra Discount:</span>
+                  <span className="text-destructive">
+                    - LKR {extraDiscountAmount.toLocaleString()}
                   </span>
                 </div>
               </div>
 
-              <Button
-                onClick={handleSaveInvoice}
-                className="w-full h-12 text-lg"
-                disabled={items.length === 0 || loading}
-              >
-                {loading ? "Processing..." : "Create Invoice"}
-              </Button>
+              <div className="border-t pt-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-lg font-bold">Grand Total:</span>
+                  <span className="text-2xl font-bold text-primary">
+                    LKR {grandTotal.toLocaleString()}
+                  </span>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
