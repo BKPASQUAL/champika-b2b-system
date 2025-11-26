@@ -1,4 +1,3 @@
-// app/dashboard/admin/purchases/create/page.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -52,103 +51,67 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
-// Interfaces specific to the form logic
+// Types matching your API response
 interface Product {
   id: string;
   sku: string;
   name: string;
-  unit_price: number;
-  selling_price?: number;
-  cost_price?: number;
+  sellingPrice: number;
+  costPrice: number;
   mrp: number;
-  stock_quantity: number;
-  unit_of_measure: string;
+  stock: number;
+  unit_of_measure?: string;
+  supplier: string; // Added supplier field to match API
+}
+
+interface Supplier {
+  id: string;
+  name: string;
 }
 
 interface PurchaseItem {
   id: string;
   productId: string;
-  sku: string; // Added Item Code
+  sku: string;
   productName: string;
   quantity: number;
-  freeQuantity: number; // Added Free Qty
+  freeQuantity: number;
   unit: string;
   mrp: number;
   sellingPrice: number;
-  unitPrice: number; // Renamed from costPrice for display
+  unitPrice: number; // Gross Cost Price
   discountPercent: number;
   discountAmount: number;
-  finalPrice: number;
+  finalPrice: number; // Net Cost Price
   total: number;
-  mrpChanged: boolean;
-  sellingPriceChanged: boolean;
 }
-
-// Mock Data for frontend-only demonstration
-const MOCK_PRODUCTS: Product[] = [
-  {
-    id: "P1",
-    sku: "SKU-001",
-    name: "Copper Wire 2.5mm",
-    unit_price: 150,
-    selling_price: 150,
-    cost_price: 120,
-    mrp: 150,
-    stock_quantity: 500,
-    unit_of_measure: "m",
-  },
-  {
-    id: "P2",
-    sku: "SKU-002",
-    name: "PVC Pipe 4 inch",
-    unit_price: 800,
-    selling_price: 800,
-    cost_price: 650,
-    mrp: 800,
-    stock_quantity: 120,
-    unit_of_measure: "unit",
-  },
-  {
-    id: "P3",
-    sku: "SKU-003",
-    name: "Cement 50kg",
-    unit_price: 2800,
-    selling_price: 2750,
-    cost_price: 2600,
-    mrp: 2800,
-    stock_quantity: 45,
-    unit_of_measure: "bag",
-  },
-];
-
-const MOCK_SUPPLIERS = [
-  { id: "S1", name: "Sierra Cables Ltd" },
-  { id: "S2", name: "Lanka Builders Pvt Ltd" },
-  { id: "S3", name: "Colombo Cement Corp" },
-];
 
 export default function CreatePurchasePage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
+  const [loadingData, setLoadingData] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Data States
   const [products, setProducts] = useState<Product[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+
+  // Form States
   const [supplierId, setSupplierId] = useState<string | null>(null);
-  const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>(
-    []
-  );
-
-  // Product search state
-  const [productSearchOpen, setProductSearchOpen] = useState(false);
-
   const [purchaseDate, setPurchaseDate] = useState(
     new Date().toISOString().split("T")[0]
   );
   const [arrivalDate, setArrivalDate] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
 
+  // Items State
   const [items, setItems] = useState<PurchaseItem[]>([]);
 
-  // Current Item State
+  // UI States
+  const [productSearchOpen, setProductSearchOpen] = useState(false);
+
+  // Current Item Edit State
   const [currentItem, setCurrentItem] = useState({
     productId: "",
     sku: "",
@@ -156,70 +119,95 @@ export default function CreatePurchasePage() {
     freeQuantity: 0,
     mrp: 0,
     sellingPrice: 0,
-    unitPrice: 0, // This is the Cost Price/Unit Price
+    unitPrice: 0, // Gross Cost
     discountPercent: 0,
   });
 
+  // --- Fetch Data on Mount ---
   useEffect(() => {
-    // Simulating data fetching
-    setTimeout(() => {
-      setProducts(MOCK_PRODUCTS);
-      setSuppliers(MOCK_SUPPLIERS);
-      if (MOCK_SUPPLIERS.length > 0) {
-        setSupplierId(MOCK_SUPPLIERS[0].id);
+    const loadData = async () => {
+      try {
+        const [prodRes, supRes] = await Promise.all([
+          fetch("/api/products"),
+          fetch("/api/suppliers"),
+        ]);
+
+        if (prodRes.ok) {
+          const prodData = await prodRes.json();
+          setProducts(prodData);
+        }
+
+        if (supRes.ok) {
+          const supData = await supRes.json();
+          setSuppliers(supData);
+        }
+      } catch (error) {
+        toast.error("Failed to load initial data");
+      } finally {
+        setLoadingData(false);
       }
-      setLoading(false);
-    }, 500);
+    };
+
+    loadData();
   }, []);
+
+  // --- Handlers ---
+
+  // Handle Supplier Change
+  const handleSupplierChange = (newSupplierId: string) => {
+    // If items exist, confirm before changing as it clears the list
+    if (items.length > 0) {
+      const confirmChange = window.confirm(
+        "Changing supplier will clear the current items. Continue?"
+      );
+      if (!confirmChange) return;
+      setItems([]); // Clear items
+    }
+    setSupplierId(newSupplierId);
+
+    // Reset current item selection
+    setCurrentItem({
+      productId: "",
+      sku: "",
+      quantity: 1,
+      freeQuantity: 0,
+      mrp: 0,
+      sellingPrice: 0,
+      unitPrice: 0,
+      discountPercent: 0,
+    });
+  };
 
   const handleProductSelect = (productId: string) => {
     const product = products.find((p) => p.id === productId);
     if (product) {
-      const sellingPrice = product.selling_price || product.unit_price;
-      const unitPrice = product.cost_price || 0;
-
-      const autoDiscount =
-        unitPrice > 0 && product.mrp > 0
-          ? ((product.mrp - unitPrice) / product.mrp) * 100
-          : 0;
+      // Default logic: Pre-fill with existing product data
+      const selling = product.sellingPrice || 0;
+      const cost = product.costPrice || 0;
 
       setCurrentItem({
         ...currentItem,
         productId: productId,
         sku: product.sku,
         mrp: product.mrp,
-        sellingPrice: sellingPrice,
-        unitPrice: unitPrice,
-        discountPercent: autoDiscount,
-        freeQuantity: 0, // Reset free qty
+        sellingPrice: selling,
+        unitPrice: cost, // Pre-fill Cost Price
+        discountPercent: 0,
+        freeQuantity: 0,
         quantity: 1,
       });
-
       setProductSearchOpen(false);
     }
   };
 
   const handleUnitPriceChange = (newPrice: number) => {
-    const newDiscount =
-      currentItem.mrp > 0
-        ? ((currentItem.mrp - newPrice) / currentItem.mrp) * 100
-        : 0;
-
-    setCurrentItem({
-      ...currentItem,
-      unitPrice: newPrice,
-      discountPercent: Math.max(0, Math.min(100, newDiscount)),
-    });
+    setCurrentItem({ ...currentItem, unitPrice: newPrice });
   };
 
   const handleDiscountChange = (newDiscount: number) => {
-    const newUnitPrice =
-      currentItem.mrp - (currentItem.mrp * newDiscount) / 100;
-
     setCurrentItem({
       ...currentItem,
-      discountPercent: newDiscount,
-      unitPrice: Math.max(0, newUnitPrice),
+      discountPercent: Math.max(0, Math.min(100, newDiscount)),
     });
   };
 
@@ -229,7 +217,7 @@ export default function CreatePurchasePage() {
       currentItem.quantity <= 0 ||
       currentItem.unitPrice < 0
     ) {
-      alert("Please fill all item details with valid quantities and prices");
+      toast.error("Please fill all fields correctly");
       return;
     }
 
@@ -237,12 +225,12 @@ export default function CreatePurchasePage() {
     if (!product) return;
 
     // Calculations
-    const total = currentItem.unitPrice * currentItem.quantity;
-    const originalSellingPrice = product.selling_price || product.unit_price;
-
-    // Discount Amount per unit * quantity
+    // Net Unit Cost = Gross Cost - (Gross Cost * Discount%)
     const unitDiscountAmount =
-      (currentItem.mrp * currentItem.discountPercent) / 100;
+      (currentItem.unitPrice * currentItem.discountPercent) / 100;
+    const netUnitPrice = currentItem.unitPrice - unitDiscountAmount;
+
+    const total = netUnitPrice * currentItem.quantity;
     const totalDiscountAmount = unitDiscountAmount * currentItem.quantity;
 
     const newItem: PurchaseItem = {
@@ -252,21 +240,19 @@ export default function CreatePurchasePage() {
       productName: product.name,
       quantity: currentItem.quantity,
       freeQuantity: currentItem.freeQuantity,
-      unit: product.unit_of_measure,
+      unit: product.unit_of_measure || "unit",
       mrp: currentItem.mrp,
       sellingPrice: currentItem.sellingPrice,
       unitPrice: currentItem.unitPrice,
       discountPercent: currentItem.discountPercent,
       discountAmount: totalDiscountAmount,
-      finalPrice: currentItem.unitPrice,
+      finalPrice: netUnitPrice,
       total: total,
-      mrpChanged: currentItem.mrp !== product.mrp,
-      sellingPriceChanged: currentItem.sellingPrice !== originalSellingPrice,
     };
 
     setItems([...items, newItem]);
 
-    // Reset form
+    // Reset Item Form
     setCurrentItem({
       productId: "",
       sku: "",
@@ -283,78 +269,94 @@ export default function CreatePurchasePage() {
     setItems(items.filter((item) => item.id !== id));
   };
 
+  // Totals
   const subtotal = items.reduce((sum, item) => sum + item.total, 0);
   const totalDiscount = items.reduce(
     (sum, item) => sum + item.discountAmount,
     0
   );
-  const totalBeforeDiscount = items.reduce(
-    (sum, item) => sum + item.mrp * item.quantity,
+  const totalGross = items.reduce(
+    (sum, item) => sum + item.unitPrice * item.quantity,
     0
   );
 
+  // --- Save Purchase ---
   const handleSavePurchase = async () => {
     if (items.length === 0) {
-      alert("Please add at least one item");
+      toast.error("Add at least one item");
       return;
     }
     if (!supplierId) {
-      alert("Supplier not found");
+      toast.error("Select a supplier");
       return;
     }
 
-    setLoading(true);
+    setSubmitting(true);
 
-    const purchaseData = {
+    const purchasePayload = {
       supplier_id: supplierId,
       purchase_date: purchaseDate,
-      arrival_date: arrivalDate || null,
-      invoice_number: invoiceNumber || null,
-      payment_status: "Unpaid",
-      items: items.map((item) => ({
-        ...item,
-        // Logic to handle backend: Usually free items are added to quantity or handled separately
-        total_quantity: item.quantity + item.freeQuantity,
-      })),
-      subtotal: subtotal,
+      arrival_date: arrivalDate || "",
+      invoice_number: invoiceNumber || "",
       total_amount: subtotal,
+      items: items, // Matches schema validation in API
     };
 
-    console.log("Saving Purchase Data:", purchaseData);
+    try {
+      const res = await fetch("/api/purchases", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(purchasePayload),
+      });
 
-    setTimeout(() => {
-      setLoading(false);
-      alert("Purchase Order Created Successfully!");
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error || "Failed to create purchase");
+
+      toast.success("Purchase Order Created Successfully!");
       router.push("/dashboard/admin/purchases");
-    }, 1000);
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const availableProducts = products.filter(
-    (product) => !items.some((item) => item.productId === product.id)
-  );
+  // --- Product Filtering Logic ---
+  const selectedSupplier = suppliers.find((s) => s.id === supplierId);
 
-  // Get selected product name for display
+  const availableProducts = products.filter((product) => {
+    // 1. Must NOT be already in the items list
+    const notInItems = !items.some((item) => item.productId === product.id);
+
+    // 2. Must match the selected supplier (if one is selected)
+    // Using supplier name matching since product.supplier is a string name
+    const matchesSupplier =
+      !selectedSupplier || product.supplier === selectedSupplier.name;
+
+    return notInItems && matchesSupplier;
+  });
+
   const getSelectedProductName = () => {
     const product = products.find((p) => p.id === currentItem.productId);
     return product ? `${product.name}` : "Select product";
   };
 
-  // Calculate Discount Amount for display in input section
   const currentDiscountAmount =
-    ((currentItem.mrp * currentItem.discountPercent) / 100) *
+    ((currentItem.unitPrice * currentItem.discountPercent) / 100) *
     currentItem.quantity;
 
-  if (loading && products.length === 0) {
+  if (loadingData) {
     return (
       <div className="flex justify-center items-center h-full min-h-64">
         <Loader2 className="h-6 w-6 animate-spin mr-2" />
-        <p className="text-lg text-muted-foreground">Loading data...</p>
+        <p className="text-lg text-muted-foreground">Loading catalogs...</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4  mx-auto pb-10">
+    <div className="space-y-4 mx-auto pb-10">
       <div className="flex items-center gap-2">
         <Button
           variant="ghost"
@@ -373,9 +375,9 @@ export default function CreatePurchasePage() {
         </div>
         <Button
           onClick={handleSavePurchase}
-          disabled={items.length === 0 || loading}
+          disabled={items.length === 0 || submitting}
         >
-          {loading ? (
+          {submitting ? (
             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
           ) : (
             <Save className="w-4 h-4 mr-2" />
@@ -401,7 +403,7 @@ export default function CreatePurchasePage() {
                   <Label>Supplier</Label>
                   <Select
                     value={supplierId || ""}
-                    onValueChange={setSupplierId}
+                    onValueChange={handleSupplierChange}
                   >
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Select Supplier" />
@@ -457,7 +459,11 @@ export default function CreatePurchasePage() {
             <CardHeader>
               <CardTitle>Add Items</CardTitle>
               <CardDescription>
-                Search and add products to the list
+                {supplierId
+                  ? `Select products from ${
+                      suppliers.find((s) => s.id === supplierId)?.name
+                    }`
+                  : "Select a supplier to see available products"}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -477,11 +483,14 @@ export default function CreatePurchasePage() {
                         role="combobox"
                         aria-expanded={productSearchOpen}
                         className="w-full h-10 justify-between"
+                        disabled={!supplierId} // Disable if no supplier selected
                       >
                         <span className="truncate">
                           {currentItem.productId
                             ? getSelectedProductName()
-                            : "Select product by Name or SKU"}
+                            : supplierId
+                            ? "Select product by Name or SKU"
+                            : "Please select a supplier first"}
                         </span>
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
@@ -490,11 +499,15 @@ export default function CreatePurchasePage() {
                       <Command>
                         <CommandInput placeholder="Search product by name or SKU..." />
                         <CommandList>
-                          <CommandEmpty>No product found.</CommandEmpty>
+                          <CommandEmpty>
+                            No product found for this supplier.
+                          </CommandEmpty>
                           <CommandGroup>
                             {availableProducts.length === 0 ? (
                               <div className="p-4 text-center text-sm text-muted-foreground">
-                                All products have been added
+                                {supplierId
+                                  ? "No items available for this supplier"
+                                  : "Select a supplier to view items"}
                               </div>
                             ) : (
                               availableProducts.map((product) => (
@@ -548,15 +561,20 @@ export default function CreatePurchasePage() {
                     <Input
                       type="number"
                       value={currentItem.mrp || ""}
-                      disabled
-                      className="h-9 bg-muted"
+                      onChange={(e) =>
+                        setCurrentItem({
+                          ...currentItem,
+                          mrp: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                      className="h-9"
                       placeholder="0.00"
                     />
                   </div>
 
                   <div className="col-span-1">
                     <Label className="mb-2 block text-xs font-semibold text-blue-600">
-                      Unit Price
+                      Cost Price
                     </Label>
                     <Input
                       type="number"
@@ -594,11 +612,7 @@ export default function CreatePurchasePage() {
                       min="0"
                       max="100"
                       step="0.01"
-                      value={
-                        currentItem.discountPercent > 0
-                          ? currentItem.discountPercent.toFixed(2)
-                          : ""
-                      }
+                      value={currentItem.discountPercent || ""}
                       onChange={(e) =>
                         handleDiscountChange(parseFloat(e.target.value) || 0)
                       }
@@ -664,7 +678,7 @@ export default function CreatePurchasePage() {
                     <Button
                       onClick={handleAddItem}
                       className="w-full h-9"
-                      disabled={availableProducts.length === 0}
+                      disabled={!currentItem.productId}
                     >
                       <Plus className="w-4 h-4 mr-2" /> Add Item
                     </Button>
@@ -695,13 +709,12 @@ export default function CreatePurchasePage() {
                       <TableRow>
                         <TableHead>Item Code</TableHead>
                         <TableHead>Item Name</TableHead>
-                        <TableHead className="text-right">MRP</TableHead>
-                        <TableHead className="text-right">Unit Price</TableHead>
+                        <TableHead className="text-right">Cost Price</TableHead>
                         <TableHead className="text-right">Qty</TableHead>
                         <TableHead className="text-right">Disc(%)</TableHead>
                         <TableHead className="text-right">D. Amount</TableHead>
                         <TableHead className="text-right text-green-600">
-                          Free Qty
+                          Free
                         </TableHead>
                         <TableHead className="text-right">
                           Selling Price
@@ -721,9 +734,6 @@ export default function CreatePurchasePage() {
                             title={item.productName}
                           >
                             {item.productName}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {item.mrp.toLocaleString()}
                           </TableCell>
                           <TableCell className="text-right text-blue-600">
                             {item.unitPrice.toLocaleString()}
@@ -802,26 +812,12 @@ export default function CreatePurchasePage() {
                     Unpaid
                   </span>
                 </div>
-                {arrivalDate && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Delivered:</span>
-                    <span className="font-medium">
-                      {new Date(arrivalDate).toLocaleDateString()}
-                    </span>
-                  </div>
-                )}
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Items:</span>
-                  <span className="font-medium">{items.length}</span>
-                </div>
               </div>
 
               <div className="border-t pt-4 space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">
-                    Gross Value (MRP):
-                  </span>
-                  <span>LKR {totalBeforeDiscount.toLocaleString()}</span>
+                  <span className="text-muted-foreground">Gross Cost:</span>
+                  <span>LKR {totalGross.toLocaleString()}</span>
                 </div>
                 {totalDiscount > 0 && (
                   <div className="flex justify-between text-sm">
@@ -834,7 +830,7 @@ export default function CreatePurchasePage() {
                   </div>
                 )}
                 <div className="flex justify-between items-center pt-2 border-t">
-                  <span className="font-semibold">Total Cost:</span>
+                  <span className="font-semibold">Net Payable:</span>
                   <span className="text-2xl font-bold text-primary">
                     LKR {subtotal.toLocaleString()}
                   </span>
@@ -848,9 +844,9 @@ export default function CreatePurchasePage() {
                 onClick={handleSavePurchase}
                 className="w-full"
                 size="lg"
-                disabled={items.length === 0 || loading}
+                disabled={items.length === 0 || submitting}
               >
-                {loading ? (
+                {submitting ? (
                   "Processing..."
                 ) : (
                   <>
