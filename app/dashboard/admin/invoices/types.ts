@@ -8,6 +8,7 @@ export interface Invoice {
   date: string;
   customerId: string;
   customerName: string;
+  salesRepName: string; // Field for Representative Name
   totalAmount: number;
   paidAmount: number;
   dueAmount: number;
@@ -19,7 +20,9 @@ export type SortField =
   | "date" 
   | "invoiceNo" 
   | "customerName" 
+  | "salesRepName" 
   | "totalAmount" 
+  | "paidAmount" 
   | "dueAmount" 
   | "status";
 

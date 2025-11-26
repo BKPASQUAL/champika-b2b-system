@@ -1,7 +1,7 @@
 // app/dashboard/admin/invoices/page.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import {
   FileSpreadsheet,
   FileText,
   Plus,
+  RefreshCw,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -26,66 +27,18 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { toast } from "sonner";
 
-import { Invoice, SortField, SortOrder, PaymentStatus } from "./types";
+import { Invoice, SortField, SortOrder } from "./types";
 import { InvoiceTable } from "./_components/InvoiceTable";
 import { InvoiceStats } from "./_components/InvoiceStats";
 
-// Mock Data
-const mockInvoices: Invoice[] = [
-  {
-    id: "INV-001",
-    invoiceNo: "INV-2024-001",
-    date: "2025-02-18",
-    customerId: "C-001",
-    customerName: "Saman Electronics",
-    totalAmount: 150000,
-    paidAmount: 50000,
-    dueAmount: 100000,
-    status: "Partial",
-    itemsCount: 5,
-  },
-  {
-    id: "INV-002",
-    invoiceNo: "INV-2024-002",
-    date: "2025-02-15",
-    customerId: "C-002",
-    customerName: "City Hardware",
-    totalAmount: 85000,
-    paidAmount: 85000,
-    dueAmount: 0,
-    status: "Paid",
-    itemsCount: 12,
-  },
-  {
-    id: "INV-003",
-    invoiceNo: "INV-2024-003",
-    date: "2025-01-20",
-    customerId: "C-003",
-    customerName: "Lanka Traders",
-    totalAmount: 240000,
-    paidAmount: 0,
-    dueAmount: 240000,
-    status: "Overdue",
-    itemsCount: 8,
-  },
-  {
-    id: "INV-004",
-    invoiceNo: "INV-2024-004",
-    date: "2025-02-19", // Today/Recent
-    customerId: "C-002",
-    customerName: "City Hardware",
-    totalAmount: 45000,
-    paidAmount: 0,
-    dueAmount: 45000,
-    status: "Unpaid",
-    itemsCount: 3,
-  },
-];
-
 export default function InvoicesPage() {
   const router = useRouter();
-  const [invoices, setInvoices] = useState<Invoice[]>(mockInvoices);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Filters & Sorting
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortField, setSortField] = useState<SortField>("date");
@@ -93,17 +46,58 @@ export default function InvoicesPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Filter Logic
+  // --- 1. Fetch Data from API ---
+  const fetchInvoices = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await fetch("/api/invoices");
+
+      if (!res.ok) throw new Error("Failed to fetch invoices");
+
+      const data = await res.json();
+
+      const mappedInvoices: Invoice[] = data.map((inv: any) => ({
+        id: inv.id,
+        invoiceNo: inv.invoiceNo,
+        date: inv.createdAt
+          ? inv.createdAt.split("T")[0]
+          : new Date().toISOString().split("T")[0],
+        customerId: inv.customerId,
+        customerName: inv.customerName || "Unknown Customer",
+        salesRepName: inv.salesRepName || "Unknown", // Mapping the new field
+        totalAmount: inv.totalAmount || 0,
+        paidAmount: inv.paidAmount || 0,
+        dueAmount: inv.dueAmount || 0,
+        status: inv.status,
+        itemsCount: 0,
+      }));
+
+      setInvoices(mappedInvoices);
+    } catch (error) {
+      console.error("Error fetching invoices:", error);
+      toast.error("Failed to load invoices");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchInvoices();
+  }, [fetchInvoices]);
+
+  // --- 2. Filter Logic ---
   const filteredInvoices = invoices.filter((inv) => {
     const matchesSearch =
       inv.invoiceNo.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      inv.customerName.toLowerCase().includes(searchQuery.toLowerCase());
+      inv.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      inv.salesRepName.toLowerCase().includes(searchQuery.toLowerCase()); // Added Rep search
+
     const matchesStatus = statusFilter === "all" || inv.status === statusFilter;
 
     return matchesSearch && matchesStatus;
   });
 
-  // Sort Logic
+  // --- 3. Sort Logic ---
   const sortedInvoices = [...filteredInvoices].sort((a, b) => {
     let aVal: any = a[sortField];
     let bVal: any = b[sortField];
@@ -124,7 +118,7 @@ export default function InvoicesPage() {
     return 0;
   });
 
-  // Pagination Logic
+  // --- 4. Pagination Logic ---
   const totalPages = Math.ceil(sortedInvoices.length / itemsPerPage);
   const paginatedInvoices = sortedInvoices.slice(
     (currentPage - 1) * itemsPerPage,
@@ -140,6 +134,10 @@ export default function InvoicesPage() {
     }
   };
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -150,6 +148,16 @@ export default function InvoicesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={fetchInvoices}
+            disabled={loading}
+            title="Refresh Data"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
@@ -157,17 +165,20 @@ export default function InvoicesPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => toast.info("Export coming soon")}
+              >
                 <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" />{" "}
                 Export Excel
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => toast.info("Export coming soon")}
+              >
                 <FileText className="w-4 h-4 mr-2 text-red-600" /> Export PDF
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Create Bill Button */}
           <Button
             onClick={() => router.push("/dashboard/admin/invoices/create")}
           >
@@ -176,7 +187,6 @@ export default function InvoicesPage() {
         </div>
       </div>
 
-      {/* Stats Cards */}
       <InvoiceStats invoices={invoices} />
 
       <Card>
@@ -185,7 +195,7 @@ export default function InvoicesPage() {
             <div className="flex-1 max-w-sm relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search invoice # or customer..."
+                placeholder="Search invoice, customer, or rep..."
                 className="pl-9"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -208,7 +218,7 @@ export default function InvoicesPage() {
         <CardContent>
           <InvoiceTable
             invoices={paginatedInvoices}
-            loading={false}
+            loading={loading}
             sortField={sortField}
             sortOrder={sortOrder}
             onSort={handleSort}

@@ -13,11 +13,12 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  Eye,
+  Download,
+  User,
   ChevronLeft,
   ChevronRight,
   Loader2,
-  Eye,
-  Download,
 } from "lucide-react";
 import { Invoice, SortField, SortOrder, PaymentStatus } from "../types";
 
@@ -81,6 +82,7 @@ export function InvoiceTable({
         <Table>
           <TableHeader>
             <TableRow>
+              {/* 1. Date */}
               <TableHead
                 onClick={() => onSort("date")}
                 className="cursor-pointer hover:bg-muted/50"
@@ -89,6 +91,8 @@ export function InvoiceTable({
                   Date {getSortIcon("date")}
                 </div>
               </TableHead>
+
+              {/* 2. Customer */}
               <TableHead
                 onClick={() => onSort("customerName")}
                 className="cursor-pointer hover:bg-muted/50"
@@ -97,6 +101,8 @@ export function InvoiceTable({
                   Customer {getSortIcon("customerName")}
                 </div>
               </TableHead>
+
+              {/* 3. Invoice No */}
               <TableHead
                 onClick={() => onSort("invoiceNo")}
                 className="cursor-pointer hover:bg-muted/50"
@@ -105,6 +111,8 @@ export function InvoiceTable({
                   Invoice No {getSortIcon("invoiceNo")}
                 </div>
               </TableHead>
+
+              {/* 4. Total */}
               <TableHead
                 onClick={() => onSort("totalAmount")}
                 className="text-right cursor-pointer hover:bg-muted/50"
@@ -113,7 +121,18 @@ export function InvoiceTable({
                   Total {getSortIcon("totalAmount")}
                 </div>
               </TableHead>
-              <TableHead className="text-right">Paid</TableHead>
+
+              {/* 5. Paid */}
+              <TableHead
+                onClick={() => onSort("paidAmount")}
+                className="text-right cursor-pointer hover:bg-muted/50"
+              >
+                <div className="flex items-center justify-end">
+                  Paid {getSortIcon("paidAmount")}
+                </div>
+              </TableHead>
+
+              {/* 6. Due Amount */}
               <TableHead
                 onClick={() => onSort("dueAmount")}
                 className="text-right cursor-pointer hover:bg-muted/50"
@@ -122,6 +141,8 @@ export function InvoiceTable({
                   Due Amount {getSortIcon("dueAmount")}
                 </div>
               </TableHead>
+
+              {/* 7. Payment Status */}
               <TableHead
                 onClick={() => onSort("status")}
                 className="text-center cursor-pointer hover:bg-muted/50"
@@ -130,6 +151,18 @@ export function InvoiceTable({
                   Payment Status {getSortIcon("status")}
                 </div>
               </TableHead>
+
+              {/* 8. Representative Name */}
+              <TableHead
+                onClick={() => onSort("salesRepName")}
+                className="cursor-pointer hover:bg-muted/50 hidden md:table-cell"
+              >
+                <div className="flex items-center">
+                  Rep Name {getSortIcon("salesRepName")}
+                </div>
+              </TableHead>
+
+              {/* 9. Action */}
               <TableHead className="text-right">Action</TableHead>
             </TableRow>
           </TableHeader>
@@ -137,7 +170,7 @@ export function InvoiceTable({
             {invoices.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={8}
+                  colSpan={9}
                   className="text-center py-8 text-muted-foreground"
                 >
                   No invoices found
@@ -146,21 +179,32 @@ export function InvoiceTable({
             ) : (
               invoices.map((invoice) => (
                 <TableRow key={invoice.id}>
+                  {/* 1. Date */}
                   <TableCell className="whitespace-nowrap">
                     {new Date(invoice.date).toLocaleDateString()}
                   </TableCell>
+
+                  {/* 2. Customer */}
                   <TableCell className="font-medium">
                     {invoice.customerName}
                   </TableCell>
+
+                  {/* 3. Invoice No */}
                   <TableCell className="font-mono text-xs">
                     {invoice.invoiceNo}
                   </TableCell>
+
+                  {/* 4. Total */}
                   <TableCell className="text-right font-medium">
                     LKR {invoice.totalAmount.toLocaleString()}
                   </TableCell>
+
+                  {/* 5. Paid */}
                   <TableCell className="text-right text-muted-foreground">
                     LKR {invoice.paidAmount.toLocaleString()}
                   </TableCell>
+
+                  {/* 6. Due Amount */}
                   <TableCell className="text-right">
                     <span
                       className={
@@ -172,9 +216,21 @@ export function InvoiceTable({
                       LKR {invoice.dueAmount.toLocaleString()}
                     </span>
                   </TableCell>
+
+                  {/* 7. Payment Status */}
                   <TableCell className="text-center">
                     {renderStatusBadge(invoice.status)}
                   </TableCell>
+
+                  {/* 8. Representative Name */}
+                  <TableCell className="hidden md:table-cell">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <User className="w-3 h-3" />
+                      {invoice.salesRepName}
+                    </div>
+                  </TableCell>
+
+                  {/* 9. Action */}
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
                       <Button variant="ghost" size="icon-sm">

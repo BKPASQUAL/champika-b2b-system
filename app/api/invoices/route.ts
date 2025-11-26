@@ -30,7 +30,6 @@ const invoiceSchema = z.object({
   extraDiscountAmount: z.number().default(0),
   grandTotal: z.number(),
   notes: z.string().optional(),
-  // ADDED: Allow passing order status, default to "Delivered" to match DB Enum
   orderStatus: z
     .enum([
       "Pending",
@@ -46,6 +45,7 @@ const invoiceSchema = z.object({
 // --- GET: Fetch All Invoices ---
 export async function GET() {
   try {
+    // We use !orders_sales_rep_id_fkey to tell Supabase exactly which relationship to join
     const { data, error } = await supabaseAdmin
       .from("invoices")
       .select(
@@ -54,6 +54,11 @@ export async function GET() {
         customers (
           shop_name,
           owner_name
+        ),
+        orders (
+          profiles!orders_sales_rep_id_fkey (
+            full_name
+          )
         )
       `
       )
@@ -62,22 +67,29 @@ export async function GET() {
     if (error) throw error;
 
     // Map to frontend format
-    const invoices = data.map((inv) => ({
-      id: inv.id,
-      invoiceNo: inv.invoice_no,
-      orderId: inv.order_id,
-      customerId: inv.customer_id,
-      customerName: inv.customers?.shop_name || "Unknown",
-      totalAmount: inv.total_amount,
-      paidAmount: inv.paid_amount,
-      dueAmount: inv.due_amount,
-      status: inv.status,
-      dueDate: inv.due_date,
-      createdAt: inv.created_at,
-    }));
+    const invoices = data.map((inv: any) => {
+      // Safely access the nested profile name
+      const repName = inv.orders?.profiles?.full_name || "Unknown";
+
+      return {
+        id: inv.id,
+        invoiceNo: inv.invoice_no,
+        orderId: inv.order_id,
+        customerId: inv.customer_id,
+        customerName: inv.customers?.shop_name || "Unknown Customer",
+        salesRepName: repName, // Mapped here
+        totalAmount: inv.total_amount,
+        paidAmount: inv.paid_amount,
+        dueAmount: inv.due_amount,
+        status: inv.status,
+        dueDate: inv.due_date,
+        createdAt: inv.created_at,
+      };
+    });
 
     return NextResponse.json(invoices);
   } catch (error: any) {
+    console.error("API Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -88,7 +100,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const val = invoiceSchema.parse(body);
 
-    // 1. Generate Invoice Number (INV-XXXX)
+    // 1. Generate Invoice Number
     const { count } = await supabaseAdmin
       .from("invoices")
       .select("*", { count: "exact", head: true });
@@ -96,7 +108,7 @@ export async function POST(request: NextRequest) {
     const nextId = (count || 0) + 1001;
     const invoiceNo = `INV-${nextId}`;
 
-    // 2. Calculate due date (30 days from invoice date)
+    // 2. Calculate Dates
     const invoiceDate =
       val.invoiceDate || new Date().toISOString().split("T")[0];
     const dueDate =
@@ -107,7 +119,7 @@ export async function POST(request: NextRequest) {
         return date.toISOString().split("T")[0];
       })();
 
-    // 3. Create Order First (since invoice references order_id)
+    // 3. Create Order
     const { count: orderCount } = await supabaseAdmin
       .from("orders")
       .select("*", { count: "exact", head: true });
@@ -122,7 +134,7 @@ export async function POST(request: NextRequest) {
         customer_id: val.customerId,
         sales_rep_id: val.salesRepId,
         order_date: invoiceDate,
-        status: val.orderStatus, // CHANGED: Use the passed status instead of "Completed"
+        status: val.orderStatus,
         total_amount: val.grandTotal,
         notes: val.notes || null,
       })
@@ -157,7 +169,7 @@ export async function POST(request: NextRequest) {
         customer_id: val.customerId,
         total_amount: val.grandTotal,
         paid_amount: 0,
-        // due_amount: val.grandTotal,
+        // due_amount is calculated automatically by DB
         status: "Unpaid",
         due_date: dueDate,
       })
@@ -166,7 +178,7 @@ export async function POST(request: NextRequest) {
 
     if (invoiceError) throw invoiceError;
 
-    // 6. Update Customer Outstanding Balance
+    // 6. Update Customer Balance
     const { error: balanceError } = await supabaseAdmin.rpc(
       "update_customer_balance",
       {
@@ -193,7 +205,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 7. Update Product Stock Quantities
+    // 7. Update Stock
     for (const item of val.items) {
       const totalQty = item.quantity + item.freeQuantity;
 
