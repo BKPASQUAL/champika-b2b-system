@@ -30,6 +30,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import {
   Command,
@@ -91,6 +98,8 @@ export default function CreateInvoicePage() {
   );
   const [invoiceNumber, setInvoiceNumber] = useState("INV-NEW");
   const [salesRepId, setSalesRepId] = useState<string>("");
+  // ADDED: Order Status State
+  const [orderStatus, setOrderStatus] = useState<string>("Delivered");
 
   // Items State
   const [items, setItems] = useState<InvoiceItem[]>([]);
@@ -148,7 +157,7 @@ export default function CreateInvoicePage() {
         const usersRes = await fetch("/api/users");
         const usersData = await usersRes.json();
         const salesReps = usersData
-          .filter((u: any) => u.role === "sales_rep")
+          .filter((u: any) => u.role === "rep") // Ensure this matches your role string
           .map((u: any) => ({
             id: u.id,
             name: u.fullName,
@@ -263,6 +272,7 @@ export default function CreateInvoicePage() {
       extraDiscountPercent: extraDiscount,
       extraDiscountAmount: extraDiscountAmount,
       grandTotal: grandTotal,
+      orderStatus, // Pass the selected status
     };
 
     console.log("Saving Invoice...", invoiceData);
@@ -485,6 +495,23 @@ export default function CreateInvoicePage() {
                     </PopoverContent>
                   </Popover>
                 </div>
+              </div>
+
+              {/* Added Order Status Selection */}
+              <div className="space-y-2">
+                <Label>Order Status</Label>
+                <Select value={orderStatus} onValueChange={setOrderStatus}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Pending">Pending</SelectItem>
+                    <SelectItem value="Processing">Processing</SelectItem>
+                    <SelectItem value="Checking">Checking</SelectItem>
+                    <SelectItem value="Loading">Loading</SelectItem>
+                    <SelectItem value="Delivered">Delivered</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </CardContent>
           </Card>

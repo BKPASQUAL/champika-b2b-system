@@ -30,6 +30,17 @@ const invoiceSchema = z.object({
   extraDiscountAmount: z.number().default(0),
   grandTotal: z.number(),
   notes: z.string().optional(),
+  // ADDED: Allow passing order status, default to "Delivered" to match DB Enum
+  orderStatus: z
+    .enum([
+      "Pending",
+      "Processing",
+      "Checking",
+      "Loading",
+      "Delivered",
+      "Cancelled",
+    ])
+    .default("Delivered"),
 });
 
 // --- GET: Fetch All Invoices ---
@@ -111,7 +122,7 @@ export async function POST(request: NextRequest) {
         customer_id: val.customerId,
         sales_rep_id: val.salesRepId,
         order_date: invoiceDate,
-        status: "Completed",
+        status: val.orderStatus, // CHANGED: Use the passed status instead of "Completed"
         total_amount: val.grandTotal,
         notes: val.notes || null,
       })
@@ -128,7 +139,7 @@ export async function POST(request: NextRequest) {
       free_quantity: item.freeQuantity,
       unit_price: item.unitPrice,
       total_price: item.total,
-      commission_earned: 0, // Can be calculated based on commission rules
+      commission_earned: 0,
     }));
 
     const { error: itemsError } = await supabaseAdmin
@@ -146,7 +157,7 @@ export async function POST(request: NextRequest) {
         customer_id: val.customerId,
         total_amount: val.grandTotal,
         paid_amount: 0,
-        due_amount: val.grandTotal,
+        // due_amount: val.grandTotal,
         status: "Unpaid",
         due_date: dueDate,
       })
@@ -164,7 +175,6 @@ export async function POST(request: NextRequest) {
       }
     );
 
-    // If RPC doesn't exist, do manual update
     if (balanceError) {
       const { data: customer } = await supabaseAdmin
         .from("customers")
@@ -192,7 +202,6 @@ export async function POST(request: NextRequest) {
         p_quantity: totalQty,
       });
 
-      // Fallback if RPC doesn't exist
       const { data: product } = await supabaseAdmin
         .from("products")
         .select("stock_quantity")
