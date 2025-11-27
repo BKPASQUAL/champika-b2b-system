@@ -2,9 +2,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { CheckCircle2, X, Loader2 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -19,7 +17,7 @@ import { ProductDialogs } from "./_components/ProductDialogs";
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
-  // FIX: Added parent_id to type definition
+
   const [categories, setCategories] = useState<
     { id: string; name: string; parent_id?: string }[]
   >([]);
@@ -60,10 +58,8 @@ export default function ProductsPage() {
     mrp: 0,
     sellingPrice: 0,
     costPrice: 0,
+    images: [], // <--- ADDED: Initialize images array
   });
-
-  const [showSuccessAlert, setShowSuccessAlert] = useState(false);
-  const [successMessage, setSuccessMessage] = useState("");
 
   // --- Fetch Data ---
   const fetchData = useCallback(async () => {
@@ -71,7 +67,6 @@ export default function ProductsPage() {
       setLoading(true);
       const [prodRes, catRes, supRes] = await Promise.all([
         fetch("/api/products"),
-        // FIX: Changed 'type=product' to 'type=category'
         fetch("/api/settings/categories?type=category"),
         fetch("/api/suppliers"),
       ]);
@@ -211,6 +206,7 @@ export default function ProductsPage() {
       mrp: 0,
       sellingPrice: 0,
       costPrice: 0,
+      images: [], // <--- ADDED: Reset images array
     });
     setSelectedProduct(null);
   };
@@ -280,7 +276,6 @@ export default function ProductsPage() {
             setSupplierFilter={setSupplierFilter}
             stockFilter={stockFilter}
             setStockFilter={setStockFilter}
-            // FIX: Deduplicate names using Set to prevent duplicate key errors
             categories={[
               "all",
               ...Array.from(new Set(categories.map((c) => c.name))),
@@ -313,6 +308,7 @@ export default function ProductsPage() {
                 mrp: p.mrp,
                 sellingPrice: p.sellingPrice,
                 costPrice: p.costPrice,
+                images: p.images || [], // <--- ADDED: Load existing images
               });
               setSelectedProduct(p);
               setIsAddDialogOpen(true);
@@ -338,7 +334,6 @@ export default function ProductsPage() {
         isDeleteDialogOpen={isDeleteDialogOpen}
         setIsDeleteDialogOpen={setIsDeleteDialogOpen}
         onDeleteConfirm={handleDeleteConfirm}
-        // Pass dynamic data to dialogs
         categories={categories}
         suppliers={suppliers}
       />

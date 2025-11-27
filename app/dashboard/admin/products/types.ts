@@ -5,11 +5,11 @@ export interface Product {
   sku: string;
   name: string;
   category: string;
-  subCategory?: string; // New
-  brand?: string; // New
-  subBrand?: string; // New
-  modelType?: string; // New
-  sizeSpec?: string; // New
+  subCategory?: string;
+  brand?: string;
+  subBrand?: string;
+  modelType?: string;
+  sizeSpec?: string;
   supplier: string;
   stock: number;
   minStock: number;
@@ -20,6 +20,7 @@ export interface Product {
   totalValue: number;
   totalCost: number;
   profitMargin: number;
+  images: string[]; // <--- ADDED THIS
 }
 
 export type SortField =
@@ -38,15 +39,16 @@ export type SortOrder = "asc" | "desc";
 export interface ProductFormData {
   name: string;
   category: string;
-  subCategory: string; // New
-  brand: string; // New
-  subBrand: string; // New
-  modelType: string; // New
-  sizeSpec: string; // New
+  subCategory: string;
+  brand: string;
+  subBrand: string;
+  modelType: string;
+  sizeSpec: string;
   supplier: string;
   stock: number;
   minStock: number;
   mrp: number;
   sellingPrice: number;
   costPrice: number;
+  images: string[]; // <--- ADDED THIS
 }

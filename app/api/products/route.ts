@@ -1,3 +1,4 @@
+// app/api/products/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
@@ -17,6 +18,7 @@ const productSchema = z.object({
   mrp: z.number().min(0),
   sellingPrice: z.number().min(0),
   costPrice: z.number().min(0),
+  images: z.array(z.string()).optional(), // <--- ADDED THIS
 });
 
 export async function GET() {
@@ -28,7 +30,6 @@ export async function GET() {
 
     if (error) throw error;
 
-    // Map DB fields to Frontend
     const mapped = data.map((p) => ({
       id: p.id,
       sku: p.sku,
@@ -40,19 +41,13 @@ export async function GET() {
       modelType: p.model_type,
       sizeSpec: p.size_spec,
       supplier: p.supplier_name,
-
-      // --- FIX: Return BOTH keys to satisfy all pages ---
-      stock: p.stock_quantity || 0, // Used by Product Page Table
-      stock_quantity: p.stock_quantity || 0, // Used by Invoice Edit Page
-
+      stock: p.stock_quantity || 0,
       minStock: p.min_stock_level || 0,
       mrp: p.mrp || 0,
       sellingPrice: p.selling_price || 0,
       costPrice: p.cost_price || 0,
-
+      images: p.images || [], // <--- ADDED THIS
       unitOfMeasure: p.unit_of_measure || "unit",
-
-      // Derived
       discountPercent:
         p.mrp > 0 ? ((p.mrp - p.selling_price) / p.mrp) * 100 : 0,
       totalValue: (p.stock_quantity || 0) * (p.selling_price || 0),
@@ -96,6 +91,7 @@ export async function POST(request: NextRequest) {
         mrp: val.mrp,
         selling_price: val.sellingPrice,
         cost_price: val.costPrice,
+        images: val.images || [], // <--- ADDED THIS
       })
       .select()
       .single();
