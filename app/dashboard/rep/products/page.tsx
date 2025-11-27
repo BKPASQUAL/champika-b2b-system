@@ -378,7 +378,7 @@ export default function RepProductsPage() {
             {/* Content Container - Scrollable Vertical Layout */}
             <div className="flex flex-col overflow-y-auto">
               {/* Image Viewer (Top) */}
-              <div className="relative bg-gray-50 flex items-center justify-center h-[320px] w-full border-b border-gray-100 shrink-0">
+              <div className="relative bg-gray-50 flex items-center justify-center h-[420px] w-full border-b border-gray-100 shrink-0">
                 {/* Product Navigation Arrows (Left/Right of Image) */}
                 <Button
                   variant="ghost"
