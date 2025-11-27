@@ -240,7 +240,7 @@ export default function RepProductsPage() {
       </div>
 
       {/* Product Grid */}
-      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-3">
+      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3">
         {loading
           ? [...Array(12)].map((_, i) => (
               <div key={i} className="flex flex-col gap-2">
@@ -294,16 +294,21 @@ export default function RepProductsPage() {
 
                   {/* Details Footer */}
                   <div className="flex flex-col gap-1">
-                    <div className="">
-                      <p className="text-[9px] text-gray-400 uppercase font-bold tracking-wider truncate leading-none mb-0.5">
-                        {product.brand || product.category}
-                      </p>
-                      <h3
-                        className="text-[11px] font-medium text-gray-900 leading-snug line-clamp-2 group-hover:text-blue-600 transition-colors"
-                        title={product.name}
-                      >
-                        {product.name}
-                      </h3>
+                    <div className="flex justify-between items-start">
+                      <div className="">
+                        <p className="text-[9px] text-gray-400 uppercase font-bold tracking-wider truncate leading-none mb-0.5">
+                          {product.brand || product.category}
+                        </p>
+                        <h3
+                          className="text-[11px] font-medium text-gray-900 leading-snug line-clamp-2 group-hover:text-blue-600 transition-colors"
+                          title={product.name}
+                        >
+                          {product.name}
+                        </h3>
+                      </div>
+                      <div>
+                        {product.stock} Units
+                      </div>
                     </div>
 
                     <div className="flex justify-between items-center mt-1 pt-1 border-t border-gray-50">
