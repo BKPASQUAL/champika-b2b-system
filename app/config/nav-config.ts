@@ -21,13 +21,13 @@ import {
   ScrollText,
   Coins,
   LucideIcon,
+  Store, // Import Store icon for Catalog
 } from "lucide-react";
 
 export type UserRole = "admin" | "office" | "rep" | "delivery";
 
-// New Structure: Array of Sections
 interface NavSection {
-  title?: string; // Optional header (e.g. "Finance")
+  title?: string;
   items: {
     name: string;
     href: string;
@@ -37,6 +37,7 @@ interface NavSection {
 
 export const roleNavItems: Record<UserRole, NavSection[]> = {
   admin: [
+    // ... (Keep existing admin items)
     {
       items: [
         { name: "Overview", href: "/dashboard/admin", icon: LayoutDashboard },
@@ -161,6 +162,7 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
     },
   ],
   office: [
+    // ... (Keep existing office items)
     {
       items: [
         { name: "Dashboard", href: "/dashboard/office", icon: LayoutDashboard },
@@ -209,6 +211,13 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           href: "/dashboard/rep/orders/create",
           icon: ShoppingCart,
         },
+        // --- Added Product Catalog Here ---
+        {
+          name: "Product Catalog",
+          href: "/dashboard/rep/products",
+          icon: Store, // Store icon works well for a shop view
+        },
+        // ----------------------------------
         { name: "My Customers", href: "/dashboard/rep/customers", icon: Users },
         {
           name: "Due Invoices",
