@@ -1,4 +1,3 @@
-// app/dashboard/rep/products/page.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -147,13 +146,13 @@ export default function RepProductsPage() {
         </div>
       </div>
 
-      {/* Product Grid - "File Browser" Style */}
-      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-7 xl:grid-cols-8 gap-x-4 gap-y-6">
+      {/* Product Grid - Compact Style */}
+      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-3">
         {loading
           ? [...Array(12)].map((_, i) => (
               <div key={i} className="flex flex-col gap-2">
-                <div className="aspect-square rounded-xl bg-gray-200 animate-pulse" />
-                <div className="h-4 w-2/3 bg-gray-200 rounded animate-pulse" />
+                <div className="aspect-square rounded-lg bg-gray-200 animate-pulse" />
+                <div className="h-3 w-2/3 bg-gray-200 rounded animate-pulse" />
                 <div className="h-3 w-1/2 bg-gray-200 rounded animate-pulse" />
               </div>
             ))
@@ -166,20 +165,15 @@ export default function RepProductsPage() {
               return (
                 <div
                   key={product.id}
-                  className="group flex flex-col gap-2 cursor-pointer"
+                  className="group flex flex-col gap-1.5 cursor-pointer bg-white p-2 rounded-lg border border-gray-100 hover:border-blue-200 hover:shadow-sm transition-all duration-200"
                 >
                   {/* 1. Image Card Box */}
-                  <div className="relative aspect-square w-full bg-white rounded-lg border border-gray-200 shadow-sm group-hover:shadow-md group-hover:border-blue-300 transition-all duration-200 overflow-hidden">
-                    {/* Top Left: Brand/Category Icon */}
-                    <div className="absolute top-2 left-2 z-10 flex items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
-                      <Layers className="h-3.5 w-3.5 text-blue-600" />
-                    </div>
-
+                  <div className="relative aspect-square w-full bg-gray-50 rounded-md overflow-hidden ">
                     {/* Top Right: Stock Status Badge */}
-                    <div className="absolute top-2 right-2 z-10">
+                    <div className="absolute top-1 right-1 z-10">
                       <span
                         className={cn(
-                          "text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider",
+                          "text-[8px] font-bold px-1 py-0.5 rounded border uppercase tracking-wider bg-white/90 backdrop-blur-sm",
                           stockStatus.color
                         )}
                       >
@@ -188,61 +182,61 @@ export default function RepProductsPage() {
                     </div>
 
                     {/* Center: Image */}
-                    <div className="w-full h-full p-6 flex items-center justify-center">
+                    <div className="w-full h-full flex items-center justify-center">
                       {product.images && product.images.length > 0 ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={product.images[0]}
                           alt={product.name}
-                          className="w-full h-full object-contain mix-blend-multiply transition-transform duration-300 group-hover:scale-110"
+                          className="w-full h-full object-contain p-2 mix-blend-multiply transition-transform duration-300 group-hover:scale-110"
                         />
                       ) : (
                         <div className="flex flex-col items-center text-gray-300">
-                          <ImageIcon className="h-8 w-8 mb-1" />
-                          <span className="text-[9px]">No Image</span>
+                          <ImageIcon className="h-6 w-6 mb-1" />
                         </div>
                       )}
                     </div>
-
-                    {/* Bottom Right: Price Tag (Floating style like reference) */}
-                    <div className="absolute bottom-2 right-2 bg-white/90 backdrop-blur-sm px-2 py-0.5 rounded text-right">
-                      <span className="text-xs font-bold text-orange-600 block leading-none">
-                        {formatCurrency(product.sellingPrice)}
-                      </span>
-                    </div>
                   </div>
 
-                  {/* 2. Details Footer (Outside Box) */}
-                  <div className="flex justify-between items-start px-0.5">
-                    <div className="flex-1 min-w-0 pr-2">
+                  {/* 2. Details Footer - Minimal Height */}
+                  <div className="flex flex-col ">
+                    {/* Name & Brand Row */}
+                    <div className="">
+                      <p className="text-[9px] text-gray-400 uppercase font-bold tracking-wider truncate leading-none mb-0.5">
+                        {product.brand || product.category}
+                      </p>
                       <h3
-                        className="text-xs font-medium text-gray-900 leading-snug line-clamp-2 group-hover:text-blue-600 transition-colors"
+                        className="text-[11px] font-medium text-gray-900 leading-snug line-clamp-2 group-hover:text-blue-600 transition-colors"
                         title={product.name}
                       >
                         {product.name}
                       </h3>
-                      <p className="text-[10px] text-gray-500 mt-0.5 truncate font-mono">
-                        {product.sku}
-                      </p>
                     </div>
 
-                    {/* Add Button - Black Background */}
-                    <Button
-                      size="icon"
-                      className={cn(
-                        "h-7 w-7 rounded-full shrink-0 transition-all shadow-sm cursor-pointer",
-                        product.stock === 0
-                          ? "bg-gray-100 text-gray-300 hover:bg-gray-100 cursor-not-allowed"
-                          : "bg-black text-white hover:bg-gray-800 hover:shadow-md" // Changed to Black
-                      )}
-                      disabled={product.stock === 0}
-                      onClick={(e) => {
-                        e.stopPropagation(); // Prevent parent click
-                        toast.success(`Added ${product.name}`);
-                      }}
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                    </Button>
+                    {/* Price & Add Button Row */}
+                    <div className="flex justify-between items-center mt-1 pt-1 border-t border-gray-50">
+                      <span className="text-xs font-bold text-orange-600">
+                        {formatCurrency(product.sellingPrice)}
+                      </span>
+
+                      {/* Add Button - Black Background */}
+                      <Button
+                        size="icon"
+                        className={cn(
+                          "h-6 w-6 rounded-full shrink-0 transition-all shadow-sm",
+                          product.stock === 0
+                            ? "bg-gray-100 text-gray-300 hover:bg-gray-100 cursor-not-allowed"
+                            : "bg-black text-white hover:bg-gray-800 hover:shadow-md"
+                        )}
+                        disabled={product.stock === 0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toast.success(`Added ${product.name}`);
+                        }}
+                      >
+                        <Plus className="h-3 w-3" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               );
@@ -256,7 +250,7 @@ export default function RepProductsPage() {
           <p className="text-sm text-muted-foreground">No products found.</p>
           <Button
             variant="link"
-            className="text-xs h-auto p-0 mt-1 "
+            className="text-xs h-auto p-0 mt-1"
             onClick={() => {
               setSearchQuery("");
               setCategoryFilter("all");
