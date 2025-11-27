@@ -663,8 +663,7 @@ export default function CreateOrderPage() {
 
               <Button
                 onClick={handleAddItem}
-                className="w-full h-11 text-base"
-                variant="secondary"
+                className="w-full h-11 text-base bg-black hover:bg-gray-800 text-white"
                 disabled={!currentItem.productId}
               >
                 <Plus className="w-5 h-5 mr-2" />
