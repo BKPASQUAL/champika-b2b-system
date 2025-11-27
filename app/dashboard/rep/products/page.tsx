@@ -294,7 +294,7 @@ export default function RepProductsPage() {
 
                   {/* Details Footer */}
                   <div className="flex flex-col gap-1">
-                    <div className="min-h-[2.2rem]">
+                    <div className="">
                       <p className="text-[9px] text-gray-400 uppercase font-bold tracking-wider truncate leading-none mb-0.5">
                         {product.brand || product.category}
                       </p>
