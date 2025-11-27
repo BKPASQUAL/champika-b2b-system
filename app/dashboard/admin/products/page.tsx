@@ -1,3 +1,4 @@
+// app/dashboard/admin/products/page.tsx
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
@@ -18,9 +19,10 @@ import { ProductDialogs } from "./_components/ProductDialogs";
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<{ id: string; name: string }[]>(
-    []
-  );
+  // FIX: Added parent_id to type definition
+  const [categories, setCategories] = useState<
+    { id: string; name: string; parent_id?: string }[]
+  >([]);
   const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>(
     []
   );
@@ -47,6 +49,11 @@ export default function ProductsPage() {
   const [formData, setFormData] = useState<ProductFormData>({
     name: "",
     category: "",
+    subCategory: "",
+    brand: "",
+    subBrand: "",
+    modelType: "",
+    sizeSpec: "",
     supplier: "",
     stock: 0,
     minStock: 0,
@@ -64,7 +71,8 @@ export default function ProductsPage() {
       setLoading(true);
       const [prodRes, catRes, supRes] = await Promise.all([
         fetch("/api/products"),
-        fetch("/api/settings/categories?type=product"),
+        // FIX: Changed 'type=product' to 'type=category'
+        fetch("/api/settings/categories?type=category"),
         fetch("/api/suppliers"),
       ]);
 
@@ -192,6 +200,11 @@ export default function ProductsPage() {
     setFormData({
       name: "",
       category: "",
+      subCategory: "",
+      brand: "",
+      subBrand: "",
+      modelType: "",
+      sizeSpec: "",
       supplier: "",
       stock: 0,
       minStock: 0,
@@ -286,7 +299,21 @@ export default function ProductsPage() {
             sortOrder={sortOrder}
             onSort={handleSort}
             onEdit={(p) => {
-              setFormData(p);
+              setFormData({
+                name: p.name,
+                category: p.category,
+                subCategory: p.subCategory || "",
+                brand: p.brand || "",
+                subBrand: p.subBrand || "",
+                modelType: p.modelType || "",
+                sizeSpec: p.sizeSpec || "",
+                supplier: p.supplier,
+                stock: p.stock,
+                minStock: p.minStock,
+                mrp: p.mrp,
+                sellingPrice: p.sellingPrice,
+                costPrice: p.costPrice,
+              });
               setSelectedProduct(p);
               setIsAddDialogOpen(true);
             }}

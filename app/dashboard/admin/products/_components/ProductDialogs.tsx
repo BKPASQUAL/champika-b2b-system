@@ -1,3 +1,4 @@
+// app/dashboard/admin/products/_components/ProductDialogs.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -46,6 +47,7 @@ interface ProductDialogsProps {
   setIsDeleteDialogOpen: (open: boolean) => void;
   onDeleteConfirm: () => void;
   suppliers: { id: string; name: string }[];
+  categories: { id: string; name: string; parent_id?: string }[]; // <--- Added this
 }
 
 export function ProductDialogs({
@@ -59,9 +61,10 @@ export function ProductDialogs({
   setIsDeleteDialogOpen,
   onDeleteConfirm,
   suppliers,
+  categories, // <--- Destructure this
 }: ProductDialogsProps) {
   // 1. Fetch Dynamic Dropdown Data
-  const categories = useSettings("category");
+  // const categories = useSettings("category"); // <--- Removed internal fetch
   const brands = useSettings("brand");
   const models = useSettings("model");
   const specs = useSettings("spec");
