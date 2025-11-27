@@ -113,7 +113,7 @@ export default function CreateOrderPage() {
   const [currentItem, setCurrentItem] = useState({
     productId: "",
     sku: "",
-    quantity: 1,
+    quantity: 0, // CHANGED: Initialized to 0 so it shows as empty
     freeQuantity: 0,
     unit: "",
     mrp: 0,
@@ -178,7 +178,7 @@ export default function CreateOrderPage() {
     setCurrentItem({
       productId: product.id,
       sku: product.sku,
-      quantity: 1,
+      quantity: 0, // CHANGED: Reset to 0 on selection
       freeQuantity: 0,
       unit: product.unit_of_measure,
       mrp: product.mrp,
@@ -193,6 +193,11 @@ export default function CreateOrderPage() {
   const handleAddItem = () => {
     if (!currentItem.productId) {
       toast.error("Please select a product");
+      return;
+    }
+
+    if (currentItem.quantity <= 0) {
+      toast.error("Quantity must be at least 1");
       return;
     }
 
@@ -232,7 +237,7 @@ export default function CreateOrderPage() {
     setCurrentItem({
       productId: "",
       sku: "",
-      quantity: 1,
+      quantity: 0, // CHANGED: Reset to 0 after adding
       freeQuantity: 0,
       unit: "",
       mrp: 0,
@@ -394,7 +399,7 @@ export default function CreateOrderPage() {
                       className="w-[var(--radix-popover-trigger-width)] p-0"
                       align="start"
                     >
-                      <Command>
+                      <Command className="bg-blue-50">
                         <CommandInput placeholder="Search customer..." />
                         <CommandList>
                           <CommandEmpty>No customer found.</CommandEmpty>
@@ -407,6 +412,7 @@ export default function CreateOrderPage() {
                                   setCustomerId(customer.id);
                                   setCustomerOpen(false);
                                 }}
+                                className="data-[selected=true]:bg-blue-50 data-[selected=true]:text-blue-900"
                               >
                                 <Check
                                   className={cn(
@@ -496,7 +502,7 @@ export default function CreateOrderPage() {
                     className="w-[var(--radix-popover-trigger-width)] p-0"
                     align="start"
                   >
-                    <Command>
+                    <Command className="bg-blue-50">
                       <CommandInput placeholder="Search product by name or SKU..." />
                       <CommandList>
                         <CommandEmpty>No product found.</CommandEmpty>
@@ -508,6 +514,7 @@ export default function CreateOrderPage() {
                               onSelect={() => {
                                 handleProductSelect(product.id);
                               }}
+                              className="data-[selected=true]:bg-blue-50 data-[selected=true]:text-blue-900"
                             >
                               <Check
                                 className={cn(
@@ -536,7 +543,7 @@ export default function CreateOrderPage() {
                 </Popover>
               </div>
 
-              {/* Quantity & Pricing Inputs (Same as previous) */}
+              {/* Quantity & Pricing Inputs */}
               <div className="grid grid-cols-4 gap-4">
                 <div className="space-y-2">
                   <Label>Quantity</Label>
@@ -544,7 +551,10 @@ export default function CreateOrderPage() {
                     type="number"
                     min="1"
                     className="h-10"
-                    value={currentItem.quantity}
+                    placeholder="0"
+                    value={
+                      currentItem.quantity === 0 ? "" : currentItem.quantity
+                    }
                     onChange={(e) =>
                       setCurrentItem({
                         ...currentItem,
@@ -559,7 +569,12 @@ export default function CreateOrderPage() {
                     type="number"
                     min="0"
                     className="h-10"
-                    value={currentItem.freeQuantity}
+                    placeholder="0"
+                    value={
+                      currentItem.freeQuantity === 0
+                        ? ""
+                        : currentItem.freeQuantity
+                    }
                     onChange={(e) =>
                       setCurrentItem({
                         ...currentItem,
@@ -596,7 +611,11 @@ export default function CreateOrderPage() {
                   <Label>Unit Price</Label>
                   <Input
                     type="number"
-                    value={currentItem.unitPrice || ""}
+                    min="0"
+                    step="0.01"
+                    value={
+                      currentItem.unitPrice === 0 ? "" : currentItem.unitPrice
+                    }
                     onChange={(e) =>
                       setCurrentItem({
                         ...currentItem,
@@ -613,7 +632,12 @@ export default function CreateOrderPage() {
                     type="number"
                     min="0"
                     max="100"
-                    value={currentItem.discountPercent || ""}
+                    step="0.01"
+                    value={
+                      currentItem.discountPercent === 0
+                        ? ""
+                        : currentItem.discountPercent
+                    }
                     onChange={(e) =>
                       setCurrentItem({
                         ...currentItem,
@@ -770,14 +794,16 @@ export default function CreateOrderPage() {
 
               <div className="border-t pt-4 space-y-3">
                 <div className="space-y-2">
-                  <Label className="text-xs">Extra Discount %</Label>
+                  <Label className="text-xs ">Extra Discount %</Label>
                   <Input
                     type="number"
                     min="0"
                     max="100"
-                    value={extraDiscount}
+                    step="0.01"
+                    value={extraDiscount === 0 ? "" : extraDiscount}
                     onChange={(e) => setExtraDiscount(Number(e.target.value))}
-                    className="h-9"
+                    className="h-9 text-end"
+                    placeholder="0"
                   />
                 </div>
                 <div className="flex justify-between text-sm">
