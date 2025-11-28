@@ -78,6 +78,7 @@ export function ProductDialogs({
     (b) => b.parent_id && b.parent_id === selectedBrandId
   );
 
+  // Image Upload
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
@@ -119,6 +120,13 @@ export function ProductDialogs({
     const newImages = formData.images.filter((_, i) => i !== index);
     setFormData({ ...formData, images: newImages });
   };
+
+  // Image Slots Logic
+  const maxImages = 6;
+  const showUpload = formData.images.length < maxImages;
+  const emptySlotsCount =
+    maxImages - formData.images.length - (showUpload ? 1 : 0);
+  const emptySlots = Array.from({ length: Math.max(0, emptySlotsCount) });
 
   return (
     <>
@@ -233,7 +241,7 @@ export function ProductDialogs({
               </Select>
             </div>
 
-            {/* Supplier - Full Width (Requested Change) */}
+            {/* Supplier - Full Width */}
             <div className="col-span-2 space-y-2">
               <Label>Supplier *</Label>
               <Select
@@ -303,7 +311,7 @@ export function ProductDialogs({
               </div>
             </div>
 
-            {/* Stock & Unit */}
+            {/* Stock & Unit - REMOVED 'unit' OPTION */}
             <div className="col-span-2 grid grid-cols-3 gap-4 border-t pt-4">
               <div className="space-y-2">
                 <Label>Unit of Measure</Label>
@@ -371,8 +379,7 @@ export function ProductDialogs({
                 </span>
               </div>
               <div className="grid grid-cols-6 gap-3">
-                {/* Upload Slot */}
-                {formData.images.length < 6 && (
+                {showUpload && (
                   <div
                     className="aspect-square rounded-lg border-2 border-dashed border-muted-foreground/25 flex flex-col items-center justify-center cursor-pointer hover:bg-muted/50 hover:border-muted-foreground/50 transition-all"
                     onClick={() => !uploading && fileInputRef.current?.click()}
@@ -398,7 +405,6 @@ export function ProductDialogs({
                     />
                   </div>
                 )}
-                {/* Previews */}
                 {formData.images.map((imgSrc, index) => (
                   <div
                     key={index}
@@ -418,16 +424,12 @@ export function ProductDialogs({
                     </button>
                   </div>
                 ))}
-                {/* Empty Slots */}
-                {formData.images.length < 5 &&
-                  Array.from({ length: 5 - formData.images.length }).map(
-                    (_, i) => (
-                      <div
-                        key={`empty-${i}`}
-                        className="aspect-square rounded-lg border-2 border-dashed border-muted-foreground/10"
-                      />
-                    )
-                  )}
+                {emptySlots.map((_, i) => (
+                  <div
+                    key={`empty-${i}`}
+                    className="aspect-square rounded-lg border-2 border-dashed border-muted-foreground/10 bg-muted/10"
+                  />
+                ))}
               </div>
             </div>
           </div>
