@@ -18,7 +18,8 @@ const productSchema = z.object({
   mrp: z.number().min(0),
   sellingPrice: z.number().min(0),
   costPrice: z.number().min(0),
-  images: z.array(z.string()).optional(), // <--- ADDED THIS
+  images: z.array(z.string()).optional(),
+  unitOfMeasure: z.string().optional(), // <--- 1. ADDED THIS VALIDATION
 });
 
 export async function GET() {
@@ -46,8 +47,8 @@ export async function GET() {
       mrp: p.mrp || 0,
       sellingPrice: p.selling_price || 0,
       costPrice: p.cost_price || 0,
-      images: p.images || [], // <--- ADDED THIS
-      unitOfMeasure: p.unit_of_measure || "unit",
+      images: p.images || [],
+      unitOfMeasure: p.unit_of_measure || "Pcs", // Fallback to Pcs
       discountPercent:
         p.mrp > 0 ? ((p.mrp - p.selling_price) / p.mrp) * 100 : 0,
       totalValue: (p.stock_quantity || 0) * (p.selling_price || 0),
@@ -91,7 +92,8 @@ export async function POST(request: NextRequest) {
         mrp: val.mrp,
         selling_price: val.sellingPrice,
         cost_price: val.costPrice,
-        images: val.images || [], // <--- ADDED THIS
+        images: val.images || [],
+        unit_of_measure: val.unitOfMeasure || "Pcs", // <--- 2. ADDED THIS INSERT
       })
       .select()
       .single();
