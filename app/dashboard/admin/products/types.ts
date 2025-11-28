@@ -20,7 +20,8 @@ export interface Product {
   totalValue: number;
   totalCost: number;
   profitMargin: number;
-  images: string[]; // <--- ADDED THIS
+  images: string[];
+  unitOfMeasure: string; // <--- ADDED
 }
 
 export type SortField =
@@ -50,5 +51,6 @@ export interface ProductFormData {
   mrp: number;
   sellingPrice: number;
   costPrice: number;
-  images: string[]; // <--- ADDED THIS
+  images: string[];
+  unitOfMeasure: string; // <--- ADDED
 }

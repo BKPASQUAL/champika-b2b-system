@@ -58,7 +58,8 @@ export default function ProductsPage() {
     mrp: 0,
     sellingPrice: 0,
     costPrice: 0,
-    images: [], // <--- ADDED: Initialize images array
+    images: [],
+    unitOfMeasure: "Pcs", // <--- DEFAULT
   });
 
   // --- Fetch Data ---
@@ -206,7 +207,8 @@ export default function ProductsPage() {
       mrp: 0,
       sellingPrice: 0,
       costPrice: 0,
-      images: [], // <--- ADDED: Reset images array
+      images: [],
+      unitOfMeasure: "Pcs", // <--- RESET
     });
     setSelectedProduct(null);
   };
@@ -222,6 +224,7 @@ export default function ProductsPage() {
       Category: p.category,
       Supplier: p.supplier,
       Stock: p.stock,
+      Unit: p.unitOfMeasure,
       MRP: p.mrp,
       "Selling Price": p.sellingPrice,
     }));
@@ -239,13 +242,14 @@ export default function ProductsPage() {
     const doc = new jsPDF();
     doc.text("Product Catalog", 14, 15);
     autoTable(doc, {
-      head: [["SKU", "Name", "Category", "Supplier", "Stock", "Price"]],
+      head: [["SKU", "Name", "Category", "Supplier", "Stock", "Unit", "Price"]],
       body: sortedProducts.map((p) => [
         p.sku,
         p.name,
         p.category,
         p.supplier,
         p.stock,
+        p.unitOfMeasure,
         p.sellingPrice,
       ]),
       startY: 20,
@@ -308,7 +312,8 @@ export default function ProductsPage() {
                 mrp: p.mrp,
                 sellingPrice: p.sellingPrice,
                 costPrice: p.costPrice,
-                images: p.images || [], // <--- ADDED: Load existing images
+                images: p.images || [],
+                unitOfMeasure: p.unitOfMeasure || "Pcs", // <--- LOAD VALUE
               });
               setSelectedProduct(p);
               setIsAddDialogOpen(true);

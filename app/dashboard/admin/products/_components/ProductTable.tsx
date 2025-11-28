@@ -175,7 +175,7 @@ export function ProductTable({
                           : ""
                       }
                     >
-                      {product.stock} units
+                      {product.stock} {product.unitOfMeasure} 
                     </span>
                     <span className="text-xs text-muted-foreground block">
                       Min: {product.minStock}

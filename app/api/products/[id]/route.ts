@@ -1,3 +1,4 @@
+// app/api/products/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
@@ -11,6 +12,7 @@ const updateSchema = z.object({
   mrp: z.number().optional(),
   sellingPrice: z.number().optional(),
   costPrice: z.number().optional(),
+  unitOfMeasure: z.string().optional(), // <--- ADDED
 });
 
 export async function PATCH(
@@ -32,6 +34,7 @@ export async function PATCH(
     if (val.sellingPrice !== undefined)
       dbUpdates.selling_price = val.sellingPrice;
     if (val.costPrice !== undefined) dbUpdates.cost_price = val.costPrice;
+    if (val.unitOfMeasure) dbUpdates.unit_of_measure = val.unitOfMeasure; // <--- UPDATE
 
     dbUpdates.updated_at = new Date().toISOString();
 

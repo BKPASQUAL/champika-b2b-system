@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Camera, Upload, X, Loader2 } from "lucide-react";
 import { Product, ProductFormData } from "../types";
-import { toast } from "sonner"; // Added for upload feedback
+import { toast } from "sonner";
 
 const useSettings = (type: string) => {
   const [data, setData] = useState<
@@ -65,9 +65,6 @@ export function ProductDialogs({
   categories,
 }: ProductDialogsProps) {
   const brands = useSettings("brand");
-  const models = useSettings("model");
-  const specs = useSettings("spec");
-
   const mainCategories = categories.filter((c) => !c.parent_id);
   const selectedCatId = mainCategories.find(
     (c) => c.name === formData.category
@@ -75,59 +72,45 @@ export function ProductDialogs({
   const subCategories = categories.filter(
     (c) => c.parent_id && c.parent_id === selectedCatId
   );
-
   const mainBrands = brands.filter((b) => !b.parent_id);
   const selectedBrandId = mainBrands.find((b) => b.name === formData.brand)?.id;
   const subBrands = brands.filter(
     (b) => b.parent_id && b.parent_id === selectedBrandId
   );
 
-  // --- Image Upload Logic ---
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
-
-  // Sync formData images with local state if needed (optional but good for consistency)
-  // We use formData.images directly for rendering.
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-
     if (formData.images.length + files.length > 6) {
       toast.error("Maximum 6 images allowed");
       return;
     }
-
     setUploading(true);
     const uploadedUrls: string[] = [];
-
     try {
       for (const file of Array.from(files)) {
         const uploadData = new FormData();
         uploadData.append("file", file);
-
         const res = await fetch("/api/upload", {
           method: "POST",
           body: uploadData,
         });
-
         if (!res.ok) throw new Error("Upload failed");
         const data = await res.json();
         uploadedUrls.push(data.url);
       }
-
-      // Update Form Data
       setFormData({
         ...formData,
         images: [...formData.images, ...uploadedUrls],
       });
       toast.success("Images uploaded");
     } catch (error) {
-      console.error(error);
       toast.error("Failed to upload image");
     } finally {
       setUploading(false);
-      // Reset input
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
@@ -152,6 +135,7 @@ export function ProductDialogs({
           </DialogHeader>
 
           <div className="grid grid-cols-2 gap-4 py-4">
+            {/* Product Name - Full Width */}
             <div className="col-span-2 space-y-2">
               <Label>Product Name *</Label>
               <Input
@@ -163,12 +147,7 @@ export function ProductDialogs({
               />
             </div>
 
-            {/* ... (Existing Input Fields remain the same) ... */}
-
-            {/* --- Existing Categories/Brands/Suppliers/Prices Inputs --- */}
-            {/* Copy the middle input section from your previous file here, 
-                just ensuring setFormData keeps other fields intact. */}
-
+            {/* Categories */}
             <div className="space-y-2">
               <Label>Category *</Label>
               <Select
@@ -189,7 +168,6 @@ export function ProductDialogs({
                 </SelectContent>
               </Select>
             </div>
-
             <div className="space-y-2">
               <Label>Sub Category</Label>
               <Select
@@ -212,6 +190,7 @@ export function ProductDialogs({
               </Select>
             </div>
 
+            {/* Brands */}
             <div className="space-y-2">
               <Label>Brand</Label>
               <Select
@@ -232,7 +211,6 @@ export function ProductDialogs({
                 </SelectContent>
               </Select>
             </div>
-
             <div className="space-y-2">
               <Label>Sub Brand</Label>
               <Select
@@ -255,7 +233,8 @@ export function ProductDialogs({
               </Select>
             </div>
 
-            <div className="space-y-2">
+            {/* Supplier - Full Width (Requested Change) */}
+            <div className="col-span-2 space-y-2">
               <Label>Supplier *</Label>
               <Select
                 value={formData.supplier}
@@ -276,77 +255,112 @@ export function ProductDialogs({
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label>MRP</Label>
-              <Input
-                type="number"
-                value={formData.mrp}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    mrp: parseFloat(e.target.value) || 0,
-                  })
-                }
-              />
+            {/* Pricing */}
+            <div className="col-span-2 grid grid-cols-3 gap-4 border-t pt-4">
+              <div className="space-y-2">
+                <Label>MRP</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={formData.mrp}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      mrp: parseFloat(e.target.value) || 0,
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Cost Price</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={formData.costPrice}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      costPrice: parseFloat(e.target.value) || 0,
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-green-600 font-bold">
+                  Selling Price
+                </Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={formData.sellingPrice}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      sellingPrice: parseFloat(e.target.value) || 0,
+                    })
+                  }
+                />
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <Label>Cost Price</Label>
-              <Input
-                type="number"
-                value={formData.costPrice}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    costPrice: parseFloat(e.target.value) || 0,
-                  })
-                }
-              />
+            {/* Stock & Unit */}
+            <div className="col-span-2 grid grid-cols-3 gap-4 border-t pt-4">
+              <div className="space-y-2">
+                <Label>Unit of Measure</Label>
+                <Select
+                  value={formData.unitOfMeasure}
+                  onValueChange={(val) =>
+                    setFormData({ ...formData, unitOfMeasure: val })
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select Unit" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Pcs">Pcs (Pieces)</SelectItem>
+                    <SelectItem value="Dz">Dz (Dozen)</SelectItem>
+                    <SelectItem value="Kg">Kg (Kilogram)</SelectItem>
+                    <SelectItem value="g">g (Gram)</SelectItem>
+                    <SelectItem value="m">m (Meter)</SelectItem>
+                    <SelectItem value="L">L (Liter)</SelectItem>
+                    <SelectItem value="Box">Box</SelectItem>
+                    <SelectItem value="Set">Set</SelectItem>
+                    <SelectItem value="Roll">Roll</SelectItem>
+                    <SelectItem value="Pkt">Packet</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Current Stock</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={formData.stock}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      stock: parseFloat(e.target.value) || 0,
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Min Stock Alert</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={formData.minStock}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      minStock: parseFloat(e.target.value) || 0,
+                    })
+                  }
+                />
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <Label>Selling Price</Label>
-              <Input
-                type="number"
-                value={formData.sellingPrice}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    sellingPrice: parseFloat(e.target.value) || 0,
-                  })
-                }
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Stock</Label>
-              <Input
-                type="number"
-                value={formData.stock}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    stock: parseInt(e.target.value) || 0,
-                  })
-                }
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Min Stock Alert</Label>
-              <Input
-                type="number"
-                value={formData.minStock}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    minStock: parseInt(e.target.value) || 0,
-                  })
-                }
-              />
-            </div>
-
-            {/* ----------------- IMAGE UPLOAD SECTION ----------------- */}
+            {/* Images - 6 Slots Fixed Layout */}
             <div className="col-span-2 space-y-3 pt-4 border-t mt-2">
               <div className="flex items-center justify-between">
                 <Label className="flex items-center gap-2">
@@ -356,9 +370,8 @@ export function ProductDialogs({
                   {formData.images.length}/6
                 </span>
               </div>
-
               <div className="grid grid-cols-6 gap-3">
-                {/* Upload Button */}
+                {/* Upload Slot */}
                 {formData.images.length < 6 && (
                   <div
                     className="aspect-square rounded-lg border-2 border-dashed border-muted-foreground/25 flex flex-col items-center justify-center cursor-pointer hover:bg-muted/50 hover:border-muted-foreground/50 transition-all"
@@ -385,7 +398,6 @@ export function ProductDialogs({
                     />
                   </div>
                 )}
-
                 {/* Previews */}
                 {formData.images.map((imgSrc, index) => (
                   <div
@@ -406,8 +418,7 @@ export function ProductDialogs({
                     </button>
                   </div>
                 ))}
-
-                {/* Empty Placeholders */}
+                {/* Empty Slots */}
                 {formData.images.length < 5 &&
                   Array.from({ length: 5 - formData.images.length }).map(
                     (_, i) => (
@@ -419,7 +430,6 @@ export function ProductDialogs({
                   )}
               </div>
             </div>
-            {/* -------------------------------------------------------- */}
           </div>
 
           <DialogFooter>
@@ -433,7 +443,6 @@ export function ProductDialogs({
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
