@@ -40,6 +40,7 @@ interface Product {
   sellingPrice: number;
   stock: number;
   minStock: number;
+  unitOfMeasure: string;
   images: string[];
 }
 
@@ -195,7 +196,7 @@ export default function RepProductsPage() {
   return (
     <div className="space-y-4 pb-20">
       {/* Header & Filters */}
-      <div className="sticky top-0 z-20 bg-gray-50/95 backdrop-blur supports-[backdrop-filter]:bg-gray-50/60 py-2 -mx-4 px-4 sm:mx-0 sm:px-0 mb-4 border-b sm:border-0 border-gray-200">
+      <div className="sticky top-0 z-20 bg-gray-50/95 backdrop-blur supports-[backdrop-filter]:bg-gray-50/60  -mx-4 px-4 sm:mx-0 sm:px-0 mb-4 border-b sm:border-0 border-gray-200">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h1 className="text-lg font-bold tracking-tight text-gray-900 flex items-center gap-2">
@@ -307,7 +308,7 @@ export default function RepProductsPage() {
                         </h3>
                       </div>
                       <div>
-                        {product.stock} Units
+                        {product.stock} {product.unitOfMeasure}
                       </div>
                     </div>
 

@@ -1,3 +1,4 @@
+// app/api/invoices/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
@@ -84,6 +85,7 @@ export async function GET(
 
     if (itemsError) throw itemsError;
 
+    // --- MAPPING FIX FOR PRINT UTILS ---
     const fullInvoice = {
       id: invoice.id,
       invoiceNo: invoice.invoice_no,
@@ -92,10 +94,30 @@ export async function GET(
       salesRepId: invoice.orders?.sales_rep_id,
       orderStatus: invoice.orders?.status,
       notes: invoice.orders?.notes,
-      grandTotal: invoice.total_amount,
+      grandTotal: invoice.total_amount, // Kept for Edit page compatibility
+
+      // 1. Add 'customer' object for print-utils
+      customer: {
+        shop: invoice.customers?.shop_name || "",
+        name: invoice.customers?.owner_name || "",
+        phone: invoice.customers?.phone || "",
+        address: invoice.customers?.address || "",
+      },
+
+      // 2. Add 'salesRep' string for print-utils
+      // Note: Adjust 'profiles' access if your relationship name differs
+      salesRep: invoice.orders?.profiles?.full_name || "Unknown",
+
+      // 3. Add 'totals' object for print-utils
+      totals: {
+        grandTotal: invoice.total_amount,
+      },
+
       items: items.map((item: any) => ({
         id: item.id,
         productId: item.product_id,
+
+        // Original fields for Edit Page
         sku: item.products?.sku,
         productName: item.products?.name,
         unit: item.products?.unit_of_measure,
@@ -105,11 +127,15 @@ export async function GET(
         unitPrice: item.unit_price,
         discountPercent: 0,
         total: item.total_price,
-        // Logic: Available = DB Stock + This Item's Current Qty (since we are editing it)
         stockAvailable:
           (item.products?.stock_quantity || 0) +
           item.quantity +
           item.free_quantity,
+
+        // 4. Mapped fields for print-utils (it expects: name, price, free)
+        name: item.products?.name,
+        price: item.unit_price,
+        free: item.free_quantity,
       })),
     };
 
@@ -149,7 +175,6 @@ export async function PATCH(
     // --- REVERT OLD STATE ---
 
     // A. Revert Customer Balance (Subtract old total)
-    // Using manual update to ensure it works if RPC is missing
     const { data: customer } = await supabaseAdmin
       .from("customers")
       .select("outstanding_balance")
@@ -212,7 +237,6 @@ export async function PATCH(
       .update({
         customer_id: val.customerId,
         total_amount: val.grandTotal,
-        // due_amount is generated automatically in DB
       })
       .eq("id", id);
 
@@ -254,7 +278,6 @@ export async function PATCH(
     }
 
     // 7. Update Customer Balance (Add new total)
-    // Fetch fresh balance again to be safe
     const { data: currentCustomer } = await supabaseAdmin
       .from("customers")
       .select("outstanding_balance")
