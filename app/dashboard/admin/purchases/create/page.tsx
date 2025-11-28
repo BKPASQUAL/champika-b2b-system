@@ -1,3 +1,4 @@
+// app/dashboard/admin/purchases/create/page.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -62,8 +63,8 @@ interface Product {
   costPrice: number;
   mrp: number;
   stock: number;
-  unit_of_measure?: string;
-  supplier: string; // Added supplier field to match API
+  unitOfMeasure: string; // <--- CHANGED: Matches API response key
+  supplier: string;
 }
 
 interface Supplier {
@@ -121,6 +122,7 @@ export default function CreatePurchasePage() {
     sellingPrice: 0,
     unitPrice: 0, // Gross Cost
     discountPercent: 0,
+    unit: "", // <--- ADDED: To store selected product unit
   });
 
   // --- Fetch Data on Mount ---
@@ -175,6 +177,7 @@ export default function CreatePurchasePage() {
       sellingPrice: 0,
       unitPrice: 0,
       discountPercent: 0,
+      unit: "",
     });
   };
 
@@ -195,6 +198,7 @@ export default function CreatePurchasePage() {
         discountPercent: 0,
         freeQuantity: 0,
         quantity: 1,
+        unit: product.unitOfMeasure || "Pcs", // <--- UPDATED: Set unit from product
       });
       setProductSearchOpen(false);
     }
@@ -225,7 +229,6 @@ export default function CreatePurchasePage() {
     if (!product) return;
 
     // Calculations
-    // Net Unit Cost = Gross Cost - (Gross Cost * Discount%)
     const unitDiscountAmount =
       (currentItem.unitPrice * currentItem.discountPercent) / 100;
     const netUnitPrice = currentItem.unitPrice - unitDiscountAmount;
@@ -240,7 +243,7 @@ export default function CreatePurchasePage() {
       productName: product.name,
       quantity: currentItem.quantity,
       freeQuantity: currentItem.freeQuantity,
-      unit: product.unit_of_measure || "unit",
+      unit: currentItem.unit, // <--- UPDATED: Use state unit
       mrp: currentItem.mrp,
       sellingPrice: currentItem.sellingPrice,
       unitPrice: currentItem.unitPrice,
@@ -262,6 +265,7 @@ export default function CreatePurchasePage() {
       sellingPrice: 0,
       unitPrice: 0,
       discountPercent: 0,
+      unit: "",
     });
   };
 
@@ -299,7 +303,7 @@ export default function CreatePurchasePage() {
       arrival_date: arrivalDate || "",
       invoice_number: invoiceNumber || "",
       total_amount: subtotal,
-      items: items, // Matches schema validation in API
+      items: items,
     };
 
     try {
@@ -326,14 +330,9 @@ export default function CreatePurchasePage() {
   const selectedSupplier = suppliers.find((s) => s.id === supplierId);
 
   const availableProducts = products.filter((product) => {
-    // 1. Must NOT be already in the items list
     const notInItems = !items.some((item) => item.productId === product.id);
-
-    // 2. Must match the selected supplier (if one is selected)
-    // Using supplier name matching since product.supplier is a string name
     const matchesSupplier =
       !selectedSupplier || product.supplier === selectedSupplier.name;
-
     return notInItems && matchesSupplier;
   });
 
@@ -483,7 +482,7 @@ export default function CreatePurchasePage() {
                         role="combobox"
                         aria-expanded={productSearchOpen}
                         className="w-full h-10 justify-between"
-                        disabled={!supplierId} // Disable if no supplier selected
+                        disabled={!supplierId}
                       >
                         <span className="truncate">
                           {currentItem.productId
@@ -553,6 +552,17 @@ export default function CreatePurchasePage() {
                       disabled
                       className="h-9 bg-muted"
                       placeholder="Auto"
+                    />
+                  </div>
+
+                  {/* ADDED: Unit of Measure Field */}
+                  <div className="col-span-1">
+                    <Label className="mb-2 block text-xs">Unit</Label>
+                    <Input
+                      value={currentItem.unit || ""}
+                      disabled
+                      className="h-9 bg-muted"
+                      placeholder="Unit"
                     />
                   </div>
 
@@ -674,13 +684,13 @@ export default function CreatePurchasePage() {
                     />
                   </div>
 
-                  <div className="col-span-1 lg:col-span-2">
+                  <div className="col-span-1">
                     <Button
                       onClick={handleAddItem}
                       className="w-full h-9"
                       disabled={!currentItem.productId}
                     >
-                      <Plus className="w-4 h-4 mr-2" /> Add Item
+                      <Plus className="w-4 h-4 mr-2" /> Add
                     </Button>
                   </div>
                 </div>
@@ -709,15 +719,13 @@ export default function CreatePurchasePage() {
                       <TableRow>
                         <TableHead>Item Code</TableHead>
                         <TableHead>Item Name</TableHead>
+                        <TableHead className="text-center">Unit</TableHead>
                         <TableHead className="text-right">Cost Price</TableHead>
                         <TableHead className="text-right">Qty</TableHead>
                         <TableHead className="text-right">Disc(%)</TableHead>
                         <TableHead className="text-right">D. Amount</TableHead>
                         <TableHead className="text-right text-green-600">
                           Free
-                        </TableHead>
-                        <TableHead className="text-right">
-                          Selling Price
                         </TableHead>
                         <TableHead className="text-right">Total</TableHead>
                         <TableHead className="w-[50px]"></TableHead>
@@ -734,6 +742,9 @@ export default function CreatePurchasePage() {
                             title={item.productName}
                           >
                             {item.productName}
+                          </TableCell>
+                          <TableCell className="text-center text-xs text-muted-foreground">
+                            {item.unit}
                           </TableCell>
                           <TableCell className="text-right text-blue-600">
                             {item.unitPrice.toLocaleString()}
@@ -753,9 +764,6 @@ export default function CreatePurchasePage() {
                           </TableCell>
                           <TableCell className="text-right text-green-600 font-medium">
                             {item.freeQuantity > 0 ? item.freeQuantity : "-"}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {item.sellingPrice.toLocaleString()}
                           </TableCell>
                           <TableCell className="text-right font-bold">
                             {item.total.toLocaleString()}
