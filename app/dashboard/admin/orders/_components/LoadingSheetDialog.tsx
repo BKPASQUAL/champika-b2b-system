@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -19,8 +19,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Truck, Users, Calendar } from "lucide-react";
-import { MOCK_DRIVERS, MOCK_LORRIES } from "../loading/types";
+import { Truck, Users, Calendar, UserCircle } from "lucide-react";
+import { toast } from "sonner";
 
 interface LoadingSheetDialogProps {
   isOpen: boolean;
@@ -35,19 +35,65 @@ export function LoadingSheetDialog({
   selectedCount,
   onConfirm,
 }: LoadingSheetDialogProps) {
+  // --- Data State ---
+  const [lorries, setLorries] = useState<{ id: string; name: string }[]>([]);
+  const [users, setUsers] = useState<
+    { id: string; fullName: string; role: string }[]
+  >([]);
+  const [loadingData, setLoadingData] = useState(false);
+
+  // --- Form State ---
   const [formData, setFormData] = useState({
     lorryNumber: "",
-    driver: "",
-    helper: "",
+    driverId: "", // Maps to Responsible Person
+    helperId: "",
     date: new Date().toISOString().split("T")[0],
   });
 
+  // --- Fetch Data on Open ---
+  useEffect(() => {
+    if (isOpen) {
+      const loadData = async () => {
+        setLoadingData(true);
+        try {
+          // 1. Fetch Lorries (from Categories API type='lorry')
+          const lorryRes = await fetch("/api/settings/categories?type=lorry");
+          const lorryData = await lorryRes.json();
+
+          // 2. Fetch All Users
+          const userRes = await fetch("/api/users");
+          const userData = await userRes.json();
+
+          if (lorryRes.ok) setLorries(lorryData);
+          if (userRes.ok) setUsers(userData);
+        } catch (error) {
+          console.error("Failed to load resources", error);
+          toast.error("Failed to load vehicle or user data");
+        } finally {
+          setLoadingData(false);
+        }
+      };
+      loadData();
+    }
+  }, [isOpen]);
+
+  // --- Submit Handler ---
   const handleSubmit = () => {
-    if (!formData.lorryNumber || !formData.driver || !formData.date) {
-      alert("Please fill in Lorry, Driver and Date.");
+    if (!formData.lorryNumber || !formData.driverId) {
+      toast.error("Please select a Lorry and a Responsible Person.");
       return;
     }
-    onConfirm(formData);
+
+    const selectedHelper = users.find((u) => u.id === formData.helperId);
+
+    const payload = {
+      lorryNumber: formData.lorryNumber,
+      driverId: formData.driverId,
+      helperName: selectedHelper ? selectedHelper.fullName : "",
+      date: formData.date,
+    };
+
+    onConfirm(payload);
     onOpenChange(false);
   };
 
@@ -57,18 +103,20 @@ export function LoadingSheetDialog({
         <DialogHeader>
           <DialogTitle>Create Loading Sheet</DialogTitle>
           <DialogDescription>
-            Assign {selectedCount} selected orders to a delivery vehicle.
+            Assign <strong>{selectedCount}</strong> orders to a delivery
+            vehicle.
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-4">
+          {/* Date Selection */}
           <div className="grid gap-2">
             <Label>Loading Date</Label>
             <div className="relative">
               <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 type="date"
-                className="pl-9"
+                className="pl-9 w-full"
                 value={formData.date}
                 onChange={(e) =>
                   setFormData({ ...formData, date: e.target.value })
@@ -77,6 +125,7 @@ export function LoadingSheetDialog({
             </div>
           </div>
 
+          {/* Lorry Selection */}
           <div className="grid gap-2">
             <Label>Select Lorry</Label>
             <Select
@@ -85,50 +134,74 @@ export function LoadingSheetDialog({
                 setFormData({ ...formData, lorryNumber: val })
               }
             >
-              <SelectTrigger className="pl-9 relative">
+              <SelectTrigger className="w-full pl-9 relative">
                 <Truck className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                <SelectValue placeholder="Select Vehicle" />
+                <SelectValue
+                  placeholder={loadingData ? "Loading..." : "Select Vehicle"}
+                />
               </SelectTrigger>
               <SelectContent>
-                {MOCK_LORRIES.map((l) => (
-                  <SelectItem key={l.id} value={l.number}>
-                    {l.number}
+                {lorries.length === 0 ? (
+                  <SelectItem value="none" disabled>
+                    No lorries found (Add in Settings)
                   </SelectItem>
-                ))}
+                ) : (
+                  lorries.map((l) => (
+                    <SelectItem key={l.id} value={l.name}>
+                      {l.name}
+                    </SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
+            {/* Responsible Person Selection */}
             <div className="grid gap-2">
-              <Label>Responsible Person (Driver)</Label>
+              <Label>Responsible Person</Label>
               <Select
-                value={formData.driver}
+                value={formData.driverId}
                 onValueChange={(val) =>
-                  setFormData({ ...formData, driver: val })
+                  setFormData({ ...formData, driverId: val })
                 }
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Driver" />
+                <SelectTrigger className="w-full pl-9 relative">
+                  <UserCircle className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <SelectValue placeholder="Select Person" />
                 </SelectTrigger>
                 <SelectContent>
-                  {MOCK_DRIVERS.map((d) => (
-                    <SelectItem key={d.id} value={d.name}>
-                      {d.name}
+                  {users.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.fullName}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Helper Selection */}
             <div className="grid gap-2">
-              <Label>Assistant / Helper (Optional)</Label>
-              <Input
-                placeholder="Helper Name"
-                value={formData.helper}
-                onChange={(e) =>
-                  setFormData({ ...formData, helper: e.target.value })
+              <Label>Assistant / Helper</Label>
+              <Select
+                value={formData.helperId}
+                onValueChange={(val) =>
+                  setFormData({ ...formData, helperId: val })
                 }
-              />
+              >
+                <SelectTrigger className="w-full pl-9 relative">
+                  <Users className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <SelectValue placeholder="Select Helper" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {users.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.fullName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </div>
@@ -137,7 +210,9 @@ export function LoadingSheetDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit}>Create Load & Complete</Button>
+          <Button onClick={handleSubmit} disabled={loadingData}>
+            {loadingData ? "Loading..." : "Create Load & Complete"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

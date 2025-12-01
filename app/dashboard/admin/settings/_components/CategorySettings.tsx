@@ -5,7 +5,8 @@ import {
   Plus,
   Trash2,
   ChevronRight,
-  MapPin, // Icon for Route
+  MapPin,
+  Truck, // Import Truck Icon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,12 +34,11 @@ export function CategorySettings() {
   const [loading, setLoading] = useState(true);
   const [newName, setNewName] = useState("");
 
-  // Added "route" and "supplier" to the types
+  // UPDATED: Added "lorry" to activeType
   const [activeType, setActiveType] = useState<
-    "category" | "brand" | "model" | "spec" | "supplier" | "route"
-  >("route"); // Defaulting to route since you are working on it
+    "category" | "brand" | "model" | "spec" | "supplier" | "route" | "lorry"
+  >("route");
 
-  // For adding sub-items
   const [selectedParent, setSelectedParent] = useState<string | null>(null);
 
   const fetchCategories = useCallback(async () => {
@@ -48,7 +48,6 @@ export function CategorySettings() {
       if (!res.ok) throw new Error("Failed to load");
       const data = await res.json();
 
-      // Organize flat list into hierarchy
       const roots = data.filter((c: Category) => !c.parent_id);
       const withChildren = roots.map((root: Category) => ({
         ...root,
@@ -65,7 +64,7 @@ export function CategorySettings() {
 
   useEffect(() => {
     fetchCategories();
-    setSelectedParent(null); // Reset parent selection on tab change
+    setSelectedParent(null);
   }, [fetchCategories]);
 
   const handleAdd = async () => {
@@ -75,7 +74,7 @@ export function CategorySettings() {
       const payload = {
         name: newName,
         type: activeType,
-        parent_id: selectedParent, // If adding a sub-item
+        parent_id: selectedParent,
       };
 
       const res = await fetch("/api/settings/categories", {
@@ -98,7 +97,7 @@ export function CategorySettings() {
     if (!confirm("Are you sure? This will also delete sub-items.")) return;
     try {
       const res = await fetch(`/api/settings/categories/${id}`, {
-        method: "DELETE",
+        method: "DELETE", //
       });
       if (!res.ok) throw new Error("Failed to delete");
       toast.success("Item removed");
@@ -121,7 +120,6 @@ export function CategorySettings() {
       <div className="space-y-2">
         {categories.map((root) => (
           <div key={root.id} className="border rounded-lg p-3 bg-card">
-            {/* Parent Item */}
             <div className="flex items-center justify-between group">
               <div
                 className={cn(
@@ -141,7 +139,6 @@ export function CategorySettings() {
                 {root.name}
               </div>
               <div className="flex items-center gap-2">
-                {/* Only show "Add Sub" if strictly necessary, usually routes don't have subs but the logic is here if you need it */}
                 <Button
                   variant="ghost"
                   size="sm"
@@ -160,7 +157,6 @@ export function CategorySettings() {
               </div>
             </div>
 
-            {/* Children / Sub-items */}
             {root.children && root.children.length > 0 && (
               <div className="ml-6 mt-2 space-y-1 border-l-2 pl-4 border-muted">
                 {root.children.map((child) => (
@@ -192,7 +188,7 @@ export function CategorySettings() {
       <CardHeader>
         <CardTitle>System Configurations</CardTitle>
         <CardDescription>
-          Manage Categories, Brands, Routes, and other drop-downs.
+          Manage Categories, Brands, Routes, and Vehicles.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -201,10 +197,13 @@ export function CategorySettings() {
           onValueChange={(v) => setActiveType(v as any)}
           className="w-full"
         >
-          {/* Updated Grid to fit Routes and Supplier */}
-          <TabsList className="grid w-full grid-cols-3 lg:grid-cols-6 mb-6 h-auto">
+          {/* UPDATED: Adjusted grid columns and added Lorry Tab */}
+          <TabsList className="grid w-full grid-cols-3 lg:grid-cols-7 mb-6 h-auto">
             <TabsTrigger value="route" className="flex gap-2">
               <MapPin className="h-4 w-4" /> Route
+            </TabsTrigger>
+            <TabsTrigger value="lorry" className="flex gap-2">
+              <Truck className="h-4 w-4" /> Lorry
             </TabsTrigger>
             <TabsTrigger value="category">Category</TabsTrigger>
             <TabsTrigger value="brand">Brand</TabsTrigger>
@@ -213,7 +212,6 @@ export function CategorySettings() {
             <TabsTrigger value="supplier">Supplier</TabsTrigger>
           </TabsList>
 
-          {/* Add Input Area */}
           <div className="flex flex-col gap-2 mb-6 p-4 bg-muted/30 rounded-lg border">
             <div className="flex gap-2">
               <Input
@@ -222,7 +220,7 @@ export function CategorySettings() {
                     ? `Add Sub-item under "${
                         categories.find((c) => c.id === selectedParent)?.name
                       }"...`
-                    : `New Main ${
+                    : `New ${
                         activeType.charAt(0).toUpperCase() + activeType.slice(1)
                       }...`
                 }
@@ -252,7 +250,6 @@ export function CategorySettings() {
             )}
           </div>
 
-          {/* Render Content */}
           {loading ? (
             <div className="p-4 text-center">Loading...</div>
           ) : (
