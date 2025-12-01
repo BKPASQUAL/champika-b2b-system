@@ -9,7 +9,7 @@ export async function GET(
 
   try {
     // Fetch Order with all relations
-    // REMOVED 'discount_percent' from the order_items selection to fix the error
+    // UPDATED: Added 'images' to the products selection
     const { data: order, error } = await supabaseAdmin
       .from("orders")
       .select(
@@ -37,7 +37,8 @@ export async function GET(
           products (
             sku,
             name,
-            unit_of_measure
+            unit_of_measure,
+            images
           )
         )
       `
@@ -75,6 +76,8 @@ export async function GET(
         sku: item.products?.sku,
         name: item.products?.name,
         unit: item.products?.unit_of_measure || "unit",
+        // UPDATED: Map the first image from the array if it exists
+        image: item.products?.images?.[0] || null,
         price: item.unit_price,
         qty: item.quantity,
         free: item.free_quantity,
