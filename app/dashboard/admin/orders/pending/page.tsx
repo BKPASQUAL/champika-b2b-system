@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Search, Filter, ArrowRight } from "lucide-react";
+import { Search, Filter, ArrowRight, Loader2 } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -15,26 +15,55 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { toast } from "sonner";
 
 import { Order } from "../types";
-import { MOCK_ALL_ORDERS } from "../data";
 
 export default function PendingOrdersPage() {
   const router = useRouter();
 
-  // Filter only pending orders
-  const [orders, setOrders] = useState<Order[]>(
-    MOCK_ALL_ORDERS.filter((o) => o.status === "Pending")
-  );
-
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Filter Logic
-  const filteredOrders = orders.filter(
-    (order) =>
-      order.orderId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.shopName.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // --- Fetch Data ---
+  useEffect(() => {
+    const fetchPendingOrders = async () => {
+      try {
+        setLoading(true);
+        // Fetch only 'Pending' orders from our new API
+        const res = await fetch("/api/orders?status=Pending");
+        if (!res.ok) throw new Error("Failed to load pending orders");
+        const data = await res.json();
+        setOrders(data);
+      } catch (error) {
+        console.error(error);
+        toast.error("Error loading pending orders");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPendingOrders();
+  }, []);
+
+  // --- Filter Logic ---
+  const filteredOrders = orders.filter((order) => {
+    const searchLower = searchQuery.toLowerCase();
+    return (
+      order.orderId.toLowerCase().includes(searchLower) ||
+      order.shopName.toLowerCase().includes(searchLower) ||
+      order.customerName.toLowerCase().includes(searchLower)
+    );
+  });
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-[calc(100vh-200px)]">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -128,7 +157,7 @@ export default function PendingOrdersPage() {
                         <Button
                           size="sm"
                           className="bg-blue-600 hover:bg-blue-700 text-white"
-                          // Navigate to the dynamic review page
+                          // Navigate to the view/review page
                           onClick={() =>
                             router.push(`/dashboard/admin/orders/${order.id}`)
                           }
