@@ -1,8 +1,7 @@
-// app/dashboard/admin/orders/[id]/page.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import React, { useState, useEffect, use } from "react";
+import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Printer,
@@ -12,6 +11,8 @@ import {
   MapPin,
   Phone,
   Briefcase,
+  Loader2,
+  XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,89 +34,106 @@ import {
 } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { MOCK_ALL_ORDERS } from "../data";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
-// --- Mock Data Extension for View ---
-const MOCK_CUSTOMERS_EXTENDED = [
-  {
-    id: "C1",
-    name: "Saman Electronics",
-    route: "Galle Town",
-    phone: "077-1234567",
-    repName: "Ajith Bandara",
-  },
-  {
-    id: "C2",
-    name: "City Hardware",
-    route: "Matara Road",
-    phone: "071-9876543",
-    repName: "Chathura Perera",
-  },
-  {
-    id: "C3",
-    name: "Lanka Traders",
-    route: "Ahangama",
-    phone: "076-5554444",
-    repName: "Dilshan Silva",
-  },
-];
-
-export default function ViewOrderPage() {
-  const params = useParams();
+export default function ViewOrderPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = use(params);
   const router = useRouter();
-  const orderId = params.id as string;
 
   const [order, setOrder] = useState<any>(null);
-  const [customerDetails, setCustomerDetails] = useState<any>(null);
+  const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState(false);
 
-  // Simulated Items Data (In a real app, this would be in the order object)
-  const [orderItems, setOrderItems] = useState([
-    {
-      id: "1",
-      sku: "SKU-001",
-      name: "Copper Wire 2.5mm",
-      unit: "m",
-      price: 180,
-      qty: 50,
-      free: 0,
-      disc: 0,
-      total: 9000,
-    },
-    {
-      id: "2",
-      sku: "SKU-002",
-      name: "PVC Pipe 4 inch",
-      unit: "unit",
-      price: 850,
-      qty: 20,
-      free: 2,
-      disc: 5,
-      total: 16150,
-    },
-  ]);
+  // Dialog States
+  const [showApproveDialog, setShowApproveDialog] = useState(false);
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
 
+  // --- 1. Fetch Order Data ---
   useEffect(() => {
-    // Simulate API Fetch
-    setTimeout(() => {
-      const foundOrder = MOCK_ALL_ORDERS.find((o) => o.id === orderId);
-      if (foundOrder) {
-        setOrder(foundOrder);
-        // Find extended customer details based on name (Simulated join)
-        const cust =
-          MOCK_CUSTOMERS_EXTENDED.find(
-            (c) => c.name === foundOrder.customerName
-          ) || MOCK_CUSTOMERS_EXTENDED[0];
-        setCustomerDetails(cust);
+    const fetchOrderDetails = async () => {
+      try {
+        setLoading(true);
+        const res = await fetch(`/api/orders/${id}`);
+
+        if (!res.ok) throw new Error("Failed to load order");
+
+        const data = await res.json();
+        setOrder(data);
+        setItems(data.items);
+      } catch (error) {
+        console.error(error);
+        toast.error("Could not fetch order details");
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
-    }, 500);
-  }, [orderId]);
+    };
+
+    fetchOrderDetails();
+  }, [id]);
+
+  // --- 2. Confirm Approve Logic ---
+  const executeApprove = async () => {
+    setProcessing(true);
+    try {
+      const res = await fetch(`/api/orders/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "Processing" }),
+      });
+
+      if (!res.ok) throw new Error("Failed to approve order");
+
+      toast.success("Order Approved! Moved to Processing.");
+      router.push("/dashboard/admin/orders/pending");
+    } catch (error) {
+      toast.error("Failed to update status");
+    } finally {
+      setProcessing(false);
+      setShowApproveDialog(false);
+    }
+  };
+
+  // --- 3. Confirm Reject Logic ---
+  const executeReject = async () => {
+    setProcessing(true);
+    try {
+      const res = await fetch(`/api/orders/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "Cancelled" }),
+      });
+
+      if (!res.ok) throw new Error("Failed to cancel order");
+
+      toast.success("Order Cancelled.");
+      router.push("/dashboard/admin/orders");
+    } catch (error) {
+      toast.error("Failed to cancel order");
+    } finally {
+      setProcessing(false);
+      setShowRejectDialog(false);
+    }
+  };
 
   if (loading) {
     return (
-      <div className="p-10 text-center text-muted-foreground">
-        Loading order details...
+      <div className="flex justify-center items-center h-[calc(100vh-200px)]">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -125,12 +143,12 @@ export default function ViewOrderPage() {
   }
 
   // Calculations
-  const subtotal = orderItems.reduce((acc, item) => acc + item.total, 0);
-  const totalDiscount = 0; // Add logic if needed
-  const grandTotal = subtotal - totalDiscount;
+  const subtotal = items.reduce((acc, item) => acc + (item.total || 0), 0);
+  const grandTotal = order.totalAmount;
+  const discountAmount = Math.max(0, subtotal - grandTotal);
 
   return (
-    <div className="space-y-4  mx-auto pb-10">
+    <div className="space-y-4 mx-auto pb-10">
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -139,7 +157,7 @@ export default function ViewOrderPage() {
           </Button>
           <div>
             <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-              Order Details
+              Order Review
               <Badge
                 variant="outline"
                 className="bg-blue-50 text-blue-700 border-blue-200"
@@ -148,7 +166,7 @@ export default function ViewOrderPage() {
               </Badge>
             </h1>
             <p className="text-muted-foreground text-sm">
-              View details for order{" "}
+              Review details for order{" "}
               <span className="font-mono font-medium text-foreground">
                 {order.orderId}
               </span>
@@ -156,22 +174,42 @@ export default function ViewOrderPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">
+          <Button variant="outline" onClick={() => window.print()}>
             <Printer className="w-4 h-4 mr-2" /> Print
           </Button>
-          {/* Only show Process button if Pending */}
+
+          {/* Approval Buttons only for Pending Orders */}
           {order.status === "Pending" && (
-            <Button className="bg-green-600 hover:bg-green-700">
-              <CheckCircle2 className="w-4 h-4 mr-2" /> Approve & Process
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                onClick={() => setShowRejectDialog(true)}
+                disabled={processing}
+              >
+                <XCircle className="w-4 h-4 mr-2" /> Reject
+              </Button>
+              <Button
+                className="bg-green-600 hover:bg-green-700 text-white"
+                onClick={() => setShowApproveDialog(true)}
+                disabled={processing}
+              >
+                {processing ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4 mr-2" />
+                )}
+                Approve & Process
+              </Button>
+            </>
           )}
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3 ">
+      <div className="grid gap-6 lg:grid-cols-3">
         {/* LEFT COLUMN: Details & Items */}
         <div className="lg:col-span-2 space-y-4">
-          {/* 1. Customer & Billing Information (Read Only) */}
+          {/* 1. Customer & Billing Information */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -182,8 +220,7 @@ export default function ViewOrderPage() {
                 Customer and billing information
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3 ">
-              {/* Row 1: Customer & Rep */}
+            <CardContent className="space-y-3">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="text-muted-foreground text-xs uppercase tracking-wider">
@@ -191,7 +228,12 @@ export default function ViewOrderPage() {
                   </Label>
                   <div className="flex items-center gap-2 p-2 border rounded-md bg-muted/30">
                     <User className="w-4 h-4 text-muted-foreground" />
-                    <span className="font-medium">{order.customerName}</span>
+                    <span className="font-medium">
+                      {order.customer?.shopName || "Unknown"}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      ({order.customer?.name})
+                    </span>
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -200,14 +242,10 @@ export default function ViewOrderPage() {
                   </Label>
                   <div className="flex items-center gap-2 p-2 border rounded-md bg-muted/30">
                     <Briefcase className="w-4 h-4 text-muted-foreground" />
-                    <span className="font-medium">
-                      {customerDetails?.repName || order.salesRep}
-                    </span>
+                    <span className="font-medium">{order.salesRep}</span>
                   </div>
                 </div>
               </div>
-
-              {/* Row 2: Route & Mobile (New Requested Fields) */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="text-muted-foreground text-xs uppercase tracking-wider">
@@ -215,7 +253,7 @@ export default function ViewOrderPage() {
                   </Label>
                   <div className="flex items-center gap-2 p-2 border rounded-md bg-muted/30">
                     <MapPin className="w-4 h-4 text-muted-foreground" />
-                    <span>{customerDetails?.route}</span>
+                    <span>{order.customer?.route || "N/A"}</span>
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -224,12 +262,10 @@ export default function ViewOrderPage() {
                   </Label>
                   <div className="flex items-center gap-2 p-2 border rounded-md bg-muted/30">
                     <Phone className="w-4 h-4 text-muted-foreground" />
-                    <span>{customerDetails?.phone}</span>
+                    <span>{order.customer?.phone || "N/A"}</span>
                   </div>
                 </div>
               </div>
-
-              {/* Row 3: Invoice No & Date */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="text-muted-foreground text-xs uppercase tracking-wider">
@@ -245,13 +281,17 @@ export default function ViewOrderPage() {
                   <Label className="text-muted-foreground text-xs uppercase tracking-wider">
                     Date
                   </Label>
-                  <Input value={order.date} disabled className="bg-muted/30" />
+                  <Input
+                    value={new Date(order.date).toLocaleDateString()}
+                    disabled
+                    className="bg-muted/30"
+                  />
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* 2. Order Items Table (Read Only) */}
+          {/* 2. Order Items Table */}
           <Card>
             <CardHeader>
               <CardTitle>Order Items</CardTitle>
@@ -275,7 +315,7 @@ export default function ViewOrderPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {orderItems.map((item) => (
+                    {items.map((item) => (
                       <TableRow key={item.id}>
                         <TableCell className="font-mono text-xs text-muted-foreground">
                           {item.sku}
@@ -348,12 +388,15 @@ export default function ViewOrderPage() {
               <div className="space-y-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Total Items</span>
-                  <span className="font-medium">{orderItems.length}</span>
+                  <span className="font-medium">{items.length}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Total Quantity</span>
                   <span className="font-medium">
-                    {orderItems.reduce((a, b) => a + b.qty + b.free, 0)}
+                    {items.reduce(
+                      (a, b) => a + (b.qty || 0) + (b.free || 0),
+                      0
+                    )}
                   </span>
                 </div>
 
@@ -363,10 +406,13 @@ export default function ViewOrderPage() {
                   <span className="text-muted-foreground">Subtotal</span>
                   <span>LKR {subtotal.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between text-sm text-green-600">
-                  <span>Total Discount</span>
-                  <span>- LKR {totalDiscount.toLocaleString()}</span>
-                </div>
+
+                {discountAmount > 0 && (
+                  <div className="flex justify-between text-sm text-green-600">
+                    <span>Total Discount</span>
+                    <span>- LKR {discountAmount.toLocaleString()}</span>
+                  </div>
+                )}
 
                 <Separator className="my-2" />
 
@@ -389,6 +435,52 @@ export default function ViewOrderPage() {
           </Card>
         </div>
       </div>
+
+      {/* --- DIALOGS --- */}
+
+      {/* Approve Dialog */}
+      <AlertDialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Approval</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to approve this order? It will be moved to
+              the <strong>Processing</strong> stage for picking and packing.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={executeApprove}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              Confirm & Process
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Reject Dialog */}
+      <AlertDialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reject Order?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to reject this order? This will mark it as{" "}
+              <strong>Cancelled</strong>. This action cannot be undone easily.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={executeReject}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Reject Order
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
