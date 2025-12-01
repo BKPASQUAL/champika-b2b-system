@@ -113,7 +113,7 @@ export default function CreateOrderPage() {
   const [currentItem, setCurrentItem] = useState({
     productId: "",
     sku: "",
-    quantity: 0, // CHANGED: Initialized to 0 so it shows as empty
+    quantity: 0,
     freeQuantity: 0,
     unit: "",
     mrp: 0,
@@ -131,7 +131,19 @@ export default function CreateOrderPage() {
         if (typeof window !== "undefined") {
           const storedUser = localStorage.getItem("currentUser");
           if (storedUser) {
-            setCurrentUser(JSON.parse(storedUser));
+            const parsedUser = JSON.parse(storedUser);
+            // Ensure we have the ID. If not, you might need to fetch profile by email
+            // For now assuming the login process saved the ID.
+            if (!parsedUser.id) {
+              // Fallback: Try to fetch user by email if ID is missing (optional safety)
+              const userRes = await fetch("/api/users");
+              const users = await userRes.json();
+              const found = users.find(
+                (u: any) => u.email === parsedUser.email
+              );
+              if (found) parsedUser.id = found.id;
+            }
+            setCurrentUser(parsedUser);
           }
         }
 
@@ -151,6 +163,7 @@ export default function CreateOrderPage() {
         );
 
         // 3. Fetch Customers
+        // If the Rep ID is available, you could filter customers here: /api/customers?repId=${currentUser.id}
         const customersRes = await fetch("/api/customers");
         const customersData = await customersRes.json();
         setCustomers(
@@ -178,7 +191,7 @@ export default function CreateOrderPage() {
     setCurrentItem({
       productId: product.id,
       sku: product.sku,
-      quantity: 0, // CHANGED: Reset to 0 on selection
+      quantity: 0,
       freeQuantity: 0,
       unit: product.unit_of_measure,
       mrp: product.mrp,
@@ -237,7 +250,7 @@ export default function CreateOrderPage() {
     setCurrentItem({
       productId: "",
       sku: "",
-      quantity: 0, // CHANGED: Reset to 0 after adding
+      quantity: 0,
       freeQuantity: 0,
       unit: "",
       mrp: 0,
@@ -251,6 +264,21 @@ export default function CreateOrderPage() {
     setItems(items.filter((item) => item.id !== id));
   };
 
+  // --- Totals Calculation ---
+  const subtotal = items.reduce((sum, item) => sum + item.total, 0);
+  const totalItemDiscount = items.reduce(
+    (sum, item) => sum + item.discountAmount,
+    0
+  );
+  const grossTotal = items.reduce(
+    (sum, item) => sum + item.unitPrice * item.quantity,
+    0
+  );
+
+  const extraDiscountAmount = (subtotal * extraDiscount) / 100;
+  const grandTotal = subtotal - extraDiscountAmount;
+
+  // --- Save Order Logic (INTEGRATED) ---
   const handleSaveOrder = async () => {
     if (!customerId) {
       toast.error("Please select a customer.");
@@ -269,9 +297,9 @@ export default function CreateOrderPage() {
 
     const orderData = {
       customerId,
-      salesRepId: currentUser.id, // <--- USING ACTUAL LOGIN ID
+      salesRepId: currentUser.id,
       invoiceDate: orderDate,
-      orderStatus: "Pending",
+      orderStatus: "Pending", // Always Pending for Reps
       items,
       subTotal: subtotal,
       extraDiscountPercent: extraDiscount,
@@ -301,20 +329,6 @@ export default function CreateOrderPage() {
       setSubmitting(false);
     }
   };
-
-  // --- Totals Calculation ---
-  const subtotal = items.reduce((sum, item) => sum + item.total, 0);
-  const totalItemDiscount = items.reduce(
-    (sum, item) => sum + item.discountAmount,
-    0
-  );
-  const grossTotal = items.reduce(
-    (sum, item) => sum + item.unitPrice * item.quantity,
-    0
-  );
-
-  const extraDiscountAmount = (subtotal * extraDiscount) / 100;
-  const grandTotal = subtotal - extraDiscountAmount;
 
   const availableProducts = products.filter(
     (p) => !items.some((i) => i.productId === p.id)
