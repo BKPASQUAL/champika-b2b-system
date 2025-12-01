@@ -88,10 +88,8 @@ export default function ProcessOrderPage({
   // --- NEW: Toggle Select All Function ---
   const toggleSelectAll = () => {
     if (areAllItemsChecked) {
-      // If all are currently checked, uncheck everything
       setCheckedItems({});
     } else {
-      // Otherwise, check everything
       const allChecked: Record<string, boolean> = {};
       items.forEach((item) => {
         allChecked[item.id] = true;
@@ -216,43 +214,41 @@ export default function ProcessOrderPage({
       <div className="grid gap-6 lg:grid-cols-3">
         {/* --- LEFT COLUMN: Picking List --- */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Progress Card */}
-          <Card className="bg-slate-50/50 border-slate-200">
-            <CardContent className="pt-6">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-medium text-slate-700">
-                  Packing Progress
-                </span>
-                <span className="text-sm font-bold text-slate-900">
-                  {packedCount} / {totalItems} Items
-                </span>
-              </div>
-              <div className="h-3 w-full bg-slate-200 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-green-500 transition-all duration-500 ease-out"
-                  style={{ width: `${progressPercentage}%` }}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Items Table Card */}
+          {/* Items Table Card with Integrated Progress Bar */}
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <PackageCheck className="w-5 h-5 text-primary" />
-                Item Checklist
-              </CardTitle>
-              <CardDescription>
-                Check off items as you pack them into the box.
-              </CardDescription>
+            <CardHeader className="">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <CardTitle className="flex items-center gap-2">
+                    <PackageCheck className="w-5 h-5 text-primary" />
+                    Item Checklist
+                  </CardTitle>
+                  <CardDescription>
+                    Check off items as you pack them into the box.
+                  </CardDescription>
+                </div>
+                {/* Progress Bar moved here */}
+                <div className="min-w-[200px] flex flex-col gap-2">
+                  <div className="flex justify-between text-xs font-medium text-slate-600">
+                    <span>Progress</span>
+                    <span>
+                      {packedCount} / {totalItems}
+                    </span>
+                  </div>
+                  <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+                    <div
+                      className="h-full bg-green-500 transition-all duration-500 ease-out"
+                      style={{ width: `${progressPercentage}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-hidden">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-slate-50/50">
-                      {/* --- MODIFIED: Select All Header --- */}
                       <TableHead className="w-[50px] text-center">
                         <Checkbox
                           checked={areAllItemsChecked}
@@ -302,7 +298,8 @@ export default function ProcessOrderPage({
                           </TableCell>
                           <TableCell>
                             <div className="flex items-start gap-4 py-1">
-                              <div className="h-14 w-14 rounded-md border bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
+                              {/* IMAGE RENDERING */}
+                              <div className="h-14 w-14  border bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
                                 {item.image ? (
                                   // eslint-disable-next-line @next/next/no-img-element
                                   <img
