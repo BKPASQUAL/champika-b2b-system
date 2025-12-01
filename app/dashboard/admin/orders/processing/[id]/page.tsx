@@ -35,6 +35,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -53,6 +63,13 @@ export default function ProcessOrderPage({
 
   // State to track checked items for packing
   const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
+
+  // --- Dialog State ---
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [confirmContent, setConfirmContent] = useState({
+    title: "",
+    description: "",
+  });
 
   useEffect(() => {
     const fetchOrder = async () => {
@@ -85,7 +102,7 @@ export default function ProcessOrderPage({
     totalItems > 0 ? (packedCount / totalItems) * 100 : 0;
   const areAllItemsChecked = totalItems > 0 && packedCount === totalItems;
 
-  // --- NEW: Toggle Select All Function ---
+  // --- Toggle Select All Function ---
   const toggleSelectAll = () => {
     if (areAllItemsChecked) {
       setCheckedItems({});
@@ -101,19 +118,28 @@ export default function ProcessOrderPage({
   // Calculate total quantity for the header
   const totalQuantity = items.reduce((acc, i) => acc + i.qty + i.free, 0);
 
-  const handleCompleteProcessing = async () => {
+  // --- Trigger Confirmation Dialog ---
+  const handleCompleteProcessing = () => {
     if (!areAllItemsChecked) {
-      if (
-        !confirm(
-          `You have only packed ${packedCount}/${totalItems} items. Proceed anyway?`
-        )
-      )
-        return;
+      setConfirmContent({
+        title: "Incomplete Packing",
+        description: `You have only packed ${packedCount}/${totalItems} items. Are you sure you want to proceed anyway?`,
+      });
     } else {
-      if (!confirm("Finish packing and move to Checking stage?")) return;
+      setConfirmContent({
+        title: "Complete Packing",
+        description:
+          "Are you sure you want to finish packing and move this order to the Checking stage?",
+      });
     }
+    setIsConfirmOpen(true);
+  };
 
+  // --- Execute API Call on Confirm ---
+  const confirmStatusUpdate = async () => {
+    setIsConfirmOpen(false); // Close dialog
     setProcessing(true);
+
     try {
       const res = await fetch(`/api/orders/${id}`, {
         method: "PATCH",
@@ -146,15 +172,15 @@ export default function ProcessOrderPage({
   if (!order) return null;
 
   return (
-    <div className="space-y-6 mx-auto pb-10">
+    <div className="">
       {/* --- Header Section --- */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 border-b pb-6">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 border-b pb-6">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => router.back()}>
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-3">
+            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-3 flex-wrap">
               Packing Order
               <Badge className="bg-blue-600 hover:bg-blue-700 text-sm px-2.5">
                 {order.orderId}
@@ -166,7 +192,9 @@ export default function ProcessOrderPage({
           </div>
         </div>
 
-        <div className="flex items-center gap-6 md:gap-8 bg-slate-50 p-4 rounded-lg border border-slate-100">
+        {/* Responsive Stats Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-lg border border-slate-100 w-full xl:w-auto">
+          {/* Date */}
           <div className="flex items-center gap-3">
             <div className="p-2 bg-white rounded-md border shadow-sm text-slate-500">
               <Calendar className="w-4 h-4" />
@@ -180,7 +208,8 @@ export default function ProcessOrderPage({
               </span>
             </div>
           </div>
-          <Separator orientation="vertical" className="h-8 hidden md:block" />
+
+          {/* Sales Rep */}
           <div className="flex items-center gap-3">
             <div className="p-2 bg-white rounded-md border shadow-sm text-slate-500">
               <Briefcase className="w-4 h-4" />
@@ -194,7 +223,8 @@ export default function ProcessOrderPage({
               </span>
             </div>
           </div>
-          <Separator orientation="vertical" className="h-8 hidden md:block" />
+
+          {/* Total Qty */}
           <div className="flex items-center gap-3">
             <div className="p-2 bg-white rounded-md border shadow-sm text-slate-500">
               <Package className="w-4 h-4" />
@@ -216,7 +246,7 @@ export default function ProcessOrderPage({
         <div className="lg:col-span-2 space-y-6">
           {/* Items Table Card with Integrated Progress Bar */}
           <Card>
-            <CardHeader className="">
+            <CardHeader className="pb-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="space-y-1">
                   <CardTitle className="flex items-center gap-2">
@@ -227,10 +257,10 @@ export default function ProcessOrderPage({
                     Check off items as you pack them into the box.
                   </CardDescription>
                 </div>
-                {/* Progress Bar moved here */}
-                <div className="min-w-[200px] flex flex-col gap-2">
+                {/* Responsive Progress Bar */}
+                <div className="w-full sm:w-[220px] flex flex-col gap-2">
                   <div className="flex justify-between text-xs font-medium text-slate-600">
-                    <span>Progress</span>
+                    <span>Packing Progress</span>
                     <span>
                       {packedCount} / {totalItems}
                     </span>
@@ -245,7 +275,7 @@ export default function ProcessOrderPage({
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-hidden">
+              <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-slate-50/50">
@@ -262,8 +292,10 @@ export default function ProcessOrderPage({
                           )}
                         />
                       </TableHead>
-                      <TableHead>Product Details</TableHead>
-                      <TableHead className="text-center w-[120px]">
+                      <TableHead className="min-w-[200px]">
+                        Product Details
+                      </TableHead>
+                      <TableHead className="text-center w-[100px]">
                         Quantity
                       </TableHead>
                       <TableHead className="text-center w-[100px]">
@@ -299,7 +331,7 @@ export default function ProcessOrderPage({
                           <TableCell>
                             <div className="flex items-start gap-4 py-1">
                               {/* IMAGE RENDERING */}
-                              <div className="h-14 w-14  border bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
+                              <div className="h-14 w-14 rounded-md border bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
                                 {item.image ? (
                                   // eslint-disable-next-line @next/next/no-img-element
                                   <img
@@ -316,10 +348,10 @@ export default function ProcessOrderPage({
                                   <ImageIcon className="h-6 w-6 text-slate-300" />
                                 )}
                               </div>
-                              <div className="flex flex-col gap-0.5">
+                              <div className="flex flex-col gap-0.5 min-w-0">
                                 <span
                                   className={cn(
-                                    "font-semibold text-base transition-all",
+                                    "font-semibold text-base transition-all truncate",
                                     isChecked
                                       ? "text-slate-500 line-through decoration-slate-400"
                                       : "text-slate-900"
@@ -455,6 +487,26 @@ export default function ProcessOrderPage({
           </Card>
         </div>
       </div>
+
+      {/* --- Confirmation Alert Dialog --- */}
+      <AlertDialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmContent.title}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmContent.description}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setIsConfirmOpen(false)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={confirmStatusUpdate}>
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
