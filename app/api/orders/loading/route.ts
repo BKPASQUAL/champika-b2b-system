@@ -1,3 +1,4 @@
+// FILE PATH: app/api/orders/loading/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
@@ -5,14 +6,15 @@ import { z } from "zod";
 // Validation Schema
 const createLoadSchema = z.object({
   lorryNumber: z.string().min(1, "Lorry number is required"),
-  driverId: z.string().min(1, "Driver (Responsible Person) is required"), // Matches frontend
+  driverId: z.string().min(1, "Driver (Responsible Person) is required"),
   helperName: z.string().optional().or(z.literal("")),
-  date: z.string(), // Matches frontend 'date'
+  date: z.string(),
   orderIds: z.array(z.string()).min(1, "Select at least one order"),
 });
 
 export async function GET() {
   try {
+    // ✅ UPDATED: Added sales_rep_id join to get representative name
     const { data: orders, error } = await supabaseAdmin
       .from("orders")
       .select(
@@ -25,6 +27,9 @@ export async function GET() {
         customers (
           shop_name,
           route
+        ),
+        profiles!orders_sales_rep_id_fkey (
+          full_name
         )
       `
       )
@@ -33,11 +38,13 @@ export async function GET() {
 
     if (error) throw error;
 
+    // ✅ UPDATED: Added salesRepName to the response
     const formattedOrders = orders.map((order: any) => ({
       id: order.id,
       orderId: order.order_id,
       shopName: order.customers?.shop_name || "Unknown",
       route: order.customers?.route || "-",
+      salesRepName: order.profiles?.full_name || "Unknown", // ✅ NEW
       totalAmount: order.total_amount,
       status: order.status,
     }));

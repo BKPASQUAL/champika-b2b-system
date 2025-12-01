@@ -1,3 +1,4 @@
+// FILE PATH: app/dashboard/admin/orders/loading/page.tsx
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
@@ -27,12 +28,12 @@ import {
 import { toast } from "sonner";
 import { LoadingSheetDialog } from "../_components/LoadingSheetDialog";
 
-// Define the Order interface locally or import it
 interface Order {
   id: string;
   orderId: string;
   shopName: string;
   route: string;
+  salesRepName: string;
   totalAmount: number;
   status: string;
 }
@@ -46,7 +47,6 @@ export default function LoadingOrdersPage() {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  // --- 1. Fetch Orders from API ---
   const fetchOrders = useCallback(async () => {
     try {
       setLoading(true);
@@ -54,7 +54,7 @@ export default function LoadingOrdersPage() {
       if (!res.ok) throw new Error("Failed to fetch loading orders");
       const data = await res.json();
       setOrders(data);
-      setSelectedOrders([]); // Reset selections on refresh
+      setSelectedOrders([]);
     } catch (error) {
       console.error(error);
       toast.error("Failed to load orders");
@@ -67,14 +67,13 @@ export default function LoadingOrdersPage() {
     fetchOrders();
   }, [fetchOrders]);
 
-  // --- 2. Filter Logic ---
   const filteredOrders = orders.filter(
     (order) =>
       order.orderId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.shopName.toLowerCase().includes(searchQuery.toLowerCase())
+      order.shopName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      order.salesRepName.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // --- 3. Selection Handlers ---
   const toggleSelectOrder = (orderId: string) => {
     setSelectedOrders((prev) =>
       prev.includes(orderId)
@@ -91,29 +90,17 @@ export default function LoadingOrdersPage() {
     }
   };
 
-  // --- 4. Create Load Handler ---
   const handleCreateLoad = async (formData: any) => {
     try {
-      // Find the driver ID based on the name selected in the dialog
-      // Note: Ideally, your Dialog should return the ID directly.
-      // For now, we assume the API needs an ID. You might need to fetch users to get the ID.
-      // If your MOCK_DRIVERS has real IDs matching Supabase users, pass that.
-      // Assuming formData.driver is the ID or you map it here.
-
       const payload = {
         lorryNumber: formData.lorryNumber,
-        driverId: formData.driver, // Ensure this sends a UUID (e.g., User ID from profiles)
-        helperName: formData.helper,
-        loadingDate: formData.date,
+        driverId: formData.driverId,
+        helperName: formData.helperName || "",
+        date: formData.date,
         orderIds: selectedOrders,
       };
 
-      // Since the mock dialog sends names, you might need to map them to IDs
-      // or update the dialog to use IDs. For this example, we assume valid UUIDs
-      // or you will need to fetch the driver list from /api/users first.
-
-      // For demonstration, if we don't have a real UUID, the API will fail validation.
-      // You should update LoadingSheetDialog to fetch drivers from /api/users.
+      console.log("Sending payload to API:", payload);
 
       const res = await fetch("/api/orders/loading", {
         method: "POST",
@@ -123,14 +110,17 @@ export default function LoadingOrdersPage() {
 
       const result = await res.json();
 
-      if (!res.ok) throw new Error(result.error || "Failed to create load");
+      if (!res.ok) {
+        console.error("API Error Response:", result);
+        throw new Error(result.error || "Failed to create load");
+      }
 
       toast.success(`Load Sheet ${result.loadId} Created!`);
 
-      // Refresh Data
       fetchOrders();
       router.push("/dashboard/admin/orders/loading/history");
     } catch (error: any) {
+      console.error("Create Load Error:", error);
       toast.error(error.message);
     }
   };
@@ -161,7 +151,6 @@ export default function LoadingOrdersPage() {
           >
             <History className="w-4 h-4 mr-2" /> Delivery History
           </Button>
-
           {selectedOrders.length > 0 && (
             <Button
               onClick={() => setIsDialogOpen(true)}
@@ -180,7 +169,7 @@ export default function LoadingOrdersPage() {
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search Order ID, Shop..."
+                placeholder="Search Order ID, Shop, or Sales Rep..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9"
@@ -208,6 +197,7 @@ export default function LoadingOrdersPage() {
                   <TableHead>Order ID</TableHead>
                   <TableHead>Route / Area</TableHead>
                   <TableHead>Customer</TableHead>
+                  <TableHead>Sales Rep</TableHead>
                   <TableHead className="text-right">Total Bill</TableHead>
                   <TableHead className="text-center">Status</TableHead>
                 </TableRow>
@@ -215,7 +205,7 @@ export default function LoadingOrdersPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-12">
+                    <TableCell colSpan={7} className="text-center py-12">
                       <div className="flex justify-center items-center gap-2 text-muted-foreground">
                         <Loader2 className="h-5 w-5 animate-spin" />
                         Loading orders...
@@ -225,51 +215,52 @@ export default function LoadingOrdersPage() {
                 ) : filteredOrders.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={6}
+                      colSpan={7}
                       className="text-center py-12 text-muted-foreground"
                     >
-                      <div className="flex flex-col items-center justify-center">
-                        <Truck className="h-12 w-12 text-muted-foreground/20 mb-4" />
-                        <p>No orders ready for loading.</p>
+                      <div className="flex flex-col items-center gap-2">
+                        <Truck className="h-12 w-12 text-muted-foreground/30" />
+                        <p className="font-medium">
+                          No orders ready for loading
+                        </p>
+                        <p className="text-sm">
+                          Orders will appear here once they pass quality checks
+                        </p>
                       </div>
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredOrders.map((order) => (
-                    <TableRow
-                      key={order.id}
-                      className={
-                        selectedOrders.includes(order.id) ? "bg-muted/50" : ""
-                      }
-                    >
+                    <TableRow key={order.id} className="hover:bg-muted/50">
                       <TableCell>
                         <Checkbox
                           checked={selectedOrders.includes(order.id)}
                           onCheckedChange={() => toggleSelectOrder(order.id)}
                         />
                       </TableCell>
-                      <TableCell className="font-medium font-mono">
+                      <TableCell className="font-medium">
                         {order.orderId}
                       </TableCell>
                       <TableCell>
-                        <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-100">
+                        <Badge variant="outline" className="font-normal">
                           {order.route}
-                        </span>
+                        </Badge>
                       </TableCell>
+                      <TableCell>{order.shopName}</TableCell>
                       <TableCell>
-                        <span className="font-medium text-sm">
-                          {order.shopName}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary">
+                            {order.salesRepName.charAt(0).toUpperCase()}
+                          </div>
+                          <span className="text-sm">{order.salesRepName}</span>
+                        </div>
                       </TableCell>
                       <TableCell className="text-right font-semibold">
-                        LKR {order.totalAmount.toLocaleString()}
+                        Rs. {order.totalAmount.toLocaleString()}
                       </TableCell>
                       <TableCell className="text-center">
-                        <Badge
-                          variant="outline"
-                          className="bg-green-50 text-green-700 border-green-200"
-                        >
-                          Ready to Load
+                        <Badge className="bg-blue-600 hover:bg-blue-700">
+                          {order.status}
                         </Badge>
                       </TableCell>
                     </TableRow>
