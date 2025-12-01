@@ -2,18 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
 
-// Schema for creating a load
+// Validation Schema
 const createLoadSchema = z.object({
   lorryNumber: z.string().min(1, "Lorry number is required"),
-  driverId: z.string().min(1, "Driver is required"), // Assuming this is a profile ID
-  helperName: z.string().optional(),
-  loadingDate: z.string(),
+  driverId: z.string().min(1, "Driver (Responsible Person) is required"), // Matches frontend
+  helperName: z.string().optional().or(z.literal("")),
+  date: z.string(), // Matches frontend 'date'
   orderIds: z.array(z.string()).min(1, "Select at least one order"),
 });
 
 export async function GET() {
   try {
-    // Fetch orders currently in the 'Loading' stage
     const { data: orders, error } = await supabaseAdmin
       .from("orders")
       .select(
@@ -34,7 +33,6 @@ export async function GET() {
 
     if (error) throw error;
 
-    // Map to frontend format
     const formattedOrders = orders.map((order: any) => ({
       id: order.id,
       orderId: order.order_id,
@@ -53,9 +51,11 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+
+    // Validate payload
     const val = createLoadSchema.parse(body);
 
-    // 1. Generate Load ID (e.g., LOAD-2025-001)
+    // Generate Load ID
     const { count } = await supabaseAdmin
       .from("loading_sheets")
       .select("*", { count: "exact", head: true });
@@ -63,15 +63,15 @@ export async function POST(request: NextRequest) {
     const nextId = (count || 0) + 1001;
     const loadIdStr = `LOAD-${new Date().getFullYear()}-${nextId}`;
 
-    // 2. Insert into loading_sheets
+    // Insert Loading Sheet
     const { data: loadData, error: loadError } = await supabaseAdmin
       .from("loading_sheets")
       .insert({
         load_id: loadIdStr,
         lorry_number: val.lorryNumber,
-        driver_id: val.driverId, // Ensure you pass the UUID of the driver/user
+        driver_id: val.driverId,
         helper_name: val.helperName,
-        loading_date: val.loadingDate,
+        loading_date: val.date,
         status: "In Transit",
       })
       .select()
@@ -79,15 +79,12 @@ export async function POST(request: NextRequest) {
 
     if (loadError) throw loadError;
 
-    // 3. Update Orders (Link to Load & Update Status)
-    // We update the status to 'Delivered' (assuming dispatching counts as process complete for warehouse)
-    // OR keep it 'Loading' if you track transit separately.
-    // Here we assume moving to 'Delivered' marks it as dispatched.
+    // Update Orders
     const { error: updateError } = await supabaseAdmin
       .from("orders")
       .update({
         load_id: loadData.id,
-        status: "Delivered", // Or 'In Transit' if you added that enum value
+        status: "Delivered",
       })
       .in("id", val.orderIds);
 
@@ -98,7 +95,13 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error: any) {
-    console.error("Load creation failed:", error);
+    console.error("Load Creation Error:", error);
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: "Validation Error", details: error.issues },
+        { status: 400 }
+      );
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

@@ -35,40 +35,34 @@ export function LoadingSheetDialog({
   selectedCount,
   onConfirm,
 }: LoadingSheetDialogProps) {
-  // --- Data State ---
   const [lorries, setLorries] = useState<{ id: string; name: string }[]>([]);
   const [users, setUsers] = useState<
     { id: string; fullName: string; role: string }[]
   >([]);
   const [loadingData, setLoadingData] = useState(false);
 
-  // --- Form State ---
+  // Form State
   const [formData, setFormData] = useState({
     lorryNumber: "",
-    driverId: "", // Maps to Responsible Person
+    driverId: "", // Ensure this is set by the Select
     helperId: "",
     date: new Date().toISOString().split("T")[0],
   });
 
-  // --- Fetch Data on Open ---
   useEffect(() => {
     if (isOpen) {
       const loadData = async () => {
         setLoadingData(true);
         try {
-          // 1. Fetch Lorries (from Categories API type='lorry')
-          const lorryRes = await fetch("/api/settings/categories?type=lorry");
-          const lorryData = await lorryRes.json();
+          const [lorryRes, userRes] = await Promise.all([
+            fetch("/api/settings/categories?type=lorry"),
+            fetch("/api/users"),
+          ]);
 
-          // 2. Fetch All Users
-          const userRes = await fetch("/api/users");
-          const userData = await userRes.json();
-
-          if (lorryRes.ok) setLorries(lorryData);
-          if (userRes.ok) setUsers(userData);
+          if (lorryRes.ok) setLorries(await lorryRes.json());
+          if (userRes.ok) setUsers(await userRes.json());
         } catch (error) {
-          console.error("Failed to load resources", error);
-          toast.error("Failed to load vehicle or user data");
+          toast.error("Failed to load data");
         } finally {
           setLoadingData(false);
         }
@@ -77,10 +71,14 @@ export function LoadingSheetDialog({
     }
   }, [isOpen]);
 
-  // --- Submit Handler ---
   const handleSubmit = () => {
-    if (!formData.lorryNumber || !formData.driverId) {
-      toast.error("Please select a Lorry and a Responsible Person.");
+    // Validation
+    if (!formData.lorryNumber) {
+      toast.error("Please select a Lorry.");
+      return;
+    }
+    if (!formData.driverId) {
+      toast.error("Please select a Responsible Person.");
       return;
     }
 
@@ -90,9 +88,10 @@ export function LoadingSheetDialog({
       lorryNumber: formData.lorryNumber,
       driverId: formData.driverId,
       helperName: selectedHelper ? selectedHelper.fullName : "",
-      date: formData.date,
+      date: formData.date, // Ensure this key matches API schema 'date'
     };
 
+    console.log("Dialog Submitting Payload:", payload); // Debug log
     onConfirm(payload);
     onOpenChange(false);
   };
@@ -109,7 +108,7 @@ export function LoadingSheetDialog({
         </DialogHeader>
 
         <div className="grid gap-4 py-4">
-          {/* Date Selection */}
+          {/* Date */}
           <div className="grid gap-2">
             <Label>Loading Date</Label>
             <div className="relative">
@@ -125,7 +124,7 @@ export function LoadingSheetDialog({
             </div>
           </div>
 
-          {/* Lorry Selection */}
+          {/* Lorry */}
           <div className="grid gap-2">
             <Label>Select Lorry</Label>
             <Select
@@ -141,23 +140,17 @@ export function LoadingSheetDialog({
                 />
               </SelectTrigger>
               <SelectContent>
-                {lorries.length === 0 ? (
-                  <SelectItem value="none" disabled>
-                    No lorries found (Add in Settings)
+                {lorries.map((l) => (
+                  <SelectItem key={l.id} value={l.name}>
+                    {l.name}
                   </SelectItem>
-                ) : (
-                  lorries.map((l) => (
-                    <SelectItem key={l.id} value={l.name}>
-                      {l.name}
-                    </SelectItem>
-                  ))
-                )}
+                ))}
               </SelectContent>
             </Select>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            {/* Responsible Person Selection */}
+            {/* Driver */}
             <div className="grid gap-2">
               <Label>Responsible Person</Label>
               <Select
@@ -180,7 +173,7 @@ export function LoadingSheetDialog({
               </Select>
             </div>
 
-            {/* Helper Selection */}
+            {/* Helper */}
             <div className="grid gap-2">
               <Label>Assistant / Helper</Label>
               <Select
@@ -211,7 +204,7 @@ export function LoadingSheetDialog({
             Cancel
           </Button>
           <Button onClick={handleSubmit} disabled={loadingData}>
-            {loadingData ? "Loading..." : "Create Load & Complete"}
+            Create Load
           </Button>
         </DialogFooter>
       </DialogContent>
