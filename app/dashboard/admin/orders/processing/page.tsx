@@ -1,14 +1,8 @@
-// app/dashboard/admin/orders/processing/page.tsx
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -26,24 +20,40 @@ import {
   ArrowRight,
   Loader2,
   PackageCheck,
-  Eye
+  Eye,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Order } from "../types";
-import { MOCK_ALL_ORDERS } from "../data";
 
 export default function ProcessingOrdersPage() {
   const router = useRouter();
-  
-  // 1. Filter for 'Processing' orders only
-  const [orders, setOrders] = useState<Order[]>(
-    MOCK_ALL_ORDERS.filter((o) => o.status === "Processing")
-  );
 
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [loadingId, setLoadingId] = useState<string | null>(null);
 
-  // 2. Filter Logic
+  // --- 1. Fetch Processing Orders ---
+  useEffect(() => {
+    const fetchOrders = async () => {
+      try {
+        setLoading(true);
+        const res = await fetch("/api/orders?status=Processing");
+        if (!res.ok) throw new Error("Failed to load processing orders");
+        const data = await res.json();
+        setOrders(data);
+      } catch (error) {
+        console.error(error);
+        toast.error("Failed to load orders");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOrders();
+  }, []);
+
+  // --- 2. Filter Logic ---
   const filteredOrders = orders.filter(
     (order) =>
       order.orderId.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -51,27 +61,21 @@ export default function ProcessingOrdersPage() {
       order.customerName.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // 3. Handle "Move to Checking" Action
-  const handleMoveToChecking = (orderId: string) => {
-    if (confirm("Confirm order is processed and ready for checking?")) {
-        setLoadingId(orderId);
-        
-        // Simulate API call
-        setTimeout(() => {
-            // Remove from this list (optimistic update)
-            setOrders((prev) => prev.filter((o) => o.id !== orderId));
-            setLoadingId(null);
-            // In real app, you'd trigger a refresh or toast here
-            alert(`Order ${filteredOrders.find(o => o.id === orderId)?.orderId} moved to Checking.`);
-        }, 1000);
-    }
-  };
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-[calc(100vh-200px)]">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Processing Orders</h1>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Processing Orders
+          </h1>
           <p className="text-muted-foreground mt-1">
             Orders currently being picked and packed.
           </p>
@@ -118,8 +122,8 @@ export default function ProcessingOrdersPage() {
                       className="text-center py-12 text-muted-foreground"
                     >
                       <div className="flex flex-col items-center justify-center">
-                         <PackageCheck className="h-12 w-12 text-muted-foreground/20 mb-4" />
-                         <p>No orders in processing.</p>
+                        <PackageCheck className="h-12 w-12 text-muted-foreground/20 mb-4" />
+                        <p>No orders in processing.</p>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -158,31 +162,31 @@ export default function ProcessingOrdersPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                            {/* View Details */}
-                            <Button 
-                                variant="ghost" 
-                                size="icon"
-                                onClick={() => router.push(`/dashboard/admin/orders/${order.id}`)}
-                                title="View Details"
-                            >
-                                <Eye className="h-4 w-4 text-muted-foreground" />
-                            </Button>
+                          {/* View Details (General View) */}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() =>
+                              router.push(`/dashboard/admin/orders/${order.id}`)
+                            }
+                            title="View Details"
+                          >
+                            <Eye className="h-4 w-4 text-muted-foreground" />
+                          </Button>
 
-                            {/* Approve / Move Next */}
-                            <Button
+                          {/* Process Order (Navigate to Packing Page) */}
+                          <Button
                             size="sm"
                             className="bg-indigo-600 hover:bg-indigo-700 text-white"
-                            onClick={() => handleMoveToChecking(order.id)}
-                            disabled={loadingId === order.id}
-                            >
-                            {loadingId === order.id ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                                <>
-                                Send to Checking <ArrowRight className="ml-2 h-3 w-3" />
-                                </>
-                            )}
-                            </Button>
+                            onClick={() =>
+                              router.push(
+                                `/dashboard/admin/orders/processing/${order.id}`
+                              )
+                            }
+                          >
+                            Process Order{" "}
+                            <ArrowRight className="ml-2 h-3 w-3" />
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>

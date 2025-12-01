@@ -9,7 +9,7 @@ export async function GET(
 
   try {
     // Fetch Order with all relations
-    // REMOVED 'discount_percent' from order_items select list to fix the error
+    // REMOVED 'discount_percent' from the order_items selection to fix the error
     const { data: order, error } = await supabaseAdmin
       .from("orders")
       .select(
@@ -78,8 +78,7 @@ export async function GET(
         price: item.unit_price,
         qty: item.quantity,
         free: item.free_quantity,
-        // Defaulting discount to 0 since column doesn't exist in DB
-        disc: 0,
+        disc: 0, // Default to 0 since column is missing in DB
         total: item.total_price,
       })),
 
