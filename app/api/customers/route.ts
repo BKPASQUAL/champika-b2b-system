@@ -15,20 +15,39 @@ const customerSchema = z.object({
   creditLimit: z.number().min(0).default(0),
 });
 
-// GET: Fetch all customers
-export async function GET() {
+// GET: Fetch customers (Optional: Filter by Rep ID)
+export async function GET(request: NextRequest) {
   try {
-    const { data: customers, error } = await supabaseAdmin
-      .from("customers")
-      .select("*")
-      .order("created_at", { ascending: false });
+    const { searchParams } = new URL(request.url);
+    const repId = searchParams.get("repId");
+
+    let query;
+
+    if (repId) {
+      // If repId is provided, perform an INNER JOIN on orders to filter customers
+      // who have at least one order created by this sales_rep
+      query = supabaseAdmin
+        .from("customers")
+        .select("*, orders!inner(sales_rep_id)")
+        .eq("orders.sales_rep_id", repId)
+        .order("created_at", { ascending: false });
+    } else {
+      // Default: Fetch all customers (for Admin)
+      query = supabaseAdmin
+        .from("customers")
+        .select("*")
+        .order("created_at", { ascending: false });
+    }
+
+    const { data: customers, error } = await query;
 
     if (error) throw error;
 
     // Map DB fields (snake_case) to Frontend types (camelCase)
-    const mappedCustomers = customers.map((c) => ({
+    // Note: We ignore the 'orders' property that might be present in the rep-filtered response
+    const mappedCustomers = customers.map((c: any) => ({
       id: c.id,
-      customerId: c.id.substring(0, 8).toUpperCase(), // Generate a short ID from UUID since 'customer_id' column is missing
+      customerId: c.id.substring(0, 8).toUpperCase(),
       shopName: c.shop_name,
       ownerName: c.owner_name || "",
       phone: c.phone,
@@ -40,8 +59,8 @@ export async function GET() {
       outstandingBalance: c.outstanding_balance || 0,
       lastOrderDate: c.updated_at
         ? new Date(c.updated_at).toISOString().split("T")[0]
-        : "-", // Fallback to updated_at
-      totalOrders: 0, // Placeholder as 'total_orders' might not exist in schema yet
+        : "-",
+      totalOrders: 0,
     }));
 
     return NextResponse.json(mappedCustomers);
@@ -57,8 +76,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const val = customerSchema.parse(body);
 
-    // Removed 'customer_id' generation to fix the error.
-    // We only insert fields that exist in your provided schema.
     const { data, error } = await supabaseAdmin
       .from("customers")
       .insert({
