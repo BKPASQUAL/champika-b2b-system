@@ -28,7 +28,22 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft, Loader2, CheckCircle2, Edit3 } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  ArrowLeft,
+  Loader2,
+  CheckCircle2,
+  Edit3,
+  CreditCard,
+  Package,
+  AlertCircle,
+  DollarSign,
+} from "lucide-react";
 import { toast } from "sonner";
 
 interface OrderItem {
@@ -86,7 +101,7 @@ export default function ReconcileLoadPage({
           customer: o.customer.shopName,
           originalAmount: o.totalAmount,
           status: o.status,
-          paymentStatus: "Unpaid",
+          paymentStatus: "Credit",
         }));
 
         setOrders(mappedOrders);
@@ -96,7 +111,7 @@ export default function ReconcileLoadPage({
           initialState[o.id] = {
             status: "Delivered",
             finalAmount: o.originalAmount,
-            paymentStatus: "Paid",
+            paymentStatus: "Credit",
             notes: "",
           };
         });
@@ -121,15 +136,12 @@ export default function ReconcileLoadPage({
     }));
   };
 
-  // ✅ UPDATED: Navigate to invoice edit page with return URL
   const handleEditInvoice = (invoiceId: string | null) => {
     if (!invoiceId) {
       toast.error("Invoice not found for this order");
       return;
     }
 
-    // Navigate to invoice edit page with return URL
-    // This allows the invoice page to show "Back to Reconciliation" button
     router.push(
       `/dashboard/admin/invoices/${invoiceId}/edit?returnTo=/dashboard/admin/orders/loading/reconcile/${id}`
     );
@@ -166,18 +178,19 @@ export default function ReconcileLoadPage({
 
   // --- Calculated Stats ---
   const deliveredCount = Object.values(reconcileData).filter(
-    (d) => d.status === "Delivered"
+    (d) => d.status === "Delivered" || d.status === "Partial"
   ).length;
+
   const rescheduledCount = Object.values(reconcileData).filter(
     (d) => d.status === "Loading"
   ).length;
-  const totalCashCollected = Object.entries(reconcileData).reduce(
-    (sum, [orderId, data]) => {
-      if (data.paymentStatus === "Paid") {
-        return sum + data.finalAmount;
-      }
-      return sum;
-    },
+
+  const returnedCount = Object.values(reconcileData).filter(
+    (d) => d.status === "Returned"
+  ).length;
+
+  const totalBillValue = orders.reduce(
+    (sum, order) => sum + order.originalAmount,
     0
   );
 
@@ -191,72 +204,100 @@ export default function ReconcileLoadPage({
 
   return (
     <div className="space-y-6 pb-10">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => router.back()}>
-          <ArrowLeft className="w-5 h-5" />
-        </Button>
-        <div className="flex-1">
-          <h1 className="text-3xl font-bold tracking-tight">
-            Reconcile Delivery
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            {loadDetails?.loadId} • {loadDetails?.lorryNumber}
-          </p>
+      {/* Header with Better Spacing */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={() => router.back()}>
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">
+              Reconcile Delivery
+            </h1>
+            <p className="text-muted-foreground mt-1">
+              {loadDetails?.loadId} • {loadDetails?.lorryNumber} •{" "}
+              {loadDetails?.driverName}
+            </p>
+          </div>
         </div>
+
+        {/* Finalize Button in Header */}
+        <Button
+          size="lg"
+          className="bg-gradient-to-r from-gray-900 to-gray-800 hover:from-black hover:to-gray-900 text-white shadow-lg"
+          onClick={handleFinalize}
+          disabled={submitting}
+        >
+          {submitting ? (
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          ) : (
+            <CheckCircle2 className="w-4 h-4 mr-2" />
+          )}
+          Finalize & Close Load
+        </Button>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
+      {/* Summary Cards - Simplified to 2 Cards */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* Total Bill Value */}
+        <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
           <CardHeader className="pb-3">
-            <CardDescription className="text-green-700 font-medium">
-              Cash to Collect
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <CardDescription className="text-blue-700 font-medium">
+                Total Bill Value
+              </CardDescription>
+              <DollarSign className="w-5 h-5 text-blue-600" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-green-900">
-              {totalCashCollected.toLocaleString()}
+            <div className="text-3xl font-bold text-blue-900">
+              Rs. {totalBillValue.toLocaleString()}
             </div>
+            <p className="text-xs text-blue-600 mt-1">
+              {orders.length} order{orders.length !== 1 ? "s" : ""}
+            </p>
           </CardContent>
         </Card>
 
+        {/* Status Overview */}
         <Card>
           <CardHeader className="pb-3">
-            <CardDescription className="font-medium">
-              Status Overview
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <CardDescription className="font-medium">
+                Delivery Status
+              </CardDescription>
+              <Package className="w-5 h-5 text-muted-foreground" />
+            </div>
           </CardHeader>
           <CardContent className="space-y-2">
             <div className="flex justify-between items-center">
               <span className="text-sm text-muted-foreground">Delivered</span>
-              <Badge variant="outline" className="bg-green-50 text-green-700">
+              <Badge
+                variant="outline"
+                className="bg-green-50 text-green-700 border-green-200"
+              >
                 {deliveredCount}
               </Badge>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm text-muted-foreground">Rescheduled</span>
-              <Badge variant="outline" className="bg-blue-50 text-blue-700">
+              <Badge
+                variant="outline"
+                className="bg-blue-50 text-blue-700 border-blue-200"
+              >
                 {rescheduledCount}
               </Badge>
             </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">Returned</span>
+              <Badge
+                variant="outline"
+                className="bg-red-50 text-red-700 border-red-200"
+              >
+                {returnedCount}
+              </Badge>
+            </div>
           </CardContent>
-        </Card>
-
-        <Card className="flex items-center justify-center border-2 border-dashed">
-          <Button
-            size="lg"
-            className="w-full m-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-lg"
-            onClick={handleFinalize}
-            disabled={submitting}
-          >
-            {submitting ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <CheckCircle2 className="w-4 h-4 mr-2" />
-            )}
-            Finalize & Close Load
-          </Button>
         </Card>
       </div>
 
@@ -265,7 +306,7 @@ export default function ReconcileLoadPage({
         <CardHeader>
           <CardTitle>Order Reconciliation</CardTitle>
           <CardDescription>
-            Mark status, edit amounts, or reschedule.
+            Mark delivery status and adjust final bill amounts if needed
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -274,12 +315,31 @@ export default function ReconcileLoadPage({
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[120px]">Order ID</TableHead>
-                  <TableHead className="w-[180px]">Invoice No</TableHead>
-                  <TableHead className="w-[180px]">Customer</TableHead>
-                  <TableHead className="w-[140px]">Action / Status</TableHead>
+                  <TableHead className="w-[140px]">Invoice No</TableHead>
+                  <TableHead className="w-[200px]">Customer</TableHead>
+                  <TableHead className="w-[140px]">Delivery Status</TableHead>
                   <TableHead className="w-[130px]">Payment</TableHead>
-                  <TableHead className="w-[150px]">Final Bill Amount</TableHead>
-                  <TableHead>Notes</TableHead>
+                  <TableHead className="w-[160px]">
+                    <div className="flex items-center gap-2">
+                      Final Bill Amount
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <AlertCircle className="w-3.5 h-3.5 text-muted-foreground" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="max-w-[200px]">
+                              Edit here for partial delivery adjustments
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                  </TableHead>
+                  <TableHead className="w-[200px]">Notes</TableHead>
+                  <TableHead className="w-[100px] text-center">
+                    Actions
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -288,6 +348,7 @@ export default function ReconcileLoadPage({
                   const isDelivered =
                     state.status === "Delivered" || state.status === "Partial";
                   const isRescheduled = state.status === "Loading";
+                  const isReturned = state.status === "Returned";
 
                   return (
                     <TableRow
@@ -295,117 +356,137 @@ export default function ReconcileLoadPage({
                       className={
                         isRescheduled
                           ? "bg-blue-50/30"
+                          : isReturned
+                          ? "bg-red-50/30"
                           : !isDelivered
-                          ? "bg-red-50/20"
-                          : ""
+                          ? "bg-yellow-50/20"
+                          : "bg-green-50/20"
                       }
                     >
-                      {/* Order ID */}
-                      <TableCell className="font-medium font-mono text-sm">
+                      <TableCell className="font-medium">
                         {order.orderId}
                       </TableCell>
 
-                      {/* Invoice Number with Edit Button */}
                       <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="font-mono">
-                            {order.invoiceNo}
-                          </Badge>
-                          {order.invoiceId && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              onClick={() => handleEditInvoice(order.invoiceId)}
-                              title="Edit Invoice"
-                            >
-                              <Edit3 className="h-3.5 w-3.5 text-blue-600" />
-                            </Button>
-                          )}
-                        </div>
+                        <Badge variant="outline" className="font-mono text-xs">
+                          {order.invoiceNo}
+                        </Badge>
                       </TableCell>
 
-                      {/* Customer */}
-                      <TableCell>
-                        <div className="text-sm">
-                          <div className="font-medium">{order.customer}</div>
-                          <div className="text-xs text-muted-foreground">
-                            Bill: LKR {order.originalAmount.toLocaleString()}
-                          </div>
-                        </div>
+                      <TableCell className="font-medium">
+                        {order.customer}
                       </TableCell>
 
-                      {/* Status Dropdown */}
                       <TableCell>
                         <Select
-                          value={state.status}
-                          onValueChange={(value) =>
-                            updateOrderState(order.id, "status", value)
+                          value={state.status || "Delivered"}
+                          onValueChange={(val) =>
+                            updateOrderState(order.id, "status", val)
                           }
                         >
-                          <SelectTrigger className="w-full">
+                          <SelectTrigger className="w-[130px]">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="Delivered">Delivered</SelectItem>
-                            <SelectItem value="Partial">
-                              Partial Delivery
+                            <SelectItem value="Delivered">
+                              <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full bg-green-500" />
+                                Delivered
+                              </div>
                             </SelectItem>
-                            <SelectItem value="Loading">Reschedule</SelectItem>
-                            <SelectItem value="Returned">Returned</SelectItem>
+                            <SelectItem value="Partial">
+                              <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full bg-yellow-500" />
+                                Partial
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="Loading">
+                              <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full bg-blue-500" />
+                                Reschedule
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="Returned">
+                              <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full bg-red-500" />
+                                Returned
+                              </div>
+                            </SelectItem>
                           </SelectContent>
                         </Select>
                       </TableCell>
 
-                      {/* Payment Status */}
                       <TableCell>
-                        <Select
-                          value={state.paymentStatus}
-                          onValueChange={(value) =>
-                            updateOrderState(order.id, "paymentStatus", value)
-                          }
+                        <Badge
+                          variant="outline"
+                          className="bg-orange-50 text-orange-700 border-orange-200 font-medium"
                         >
-                          <SelectTrigger className="w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Paid">Paid (Cash)</SelectItem>
-                            <SelectItem value="Unpaid">Credit</SelectItem>
-                          </SelectContent>
-                        </Select>
+                          <CreditCard className="w-3 h-3 mr-1" />
+                          Credit
+                        </Badge>
                       </TableCell>
 
-                      {/* Final Amount Input */}
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <span className="text-sm text-muted-foreground">
-                            Rs
+                          <span className="text-xs text-muted-foreground">
+                            Rs.
                           </span>
                           <Input
                             type="number"
-                            value={state.finalAmount}
+                            value={state.finalAmount || order.originalAmount}
                             onChange={(e) =>
                               updateOrderState(
                                 order.id,
                                 "finalAmount",
-                                Number(e.target.value)
+                                parseFloat(e.target.value) || 0
                               )
                             }
-                            className="w-28"
+                            className="w-[110px] h-9 font-medium"
+                            disabled
                           />
                         </div>
+                        {state.finalAmount !== order.originalAmount && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Original: Rs.{" "}
+                            {order.originalAmount.toLocaleString()}
+                          </p>
+                        )}
                       </TableCell>
 
-                      {/* Notes */}
                       <TableCell>
                         <Input
-                          placeholder="Optional notes..."
-                          value={state.notes}
+                          placeholder="Add notes..."
+                          value={state.notes || ""}
                           onChange={(e) =>
                             updateOrderState(order.id, "notes", e.target.value)
                           }
-                          className="w-full"
+                          className="w-[180px] h-9 text-sm"
                         />
+                      </TableCell>
+
+                      <TableCell>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  handleEditInvoice(order.invoiceId)
+                                }
+                                className="w-full"
+                              >
+                                <Edit3 className="w-3.5 h-3.5 mr-1" />
+                                Edit
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>
+                                Edit full invoice (items, prices, quantities)
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </TableCell>
                     </TableRow>
                   );
