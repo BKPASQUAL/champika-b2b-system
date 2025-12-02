@@ -1,4 +1,3 @@
-// app/dashboard/admin/orders/_components/OrderTable.tsx
 import {
   Table,
   TableBody,
@@ -62,18 +61,24 @@ export function OrderTable({
   };
 
   const renderStatusBadge = (status: OrderStatus) => {
-    const styles = {
+    // Explicitly typed Record ensures we handle all OrderStatus cases
+    const styles: Record<OrderStatus, string> = {
       Pending: "bg-yellow-100 text-yellow-700 border-yellow-200",
       Processing: "bg-blue-100 text-blue-700 border-blue-200",
       Checking: "bg-purple-100 text-purple-700 border-purple-200",
       Loading: "bg-indigo-100 text-indigo-700 border-indigo-200",
+      "In Transit": "bg-orange-100 text-orange-700 border-orange-200", // Added
       Delivered: "bg-green-100 text-green-700 border-green-200",
       Cancelled: "bg-red-100 text-red-700 border-red-200",
+      Completed: "bg-gray-100 text-gray-700 border-gray-200", // Added
     };
+
     return (
       <Badge
         variant="outline"
-        className={`${styles[status]} border px-2 py-0.5`}
+        className={`${
+          styles[status] || "bg-gray-100 text-gray-700"
+        } border px-2 py-0.5`}
       >
         {status}
       </Badge>
