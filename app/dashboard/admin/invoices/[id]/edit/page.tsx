@@ -16,6 +16,7 @@ import {
   TruckIcon,
   History,
   FileText,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,7 +61,6 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 // --- Interfaces ---
-
 interface InvoiceHistory {
   id: string;
   changedAt: string;
@@ -92,6 +92,8 @@ export default function EditInvoicePage({
   const { id } = use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  // ✅ Check for Return URL (Indicates Privileged Edit Mode from Reconciliation)
   const returnTo = searchParams.get("returnTo");
   const isFromReconciliation = !!returnTo;
 
@@ -113,7 +115,7 @@ export default function EditInvoicePage({
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [salesRepId, setSalesRepId] = useState<string>("");
   const [orderStatus, setOrderStatus] = useState<string>("Delivered");
-  const [editReason, setEditReason] = useState(""); // Track why it was edited
+  const [editReason, setEditReason] = useState("");
 
   // Items State
   const [items, setItems] = useState<InvoiceItem[]>([]);
@@ -139,6 +141,19 @@ export default function EditInvoicePage({
     discountPercent: 0,
     stockAvailable: 0,
   });
+
+  // ✅ Determine Read-Only State
+  const lockedStatuses = [
+    "Loading",
+    "In Transit",
+    "Delivered",
+    "Completed",
+    "Cancelled",
+  ];
+  const isStatusLocked = lockedStatuses.includes(orderStatus);
+
+  // Allows editing if status is NOT locked OR if we are coming from reconciliation
+  const isReadOnly = isStatusLocked && !isFromReconciliation;
 
   const handleBack = () => {
     if (returnTo) {
@@ -204,7 +219,6 @@ export default function EditInvoicePage({
         }));
         setItems(mappedItems);
 
-        // Calculate extra discount
         const itemsTotal = mappedItems.reduce(
           (sum: number, i: any) => sum + i.total,
           0
@@ -242,8 +256,9 @@ export default function EditInvoicePage({
     }
   };
 
-  // --- Item Handlers (Same as before) ---
+  // --- Item Handlers ---
   const handleProductSelect = (productId: string) => {
+    if (isReadOnly) return;
     const product = products.find((p) => p.id === productId);
     if (!product) return;
 
@@ -270,6 +285,7 @@ export default function EditInvoicePage({
   };
 
   const handleAddOrUpdateItem = () => {
+    if (isReadOnly) return;
     if (!currentItem.productId) {
       toast.error("Please select a product");
       return;
@@ -318,10 +334,12 @@ export default function EditInvoicePage({
   };
 
   const handleRemoveItem = (id: string) => {
+    if (isReadOnly) return;
     setItems(items.filter((item) => item.id !== id));
   };
 
   const handleEditItem = (item: InvoiceItem) => {
+    if (isReadOnly) return;
     setEditingItemId(item.id);
     const product = products.find((p) => p.id === item.productId);
     const currentDbStock = product ? product.stock_quantity : 0;
@@ -361,6 +379,10 @@ export default function EditInvoicePage({
 
   // --- Save / Update Logic ---
   const handleUpdateInvoice = async (asDraft = false) => {
+    if (isReadOnly) {
+      toast.error("This invoice is locked and cannot be edited.");
+      return;
+    }
     if (!customerId || !salesRepId || items.length === 0) {
       toast.error("Please fill all required fields");
       return;
@@ -368,24 +390,13 @@ export default function EditInvoicePage({
 
     setSaving(true);
 
-    // Get current user from local storage (simple implementation)
-    const userStr = localStorage.getItem("currentUser");
-    // In a real app, you might parse this to get the ID if stored,
-    // or fetch the session again. For now, assuming ID is available or handled.
-    // IMPORTANT: Ensure your login logic stores the ID!
-    // If you don't have the ID in localStorage, you might need to fetch '/api/auth/me' or similar.
-    // Here we assume backend gets it or we pass it if available.
-
-    // Let's try to find a user ID from the reps list based on email if stored
     let userId = "";
-    if (userStr) {
-      const u = JSON.parse(userStr);
-      // This is a hack if ID isn't stored. Ideally, store ID on login.
-      // If you updated login page as per previous context, you might not have ID.
-      // Let's assume the API can handle the session user if not passed,
-      // but passing it ensures the `changed_by` field is filled.
-      // For this example, we'll rely on the backend session or pass a placeholder if missing.
-      // Update your Login Page to store `id` in `currentUser`!
+    if (typeof window !== "undefined") {
+      const userStr = localStorage.getItem("currentUser");
+      if (userStr) {
+        const userData = JSON.parse(userStr);
+        userId = userData.id;
+      }
     }
 
     const updateData = {
@@ -395,8 +406,8 @@ export default function EditInvoicePage({
       orderStatus,
       items,
       grandTotal,
-      isDraft: asDraft, // Flag for backend
-      userId: "some-user-id-from-auth-context", // Replace with actual user ID retrieval
+      isDraft: asDraft,
+      userId: userId,
       changeReason:
         editReason || (asDraft ? "Saved as Draft" : "Updated Invoice"),
     };
@@ -418,6 +429,16 @@ export default function EditInvoicePage({
       setSaving(false);
     }
   };
+
+  const availableProducts = products.filter(
+    (p) => !items.some((i) => i.productId === p.id && i.id !== editingItemId)
+  );
+
+  const currentDiscountAmt =
+    (currentItem.unitPrice *
+      currentItem.quantity *
+      currentItem.discountPercent) /
+    100;
 
   if (loading) {
     return (
@@ -482,11 +503,9 @@ export default function EditInvoicePage({
                         key={log.id}
                         className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active"
                       >
-                        {/* Icon */}
                         <div className="flex items-center justify-center w-10 h-10 rounded-full border border-white bg-slate-300 group-[.is-active]:bg-blue-500 text-slate-500 group-[.is-active]:text-emerald-50 shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
                           <FileText className="w-5 h-5" />
                         </div>
-                        {/* Card */}
                         <div className="w-full p-4 rounded border border-slate-200 bg-slate-50 shadow-sm">
                           <div className="flex justify-between items-center mb-1">
                             <span className="font-bold text-slate-900 text-sm">
@@ -511,27 +530,63 @@ export default function EditInvoicePage({
             </SheetContent>
           </Sheet>
 
-          <Button
-            variant="secondary"
-            onClick={() => handleUpdateInvoice(true)}
-            disabled={saving}
-          >
-            Save as Draft
-          </Button>
-          <Button onClick={() => handleUpdateInvoice(false)} disabled={saving}>
-            {saving ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Save className="w-4 h-4 mr-2" />
-            )}
-            Update & Finalize
-          </Button>
+          {!isReadOnly && (
+            <>
+              <Button
+                variant="secondary"
+                onClick={() => handleUpdateInvoice(true)}
+                disabled={saving}
+              >
+                Save as Draft
+              </Button>
+              <Button
+                onClick={() => handleUpdateInvoice(false)}
+                disabled={saving}
+              >
+                {saving ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4 mr-2" />
+                )}
+                Update & Finalize
+              </Button>
+            </>
+          )}
         </div>
       </div>
+
+      {/* Read Only Warning */}
+      {isReadOnly && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-md flex items-center gap-3">
+          <AlertTriangle className="h-5 w-5 text-amber-600" />
+          <div>
+            <p className="font-bold text-sm">View Only Mode</p>
+            <p className="text-xs">
+              This invoice corresponds to a locked order status. To edit, please
+              use the reconciliation page.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Reason Input for Tracking */}
+      {!isReadOnly && (
+        <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-md flex items-center gap-4">
+          <Label className="text-yellow-800 whitespace-nowrap">
+            Change Reason:
+          </Label>
+          <Input
+            placeholder="Why are you editing this invoice? (Optional)"
+            value={editReason}
+            onChange={(e) => setEditReason(e.target.value)}
+            className="bg-white border-yellow-300"
+          />
+        </div>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-3">
         {/* LEFT COLUMN */}
         <div className="lg:col-span-2 space-y-6">
-          {/* ... Same Invoice Details Card ... */}
           <Card>
             <CardHeader>
               <CardTitle>Invoice Details</CardTitle>
@@ -540,21 +595,28 @@ export default function EditInvoicePage({
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Details Fields - Disabled if ReadOnly */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Customer</Label>
-                  <Popover open={customerOpen} onOpenChange={setCustomerOpen}>
+                  <Popover
+                    open={!isReadOnly && customerOpen}
+                    onOpenChange={setCustomerOpen}
+                  >
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
                         role="combobox"
                         aria-expanded={customerOpen}
                         className="w-full justify-between"
+                        disabled={isReadOnly}
                       >
                         {customerId
                           ? customers.find((c) => c.id === customerId)?.name
                           : "Select customer..."}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        {!isReadOnly && (
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        )}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-full p-0">
@@ -592,18 +654,24 @@ export default function EditInvoicePage({
 
                 <div className="space-y-2">
                   <Label>Sales Representative</Label>
-                  <Popover open={salesRepOpen} onOpenChange={setSalesRepOpen}>
+                  <Popover
+                    open={!isReadOnly && salesRepOpen}
+                    onOpenChange={setSalesRepOpen}
+                  >
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
                         role="combobox"
                         aria-expanded={salesRepOpen}
                         className="w-full justify-between"
+                        disabled={isReadOnly}
                       >
                         {salesRepId
                           ? reps.find((r) => r.id === salesRepId)?.name
                           : "Select rep..."}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        {!isReadOnly && (
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        )}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-full p-0">
@@ -647,6 +715,7 @@ export default function EditInvoicePage({
                     type="date"
                     value={invoiceDate}
                     onChange={(e) => setInvoiceDate(e.target.value)}
+                    disabled={isReadOnly}
                   />
                 </div>
                 <div className="space-y-2">
@@ -656,7 +725,7 @@ export default function EditInvoicePage({
               </div>
             </CardContent>
           </Card>
-          {/* ... Rest of item adding/table logic (Same as before) ... */}
+
           {/* 2. Add/Edit Item Form */}
           <Card className={editingItemId ? "border-blue-500 border-2" : ""}>
             <CardHeader>
@@ -673,13 +742,16 @@ export default function EditInvoicePage({
               {/* Product Selector */}
               <div className="space-y-2">
                 <Label>Product</Label>
-                <Popover open={productOpen} onOpenChange={setProductOpen}>
+                <Popover
+                  open={!isReadOnly && productOpen}
+                  onOpenChange={setProductOpen}
+                >
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
                       role="combobox"
                       className="w-full justify-between"
-                      disabled={!!editingItemId}
+                      disabled={!!editingItemId || isReadOnly}
                     >
                       {currentItem.productId
                         ? `${currentItem.sku} - ${
@@ -687,7 +759,9 @@ export default function EditInvoicePage({
                               ?.name
                           }`
                         : "Select product..."}
-                      <ChevronsUpDown className="ml-2 h-4 w-4 opacity-50" />
+                      {!isReadOnly && (
+                        <ChevronsUpDown className="ml-2 h-4 w-4 opacity-50" />
+                      )}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-full p-0">
@@ -696,7 +770,7 @@ export default function EditInvoicePage({
                       <CommandList>
                         <CommandEmpty>No product found.</CommandEmpty>
                         <CommandGroup>
-                          {products.map((product) => (
+                          {availableProducts.map((product) => (
                             <CommandItem
                               key={product.id}
                               value={`${product.sku} ${product.name}`}
@@ -742,7 +816,7 @@ export default function EditInvoicePage({
                         quantity: Math.max(1, parseInt(e.target.value) || 1),
                       })
                     }
-                    disabled={!currentItem.productId}
+                    disabled={!currentItem.productId || isReadOnly}
                   />
                 </div>
                 <div className="space-y-2">
@@ -760,7 +834,7 @@ export default function EditInvoicePage({
                         ),
                       })
                     }
-                    disabled={!currentItem.productId}
+                    disabled={!currentItem.productId || isReadOnly}
                   />
                 </div>
                 <div className="space-y-2">
@@ -783,7 +857,7 @@ export default function EditInvoicePage({
                         unitPrice: parseFloat(e.target.value) || 0,
                       })
                     }
-                    disabled={!currentItem.productId}
+                    disabled={!currentItem.productId || isReadOnly}
                   />
                 </div>
                 <div className="space-y-2">
@@ -803,7 +877,7 @@ export default function EditInvoicePage({
                         ),
                       })
                     }
-                    disabled={!currentItem.productId}
+                    disabled={!currentItem.productId || isReadOnly}
                   />
                 </div>
                 <div className="space-y-2">
@@ -811,10 +885,7 @@ export default function EditInvoicePage({
                   <Input
                     value={(
                       currentItem.unitPrice * currentItem.quantity -
-                      (currentItem.unitPrice *
-                        currentItem.quantity *
-                        currentItem.discountPercent) /
-                        100
+                      currentDiscountAmt
                     ).toFixed(2)}
                     disabled
                   />
@@ -822,30 +893,32 @@ export default function EditInvoicePage({
               </div>
 
               {/* Action Buttons */}
-              <div className="flex gap-2">
-                {editingItemId && (
-                  <Button variant="outline" onClick={handleCancelEdit}>
-                    <X className="w-4 h-4 mr-2" />
-                    Cancel
-                  </Button>
-                )}
-                <Button
-                  onClick={handleAddOrUpdateItem}
-                  className="flex-1"
-                  variant={editingItemId ? "default" : "default"}
-                  disabled={!currentItem.productId}
-                >
-                  {editingItemId ? (
-                    <>
-                      <Save className="w-4 h-4 mr-2" /> Update Item
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="w-4 h-4 mr-2" /> Add to Invoice
-                    </>
+              {!isReadOnly && (
+                <div className="flex gap-2">
+                  {editingItemId && (
+                    <Button variant="outline" onClick={handleCancelEdit}>
+                      <X className="w-4 h-4 mr-2" />
+                      Cancel
+                    </Button>
                   )}
-                </Button>
-              </div>
+                  <Button
+                    onClick={handleAddOrUpdateItem}
+                    className="flex-1"
+                    variant={editingItemId ? "default" : "default"}
+                    disabled={!currentItem.productId}
+                  >
+                    {editingItemId ? (
+                      <>
+                        <Save className="w-4 h-4 mr-2" /> Update Item
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4 mr-2" /> Add to Invoice
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -901,7 +974,7 @@ export default function EditInvoicePage({
                             </div>
                           </TableCell>
                           <TableCell className="text-center">
-                            {item.quantity}
+                            {item.quantity} {item.unit}
                           </TableCell>
                           <TableCell className="text-center">
                             {item.freeQuantity}
@@ -921,7 +994,7 @@ export default function EditInvoicePage({
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => handleEditItem(item)}
-                                disabled={editingItemId !== null}
+                                disabled={editingItemId !== null || isReadOnly}
                               >
                                 <Edit className="w-4 h-4" />
                               </Button>
@@ -929,6 +1002,7 @@ export default function EditInvoicePage({
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => handleRemoveItem(item.id)}
+                                disabled={isReadOnly}
                               >
                                 <Trash2 className="w-4 h-4 text-destructive" />
                               </Button>
@@ -973,6 +1047,7 @@ export default function EditInvoicePage({
                       )
                     )
                   }
+                  disabled={isReadOnly}
                 />
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Amount:</span>

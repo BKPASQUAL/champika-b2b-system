@@ -1,4 +1,3 @@
-// app/dashboard/admin/invoices/page.tsx
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
@@ -72,6 +71,11 @@ export default function InvoicesPage() {
         paidAmount: inv.paidAmount || 0,
         dueAmount: inv.dueAmount || 0,
         status: inv.status,
+
+        // ✅ MAP ORDER STATUS HERE
+        // The API route I provided earlier sends 'orderStatus' at the root of the object
+        orderStatus: inv.orderStatus || "Pending",
+
         itemsCount: 0,
       }));
 
@@ -127,16 +131,18 @@ export default function InvoicesPage() {
         ? new Date(aVal).getTime() - new Date(bVal).getTime()
         : new Date(bVal).getTime() - new Date(aVal).getTime();
     }
+
     if (typeof aVal === "string") {
       aVal = aVal.toLowerCase();
       bVal = bVal.toLowerCase();
     }
+
     if (aVal < bVal) return sortOrder === "asc" ? -1 : 1;
     if (aVal > bVal) return sortOrder === "asc" ? 1 : -1;
     return 0;
   });
 
-  // --- 5. Pagination Logic ---
+  // --- 5. Pagination ---
   const totalPages = Math.ceil(sortedInvoices.length / itemsPerPage);
   const paginatedInvoices = sortedInvoices.slice(
     (currentPage - 1) * itemsPerPage,
@@ -152,7 +158,6 @@ export default function InvoicesPage() {
     }
   };
 
-  // --- 6. Action Handlers ---
   const handleEdit = (id: string) => {
     router.push(`/dashboard/admin/invoices/${id}/edit`);
   };
@@ -167,7 +172,7 @@ export default function InvoicesPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Customer Bills</h1>
           <p className="text-muted-foreground mt-1">
-            Manage customer bills and payments
+            Manage customer bills, track payments, and view order status.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -184,18 +189,18 @@ export default function InvoicesPage() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
-                <Download className="w-4 h-4 mr-2" /> Generate Report
+                <Download className="w-4 h-4 mr-2" /> Export
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem
-                onClick={() => toast.info("Export coming soon")}
+                onClick={() => toast.info("Export Excel coming soon")}
               >
                 <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" />{" "}
                 Export Excel
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => toast.info("Export coming soon")}
+                onClick={() => toast.info("Export PDF coming soon")}
               >
                 <FileText className="w-4 h-4 mr-2 text-red-600" /> Export PDF
               </DropdownMenuItem>
@@ -228,7 +233,6 @@ export default function InvoicesPage() {
 
             {/* Filters */}
             <div className="flex items-center gap-2 w-full md:w-auto">
-              {/* Status Filter */}
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="w-full md:w-[160px]">
                   <div className="flex items-center gap-2 text-muted-foreground">
@@ -245,7 +249,6 @@ export default function InvoicesPage() {
                 </SelectContent>
               </Select>
 
-              {/* Representative Filter */}
               <Select value={repFilter} onValueChange={setRepFilter}>
                 <SelectTrigger className="w-full md:w-[180px]">
                   <div className="flex items-center gap-2 text-muted-foreground">
@@ -273,7 +276,7 @@ export default function InvoicesPage() {
             sortField={sortField}
             sortOrder={sortOrder}
             onSort={handleSort}
-            onEdit={handleEdit} // <--- THIS WAS MISSING
+            onEdit={handleEdit}
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={setCurrentPage}

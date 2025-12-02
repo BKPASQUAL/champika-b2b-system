@@ -6,8 +6,8 @@ import { z } from "zod";
 
 const invoiceItemSchema = z.object({
   productId: z.string(),
-  sku: z.string(),
-  productName: z.string(),
+  sku: z.string().optional(),
+  productName: z.string().optional(),
   quantity: z.number().min(1),
   freeQuantity: z.number().default(0),
   unit: z.string().optional().or(z.literal("")),
@@ -29,7 +29,6 @@ const invoiceSchema = z.object({
   extraDiscountAmount: z.number().default(0),
   grandTotal: z.number(),
   notes: z.string().optional(),
-  // Accepts 'Pending' as sent by the Rep Dashboard
   orderStatus: z
     .enum([
       "Pending",
@@ -55,6 +54,7 @@ export async function GET() {
           owner_name
         ),
         orders (
+          status, 
           profiles!orders_sales_rep_id_fkey (
             full_name
           )
@@ -68,6 +68,8 @@ export async function GET() {
     // Map to frontend format
     const invoices = data.map((inv: any) => {
       const repName = inv.orders?.profiles?.full_name || "Unknown";
+      // ✅ EXTRACT ORDER STATUS
+      const orderStatus = inv.orders?.status || "Pending";
 
       return {
         id: inv.id,
@@ -80,6 +82,7 @@ export async function GET() {
         paidAmount: inv.paid_amount,
         dueAmount: inv.due_amount,
         status: inv.status,
+        orderStatus: orderStatus, // ✅ ADDED
         dueDate: inv.due_date,
         createdAt: inv.created_at,
       };
@@ -98,7 +101,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const val = invoiceSchema.parse(body);
 
-    // 1. Generate Invoice Number (e.g., INV-1001)
+    // 1. Generate Invoice Number
     const { count } = await supabaseAdmin
       .from("invoices")
       .select("*", { count: "exact", head: true });
@@ -109,7 +112,6 @@ export async function POST(request: NextRequest) {
     // 2. Calculate Dates
     const invoiceDate =
       val.invoiceDate || new Date().toISOString().split("T")[0];
-    // Default due date is 30 days if not provided
     const dueDate =
       val.dueDate ||
       (() => {
@@ -119,7 +121,6 @@ export async function POST(request: NextRequest) {
       })();
 
     // 3. Create Order Record
-    // We generate a separate Order ID (e.g., ORD-1001)
     const { count: orderCount } = await supabaseAdmin
       .from("orders")
       .select("*", { count: "exact", head: true });
@@ -134,10 +135,10 @@ export async function POST(request: NextRequest) {
         customer_id: val.customerId,
         sales_rep_id: val.salesRepId,
         order_date: invoiceDate,
-        status: val.orderStatus, // Will be "Pending" from Rep Dashboard
+        status: val.orderStatus,
         total_amount: val.grandTotal,
         notes: val.notes || null,
-        created_by: val.salesRepId, // Track who created it
+        created_by: val.salesRepId,
       })
       .select()
       .single();
@@ -152,7 +153,7 @@ export async function POST(request: NextRequest) {
       free_quantity: item.freeQuantity,
       unit_price: item.unitPrice,
       total_price: item.total,
-      commission_earned: 0, // Logic for commission can be added later
+      commission_earned: 0,
     }));
 
     const { error: itemsError } = await supabaseAdmin
@@ -162,8 +163,6 @@ export async function POST(request: NextRequest) {
     if (itemsError) throw itemsError;
 
     // 5. Create Invoice Record
-    // Note: Even for Pending orders, we create an "Unpaid" invoice record
-    // to track the financial commitment.
     const { data: invoiceData, error: invoiceError } = await supabaseAdmin
       .from("invoices")
       .insert({
@@ -180,67 +179,42 @@ export async function POST(request: NextRequest) {
 
     if (invoiceError) throw invoiceError;
 
-    // 6. Update Customer Outstanding Balance
-    // This uses a Postgres RPC function if available, or manual update
-    const { error: balanceError } = await supabaseAdmin.rpc(
-      "update_customer_balance",
-      {
-        p_customer_id: val.customerId,
-        p_amount: val.grandTotal,
-      }
-    );
+    // 6. Update Customer Balance
+    const { data: customer } = await supabaseAdmin
+      .from("customers")
+      .select("outstanding_balance")
+      .eq("id", val.customerId)
+      .single();
 
-    if (balanceError) {
-      // Fallback: Manual update if RPC doesn't exist
-      const { data: customer } = await supabaseAdmin
+    if (customer) {
+      await supabaseAdmin
         .from("customers")
-        .select("outstanding_balance")
-        .eq("id", val.customerId)
-        .single();
-
-      if (customer) {
-        await supabaseAdmin
-          .from("customers")
-          .update({
-            outstanding_balance:
-              (customer.outstanding_balance || 0) + val.grandTotal,
-          })
-          .eq("id", val.customerId);
-      }
+        .update({
+          outstanding_balance:
+            (customer.outstanding_balance || 0) + val.grandTotal,
+        })
+        .eq("id", val.customerId);
     }
 
     // 7. Deduct Stock
     for (const item of val.items) {
       const totalQty = item.quantity + item.freeQuantity;
+      const { data: product } = await supabaseAdmin
+        .from("products")
+        .select("stock_quantity")
+        .eq("id", item.productId)
+        .single();
 
-      // Try RPC for safe decrement
-      const { error: stockRpcError } = await supabaseAdmin.rpc(
-        "decrement_stock",
-        {
-          p_product_id: item.productId,
-          p_quantity: totalQty,
-        }
-      );
-
-      // Fallback: Manual update
-      if (stockRpcError) {
-        const { data: product } = await supabaseAdmin
+      if (product) {
+        await supabaseAdmin
           .from("products")
-          .select("stock_quantity")
-          .eq("id", item.productId)
-          .single();
-
-        if (product) {
-          await supabaseAdmin
-            .from("products")
-            .update({
-              stock_quantity: Math.max(
-                0,
-                (product.stock_quantity || 0) - totalQty
-              ),
-            })
-            .eq("id", item.productId);
-        }
+          .update({
+            stock_quantity: Math.max(
+              0,
+              (product.stock_quantity || 0) - totalQty
+            ),
+          })
+          .eq("id", item.productId);
       }
     }
 
@@ -254,7 +228,6 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error: any) {
-    console.error("Order Creation Error:", error);
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: error.issues[0].message },

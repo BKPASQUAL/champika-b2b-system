@@ -1,4 +1,5 @@
-// app/dashboard/admin/invoices/_components/InvoiceTable.tsx
+"use client";
+
 import {
   Table,
   TableBody,
@@ -13,14 +14,19 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  Eye,
-  Download,
-  User,
   Edit,
   Loader2,
   Printer,
+  User,
+  Truck, // Import Truck Icon
 } from "lucide-react";
-import { Invoice, SortField, SortOrder, PaymentStatus } from "../types";
+import {
+  Invoice,
+  SortField,
+  SortOrder,
+  PaymentStatus,
+  OrderStatus,
+} from "../types";
 import { printInvoice } from "../print-utils";
 import { useState } from "react";
 
@@ -30,7 +36,7 @@ interface InvoiceTableProps {
   sortField: SortField;
   sortOrder: SortOrder;
   onSort: (field: SortField) => void;
-  onEdit: (id: string) => void; // <--- ADDED PROP
+  onEdit: (id: string) => void;
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
@@ -42,7 +48,7 @@ export function InvoiceTable({
   sortField,
   sortOrder,
   onSort,
-  onEdit, // <--- Destructure
+  onEdit,
   currentPage,
   totalPages,
   onPageChange,
@@ -65,18 +71,57 @@ export function InvoiceTable({
     );
   };
 
-  const renderStatusBadge = (status: PaymentStatus) => {
+  // 1. Payment Status Badge
+  const renderPaymentBadge = (status: PaymentStatus) => {
     const styles = {
       Paid: "bg-green-100 text-green-700 border-green-200",
-      Unpaid: "bg-yellow-100 text-yellow-700 border-yellow-200",
-      Partial: "bg-blue-100 text-blue-700 border-blue-200",
-      Overdue: "bg-red-100 text-red-700 border-red-200",
+      Unpaid: "bg-red-100 text-red-700 border-red-200",
+      Partial: "bg-orange-100 text-orange-700 border-orange-200",
+      Overdue: "bg-red-600 text-white border-red-700",
     };
     return (
-      <Badge variant="outline" className={`${styles[status]} border`}>
+      <Badge
+        variant="outline"
+        className={`${styles[status]} border whitespace-nowrap`}
+      >
         {status}
       </Badge>
     );
+  };
+
+  // 2. Order Status Badge (The new one)
+  const renderOrderStatusBadge = (status: OrderStatus) => {
+    const styles: Record<string, string> = {
+      Pending: "bg-yellow-50 text-yellow-800 border-yellow-200",
+      Processing: "bg-blue-50 text-blue-800 border-blue-200",
+      Checking: "bg-purple-50 text-purple-800 border-purple-200",
+      Loading: "bg-indigo-50 text-indigo-800 border-indigo-200",
+      "In Transit": "bg-indigo-100 text-indigo-800 border-indigo-200",
+      Delivered: "bg-green-50 text-green-800 border-green-200",
+      Completed: "bg-gray-100 text-gray-800 border-gray-200",
+      Cancelled: "bg-red-50 text-red-800 border-red-200",
+    };
+    return (
+      <Badge
+        variant="outline"
+        className={`${
+          styles[status] || "bg-gray-100"
+        } border whitespace-nowrap`}
+      >
+        {status}
+      </Badge>
+    );
+  };
+
+  // Lock logic
+  const isLocked = (status: string) => {
+    return [
+      "Loading",
+      "In Transit",
+      "Delivered",
+      "Completed",
+      "Cancelled",
+    ].includes(status);
   };
 
   if (loading) {
@@ -90,17 +135,24 @@ export function InvoiceTable({
 
   return (
     <>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
-              {/* ... (Previous Headers remain same) ... */}
               <TableHead
                 onClick={() => onSort("date")}
                 className="cursor-pointer hover:bg-muted/50"
               >
                 <div className="flex items-center">
                   Date {getSortIcon("date")}
+                </div>
+              </TableHead>
+              <TableHead
+                onClick={() => onSort("invoiceNo")}
+                className="cursor-pointer hover:bg-muted/50"
+              >
+                <div className="flex items-center">
+                  Invoice # {getSortIcon("invoiceNo")}
                 </div>
               </TableHead>
               <TableHead
@@ -111,14 +163,28 @@ export function InvoiceTable({
                   Customer {getSortIcon("customerName")}
                 </div>
               </TableHead>
+
+              {/* ✅ NEW COLUMN: Order Status */}
               <TableHead
-                onClick={() => onSort("invoiceNo")}
-                className="cursor-pointer hover:bg-muted/50"
+                onClick={() => onSort("orderStatus")}
+                className="text-center cursor-pointer hover:bg-muted/50"
               >
-                <div className="flex items-center">
-                  Invoice No {getSortIcon("invoiceNo")}
+                <div className="flex items-center justify-center">
+                  <Truck className="w-3 h-3 mr-1" /> Order Status{" "}
+                  {getSortIcon("orderStatus")}
                 </div>
               </TableHead>
+
+              {/* Payment Status */}
+              <TableHead
+                onClick={() => onSort("status")}
+                className="text-center cursor-pointer hover:bg-muted/50"
+              >
+                <div className="flex items-center justify-center">
+                  Payment {getSortIcon("status")}
+                </div>
+              </TableHead>
+
               <TableHead
                 onClick={() => onSort("totalAmount")}
                 className="text-right cursor-pointer hover:bg-muted/50"
@@ -128,35 +194,11 @@ export function InvoiceTable({
                 </div>
               </TableHead>
               <TableHead
-                onClick={() => onSort("paidAmount")}
-                className="text-right cursor-pointer hover:bg-muted/50"
-              >
-                <div className="flex items-center justify-end">
-                  Paid {getSortIcon("paidAmount")}
-                </div>
-              </TableHead>
-              <TableHead
                 onClick={() => onSort("dueAmount")}
                 className="text-right cursor-pointer hover:bg-muted/50"
               >
                 <div className="flex items-center justify-end">
-                  Due Amount {getSortIcon("dueAmount")}
-                </div>
-              </TableHead>
-              <TableHead
-                onClick={() => onSort("status")}
-                className="text-center cursor-pointer hover:bg-muted/50"
-              >
-                <div className="flex items-center justify-center">
-                  Payment Status {getSortIcon("status")}
-                </div>
-              </TableHead>
-              <TableHead
-                onClick={() => onSort("salesRepName")}
-                className="cursor-pointer hover:bg-muted/50 hidden md:table-cell"
-              >
-                <div className="flex items-center">
-                  Rep Name {getSortIcon("salesRepName")}
+                  Due {getSortIcon("dueAmount")}
                 </div>
               </TableHead>
               <TableHead className="text-right">Action</TableHead>
@@ -166,8 +208,8 @@ export function InvoiceTable({
             {invoices.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={9}
-                  className="text-center py-8 text-muted-foreground"
+                  colSpan={8}
+                  className="text-center py-12 text-muted-foreground"
                 >
                   No invoices found
                 </TableCell>
@@ -175,20 +217,33 @@ export function InvoiceTable({
             ) : (
               invoices.map((invoice) => (
                 <TableRow key={invoice.id}>
-                  <TableCell className="whitespace-nowrap">
+                  <TableCell className="whitespace-nowrap font-medium text-muted-foreground">
                     {new Date(invoice.date).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    {invoice.customerName}
                   </TableCell>
                   <TableCell className="font-mono text-xs">
                     {invoice.invoiceNo}
                   </TableCell>
+                  <TableCell>
+                    <div className="font-medium text-sm">
+                      {invoice.customerName}
+                    </div>
+                    <div className="text-xs text-muted-foreground hidden md:flex items-center gap-1">
+                      <User className="w-3 h-3" /> {invoice.salesRepName}
+                    </div>
+                  </TableCell>
+
+                  {/* ✅ RENDER ORDER STATUS BADGE */}
+                  <TableCell className="text-center">
+                    {renderOrderStatusBadge(invoice.orderStatus)}
+                  </TableCell>
+
+                  {/* Render Payment Status Badge */}
+                  <TableCell className="text-center">
+                    {renderPaymentBadge(invoice.status)}
+                  </TableCell>
+
                   <TableCell className="text-right font-medium">
                     LKR {invoice.totalAmount.toLocaleString()}
-                  </TableCell>
-                  <TableCell className="text-right text-muted-foreground">
-                    LKR {invoice.paidAmount.toLocaleString()}
                   </TableCell>
                   <TableCell className="text-right">
                     <span
@@ -201,33 +256,33 @@ export function InvoiceTable({
                       LKR {invoice.dueAmount.toLocaleString()}
                     </span>
                   </TableCell>
-                  <TableCell className="text-center">
-                    {renderStatusBadge(invoice.status)}
-                  </TableCell>
-                  <TableCell className="hidden md:table-cell">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <User className="w-3 h-3" />
-                      {invoice.salesRepName}
-                    </div>
-                  </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      {/* Edit Button */}
+                    <div className="flex items-center justify-end gap-1">
                       <Button
                         variant="ghost"
                         size="icon-sm"
                         onClick={() => onEdit(invoice.id)}
-                        title="Edit Invoice"
+                        disabled={isLocked(invoice.orderStatus)}
+                        title={
+                          isLocked(invoice.orderStatus)
+                            ? "Locked"
+                            : "Edit Invoice"
+                        }
                       >
-                        <Edit className="w-4 h-4 text-muted-foreground" />
+                        <Edit
+                          className={`w-4 h-4 ${
+                            isLocked(invoice.orderStatus)
+                              ? "opacity-30"
+                              : "text-muted-foreground"
+                          }`}
+                        />
                       </Button>
-                      {/* Print Button */}
                       <Button
                         variant="ghost"
                         size="icon-sm"
                         onClick={() => handleDownload(invoice.id)}
                         disabled={downloadingId === invoice.id}
-                        title="Download/Print"
+                        title="Print Invoice"
                       >
                         {downloadingId === invoice.id ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
@@ -243,7 +298,32 @@ export function InvoiceTable({
           </TableBody>
         </Table>
       </div>
-      {/* Pagination Controls... (Kept same) */}
+      {/* Pagination controls... (Keep existing code) */}
+      {!loading && invoices.length > 0 && (
+        <div className="flex items-center justify-between px-2 py-4">
+          <div className="text-sm text-muted-foreground">
+            Page {currentPage} of {totalPages}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onPageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onPageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
     </>
   );
 }
