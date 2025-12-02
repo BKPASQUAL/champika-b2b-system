@@ -5,14 +5,16 @@ export type OrderStatus =
   | "Processing"
   | "Checking"
   | "Loading"
+  | "In Transit" // Added
   | "Delivered"
-  | "Cancelled";
+  | "Cancelled"
+  | "Completed"; // Added
 
 export type PaymentStatus = "Paid" | "Unpaid" | "Partial";
 
 export interface Order {
   id: string;
-  orderId: string; // e.g., ORD-2024-001
+  orderId: string;
   customerName: string;
   shopName: string;
   date: string;

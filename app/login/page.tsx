@@ -1,3 +1,4 @@
+// app/login/page.tsx
 "use client";
 
 import React, { useState } from "react";
@@ -36,11 +37,12 @@ export default function LoginPage() {
         throw new Error(data.error || "Login failed");
       }
 
-      // --- SAVE USER DATA ---
+      // --- SAVE USER DATA (FIXED) ---
       if (typeof window !== "undefined") {
         localStorage.setItem(
           "currentUser",
           JSON.stringify({
+            id: data.user.id, // <--- ADDED THIS (Required for Reconciliation)
             name: data.user.name,
             email: data.user.email,
             role: data.role,
@@ -190,7 +192,7 @@ export default function LoginPage() {
               </label>
             </div>
 
-            {/* Sign In Button - Solid Black */}
+            {/* Sign In Button */}
             <Button
               className="w-full h-11 bg-black hover:bg-[#262626] text-white font-medium rounded-lg text-[15px] shadow-lg shadow-black/5 transition-all active:scale-[0.98]"
               disabled={isLoading}

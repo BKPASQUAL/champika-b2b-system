@@ -32,11 +32,6 @@ import {
 } from "@/components/ui/table";
 import {
   ArrowLeft,
-  Truck,
-  User,
-  Calendar,
-  Package,
-  MapPin,
   Edit,
   Loader2,
   ShoppingBag,
@@ -45,6 +40,7 @@ import {
   CheckCircle2,
   XCircle,
   RefreshCw,
+  Send,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -57,7 +53,7 @@ interface OrderDetail {
   orderId: string;
   invoiceNo: string;
   totalAmount: number;
-  originalAmount?: number; // Made optional to prevent TS errors if API is old
+  originalAmount?: number; // Made optional to fix crash if API data is old
   status: string;
   customer: {
     shopName: string;
@@ -221,6 +217,12 @@ export default function LoadingSheetDetailPage({
         return (
           <Badge className="bg-orange-500 hover:bg-orange-600">
             <RefreshCw className="w-3 h-3 mr-1" /> Rescheduled
+          </Badge>
+        );
+      case "In Transit":
+        return (
+          <Badge className="bg-blue-500 hover:bg-blue-600">
+            <Send className="w-3 h-3 mr-1" /> In Transit
           </Badge>
         );
       default:
@@ -416,7 +418,7 @@ export default function LoadingSheetDetailPage({
       {/* Orders List Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Order Details & Reconciliation</CardTitle>
+          <CardTitle>Order Details</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">

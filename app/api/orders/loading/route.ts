@@ -1,4 +1,4 @@
-// FILE PATH: app/api/orders/loading/route.ts
+// app/api/orders/loading/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
@@ -14,7 +14,6 @@ const createLoadSchema = z.object({
 
 export async function GET() {
   try {
-    // ✅ UPDATED: Added sales_rep_id join to get representative name
     const { data: orders, error } = await supabaseAdmin
       .from("orders")
       .select(
@@ -38,13 +37,12 @@ export async function GET() {
 
     if (error) throw error;
 
-    // ✅ UPDATED: Added salesRepName to the response
     const formattedOrders = orders.map((order: any) => ({
       id: order.id,
       orderId: order.order_id,
       shopName: order.customers?.shop_name || "Unknown",
       route: order.customers?.route || "-",
-      salesRepName: order.profiles?.full_name || "Unknown", // ✅ NEW
+      salesRepName: order.profiles?.full_name || "Unknown",
       totalAmount: order.total_amount,
       status: order.status,
     }));
@@ -87,11 +85,12 @@ export async function POST(request: NextRequest) {
     if (loadError) throw loadError;
 
     // Update Orders
+    // CHANGED: Status is now 'In Transit', NOT 'Delivered'
     const { error: updateError } = await supabaseAdmin
       .from("orders")
       .update({
         load_id: loadData.id,
-        status: "Delivered",
+        status: "In Transit", // Updated status
       })
       .in("id", val.orderIds);
 
