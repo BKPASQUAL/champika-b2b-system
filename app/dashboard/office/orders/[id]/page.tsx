@@ -227,7 +227,7 @@ export default function OfficeViewOrderPage({
               <CardDescription>Customer and route information</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 text-sm">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
                 {/* Customer */}
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground uppercase">
