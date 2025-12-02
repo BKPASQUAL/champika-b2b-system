@@ -1,7 +1,8 @@
+// FILE PATH: app/dashboard/admin/invoices/[id]/edit/page.tsx
 "use client";
 
 import React, { useState, useEffect, use } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Plus,
@@ -13,6 +14,7 @@ import {
   ChevronsUpDown,
   Edit,
   X,
+  TruckIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -82,6 +84,12 @@ export default function EditInvoicePage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // ✅ NEW: Get return URL from query params
+  const returnTo = searchParams.get("returnTo");
+  const isFromReconciliation = !!returnTo;
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -123,6 +131,15 @@ export default function EditInvoicePage({
     discountPercent: 0,
     stockAvailable: 0,
   });
+
+  // ✅ NEW: Handle back navigation
+  const handleBack = () => {
+    if (returnTo) {
+      router.push(returnTo);
+    } else {
+      router.push("/dashboard/admin/invoices");
+    }
+  };
 
   // --- Fetch Data on Mount ---
   useEffect(() => {
@@ -178,7 +195,7 @@ export default function EditInvoicePage({
         // Map items (Robust mapping to handle potential API differences)
         const mappedItems: InvoiceItem[] = invoice.items.map((item: any) => ({
           id: item.id || Math.random().toString(),
-          productId: item.productId || item.product_id, // HANDLE BOTH KEYS
+          productId: item.productId || item.product_id,
           sku: item.sku,
           productName: item.productName || item.name,
           unit: item.unit,
@@ -202,21 +219,20 @@ export default function EditInvoicePage({
       } catch (error) {
         console.error(error);
         toast.error("Failed to load data");
-        router.push("/dashboard/admin/invoices");
+        handleBack();
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, [id, router]);
+  }, [id]);
 
   // --- Product Selection ---
   const handleProductSelect = (productId: string) => {
     const product = products.find((p) => p.id === productId);
     if (!product) return;
 
-    // Logic: Include current item's quantity in stock availability if we are editing it
     let additionalStock = 0;
     if (editingItemId) {
       const editingItem = items.find((i) => i.id === editingItemId);
@@ -245,7 +261,6 @@ export default function EditInvoicePage({
 
     const product = products.find((p) => p.id === item.productId);
     const currentDbStock = product ? product.stock_quantity : 0;
-    const available = currentDbStock + item.quantity + item.freeQuantity;
 
     setCurrentItem({
       productId: item.productId,
@@ -256,7 +271,7 @@ export default function EditInvoicePage({
       mrp: item.mrp,
       unitPrice: item.unitPrice,
       discountPercent: item.discountPercent,
-      stockAvailable: available,
+      stockAvailable: currentDbStock + item.quantity + item.freeQuantity,
     });
   };
 
@@ -275,55 +290,51 @@ export default function EditInvoicePage({
     });
   };
 
-  // --- Add / Update Item Logic ---
   const handleAddOrUpdateItem = () => {
     if (!currentItem.productId) {
       toast.error("Please select a product");
       return;
     }
 
-    const totalReqQty = currentItem.quantity + currentItem.freeQuantity;
-    if (totalReqQty > currentItem.stockAvailable) {
-      toast.error(
-        `Insufficient stock! Available: ${currentItem.stockAvailable}`
-      );
+    const totalQty = currentItem.quantity + currentItem.freeQuantity;
+    if (totalQty > currentItem.stockAvailable) {
+      toast.error(`Not enough stock. Available: ${currentItem.stockAvailable}`);
       return;
     }
 
-    const product = products.find((p) => p.id === currentItem.productId);
-    if (!product) return;
+    const discountAmt =
+      (currentItem.unitPrice *
+        currentItem.quantity *
+        currentItem.discountPercent) /
+      100;
+    const total = currentItem.unitPrice * currentItem.quantity - discountAmt;
 
-    const grossTotal = currentItem.unitPrice * currentItem.quantity;
-    const discountAmount = (grossTotal * currentItem.discountPercent) / 100;
-    const netTotal = grossTotal - discountAmount;
+    const product = products.find((p) => p.id === currentItem.productId);
 
     const newItem: InvoiceItem = {
-      id: editingItemId || Date.now().toString(),
+      id: editingItemId || Math.random().toString(),
       productId: currentItem.productId,
-      sku: product.sku,
-      productName: product.name,
-      unit: product.unit_of_measure,
+      sku: currentItem.sku,
+      productName: product?.name || "",
       quantity: currentItem.quantity,
       freeQuantity: currentItem.freeQuantity,
+      unit: currentItem.unit,
       mrp: currentItem.mrp,
       unitPrice: currentItem.unitPrice,
       discountPercent: currentItem.discountPercent,
-      discountAmount: discountAmount,
-      total: netTotal,
+      discountAmount: discountAmt,
+      total,
     };
 
     if (editingItemId) {
-      // Update existing item in list
       setItems(items.map((i) => (i.id === editingItemId ? newItem : i)));
       setEditingItemId(null);
       toast.success("Item updated");
     } else {
-      // Add new item to list
       setItems([...items, newItem]);
       toast.success("Item added");
     }
 
-    // Reset form
     setCurrentItem({
       productId: "",
       sku: "",
@@ -345,7 +356,6 @@ export default function EditInvoicePage({
   };
 
   // --- Live Calculations ---
-  // These update automatically when `items` changes
   const subtotal = items.reduce((sum, item) => sum + item.total, 0);
   const totalItemDiscount = items.reduce(
     (sum, item) => sum + (item.discountAmount || 0),
@@ -397,7 +407,9 @@ export default function EditInvoicePage({
       if (!res.ok) throw new Error("Failed to update invoice");
 
       toast.success("Invoice Updated Successfully!");
-      router.push("/dashboard/admin/invoices");
+
+      // ✅ NEW: Navigate back appropriately
+      handleBack();
     } catch (error: any) {
       toast.error(error.message || "Update failed");
     } finally {
@@ -416,18 +428,26 @@ export default function EditInvoicePage({
 
   return (
     <div className="space-y-4 mx-auto">
-      {/* Header */}
+      {/* ✅ UPDATED: Header with Conditional Back Button */}
       <div className="flex items-center gap-4">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => router.push("/dashboard/admin/invoices")}
-        >
+        <Button variant="ghost" size="icon" onClick={handleBack}>
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <div className="flex-1">
           <h1 className="text-3xl font-bold tracking-tight">Edit Invoice</h1>
-          <p className="text-muted-foreground mt-1">{invoiceNumber}</p>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-muted-foreground">{invoiceNumber}</p>
+            {/* ✅ NEW: Show reconciliation indicator */}
+            {isFromReconciliation && (
+              <Badge
+                variant="outline"
+                className="bg-blue-50 text-blue-700 border-blue-300"
+              >
+                <TruckIcon className="w-3 h-3 mr-1" />
+                From Reconciliation
+              </Badge>
+            )}
+          </div>
         </div>
         <Button onClick={handleUpdateInvoice} disabled={saving}>
           {saving ? (
@@ -464,14 +484,11 @@ export default function EditInvoicePage({
                       >
                         {customerId
                           ? customers.find((c) => c.id === customerId)?.name
-                          : "Select Customer"}
+                          : "Select customer..."}
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent
-                      className="w-[var(--radix-popover-trigger-width)] p-0"
-                      align="start"
-                    >
+                    <PopoverContent className="w-full p-0">
                       <Command>
                         <CommandInput placeholder="Search customer..." />
                         <CommandList>
@@ -503,20 +520,7 @@ export default function EditInvoicePage({
                     </PopoverContent>
                   </Popover>
                 </div>
-                <div className="space-y-2">
-                  <Label>Invoice Date</Label>
-                  <Input
-                    type="date"
-                    value={invoiceDate}
-                    onChange={(e) => setInvoiceDate(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Invoice No</Label>
-                  <Input value={invoiceNumber} disabled className="bg-muted" />
-                </div>
+
                 <div className="space-y-2">
                   <Label>Sales Representative</Label>
                   <Popover open={salesRepOpen} onOpenChange={setSalesRepOpen}>
@@ -529,18 +533,15 @@ export default function EditInvoicePage({
                       >
                         {salesRepId
                           ? reps.find((r) => r.id === salesRepId)?.name
-                          : "Select Representative"}
+                          : "Select rep..."}
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent
-                      className="w-[var(--radix-popover-trigger-width)] p-0"
-                      align="start"
-                    >
+                    <PopoverContent className="w-full p-0">
                       <Command>
-                        <CommandInput placeholder="Search representative..." />
+                        <CommandInput placeholder="Search rep..." />
                         <CommandList>
-                          <CommandEmpty>No representative found.</CommandEmpty>
+                          <CommandEmpty>No rep found.</CommandEmpty>
                           <CommandGroup>
                             {reps.map((rep) => (
                               <CommandItem
@@ -569,95 +570,97 @@ export default function EditInvoicePage({
                   </Popover>
                 </div>
               </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Invoice Date</Label>
+                  <Input
+                    type="date"
+                    value={invoiceDate}
+                    onChange={(e) => setInvoiceDate(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Invoice Number</Label>
+                  <Input value={invoiceNumber} disabled />
+                </div>
+              </div>
             </CardContent>
           </Card>
 
-          {/* 2. Edit Items Form */}
+          {/* 2. Add/Edit Item Form */}
           <Card className={editingItemId ? "border-blue-500 border-2" : ""}>
             <CardHeader>
-              <CardTitle className="flex justify-between items-center">
+              <CardTitle>
                 {editingItemId ? "Edit Item" : "Add Product"}
-                {editingItemId && (
-                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                    Editing Mode
-                  </span>
-                )}
               </CardTitle>
               <CardDescription>
                 {editingItemId
-                  ? "Modify the details of the selected item."
-                  : "Search and add products to the invoice."}
+                  ? "Update the item details below"
+                  : "Select product and enter quantities"}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Product Selection */}
-              <div className="grid grid-cols-4 gap-4">
-                <div className="col-span-4 space-y-2">
-                  <Label>Product</Label>
-                  <Popover open={productOpen} onOpenChange={setProductOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={productOpen}
-                        className="w-full justify-between"
-                      >
-                        {currentItem.productId
-                          ? products.find((p) => p.id === currentItem.productId)
-                              ?.name
-                          : "Select Product"}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent
-                      className="w-[var(--radix-popover-trigger-width)] p-0"
-                      align="start"
+              {/* Product Selector */}
+              <div className="space-y-2">
+                <Label>Product</Label>
+                <Popover open={productOpen} onOpenChange={setProductOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className="w-full justify-between"
+                      disabled={!!editingItemId}
                     >
-                      <Command>
-                        <CommandInput placeholder="Search product..." />
-                        <CommandList>
-                          <CommandEmpty>No product found.</CommandEmpty>
-                          <CommandGroup>
-                            {(editingItemId ? products : availableProducts).map(
-                              (product) => (
-                                <CommandItem
-                                  key={product.id}
-                                  value={product.name}
-                                  onSelect={() => {
-                                    handleProductSelect(product.id);
-                                  }}
-                                >
-                                  <Check
-                                    className={cn(
-                                      "mr-2 h-4 w-4",
-                                      currentItem.productId === product.id
-                                        ? "opacity-100"
-                                        : "opacity-0"
-                                    )}
-                                  />
-                                  <div className="flex-1">
-                                    <div className="font-medium">
-                                      {product.name}
-                                    </div>
-                                    <div className="text-xs text-muted-foreground">
-                                      {product.sku} • Stock:{" "}
-                                      {product.stock_quantity} • LKR{" "}
-                                      {product.selling_price}
-                                    </div>
-                                  </div>
-                                </CommandItem>
-                              )
-                            )}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                </div>
+                      {currentItem.productId
+                        ? `${currentItem.sku} - ${
+                            products.find((p) => p.id === currentItem.productId)
+                              ?.name
+                          }`
+                        : "Select product..."}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0">
+                    <Command>
+                      <CommandInput placeholder="Search product..." />
+                      <CommandList>
+                        <CommandEmpty>No product found.</CommandEmpty>
+                        <CommandGroup>
+                          {availableProducts.map((product) => (
+                            <CommandItem
+                              key={product.id}
+                              value={`${product.sku} ${product.name}`}
+                              onSelect={() => handleProductSelect(product.id)}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  currentItem.productId === product.id
+                                    ? "opacity-100"
+                                    : "opacity-0"
+                                )}
+                              />
+                              <div className="flex flex-col">
+                                <span className="font-medium">
+                                  {product.sku} - {product.name}
+                                </span>
+                                <span className="text-xs text-muted-foreground">
+                                  Stock: {product.stock_quantity} | MRP:{" "}
+                                  {product.mrp} | Price: {product.selling_price}
+                                </span>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
 
-              {/* Inputs Row 1 */}
-              <div className="grid grid-cols-4 gap-4">
+              {/* Quantity Inputs */}
+              <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label>Quantity</Label>
                   <Input
@@ -667,9 +670,10 @@ export default function EditInvoicePage({
                     onChange={(e) =>
                       setCurrentItem({
                         ...currentItem,
-                        quantity: Number(e.target.value),
+                        quantity: Math.max(1, parseInt(e.target.value) || 1),
                       })
                     }
+                    disabled={!currentItem.productId}
                   />
                 </div>
                 <div className="space-y-2">
@@ -681,78 +685,56 @@ export default function EditInvoicePage({
                     onChange={(e) =>
                       setCurrentItem({
                         ...currentItem,
-                        freeQuantity: Number(e.target.value),
+                        freeQuantity: Math.max(
+                          0,
+                          parseInt(e.target.value) || 0
+                        ),
                       })
                     }
+                    disabled={!currentItem.productId}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label>Unit</Label>
-                  <Input
-                    value={currentItem.unit || "-"}
-                    disabled
-                    className="bg-muted"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Stock</Label>
-                  <Input
-                    value={currentItem.stockAvailable || "-"}
-                    disabled
-                    className={
-                      currentItem.stockAvailable > 0 &&
-                      currentItem.stockAvailable < 10
-                        ? "text-destructive font-bold bg-muted"
-                        : "bg-muted"
-                    }
-                  />
+                  <Input value={currentItem.unit} disabled />
                 </div>
               </div>
 
-              {/* Inputs Row 2 */}
-              <div className="grid grid-cols-4 gap-4">
-                <div className="space-y-2">
-                  <Label>MRP</Label>
-                  <Input
-                    type="number"
-                    value={currentItem.mrp || ""}
-                    onChange={(e) =>
-                      setCurrentItem({
-                        ...currentItem,
-                        mrp: Number(e.target.value),
-                      })
-                    }
-                    placeholder="0.00"
-                  />
-                </div>
+              {/* Price & Discount */}
+              <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label>Unit Price</Label>
                   <Input
                     type="number"
-                    value={currentItem.unitPrice || ""}
+                    step="0.01"
+                    value={currentItem.unitPrice}
                     onChange={(e) =>
                       setCurrentItem({
                         ...currentItem,
-                        unitPrice: Number(e.target.value),
+                        unitPrice: parseFloat(e.target.value) || 0,
                       })
                     }
-                    placeholder="0.00"
+                    disabled={!currentItem.productId}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label>Discount %</Label>
                   <Input
                     type="number"
+                    step="0.1"
                     min="0"
                     max="100"
-                    value={currentItem.discountPercent || ""}
+                    value={currentItem.discountPercent}
                     onChange={(e) =>
                       setCurrentItem({
                         ...currentItem,
-                        discountPercent: Number(e.target.value),
+                        discountPercent: Math.min(
+                          100,
+                          Math.max(0, parseFloat(e.target.value) || 0)
+                        ),
                       })
                     }
-                    placeholder="0"
+                    disabled={!currentItem.productId}
                   />
                 </div>
                 <div className="space-y-2">
@@ -763,7 +745,6 @@ export default function EditInvoicePage({
                       currentDiscountAmt
                     ).toFixed(2)}
                     disabled
-                    className="font-bold bg-muted"
                   />
                 </div>
               </div>
@@ -771,12 +752,9 @@ export default function EditInvoicePage({
               {/* Action Buttons */}
               <div className="flex gap-2">
                 {editingItemId && (
-                  <Button
-                    variant="outline"
-                    onClick={handleCancelEdit}
-                    className="flex-1 border-red-200 text-red-700 hover:bg-red-50"
-                  >
-                    <X className="w-4 h-4 mr-2" /> Cancel Edit
+                  <Button variant="outline" onClick={handleCancelEdit}>
+                    <X className="w-4 h-4 mr-2" />
+                    Cancel
                   </Button>
                 )}
                 <Button
@@ -838,55 +816,47 @@ export default function EditInvoicePage({
                         <TableRow
                           key={item.id}
                           className={
-                            editingItemId === item.id ? "bg-blue-50/50" : ""
+                            editingItemId === item.id ? "bg-blue-50" : ""
                           }
                         >
                           <TableCell>{idx + 1}</TableCell>
                           <TableCell>
-                            <div className="font-medium">
-                              {item.productName}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {item.sku}
+                            <div>
+                              <p className="font-medium">{item.productName}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {item.sku}
+                              </p>
                             </div>
                           </TableCell>
                           <TableCell className="text-center">
-                            {item.quantity} {item.unit}
+                            {item.quantity}
                           </TableCell>
                           <TableCell className="text-center">
-                            {item.freeQuantity || "-"}
+                            {item.freeQuantity}
                           </TableCell>
                           <TableCell className="text-right">
-                            {item.unitPrice.toLocaleString()}
+                            {item.unitPrice.toFixed(2)}
                           </TableCell>
                           <TableCell className="text-center">
-                            {item.discountPercent > 0
-                              ? `${item.discountPercent}%`
-                              : "-"}
+                            {item.discountPercent}%
                           </TableCell>
-                          <TableCell className="text-right font-bold">
-                            {item.total.toLocaleString()}
+                          <TableCell className="text-right font-medium">
+                            {item.total.toFixed(2)}
                           </TableCell>
-                          <TableCell>
-                            <div className="flex items-center justify-end gap-1">
+                          <TableCell className="text-right">
+                            <div className="flex gap-1 justify-end">
                               <Button
                                 variant="ghost"
-                                size="icon-sm"
+                                size="icon"
                                 onClick={() => handleEditItem(item)}
-                                title="Edit Item"
-                                className={
-                                  editingItemId === item.id
-                                    ? "bg-blue-100 text-blue-700"
-                                    : ""
-                                }
+                                disabled={editingItemId !== null}
                               >
                                 <Edit className="w-4 h-4" />
                               </Button>
                               <Button
                                 variant="ghost"
-                                size="icon-sm"
+                                size="icon"
                                 onClick={() => handleRemoveItem(item.id)}
-                                title="Remove Item"
                               >
                                 <Trash2 className="w-4 h-4 text-destructive" />
                               </Button>
@@ -902,83 +872,58 @@ export default function EditInvoicePage({
           </Card>
         </div>
 
-        {/* RIGHT COLUMN */}
-        <div className="lg:col-span-1">
+        {/* RIGHT COLUMN - Summary */}
+        <div className="space-y-6">
           <Card className="sticky top-6">
             <CardHeader>
               <CardTitle>Invoice Summary</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Customer:</span>
-                  <span className="font-medium">
-                    {customers.find((c) => c.id === customerId)?.name || "-"}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Sales Rep:</span>
-                  <span className="font-medium">
-                    {reps.find((r) => r.id === salesRepId)?.name || "-"}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Invoice Date:</span>
-                  <span className="font-medium">{invoiceDate}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Order Status:</span>
-                  <span className="font-medium">{orderStatus}</span>
-                </div>
+            <CardContent className="space-y-3">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Gross Total:</span>
+                <span className="font-medium">LKR {grossTotal.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Item Discounts:</span>
+                <span className="text-green-600">
+                  - LKR {totalItemDiscount.toFixed(2)}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Subtotal:</span>
+                <span className="font-medium">LKR {subtotal.toFixed(2)}</span>
               </div>
 
-              <div className="border-t pt-4 space-y-2">
+              <div className="space-y-2 pt-2 border-t">
+                <Label>Extra Discount (%)</Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="100"
+                  value={extraDiscount}
+                  onChange={(e) =>
+                    setExtraDiscount(
+                      Math.min(
+                        100,
+                        Math.max(0, parseFloat(e.target.value) || 0)
+                      )
+                    )
+                  }
+                />
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Items:</span>
-                  <span>{items.length}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Gross Total:</span>
-                  <span>LKR {grossTotal.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Item Discounts:</span>
-                  <span className="text-destructive">
-                    - LKR {totalItemDiscount.toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm font-medium">
-                  <span>Subtotal:</span>
-                  <span>LKR {subtotal.toLocaleString()}</span>
-                </div>
-              </div>
-
-              <div className="border-t pt-4 space-y-3">
-                <div className="space-y-2">
-                  <Label className="text-xs">Extra Discount %</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={extraDiscount}
-                    onChange={(e) => setExtraDiscount(Number(e.target.value))}
-                  />
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Extra Discount:</span>
-                  <span className="text-destructive">
-                    - LKR {extraDiscountAmount.toLocaleString()}
+                  <span className="text-muted-foreground">Amount:</span>
+                  <span className="text-green-600">
+                    - LKR {extraDiscountAmount.toFixed(2)}
                   </span>
                 </div>
               </div>
 
-              <div className="border-t pt-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-lg font-bold">Grand Total:</span>
-                  <span className="text-2xl font-bold text-primary">
-                    LKR {grandTotal.toLocaleString()}
-                  </span>
-                </div>
+              <div className="flex justify-between text-lg font-bold pt-3 border-t">
+                <span>Grand Total:</span>
+                <span className="text-primary">
+                  LKR {grandTotal.toFixed(2)}
+                </span>
               </div>
             </CardContent>
           </Card>
@@ -987,3 +932,6 @@ export default function EditInvoicePage({
     </div>
   );
 }
+
+// ✅ NEW: Add Badge import
+import { Badge } from "@/components/ui/badge";

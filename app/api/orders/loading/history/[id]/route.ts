@@ -42,6 +42,7 @@ export async function GET(
         orders (
           id,
           order_id,
+          invoice_no,
           total_amount,
           status,
           created_at,
@@ -84,6 +85,28 @@ export async function GET(
       ? loadingSheet.profiles[0]
       : loadingSheet.profiles;
 
+    // ✅ NEW: Fetch invoice IDs for all orders in this load
+    const orderIds = loadingSheet.orders?.map((o: any) => o.id) || [];
+
+    let invoicesMap: Record<string, { id: string; invoice_no: string }> = {};
+
+    if (orderIds.length > 0) {
+      const { data: invoices, error: invoiceError } = await supabaseAdmin
+        .from("invoices")
+        .select("id, invoice_no, order_id")
+        .in("order_id", orderIds);
+
+      if (!invoiceError && invoices) {
+        // Create a map of order_id -> invoice details
+        invoices.forEach((inv: any) => {
+          invoicesMap[inv.order_id] = {
+            id: inv.id,
+            invoice_no: inv.invoice_no,
+          };
+        });
+      }
+    }
+
     // Format the response
     const formattedResponse = {
       id: loadingSheet.id,
@@ -125,10 +148,15 @@ export async function GET(
             ? order.profiles[0]
             : order.profiles;
 
+          // ✅ NEW: Get invoice details from map
+          const invoiceDetails = invoicesMap[order.id];
+
           return {
             id: order.id,
             orderId: order.order_id,
-            totalAmount: order.total_amount,
+            invoiceId: invoiceDetails?.id || null, // ✅ ADDED: Invoice UUID
+            invoiceNo: invoiceDetails?.invoice_no || order.invoice_no || "N/A", // ✅ UPDATED: Use invoice table data
+            totalAmount: order.total_amount || 0,
             status: order.status,
             createdAt: order.created_at,
             customer: {
@@ -138,21 +166,16 @@ export async function GET(
               address: order.customers?.address || "",
               route: order.customers?.route || "",
             },
-            salesRep: salesRepProfile?.full_name || "Unknown",
-            itemCount: order.order_items?.length || 0,
-            totalQuantity:
-              order.order_items?.reduce(
-                (sum: number, item: any) =>
-                  sum + item.quantity + item.free_quantity,
-                0
-              ) || 0,
+            salesRep: {
+              name: salesRepProfile?.full_name || "Not Assigned",
+            },
             items:
               order.order_items?.map((item: any) => ({
                 id: item.id,
-                productName: item.products?.name || "Unknown",
-                sku: item.products?.sku || "",
                 quantity: item.quantity,
                 freeQuantity: item.free_quantity,
+                productName: item.products?.name || "Unknown Product",
+                sku: item.products?.sku || "",
               })) || [],
           };
         }) || [],
@@ -160,12 +183,12 @@ export async function GET(
 
     return NextResponse.json(formattedResponse);
   } catch (error: any) {
-    console.error("Error fetching loading sheet:", error);
+    console.error("Error fetching loading sheet details:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
-// PATCH: Update loading sheet
+// PATCH: Update loading sheet details
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -174,24 +197,24 @@ export async function PATCH(
 
   try {
     const body = await request.json();
-    const validated = updateLoadingSheetSchema.parse(body);
 
-    // Build update object
-    const updates: any = {
-      updated_at: new Date().toISOString(),
-    };
+    // Validate input
+    const validatedData = updateLoadingSheetSchema.parse(body);
 
-    if (validated.lorryNumber) updates.lorry_number = validated.lorryNumber;
-    if (validated.driverId) updates.driver_id = validated.driverId;
-    if (validated.helperName !== undefined)
-      updates.helper_name = validated.helperName;
-    if (validated.loadingDate) updates.loading_date = validated.loadingDate;
-    if (validated.status) updates.status = validated.status;
+    const updateData: any = {};
+    if (validatedData.lorryNumber)
+      updateData.lorry_number = validatedData.lorryNumber;
+    if (validatedData.driverId) updateData.driver_id = validatedData.driverId;
+    if (validatedData.helperName !== undefined)
+      updateData.helper_name = validatedData.helperName;
+    if (validatedData.loadingDate)
+      updateData.loading_date = validatedData.loadingDate;
+    if (validatedData.status) updateData.status = validatedData.status;
 
-    // Update loading sheet
+    // Update the loading sheet
     const { data, error } = await supabaseAdmin
       .from("loading_sheets")
-      .update(updates)
+      .update(updateData)
       .eq("id", id)
       .select()
       .single();
@@ -203,15 +226,10 @@ export async function PATCH(
       data,
     });
   } catch (error: any) {
-    console.error("Error updating loading sheet:", error);
-
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: "Validation Error", details: error.issues },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: error.issues }, { status: 400 });
     }
-
+    console.error("Error updating loading sheet:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

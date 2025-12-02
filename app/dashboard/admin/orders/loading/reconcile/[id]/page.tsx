@@ -1,22 +1,8 @@
+// FILE PATH: app/dashboard/admin/orders/loading/reconcile/[id]/page.tsx
 "use client";
 
 import React, { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
-import {
-  ArrowLeft,
-  Save,
-  Loader2,
-  CheckCircle2,
-  XCircle,
-  AlertCircle,
-  Undo2,
-  DollarSign,
-  CalendarClock,
-  FileEdit,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -24,6 +10,16 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -32,23 +28,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { ArrowLeft, Loader2, CheckCircle2, Edit3 } from "lucide-react";
 import { toast } from "sonner";
-import { Separator } from "@/components/ui/separator";
-// IMPORT ADDED HERE
-import { cn } from "@/lib/utils";
 
-// --- Types ---
 interface OrderItem {
   id: string;
   orderId: string;
-  invoiceId?: string;
+  invoiceId: string | null;
+  invoiceNo: string;
   customer: string;
   originalAmount: number;
   status: string;
@@ -94,7 +81,8 @@ export default function ReconcileLoadPage({
         const mappedOrders = data.orders.map((o: any) => ({
           id: o.id,
           orderId: o.orderId,
-          invoiceId: o.id, // Ideally mapped to actual Invoice ID if available
+          invoiceId: o.invoiceId,
+          invoiceNo: o.invoiceNo || "N/A",
           customer: o.customer.shopName,
           originalAmount: o.totalAmount,
           status: o.status,
@@ -133,9 +121,18 @@ export default function ReconcileLoadPage({
     }));
   };
 
-  const handleEditBill = (invoiceId: string) => {
-    // Open in new tab to not lose current reconciliation state
-    window.open(`/dashboard/admin/invoices/${invoiceId}/edit`, "_blank");
+  // ✅ UPDATED: Navigate to invoice edit page with return URL
+  const handleEditInvoice = (invoiceId: string | null) => {
+    if (!invoiceId) {
+      toast.error("Invoice not found for this order");
+      return;
+    }
+
+    // Navigate to invoice edit page with return URL
+    // This allows the invoice page to show "Back to Reconciliation" button
+    router.push(
+      `/dashboard/admin/invoices/${invoiceId}/edit?returnTo=/dashboard/admin/orders/loading/reconcile/${id}`
+    );
   };
 
   const handleFinalize = async () => {
@@ -159,102 +156,97 @@ export default function ReconcileLoadPage({
       if (!res.ok) throw new Error("Failed to save reconciliation");
 
       toast.success("Delivery Load Reconciled Successfully!");
-      router.push(`/dashboard/admin/orders/loading/history/${id}`);
+      router.push("/dashboard/admin/orders/loading/history");
     } catch (error) {
-      console.error(error);
-      toast.error("Failed to save reconciliation");
+      toast.error("Failed to finalize reconciliation");
     } finally {
       setSubmitting(false);
     }
   };
 
-  // --- Calculations ---
-  const totalCollected = Object.values(reconcileData).reduce(
-    (sum, item) =>
-      sum +
-      (item.status === "Delivered" || item.status === "Partial"
-        ? Number(item.finalAmount)
-        : 0),
+  // --- Calculated Stats ---
+  const deliveredCount = Object.values(reconcileData).filter(
+    (d) => d.status === "Delivered"
+  ).length;
+  const rescheduledCount = Object.values(reconcileData).filter(
+    (d) => d.status === "Loading"
+  ).length;
+  const totalCashCollected = Object.entries(reconcileData).reduce(
+    (sum, [orderId, data]) => {
+      if (data.paymentStatus === "Paid") {
+        return sum + data.finalAmount;
+      }
+      return sum;
+    },
     0
   );
 
-  const deliveredCount = Object.values(reconcileData).filter(
-    (i) => i.status === "Delivered"
-  ).length;
-  const rescheduleCount = Object.values(reconcileData).filter(
-    (i) => i.status === "Loading"
-  ).length;
-
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-[80vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="flex items-center justify-center h-screen">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 pb-20">
+    <div className="space-y-6 pb-10">
       {/* Header */}
-      <div className="flex items-center gap-4 border-b pb-6">
+      <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="w-5 h-5" />
         </Button>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
+        <div className="flex-1">
+          <h1 className="text-3xl font-bold tracking-tight">
             Reconcile Delivery
           </h1>
-          <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
-            <Badge variant="outline" className="font-mono">
-              {loadDetails?.loadId}
-            </Badge>
-            <span>•</span>
-            <span>{loadDetails?.lorryNumber}</span>
-          </div>
+          <p className="text-muted-foreground mt-1">
+            {loadDetails?.loadId} • {loadDetails?.lorryNumber}
+          </p>
         </div>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-green-50 border-green-100">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-green-700">
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
+          <CardHeader className="pb-3">
+            <CardDescription className="text-green-700 font-medium">
               Cash to Collect
-            </CardTitle>
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-700 flex items-center gap-2">
-              <DollarSign className="h-6 w-6" />
-              {totalCollected.toLocaleString()}
+            <div className="text-3xl font-bold text-green-900">
+              {totalCashCollected.toLocaleString()}
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
+          <CardHeader className="pb-3">
+            <CardDescription className="font-medium">
               Status Overview
-            </CardTitle>
+            </CardDescription>
           </CardHeader>
-          <CardContent className="flex gap-4 text-sm">
-            <div>
-              <div className="text-2xl font-bold">{deliveredCount}</div>
-              <p className="text-muted-foreground">Delivered</p>
+          <CardContent className="space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">Delivered</span>
+              <Badge variant="outline" className="bg-green-50 text-green-700">
+                {deliveredCount}
+              </Badge>
             </div>
-            <Separator orientation="vertical" className="h-10" />
-            <div>
-              <div className="text-2xl font-bold text-blue-600">
-                {rescheduleCount}
-              </div>
-              <p className="text-muted-foreground">Rescheduled</p>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">Rescheduled</span>
+              <Badge variant="outline" className="bg-blue-50 text-blue-700">
+                {rescheduledCount}
+              </Badge>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="flex flex-col justify-center items-start p-6 bg-slate-50">
+        <Card className="flex items-center justify-center border-2 border-dashed">
           <Button
             size="lg"
-            className="w-full bg-black hover:bg-gray-800 text-white"
+            className="w-full m-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-lg"
             onClick={handleFinalize}
             disabled={submitting}
           >
@@ -277,191 +269,150 @@ export default function ReconcileLoadPage({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[300px]">Order Details</TableHead>
-                <TableHead className="w-[180px]">Action / Status</TableHead>
-                <TableHead className="w-[160px]">Payment</TableHead>
-                <TableHead className="w-[160px]">Final Bill Amount</TableHead>
-                <TableHead>Notes</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {orders.map((order) => {
-                const state = reconcileData[order.id] || {};
-                const isDelivered =
-                  state.status === "Delivered" || state.status === "Partial";
-                const isRescheduled = state.status === "Loading";
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[120px]">Order ID</TableHead>
+                  <TableHead className="w-[180px]">Invoice No</TableHead>
+                  <TableHead className="w-[180px]">Customer</TableHead>
+                  <TableHead className="w-[140px]">Action / Status</TableHead>
+                  <TableHead className="w-[130px]">Payment</TableHead>
+                  <TableHead className="w-[150px]">Final Bill Amount</TableHead>
+                  <TableHead>Notes</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {orders.map((order) => {
+                  const state = reconcileData[order.id] || {};
+                  const isDelivered =
+                    state.status === "Delivered" || state.status === "Partial";
+                  const isRescheduled = state.status === "Loading";
 
-                return (
-                  <TableRow
-                    key={order.id}
-                    className={
-                      isRescheduled
-                        ? "bg-blue-50/30"
-                        : !isDelivered
-                        ? "bg-red-50/30"
-                        : ""
-                    }
-                  >
-                    {/* Order Info with Edit Button */}
-                    <TableCell>
-                      <div className="flex flex-col gap-1">
-                        <span className="font-medium text-sm">
-                          {order.customer}
-                        </span>
+                  return (
+                    <TableRow
+                      key={order.id}
+                      className={
+                        isRescheduled
+                          ? "bg-blue-50/30"
+                          : !isDelivered
+                          ? "bg-red-50/20"
+                          : ""
+                      }
+                    >
+                      {/* Order ID */}
+                      <TableCell className="font-medium font-mono text-sm">
+                        {order.orderId}
+                      </TableCell>
+
+                      {/* Invoice Number with Edit Button */}
+                      <TableCell>
                         <div className="flex items-center gap-2">
-                          <Badge
-                            variant="outline"
-                            className="w-fit font-mono text-[10px]"
-                          >
-                            {order.orderId}
+                          <Badge variant="outline" className="font-mono">
+                            {order.invoiceNo}
                           </Badge>
-                          <span className="text-xs text-muted-foreground">
-                            Bill: LKR {order.originalAmount.toLocaleString()}
-                          </span>
-
-                          {/* EDIT BILL BUTTON */}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 text-blue-600 hover:text-blue-800 hover:bg-blue-100 ml-2"
-                            onClick={() => handleEditBill(order.id)}
-                            title="Edit Full Bill"
-                          >
-                            <FileEdit className="h-3.5 w-3.5" />
-                          </Button>
+                          {order.invoiceId && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => handleEditInvoice(order.invoiceId)}
+                              title="Edit Invoice"
+                            >
+                              <Edit3 className="h-3.5 w-3.5 text-blue-600" />
+                            </Button>
+                          )}
                         </div>
-                      </div>
-                    </TableCell>
+                      </TableCell>
 
-                    {/* Status Selector */}
-                    <TableCell>
-                      <Select
-                        value={state.status}
-                        onValueChange={(val) =>
-                          updateOrderState(order.id, "status", val)
-                        }
-                      >
-                        <SelectTrigger
-                          className={cn(
-                            state.status === "Delivered" &&
-                              "bg-green-100 text-green-700 border-green-200",
-                            state.status === "Loading" &&
-                              "bg-blue-100 text-blue-700 border-blue-200",
-                            state.status === "Returned" &&
-                              "bg-red-100 text-red-700 border-red-200"
-                          )}
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Delivered">
-                            <div className="flex items-center gap-2">
-                              <CheckCircle2 className="w-4 h-4 text-green-600" />{" "}
-                              Delivered
-                            </div>
-                          </SelectItem>
+                      {/* Customer */}
+                      <TableCell>
+                        <div className="text-sm">
+                          <div className="font-medium">{order.customer}</div>
+                          <div className="text-xs text-muted-foreground">
+                            Bill: LKR {order.originalAmount.toLocaleString()}
+                          </div>
+                        </div>
+                      </TableCell>
 
-                          {/* Reschedule Option */}
-                          <SelectItem value="Loading">
-                            <div className="flex items-center gap-2">
-                              <CalendarClock className="w-4 h-4 text-blue-600" />{" "}
-                              Reschedule (Next Load)
-                            </div>
-                          </SelectItem>
-
-                          <SelectItem value="Partial">
-                            <div className="flex items-center gap-2">
-                              <AlertCircle className="w-4 h-4 text-orange-600" />{" "}
-                              Partial / Changed
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="Returned">
-                            <div className="flex items-center gap-2">
-                              <Undo2 className="w-4 h-4 text-red-600" />{" "}
-                              Returned
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="Cancelled">
-                            <div className="flex items-center gap-2">
-                              <XCircle className="w-4 h-4 text-gray-600" />{" "}
-                              Cancelled
-                            </div>
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-
-                    {/* Payment Status */}
-                    <TableCell>
-                      <Select
-                        value={state.paymentStatus}
-                        onValueChange={(val) =>
-                          updateOrderState(order.id, "paymentStatus", val)
-                        }
-                        disabled={!isDelivered}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Paid">Paid (Cash)</SelectItem>
-                          <SelectItem value="Credit">
-                            Credit / Unpaid
-                          </SelectItem>
-                          <SelectItem value="Cheque">Cheque</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-
-                    {/* Amount Input */}
-                    <TableCell>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">
-                          Rs
-                        </span>
-                        <Input
-                          type="number"
-                          className={cn(
-                            "pl-8 font-semibold h-9",
-                            state.finalAmount !== order.originalAmount &&
-                              "border-orange-300 text-orange-700 bg-orange-50"
-                          )}
-                          value={state.finalAmount}
-                          onChange={(e) =>
-                            updateOrderState(
-                              order.id,
-                              "finalAmount",
-                              parseFloat(e.target.value) || 0
-                            )
+                      {/* Status Dropdown */}
+                      <TableCell>
+                        <Select
+                          value={state.status}
+                          onValueChange={(value) =>
+                            updateOrderState(order.id, "status", value)
                           }
-                          disabled={!isDelivered}
-                        />
-                      </div>
-                    </TableCell>
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Delivered">Delivered</SelectItem>
+                            <SelectItem value="Partial">
+                              Partial Delivery
+                            </SelectItem>
+                            <SelectItem value="Loading">Reschedule</SelectItem>
+                            <SelectItem value="Returned">Returned</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
 
-                    {/* Notes */}
-                    <TableCell>
-                      <Input
-                        placeholder={
-                          isRescheduled
-                            ? "Reason for reschedule..."
-                            : "Notes..."
-                        }
-                        value={state.notes}
-                        onChange={(e) =>
-                          updateOrderState(order.id, "notes", e.target.value)
-                        }
-                        className="text-xs h-9"
-                      />
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                      {/* Payment Status */}
+                      <TableCell>
+                        <Select
+                          value={state.paymentStatus}
+                          onValueChange={(value) =>
+                            updateOrderState(order.id, "paymentStatus", value)
+                          }
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Paid">Paid (Cash)</SelectItem>
+                            <SelectItem value="Unpaid">Credit</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+
+                      {/* Final Amount Input */}
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground">
+                            Rs
+                          </span>
+                          <Input
+                            type="number"
+                            value={state.finalAmount}
+                            onChange={(e) =>
+                              updateOrderState(
+                                order.id,
+                                "finalAmount",
+                                Number(e.target.value)
+                              )
+                            }
+                            className="w-28"
+                          />
+                        </div>
+                      </TableCell>
+
+                      {/* Notes */}
+                      <TableCell>
+                        <Input
+                          placeholder="Optional notes..."
+                          value={state.notes}
+                          onChange={(e) =>
+                            updateOrderState(order.id, "notes", e.target.value)
+                          }
+                          className="w-full"
+                        />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
