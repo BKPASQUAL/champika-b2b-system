@@ -1,4 +1,3 @@
-// app/api/invoices/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
@@ -26,6 +25,9 @@ const updateInvoiceSchema = z.object({
   items: z.array(invoiceItemSchema).min(1),
   grandTotal: z.number(),
   notes: z.string().optional(),
+  userId: z.string().optional(),
+  isDraft: z.boolean().optional(),
+  changeReason: z.string().optional(),
 });
 
 export async function GET(
@@ -35,7 +37,6 @@ export async function GET(
   const { id } = await params;
 
   try {
-    // 1. Fetch Invoice
     const { data: invoice, error: invError } = await supabaseAdmin
       .from("invoices")
       .select(
@@ -64,7 +65,6 @@ export async function GET(
 
     if (invError || !invoice) throw new Error("Invoice not found");
 
-    // 2. Fetch Items via Order ID
     const { data: items, error: itemsError } = await supabaseAdmin
       .from("order_items")
       .select(
@@ -85,7 +85,6 @@ export async function GET(
 
     if (itemsError) throw itemsError;
 
-    // --- MAPPING FIX FOR PRINT UTILS ---
     const fullInvoice = {
       id: invoice.id,
       invoiceNo: invoice.invoice_no,
@@ -94,32 +93,27 @@ export async function GET(
       salesRepId: invoice.orders?.sales_rep_id,
       orderStatus: invoice.orders?.status,
       notes: invoice.orders?.notes,
-      grandTotal: invoice.total_amount, // Kept for Edit page compatibility
-
-      // 1. Add 'customer' object for print-utils
+      grandTotal: invoice.total_amount,
+      // For Print Utils
       customer: {
         shop: invoice.customers?.shop_name || "",
         name: invoice.customers?.owner_name || "",
         phone: invoice.customers?.phone || "",
         address: invoice.customers?.address || "",
       },
-
-      // 2. Add 'salesRep' string for print-utils
-      // Note: Adjust 'profiles' access if your relationship name differs
       salesRep: invoice.orders?.profiles?.full_name || "Unknown",
-
-      // 3. Add 'totals' object for print-utils
-      totals: {
-        grandTotal: invoice.total_amount,
-      },
-
+      totals: { grandTotal: invoice.total_amount },
+      // Items
       items: items.map((item: any) => ({
         id: item.id,
         productId: item.product_id,
-
-        // Original fields for Edit Page
         sku: item.products?.sku,
         productName: item.products?.name,
+        // Map name/price for Print Utils
+        name: item.products?.name,
+        price: item.unit_price,
+        free: item.free_quantity,
+
         unit: item.products?.unit_of_measure,
         quantity: item.quantity,
         freeQuantity: item.free_quantity,
@@ -131,11 +125,6 @@ export async function GET(
           (item.products?.stock_quantity || 0) +
           item.quantity +
           item.free_quantity,
-
-        // 4. Mapped fields for print-utils (it expects: name, price, free)
-        name: item.products?.name,
-        price: item.unit_price,
-        free: item.free_quantity,
       })),
     };
 
@@ -155,44 +144,73 @@ export async function PATCH(
     const body = await request.json();
     const val = updateInvoiceSchema.parse(body);
 
-    // 1. Fetch Current Invoice (to get order_id & old totals)
-    const { data: oldInvoice, error: invError } = await supabaseAdmin
+    // 1. Fetch Current Invoice State (Snapshot for History)
+    // FIX: We removed 'order_items (*)' from this query because they are not directly on invoices table
+    const { data: currentInvoice, error: invError } = await supabaseAdmin
       .from("invoices")
-      .select("id, order_id, customer_id, total_amount")
+      .select(
+        `
+        *,
+        orders (*)
+      `
+      )
       .eq("id", id)
       .single();
 
-    if (invError || !oldInvoice) {
-      return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+    if (invError || !currentInvoice) {
+      console.error("Invoice fetch error:", invError); // Log the actual error
+      return NextResponse.json(
+        { error: "Invoice not found or DB error" },
+        { status: 404 }
+      );
     }
 
-    // 2. Fetch Old Items (to revert stock)
-    const { data: oldItems } = await supabaseAdmin
+    // 2. Fetch Items Separately for Snapshot
+    const { data: currentItems } = await supabaseAdmin
       .from("order_items")
-      .select("product_id, quantity, free_quantity")
-      .eq("order_id", oldInvoice.order_id);
+      .select("*")
+      .eq("order_id", currentInvoice.order_id);
 
-    // --- REVERT OLD STATE ---
+    // 3. Save Snapshot to History
+    if (val.userId) {
+      // Combine invoice and items for the snapshot record
+      const snapshotData = {
+        ...currentInvoice,
+        items: currentItems,
+      };
 
-    // A. Revert Customer Balance (Subtract old total)
+      await supabaseAdmin.from("invoice_history").insert({
+        invoice_id: id,
+        previous_data: snapshotData, // Save complete object
+        changed_by: val.userId,
+        change_reason: val.changeReason || "Updated details",
+      });
+    }
+
+    // 4. Prepare Updates
+    const newStatus = val.isDraft ? "Pending" : val.orderStatus;
+
+    // --- REVERT OLD STOCK & BALANCE ---
+
+    // A. Revert Customer Balance
     const { data: customer } = await supabaseAdmin
       .from("customers")
       .select("outstanding_balance")
-      .eq("id", oldInvoice.customer_id)
+      .eq("id", currentInvoice.customer_id)
       .single();
 
     if (customer) {
       const revertedBalance =
-        (customer.outstanding_balance || 0) - oldInvoice.total_amount;
+        (customer.outstanding_balance || 0) - currentInvoice.total_amount;
       await supabaseAdmin
         .from("customers")
         .update({ outstanding_balance: revertedBalance })
-        .eq("id", oldInvoice.customer_id);
+        .eq("id", currentInvoice.customer_id);
     }
 
-    // B. Revert Stock (Add back old quantities)
-    if (oldItems) {
-      for (const item of oldItems) {
+    // B. Revert Stock (Using the items fetched in step 2)
+    if (currentItems) {
+      for (const item of currentItems) {
         const { data: prod } = await supabaseAdmin
           .from("products")
           .select("stock_quantity")
@@ -213,25 +231,25 @@ export async function PATCH(
       await supabaseAdmin
         .from("order_items")
         .delete()
-        .eq("order_id", oldInvoice.order_id);
+        .eq("order_id", currentInvoice.order_id);
     }
 
-    // --- APPLY NEW STATE ---
+    // --- APPLY NEW DATA ---
 
-    // 3. Update Order Header
+    // Update Order
     await supabaseAdmin
       .from("orders")
       .update({
         customer_id: val.customerId,
         sales_rep_id: val.salesRepId,
         order_date: val.invoiceDate,
-        status: val.orderStatus,
+        status: newStatus,
         total_amount: val.grandTotal,
         notes: val.notes,
       })
-      .eq("id", oldInvoice.order_id);
+      .eq("id", currentInvoice.order_id);
 
-    // 4. Update Invoice Header
+    // Update Invoice
     await supabaseAdmin
       .from("invoices")
       .update({
@@ -240,9 +258,9 @@ export async function PATCH(
       })
       .eq("id", id);
 
-    // 5. Insert New Items
+    // Insert New Items
     const newItemsData = val.items.map((item) => ({
-      order_id: oldInvoice.order_id,
+      order_id: currentInvoice.order_id,
       product_id: item.productId,
       quantity: item.quantity,
       free_quantity: item.freeQuantity,
@@ -257,10 +275,9 @@ export async function PATCH(
 
     if (insertError) throw insertError;
 
-    // 6. Deduct New Stock
+    // Deduct New Stock
     for (const item of val.items) {
       const totalQty = item.quantity + item.freeQuantity;
-
       const { data: prod } = await supabaseAdmin
         .from("products")
         .select("stock_quantity")
@@ -277,7 +294,7 @@ export async function PATCH(
       }
     }
 
-    // 7. Update Customer Balance (Add new total)
+    // Update Customer Balance (Add new total)
     const { data: currentCustomer } = await supabaseAdmin
       .from("customers")
       .select("outstanding_balance")
