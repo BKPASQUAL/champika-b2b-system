@@ -1,4 +1,3 @@
-// FILE PATH: app/dashboard/admin/orders/loading/history/page.tsx
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
@@ -25,17 +24,20 @@ import {
 import {
   ArrowLeft,
   Truck,
-  User,
-  FileText,
-  Eye,
   Search,
   Filter,
   Loader2,
   Package,
   Calendar,
   RefreshCw,
+  Printer, // Icon for Print
+  Download, // Icon for Download
+  ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
+import { downloadLoadingSheet, printLoadingSheet } from "./print-loading-sheet";
+// Import both print functions
+
 
 interface LoadingHistory {
   id: string;
@@ -59,6 +61,10 @@ export default function DeliveryHistoryPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
+  // Track loading states for specific rows
+  const [printingId, setPrintingId] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
   // Fetch history data
   const fetchHistory = useCallback(async () => {
     try {
@@ -78,6 +84,26 @@ export default function DeliveryHistoryPage() {
   useEffect(() => {
     fetchHistory();
   }, [fetchHistory]);
+
+  // Handle Print (Direct)
+  const handlePrint = async (e: React.MouseEvent, loadId: string) => {
+    e.stopPropagation(); // Prevent row click
+    if (printingId || downloadingId) return;
+
+    setPrintingId(loadId);
+    await printLoadingSheet(loadId);
+    setPrintingId(null);
+  };
+
+  // Handle Download (File)
+  const handleDownload = async (e: React.MouseEvent, loadId: string) => {
+    e.stopPropagation(); // Prevent row click
+    if (printingId || downloadingId) return;
+
+    setDownloadingId(loadId);
+    await downloadLoadingSheet(loadId);
+    setDownloadingId(null);
+  };
 
   // Filter logic
   const filteredHistory = history.filter((load) => {
@@ -259,7 +285,15 @@ export default function DeliveryHistoryPage() {
                   </TableRow>
                 ) : (
                   filteredHistory.map((load) => (
-                    <TableRow key={load.id} className="hover:bg-muted/50">
+                    <TableRow
+                      key={load.id}
+                      className="hover:bg-muted/50 cursor-pointer group"
+                      onClick={() =>
+                        router.push(
+                          `/dashboard/admin/orders/loading/history/${load.id}`
+                        )
+                      }
+                    >
                       <TableCell className="font-medium font-mono">
                         {load.loadId}
                       </TableCell>
@@ -326,21 +360,47 @@ export default function DeliveryHistoryPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
+                        <div className="flex justify-end items-center gap-1">
+                          {/* Print Button */}
                           <Button
                             variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              router.push(
-                                `/dashboard/admin/orders/loading/history/${load.id}`
-                              )
+                            size="icon"
+                            className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            onClick={(e) => handlePrint(e, load.id)}
+                            disabled={
+                              printingId === load.id ||
+                              downloadingId === load.id
                             }
+                            title="Print Sheet"
                           >
-                            <Eye className="w-4 h-4 mr-2" /> View
+                            {printingId === load.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Printer className="w-4 h-4" />
+                            )}
                           </Button>
-                          <Button variant="ghost" size="sm">
-                            <FileText className="w-4 h-4" />
+
+                          {/* Download Button */}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                            onClick={(e) => handleDownload(e, load.id)}
+                            disabled={
+                              printingId === load.id ||
+                              downloadingId === load.id
+                            }
+                            title="Download PDF"
+                          >
+                            {downloadingId === load.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Download className="w-4 h-4" />
+                            )}
                           </Button>
+
+                          {/* View Indicator */}
+                          <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-muted-foreground transition-colors ml-1" />
                         </div>
                       </TableCell>
                     </TableRow>
