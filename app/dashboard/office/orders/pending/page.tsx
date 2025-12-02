@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Search, Filter, ArrowRight, Loader2, Clock } from "lucide-react";
+import { Search, Filter, ArrowRight, Loader2, User } from "lucide-react"; // Added User icon
 import {
   Table,
   TableBody,
@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 
-import { Order } from "../../orders/types"; // Adjust path if needed based on folder structure
+import { Order } from "../../orders/types";
 
 export default function OfficePendingOrdersPage() {
   const router = useRouter();
@@ -65,65 +65,62 @@ export default function OfficePendingOrdersPage() {
   }
 
   return (
-    <div className="space-y-6 p-2 sm:p-0">
-      {/* Header Section - Stacks on Mobile */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+    <div className="space-y-3  ">
+      {/* Header Section */}
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-            Pending Orders
-          </h1>
-          <p className="text-muted-foreground mt-1 text-sm sm:text-base">
-            Office Portal: Review and approve new orders.
+          <h1 className="text-2xl font-bold tracking-tight">Pending Orders</h1>
+          <p className="text-muted-foreground text-sm">
+            Review and approve new orders.
           </p>
         </div>
       </div>
 
       {/* Main Content Card */}
       <Card className="border-0 sm:border shadow-none sm:shadow-sm bg-transparent sm:bg-card">
-        <CardHeader className="px-0 sm:px-6 pb-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="relative w-full sm:max-w-md">
+        {/* Reduced padding-bottom (pb-2) to minimize gap */}
+        <CardHeader className="px-0 sm:px-6 pb-2 pt-2">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search Order ID, Shop..."
+                placeholder="Search ID, Shop or Rep..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 bg-background"
+                className="pl-9 bg-white border-slate-200"
               />
             </div>
-            <Button
-              variant="outline"
-              size="icon"
-              className="shrink-0 hidden sm:flex"
-            >
+            <Button variant="outline" size="icon" className="shrink-0 bg-white">
               <Filter className="h-4 w-4" />
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="px-0 sm:px-6">
-          {/* Mobile View: Card List */}
-          <div className="grid grid-cols-1 gap-4 md:hidden">
+
+        <CardContent className="px-0 sm:px-6 pt-0">
+          {/* Mobile View: Cards */}
+          <div className="grid grid-cols-1 gap-3 md:hidden">
             {filteredOrders.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No pending orders.
+              <div className="text-center py-12 text-muted-foreground bg-slate-50 rounded-lg border border-dashed">
+                No pending orders found.
               </div>
             ) : (
               filteredOrders.map((order) => (
                 <div
                   key={order.id}
-                  className="bg-white border rounded-lg p-4 shadow-sm flex flex-col gap-3"
+                  className="bg-white border rounded-xl p-4 shadow-sm flex flex-col gap-3 active:scale-[0.99] transition-transform"
+                  onClick={() =>
+                    router.push(`/dashboard/office/orders/${order.id}`)
+                  }
                 >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <span className="font-mono font-bold text-blue-700">
+                  {/* Row 1: Order ID, Date, and Status Badge */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded text-xs">
                         {order.orderId}
                       </span>
-                      <p className="text-sm font-semibold mt-1">
-                        {order.shopName}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {order.customerName}
-                      </p>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(order.date).toLocaleDateString()}
+                      </span>
                     </div>
                     <Badge
                       variant="outline"
@@ -133,26 +130,47 @@ export default function OfficePendingOrdersPage() {
                     </Badge>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 text-sm mt-2 border-t pt-3">
+                  {/* Row 2: Shop Name (Left) & Sales Rep (Right) */}
+                  <div className="flex justify-between items-start gap-2">
+                    {/* Left Side: Shop & Customer */}
+                    <div className="flex flex-col min-w-0">
+                      <p className="text-sm font-bold text-slate-900 truncate">
+                        {order.shopName}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {order.customerName}
+                      </p>
+                    </div>
+
+                    {/* Right Side: Sales Rep (Highlighted) */}
+                    <div className="flex items-center gap-1.5 shrink-0 bg-indigo-50 border border-indigo-100 text-indigo-700 px-2 py-1 rounded text-xs font-medium">
+                      <User className="h-3 w-3" />
+                      <span>{order.salesRep}</span>
+                    </div>
+                  </div>
+
+                  {/* Row 3: Totals & Divider */}
+                  <div className="grid grid-cols-2 gap-2 text-sm border-t pt-2 mt-1">
                     <div>
-                      <p className="text-xs text-muted-foreground">Date</p>
-                      <p>{new Date(order.date).toLocaleDateString()}</p>
+                      <p className="text-xs text-muted-foreground">Items</p>
+                      <p className="font-medium">{order.itemCount}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs text-muted-foreground">Total</p>
-                      <p className="font-bold">
+                      <p className="text-xs text-muted-foreground">
+                        Total Amount
+                      </p>
+                      <p className="font-bold text-slate-900">
                         LKR {order.totalAmount.toLocaleString()}
                       </p>
                     </div>
                   </div>
 
+                  {/* Row 4: Action Button */}
                   <Button
-                    className="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white"
-                    onClick={() =>
-                      router.push(`/dashboard/office/orders/${order.id}`)
-                    }
+                    size="sm"
+                    className="w-full mt-1 bg-blue-600 hover:bg-blue-700 text-white h-9"
                   >
-                    Review Order <ArrowRight className="ml-2 h-4 w-4" />
+                    Review Order <ArrowRight className="ml-2 h-3 w-3" />
                   </Button>
                 </div>
               ))
@@ -160,18 +178,16 @@ export default function OfficePendingOrdersPage() {
           </div>
 
           {/* Tablet/Desktop View: Table */}
-          <div className="hidden md:block rounded-md border bg-white">
+          <div className="hidden md:block rounded-md border bg-white overflow-hidden">
             <Table>
-              <TableHeader>
+              <TableHeader className="bg-slate-50">
                 <TableRow>
-                  <TableHead className="w-[120px]">Date</TableHead>
+                  <TableHead className="w-[100px]">Date</TableHead>
                   <TableHead>Order ID</TableHead>
                   <TableHead>Customer / Shop</TableHead>
-                  <TableHead className="hidden lg:table-cell">
-                    Sales Rep
-                  </TableHead>
+                  <TableHead>Sales Rep</TableHead>
                   <TableHead className="text-right">Items</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
                   <TableHead className="text-center">Status</TableHead>
                   <TableHead className="text-right">Action</TableHead>
                 </TableRow>
@@ -181,23 +197,23 @@ export default function OfficePendingOrdersPage() {
                   <TableRow>
                     <TableCell
                       colSpan={8}
-                      className="text-center py-8 text-muted-foreground"
+                      className="text-center py-12 text-muted-foreground"
                     >
                       No pending orders found.
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredOrders.map((order) => (
-                    <TableRow key={order.id}>
-                      <TableCell className="whitespace-nowrap text-muted-foreground">
+                    <TableRow key={order.id} className="hover:bg-slate-50">
+                      <TableCell className="whitespace-nowrap text-muted-foreground text-xs">
                         {new Date(order.date).toLocaleDateString()}
                       </TableCell>
-                      <TableCell className="font-medium font-mono text-blue-700">
+                      <TableCell className="font-medium font-mono text-blue-700 text-xs">
                         {order.orderId}
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col">
-                          <span className="font-medium text-sm">
+                          <span className="font-medium text-sm text-slate-900">
                             {order.shopName}
                           </span>
                           <span className="text-xs text-muted-foreground">
@@ -205,13 +221,13 @@ export default function OfficePendingOrdersPage() {
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell className="hidden lg:table-cell text-sm">
+                      <TableCell className="text-sm">
                         {order.salesRep}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right text-sm">
                         {order.itemCount}
                       </TableCell>
-                      <TableCell className="text-right font-semibold">
+                      <TableCell className="text-right font-semibold text-sm">
                         LKR {order.totalAmount.toLocaleString()}
                       </TableCell>
                       <TableCell className="text-center">
@@ -226,12 +242,12 @@ export default function OfficePendingOrdersPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="border-blue-200 text-blue-700 hover:bg-blue-50"
+                          className="border-blue-200 text-blue-700 hover:bg-blue-50 h-8 text-xs"
                           onClick={() =>
                             router.push(`/dashboard/office/orders/${order.id}`)
                           }
                         >
-                          Review <ArrowRight className="ml-2 h-3 w-3" />
+                          Review <ArrowRight className="ml-1 h-3 w-3" />
                         </Button>
                       </TableCell>
                     </TableRow>
