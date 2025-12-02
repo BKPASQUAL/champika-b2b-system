@@ -1,4 +1,3 @@
-// FILE PATH: app/dashboard/admin/orders/loading/history/[id]/page.tsx
 "use client";
 
 import React, { useState, useEffect, use } from "react";
@@ -47,9 +46,11 @@ import {
   Download, // Added Download icon
 } from "lucide-react";
 import { toast } from "sonner";
-import { downloadLoadingSheet, printLoadingSheet } from "../print-loading-sheet";
+import {
+  downloadLoadingSheet,
+  printLoadingSheet,
+} from "../print-loading-sheet";
 // Import both functions
-
 
 // ... (Interfaces remain the same) ...
 interface LoadingSheetDetail {
@@ -79,7 +80,7 @@ interface LoadingSheetDetail {
       address: string;
       route: string;
     };
-    salesRep: string;
+    salesRep: { name: string }; // Changed from string to object
     itemCount: number;
     totalQuantity: number;
     items: Array<{
@@ -449,7 +450,7 @@ export default function LoadingSheetDetailPage({
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell>{order.salesRep}</TableCell>
+                  <TableCell>{order.salesRep.name}</TableCell>
                   <TableCell className="text-right font-semibold">
                     Rs. {order.totalAmount.toLocaleString()}
                   </TableCell>
