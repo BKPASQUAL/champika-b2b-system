@@ -1,3 +1,4 @@
+// app/dashboard/admin/orders/loading/history/[id]/page.tsx
 "use client";
 
 import React, { useState, useEffect, use } from "react";
@@ -17,7 +18,6 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -37,30 +37,44 @@ import {
   Calendar,
   Package,
   MapPin,
-  Phone,
   Edit,
   Loader2,
-  Users,
   ShoppingBag,
   Printer,
-  Download, // Added Download icon
+  Download,
+  CheckCircle2,
+  XCircle,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   downloadLoadingSheet,
   printLoadingSheet,
 } from "../print-loading-sheet";
-// Import both functions
 
-// ... (Interfaces remain the same) ...
+interface OrderDetail {
+  id: string;
+  orderId: string;
+  invoiceNo: string;
+  totalAmount: number;
+  originalAmount?: number; // Made optional to prevent TS errors if API is old
+  status: string;
+  customer: {
+    shopName: string;
+    ownerName: string;
+    phone: string;
+    address: string;
+    route: string;
+  };
+  salesRep: { name: string };
+}
+
 interface LoadingSheetDetail {
   id: string;
   loadId: string;
   lorryNumber: string;
   driverId: string;
   driverName: string;
-  driverEmail: string;
-  driverPhone: string;
   helperName: string;
   loadingDate: string;
   status: string;
@@ -68,28 +82,7 @@ interface LoadingSheetDetail {
   totalOrders: number;
   totalAmount: number;
   totalItems: number;
-  orders: Array<{
-    id: string;
-    orderId: string;
-    totalAmount: number;
-    status: string;
-    customer: {
-      shopName: string;
-      ownerName: string;
-      phone: string;
-      address: string;
-      route: string;
-    };
-    salesRep: { name: string }; // Changed from string to object
-    itemCount: number;
-    totalQuantity: number;
-    items: Array<{
-      productName: string;
-      sku: string;
-      quantity: number;
-      freeQuantity: number;
-    }>;
-  }>;
+  orders: OrderDetail[];
 }
 
 export default function LoadingSheetDetailPage({
@@ -106,12 +99,10 @@ export default function LoadingSheetDetailPage({
   const [loading, setLoading] = useState(true);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [updating, setUpdating] = useState(false);
-
-  // Action States
   const [printing, setPrinting] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
-  // ... (Edit form states remain same) ...
+  // Edit form states
   const [editForm, setEditForm] = useState({
     lorryNumber: "",
     driverId: "",
@@ -124,7 +115,6 @@ export default function LoadingSheetDetailPage({
     { id: string; fullName: string; role: string }[]
   >([]);
 
-  // ... (useEffect for fetching data remains same) ...
   useEffect(() => {
     const fetchDetails = async () => {
       try {
@@ -151,7 +141,6 @@ export default function LoadingSheetDetailPage({
     fetchDetails();
   }, [id]);
 
-  // ... (loadEditOptions remains same) ...
   const loadEditOptions = async () => {
     try {
       const [lorryRes, userRes] = await Promise.all([
@@ -170,7 +159,6 @@ export default function LoadingSheetDetailPage({
     setIsEditDialogOpen(true);
   };
 
-  // --- NEW HANDLERS ---
   const handlePrint = async () => {
     if (!loadingSheet) return;
     setPrinting(true);
@@ -185,7 +173,6 @@ export default function LoadingSheetDetailPage({
     setDownloading(false);
   };
 
-  // ... (handleUpdateLoadingSheet remains same) ...
   const handleUpdateLoadingSheet = async () => {
     try {
       setUpdating(true);
@@ -207,14 +194,37 @@ export default function LoadingSheetDetailPage({
       }
       toast.success("Loading sheet updated successfully!");
       setIsEditDialogOpen(false);
-      const refreshRes = await fetch(`/api/orders/loading/history/${id}`);
-      const refreshedData = await refreshRes.json();
-      setLoadingSheet(refreshedData);
+      window.location.reload();
     } catch (error: any) {
       console.error(error);
       toast.error(error.message);
     } finally {
       setUpdating(false);
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "Delivered":
+        return (
+          <Badge className="bg-green-600 hover:bg-green-700">
+            <CheckCircle2 className="w-3 h-3 mr-1" /> Delivered
+          </Badge>
+        );
+      case "Cancelled":
+        return (
+          <Badge className="bg-red-600 hover:bg-red-700">
+            <XCircle className="w-3 h-3 mr-1" /> Returned
+          </Badge>
+        );
+      case "Loading":
+        return (
+          <Badge className="bg-orange-500 hover:bg-orange-600">
+            <RefreshCw className="w-3 h-3 mr-1" /> Rescheduled
+          </Badge>
+        );
+      default:
+        return <Badge variant="outline">{status}</Badge>;
     }
   };
 
@@ -231,8 +241,19 @@ export default function LoadingSheetDetailPage({
 
   if (!loadingSheet) return <div>Not found</div>;
 
+  // Safe calculation with fallbacks
+  const totalSentValue = loadingSheet.orders.reduce(
+    (sum, o) => sum + (o.originalAmount || o.totalAmount || 0),
+    0
+  );
+  const totalFinalValue = loadingSheet.orders.reduce(
+    (sum, o) => sum + (o.totalAmount || 0),
+    0
+  );
+  const totalDiff = totalFinalValue - totalSentValue;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-10">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -258,12 +279,9 @@ export default function LoadingSheetDetailPage({
         </div>
 
         <div className="flex gap-2 flex-wrap">
-          {/* Edit Button */}
           <Button variant="outline" onClick={handleEditClick}>
             <Edit className="w-4 h-4 mr-2" /> Edit
           </Button>
-
-          {/* Download Button */}
           <Button
             variant="outline"
             onClick={handleDownload}
@@ -276,11 +294,9 @@ export default function LoadingSheetDetailPage({
             )}
             Download
           </Button>
-
-          {/* Print Button */}
           <Button variant="default" onClick={handlePrint} disabled={printing}>
             {printing ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <Printer className="w-4 h-4 mr-2" />
             )}
@@ -289,56 +305,61 @@ export default function LoadingSheetDetailPage({
         </div>
       </div>
 
-      {/* ... (Rest of the UI Cards for Stats, Vehicle Info, Orders List remain unchanged) ... */}
-
-      {/* Summary Stats */}
+      {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
-            <Package className="w-4 h-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{loadingSheet.totalOrders}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {loadingSheet.totalItems} items total
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Value</CardTitle>
-            <ShoppingBag className="w-4 h-4 text-muted-foreground" />
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Sent Value (Original)
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              Rs. {loadingSheet.totalAmount.toLocaleString()}
+              Rs. {totalSentValue.toLocaleString()}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Combined order value
-            </p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Status</CardTitle>
-            <Truck className="w-4 h-4 text-muted-foreground" />
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-blue-600">
+              Final Value (Reconciled)
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <Badge
-              variant={
-                loadingSheet.status === "Completed" ? "default" : "secondary"
-              }
-              className={
-                loadingSheet.status === "Completed"
-                  ? "bg-green-600"
-                  : "bg-blue-600"
-              }
+            <div className="text-2xl font-bold text-blue-700">
+              Rs. {totalFinalValue.toLocaleString()}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card
+          className={
+            totalDiff !== 0
+              ? totalDiff > 0
+                ? "bg-green-50 border-green-200"
+                : "bg-red-50 border-red-200"
+              : ""
+          }
+        >
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Difference
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div
+              className={`text-2xl font-bold flex items-center gap-2 ${
+                totalDiff > 0
+                  ? "text-green-700"
+                  : totalDiff < 0
+                  ? "text-red-700"
+                  : ""
+              }`}
             >
-              {loadingSheet.status}
-            </Badge>
+              {totalDiff > 0 ? "+" : ""}
+              {totalDiff !== 0 ? "Rs. " + totalDiff.toLocaleString() : "-"}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -350,118 +371,121 @@ export default function LoadingSheetDetailPage({
             <CardTitle>Vehicle & Personnel</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-start gap-3">
-              <Truck className="w-5 h-5 text-muted-foreground mt-0.5" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-muted-foreground">
-                  Vehicle
-                </p>
-                <p className="text-lg font-semibold">
-                  {loadingSheet.lorryNumber}
-                </p>
-              </div>
+            <div className="flex justify-between border-b pb-2">
+              <span className="text-muted-foreground">Vehicle</span>
+              <span className="font-medium">{loadingSheet.lorryNumber}</span>
             </div>
-            <div className="flex items-start gap-3">
-              <User className="w-5 h-5 text-muted-foreground mt-0.5" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-muted-foreground">
-                  Driver
-                </p>
-                <p className="text-lg font-semibold">
-                  {loadingSheet.driverName}
-                </p>
-              </div>
+            <div className="flex justify-between border-b pb-2">
+              <span className="text-muted-foreground">Driver</span>
+              <span className="font-medium">{loadingSheet.driverName}</span>
             </div>
-            {loadingSheet.helperName && (
-              <div className="flex items-start gap-3">
-                <Users className="w-5 h-5 text-muted-foreground mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-muted-foreground">
-                    Helper
-                  </p>
-                  <p className="text-lg font-semibold">
-                    {loadingSheet.helperName}
-                  </p>
-                </div>
-              </div>
-            )}
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Helper</span>
+              <span className="font-medium">
+                {loadingSheet.helperName || "-"}
+              </span>
+            </div>
           </CardContent>
         </Card>
 
-        {/* Route Summary */}
         <Card>
           <CardHeader>
-            <CardTitle>Route Summary</CardTitle>
+            <CardTitle>Status</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {Array.from(
-                new Set(loadingSheet.orders.map((o) => o.customer.route))
-              ).map((route) => {
-                const routeOrders = loadingSheet.orders.filter(
-                  (o) => o.customer.route === route
-                );
-                return (
-                  <div
-                    key={route}
-                    className="flex items-center justify-between p-3 rounded-lg border bg-muted/30"
-                  >
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-4 h-4 text-primary" />
-                      <span className="font-medium">{route}</span>
-                    </div>
-                    <Badge variant="outline">{routeOrders.length} orders</Badge>
-                  </div>
-                );
-              })}
+            <div className="flex flex-col gap-2 items-center justify-center h-full py-2">
+              <Badge
+                className={`text-lg px-4 py-1 ${
+                  loadingSheet.status === "Completed"
+                    ? "bg-green-600"
+                    : "bg-blue-600"
+                }`}
+              >
+                {loadingSheet.status}
+              </Badge>
+              <p className="text-sm text-muted-foreground">
+                {loadingSheet.status === "Completed"
+                  ? "All items reconciled and closed."
+                  : "Currently in transit."}
+              </p>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Orders List */}
+      {/* Orders List Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Orders</CardTitle>
+          <CardTitle>Order Details & Reconciliation</CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Order ID</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Sales Rep</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loadingSheet.orders.map((order) => (
-                <TableRow key={order.id}>
-                  <TableCell className="font-medium font-mono">
-                    {order.orderId}
-                  </TableCell>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">
-                        {order.customer.shopName}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {order.customer.address}
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>{order.salesRep.name}</TableCell>
-                  <TableCell className="text-right font-semibold">
-                    Rs. {order.totalAmount.toLocaleString()}
-                  </TableCell>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Order ID</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right text-muted-foreground">
+                    Sent Amount
+                  </TableHead>
+                  <TableHead className="text-right">Final Amount</TableHead>
+                  <TableHead className="text-right">Difference</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {loadingSheet.orders.map((order) => {
+                  // Safe fallback for values
+                  const original =
+                    order.originalAmount ?? order.totalAmount ?? 0;
+                  const final = order.totalAmount ?? 0;
+                  const diff = final - original;
+
+                  return (
+                    <TableRow key={order.id}>
+                      <TableCell className="font-medium font-mono">
+                        {order.orderId}
+                        <div className="text-xs text-muted-foreground">
+                          {order.invoiceNo}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium">
+                          {order.customer.shopName}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {order.customer.address}
+                        </div>
+                      </TableCell>
+                      <TableCell>{getStatusBadge(order.status)}</TableCell>
+                      <TableCell className="text-right text-muted-foreground font-mono">
+                        {original.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right font-bold font-mono">
+                        {final.toLocaleString()}
+                      </TableCell>
+                      <TableCell
+                        className={`text-right font-mono text-sm ${
+                          diff !== 0
+                            ? diff > 0
+                              ? "text-green-600"
+                              : "text-red-600"
+                            : "text-muted-foreground"
+                        }`}
+                      >
+                        {diff > 0 ? "+" : ""}
+                        {diff !== 0 ? diff.toLocaleString() : "-"}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Edit Dialog (Kept existing logic) */}
+      {/* Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent>
           <DialogHeader>

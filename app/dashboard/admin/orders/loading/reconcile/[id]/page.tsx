@@ -1,4 +1,4 @@
-// FILE PATH: app/dashboard/admin/orders/loading/reconcile/[id]/page.tsx
+// app/dashboard/admin/orders/loading/reconcile/[id]/page.tsx
 "use client";
 
 import React, { useState, useEffect, use } from "react";
@@ -43,6 +43,9 @@ import {
   Package,
   AlertCircle,
   DollarSign,
+  User,
+  ArrowUpRight,
+  ArrowDownRight,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -52,7 +55,8 @@ interface OrderItem {
   invoiceId: string | null;
   invoiceNo: string;
   customer: string;
-  originalAmount: number;
+  currentAmount: number; // This is the current amount in DB (Post-Edit)
+  originalAmount: number; // This is the amount at Dispatch (Pre-Edit)
   status: string;
   paymentStatus: string;
 }
@@ -60,7 +64,6 @@ interface OrderItem {
 interface ReconcileState {
   [orderId: string]: {
     status: string;
-    finalAmount: number;
     paymentStatus: string;
     notes: string;
   };
@@ -79,7 +82,13 @@ export default function ReconcileLoadPage({
   const [loadDetails, setLoadDetails] = useState<any>(null);
   const [orders, setOrders] = useState<OrderItem[]>([]);
 
-  // State to track changes for each order
+  // User State
+  const [currentUser, setCurrentUser] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+
+  // State to track status/notes for each order
   const [reconcileData, setReconcileData] = useState<ReconcileState>({});
 
   // --- Fetch Data ---
@@ -87,30 +96,69 @@ export default function ReconcileLoadPage({
     const fetchData = async () => {
       try {
         setLoading(true);
+
+        // 1. Load User from LocalStorage
+        if (typeof window !== "undefined") {
+          const stored = localStorage.getItem("currentUser");
+          if (stored) {
+            setCurrentUser(JSON.parse(stored));
+          }
+        }
+
+        // 2. Load Sheet Details
         const res = await fetch(`/api/orders/loading/history/${id}`);
         if (!res.ok) throw new Error("Failed to load data");
         const data = await res.json();
 
         setLoadDetails(data);
 
-        const mappedOrders = data.orders.map((o: any) => ({
-          id: o.id,
-          orderId: o.orderId,
-          invoiceId: o.invoiceId,
-          invoiceNo: o.invoiceNo || "N/A",
-          customer: o.customer.shopName,
-          originalAmount: o.totalAmount,
-          status: o.status,
-          paymentStatus: "Credit",
-        }));
+        // 3. Fetch Invoice Histories to find Original Amounts
+        // This enables us to show the "Difference" even if the main record was updated.
+        const ordersWithHistory = await Promise.all(
+          data.orders.map(async (o: any) => {
+            let originalAmount = o.totalAmount;
 
-        setOrders(mappedOrders);
+            // Try to find the oldest history record for this invoice
+            if (o.invoiceId) {
+              try {
+                const histRes = await fetch(
+                  `/api/invoices/${o.invoiceId}/history`
+                );
+                if (histRes.ok) {
+                  const history = await histRes.json();
+                  // If history exists, the oldest 'previousTotal' is likely our original dispatched amount
+                  if (history.length > 0) {
+                    originalAmount = history[history.length - 1].previousTotal;
+                  }
+                }
+              } catch (err) {
+                console.error("Failed to load history for", o.invoiceId);
+              }
+            }
+
+            return {
+              id: o.id,
+              orderId: o.orderId,
+              invoiceId: o.invoiceId,
+              invoiceNo: o.invoiceNo || "N/A",
+              customer: o.customer.shopName,
+              currentAmount: o.totalAmount, // The value AFTER any edits
+              originalAmount: originalAmount, // The value BEFORE edits
+              status: o.status,
+              paymentStatus: "Credit",
+            };
+          })
+        );
+
+        setOrders(ordersWithHistory);
 
         const initialState: ReconcileState = {};
-        mappedOrders.forEach((o: OrderItem) => {
+        ordersWithHistory.forEach((o: OrderItem) => {
           initialState[o.id] = {
-            status: "Delivered",
-            finalAmount: o.originalAmount,
+            status:
+              o.status === "In Transit" || o.status === "Loading"
+                ? "Delivered"
+                : o.status,
             paymentStatus: "Credit",
             notes: "",
           };
@@ -141,20 +189,28 @@ export default function ReconcileLoadPage({
       toast.error("Invoice not found for this order");
       return;
     }
-
+    // Redirect to Edit page, keeping return URL
     router.push(
       `/dashboard/admin/invoices/${invoiceId}/edit?returnTo=/dashboard/admin/orders/loading/reconcile/${id}`
     );
   };
 
   const handleFinalize = async () => {
+    if (!currentUser?.id) {
+      toast.error("User session missing. Please login.");
+      return;
+    }
+
     setSubmitting(true);
     try {
       const payload = {
         loadId: id,
+        userId: currentUser.id, // Send User ID
         updates: Object.entries(reconcileData).map(([orderId, data]) => ({
           orderId,
           ...data,
+          // We send the current amount from the orders list, ensuring consistency
+          finalAmount: orders.find((o) => o.id === orderId)?.currentAmount || 0,
         })),
         closeLoad: true,
       };
@@ -176,23 +232,27 @@ export default function ReconcileLoadPage({
     }
   };
 
-  // --- Calculated Stats ---
+  // --- Stats ---
+  const totalDispatchedValue = orders.reduce(
+    (sum, order) => sum + order.originalAmount,
+    0
+  );
+  const totalFinalValue = orders.reduce(
+    (sum, order) => sum + order.currentAmount,
+    0
+  );
+  const valueDifference = totalFinalValue - totalDispatchedValue;
+
   const deliveredCount = Object.values(reconcileData).filter(
     (d) => d.status === "Delivered" || d.status === "Partial"
   ).length;
 
-  const rescheduledCount = Object.values(reconcileData).filter(
-    (d) => d.status === "Loading"
-  ).length;
-
-  const returnedCount = Object.values(reconcileData).filter(
-    (d) => d.status === "Returned"
-  ).length;
-
-  const totalBillValue = orders.reduce(
-    (sum, order) => sum + order.originalAmount,
-    0
-  );
+  // Helper for Diff Styling
+  const getDiffStyles = (diff: number) => {
+    if (diff > 0) return "text-green-600 bg-green-50";
+    if (diff < 0) return "text-red-600 bg-red-50";
+    return "text-muted-foreground bg-gray-50";
+  };
 
   if (loading) {
     return (
@@ -204,8 +264,8 @@ export default function ReconcileLoadPage({
 
   return (
     <div className="space-y-6 pb-10">
-      {/* Header with Better Spacing */}
-      <div className="flex items-center justify-between">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => router.back()}>
             <ArrowLeft className="w-5 h-5" />
@@ -214,17 +274,24 @@ export default function ReconcileLoadPage({
             <h1 className="text-3xl font-bold tracking-tight">
               Reconcile Delivery
             </h1>
-            <p className="text-muted-foreground mt-1">
-              {loadDetails?.loadId} • {loadDetails?.lorryNumber} •{" "}
-              {loadDetails?.driverName}
-            </p>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mt-1 text-muted-foreground text-sm">
+              <span>{loadDetails?.loadId}</span>
+              <span className="hidden sm:inline">•</span>
+              <span>{loadDetails?.lorryNumber}</span>
+              <span className="hidden sm:inline">•</span>
+              {currentUser && (
+                <span className="flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full text-xs font-medium border border-blue-100">
+                  <User className="w-3 h-3" />
+                  Reconciling as: {currentUser.name}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Finalize Button in Header */}
         <Button
           size="lg"
-          className="bg-gradient-to-r from-gray-900 to-gray-800 hover:from-black hover:to-gray-900 text-white shadow-lg"
+          className="bg-black hover:bg-gray-800 text-white shadow-md"
           onClick={handleFinalize}
           disabled={submitting}
         >
@@ -237,146 +304,103 @@ export default function ReconcileLoadPage({
         </Button>
       </div>
 
-      {/* Summary Cards - Simplified to 2 Cards */}
-      <div className="grid gap-4 md:grid-cols-2">
-        {/* Total Bill Value */}
-        <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardDescription className="text-blue-700 font-medium">
-                Total Bill Value
-              </CardDescription>
-              <DollarSign className="w-5 h-5 text-blue-600" />
-            </div>
+      {/* Summary Stats */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Original Dispatched Value</CardDescription>
+            <CardTitle className="text-2xl font-mono text-muted-foreground">
+              LKR {totalDispatchedValue.toLocaleString()}
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-blue-900">
-              Rs. {totalBillValue.toLocaleString()}
-            </div>
-            <p className="text-xs text-blue-600 mt-1">
-              {orders.length} order{orders.length !== 1 ? "s" : ""}
-            </p>
-          </CardContent>
         </Card>
 
-        {/* Status Overview */}
         <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardDescription className="font-medium">
-                Delivery Status
-              </CardDescription>
-              <Package className="w-5 h-5 text-muted-foreground" />
+          <CardHeader className="pb-2">
+            <CardDescription>Final Reconciled Value</CardDescription>
+            <CardTitle className="text-2xl font-bold text-blue-700">
+              LKR {totalFinalValue.toLocaleString()}
+            </CardTitle>
+          </CardHeader>
+        </Card>
+
+        <Card
+          className={
+            valueDifference < 0
+              ? "bg-red-50 border-red-100"
+              : valueDifference > 0
+              ? "bg-green-50 border-green-100"
+              : ""
+          }
+        >
+          <CardHeader className="pb-2">
+            <CardDescription>Total Difference</CardDescription>
+            <div className="flex items-center gap-2">
+              <CardTitle
+                className={`text-2xl font-bold ${
+                  valueDifference < 0
+                    ? "text-red-700"
+                    : valueDifference > 0
+                    ? "text-green-700"
+                    : "text-slate-700"
+                }`}
+              >
+                {valueDifference > 0 ? "+" : ""}
+                LKR {valueDifference.toLocaleString()}
+              </CardTitle>
+              {valueDifference !== 0 &&
+                (valueDifference > 0 ? (
+                  <ArrowUpRight className="w-6 h-6 text-green-600" />
+                ) : (
+                  <ArrowDownRight className="w-6 h-6 text-red-600" />
+                ))}
             </div>
           </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Delivered</span>
-              <Badge
-                variant="outline"
-                className="bg-green-50 text-green-700 border-green-200"
-              >
-                {deliveredCount}
-              </Badge>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Rescheduled</span>
-              <Badge
-                variant="outline"
-                className="bg-blue-50 text-blue-700 border-blue-200"
-              >
-                {rescheduledCount}
-              </Badge>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Returned</span>
-              <Badge
-                variant="outline"
-                className="bg-red-50 text-red-700 border-red-200"
-              >
-                {returnedCount}
-              </Badge>
-            </div>
-          </CardContent>
         </Card>
       </div>
 
-      {/* Orders Table */}
+      {/* Reconcile Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Order Reconciliation</CardTitle>
+          <CardTitle>Order List</CardTitle>
           <CardDescription>
-            Mark delivery status and adjust final bill amounts if needed
+            Verify status and amounts. Use "Edit Invoice" to correct any
+            discrepancies.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow>
+                <TableRow className="bg-slate-50 hover:bg-slate-50">
                   <TableHead className="w-[120px]">Order ID</TableHead>
-                  <TableHead className="w-[140px]">Invoice No</TableHead>
                   <TableHead className="w-[200px]">Customer</TableHead>
-                  <TableHead className="w-[140px]">Delivery Status</TableHead>
-                  <TableHead className="w-[130px]">Payment</TableHead>
-                  <TableHead className="w-[160px]">
-                    <div className="flex items-center gap-2">
-                      Final Bill Amount
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger>
-                            <AlertCircle className="w-3.5 h-3.5 text-muted-foreground" />
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p className="max-w-[200px]">
-                              Edit here for partial delivery adjustments
-                            </p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </div>
-                  </TableHead>
-                  <TableHead className="w-[200px]">Notes</TableHead>
-                  <TableHead className="w-[100px] text-center">
-                    Actions
-                  </TableHead>
+                  <TableHead className="w-[140px]">Status</TableHead>
+                  <TableHead className="text-right">Original (Sent)</TableHead>
+                  <TableHead className="text-right">Final (Edit)</TableHead>
+                  <TableHead className="text-right">Diff</TableHead>
+                  <TableHead className="w-[200px] pl-6">Notes</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {orders.map((order) => {
                   const state = reconcileData[order.id] || {};
-                  const isDelivered =
-                    state.status === "Delivered" || state.status === "Partial";
-                  const isRescheduled = state.status === "Loading";
-                  const isReturned = state.status === "Returned";
+                  const diff = order.currentAmount - order.originalAmount;
 
                   return (
-                    <TableRow
-                      key={order.id}
-                      className={
-                        isRescheduled
-                          ? "bg-blue-50/30"
-                          : isReturned
-                          ? "bg-red-50/30"
-                          : !isDelivered
-                          ? "bg-yellow-50/20"
-                          : "bg-green-50/20"
-                      }
-                    >
+                    <TableRow key={order.id}>
                       <TableCell className="font-medium">
                         {order.orderId}
-                      </TableCell>
-
-                      <TableCell>
-                        <Badge variant="outline" className="font-mono text-xs">
+                        <div className="text-xs text-muted-foreground font-mono">
                           {order.invoiceNo}
-                        </Badge>
+                        </div>
                       </TableCell>
-
-                      <TableCell className="font-medium">
-                        {order.customer}
+                      <TableCell>
+                        <span className="font-medium text-sm">
+                          {order.customer}
+                        </span>
                       </TableCell>
-
                       <TableCell>
                         <Select
                           value={state.status || "Delivered"}
@@ -384,87 +408,60 @@ export default function ReconcileLoadPage({
                             updateOrderState(order.id, "status", val)
                           }
                         >
-                          <SelectTrigger className="w-[130px]">
+                          <SelectTrigger className="w-[130px] h-8">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="Delivered">
-                              <div className="flex items-center gap-2">
-                                <div className="w-2 h-2 rounded-full bg-green-500" />
-                                Delivered
-                              </div>
-                            </SelectItem>
-                            <SelectItem value="Partial">
-                              <div className="flex items-center gap-2">
-                                <div className="w-2 h-2 rounded-full bg-yellow-500" />
-                                Partial
-                              </div>
-                            </SelectItem>
-                            <SelectItem value="Loading">
-                              <div className="flex items-center gap-2">
-                                <div className="w-2 h-2 rounded-full bg-blue-500" />
-                                Reschedule
-                              </div>
-                            </SelectItem>
-                            <SelectItem value="Returned">
-                              <div className="flex items-center gap-2">
-                                <div className="w-2 h-2 rounded-full bg-red-500" />
-                                Returned
-                              </div>
-                            </SelectItem>
+                            <SelectItem value="Delivered">Delivered</SelectItem>
+                            <SelectItem value="Partial">Partial</SelectItem>
+                            <SelectItem value="Returned">Returned</SelectItem>
+                            <SelectItem value="Loading">Reschedule</SelectItem>
                           </SelectContent>
                         </Select>
                       </TableCell>
 
-                      <TableCell>
+                      {/* Original Amount (Sent) */}
+                      <TableCell className="text-right font-mono text-muted-foreground">
+                        {order.originalAmount.toLocaleString()}
+                      </TableCell>
+
+                      {/* Final Amount (Current DB Value) - READ ONLY */}
+                      <TableCell className="text-right">
+                        <div className="flex justify-end items-center gap-2">
+                          {order.currentAmount !== order.originalAmount && (
+                            <Edit3 className="w-3 h-3 text-blue-500 animate-pulse" />
+                          )}
+                          <span className="font-bold font-mono text-sm">
+                            {order.currentAmount.toLocaleString()}
+                          </span>
+                        </div>
+                      </TableCell>
+
+                      {/* Difference */}
+                      <TableCell className="text-right">
                         <Badge
                           variant="outline"
-                          className="bg-orange-50 text-orange-700 border-orange-200 font-medium"
+                          className={`font-mono ${getDiffStyles(diff)}`}
                         >
-                          <CreditCard className="w-3 h-3 mr-1" />
-                          Credit
+                          {diff > 0 ? "+" : ""}
+                          {diff.toLocaleString()}
                         </Badge>
                       </TableCell>
 
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">
-                            Rs.
-                          </span>
-                          <Input
-                            type="number"
-                            value={state.finalAmount || order.originalAmount}
-                            onChange={(e) =>
-                              updateOrderState(
-                                order.id,
-                                "finalAmount",
-                                parseFloat(e.target.value) || 0
-                              )
-                            }
-                            className="w-[110px] h-9 font-medium"
-                            disabled
-                          />
-                        </div>
-                        {state.finalAmount !== order.originalAmount && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Original: Rs.{" "}
-                            {order.originalAmount.toLocaleString()}
-                          </p>
-                        )}
-                      </TableCell>
-
-                      <TableCell>
+                      {/* Notes */}
+                      <TableCell className="pl-6">
                         <Input
-                          placeholder="Add notes..."
+                          placeholder="Reason for change..."
                           value={state.notes || ""}
                           onChange={(e) =>
                             updateOrderState(order.id, "notes", e.target.value)
                           }
-                          className="w-[180px] h-9 text-sm"
+                          className="w-full h-8 text-xs bg-white"
                         />
                       </TableCell>
 
-                      <TableCell>
+                      {/* Edit Action */}
+                      <TableCell className="text-right">
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -474,16 +471,14 @@ export default function ReconcileLoadPage({
                                 onClick={() =>
                                   handleEditInvoice(order.invoiceId)
                                 }
-                                className="w-full"
+                                className="h-8 text-blue-600 border-blue-200 hover:bg-blue-50"
                               >
-                                <Edit3 className="w-3.5 h-3.5 mr-1" />
-                                Edit
+                                <Edit3 className="w-3.5 h-3.5 mr-1.5" />
+                                Edit Invoice
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>
-                              <p>
-                                Edit full invoice (items, prices, quantities)
-                              </p>
+                              <p>Change quantity/prices if rejected/returned</p>
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
