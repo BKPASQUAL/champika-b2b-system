@@ -1,5 +1,3 @@
-"use client";
-
 import {
   Table,
   TableBody,
@@ -18,7 +16,8 @@ import {
   Loader2,
   Printer,
   User,
-  Truck, // Import Truck Icon
+  Truck,
+  Eye, // ✅ Import Eye Icon
 } from "lucide-react";
 import {
   Invoice,
@@ -37,6 +36,7 @@ interface InvoiceTableProps {
   sortOrder: SortOrder;
   onSort: (field: SortField) => void;
   onEdit: (id: string) => void;
+  onView: (id: string) => void; // ✅ Add onView Prop
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
@@ -49,6 +49,7 @@ export function InvoiceTable({
   sortOrder,
   onSort,
   onEdit,
+  onView, // ✅ Destructure onView
   currentPage,
   totalPages,
   onPageChange,
@@ -71,7 +72,6 @@ export function InvoiceTable({
     );
   };
 
-  // 1. Payment Status Badge
   const renderPaymentBadge = (status: PaymentStatus) => {
     const styles = {
       Paid: "bg-green-100 text-green-700 border-green-200",
@@ -89,7 +89,6 @@ export function InvoiceTable({
     );
   };
 
-  // 2. Order Status Badge (The new one)
   const renderOrderStatusBadge = (status: OrderStatus) => {
     const styles: Record<string, string> = {
       Pending: "bg-yellow-50 text-yellow-800 border-yellow-200",
@@ -113,7 +112,6 @@ export function InvoiceTable({
     );
   };
 
-  // Lock logic
   const isLocked = (status: string) => {
     return [
       "Loading",
@@ -163,8 +161,6 @@ export function InvoiceTable({
                   Customer {getSortIcon("customerName")}
                 </div>
               </TableHead>
-
-              {/* ✅ NEW COLUMN: Order Status */}
               <TableHead
                 onClick={() => onSort("orderStatus")}
                 className="text-center cursor-pointer hover:bg-muted/50"
@@ -174,8 +170,6 @@ export function InvoiceTable({
                   {getSortIcon("orderStatus")}
                 </div>
               </TableHead>
-
-              {/* Payment Status */}
               <TableHead
                 onClick={() => onSort("status")}
                 className="text-center cursor-pointer hover:bg-muted/50"
@@ -184,7 +178,6 @@ export function InvoiceTable({
                   Payment {getSortIcon("status")}
                 </div>
               </TableHead>
-
               <TableHead
                 onClick={() => onSort("totalAmount")}
                 className="text-right cursor-pointer hover:bg-muted/50"
@@ -231,17 +224,12 @@ export function InvoiceTable({
                       <User className="w-3 h-3" /> {invoice.salesRepName}
                     </div>
                   </TableCell>
-
-                  {/* ✅ RENDER ORDER STATUS BADGE */}
                   <TableCell className="text-center">
                     {renderOrderStatusBadge(invoice.orderStatus)}
                   </TableCell>
-
-                  {/* Render Payment Status Badge */}
                   <TableCell className="text-center">
                     {renderPaymentBadge(invoice.status)}
                   </TableCell>
-
                   <TableCell className="text-right font-medium">
                     LKR {invoice.totalAmount.toLocaleString()}
                   </TableCell>
@@ -258,6 +246,17 @@ export function InvoiceTable({
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
+                      {/* ✅ View Button (Always Visible) */}
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => onView(invoice.id)}
+                        title="View Details"
+                      >
+                        <Eye className="w-4 h-4 text-blue-600" />
+                      </Button>
+
+                      {/* Edit Button (Locked based on status) */}
                       <Button
                         variant="ghost"
                         size="icon-sm"
@@ -277,6 +276,8 @@ export function InvoiceTable({
                           }`}
                         />
                       </Button>
+
+                      {/* Print Button */}
                       <Button
                         variant="ghost"
                         size="icon-sm"
@@ -298,7 +299,7 @@ export function InvoiceTable({
           </TableBody>
         </Table>
       </div>
-      {/* Pagination controls... (Keep existing code) */}
+      {/* Pagination... */}
       {!loading && invoices.length > 0 && (
         <div className="flex items-center justify-between px-2 py-4">
           <div className="text-sm text-muted-foreground">

@@ -162,6 +162,9 @@ export default function InvoicesPage() {
     router.push(`/dashboard/admin/invoices/${id}/edit`);
   };
 
+  const handleView = (id: string) => {
+    router.push(`/dashboard/admin/invoices/${id}`);
+  };
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, statusFilter, repFilter]);
@@ -277,6 +280,7 @@ export default function InvoicesPage() {
             sortOrder={sortOrder}
             onSort={handleSort}
             onEdit={handleEdit}
+            onView={handleView} // ✅ Pass the function
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={setCurrentPage}
