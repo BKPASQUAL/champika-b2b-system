@@ -1,3 +1,5 @@
+// app/config/nav-config.ts
+
 import {
   LayoutDashboard,
   Users,
@@ -22,7 +24,7 @@ import {
   Coins,
   LucideIcon,
   Store,
-  Send, // New Icon for Dispatched
+  Send,
 } from "lucide-react";
 
 export type UserRole = "admin" | "office" | "rep" | "delivery";
@@ -38,6 +40,7 @@ interface NavSection {
 
 export const roleNavItems: Record<UserRole, NavSection[]> = {
   admin: [
+    // ... (Keep existing Admin config) ...
     {
       items: [
         { name: "Overview", href: "/dashboard/admin", icon: LayoutDashboard },
@@ -71,7 +74,6 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           href: "/dashboard/admin/orders/loading",
           icon: Box,
         },
-        // --- NEW PAGE ---
         {
           name: "5. Dispatched",
           href: "/dashboard/admin/orders/loading/active",
@@ -167,6 +169,8 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
       ],
     },
   ],
+
+  // --- UPDATED OFFICE LAYOUT ---
   office: [
     {
       items: [
@@ -174,39 +178,103 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
       ],
     },
     {
-      title: "Daily Tasks",
+      title: "Order Workflow",
       items: [
         {
-          name: "Pending Orders",
+          name: "All Orders",
+          href: "/dashboard/office/orders",
+          icon: ShoppingCart,
+        },
+        {
+          name: "1. Pending",
           href: "/dashboard/office/orders/pending",
           icon: Clock,
         },
         {
-          name: "Picking List",
+          name: "2. Processing",
           href: "/dashboard/office/orders/processing",
           icon: Loader2,
         },
         {
-          name: "Checking",
+          name: "3. Checking",
           href: "/dashboard/office/orders/checking",
           icon: ClipboardCheck,
+        },
+        {
+          name: "4. Loading",
+          href: "/dashboard/office/orders/loading",
+          icon: Box,
+        },
+        {
+          name: "5. Dispatched",
+          href: "/dashboard/office/orders/loading/active",
+          icon: Send,
         },
       ],
     },
     {
-      title: "Accounts",
+      title: "Customer Finance",
       items: [
-        { name: "Customers", href: "/dashboard/office/customers", icon: Users },
-        { name: "Invoices", href: "/dashboard/office/invoices", icon: Receipt },
         {
-          name: "Payments",
+          name: "Customers",
+          href: "/dashboard/office/customers",
+          icon: Briefcase,
+        },
+        {
+          name: "Bills / Invoice",
+          href: "/dashboard/office/invoices",
+          icon: Receipt,
+        },
+        {
+          name: "Payments Recv",
           href: "/dashboard/office/payments",
           icon: Banknote,
         },
-        { name: "Expenses", href: "/dashboard/office/expenses", icon: Coins },
+        {
+          name: "Due Alerts",
+          href: "/dashboard/office/invoices/due",
+          icon: AlertCircle,
+        },
+      ],
+    },
+    {
+      title: "Suppliers",
+      items: [
+        {
+          name: "Supplier List",
+          href: "/dashboard/office/suppliers",
+          icon: Factory,
+        },
+        {
+          name: "Purchases",
+          href: "/dashboard/office/purchases",
+          icon: FileText,
+        },
+        {
+          name: "Payments Out",
+          href: "/dashboard/office/suppliers/payments",
+          icon: Banknote,
+        },
+      ],
+    },
+    {
+      title: "Inventory",
+      items: [
+        {
+          name: "Product Catalog",
+          href: "/dashboard/office/products",
+          icon: Package,
+        },
+        {
+          name: "Stock Control",
+          href: "/dashboard/office/inventory",
+          icon: Layers,
+        },
       ],
     },
   ],
+
+  // ... (Keep rep/delivery roles) ...
   rep: [
     {
       items: [
