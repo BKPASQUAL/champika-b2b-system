@@ -16,6 +16,9 @@ import {
   Edit,
   Save,
   X,
+  Calendar,
+  Hash,
+  CreditCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -93,8 +96,6 @@ export default function ViewOrderPage({
   }, [id]);
 
   // --- 2. Editing Logic ---
-
-  // Handle individual field updates in the table
   const handleItemChange = (itemId: string, field: string, value: string) => {
     const numValue = parseFloat(value) || 0;
 
@@ -102,8 +103,6 @@ export default function ViewOrderPage({
       prevItems.map((item) => {
         if (item.id === itemId) {
           const updatedItem = { ...item, [field]: numValue };
-          // Recalculate total for this item
-          // Assuming no discount for now, or simple price * qty
           updatedItem.total = updatedItem.price * updatedItem.qty;
           return updatedItem;
         }
@@ -116,7 +115,6 @@ export default function ViewOrderPage({
     if (!order) return;
     setProcessing(true);
 
-    // Calculate new total
     const newTotalAmount = items.reduce(
       (acc, item) => acc + (item.total || 0),
       0
@@ -137,7 +135,7 @@ export default function ViewOrderPage({
 
       toast.success("Order updated successfully! Stocks adjusted.");
       setIsEditing(false);
-      fetchOrderDetails(); // Refresh to get consistent data from DB
+      fetchOrderDetails(); // Refresh
     } catch (error) {
       toast.error("Failed to save changes");
     } finally {
@@ -200,10 +198,8 @@ export default function ViewOrderPage({
     return <div className="p-10 text-center text-red-500">Order not found</div>;
   }
 
-  // Live Calculations for Summary
   const subtotal = items.reduce((acc, item) => acc + (item.total || 0), 0);
-  const grandTotal = subtotal; // Assuming no extra discounts for now
-  // If original order had a discount logic, apply it here similarly
+  const grandTotal = subtotal;
 
   return (
     <div className="space-y-4 mx-auto pb-10">
@@ -302,87 +298,137 @@ export default function ViewOrderPage({
       <div className="grid gap-6 lg:grid-cols-3">
         {/* LEFT COLUMN: Details & Items */}
         <div className="lg:col-span-2 space-y-4">
-          {/* 1. Customer Information (Read Only) */}
+          {/* 1. Extended Customer & Order Details */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileText className="w-4 h-4 text-muted-foreground" />
-                Invoice Details
+                Invoice & Customer Details
               </CardTitle>
-              <CardDescription>
-                Customer and billing information
-              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground text-xs uppercase tracking-wider">
-                    Customer
+            <CardContent className="space-y-6">
+              {/* TOP HIGHLIGHT: Invoice Number */}
+              <div className="flex flex-col md:flex-row justify-between gap-4 bg-blue-50 p-4 rounded-lg border border-blue-100 shadow-sm">
+                <div>
+                  <Label className="text-xs uppercase text-blue-600 font-bold tracking-wider">
+                    Invoice Number
                   </Label>
-                  <div className="flex items-center gap-2 p-2 border rounded-md bg-muted/30">
-                    <User className="w-4 h-4 text-muted-foreground" />
-                    <span className="font-medium">
-                      {order.customer?.shopName || "Unknown"}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      ({order.customer?.name})
-                    </span>
+                  <div className="text-3xl font-bold text-blue-900 mt-1 font-mono tracking-tight">
+                    {order.invoiceNo || "N/A"}
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground text-xs uppercase tracking-wider">
-                    Representative
-                  </Label>
-                  <div className="flex items-center gap-2 p-2 border rounded-md bg-muted/30">
-                    <Briefcase className="w-4 h-4 text-muted-foreground" />
-                    <span className="font-medium">{order.salesRep}</span>
+                <div className="flex flex-col md:items-end justify-center gap-1">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Hash className="w-4 h-4" />
+                    <span>
+                      Order ID:{" "}
+                      <span className="font-mono font-medium text-foreground">
+                        {order.orderId}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Calendar className="w-4 h-4" />
+                    <span>
+                      Date:{" "}
+                      <span className="font-medium text-foreground">
+                        {new Date(order.date).toLocaleDateString()}
+                      </span>
+                    </span>
                   </div>
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground text-xs uppercase tracking-wider">
-                    Route / Area
-                  </Label>
-                  <div className="flex items-center gap-2 p-2 border rounded-md bg-muted/30">
-                    <MapPin className="w-4 h-4 text-muted-foreground" />
-                    <span>{order.customer?.route || "N/A"}</span>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Customer Info */}
+                <div className="space-y-4">
+                  <div className="space-y-1">
+                    <Label className="text-xs uppercase text-muted-foreground font-semibold tracking-wider">
+                      Customer Information
+                    </Label>
+                    <div className="flex items-start gap-3 p-3 border rounded-md bg-muted/20">
+                      <User className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
+                      <div className="space-y-0.5">
+                        <div className="font-medium text-base">
+                          {order.customer?.shopName || "Unknown Shop"}
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          {order.customer?.name}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs uppercase text-muted-foreground font-semibold tracking-wider">
+                      Contact Details
+                    </Label>
+                    <div className="grid grid-cols-1 gap-2">
+                      <div className="flex items-center gap-2 text-sm p-2 border rounded bg-white/50">
+                        <Phone className="w-4 h-4 text-muted-foreground" />
+                        <span className="font-medium">
+                          {order.customer?.phone || "No Phone"}
+                        </span>
+                      </div>
+                      <div className="flex items-start gap-2 text-sm p-2 border rounded bg-white/50">
+                        <MapPin className="w-4 h-4 text-muted-foreground mt-0.5" />
+                        <div className="flex flex-col">
+                          <span className="font-medium">
+                            {order.customer?.address || "No Address"}
+                          </span>
+                          {order.customer?.route && (
+                            <Badge
+                              variant="secondary"
+                              className="w-fit mt-1 text-[10px] px-1.5 h-5"
+                            >
+                              {order.customer.route}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground text-xs uppercase tracking-wider">
-                    Shop Mobile
-                  </Label>
-                  <div className="flex items-center gap-2 p-2 border rounded-md bg-muted/30">
-                    <Phone className="w-4 h-4 text-muted-foreground" />
-                    <span>{order.customer?.phone || "N/A"}</span>
+
+                {/* Order Meta */}
+                <div className="space-y-4">
+                  <div className="space-y-1">
+                    <Label className="text-xs uppercase text-muted-foreground font-semibold tracking-wider">
+                      Sales Representative
+                    </Label>
+                    <div className="flex items-center gap-3 p-3 border rounded-md bg-muted/20">
+                      <Briefcase className="w-5 h-5 text-muted-foreground" />
+                      <span className="text-sm font-medium">
+                        {order.salesRep}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground text-xs uppercase tracking-wider">
-                    Order / Invoice No
-                  </Label>
-                  <Input
-                    value={order.orderId}
-                    disabled
-                    className="bg-muted/30 font-mono"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground text-xs uppercase tracking-wider">
-                    Date
-                  </Label>
-                  <Input
-                    value={new Date(order.date).toLocaleDateString()}
-                    disabled
-                    className="bg-muted/30"
-                  />
+
+                  <div className="space-y-1">
+                    <Label className="text-xs uppercase text-muted-foreground font-semibold tracking-wider">
+                      Payment Details
+                    </Label>
+                    <div className="flex items-center gap-3 p-3 border rounded-md bg-muted/20">
+                      <CreditCard className="w-5 h-5 text-muted-foreground" />
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">Status:</span>
+                        <Badge
+                          variant={
+                            order.paymentStatus === "Paid"
+                              ? "default"
+                              : "destructive"
+                          }
+                        >
+                          {order.paymentStatus}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </CardContent>
           </Card>
+
           {/* 2. Order Items Table (Editable) */}
           <Card>
             <CardHeader>
@@ -495,26 +541,6 @@ export default function ViewOrderPage({
               <CardTitle>Order Summary</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Status Section */}
-              {!isEditing && (
-                <div className="rounded-lg border p-4 bg-muted/10">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">
-                      Payment Status
-                    </span>
-                    <Badge
-                      variant={
-                        order.paymentStatus === "Paid"
-                          ? "default"
-                          : "destructive"
-                      }
-                    >
-                      {order.paymentStatus}
-                    </Badge>
-                  </div>
-                </div>
-              )}
-
               {/* Totals Section */}
               <div className="space-y-3">
                 <div className="flex justify-between text-sm">
@@ -568,7 +594,6 @@ export default function ViewOrderPage({
       </div>
 
       {/* Dialogs for Approve/Reject */}
-      {/* ... (Keep existing AlertDialogs) ... */}
       <AlertDialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
