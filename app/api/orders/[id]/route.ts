@@ -1,3 +1,4 @@
+// app/api/orders/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
@@ -114,7 +115,50 @@ export async function PATCH(
       );
     }
 
-    // Update Order Status
+    // 1. Check current status to prevent duplicate stock restoration
+    const { data: currentOrder, error: fetchError } = await supabaseAdmin
+      .from("orders")
+      .select("status")
+      .eq("id", id)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    // 2. If cancelling, restore stock (Re-join stock)
+    if (status === "Cancelled" && currentOrder.status !== "Cancelled") {
+      // Fetch items to restore
+      const { data: orderItems, error: itemsError } = await supabaseAdmin
+        .from("order_items")
+        .select("product_id, quantity, free_quantity")
+        .eq("order_id", id);
+
+      if (itemsError) throw itemsError;
+
+      if (orderItems) {
+        for (const item of orderItems) {
+          // Fetch current product stock
+          const { data: product, error: prodError } = await supabaseAdmin
+            .from("products")
+            .select("stock_quantity")
+            .eq("id", item.product_id)
+            .single();
+
+          if (!prodError && product) {
+            const currentStock = Number(product.stock_quantity) || 0;
+            const restoreQty =
+              (Number(item.quantity) || 0) + (Number(item.free_quantity) || 0);
+
+            // Update product stock
+            await supabaseAdmin
+              .from("products")
+              .update({ stock_quantity: currentStock + restoreQty })
+              .eq("id", item.product_id);
+          }
+        }
+      }
+    }
+
+    // 3. Update Order Status
     const { error } = await supabaseAdmin
       .from("orders")
       .update({ status })
@@ -124,6 +168,7 @@ export async function PATCH(
 
     return NextResponse.json({ message: "Order updated successfully" });
   } catch (error: any) {
+    console.error("Order update error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
