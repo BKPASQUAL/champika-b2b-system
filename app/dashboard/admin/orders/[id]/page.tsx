@@ -81,6 +81,7 @@ export default function ViewOrderPage({
   // Dialog States
   const [showApproveDialog, setShowApproveDialog] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [showSaveConfirmDialog, setShowSaveConfirmDialog] = useState(false); // New State for Save Dialog
 
   // --- 1. Fetch Order Data ---
   const fetchOrderDetails = async () => {
@@ -93,10 +94,9 @@ export default function ViewOrderPage({
       const data = await res.json();
       setOrder(data);
 
-      // Map and Calculate Item Discounts
       const mappedItems = data.items.map((item: any) => {
         const grossAmount = item.price * item.qty;
-        const netAmount = item.total; // This comes from DB
+        const netAmount = item.total;
         const discountAmount = Math.max(0, grossAmount - netAmount);
         const discountPercent =
           grossAmount > 0 ? (discountAmount / grossAmount) * 100 : 0;
@@ -129,14 +129,10 @@ export default function ViewOrderPage({
       prevItems.map((item) => {
         if (item.id === itemId) {
           const updatedItem = { ...item, [field]: numValue };
-
-          // Recalculate Totals based on Price, Qty and Discount %
           const gross = updatedItem.price * updatedItem.qty;
           const discountAmt = (gross * updatedItem.discountPercent) / 100;
-
           updatedItem.discountAmount = discountAmt;
           updatedItem.total = gross - discountAmt;
-
           return updatedItem;
         }
         return item;
@@ -146,6 +142,7 @@ export default function ViewOrderPage({
 
   const handleRemoveItem = (itemId: string) => {
     setItems((prevItems) => prevItems.filter((item) => item.id !== itemId));
+    toast.info("Item removed. Click 'Save Changes' to apply.");
   };
 
   const saveChanges = async () => {
@@ -168,15 +165,21 @@ export default function ViewOrderPage({
         }),
       });
 
-      if (!res.ok) throw new Error("Failed to update order");
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to update order");
+      }
 
       toast.success("Order updated successfully!");
       setIsEditing(false);
-      fetchOrderDetails(); // Refresh
-    } catch (error) {
-      toast.error("Failed to save changes");
+      fetchOrderDetails();
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error.message || "Failed to save changes");
     } finally {
       setProcessing(false);
+      setShowSaveConfirmDialog(false); // Close the dialog
     }
   };
 
@@ -194,8 +197,8 @@ export default function ViewOrderPage({
 
       toast.success("Order Approved! Moved to Processing.");
       router.push("/dashboard/admin/orders/pending");
-    } catch (error) {
-      toast.error("Failed to update status");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to update status");
     } finally {
       setProcessing(false);
       setShowApproveDialog(false);
@@ -215,8 +218,8 @@ export default function ViewOrderPage({
 
       toast.success("Order Cancelled.");
       router.push("/dashboard/admin/orders");
-    } catch (error) {
-      toast.error("Failed to cancel order");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to cancel order");
     } finally {
       setProcessing(false);
       setShowRejectDialog(false);
@@ -235,7 +238,6 @@ export default function ViewOrderPage({
     return <div className="p-10 text-center text-red-500">Order not found</div>;
   }
 
-  // --- SUMMARY CALCULATIONS ---
   const totalItemGross = items.reduce(
     (acc, item) => acc + item.price * item.qty,
     0
@@ -244,19 +246,14 @@ export default function ViewOrderPage({
     (acc, item) => acc + item.discountAmount,
     0
   );
-
-  // If editing, recalculate totals live. If viewing, use DB stored total.
   const subtotal = items.reduce((acc, item) => acc + item.total, 0);
   const finalGrandTotal = isEditing ? subtotal : order.totalAmount;
-
-  // Extra Discount is the gap between Item Subtotal and the Final Stored Amount
   const extraDiscountAmount = Math.max(0, subtotal - finalGrandTotal);
   const extraDiscountPercent =
     subtotal > 0 ? (extraDiscountAmount / subtotal) * 100 : 0;
 
   return (
     <div className="space-y-6 mx-auto pb-10">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Button
@@ -294,7 +291,7 @@ export default function ViewOrderPage({
                 size="sm"
                 onClick={() => {
                   setIsEditing(false);
-                  fetchOrderDetails(); // Reset changes
+                  fetchOrderDetails();
                 }}
                 disabled={processing}
               >
@@ -302,7 +299,7 @@ export default function ViewOrderPage({
               </Button>
               <Button
                 size="sm"
-                onClick={saveChanges}
+                onClick={() => setShowSaveConfirmDialog(true)} // Open Confirmation Dialog
                 disabled={processing}
                 className="bg-green-600 hover:bg-green-700"
               >
@@ -360,9 +357,7 @@ export default function ViewOrderPage({
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* LEFT COLUMN: Details & Items */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Customer Info Card */}
           <Card>
             <CardHeader className="">
               <CardTitle className="text-lg">Customer & Invoice</CardTitle>
@@ -441,7 +436,6 @@ export default function ViewOrderPage({
             </CardContent>
           </Card>
 
-          {/* Order Items Table */}
           <Card>
             <CardHeader className="">
               <div className="flex items-center justify-between">
@@ -565,8 +559,6 @@ export default function ViewOrderPage({
                               <span className="text-muted-foreground">-</span>
                             )}
                           </TableCell>
-
-                          {/* Discount Column */}
                           <TableCell className="text-center">
                             {isEditing ? (
                               <div className="flex items-center justify-center gap-1">
@@ -605,7 +597,6 @@ export default function ViewOrderPage({
                               </div>
                             )}
                           </TableCell>
-
                           <TableCell className="text-right font-bold text-sm">
                             {item.total.toLocaleString()}
                           </TableCell>
@@ -631,7 +622,6 @@ export default function ViewOrderPage({
           </Card>
         </div>
 
-        {/* RIGHT COLUMN: Summary */}
         <div className="lg:col-span-1">
           <Card className="sticky top-6">
             <CardHeader className="pb-4">
@@ -639,7 +629,6 @@ export default function ViewOrderPage({
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2.5">
-                {/* Basic Counts */}
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Total Items</span>
                   <span className="font-medium">{items.length}</span>
@@ -654,36 +643,26 @@ export default function ViewOrderPage({
                     )}
                   </span>
                 </div>
-
                 <Separator />
-
-                {/* Gross Amount */}
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Gross Amount</span>
                   <span className="font-medium">
                     LKR {totalItemGross.toLocaleString()}
                   </span>
                 </div>
-
-                {/* Item Discounts */}
                 {totalItemDiscounts > 0 && (
                   <div className="flex justify-between text-sm text-red-600">
                     <span>Item Discounts</span>
                     <span>- LKR {totalItemDiscounts.toLocaleString()}</span>
                   </div>
                 )}
-
                 <Separator className="opacity-50" />
-
-                {/* Subtotal */}
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-700 font-medium">Subtotal</span>
                   <span className="font-bold">
                     LKR {subtotal.toLocaleString()}
                   </span>
                 </div>
-
-                {/* Extra Discount (Order Level) */}
                 {extraDiscountAmount > 0 && (
                   <div className="flex justify-between text-sm text-red-600">
                     <span>
@@ -695,10 +674,7 @@ export default function ViewOrderPage({
                     <span>- LKR {extraDiscountAmount.toLocaleString()}</span>
                   </div>
                 )}
-
                 <Separator className="border-t-2" />
-
-                {/* Grand Total */}
                 <div className="flex justify-between items-center pt-1">
                   <span className="font-bold text-lg">Grand Total</span>
                   <span className="font-bold text-2xl text-primary">
@@ -706,7 +682,6 @@ export default function ViewOrderPage({
                   </span>
                 </div>
               </div>
-
               {!isEditing && (
                 <Button
                   className="w-full mt-4"
@@ -760,6 +735,31 @@ export default function ViewOrderPage({
               className="bg-red-600 hover:bg-red-700"
             >
               Reject Order
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Save Confirmation Dialog */}
+      <AlertDialog
+        open={showSaveConfirmDialog}
+        onOpenChange={setShowSaveConfirmDialog}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Save Changes</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to save the changes to this order? This
+              action will update the order details.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={saveChanges}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              Save Changes
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
