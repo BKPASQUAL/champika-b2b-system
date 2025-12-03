@@ -6,9 +6,7 @@ import {
   ArrowLeft,
   Printer,
   CheckCircle2,
-  FileText,
   User,
-  MapPin,
   Phone,
   Briefcase,
   Loader2,
@@ -16,12 +14,6 @@ import {
   Edit,
   Save,
   X,
-  Calendar,
-  Hash,
-  CreditCard,
-  Plus,
-  Search,
-  Package,
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -55,31 +47,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-
-interface Product {
-  id: string;
-  sku: string;
-  name: string;
-  unit: string;
-  price: number;
-  stock: number;
-}
 
 interface OrderItem {
   id: string;
@@ -89,6 +56,8 @@ interface OrderItem {
   price: number;
   qty: number;
   free: number;
+  discountPercent: number;
+  discountAmount: number;
   total: number;
   productId?: string;
 }
@@ -112,15 +81,6 @@ export default function ViewOrderPage({
   // Dialog States
   const [showApproveDialog, setShowApproveDialog] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
-  const [showAddItemDialog, setShowAddItemDialog] = useState(false);
-
-  // Products for adding
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loadingProducts, setLoadingProducts] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [newItemQty, setNewItemQty] = useState(1);
-  const [newItemFree, setNewItemFree] = useState(0);
 
   // --- 1. Fetch Order Data ---
   const fetchOrderDetails = async () => {
@@ -132,7 +92,23 @@ export default function ViewOrderPage({
 
       const data = await res.json();
       setOrder(data);
-      setItems(data.items);
+
+      // Map and Calculate Item Discounts
+      const mappedItems = data.items.map((item: any) => {
+        const grossAmount = item.price * item.qty;
+        const netAmount = item.total; // This comes from DB
+        const discountAmount = Math.max(0, grossAmount - netAmount);
+        const discountPercent =
+          grossAmount > 0 ? (discountAmount / grossAmount) * 100 : 0;
+
+        return {
+          ...item,
+          discountPercent: parseFloat(discountPercent.toFixed(2)),
+          discountAmount: discountAmount,
+        };
+      });
+
+      setItems(mappedItems);
     } catch (error) {
       console.error(error);
       toast.error("Could not fetch order details");
@@ -141,27 +117,11 @@ export default function ViewOrderPage({
     }
   };
 
-  // --- 2. Fetch Products for Adding ---
-  const fetchProducts = async () => {
-    try {
-      setLoadingProducts(true);
-      const res = await fetch("/api/products");
-      if (!res.ok) throw new Error("Failed to load products");
-      const data = await res.json();
-      setProducts(data);
-    } catch (error) {
-      console.error(error);
-      toast.error("Could not load products");
-    } finally {
-      setLoadingProducts(false);
-    }
-  };
-
   useEffect(() => {
     fetchOrderDetails();
   }, [id]);
 
-  // --- 3. Editing Logic ---
+  // --- 2. Editing Logic ---
   const handleItemChange = (itemId: string, field: string, value: string) => {
     const numValue = parseFloat(value) || 0;
 
@@ -169,7 +129,14 @@ export default function ViewOrderPage({
       prevItems.map((item) => {
         if (item.id === itemId) {
           const updatedItem = { ...item, [field]: numValue };
-          updatedItem.total = updatedItem.price * updatedItem.qty;
+
+          // Recalculate Totals based on Price, Qty and Discount %
+          const gross = updatedItem.price * updatedItem.qty;
+          const discountAmt = (gross * updatedItem.discountPercent) / 100;
+
+          updatedItem.discountAmount = discountAmt;
+          updatedItem.total = gross - discountAmt;
+
           return updatedItem;
         }
         return item;
@@ -179,42 +146,6 @@ export default function ViewOrderPage({
 
   const handleRemoveItem = (itemId: string) => {
     setItems((prevItems) => prevItems.filter((item) => item.id !== itemId));
-  };
-
-  const handleAddNewItem = () => {
-    if (!selectedProduct) {
-      toast.error("Please select a product");
-      return;
-    }
-
-    // Check if product already exists in items
-    const exists = items.find((item) => item.productId === selectedProduct.id);
-    if (exists) {
-      toast.error("This product is already in the order");
-      return;
-    }
-
-    const newItem: OrderItem = {
-      id: `temp-${Date.now()}`, // Temporary ID
-      sku: selectedProduct.sku,
-      name: selectedProduct.name,
-      unit: selectedProduct.unit,
-      price: selectedProduct.price,
-      qty: newItemQty,
-      free: newItemFree,
-      total: selectedProduct.price * newItemQty,
-      productId: selectedProduct.id,
-    };
-
-    setItems([...items, newItem]);
-    toast.success(`Added ${selectedProduct.name} to order`);
-
-    // Reset dialog
-    setShowAddItemDialog(false);
-    setSelectedProduct(null);
-    setNewItemQty(1);
-    setNewItemFree(0);
-    setSearchQuery("");
   };
 
   const saveChanges = async () => {
@@ -249,7 +180,7 @@ export default function ViewOrderPage({
     }
   };
 
-  // --- 4. Action Buttons Logic ---
+  // --- 3. Action Buttons Logic ---
   const executeApprove = async () => {
     setProcessing(true);
     try {
@@ -292,12 +223,6 @@ export default function ViewOrderPage({
     }
   };
 
-  const filteredProducts = products.filter(
-    (product) =>
-      product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.sku.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
   if (loading) {
     return (
       <div className="flex justify-center items-center h-[calc(100vh-200px)]">
@@ -310,8 +235,24 @@ export default function ViewOrderPage({
     return <div className="p-10 text-center text-red-500">Order not found</div>;
   }
 
-  const subtotal = items.reduce((acc, item) => acc + (item.total || 0), 0);
-  const grandTotal = subtotal;
+  // --- SUMMARY CALCULATIONS ---
+  const totalItemGross = items.reduce(
+    (acc, item) => acc + item.price * item.qty,
+    0
+  );
+  const totalItemDiscounts = items.reduce(
+    (acc, item) => acc + item.discountAmount,
+    0
+  );
+
+  // If editing, recalculate totals live. If viewing, use DB stored total.
+  const subtotal = items.reduce((acc, item) => acc + item.total, 0);
+  const finalGrandTotal = isEditing ? subtotal : order.totalAmount;
+
+  // Extra Discount is the gap between Item Subtotal and the Final Stored Amount
+  const extraDiscountAmount = Math.max(0, subtotal - finalGrandTotal);
+  const extraDiscountPercent =
+    subtotal > 0 ? (extraDiscountAmount / subtotal) * 100 : 0;
 
   return (
     <div className="space-y-6 mx-auto pb-10">
@@ -421,15 +362,12 @@ export default function ViewOrderPage({
       <div className="grid gap-6 lg:grid-cols-3">
         {/* LEFT COLUMN: Details & Items */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Customer & Invoice Info Card */}
+          {/* Customer Info Card */}
           <Card>
             <CardHeader className="">
-              <CardTitle className="text-lg">
-                Invoice & Customer Details
-              </CardTitle>
+              <CardTitle className="text-lg">Customer & Invoice</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Invoice Number Highlight */}
               <div className="bg-gradient-to-r from-blue-50 to-blue-100/50 p-4 rounded-lg border border-blue-200">
                 <div className="flex justify-between items-center">
                   <div>
@@ -464,7 +402,6 @@ export default function ViewOrderPage({
                 </div>
               </div>
 
-              {/* Customer & Sales Info Grid */}
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground font-semibold uppercase">
@@ -512,23 +449,10 @@ export default function ViewOrderPage({
                   <CardTitle className="text-lg">Order Items</CardTitle>
                   <CardDescription className="text-xs mt-1">
                     {isEditing
-                      ? "Modify quantities or add new items"
+                      ? "Modify quantities, prices or discounts"
                       : `${items.length} items in this order`}
                   </CardDescription>
                 </div>
-                {isEditing && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setShowAddItemDialog(true);
-                      fetchProducts();
-                    }}
-                    className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
-                  >
-                    <Plus className="w-4 h-4 mr-2" /> Add Items
-                  </Button>
-                )}
               </div>
             </CardHeader>
             <CardContent className="">
@@ -536,25 +460,28 @@ export default function ViewOrderPage({
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/50">
-                      <TableHead className="w-[100px]">SKU</TableHead>
+                      <TableHead className="w-[80px]">SKU</TableHead>
                       <TableHead>Product</TableHead>
-                      <TableHead className="text-right w-[80px]">
+                      <TableHead className="text-right w-[70px]">
                         Unit
                       </TableHead>
                       <TableHead className="text-right w-[100px]">
                         Price
                       </TableHead>
-                      <TableHead className="text-right w-[100px]">
+                      <TableHead className="text-center w-[80px]">
                         Qty
                       </TableHead>
-                      <TableHead className="text-right w-[80px] text-green-600">
+                      <TableHead className="text-center w-[70px] text-green-600">
                         Free
                       </TableHead>
-                      <TableHead className="text-right w-[120px]">
+                      <TableHead className="text-center w-[90px]">
+                        Discount
+                      </TableHead>
+                      <TableHead className="text-right w-[110px]">
                         Total
                       </TableHead>
                       {isEditing && (
-                        <TableHead className="w-[60px]"></TableHead>
+                        <TableHead className="w-[50px]"></TableHead>
                       )}
                     </TableRow>
                   </TableHeader>
@@ -562,7 +489,7 @@ export default function ViewOrderPage({
                     {items.length === 0 ? (
                       <TableRow>
                         <TableCell
-                          colSpan={isEditing ? 8 : 7}
+                          colSpan={isEditing ? 9 : 8}
                           className="text-center py-8 text-muted-foreground"
                         >
                           No items in this order
@@ -574,17 +501,17 @@ export default function ViewOrderPage({
                           <TableCell className="font-mono text-xs text-muted-foreground">
                             {item.sku}
                           </TableCell>
-                          <TableCell className="font-medium">
+                          <TableCell className="font-medium text-sm">
                             {item.name}
                           </TableCell>
-                          <TableCell className="text-right text-sm text-muted-foreground">
+                          <TableCell className="text-right text-xs text-muted-foreground">
                             {item.unit}
                           </TableCell>
                           <TableCell className="text-right">
                             {isEditing ? (
                               <Input
                                 type="number"
-                                className="w-20 text-right h-8 ml-auto text-sm"
+                                className="w-20 text-right h-8 ml-auto text-sm px-1"
                                 value={item.price}
                                 onChange={(e) =>
                                   handleItemChange(
@@ -600,11 +527,11 @@ export default function ViewOrderPage({
                               </span>
                             )}
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-center">
                             {isEditing ? (
                               <Input
                                 type="number"
-                                className="w-16 text-right h-8 ml-auto text-sm font-medium"
+                                className="w-14 text-center h-8 mx-auto text-sm font-medium px-1"
                                 value={item.qty}
                                 onChange={(e) =>
                                   handleItemChange(
@@ -618,11 +545,11 @@ export default function ViewOrderPage({
                               <span className="font-medium">{item.qty}</span>
                             )}
                           </TableCell>
-                          <TableCell className="text-right text-green-600">
+                          <TableCell className="text-center text-green-600">
                             {isEditing ? (
                               <Input
                                 type="number"
-                                className="w-16 text-right h-8 ml-auto text-sm border-green-200 focus:border-green-500"
+                                className="w-14 text-center h-8 mx-auto text-sm border-green-200 focus:border-green-500 px-1"
                                 value={item.free}
                                 onChange={(e) =>
                                   handleItemChange(
@@ -638,8 +565,49 @@ export default function ViewOrderPage({
                               <span className="text-muted-foreground">-</span>
                             )}
                           </TableCell>
-                          <TableCell className="text-right font-bold">
-                            LKR {item.total.toLocaleString()}
+
+                          {/* Discount Column */}
+                          <TableCell className="text-center">
+                            {isEditing ? (
+                              <div className="flex items-center justify-center gap-1">
+                                <Input
+                                  type="number"
+                                  className="w-12 text-center h-8 text-sm px-1"
+                                  value={item.discountPercent}
+                                  onChange={(e) =>
+                                    handleItemChange(
+                                      item.id,
+                                      "discountPercent",
+                                      e.target.value
+                                    )
+                                  }
+                                />
+                                <span className="text-xs text-muted-foreground">
+                                  %
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col items-center">
+                                {item.discountPercent > 0 ? (
+                                  <>
+                                    <span className="text-xs font-medium text-red-500">
+                                      {item.discountPercent}%
+                                    </span>
+                                    <span className="text-[10px] text-muted-foreground">
+                                      (-{item.discountAmount.toLocaleString()})
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className="text-muted-foreground">
+                                    -
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </TableCell>
+
+                          <TableCell className="text-right font-bold text-sm">
+                            {item.total.toLocaleString()}
                           </TableCell>
                           {isEditing && (
                             <TableCell>
@@ -671,6 +639,7 @@ export default function ViewOrderPage({
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2.5">
+                {/* Basic Counts */}
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Total Items</span>
                   <span className="font-medium">{items.length}</span>
@@ -688,19 +657,52 @@ export default function ViewOrderPage({
 
                 <Separator />
 
+                {/* Gross Amount */}
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="text-muted-foreground">Gross Amount</span>
                   <span className="font-medium">
+                    LKR {totalItemGross.toLocaleString()}
+                  </span>
+                </div>
+
+                {/* Item Discounts */}
+                {totalItemDiscounts > 0 && (
+                  <div className="flex justify-between text-sm text-red-600">
+                    <span>Item Discounts</span>
+                    <span>- LKR {totalItemDiscounts.toLocaleString()}</span>
+                  </div>
+                )}
+
+                <Separator className="opacity-50" />
+
+                {/* Subtotal */}
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-700 font-medium">Subtotal</span>
+                  <span className="font-bold">
                     LKR {subtotal.toLocaleString()}
                   </span>
                 </div>
 
-                <Separator />
+                {/* Extra Discount (Order Level) */}
+                {extraDiscountAmount > 0 && (
+                  <div className="flex justify-between text-sm text-red-600">
+                    <span>
+                      Extra Discount{" "}
+                      <span className="text-xs ml-1 bg-red-50 px-1 rounded">
+                        ({extraDiscountPercent.toFixed(1)}%)
+                      </span>
+                    </span>
+                    <span>- LKR {extraDiscountAmount.toLocaleString()}</span>
+                  </div>
+                )}
 
-                <div className="flex justify-between items-center pt-2">
-                  <span className="font-bold">Grand Total</span>
+                <Separator className="border-t-2" />
+
+                {/* Grand Total */}
+                <div className="flex justify-between items-center pt-1">
+                  <span className="font-bold text-lg">Grand Total</span>
                   <span className="font-bold text-2xl text-primary">
-                    LKR {grandTotal.toLocaleString()}
+                    LKR {finalGrandTotal.toLocaleString()}
                   </span>
                 </div>
               </div>
@@ -718,170 +720,6 @@ export default function ViewOrderPage({
           </Card>
         </div>
       </div>
-
-      {/* Add Item Dialog */}
-      <Dialog open={showAddItemDialog} onOpenChange={setShowAddItemDialog}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Package className="w-5 h-5" />
-              Add Product to Order
-            </DialogTitle>
-            <DialogDescription>
-              Search and select a product to add to this order
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="flex-1 overflow-hidden flex flex-col space-y-4">
-            {/* Search Input */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-              <Input
-                placeholder="Search products by name or SKU..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-
-            {/* Products List */}
-            <div className="flex-1 overflow-y-auto border rounded-lg">
-              {loadingProducts ? (
-                <div className="flex justify-center items-center h-40">
-                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : filteredProducts.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Package className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                  <p>No products found</p>
-                </div>
-              ) : (
-                <div className="divide-y">
-                  {filteredProducts.map((product) => (
-                    <div
-                      key={product.id}
-                      className={`p-3 cursor-pointer transition-colors hover:bg-muted/50 ${
-                        selectedProduct?.id === product.id
-                          ? "bg-blue-50 border-l-4 border-blue-500"
-                          : ""
-                      }`}
-                      onClick={() => setSelectedProduct(product)}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <div className="font-medium">{product.name}</div>
-                          <div className="flex items-center gap-3 mt-1">
-                            <span className="text-xs font-mono text-muted-foreground">
-                              {product.sku}
-                            </span>
-                            <Badge
-                              variant="outline"
-                              className="text-[10px] h-5"
-                            >
-                              {product.unit}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground">
-                              Stock: {product.stock}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="font-bold">
-                            LKR {product.price.toLocaleString()}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Quantity Inputs */}
-            {selectedProduct && (
-              <Card className="border-2 border-blue-200 bg-blue-50/50">
-                <CardContent className="p-4">
-                  <div className="space-y-3">
-                    <div>
-                      <Label className="text-xs font-semibold text-blue-900">
-                        Selected Product
-                      </Label>
-                      <div className="font-medium">{selectedProduct.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        LKR {selectedProduct.price.toLocaleString()} /{" "}
-                        {selectedProduct.unit}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <Label htmlFor="qty" className="text-xs">
-                          Quantity <span className="text-red-500">*</span>
-                        </Label>
-                        <Input
-                          id="qty"
-                          type="number"
-                          min="1"
-                          value={newItemQty}
-                          onChange={(e) =>
-                            setNewItemQty(Number(e.target.value))
-                          }
-                          className="mt-1"
-                        />
-                      </div>
-                      <div>
-                        <Label
-                          htmlFor="free"
-                          className="text-xs text-green-600"
-                        >
-                          Free Items
-                        </Label>
-                        <Input
-                          id="free"
-                          type="number"
-                          min="0"
-                          value={newItemFree}
-                          onChange={(e) =>
-                            setNewItemFree(Number(e.target.value))
-                          }
-                          className="mt-1 border-green-200 focus:border-green-500"
-                        />
-                      </div>
-                    </div>
-                    <div className="flex justify-between items-center pt-2 border-t">
-                      <span className="text-sm font-medium">Item Total:</span>
-                      <span className="text-lg font-bold text-blue-900">
-                        LKR{" "}
-                        {(selectedProduct.price * newItemQty).toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowAddItemDialog(false);
-                setSelectedProduct(null);
-                setSearchQuery("");
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleAddNewItem}
-              disabled={!selectedProduct || newItemQty < 1}
-              className="bg-green-600 hover:bg-green-700"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Add to Order
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Approve Dialog */}
       <AlertDialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
