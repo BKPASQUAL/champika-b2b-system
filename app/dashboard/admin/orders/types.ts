@@ -5,16 +5,17 @@ export type OrderStatus =
   | "Processing"
   | "Checking"
   | "Loading"
-  | "In Transit" // Added
+  | "In Transit"
   | "Delivered"
   | "Cancelled"
-  | "Completed"; // Added
+  | "Completed";
 
 export type PaymentStatus = "Paid" | "Unpaid" | "Partial";
 
 export interface Order {
   id: string;
   orderId: string;
+  invoiceNo?: string; // Added Invoice No
   customerName: string;
   shopName: string;
   date: string;
@@ -28,6 +29,7 @@ export interface Order {
 export type SortField =
   | "date"
   | "orderId"
+  | "invoiceNo" // Added sort field
   | "customerName"
   | "totalAmount"
   | "status";

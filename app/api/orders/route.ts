@@ -19,7 +19,8 @@ export async function GET(request: NextRequest) {
           full_name
         ),
         invoices (
-          status
+          status,
+          invoice_no
         ),
         order_items (
           id
@@ -39,14 +40,19 @@ export async function GET(request: NextRequest) {
 
     // Map to Frontend Order Interface
     const formattedOrders = data.map((order: any) => {
-      // Get payment status from the related invoice (assuming 1-to-1 mostly)
+      // Get payment status and invoice number from the related invoice
       const paymentStatus = order.invoices?.[0]?.status || "Unpaid";
+      // Priority: Invoice table > Order table > Placeholder
+      const invoiceNumber =
+        order.invoices?.[0]?.invoice_no || order.invoice_no || "N/A";
+
       const repName = order.profiles?.full_name || "Unknown";
       const itemsCount = order.order_items?.length || 0;
 
       return {
         id: order.id,
         orderId: order.order_id,
+        invoiceNo: invoiceNumber, // Mapped Invoice Number
         customerName: order.customers?.owner_name || "Unknown",
         shopName: order.customers?.shop_name || "Unknown Shop",
         date: order.order_date,
