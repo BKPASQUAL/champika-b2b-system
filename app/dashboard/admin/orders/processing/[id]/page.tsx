@@ -292,7 +292,7 @@ export default function ProcessOrderPage({
         {/* Header Actions & Stats */}
         <div className="flex flex-col sm:flex-row gap-4 w-full xl:w-auto">
           {/* Stats Grid - Updated for 4 Columns */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-lg border border-slate-100 flex-1">
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-lg border border-slate-100 flex-1">
             {/* Invoice No (Added) */}
             <div className="flex items-center gap-3">
               <div className="p-2 bg-white rounded-md border shadow-sm text-slate-500">
@@ -410,8 +410,8 @@ export default function ProcessOrderPage({
                       >
                         <Edit className="w-4 h-4 mr-2" /> Edit Order
                       </Button>
-                      {/* Progress Bar (Only show when NOT editing) */}
-                      <div className="w-[120px] hidden sm:flex flex-col gap-1 ml-4">
+                      {/* --- PROGRESS BAR (Visible on Mobile & Desktop) --- */}
+                      <div className="w-[120px] flex flex-col gap-1 ml-2 sm:ml-4">
                         <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-200">
                           <div
                             className="h-full bg-green-500 transition-all duration-500 ease-out"
