@@ -13,6 +13,9 @@ import {
   Briefcase,
   Loader2,
   XCircle,
+  Edit,
+  Save,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,34 +62,90 @@ export default function ViewOrderPage({
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
 
+  // Edit Mode State
+  const [isEditing, setIsEditing] = useState(false);
+
   // Dialog States
   const [showApproveDialog, setShowApproveDialog] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
 
   // --- 1. Fetch Order Data ---
+  const fetchOrderDetails = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch(`/api/orders/${id}`);
+
+      if (!res.ok) throw new Error("Failed to load order");
+
+      const data = await res.json();
+      setOrder(data);
+      setItems(data.items);
+    } catch (error) {
+      console.error(error);
+      toast.error("Could not fetch order details");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchOrderDetails = async () => {
-      try {
-        setLoading(true);
-        const res = await fetch(`/api/orders/${id}`);
-
-        if (!res.ok) throw new Error("Failed to load order");
-
-        const data = await res.json();
-        setOrder(data);
-        setItems(data.items);
-      } catch (error) {
-        console.error(error);
-        toast.error("Could not fetch order details");
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchOrderDetails();
   }, [id]);
 
-  // --- 2. Confirm Approve Logic ---
+  // --- 2. Editing Logic ---
+
+  // Handle individual field updates in the table
+  const handleItemChange = (itemId: string, field: string, value: string) => {
+    const numValue = parseFloat(value) || 0;
+
+    setItems((prevItems) =>
+      prevItems.map((item) => {
+        if (item.id === itemId) {
+          const updatedItem = { ...item, [field]: numValue };
+          // Recalculate total for this item
+          // Assuming no discount for now, or simple price * qty
+          updatedItem.total = updatedItem.price * updatedItem.qty;
+          return updatedItem;
+        }
+        return item;
+      })
+    );
+  };
+
+  const saveChanges = async () => {
+    if (!order) return;
+    setProcessing(true);
+
+    // Calculate new total
+    const newTotalAmount = items.reduce(
+      (acc, item) => acc + (item.total || 0),
+      0
+    );
+
+    try {
+      const res = await fetch(`/api/orders/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update_items",
+          items: items,
+          totalAmount: newTotalAmount,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to update order");
+
+      toast.success("Order updated successfully! Stocks adjusted.");
+      setIsEditing(false);
+      fetchOrderDetails(); // Refresh to get consistent data from DB
+    } catch (error) {
+      toast.error("Failed to save changes");
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // --- 3. Action Buttons Logic ---
   const executeApprove = async () => {
     setProcessing(true);
     try {
@@ -108,7 +167,6 @@ export default function ViewOrderPage({
     }
   };
 
-  // --- 3. Confirm Reject Logic ---
   const executeReject = async () => {
     setProcessing(true);
     try {
@@ -142,10 +200,10 @@ export default function ViewOrderPage({
     return <div className="p-10 text-center text-red-500">Order not found</div>;
   }
 
-  // Calculations
+  // Live Calculations for Summary
   const subtotal = items.reduce((acc, item) => acc + (item.total || 0), 0);
-  const grandTotal = order.totalAmount;
-  const discountAmount = Math.max(0, subtotal - grandTotal);
+  const grandTotal = subtotal; // Assuming no extra discounts for now
+  // If original order had a discount logic, apply it here similarly
 
   return (
     <div className="space-y-4 mx-auto pb-10">
@@ -157,7 +215,7 @@ export default function ViewOrderPage({
           </Button>
           <div>
             <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-              Order Review
+              {isEditing ? "Editing Order" : "Order Review"}
               <Badge
                 variant="outline"
                 className="bg-blue-50 text-blue-700 border-blue-200"
@@ -166,41 +224,76 @@ export default function ViewOrderPage({
               </Badge>
             </h1>
             <p className="text-muted-foreground text-sm">
-              Review details for order{" "}
-              <span className="font-mono font-medium text-foreground">
-                {order.orderId}
-              </span>
+              {isEditing ? (
+                "Update quantities below. Stock will adjust automatically."
+              ) : (
+                <>
+                  Review details for order{" "}
+                  <span className="font-mono font-medium text-foreground">
+                    {order.orderId}
+                  </span>
+                </>
+              )}
             </p>
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => window.print()}>
-            <Printer className="w-4 h-4 mr-2" /> Print
-          </Button>
-
-          {/* Approval Buttons only for Pending Orders */}
-          {order.status === "Pending" && (
+          {isEditing ? (
             <>
               <Button
                 variant="outline"
-                className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
-                onClick={() => setShowRejectDialog(true)}
+                onClick={() => setIsEditing(false)}
                 disabled={processing}
               >
-                <XCircle className="w-4 h-4 mr-2" /> Reject
+                <X className="w-4 h-4 mr-2" /> Cancel
               </Button>
-              <Button
-                className="bg-green-600 hover:bg-green-700 text-white"
-                onClick={() => setShowApproveDialog(true)}
-                disabled={processing}
-              >
+              <Button onClick={saveChanges} disabled={processing}>
                 {processing ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 ) : (
-                  <CheckCircle2 className="w-4 h-4 mr-2" />
+                  <Save className="w-4 h-4 mr-2" />
                 )}
-                Approve & Process
+                Save Changes
               </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => window.print()}>
+                <Printer className="w-4 h-4 mr-2" /> Print
+              </Button>
+
+              {/* Allow editing if Pending */}
+              {order.status === "Pending" && (
+                <Button variant="secondary" onClick={() => setIsEditing(true)}>
+                  <Edit className="w-4 h-4 mr-2" /> Edit Order
+                </Button>
+              )}
+
+              {/* Approval Buttons only for Pending Orders */}
+              {order.status === "Pending" && (
+                <>
+                  <Button
+                    variant="outline"
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                    onClick={() => setShowRejectDialog(true)}
+                    disabled={processing}
+                  >
+                    <XCircle className="w-4 h-4 mr-2" /> Reject
+                  </Button>
+                  <Button
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                    onClick={() => setShowApproveDialog(true)}
+                    disabled={processing}
+                  >
+                    {processing ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4 mr-2" />
+                    )}
+                    Approve
+                  </Button>
+                </>
+              )}
             </>
           )}
         </div>
@@ -209,7 +302,7 @@ export default function ViewOrderPage({
       <div className="grid gap-6 lg:grid-cols-3">
         {/* LEFT COLUMN: Details & Items */}
         <div className="lg:col-span-2 space-y-4">
-          {/* 1. Customer & Billing Information */}
+          {/* 1. Customer Information (Read Only) */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -290,12 +383,15 @@ export default function ViewOrderPage({
               </div>
             </CardContent>
           </Card>
-
-          {/* 2. Order Items Table */}
+          {/* 2. Order Items Table (Editable) */}
           <Card>
             <CardHeader>
               <CardTitle>Order Items</CardTitle>
-              <CardDescription>Products included in this order</CardDescription>
+              <CardDescription>
+                {isEditing
+                  ? "Modify quantities and prices directly below."
+                  : "Products included in this order"}
+              </CardDescription>
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto px-4">
@@ -310,7 +406,6 @@ export default function ViewOrderPage({
                       <TableHead className="text-right text-green-600">
                         Free
                       </TableHead>
-                      <TableHead className="text-right">Disc %</TableHead>
                       <TableHead className="text-right">Total</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -326,18 +421,61 @@ export default function ViewOrderPage({
                         <TableCell className="text-right text-muted-foreground">
                           {item.unit}
                         </TableCell>
+
+                        {/* Editable Fields */}
                         <TableCell className="text-right">
-                          {item.price.toLocaleString()}
+                          {isEditing ? (
+                            <Input
+                              type="number"
+                              className="w-24 text-right h-8 ml-auto"
+                              value={item.price}
+                              onChange={(e) =>
+                                handleItemChange(
+                                  item.id,
+                                  "price",
+                                  e.target.value
+                                )
+                              }
+                            />
+                          ) : (
+                            item.price.toLocaleString()
+                          )}
                         </TableCell>
                         <TableCell className="text-right font-medium">
-                          {item.qty}
+                          {isEditing ? (
+                            <Input
+                              type="number"
+                              className="w-20 text-right h-8 ml-auto"
+                              value={item.qty}
+                              onChange={(e) =>
+                                handleItemChange(item.id, "qty", e.target.value)
+                              }
+                            />
+                          ) : (
+                            item.qty
+                          )}
                         </TableCell>
                         <TableCell className="text-right text-green-600">
-                          {item.free > 0 ? item.free : "-"}
+                          {isEditing ? (
+                            <Input
+                              type="number"
+                              className="w-20 text-right h-8 ml-auto border-green-200 focus:border-green-500"
+                              value={item.free}
+                              onChange={(e) =>
+                                handleItemChange(
+                                  item.id,
+                                  "free",
+                                  e.target.value
+                                )
+                              }
+                            />
+                          ) : item.free > 0 ? (
+                            item.free
+                          ) : (
+                            "-"
+                          )}
                         </TableCell>
-                        <TableCell className="text-right text-red-500">
-                          {item.disc > 0 ? item.disc + "%" : "-"}
-                        </TableCell>
+
                         <TableCell className="text-right font-bold">
                           LKR {item.total.toLocaleString()}
                         </TableCell>
@@ -358,31 +496,24 @@ export default function ViewOrderPage({
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Status Section */}
-              <div className="rounded-lg border p-4 bg-muted/10">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm text-muted-foreground">
-                    Payment Status
-                  </span>
-                  <Badge
-                    variant={
-                      order.paymentStatus === "Paid" ? "default" : "destructive"
-                    }
-                  >
-                    {order.paymentStatus}
-                  </Badge>
+              {!isEditing && (
+                <div className="rounded-lg border p-4 bg-muted/10">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">
+                      Payment Status
+                    </span>
+                    <Badge
+                      variant={
+                        order.paymentStatus === "Paid"
+                          ? "default"
+                          : "destructive"
+                      }
+                    >
+                      {order.paymentStatus}
+                    </Badge>
+                  </div>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">
-                    Order Status
-                  </span>
-                  <Badge
-                    variant="secondary"
-                    className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100"
-                  >
-                    {order.status}
-                  </Badge>
-                </div>
-              </div>
+              )}
 
               {/* Totals Section */}
               <div className="space-y-3">
@@ -394,7 +525,8 @@ export default function ViewOrderPage({
                   <span className="text-muted-foreground">Total Quantity</span>
                   <span className="font-medium">
                     {items.reduce(
-                      (a, b) => a + (b.qty || 0) + (b.free || 0),
+                      (a, b) =>
+                        a + (Number(b.qty) || 0) + (Number(b.free) || 0),
                       0
                     )}
                   </span>
@@ -407,38 +539,36 @@ export default function ViewOrderPage({
                   <span>LKR {subtotal.toLocaleString()}</span>
                 </div>
 
-                {discountAmount > 0 && (
-                  <div className="flex justify-between text-sm text-green-600">
-                    <span>Total Discount</span>
-                    <span>- LKR {discountAmount.toLocaleString()}</span>
-                  </div>
-                )}
-
                 <Separator className="my-2" />
 
                 <div className="flex justify-between items-center pt-2">
                   <span className="font-bold text-lg">Grand Total</span>
-                  <span className="font-bold text-2xl text-primary">
+                  <span
+                    className={`font-bold text-2xl ${
+                      isEditing ? "text-amber-600" : "text-primary"
+                    }`}
+                  >
                     LKR {grandTotal.toLocaleString()}
                   </span>
                 </div>
               </div>
 
-              <Button
-                className="w-full h-12 text-lg"
-                variant="outline"
-                onClick={() => router.back()}
-              >
-                Back to Orders
-              </Button>
+              {!isEditing && (
+                <Button
+                  className="w-full h-12 text-lg"
+                  variant="outline"
+                  onClick={() => router.back()}
+                >
+                  Back to Orders
+                </Button>
+              )}
             </CardContent>
           </Card>
         </div>
       </div>
 
-      {/* --- DIALOGS --- */}
-
-      {/* Approve Dialog */}
+      {/* Dialogs for Approve/Reject */}
+      {/* ... (Keep existing AlertDialogs) ... */}
       <AlertDialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -460,7 +590,6 @@ export default function ViewOrderPage({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Reject Dialog */}
       <AlertDialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
