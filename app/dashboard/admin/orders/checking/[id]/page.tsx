@@ -4,7 +4,7 @@ import React, { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
-  PackageCheck,
+  ClipboardCheck,
   Loader2,
   MapPin,
   Phone,
@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   Package,
+  ShieldCheck,
   Edit,
   Save,
   X,
@@ -67,7 +68,7 @@ interface OrderItem {
   total: number;
 }
 
-export default function ProcessOrderPage({
+export default function CheckOrderPage({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -83,12 +84,12 @@ export default function ProcessOrderPage({
   // --- Edit Mode State ---
   const [isEditing, setIsEditing] = useState(false);
 
-  // State to track checked items for packing
+  // State to track checked items for QC
   const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
 
   // --- Dialog States ---
-  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
-  const [isSaveConfirmOpen, setIsSaveConfirmOpen] = useState(false);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false); // For "Pass QC"
+  const [isSaveConfirmOpen, setIsSaveConfirmOpen] = useState(false); // For "Save Changes"
 
   const [confirmContent, setConfirmContent] = useState({
     title: "",
@@ -114,9 +115,9 @@ export default function ProcessOrderPage({
     fetchOrder();
   }, [id]);
 
-  // --- Packing Logic (Checkboxes) ---
+  // --- QC Logic (Checkboxes) ---
   const toggleItemCheck = (itemId: string) => {
-    if (isEditing) return;
+    if (isEditing) return; // Disable checking while editing
     setCheckedItems((prev) => ({
       ...prev,
       [itemId]: !prev[itemId],
@@ -148,6 +149,7 @@ export default function ProcessOrderPage({
       prevItems.map((item) => {
         if (item.id === itemId) {
           const updatedItem = { ...item, [field]: numValue };
+          // Recalculate total
           updatedItem.total = updatedItem.price * updatedItem.qty;
           return updatedItem;
         }
@@ -168,6 +170,7 @@ export default function ProcessOrderPage({
     setProcessing(true);
     setIsSaveConfirmOpen(false);
 
+    // Recalculate Grand Total
     const newTotalAmount = items.reduce((acc, item) => acc + item.total, 0);
 
     try {
@@ -183,7 +186,7 @@ export default function ProcessOrderPage({
 
       if (!res.ok) throw new Error("Failed to update order");
 
-      toast.success("Order, Stocks & Bill Updated Successfully!");
+      toast.success("Order Updated Successfully!");
       setIsEditing(false);
       fetchOrder();
     } catch (error: any) {
@@ -200,14 +203,14 @@ export default function ProcessOrderPage({
 
   // --- Calculations ---
   const totalItems = items.length;
-  const packedCount = Object.values(checkedItems).filter(Boolean).length;
+  const checkedCount = Object.values(checkedItems).filter(Boolean).length;
   const progressPercentage =
-    totalItems > 0 ? (packedCount / totalItems) * 100 : 0;
-  const areAllItemsChecked = totalItems > 0 && packedCount === totalItems;
+    totalItems > 0 ? (checkedCount / totalItems) * 100 : 0;
+  const areAllItemsChecked = totalItems > 0 && checkedCount === totalItems;
   const totalQuantity = items.reduce((acc, i) => acc + i.qty + i.free, 0);
 
   // --- Status Update Logic ---
-  const handleCompleteProcessing = () => {
+  const handleCompleteChecking = () => {
     if (isEditing) {
       toast.warning("Please save or cancel your changes first.");
       return;
@@ -215,14 +218,14 @@ export default function ProcessOrderPage({
 
     if (!areAllItemsChecked) {
       setConfirmContent({
-        title: "Incomplete Packing",
-        description: `You have only packed ${packedCount}/${totalItems} items. Are you sure you want to proceed anyway?`,
+        title: "Incomplete QC",
+        description: `You have only verified ${checkedCount}/${totalItems} items. Are you sure you want to proceed anyway?`,
       });
     } else {
       setConfirmContent({
-        title: "Complete Packing",
+        title: "Pass Quality Control",
         description:
-          "Are you sure you want to finish packing and move this order to the Checking stage?",
+          "Are you sure you want to mark this order as Verified and move it to the Loading stage?",
       });
     }
     setIsConfirmOpen(true);
@@ -236,13 +239,13 @@ export default function ProcessOrderPage({
       const res = await fetch(`/api/orders/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "Checking" }),
+        body: JSON.stringify({ status: "Loading" }),
       });
 
       if (!res.ok) throw new Error("Failed to update order");
 
-      toast.success("Order moved to Checking!");
-      router.push("/dashboard/admin/orders/processing");
+      toast.success("QC Passed! Order moved to Loading.");
+      router.push("/dashboard/admin/orders/checking");
     } catch (error) {
       toast.error("Something went wrong");
     } finally {
@@ -266,27 +269,29 @@ export default function ProcessOrderPage({
   return (
     <div className="">
       {/* --- Header Section --- */}
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 border-b pb-6">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 border-b pb-2">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => router.back()}>
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div>
             <h1 className="text-2xl font-bold tracking-tight flex items-center gap-3 flex-wrap">
-              Packing Order
-              <Badge className="bg-blue-600 hover:bg-blue-700 text-sm px-2.5">
+              Checking Order
+              <Badge className="bg-purple-600 hover:bg-purple-700 text-sm px-2.5">
                 {order.orderId}
               </Badge>
             </h1>
             <p className="text-muted-foreground text-sm mt-1">
-              Verify items and quantities before marking as ready for QC.
+              Perform quality control checks before loading.
             </p>
           </div>
         </div>
 
         {/* Header Actions & Stats */}
         <div className="flex flex-col sm:flex-row gap-4 w-full xl:w-auto">
+          {/* Stats Grid - 4 Columns */}
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-lg border border-slate-100 flex-1">
+            {/* Invoice No */}
             <div className="flex items-center gap-3">
               <div className="p-2 bg-white rounded-md border shadow-sm text-slate-500">
                 <FileText className="w-4 h-4" />
@@ -301,6 +306,7 @@ export default function ProcessOrderPage({
               </div>
             </div>
 
+            {/* Date */}
             <div className="flex items-center gap-3">
               <div className="p-2 bg-white rounded-md border shadow-sm text-slate-500">
                 <Calendar className="w-4 h-4" />
@@ -315,6 +321,7 @@ export default function ProcessOrderPage({
               </div>
             </div>
 
+            {/* Sales Rep */}
             <div className="flex items-center gap-3">
               <div className="p-2 bg-white rounded-md border shadow-sm text-slate-500">
                 <Briefcase className="w-4 h-4" />
@@ -329,6 +336,7 @@ export default function ProcessOrderPage({
               </div>
             </div>
 
+            {/* Total Qty */}
             <div className="flex items-center gap-3">
               <div className="p-2 bg-white rounded-md border shadow-sm text-slate-500">
                 <Package className="w-4 h-4" />
@@ -346,23 +354,25 @@ export default function ProcessOrderPage({
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3 mt-6">
+      <div className="grid gap-6 lg:grid-cols-3 mt-6 bh">
+        {/* --- LEFT COLUMN: QC Checklist --- */}
         <div className="lg:col-span-2 space-y-6">
-          <Card>
-            <CardHeader className="pb-1">
+          <Card className="">
+            <CardHeader className="pb-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="space-y-1">
                   <CardTitle className="flex items-center gap-2">
-                    <PackageCheck className="w-5 h-5 text-primary" />
-                    Item Checklist
+                    <ClipboardCheck className="w-5 h-5 text-purple-600" />
+                    QC Checklist
                   </CardTitle>
                   <CardDescription>
                     {isEditing
-                      ? "Adjust quantities or remove items from this order."
-                      : "Check off items as you pack them into the box."}
+                      ? "Correct item quantities or remove items."
+                      : "Verify items against the packing list."}
                   </CardDescription>
                 </div>
 
+                {/* Actions: Edit / Save / Progress */}
                 <div className="flex items-center gap-2">
                   {isEditing ? (
                     <>
@@ -397,16 +407,16 @@ export default function ProcessOrderPage({
                       >
                         <Edit className="w-4 h-4 mr-2" /> Edit Order
                       </Button>
-                      {/* --- PROGRESS BAR (Visible on Mobile & Desktop) --- */}
-                      <div className="w-[120px] flex flex-col gap-1 ml-2 sm:ml-4">
+                      {/* Progress Bar */}
+                      <div className="w-[120px] hidden sm:flex flex-col gap-1 ml-4">
                         <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-200">
                           <div
-                            className="h-full bg-green-500 transition-all duration-500 ease-out"
+                            className="h-full bg-purple-600 transition-all duration-500 ease-out"
                             style={{ width: `${progressPercentage}%` }}
                           />
                         </div>
                         <div className="text-[10px] text-center text-muted-foreground">
-                          {packedCount} / {totalItems} Packed
+                          {checkedCount} / {totalItems} Verified
                         </div>
                       </div>
                     </>
@@ -428,7 +438,7 @@ export default function ProcessOrderPage({
                             className={cn(
                               "translate-y-[2px] w-5 h-5 border-2",
                               areAllItemsChecked
-                                ? "border-green-600 bg-green-600"
+                                ? "border-purple-600 bg-purple-600"
                                 : "border-slate-400"
                             )}
                           />
@@ -472,7 +482,7 @@ export default function ProcessOrderPage({
                                 className={cn(
                                   "w-6 h-6 border-2",
                                   isChecked
-                                    ? "border-green-600 data-[state=checked]:bg-green-600"
+                                    ? "border-purple-600 data-[state=checked]:bg-purple-600"
                                     : "border-slate-300"
                                 )}
                               />
@@ -480,7 +490,8 @@ export default function ProcessOrderPage({
                           </TableCell>
                           <TableCell>
                             <div className="flex items-start gap-4 py-1">
-                              <div className="h-12 w-12 rounded-md border bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
+                              {/* IMAGE RENDERING */}
+                              <div className="h-14 w-14 rounded-md border bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
                                 {item.image ? (
                                   // eslint-disable-next-line @next/next/no-img-element
                                   <img
@@ -494,13 +505,13 @@ export default function ProcessOrderPage({
                                     )}
                                   />
                                 ) : (
-                                  <ImageIcon className="h-5 w-5 text-slate-300" />
+                                  <ImageIcon className="h-6 w-6 text-slate-300" />
                                 )}
                               </div>
                               <div className="flex flex-col gap-0.5 min-w-0">
                                 <span
                                   className={cn(
-                                    "font-semibold text-sm transition-all truncate",
+                                    "font-semibold text-base transition-all truncate",
                                     isChecked && !isEditing
                                       ? "text-slate-500 line-through decoration-slate-400"
                                       : "text-slate-900"
@@ -533,16 +544,13 @@ export default function ProcessOrderPage({
                             ) : (
                               <div
                                 className={cn(
-                                  "font-bold text-lg",
+                                  "flex items-center justify-center font-bold text-xl",
                                   isChecked
                                     ? "text-slate-400"
                                     : "text-slate-900"
                                 )}
                               >
-                                {item.qty}{" "}
-                                <span className="text-xs font-normal text-muted-foreground">
-                                  {item.unit}
-                                </span>
+                                {item.qty}
                               </div>
                             )}
                           </TableCell>
@@ -569,7 +577,7 @@ export default function ProcessOrderPage({
                                   "font-bold",
                                   isChecked
                                     ? "bg-slate-200 text-slate-500"
-                                    : "bg-green-100 text-green-700"
+                                    : "bg-green-100 text-green-700 border-green-200"
                                 )}
                               >
                                 +{item.free}
@@ -581,6 +589,7 @@ export default function ProcessOrderPage({
                             )}
                           </TableCell>
 
+                          {/* Delete Button (Edit Mode Only) */}
                           {isEditing && (
                             <TableCell>
                               <Button
@@ -606,6 +615,7 @@ export default function ProcessOrderPage({
           </Card>
         </div>
 
+        {/* --- RIGHT COLUMN: Info & Actions --- */}
         <div className="lg:col-span-1 space-y-6">
           <Card>
             <CardHeader className="pb-3">
@@ -625,7 +635,7 @@ export default function ProcessOrderPage({
               <Separator />
               <div className="space-y-3 text-sm">
                 <div className="flex items-start gap-3">
-                  <MapPin className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                  <MapPin className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
                   <div className="flex flex-col">
                     <span className="font-medium">Route / Area</span>
                     <span className="text-muted-foreground">
@@ -637,7 +647,7 @@ export default function ProcessOrderPage({
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Phone className="w-4 h-4 text-primary shrink-0" />
+                  <Phone className="w-4 h-4 text-purple-600 shrink-0" />
                   <div className="flex flex-col">
                     <span className="font-medium">Contact</span>
                     <span className="text-muted-foreground">
@@ -651,30 +661,30 @@ export default function ProcessOrderPage({
 
           <Card
             className={cn(
-              "lg:sticky lg:top-6 shadow-md border-primary/20 bg-primary/5",
+              "lg:sticky lg:top-6 shadow-md border-purple-200 bg-purple-50/30",
               isEditing && "opacity-50 pointer-events-none"
             )}
           >
             <CardHeader>
-              <CardTitle className="text-primary">Ready to Complete?</CardTitle>
+              <CardTitle className="text-purple-700">QC Completed?</CardTitle>
               <CardDescription>
-                Once all items are packed, move the order to the{" "}
-                <strong>Checking</strong> stage.
+                Once verified, move the order to the <strong>Loading</strong>{" "}
+                stage.
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Button
                 size="lg"
-                className="w-full h-12 text-base font-semibold shadow-lg"
-                onClick={handleCompleteProcessing}
+                className="w-full h-12 text-base font-semibold shadow-lg bg-purple-600 hover:bg-purple-700 text-white"
+                onClick={handleCompleteChecking}
                 disabled={processing || isEditing}
               >
                 {processing ? (
                   <Loader2 className="w-5 h-5 mr-2 animate-spin" />
                 ) : (
-                  <CheckCircle2 className="w-5 h-5 mr-2" />
+                  <ShieldCheck className="w-5 h-5 mr-2" />
                 )}
-                Complete Packing
+                Pass Quality Control
               </Button>
             </CardContent>
             {!areAllItemsChecked && !isEditing && (
@@ -682,7 +692,7 @@ export default function ProcessOrderPage({
                 <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 px-3 py-2 rounded-md w-full border border-amber-100">
                   <AlertTriangle className="w-3 h-3" />
                   <span>
-                    {totalItems - packedCount} items remaining to pack
+                    {totalItems - checkedCount} items pending verification
                   </span>
                 </div>
               </CardFooter>
@@ -691,6 +701,7 @@ export default function ProcessOrderPage({
         </div>
       </div>
 
+      {/* --- Confirmation Alert Dialog (QC Pass) --- */}
       <AlertDialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -703,13 +714,17 @@ export default function ProcessOrderPage({
             <AlertDialogCancel onClick={() => setIsConfirmOpen(false)}>
               Cancel
             </AlertDialogCancel>
-            <AlertDialogAction onClick={confirmStatusUpdate}>
+            <AlertDialogAction
+              onClick={confirmStatusUpdate}
+              className="bg-purple-600 hover:bg-purple-700"
+            >
               Confirm
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* --- Save Confirmation Dialog (New) --- */}
       <AlertDialog open={isSaveConfirmOpen} onOpenChange={setIsSaveConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

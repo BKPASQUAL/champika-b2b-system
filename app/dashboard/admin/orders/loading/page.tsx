@@ -1,4 +1,3 @@
-// FILE PATH: app/dashboard/admin/orders/loading/page.tsx
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
@@ -24,6 +23,10 @@ import {
   PlusCircle,
   Loader2,
   RefreshCw,
+  FileText,
+  User,
+  Calendar,
+  MapPin,
 } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingSheetDialog } from "../_components/LoadingSheetDialog";
@@ -31,11 +34,13 @@ import { LoadingSheetDialog } from "../_components/LoadingSheetDialog";
 interface Order {
   id: string;
   orderId: string;
+  invoiceNo?: string; // Added optional invoiceNo
   shopName: string;
   route: string;
   salesRepName: string;
   totalAmount: number;
   status: string;
+  date?: string; // Added date field if available from API
 }
 
 export default function LoadingOrdersPage() {
@@ -69,6 +74,8 @@ export default function LoadingOrdersPage() {
 
   const filteredOrders = orders.filter(
     (order) =>
+      (order.invoiceNo &&
+        order.invoiceNo.toLowerCase().includes(searchQuery.toLowerCase())) ||
       order.orderId.toLowerCase().includes(searchQuery.toLowerCase()) ||
       order.shopName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       order.salesRepName.toLowerCase().includes(searchQuery.toLowerCase())
@@ -100,8 +107,6 @@ export default function LoadingOrdersPage() {
         orderIds: selectedOrders,
       };
 
-      console.log("Sending payload to API:", payload);
-
       const res = await fetch("/api/orders/loading", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -111,7 +116,6 @@ export default function LoadingOrdersPage() {
       const result = await res.json();
 
       if (!res.ok) {
-        console.error("API Error Response:", result);
         throw new Error(result.error || "Failed to create load");
       }
 
@@ -125,21 +129,31 @@ export default function LoadingOrdersPage() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-[calc(100vh-200px)]">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
+      {/* Header Section */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Loading Orders</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className="text-2xl font-bold tracking-tight">Loading Orders</h1>
+          <p className="text-muted-foreground text-sm">
             Select orders to create a delivery load.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
             size="icon"
             onClick={fetchOrders}
             title="Refresh"
+            className="bg-white"
           >
             <RefreshCw className={loading ? "animate-spin" : ""} />
           </Button>
@@ -148,13 +162,14 @@ export default function LoadingOrdersPage() {
             onClick={() =>
               router.push("/dashboard/admin/orders/loading/history")
             }
+            className="bg-white"
           >
-            <History className="w-4 h-4 mr-2" /> Delivery History
+            <History className="w-4 h-4 mr-2" /> History
           </Button>
           {selectedOrders.length > 0 && (
             <Button
               onClick={() => setIsDialogOpen(true)}
-              className="animate-in fade-in zoom-in duration-300"
+              className="animate-in fade-in zoom-in duration-300 bg-indigo-600 hover:bg-indigo-700 text-white"
             >
               <PlusCircle className="w-4 h-4 mr-2" /> Create Load (
               {selectedOrders.length})
@@ -163,27 +178,106 @@ export default function LoadingOrdersPage() {
         </div>
       </div>
 
-      <Card>
-        <CardHeader className="pb-4">
+      {/* Main Content Card */}
+      <Card className="border-0 sm:border shadow-none sm:shadow-sm bg-transparent sm:bg-card">
+        <CardHeader className="px-0 sm:px-6 pb-2 pt-2">
           <div className="flex items-center justify-between gap-4">
-            <div className="relative flex-1 max-w-md">
+            <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search Order ID, Shop, or Sales Rep..."
+                placeholder="Search Invoice, Shop, or Sales Rep..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
+                className="pl-9 bg-white border-slate-200"
               />
             </div>
-            <Button variant="outline" size="icon">
+            <Button variant="outline" size="icon" className="shrink-0 bg-white">
               <Filter className="h-4 w-4" />
             </Button>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="rounded-md border">
+
+        <CardContent className="px-0 sm:px-6 pt-0">
+          {/* --- MOBILE VIEW: CARDS (md:hidden) --- */}
+          <div className="grid grid-cols-1 gap-3 md:hidden">
+            {filteredOrders.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground bg-slate-50 rounded-lg border border-dashed">
+                <div className="flex flex-col items-center gap-2">
+                  <Truck className="h-10 w-10 text-muted-foreground/20" />
+                  <p>No orders ready for loading</p>
+                </div>
+              </div>
+            ) : (
+              filteredOrders.map((order) => {
+                const isSelected = selectedOrders.includes(order.id);
+                return (
+                  <div
+                    key={order.id}
+                    className={`
+                      bg-white border rounded-xl p-4 shadow-sm flex flex-col gap-3 transition-all duration-200
+                      ${isSelected ? "border-indigo-500 ring-1 ring-indigo-500 bg-indigo-50/10" : "border-slate-200"}
+                    `}
+                    onClick={() => toggleSelectOrder(order.id)}
+                  >
+                    {/* Row 1: Checkbox, ID, Route */}
+                    <div className="flex items-start gap-3">
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => toggleSelectOrder(order.id)}
+                        className="mt-1"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded text-xs">
+                              <FileText className="h-3 w-3 inline mr-1" />
+                              {order.invoiceNo || "N/A"}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground font-mono">
+                              ({order.orderId})
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <MapPin className="h-3 w-3" />
+                          <span className="truncate">{order.route}</span>
+                        </div>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className="bg-blue-50 text-blue-700 border-blue-200 shrink-0"
+                      >
+                        {order.status}
+                      </Badge>
+                    </div>
+
+                    {/* Row 2: Shop Details */}
+                    <div className="pl-7">
+                      <p className="font-medium text-sm text-slate-900 truncate">
+                        {order.shopName}
+                      </p>
+                      <div className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground">
+                        <User className="h-3 w-3" />
+                        <span>{order.salesRepName}</span>
+                      </div>
+                    </div>
+
+                    {/* Row 3: Totals */}
+                    <div className="flex justify-end border-t pt-2 pl-7">
+                      <p className="font-bold text-slate-900">
+                        LKR {order.totalAmount.toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* --- DESKTOP VIEW: TABLE (hidden md:block) --- */}
+          <div className="hidden md:block rounded-md border bg-white overflow-hidden">
             <Table>
-              <TableHeader>
+              <TableHeader className="bg-slate-50">
                 <TableRow>
                   <TableHead className="w-[50px]">
                     <Checkbox
@@ -194,7 +288,7 @@ export default function LoadingOrdersPage() {
                       onCheckedChange={toggleSelectAll}
                     />
                   </TableHead>
-                  <TableHead>Order ID</TableHead>
+                  <TableHead>Invoice No</TableHead>
                   <TableHead>Route / Area</TableHead>
                   <TableHead>Customer</TableHead>
                   <TableHead>Sales Rep</TableHead>
@@ -203,16 +297,7 @@ export default function LoadingOrdersPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-12">
-                      <div className="flex justify-center items-center gap-2 text-muted-foreground">
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                        Loading orders...
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : filteredOrders.length === 0 ? (
+                {filteredOrders.length === 0 ? (
                   <TableRow>
                     <TableCell
                       colSpan={7}
@@ -231,31 +316,51 @@ export default function LoadingOrdersPage() {
                   </TableRow>
                 ) : (
                   filteredOrders.map((order) => (
-                    <TableRow key={order.id} className="hover:bg-muted/50">
-                      <TableCell>
+                    <TableRow
+                      key={order.id}
+                      className={`hover:bg-slate-50 cursor-pointer ${
+                        selectedOrders.includes(order.id) ? "bg-indigo-50/30" : ""
+                      }`}
+                      onClick={() => toggleSelectOrder(order.id)}
+                    >
+                      <TableCell onClick={(e) => e.stopPropagation()}>
                         <Checkbox
                           checked={selectedOrders.includes(order.id)}
                           onCheckedChange={() => toggleSelectOrder(order.id)}
                         />
                       </TableCell>
-                      <TableCell className="font-medium">
-                        {order.orderId}
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="font-medium font-mono text-indigo-700 text-xs flex items-center gap-1">
+                            <FileText className="h-3 w-3" />
+                            {order.invoiceNo || "N/A"}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                            {order.orderId}
+                          </span>
+                        </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="font-normal">
+                        <Badge variant="outline" className="font-normal text-xs">
                           {order.route}
                         </Badge>
                       </TableCell>
-                      <TableCell>{order.shopName}</TableCell>
+                      <TableCell>
+                        <span className="font-medium text-sm text-slate-900">
+                          {order.shopName}
+                        </span>
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary">
+                          <div className="h-6 w-6 rounded-full bg-indigo-50 flex items-center justify-center text-[10px] font-bold text-indigo-600 border border-indigo-100">
                             {order.salesRepName.charAt(0).toUpperCase()}
                           </div>
-                          <span className="text-sm">{order.salesRepName}</span>
+                          <span className="text-sm text-muted-foreground">
+                            {order.salesRepName}
+                          </span>
                         </div>
                       </TableCell>
-                      <TableCell className="text-right font-semibold">
+                      <TableCell className="text-right font-semibold text-sm">
                         Rs. {order.totalAmount.toLocaleString()}
                       </TableCell>
                       <TableCell className="text-center">
