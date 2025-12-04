@@ -14,7 +14,8 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Settings, Shield, Bell, Database } from "lucide-react";
+import { Settings, Shield, Bell, Database, Percent } from "lucide-react";
+import { CommissionSettings } from "./_components/CommissionSettings";
 
 export default function SettingsPage() {
   return (
@@ -26,13 +27,16 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="general" className="space-y-4">
-        <TabsList>
+      <Tabs defaultValue="commissions" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-2 lg:grid-cols-5 h-auto">
           <TabsTrigger value="general" className="flex items-center gap-2">
             <Settings className="h-4 w-4" /> General
           </TabsTrigger>
           <TabsTrigger value="categories" className="flex items-center gap-2">
             <Database className="h-4 w-4" /> Categories
+          </TabsTrigger>
+          <TabsTrigger value="commissions" className="flex items-center gap-2">
+            <Percent className="h-4 w-4" /> Commissions
           </TabsTrigger>
           <TabsTrigger
             value="notifications"
@@ -84,14 +88,21 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* 2. Categories Settings (The requested feature) */}
+        {/* 2. Categories Settings */}
         <TabsContent value="categories">
-          <div className="max-w-2xl">
+          <div className="max-w-3xl">
             <CategorySettings />
           </div>
         </TabsContent>
 
-        {/* 3. Notifications */}
+        {/* 3. Commissions Settings (NEW) */}
+        <TabsContent value="commissions">
+          <div className="max-w-6xl">
+            <CommissionSettings />
+          </div>
+        </TabsContent>
+
+        {/* 4. Notifications */}
         <TabsContent value="notifications">
           <Card>
             <CardHeader>
@@ -119,20 +130,11 @@ export default function SettingsPage() {
                 </div>
                 <Switch defaultChecked />
               </div>
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label className="text-base">Payment Reminders</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Daily summary of due cheques
-                  </p>
-                </div>
-                <Switch />
-              </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* 4. Security */}
+        {/* 5. Security */}
         <TabsContent value="security">
           <Card>
             <CardHeader>
