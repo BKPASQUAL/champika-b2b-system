@@ -92,15 +92,11 @@ export function ProductDialogs({
     (b) => b.parent_id && b.parent_id === selectedBrandId
   );
 
-  // --- Model Logic (Fixed for Edit Mode) ---
+  // --- Model Logic ---
   const mainModels = models.filter((m) => !m.parent_id);
-
-  // Find the ID of the selected Model Name
   const selectedModelId = mainModels.find(
     (m) => m.name.trim() === formData.modelType?.trim()
   )?.id;
-
-  // Filter sub-models.
   const subModels = models.filter(
     (m) => m.parent_id && m.parent_id === selectedModelId
   );
@@ -157,8 +153,8 @@ export function ProductDialogs({
   return (
     <>
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-w-3xl  overflow-y-auto">
+          <DialogHeader className="p-0 ">
             <DialogTitle>
               {selectedProduct ? "Edit Product" : "Add New Product"}
             </DialogTitle>
@@ -168,7 +164,7 @@ export function ProductDialogs({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-2 gap-4 py-4">
+          <div className="grid grid-cols-2 gap-4 py-2">
             {/* Product Name */}
             <div className="col-span-2 space-y-2">
               <Label>Product Name *</Label>
@@ -206,15 +202,24 @@ export function ProductDialogs({
               <Label>Sub Category</Label>
               <Select
                 value={formData.subCategory}
-                onValueChange={(val) =>
-                  setFormData({ ...formData, subCategory: val })
-                }
+                onValueChange={(val) => {
+                  // ✅ Handle None option
+                  if (val === "none") {
+                    setFormData({ ...formData, subCategory: "" });
+                  } else {
+                    setFormData({ ...formData, subCategory: val });
+                  }
+                }}
                 disabled={!formData.category}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select Sub" />
+                  <SelectValue placeholder="Select Sub Category" />
                 </SelectTrigger>
                 <SelectContent>
+                  {/* ✅ NONE OPTION */}
+                  <SelectItem value="none">
+                    <span className="text-muted-foreground italic">None</span>
+                  </SelectItem>
                   {subCategories.map((c) => (
                     <SelectItem key={c.id} value={c.name}>
                       {c.name}
@@ -229,14 +234,23 @@ export function ProductDialogs({
               <Label>Brand</Label>
               <Select
                 value={formData.brand}
-                onValueChange={(val) =>
-                  setFormData({ ...formData, brand: val, subBrand: "" })
-                }
+                onValueChange={(val) => {
+                  // ✅ Handle None option
+                  if (val === "none") {
+                    setFormData({ ...formData, brand: "", subBrand: "" });
+                  } else {
+                    setFormData({ ...formData, brand: val, subBrand: "" });
+                  }
+                }}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select Brand" />
                 </SelectTrigger>
                 <SelectContent>
+                  {/* ✅ NONE OPTION */}
+                  <SelectItem value="none">
+                    <span className="text-muted-foreground italic">None</span>
+                  </SelectItem>
                   {mainBrands.map((b) => (
                     <SelectItem key={b.id} value={b.name}>
                       {b.name}
@@ -249,15 +263,24 @@ export function ProductDialogs({
               <Label>Sub Brand</Label>
               <Select
                 value={formData.subBrand}
-                onValueChange={(val) =>
-                  setFormData({ ...formData, subBrand: val })
-                }
+                onValueChange={(val) => {
+                  // ✅ Handle None option
+                  if (val === "none") {
+                    setFormData({ ...formData, subBrand: "" });
+                  } else {
+                    setFormData({ ...formData, subBrand: val });
+                  }
+                }}
                 disabled={!formData.brand}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select Sub Brand" />
                 </SelectTrigger>
                 <SelectContent>
+                  {/* ✅ NONE OPTION */}
+                  <SelectItem value="none">
+                    <span className="text-muted-foreground italic">None</span>
+                  </SelectItem>
                   {subBrands.map((b) => (
                     <SelectItem key={b.id} value={b.name}>
                       {b.name}
@@ -272,14 +295,23 @@ export function ProductDialogs({
               <Label>Model</Label>
               <Select
                 value={formData.modelType}
-                onValueChange={(val) =>
-                  setFormData({ ...formData, modelType: val, subModel: "" })
-                }
+                onValueChange={(val) => {
+                  // ✅ Handle None option - clear both model and subModel
+                  if (val === "none") {
+                    setFormData({ ...formData, modelType: "", subModel: "" });
+                  } else {
+                    setFormData({ ...formData, modelType: val, subModel: "" });
+                  }
+                }}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select Model" />
                 </SelectTrigger>
                 <SelectContent>
+                  {/* ✅ NONE OPTION */}
+                  <SelectItem value="none">
+                    <span className="text-muted-foreground italic">None</span>
+                  </SelectItem>
                   {mainModels.map((m) => (
                     <SelectItem key={m.id} value={m.name}>
                       {m.name}
@@ -291,19 +323,27 @@ export function ProductDialogs({
 
             <div className="space-y-2">
               <Label>Sub Model</Label>
-              {/* This KEY is the Fix: It forces re-render when data is ready */}
               <Select
                 key={`${selectedModelId || "loading"}-${subModels.length}`}
                 value={formData.subModel}
-                onValueChange={(val) =>
-                  setFormData({ ...formData, subModel: val })
-                }
+                onValueChange={(val) => {
+                  // ✅ Handle None option
+                  if (val === "none") {
+                    setFormData({ ...formData, subModel: "" });
+                  } else {
+                    setFormData({ ...formData, subModel: val });
+                  }
+                }}
                 disabled={!formData.modelType}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select Sub Model" />
                 </SelectTrigger>
                 <SelectContent>
+                  {/* ✅ NONE OPTION */}
+                  <SelectItem value="none">
+                    <span className="text-muted-foreground italic">None</span>
+                  </SelectItem>
                   {subModels.map((m) => (
                     <SelectItem key={m.id} value={m.name}>
                       {m.name}
@@ -317,14 +357,23 @@ export function ProductDialogs({
               <Label>Specification</Label>
               <Select
                 value={formData.sizeSpec}
-                onValueChange={(val) =>
-                  setFormData({ ...formData, sizeSpec: val })
-                }
+                onValueChange={(val) => {
+                  // ✅ Handle None option
+                  if (val === "none") {
+                    setFormData({ ...formData, sizeSpec: "" });
+                  } else {
+                    setFormData({ ...formData, sizeSpec: val });
+                  }
+                }}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select Spec" />
                 </SelectTrigger>
                 <SelectContent>
+                  {/* ✅ NONE OPTION */}
+                  <SelectItem value="none">
+                    <span className="text-muted-foreground italic">None</span>
+                  </SelectItem>
                   {specs.map((s) => (
                     <SelectItem key={s.id} value={s.name}>
                       {s.name}
@@ -373,6 +422,20 @@ export function ProductDialogs({
                 />
               </div>
               <div className="space-y-2">
+                <Label>Selling Price</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={formData.sellingPrice}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      sellingPrice: parseFloat(e.target.value) || 0,
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
                 <Label>Cost Price</Label>
                 <Input
                   type="number"
@@ -386,26 +449,10 @@ export function ProductDialogs({
                   }
                 />
               </div>
-              <div className="space-y-2">
-                <Label className="text-green-600 font-bold">
-                  Selling Price
-                </Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={formData.sellingPrice}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      sellingPrice: parseFloat(e.target.value) || 0,
-                    })
-                  }
-                />
-              </div>
             </div>
 
-            {/* Stock & Unit */}
-            <div className="col-span-2 grid grid-cols-3 gap-4 border-t pt-4">
+            {/* Stock */}
+            <div className="col-span-2 grid grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label>Unit of Measure</Label>
                 <Select
@@ -415,15 +462,10 @@ export function ProductDialogs({
                   }
                 >
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select Unit" />
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Pcs">Pcs (Pieces)</SelectItem>
-                    <SelectItem value="Dz">Dz (Dozen)</SelectItem>
-                    <SelectItem value="Kg">Kg (Kilogram)</SelectItem>
-                    <SelectItem value="g">g (Gram)</SelectItem>
-                    <SelectItem value="m">m (Meter)</SelectItem>
-                    <SelectItem value="L">L (Liter)</SelectItem>
+                    <SelectItem value="Pcs">Pieces</SelectItem>
                     <SelectItem value="Box">Box</SelectItem>
                     <SelectItem value="Set">Set</SelectItem>
                     <SelectItem value="Roll">Roll</SelectItem>

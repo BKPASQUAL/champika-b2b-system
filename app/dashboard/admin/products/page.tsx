@@ -51,6 +51,7 @@ export default function ProductsPage() {
     brand: "",
     subBrand: "",
     modelType: "",
+    subModel: "", // ✅ ADDED - Default value for subModel
     sizeSpec: "",
     supplier: "",
     stock: 0,
@@ -59,7 +60,7 @@ export default function ProductsPage() {
     sellingPrice: 0,
     costPrice: 0,
     images: [],
-    unitOfMeasure: "Pcs", // <--- DEFAULT
+    unitOfMeasure: "Pcs",
   });
 
   // --- Fetch Data ---
@@ -200,6 +201,7 @@ export default function ProductsPage() {
       brand: "",
       subBrand: "",
       modelType: "",
+      subModel: "", // ✅ ADDED - Reset subModel to empty string
       sizeSpec: "",
       supplier: "",
       stock: 0,
@@ -208,7 +210,7 @@ export default function ProductsPage() {
       sellingPrice: 0,
       costPrice: 0,
       images: [],
-      unitOfMeasure: "Pcs", // <--- RESET
+      unitOfMeasure: "Pcs",
     });
     setSelectedProduct(null);
   };
@@ -305,6 +307,7 @@ export default function ProductsPage() {
                 brand: p.brand || "",
                 subBrand: p.subBrand || "",
                 modelType: p.modelType || "",
+                subModel: p.subModel || "", // ✅ ADDED - Load subModel from product
                 sizeSpec: p.sizeSpec || "",
                 supplier: p.supplier,
                 stock: p.stock,
@@ -313,7 +316,7 @@ export default function ProductsPage() {
                 sellingPrice: p.sellingPrice,
                 costPrice: p.costPrice,
                 images: p.images || [],
-                unitOfMeasure: p.unitOfMeasure || "Pcs", // <--- LOAD VALUE
+                unitOfMeasure: p.unitOfMeasure || "Pcs",
               });
               setSelectedProduct(p);
               setIsAddDialogOpen(true);

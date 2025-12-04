@@ -1,3 +1,4 @@
+// app/api/products/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
@@ -9,7 +10,7 @@ const updateSchema = z.object({
   brand: z.string().optional(),
   subBrand: z.string().optional(),
   modelType: z.string().optional(),
-  subModel: z.string().optional(), // <--- Validation
+  subModel: z.string().optional(),
   sizeSpec: z.string().optional(),
   supplier: z.string().optional(),
   stock: z.number().optional(),
@@ -33,12 +34,17 @@ export async function PATCH(
     const dbUpdates: any = {};
     if (val.name) dbUpdates.name = val.name;
     if (val.category) dbUpdates.category = val.category;
-    if (val.subCategory) dbUpdates.sub_category = val.subCategory;
-    if (val.brand) dbUpdates.brand = val.brand;
-    if (val.subBrand) dbUpdates.sub_brand = val.subBrand;
-    if (val.modelType) dbUpdates.model_type = val.modelType;
-    if (val.subModel) dbUpdates.sub_model = val.subModel; // <--- Update DB
-    if (val.sizeSpec) dbUpdates.size_spec = val.sizeSpec;
+    if (val.subCategory !== undefined)
+      dbUpdates.sub_category = val.subCategory || null;
+    if (val.brand !== undefined) dbUpdates.brand = val.brand || null;
+    if (val.subBrand !== undefined) dbUpdates.sub_brand = val.subBrand || null;
+
+    // ✅ FIXED: Allow empty strings to clear the database values
+    if (val.modelType !== undefined)
+      dbUpdates.model_type = val.modelType || null;
+    if (val.subModel !== undefined) dbUpdates.sub_model = val.subModel || null;
+
+    if (val.sizeSpec !== undefined) dbUpdates.size_spec = val.sizeSpec || null;
     if (val.supplier) dbUpdates.supplier_name = val.supplier;
     if (val.stock !== undefined) dbUpdates.stock_quantity = val.stock;
     if (val.minStock !== undefined) dbUpdates.min_stock_level = val.minStock;
