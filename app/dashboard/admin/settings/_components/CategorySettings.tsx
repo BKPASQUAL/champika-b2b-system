@@ -1,4 +1,3 @@
-// app/dashboard/admin/settings/_components/CategorySettings.tsx
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -15,8 +14,6 @@ import {
   Building2,
   AlertCircle,
   Check,
-  X,
-  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -349,7 +346,7 @@ export function CategorySettings() {
     }
 
     return (
-      <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {Object.keys(groupedByCategory).map((categoryId) => {
           const category = allCategories.find((c) => c.id === categoryId);
           const items = groupedByCategory[categoryId];
@@ -357,7 +354,7 @@ export function CategorySettings() {
           return (
             <Card
               key={categoryId}
-              className="overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+              className="overflow-hidden shadow-sm hover:shadow-md transition-shadow h-fit"
             >
               <CardHeader className={cn("pb-4", activeTab?.bgColor)}>
                 <div className="flex items-center justify-between">
@@ -406,7 +403,8 @@ export function CategorySettings() {
                           </div>
                           <span className="font-medium">{item.name}</span>
                         </div>
-                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {/* CHANGED: Removed opacity-0 group-hover:opacity-100 */}
+                        <div className="flex items-center gap-2">
                           {activeType === "model" && (
                             <Button
                               size="sm"
@@ -444,13 +442,14 @@ export function CategorySettings() {
                                     {sub.name}
                                   </span>
                                 </div>
+                                {/* CHANGED: Removed opacity-0 group-hover:opacity-100 */}
                                 <Button
                                   size="sm"
                                   variant="ghost"
                                   onClick={() =>
                                     confirmDelete(sub.id, sub.name)
                                   }
-                                  className="h-7 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10 hover:text-destructive"
+                                  className="h-7 hover:bg-destructive/10 hover:text-destructive"
                                 >
                                   <Trash2 className="h-3 w-3" />
                                 </Button>
@@ -467,7 +466,7 @@ export function CategorySettings() {
         })}
 
         {withoutCategory.length > 0 && (
-          <Card className="border-2 border-amber-200 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-950/20 shadow-sm">
+          <Card className="border-2 border-amber-200 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-950/20 shadow-sm h-fit">
             <CardHeader className="pb-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -500,11 +499,12 @@ export function CategorySettings() {
                     className="group flex items-center justify-between p-3 bg-background rounded-lg border hover:border-amber-300 dark:hover:border-amber-700 transition-colors"
                   >
                     <span className="font-medium">{item.name}</span>
+                    {/* CHANGED: Removed opacity-0 group-hover:opacity-100 */}
                     <Button
                       size="sm"
                       variant="ghost"
                       onClick={() => confirmDelete(item.id, item.name)}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10 hover:text-destructive"
+                      className="hover:bg-destructive/10 hover:text-destructive"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -554,7 +554,7 @@ export function CategorySettings() {
     }
 
     return (
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {categories.map((item) => (
           <Card
             key={item.id}
@@ -592,6 +592,7 @@ export function CategorySettings() {
 
                 <Separator />
 
+                {/* CHANGED: Removed opacity-0 group-hover:opacity-100 logic if it existed here (it didn't, but ensuring consistency) */}
                 <div className="flex items-center gap-2">
                   {(activeType === "category" ||
                     activeType === "brand" ||
@@ -629,11 +630,12 @@ export function CategorySettings() {
                             <ChevronRight className="h-3 w-3 text-muted-foreground" />
                             <span className="font-medium">{child.name}</span>
                           </div>
+                          {/* CHANGED: Removed opacity-0 group-hover:opacity-100 */}
                           <Button
                             size="sm"
                             variant="ghost"
                             onClick={() => confirmDelete(child.id, child.name)}
-                            className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10 hover:text-destructive"
+                            className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
                           >
                             <Trash2 className="h-3 w-3" />
                           </Button>

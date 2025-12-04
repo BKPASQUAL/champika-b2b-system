@@ -23,20 +23,42 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const val = schema.parse(body);
 
+    // 1. Check for existing item with same name, type AND parent
+    let checkQuery = supabaseAdmin
+      .from("categories")
+      .select("id")
+      .eq("name", val.name)
+      .eq("type", val.type);
+
+    if (val.parent_id) {
+      checkQuery = checkQuery.eq("parent_id", val.parent_id);
+    } else {
+      checkQuery = checkQuery.is("parent_id", null);
+    }
+
+    if (val.category_id) {
+      checkQuery = checkQuery.eq("category_id", val.category_id);
+    } else {
+      checkQuery = checkQuery.is("category_id", null);
+    }
+
+    const { data: existing } = await checkQuery.single();
+
+    if (existing) {
+      return NextResponse.json(
+        { error: `A ${val.type} with this name already exists in this group.` },
+        { status: 409 }
+      );
+    }
+
+    // 2. Proceed with Insert
     const insertData: any = {
       name: val.name,
       type: val.type,
     };
 
-    // Add parent_id if provided (for hierarchical relationships)
-    if (val.parent_id) {
-      insertData.parent_id = val.parent_id;
-    }
-
-    // ✅ Add category_id if provided (for models/specs)
-    if (val.category_id) {
-      insertData.category_id = val.category_id;
-    }
+    if (val.parent_id) insertData.parent_id = val.parent_id;
+    if (val.category_id) insertData.category_id = val.category_id;
 
     const { data, error } = await supabaseAdmin
       .from("categories")
@@ -47,10 +69,16 @@ export async function POST(request: NextRequest) {
     if (error) throw error;
     return NextResponse.json(data, { status: 201 });
   } catch (error: any) {
+    // Handle unique constraint violation gracefully if SQL fix wasn't applied
+    if (error.code === "23505") {
+      return NextResponse.json(
+        { error: "This item already exists." },
+        { status: 409 }
+      );
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
-
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const type = searchParams.get("type");
