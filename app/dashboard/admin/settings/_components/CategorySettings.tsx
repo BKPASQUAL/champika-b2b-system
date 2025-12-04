@@ -2,9 +2,25 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Trash2, ChevronRight, MapPin, Truck } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  ChevronRight,
+  MapPin,
+  Truck,
+  Package,
+  Tag,
+  Layers,
+  FileText,
+  Building2,
+  AlertCircle,
+  Check,
+  X,
+  Pencil,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Card,
   CardContent,
@@ -19,7 +35,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -34,9 +70,15 @@ interface Category {
 
 export function CategorySettings() {
   const [categories, setCategories] = useState<Category[]>([]);
-  const [allCategories, setAllCategories] = useState<Category[]>([]); // For category dropdown
+  const [allCategories, setAllCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [newName, setNewName] = useState("");
+  const [deleteDialog, setDeleteDialog] = useState<{
+    open: boolean;
+    id: string | null;
+    name: string;
+  }>({ open: false, id: null, name: "" });
 
   const [activeType, setActiveType] = useState<
     "category" | "brand" | "model" | "spec" | "supplier" | "route" | "lorry"
@@ -45,9 +87,77 @@ export function CategorySettings() {
   const [selectedParent, setSelectedParent] = useState<string | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
     null
-  ); // For Model/Spec
+  );
 
-  // Fetch all main categories for the dropdown
+  // Tab configurations with icons and colors
+  const tabs = [
+    {
+      value: "category",
+      label: "Categories",
+      icon: Package,
+      color: "text-blue-600",
+      bgColor: "bg-blue-50 dark:bg-blue-950/30",
+      borderColor: "border-blue-200 dark:border-blue-800",
+      description: "Manage product categories and sub-categories",
+    },
+    {
+      value: "brand",
+      label: "Brands",
+      icon: Tag,
+      color: "text-purple-600",
+      bgColor: "bg-purple-50 dark:bg-purple-950/30",
+      borderColor: "border-purple-200 dark:border-purple-800",
+      description: "Manage brands and sub-brands",
+    },
+    {
+      value: "model",
+      label: "Models",
+      icon: Layers,
+      color: "text-green-600",
+      bgColor: "bg-green-50 dark:bg-green-950/30",
+      borderColor: "border-green-200 dark:border-green-800",
+      description: "Manage product models by category",
+    },
+    {
+      value: "spec",
+      label: "Specifications",
+      icon: FileText,
+      color: "text-orange-600",
+      bgColor: "bg-orange-50 dark:bg-orange-950/30",
+      borderColor: "border-orange-200 dark:border-orange-800",
+      description: "Manage product specifications by category",
+    },
+    {
+      value: "route",
+      label: "Routes",
+      icon: MapPin,
+      color: "text-red-600",
+      bgColor: "bg-red-50 dark:bg-red-950/30",
+      borderColor: "border-red-200 dark:border-red-800",
+      description: "Manage delivery routes",
+    },
+    {
+      value: "lorry",
+      label: "Lorries",
+      icon: Truck,
+      color: "text-indigo-600",
+      bgColor: "bg-indigo-50 dark:bg-indigo-950/30",
+      borderColor: "border-indigo-200 dark:border-indigo-800",
+      description: "Manage fleet vehicles",
+    },
+    {
+      value: "supplier",
+      label: "Suppliers",
+      icon: Building2,
+      color: "text-teal-600",
+      bgColor: "bg-teal-50 dark:bg-teal-950/30",
+      borderColor: "border-teal-200 dark:border-teal-800",
+      description: "Manage supplier categories",
+    },
+  ];
+
+  const activeTab = tabs.find((t) => t.value === activeType);
+
   const fetchAllCategories = useCallback(async () => {
     try {
       const res = await fetch(`/api/settings/categories?type=category`);
@@ -68,10 +178,8 @@ export function CategorySettings() {
       const data = await res.json();
 
       if (activeType === "model" || activeType === "spec") {
-        // For models and specs, group by category_id
         setCategories(data);
       } else {
-        // For others, build parent-child hierarchy
         const roots = data.filter((c: Category) => !c.parent_id);
         const withChildren = roots.map((root: Category) => ({
           ...root,
@@ -94,12 +202,24 @@ export function CategorySettings() {
     fetchCategories();
     setSelectedParent(null);
     setSelectedCategoryId(null);
+    setNewName("");
   }, [fetchCategories]);
 
-  const handleAdd = async () => {
-    if (!newName.trim()) return;
+  const openAddDialog = (parentId: string | null = null) => {
+    setSelectedParent(parentId);
+    setNewName("");
+    if (parentId) {
+      setSelectedCategoryId(null);
+    }
+    setAddDialogOpen(true);
+  };
 
-    // Validation for models and specs
+  const handleAdd = async () => {
+    if (!newName.trim()) {
+      toast.error("Please enter a name");
+      return;
+    }
+
     if (
       (activeType === "model" || activeType === "spec") &&
       !selectedParent &&
@@ -111,18 +231,15 @@ export function CategorySettings() {
 
     try {
       const payload: any = {
-        name: newName,
+        name: newName.trim(),
         type: activeType,
         parent_id: selectedParent,
       };
 
-      // Add category_id for models and specs
       if (activeType === "model" || activeType === "spec") {
         if (selectedParent) {
-          // Adding sub-model (child of model)
-          payload.category_id = null; // Sub-models inherit category from parent
+          payload.category_id = null;
         } else {
-          // Adding main model or spec
           payload.category_id = selectedCategoryId;
         }
       }
@@ -135,112 +252,207 @@ export function CategorySettings() {
 
       if (!res.ok) throw new Error("Failed to add");
 
-      toast.success("Item added successfully");
+      toast.success(
+        <div className="flex items-center gap-2">
+          <Check className="h-4 w-4" />
+          <span>Added successfully</span>
+        </div>
+      );
       setNewName("");
       setSelectedParent(null);
-      if (!selectedParent) setSelectedCategoryId(null); // Reset category selection only for main items
+      setSelectedCategoryId(null);
+      setAddDialogOpen(false);
       fetchCategories();
     } catch (error) {
       toast.error("Failed to add item");
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure? This will also delete sub-items.")) return;
+  const confirmDelete = (id: string, name: string) => {
+    setDeleteDialog({ open: true, id, name });
+  };
+
+  const handleDelete = async () => {
+    if (!deleteDialog.id) return;
 
     try {
-      const res = await fetch(`/api/settings/categories/${id}`, {
+      const res = await fetch(`/api/settings/categories/${deleteDialog.id}`, {
         method: "DELETE",
       });
       if (!res.ok) throw new Error("Failed to delete");
 
-      toast.success("Deleted successfully");
+      toast.success(
+        <div className="flex items-center gap-2">
+          <Check className="h-4 w-4" />
+          <span>Deleted successfully</span>
+        </div>
+      );
+      setDeleteDialog({ open: false, id: null, name: "" });
       fetchCategories();
     } catch (error) {
       toast.error("Failed to delete");
     }
   };
 
-  const renderList = () => {
-    if (activeType === "model" || activeType === "spec") {
-      // Group by category
-      const groupedByCategory: { [key: string]: Category[] } = {};
-      const withoutCategory: Category[] = [];
+  const renderCategoryBasedList = () => {
+    const groupedByCategory: { [key: string]: Category[] } = {};
+    const withoutCategory: Category[] = [];
 
-      categories.forEach((item) => {
-        if (item.category_id) {
-          if (!groupedByCategory[item.category_id]) {
-            groupedByCategory[item.category_id] = [];
-          }
-          groupedByCategory[item.category_id].push(item);
-        } else if (!item.parent_id) {
-          withoutCategory.push(item);
+    categories.forEach((item) => {
+      if (item.category_id) {
+        if (!groupedByCategory[item.category_id]) {
+          groupedByCategory[item.category_id] = [];
         }
-      });
+        groupedByCategory[item.category_id].push(item);
+      } else if (!item.parent_id) {
+        withoutCategory.push(item);
+      }
+    });
 
+    const hasItems =
+      Object.keys(groupedByCategory).length > 0 || withoutCategory.length > 0;
+
+    if (!hasItems) {
       return (
-        <div className="space-y-6">
-          {Object.keys(groupedByCategory).map((categoryId) => {
-            const category = allCategories.find((c) => c.id === categoryId);
-            const items = groupedByCategory[categoryId];
+        <Card
+          className={cn(
+            "border-2 border-dashed",
+            activeTab?.borderColor,
+            activeTab?.bgColor
+          )}
+        >
+          <CardContent className="flex flex-col items-center justify-center py-16">
+            <div
+              className={cn(
+                "h-20 w-20 rounded-full flex items-center justify-center mb-6",
+                activeTab?.bgColor,
+                "ring-4 ring-offset-4",
+                activeTab?.borderColor?.replace("border-", "ring-")
+              )}
+            >
+              {activeTab && (
+                <activeTab.icon className={cn("h-10 w-10", activeTab.color)} />
+              )}
+            </div>
+            <h3 className="text-xl font-semibold mb-2">
+              No {activeTab?.label} Yet
+            </h3>
+            <p className="text-sm text-muted-foreground text-center max-w-md mb-6">
+              Get started by adding your first {activeType}.{" "}
+              {activeType === "model" || activeType === "spec"
+                ? "Select a category and enter a name."
+                : "Click the button above to add one."}
+            </p>
+          </CardContent>
+        </Card>
+      );
+    }
 
-            return (
-              <div
-                key={categoryId}
-                className="border rounded-lg p-4 bg-muted/10"
-              >
-                <h3 className="font-semibold text-lg mb-3 text-primary">
-                  {category?.name || "Unknown Category"}
-                </h3>
+    return (
+      <div className="space-y-6">
+        {Object.keys(groupedByCategory).map((categoryId) => {
+          const category = allCategories.find((c) => c.id === categoryId);
+          const items = groupedByCategory[categoryId];
+
+          return (
+            <Card
+              key={categoryId}
+              className="overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+            >
+              <CardHeader className={cn("pb-4", activeTab?.bgColor)}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={cn(
+                        "h-10 w-10 rounded-lg flex items-center justify-center",
+                        "bg-background shadow-sm"
+                      )}
+                    >
+                      <Package className={cn("h-5 w-5", activeTab?.color)} />
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg font-semibold">
+                        {category?.name || "Unknown Category"}
+                      </CardTitle>
+                      <CardDescription className="text-xs">
+                        {items.length} {activeType}
+                        {items.length !== 1 ? "s" : ""}
+                      </CardDescription>
+                    </div>
+                  </div>
+                  <Badge variant="secondary" className="text-sm px-3 py-1">
+                    {items.length}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <Separator />
+              <CardContent className="p-4">
                 <div className="space-y-2">
                   {items.map((item) => (
-                    <div key={item.id}>
-                      <div className="flex items-center justify-between p-3 bg-background rounded-md border hover:bg-muted/50 transition-colors">
-                        <span className="font-medium">{item.name}</span>
-                        <div className="flex gap-2">
+                    <div key={item.id} className="space-y-2">
+                      <div className="group flex items-center justify-between p-4 bg-muted/50 rounded-lg hover:bg-muted transition-all">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={cn(
+                              "h-9 w-9 rounded-md flex items-center justify-center",
+                              activeTab?.bgColor
+                            )}
+                          >
+                            {activeTab && (
+                              <activeTab.icon
+                                className={cn("h-4 w-4", activeTab.color)}
+                              />
+                            )}
+                          </div>
+                          <span className="font-medium">{item.name}</span>
+                        </div>
+                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           {activeType === "model" && (
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => {
-                                setSelectedParent(item.id);
-                                setSelectedCategoryId(null);
-                              }}
+                              onClick={() => openAddDialog(item.id)}
+                              className="h-8"
                             >
-                              <ChevronRight className="h-4 w-4 mr-1" />
-                              Add Sub Model
+                              <Plus className="h-3 w-3 mr-1" />
+                              Sub Model
                             </Button>
                           )}
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => handleDelete(item.id)}
+                            onClick={() => confirmDelete(item.id, item.name)}
+                            className="h-8 hover:bg-destructive/10 hover:text-destructive"
                           >
-                            <Trash2 className="h-4 w-4 text-red-600" />
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </div>
 
-                      {/* Show sub-models */}
                       {activeType === "model" && (
-                        <div className="ml-6 mt-2 space-y-1">
+                        <div className="ml-12 space-y-1">
                           {categories
                             .filter((c) => c.parent_id === item.id)
                             .map((sub) => (
                               <div
                                 key={sub.id}
-                                className="flex items-center justify-between p-2 bg-muted/30 rounded-md text-sm"
+                                className="group flex items-center justify-between p-3 rounded-md bg-background border hover:border-primary/50 transition-all"
                               >
-                                <span className="flex items-center gap-2">
-                                  <ChevronRight className="h-3 w-3" />
-                                  {sub.name}
-                                </span>
+                                <div className="flex items-center gap-2 text-sm">
+                                  <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                                  <span className="font-medium">
+                                    {sub.name}
+                                  </span>
+                                </div>
                                 <Button
                                   size="sm"
                                   variant="ghost"
-                                  onClick={() => handleDelete(sub.id)}
+                                  onClick={() =>
+                                    confirmDelete(sub.id, sub.name)
+                                  }
+                                  className="h-7 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10 hover:text-destructive"
                                 >
-                                  <Trash2 className="h-3 w-3 text-red-600" />
+                                  <Trash2 className="h-3 w-3" />
                                 </Button>
                               </div>
                             ))}
@@ -249,220 +461,422 @@ export function CategorySettings() {
                     </div>
                   ))}
                 </div>
-              </div>
-            );
-          })}
+              </CardContent>
+            </Card>
+          );
+        })}
 
-          {withoutCategory.length > 0 && (
-            <div className="border rounded-lg p-4 bg-amber-50 dark:bg-amber-950/20">
-              <h3 className="font-semibold text-lg mb-3 text-amber-700 dark:text-amber-500">
-                ⚠️ Not Assigned to Category
-              </h3>
+        {withoutCategory.length > 0 && (
+          <Card className="border-2 border-amber-200 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-950/20 shadow-sm">
+            <CardHeader className="pb-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                    <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-500" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg text-amber-900 dark:text-amber-500">
+                      Not Assigned to Category
+                    </CardTitle>
+                    <CardDescription className="text-xs text-amber-700 dark:text-amber-400">
+                      These items need to be assigned
+                    </CardDescription>
+                  </div>
+                </div>
+                <Badge
+                  variant="outline"
+                  className="border-amber-300 dark:border-amber-700"
+                >
+                  {withoutCategory.length}
+                </Badge>
+              </div>
+            </CardHeader>
+            <Separator className="bg-amber-200 dark:bg-amber-900" />
+            <CardContent className="p-4">
               <div className="space-y-2">
                 {withoutCategory.map((item) => (
                   <div
                     key={item.id}
-                    className="flex items-center justify-between p-3 bg-background rounded-md border"
+                    className="group flex items-center justify-between p-3 bg-background rounded-lg border hover:border-amber-300 dark:hover:border-amber-700 transition-colors"
                   >
                     <span className="font-medium">{item.name}</span>
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => handleDelete(item.id)}
+                      onClick={() => confirmDelete(item.id, item.name)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10 hover:text-destructive"
                     >
-                      <Trash2 className="h-4 w-4 text-red-600" />
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 ))}
               </div>
-            </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    );
+  };
+
+  const renderHierarchicalList = () => {
+    if (categories.length === 0) {
+      return (
+        <Card
+          className={cn(
+            "border-2 border-dashed",
+            activeTab?.borderColor,
+            activeTab?.bgColor
           )}
-        </div>
+        >
+          <CardContent className="flex flex-col items-center justify-center py-16">
+            <div
+              className={cn(
+                "h-20 w-20 rounded-full flex items-center justify-center mb-6",
+                activeTab?.bgColor,
+                "ring-4 ring-offset-4",
+                activeTab?.borderColor?.replace("border-", "ring-")
+              )}
+            >
+              {activeTab && (
+                <activeTab.icon className={cn("h-10 w-10", activeTab.color)} />
+              )}
+            </div>
+            <h3 className="text-xl font-semibold mb-2">
+              No {activeTab?.label} Yet
+            </h3>
+            <p className="text-sm text-muted-foreground text-center max-w-md mb-6">
+              Get started by adding your first {activeType}. Click the button
+              above to create one.
+            </p>
+          </CardContent>
+        </Card>
       );
     }
 
-    // Default hierarchical list for other types
     return (
-      <div className="space-y-2">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {categories.map((item) => (
-          <div key={item.id} className="space-y-1">
-            <div className="flex items-center justify-between p-3 bg-muted/50 rounded-md border hover:bg-muted transition-colors">
-              <span className="font-medium">{item.name}</span>
-              <div className="flex gap-2">
-                {(activeType === "category" ||
-                  activeType === "brand" ||
-                  activeType === "model") && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setSelectedParent(item.id);
-                      setSelectedCategoryId(null);
-                    }}
-                  >
-                    <ChevronRight className="h-4 w-4 mr-1" />
-                    Add Sub
-                  </Button>
-                )}
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => handleDelete(item.id)}
-                >
-                  <Trash2 className="h-4 w-4 text-red-600" />
-                </Button>
-              </div>
-            </div>
+          <Card
+            key={item.id}
+            className="overflow-hidden hover:shadow-md transition-shadow"
+          >
+            <CardContent className="p-4">
+              <div className="space-y-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3 flex-1">
+                    <div
+                      className={cn(
+                        "h-12 w-12 rounded-xl flex items-center justify-center shrink-0",
+                        activeTab?.bgColor
+                      )}
+                    >
+                      {activeTab && (
+                        <activeTab.icon
+                          className={cn("h-6 w-6", activeTab.color)}
+                        />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h4 className="font-semibold text-base truncate">
+                        {item.name}
+                      </h4>
+                      {item.children && item.children.length > 0 && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {item.children.length} sub-item
+                          {item.children.length !== 1 ? "s" : ""}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
 
-            {item.children && item.children.length > 0 && (
-              <div className="ml-6 space-y-1">
-                {item.children.map((child) => (
-                  <div
-                    key={child.id}
-                    className="flex items-center justify-between p-2 bg-background rounded-md border text-sm"
-                  >
-                    <span className="flex items-center gap-2">
-                      <ChevronRight className="h-3 w-3" />
-                      {child.name}
-                    </span>
+                <Separator />
+
+                <div className="flex items-center gap-2">
+                  {(activeType === "category" ||
+                    activeType === "brand" ||
+                    activeType === "model") && (
                     <Button
                       size="sm"
-                      variant="ghost"
-                      onClick={() => handleDelete(child.id)}
+                      variant="outline"
+                      onClick={() => openAddDialog(item.id)}
+                      className="flex-1 h-8"
                     >
-                      <Trash2 className="h-3 w-3 text-red-600" />
+                      <Plus className="h-3 w-3 mr-1" />
+                      Add Sub
                     </Button>
-                  </div>
-                ))}
+                  )}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => confirmDelete(item.id, item.name)}
+                    className="h-8 hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                {item.children && item.children.length > 0 && (
+                  <>
+                    <Separator />
+                    <div className="space-y-1">
+                      {item.children.map((child) => (
+                        <div
+                          key={child.id}
+                          className="group flex items-center justify-between p-2 rounded-md bg-muted/50 hover:bg-muted transition-colors"
+                        >
+                          <div className="flex items-center gap-2 text-sm">
+                            <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                            <span className="font-medium">{child.name}</span>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => confirmDelete(child.id, child.name)}
+                            className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10 hover:text-destructive"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
-            )}
-          </div>
+            </CardContent>
+          </Card>
         ))}
       </div>
     );
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Product Categories & Settings</CardTitle>
-        <CardDescription>
-          Manage categories, brands, models, specifications, and logistics.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Tabs
-          value={activeType}
-          onValueChange={(v) => setActiveType(v as any)}
-          className="w-full"
-        >
-          <TabsList className="grid w-full grid-cols-3 lg:grid-cols-7 mb-6 h-auto">
-            <TabsTrigger value="category">Category</TabsTrigger>
-            <TabsTrigger value="brand">Brand</TabsTrigger>
-            <TabsTrigger value="model">Model</TabsTrigger>
-            <TabsTrigger value="spec">Spec</TabsTrigger>
-            <TabsTrigger value="route" className="flex gap-2">
-              <MapPin className="h-4 w-4" /> Route
-            </TabsTrigger>
-            <TabsTrigger value="lorry" className="flex gap-2">
-              <Truck className="h-4 w-4" /> Lorry
-            </TabsTrigger>
-            <TabsTrigger value="supplier">Supplier</TabsTrigger>
-          </TabsList>
-
-          <div className="flex flex-col gap-3 mb-6 p-4 bg-muted/30 rounded-lg border">
-            {/* Category selection for Models and Specs */}
-            {(activeType === "model" || activeType === "spec") &&
-              !selectedParent && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Select Category *
-                  </label>
-                  <Select
-                    value={selectedCategoryId || ""}
-                    onValueChange={setSelectedCategoryId}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Choose a category..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {allCategories.map((cat) => (
-                        <SelectItem key={cat.id} value={cat.id}>
-                          {cat.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-            <div className="flex gap-2">
-              <Input
-                placeholder={
-                  selectedParent
-                    ? `Add Sub-item under "${
-                        categories.find((c) => c.id === selectedParent)?.name
-                      }"...`
-                    : `New ${
-                        activeType.charAt(0).toUpperCase() + activeType.slice(1)
-                      }...`
-                }
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-              />
-              <Button onClick={handleAdd} disabled={loading}>
-                <Plus className="h-4 w-4 mr-2" /> Add
-              </Button>
-            </div>
-
-            {selectedParent && (
-              <div className="text-xs text-muted-foreground flex justify-between items-center">
-                <span>
-                  Adding to parent:{" "}
-                  <strong>
-                    {categories.find((c) => c.id === selectedParent)?.name}
-                  </strong>
-                </span>
-                <button
-                  onClick={() => setSelectedParent(null)}
-                  className="text-blue-500 hover:underline"
-                >
-                  Cancel selection
-                </button>
-              </div>
-            )}
-
-            {(activeType === "model" || activeType === "spec") &&
-              selectedCategoryId &&
-              !selectedParent && (
-                <div className="text-xs text-muted-foreground flex justify-between items-center">
-                  <span>
-                    Category:{" "}
-                    <strong>
-                      {
-                        allCategories.find((c) => c.id === selectedCategoryId)
-                          ?.name
-                      }
-                    </strong>
-                  </span>
-                  <button
-                    onClick={() => setSelectedCategoryId(null)}
-                    className="text-blue-500 hover:underline"
-                  >
-                    Change category
-                  </button>
-                </div>
-              )}
+    <>
+      <div className="space-y-6">
+        {/* Header Section */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight">
+              Product Settings
+            </h2>
+            <p className="text-muted-foreground mt-1">
+              {activeTab?.description}
+            </p>
           </div>
+          <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+            <DialogTrigger asChild>
+              <Button
+                size="lg"
+                className="gap-2"
+                onClick={() => openAddDialog(null)}
+              >
+                <Plus className="h-4 w-4" />
+                Add {activeTab?.label.slice(0, -1)}
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[500px]">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-xl">
+                  {activeTab && (
+                    <activeTab.icon
+                      className={cn("h-5 w-5", activeTab.color)}
+                    />
+                  )}
+                  {selectedParent
+                    ? `Add Sub-${activeTab?.label.slice(0, -1)}`
+                    : `Add New ${activeTab?.label.slice(0, -1)}`}
+                </DialogTitle>
+                <DialogDescription>
+                  {selectedParent
+                    ? `Add a sub-item under "${
+                        categories.find((c) => c.id === selectedParent)?.name
+                      }"`
+                    : `Create a new ${activeType} for your products`}
+                </DialogDescription>
+              </DialogHeader>
 
-          {loading ? (
-            <div className="p-4 text-center">Loading...</div>
-          ) : (
-            renderList()
-          )}
-        </Tabs>
-      </CardContent>
-    </Card>
+              <div className="space-y-6 py-4">
+                {(activeType === "model" || activeType === "spec") &&
+                  !selectedParent && (
+                    <div className="space-y-3">
+                      <Label
+                        htmlFor="category"
+                        className="text-base font-semibold"
+                      >
+                        Category <span className="text-destructive">*</span>
+                      </Label>
+                      <Select
+                        value={selectedCategoryId || ""}
+                        onValueChange={setSelectedCategoryId}
+                      >
+                        <SelectTrigger id="category" className="h-11">
+                          <SelectValue placeholder="Select a category..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {allCategories.map((cat) => (
+                            <SelectItem key={cat.id} value={cat.id}>
+                              <div className="flex items-center gap-2">
+                                <Package className="h-4 w-4 text-muted-foreground" />
+                                {cat.name}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                {selectedParent && (
+                  <div
+                    className={cn(
+                      "p-4 rounded-lg",
+                      activeTab?.bgColor,
+                      activeTab?.borderColor,
+                      "border-2"
+                    )}
+                  >
+                    <div className="flex items-center gap-2 text-sm">
+                      <ChevronRight
+                        className={cn("h-4 w-4", activeTab?.color)}
+                      />
+                      <span className="font-medium">
+                        Adding to:{" "}
+                        <strong>
+                          {
+                            categories.find((c) => c.id === selectedParent)
+                              ?.name
+                          }
+                        </strong>
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  <Label htmlFor="name" className="text-base font-semibold">
+                    Name <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="name"
+                    placeholder={`Enter ${activeType} name...`}
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+                    className="h-11"
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setAddDialogOpen(false);
+                    setNewName("");
+                    setSelectedParent(null);
+                    setSelectedCategoryId(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button type="button" onClick={handleAdd} disabled={loading}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add {activeTab?.label.slice(0, -1)}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        <Separator />
+
+        {/* Tabs Section */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2">
+          {tabs.map((tab) => (
+            <button
+              key={tab.value}
+              onClick={() => setActiveType(tab.value as any)}
+              className={cn(
+                "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all",
+                "hover:shadow-md",
+                activeType === tab.value
+                  ? cn(tab.bgColor, tab.borderColor, "shadow-sm")
+                  : "border-border hover:border-primary/30 bg-background"
+              )}
+            >
+              <div
+                className={cn(
+                  "h-10 w-10 rounded-lg flex items-center justify-center",
+                  activeType === tab.value
+                    ? "bg-background shadow-sm"
+                    : tab.bgColor
+                )}
+              >
+                <tab.icon className={cn("h-5 w-5", tab.color)} />
+              </div>
+              <span
+                className={cn(
+                  "text-sm font-semibold text-center",
+                  activeType === tab.value ? tab.color : "text-muted-foreground"
+                )}
+              >
+                {tab.label}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {/* Content Section */}
+        {loading ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-16">
+              <div className="h-12 w-12 rounded-full border-4 border-primary/20 border-t-primary animate-spin mb-4" />
+              <p className="text-sm text-muted-foreground">Loading...</p>
+            </CardContent>
+          </Card>
+        ) : activeType === "model" || activeType === "spec" ? (
+          renderCategoryBasedList()
+        ) : (
+          renderHierarchicalList()
+        )}
+      </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog
+        open={deleteDialog.open}
+        onOpenChange={(open) =>
+          !open && setDeleteDialog({ open: false, id: null, name: "" })
+        }
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-xl">
+              <AlertCircle className="h-5 w-5 text-destructive" />
+              Confirm Deletion
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-base">
+              Are you sure you want to delete{" "}
+              <strong className="text-foreground">{deleteDialog.name}</strong>?
+              <br />
+              <span className="text-destructive">
+                This will also delete all sub-items and cannot be undone.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
