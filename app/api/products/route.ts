@@ -1,4 +1,3 @@
-// app/api/products/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
@@ -11,6 +10,7 @@ const productSchema = z.object({
   brand: z.string().optional(),
   subBrand: z.string().optional(),
   modelType: z.string().optional(),
+  subModel: z.string().optional(), // <--- Validation
   sizeSpec: z.string().optional(),
   supplier: z.string().min(1, "Supplier required"),
   stock: z.number().min(0),
@@ -19,7 +19,7 @@ const productSchema = z.object({
   sellingPrice: z.number().min(0),
   costPrice: z.number().min(0),
   images: z.array(z.string()).optional(),
-  unitOfMeasure: z.string().optional(), // <--- 1. ADDED THIS VALIDATION
+  unitOfMeasure: z.string().optional(),
 });
 
 export async function GET() {
@@ -40,6 +40,7 @@ export async function GET() {
       brand: p.brand,
       subBrand: p.sub_brand,
       modelType: p.model_type,
+      subModel: p.sub_model, // <--- Map from DB
       sizeSpec: p.size_spec,
       supplier: p.supplier_name,
       stock: p.stock_quantity || 0,
@@ -48,7 +49,7 @@ export async function GET() {
       sellingPrice: p.selling_price || 0,
       costPrice: p.cost_price || 0,
       images: p.images || [],
-      unitOfMeasure: p.unit_of_measure || "Pcs", // Fallback to Pcs
+      unitOfMeasure: p.unit_of_measure || "Pcs",
       discountPercent:
         p.mrp > 0 ? ((p.mrp - p.selling_price) / p.mrp) * 100 : 0,
       totalValue: (p.stock_quantity || 0) * (p.selling_price || 0),
@@ -85,6 +86,7 @@ export async function POST(request: NextRequest) {
         brand: val.brand,
         sub_brand: val.subBrand,
         model_type: val.modelType,
+        sub_model: val.subModel, // <--- Save to DB
         size_spec: val.sizeSpec,
         supplier_name: val.supplier,
         stock_quantity: val.stock,
@@ -93,7 +95,7 @@ export async function POST(request: NextRequest) {
         selling_price: val.sellingPrice,
         cost_price: val.costPrice,
         images: val.images || [],
-        unit_of_measure: val.unitOfMeasure || "Pcs", // <--- 2. ADDED THIS INSERT
+        unit_of_measure: val.unitOfMeasure || "Pcs",
       })
       .select()
       .single();

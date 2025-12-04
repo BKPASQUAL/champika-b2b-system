@@ -9,6 +9,7 @@ export interface Product {
   brand?: string;
   subBrand?: string;
   modelType?: string;
+  subModel?: string; // <--- ADD THIS
   sizeSpec?: string;
   supplier: string;
   stock: number;
@@ -21,7 +22,7 @@ export interface Product {
   totalCost: number;
   profitMargin: number;
   images: string[];
-  unitOfMeasure: string; // <--- Added Unit
+  unitOfMeasure: string;
 }
 
 export type SortField =
@@ -44,6 +45,7 @@ export interface ProductFormData {
   brand: string;
   subBrand: string;
   modelType: string;
+  subModel: string; // <--- ADD THIS
   sizeSpec: string;
   supplier: string;
   stock: number;
@@ -52,5 +54,5 @@ export interface ProductFormData {
   sellingPrice: number;
   costPrice: number;
   images: string[];
-  unitOfMeasure: string; // <--- Added Unit
+  unitOfMeasure: string;
 }

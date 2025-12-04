@@ -24,16 +24,21 @@ import { Camera, Upload, X, Loader2 } from "lucide-react";
 import { Product, ProductFormData } from "../types";
 import { toast } from "sonner";
 
+// Helper hook to fetch settings
 const useSettings = (type: string) => {
   const [data, setData] = useState<
     { id: string; name: string; parent_id?: string }[]
   >([]);
+
   useEffect(() => {
     fetch(`/api/settings/categories?type=${type}`)
       .then((res) => res.json())
-      .then((data) => setData(data))
+      .then((data) => {
+        if (Array.isArray(data)) setData(data);
+      })
       .catch((err) => console.error(err));
   }, [type]);
+
   return data;
 };
 
@@ -64,7 +69,14 @@ export function ProductDialogs({
   suppliers,
   categories,
 }: ProductDialogsProps) {
+  // --- 1. Fetch Configuration Data ---
   const brands = useSettings("brand");
+  const models = useSettings("model");
+  const specs = useSettings("spec");
+
+  // --- 2. Filter Hierarchies ---
+
+  // Category Logic
   const mainCategories = categories.filter((c) => !c.parent_id);
   const selectedCatId = mainCategories.find(
     (c) => c.name === formData.category
@@ -72,13 +84,28 @@ export function ProductDialogs({
   const subCategories = categories.filter(
     (c) => c.parent_id && c.parent_id === selectedCatId
   );
+
+  // Brand Logic
   const mainBrands = brands.filter((b) => !b.parent_id);
   const selectedBrandId = mainBrands.find((b) => b.name === formData.brand)?.id;
   const subBrands = brands.filter(
     (b) => b.parent_id && b.parent_id === selectedBrandId
   );
 
-  // Image Upload
+  // --- Model Logic (Fixed for Edit Mode) ---
+  const mainModels = models.filter((m) => !m.parent_id);
+
+  // Find the ID of the selected Model Name
+  const selectedModelId = mainModels.find(
+    (m) => m.name.trim() === formData.modelType?.trim()
+  )?.id;
+
+  // Filter sub-models.
+  const subModels = models.filter(
+    (m) => m.parent_id && m.parent_id === selectedModelId
+  );
+
+  // Image Upload Logic
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
@@ -121,7 +148,6 @@ export function ProductDialogs({
     setFormData({ ...formData, images: newImages });
   };
 
-  // Image Slots Logic
   const maxImages = 6;
   const showUpload = formData.images.length < maxImages;
   const emptySlotsCount =
@@ -143,7 +169,7 @@ export function ProductDialogs({
           </DialogHeader>
 
           <div className="grid grid-cols-2 gap-4 py-4">
-            {/* Product Name - Full Width */}
+            {/* Product Name */}
             <div className="col-span-2 space-y-2">
               <Label>Product Name *</Label>
               <Input
@@ -241,8 +267,75 @@ export function ProductDialogs({
               </Select>
             </div>
 
-            {/* Supplier - Full Width */}
-            <div className="col-span-2 space-y-2">
+            {/* --- Models & Specs --- */}
+            <div className="space-y-2">
+              <Label>Model</Label>
+              <Select
+                value={formData.modelType}
+                onValueChange={(val) =>
+                  setFormData({ ...formData, modelType: val, subModel: "" })
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select Model" />
+                </SelectTrigger>
+                <SelectContent>
+                  {mainModels.map((m) => (
+                    <SelectItem key={m.id} value={m.name}>
+                      {m.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Sub Model</Label>
+              {/* This KEY is the Fix: It forces re-render when data is ready */}
+              <Select
+                key={`${selectedModelId || "loading"}-${subModels.length}`}
+                value={formData.subModel}
+                onValueChange={(val) =>
+                  setFormData({ ...formData, subModel: val })
+                }
+                disabled={!formData.modelType}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select Sub Model" />
+                </SelectTrigger>
+                <SelectContent>
+                  {subModels.map((m) => (
+                    <SelectItem key={m.id} value={m.name}>
+                      {m.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Specification</Label>
+              <Select
+                value={formData.sizeSpec}
+                onValueChange={(val) =>
+                  setFormData({ ...formData, sizeSpec: val })
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select Spec" />
+                </SelectTrigger>
+                <SelectContent>
+                  {specs.map((s) => (
+                    <SelectItem key={s.id} value={s.name}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Supplier */}
+            <div className="space-y-2">
               <Label>Supplier *</Label>
               <Select
                 value={formData.supplier}
@@ -311,7 +404,7 @@ export function ProductDialogs({
               </div>
             </div>
 
-            {/* Stock & Unit - REMOVED 'unit' OPTION */}
+            {/* Stock & Unit */}
             <div className="col-span-2 grid grid-cols-3 gap-4 border-t pt-4">
               <div className="space-y-2">
                 <Label>Unit of Measure</Label>
@@ -368,7 +461,7 @@ export function ProductDialogs({
               </div>
             </div>
 
-            {/* Images - 6 Slots Fixed Layout */}
+            {/* Images */}
             <div className="col-span-2 space-y-3 pt-4 border-t mt-2">
               <div className="flex items-center justify-between">
                 <Label className="flex items-center gap-2">
@@ -410,7 +503,6 @@ export function ProductDialogs({
                     key={index}
                     className="aspect-square rounded-lg border bg-muted relative group overflow-hidden"
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={imgSrc}
                       alt={`Product ${index}`}
@@ -445,6 +537,7 @@ export function ProductDialogs({
         </DialogContent>
       </Dialog>
 
+      {/* Delete Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
