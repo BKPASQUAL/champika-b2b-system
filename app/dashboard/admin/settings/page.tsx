@@ -90,7 +90,7 @@ export default function SettingsPage() {
 
         {/* 2. Categories Settings */}
         <TabsContent value="categories">
-          <div className="max-w-3xl">
+          <div className="max-full">
             <CategorySettings />
           </div>
         </TabsContent>
