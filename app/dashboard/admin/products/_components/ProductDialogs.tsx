@@ -27,7 +27,7 @@ import { toast } from "sonner";
 // Helper hook to fetch settings
 const useSettings = (type: string) => {
   const [data, setData] = useState<
-    { id: string; name: string; parent_id?: string }[]
+    { id: string; name: string; parent_id?: string; category_id?: string }[]
   >([]);
 
   useEffect(() => {
@@ -85,21 +85,34 @@ export function ProductDialogs({
     (c) => c.parent_id && c.parent_id === selectedCatId
   );
 
-  // Brand Logic
+  // Brand Logic (remains independent)
   const mainBrands = brands.filter((b) => !b.parent_id);
   const selectedBrandId = mainBrands.find((b) => b.name === formData.brand)?.id;
   const subBrands = brands.filter(
     (b) => b.parent_id && b.parent_id === selectedBrandId
   );
 
-  // --- Model Logic ---
-  const mainModels = models.filter((m) => !m.parent_id);
-  const selectedModelId = mainModels.find(
+  // ✅ NEW: Model Logic - Filter by Category
+  // Only show models that belong to the selected category
+  const categoryModels = models.filter((m) => {
+    // Main models (parent) that belong to this category
+    return !m.parent_id && m.category_id === selectedCatId;
+  });
+
+  const selectedModelId = categoryModels.find(
     (m) => m.name.trim() === formData.modelType?.trim()
   )?.id;
+
+  // Sub models - children of selected model
   const subModels = models.filter(
     (m) => m.parent_id && m.parent_id === selectedModelId
   );
+
+  // ✅ NEW: Specification Logic - Filter by Category
+  // Only show specs that belong to the selected category
+  const categorySpecs = specs.filter((s) => {
+    return s.category_id === selectedCatId;
+  });
 
   // Image Upload Logic
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -153,8 +166,8 @@ export function ProductDialogs({
   return (
     <>
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="max-w-3xl  overflow-y-auto">
-          <DialogHeader className="p-0 ">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
             <DialogTitle>
               {selectedProduct ? "Edit Product" : "Add New Product"}
             </DialogTitle>
@@ -164,7 +177,7 @@ export function ProductDialogs({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-2 gap-4 py-2">
+          <div className="grid grid-cols-2 gap-4 py-4">
             {/* Product Name */}
             <div className="col-span-2 space-y-2">
               <Label>Product Name *</Label>
@@ -182,9 +195,17 @@ export function ProductDialogs({
               <Label>Category *</Label>
               <Select
                 value={formData.category}
-                onValueChange={(val) =>
-                  setFormData({ ...formData, category: val, subCategory: "" })
-                }
+                onValueChange={(val) => {
+                  // ✅ When category changes, clear dependent fields
+                  setFormData({
+                    ...formData,
+                    category: val,
+                    subCategory: "",
+                    modelType: "",
+                    subModel: "",
+                    sizeSpec: "",
+                  });
+                }}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select Category" />
@@ -203,7 +224,6 @@ export function ProductDialogs({
               <Select
                 value={formData.subCategory}
                 onValueChange={(val) => {
-                  // ✅ Handle None option
                   if (val === "none") {
                     setFormData({ ...formData, subCategory: "" });
                   } else {
@@ -216,7 +236,6 @@ export function ProductDialogs({
                   <SelectValue placeholder="Select Sub Category" />
                 </SelectTrigger>
                 <SelectContent>
-                  {/* ✅ NONE OPTION */}
                   <SelectItem value="none">
                     <span className="text-muted-foreground italic">None</span>
                   </SelectItem>
@@ -235,7 +254,6 @@ export function ProductDialogs({
               <Select
                 value={formData.brand}
                 onValueChange={(val) => {
-                  // ✅ Handle None option
                   if (val === "none") {
                     setFormData({ ...formData, brand: "", subBrand: "" });
                   } else {
@@ -247,7 +265,6 @@ export function ProductDialogs({
                   <SelectValue placeholder="Select Brand" />
                 </SelectTrigger>
                 <SelectContent>
-                  {/* ✅ NONE OPTION */}
                   <SelectItem value="none">
                     <span className="text-muted-foreground italic">None</span>
                   </SelectItem>
@@ -264,7 +281,6 @@ export function ProductDialogs({
               <Select
                 value={formData.subBrand}
                 onValueChange={(val) => {
-                  // ✅ Handle None option
                   if (val === "none") {
                     setFormData({ ...formData, subBrand: "" });
                   } else {
@@ -277,7 +293,6 @@ export function ProductDialogs({
                   <SelectValue placeholder="Select Sub Brand" />
                 </SelectTrigger>
                 <SelectContent>
-                  {/* ✅ NONE OPTION */}
                   <SelectItem value="none">
                     <span className="text-muted-foreground italic">None</span>
                   </SelectItem>
@@ -290,35 +305,47 @@ export function ProductDialogs({
               </Select>
             </div>
 
-            {/* --- Models & Specs --- */}
+            {/* ✅ Models - Filtered by Category */}
             <div className="space-y-2">
               <Label>Model</Label>
               <Select
                 value={formData.modelType}
                 onValueChange={(val) => {
-                  // ✅ Handle None option - clear both model and subModel
                   if (val === "none") {
                     setFormData({ ...formData, modelType: "", subModel: "" });
                   } else {
                     setFormData({ ...formData, modelType: val, subModel: "" });
                   }
                 }}
+                disabled={!formData.category}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select Model" />
                 </SelectTrigger>
                 <SelectContent>
-                  {/* ✅ NONE OPTION */}
                   <SelectItem value="none">
                     <span className="text-muted-foreground italic">None</span>
                   </SelectItem>
-                  {mainModels.map((m) => (
-                    <SelectItem key={m.id} value={m.name}>
-                      {m.name}
+                  {categoryModels.length > 0 ? (
+                    categoryModels.map((m) => (
+                      <SelectItem key={m.id} value={m.name}>
+                        {m.name}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="no-models" disabled>
+                      <span className="text-muted-foreground italic">
+                        No models for this category
+                      </span>
                     </SelectItem>
-                  ))}
+                  )}
                 </SelectContent>
               </Select>
+              {!formData.category && (
+                <p className="text-xs text-muted-foreground">
+                  Select a category first
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -327,7 +354,6 @@ export function ProductDialogs({
                 key={`${selectedModelId || "loading"}-${subModels.length}`}
                 value={formData.subModel}
                 onValueChange={(val) => {
-                  // ✅ Handle None option
                   if (val === "none") {
                     setFormData({ ...formData, subModel: "" });
                   } else {
@@ -340,7 +366,6 @@ export function ProductDialogs({
                   <SelectValue placeholder="Select Sub Model" />
                 </SelectTrigger>
                 <SelectContent>
-                  {/* ✅ NONE OPTION */}
                   <SelectItem value="none">
                     <span className="text-muted-foreground italic">None</span>
                   </SelectItem>
@@ -353,34 +378,47 @@ export function ProductDialogs({
               </Select>
             </div>
 
+            {/* ✅ Specification - Filtered by Category */}
             <div className="space-y-2">
               <Label>Specification</Label>
               <Select
                 value={formData.sizeSpec}
                 onValueChange={(val) => {
-                  // ✅ Handle None option
                   if (val === "none") {
                     setFormData({ ...formData, sizeSpec: "" });
                   } else {
                     setFormData({ ...formData, sizeSpec: val });
                   }
                 }}
+                disabled={!formData.category}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select Spec" />
                 </SelectTrigger>
                 <SelectContent>
-                  {/* ✅ NONE OPTION */}
                   <SelectItem value="none">
                     <span className="text-muted-foreground italic">None</span>
                   </SelectItem>
-                  {specs.map((s) => (
-                    <SelectItem key={s.id} value={s.name}>
-                      {s.name}
+                  {categorySpecs.length > 0 ? (
+                    categorySpecs.map((s) => (
+                      <SelectItem key={s.id} value={s.name}>
+                        {s.name}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="no-specs" disabled>
+                      <span className="text-muted-foreground italic">
+                        No specifications for this category
+                      </span>
                     </SelectItem>
-                  ))}
+                  )}
                 </SelectContent>
               </Select>
+              {!formData.category && (
+                <p className="text-xs text-muted-foreground">
+                  Select a category first
+                </p>
+              )}
             </div>
 
             {/* Supplier */}
