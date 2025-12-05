@@ -341,11 +341,6 @@ export function ProductDialogs({
                   )}
                 </SelectContent>
               </Select>
-              {!formData.category && (
-                <p className="text-xs text-muted-foreground">
-                  Select a category first
-                </p>
-              )}
             </div>
 
             <div className="space-y-2">
@@ -414,11 +409,7 @@ export function ProductDialogs({
                   )}
                 </SelectContent>
               </Select>
-              {!formData.category && (
-                <p className="text-xs text-muted-foreground">
-                  Select a category first
-                </p>
-              )}
+             
             </div>
 
             {/* Supplier */}

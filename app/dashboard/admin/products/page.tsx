@@ -43,7 +43,7 @@ export default function ProductsPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
-  // Form Data
+  // Form Data - Initialized with empty strings for numeric fields
   const [formData, setFormData] = useState<ProductFormData>({
     name: "",
     category: "",
@@ -51,14 +51,14 @@ export default function ProductsPage() {
     brand: "",
     subBrand: "",
     modelType: "",
-    subModel: "", // ✅ ADDED - Default value for subModel
+    subModel: "", 
     sizeSpec: "",
     supplier: "",
-    stock: 0,
-    minStock: 0,
-    mrp: 0,
-    sellingPrice: 0,
-    costPrice: 0,
+    stock: "", 
+    minStock: "",
+    mrp: "",
+    sellingPrice: "",
+    costPrice: "",
     images: [],
     unitOfMeasure: "Pcs",
   });
@@ -147,13 +147,23 @@ export default function ProductsPage() {
       return;
     }
 
+    // Convert empty strings to 0 or appropriate numbers for the API
+    const payload = {
+      ...formData,
+      stock: Number(formData.stock) || 0,
+      minStock: Number(formData.minStock) || 0,
+      mrp: Number(formData.mrp) || 0,
+      sellingPrice: Number(formData.sellingPrice) || 0,
+      costPrice: Number(formData.costPrice) || 0,
+    };
+
     try {
       if (selectedProduct) {
         // UPDATE
         const res = await fetch(`/api/products/${selectedProduct.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formData),
+          body: JSON.stringify(payload),
         });
         if (!res.ok) throw new Error("Failed update");
         toast.success("Product updated successfully");
@@ -162,7 +172,7 @@ export default function ProductsPage() {
         const res = await fetch("/api/products", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formData),
+          body: JSON.stringify(payload),
         });
         if (!res.ok) throw new Error("Failed create");
         toast.success("Product created successfully");
@@ -201,14 +211,14 @@ export default function ProductsPage() {
       brand: "",
       subBrand: "",
       modelType: "",
-      subModel: "", // ✅ ADDED - Reset subModel to empty string
+      subModel: "",
       sizeSpec: "",
       supplier: "",
-      stock: 0,
-      minStock: 0,
-      mrp: 0,
-      sellingPrice: 0,
-      costPrice: 0,
+      stock: "", // Reset to empty
+      minStock: "", // Reset to empty
+      mrp: "", // Reset to empty
+      sellingPrice: "", // Reset to empty
+      costPrice: "", // Reset to empty
       images: [],
       unitOfMeasure: "Pcs",
     });
@@ -307,7 +317,7 @@ export default function ProductsPage() {
                 brand: p.brand || "",
                 subBrand: p.subBrand || "",
                 modelType: p.modelType || "",
-                subModel: p.subModel || "", // ✅ ADDED - Load subModel from product
+                subModel: p.subModel || "", 
                 sizeSpec: p.sizeSpec || "",
                 supplier: p.supplier,
                 stock: p.stock,

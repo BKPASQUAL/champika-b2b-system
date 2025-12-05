@@ -48,11 +48,12 @@ export interface ProductFormData {
   subModel: string; // <--- ADD THIS
   sizeSpec: string;
   supplier: string;
-  stock: number;
-  minStock: number;
-  mrp: number;
-  sellingPrice: number;
-  costPrice: number;
+  // Updated to allow string (for empty state)
+  stock: number | string;
+  minStock: number | string;
+  mrp: number | string;
+  sellingPrice: number | string;
+  costPrice: number | string;
   images: string[];
   unitOfMeasure: string;
 }
