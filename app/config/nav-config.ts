@@ -25,6 +25,7 @@ import {
   LucideIcon,
   Store,
   Send,
+  BarChart3,
 } from "lucide-react";
 
 export type UserRole = "admin" | "office" | "rep" | "delivery";
@@ -138,6 +139,16 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           name: "Stock Control",
           href: "/dashboard/admin/inventory",
           icon: Layers,
+        },
+      ],
+    },
+    {
+      title: "Analytics",
+      items: [
+        {
+          name: "Profit & Reports",
+          href: "/dashboard/admin/reports",
+          icon: BarChart3,
         },
       ],
     },
