@@ -1,15 +1,19 @@
+// app/dashboard/admin/inventory/transfer/page.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
-  CardDescription,
+  CardFooter,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -17,8 +21,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -27,167 +29,182 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowLeft, ArrowRight, Loader2, Save, Search } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Loader2,
+  Plus,
+  X,
+  Package,
+  Warehouse,
+  CheckCircle2,
+  ArrowRightLeft,
+  Search,
+  Truck,
+} from "lucide-react";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 
-export default function StockTransferPage() {
+// --- Interfaces (Kept exactly same) ---
+interface Location {
+  id: string;
+  name: string;
+}
+
+interface Product {
+  id: string;
+  sku: string;
+  name: string;
+  category?: string;
+  brand?: string;
+  available_quantity: number;
+}
+
+interface TransferItem {
+  productId: string;
+  productName: string;
+  sku: string;
+  category?: string;
+  quantity: number;
+  availableQuantity: number;
+}
+
+export default function BulkStockTransferPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [stockLoading, setStockLoading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
 
-  // Data
-  const [locations, setLocations] = useState<any[]>([]);
-  const [sourceProducts, setSourceProducts] = useState<any[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-
-  // Form
+  // --- State (Kept exactly same) ---
+  const [locations, setLocations] = useState<Location[]>([]);
   const [sourceId, setSourceId] = useState("");
   const [destId, setDestId] = useState("");
   const [reason, setReason] = useState("");
 
-  // Selection State: map of productId -> transferQuantity
-  // If a product ID is in this map with a value > 0, it is "selected".
-  const [selectedItems, setSelectedItems] = useState<Record<string, number>>(
-    {}
-  );
+  const [sourceProducts, setSourceProducts] = useState<Product[]>([]);
+  const [selectedProductId, setSelectedProductId] = useState("");
+  const [quantity, setQuantity] = useState("");
 
-  // Initial Data Fetch
+  const [transferItems, setTransferItems] = useState<TransferItem[]>([]);
+
+  const [loading, setLoading] = useState(true);
+  const [stockLoading, setStockLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  // --- Effects & Fetch Logic (Kept exactly same) ---
   useEffect(() => {
-    const fetchLocations = async () => {
-      try {
-        const res = await fetch("/api/settings/locations");
-        if (res.ok) {
-          setLocations(await res.json());
-        }
-      } catch (error) {
-        toast.error("Failed to load locations");
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchLocations();
   }, []);
 
-  // Fetch Products when Source Changes
   useEffect(() => {
-    if (!sourceId) {
+    if (sourceId) {
+      fetchSourceStock();
+    } else {
       setSourceProducts([]);
-      return;
+      setTransferItems([]);
+      setSelectedProductId("");
+      setQuantity("");
     }
-
-    const fetchSourceStock = async () => {
-      try {
-        setStockLoading(true);
-        const res = await fetch(`/api/inventory/${sourceId}`);
-        if (res.ok) {
-          const data = await res.json();
-          // Only show items with positive stock
-          setSourceProducts(data.stocks.filter((s: any) => s.quantity > 0));
-        }
-      } catch (error) {
-        toast.error("Failed to load source stock");
-      } finally {
-        setStockLoading(false);
-      }
-    };
-
-    fetchSourceStock();
-    // Reset selection when source changes
-    setSelectedItems({});
   }, [sourceId]);
 
-  // Handle Quantity Change (Typing in Input)
-  const handleQtyChange = (productId: string, val: string, max: number) => {
-    // If empty, remove from selection
-    if (val === "") {
-      const next = { ...selectedItems };
-      delete next[productId];
-      setSelectedItems(next);
+  const fetchLocations = async () => {
+    try {
+      const res = await fetch("/api/settings/locations");
+      if (!res.ok) throw new Error("Failed to load locations");
+      const data = await res.json();
+      setLocations(data);
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchSourceStock = async () => {
+    setStockLoading(true);
+    try {
+      const res = await fetch(`/api/inventory/${sourceId}`);
+      if (!res.ok) throw new Error("Failed to load stock data");
+      const data = await res.json();
+
+      const products = data.stocks.map((stock: any) => ({
+        id: stock.id,
+        sku: stock.sku,
+        name: stock.name,
+        category: stock.category,
+        brand: stock.brand,
+        available_quantity: stock.quantity,
+      }));
+
+      setSourceProducts(products);
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setStockLoading(false);
+    }
+  };
+
+  // --- Handlers (Kept exactly same) ---
+  const handleAddProduct = () => {
+    if (!selectedProductId) {
+      toast.error("Please select a product");
       return;
     }
 
-    const numVal = parseInt(val);
-
-    // If invalid number, do nothing
-    if (isNaN(numVal)) return;
-
-    // If 0, remove from selection
-    if (numVal <= 0) {
-      const next = { ...selectedItems };
-      delete next[productId];
-      setSelectedItems(next);
+    const qty = parseInt(quantity, 10);
+    if (isNaN(qty) || qty <= 0) {
+      toast.error("Please enter a valid quantity");
       return;
     }
 
-    // Cap at Max Quantity
-    const safeVal = Math.min(numVal, max);
+    const product = sourceProducts.find((p) => p.id === selectedProductId);
+    if (!product) return;
 
-    setSelectedItems((prev) => ({
-      ...prev,
-      [productId]: safeVal,
-    }));
-  };
+    if (qty > product.available_quantity) {
+      toast.error(
+        `Maximum available quantity is ${product.available_quantity}`
+      );
+      return;
+    }
 
-  // Handle Checkbox Toggle (Clicking Checkbox)
-  const handleToggle = (productId: string, maxQty: number) => {
-    setSelectedItems((prev) => {
-      const next = { ...prev };
-      if (next[productId] !== undefined) {
-        delete next[productId]; // Deselect
-      } else {
-        next[productId] = maxQty; // Select with max quantity by default
-      }
-      return next;
-    });
-  };
-
-  // Handle "Select All"
-  const handleSelectAll = () => {
-    const filtered = sourceProducts.filter((p) =>
-      p.name.toLowerCase().includes(searchQuery.toLowerCase())
+    const existingIndex = transferItems.findIndex(
+      (item) => item.productId === selectedProductId
     );
 
-    const allSelected = filtered.every(
-      (p) => selectedItems[p.id] !== undefined
-    );
-
-    if (allSelected) {
-      // Deselect all visible
-      const newSelection = { ...selectedItems };
-      filtered.forEach((p) => delete newSelection[p.id]);
-      setSelectedItems(newSelection);
+    if (existingIndex >= 0) {
+      const updatedItems = [...transferItems];
+      updatedItems[existingIndex].quantity = qty;
+      setTransferItems(updatedItems);
+      toast.success("Product quantity updated");
     } else {
-      // Select all visible with Max Qty
-      const newSelection = { ...selectedItems };
-      filtered.forEach((p) => {
-        newSelection[p.id] = p.quantity;
-      });
-      setSelectedItems(newSelection);
+      const newItem: TransferItem = {
+        productId: product.id,
+        productName: product.name,
+        sku: product.sku,
+        category: product.category,
+        quantity: qty,
+        availableQuantity: product.available_quantity,
+      };
+      setTransferItems([...transferItems, newItem]);
+      toast.success("Product added to transfer list");
     }
+
+    setSelectedProductId("");
+    setQuantity("");
   };
 
-  const handleTransfer = async () => {
-    const itemsToTransfer = Object.entries(selectedItems)
-      .map(([productId, qty]) => ({
-        productId,
-        quantity: qty,
-      }))
-      .filter((i) => i.quantity > 0);
+  const handleRemoveItem = (productId: string) => {
+    setTransferItems(
+      transferItems.filter((item) => item.productId !== productId)
+    );
+    toast.success("Product removed from transfer list");
+  };
 
+  const handleSubmit = async () => {
     if (!sourceId || !destId) {
-      toast.error("Please select source and destination");
+      toast.error("Please select source and destination locations");
       return;
     }
-
-    if (sourceId === destId) {
-      toast.error("Source and Destination cannot be the same");
-      return;
-    }
-
-    if (itemsToTransfer.length === 0) {
-      toast.error("Please select items to transfer");
+    if (transferItems.length === 0) {
+      toast.error("Please add at least one product to transfer");
       return;
     }
 
@@ -196,8 +213,11 @@ export default function StockTransferPage() {
       const payload = {
         sourceLocationId: sourceId,
         destLocationId: destId,
-        items: itemsToTransfer,
-        reason,
+        items: transferItems.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+        })),
+        reason: reason || "Bulk Stock Transfer",
       };
 
       const res = await fetch("/api/inventory/transfer", {
@@ -210,7 +230,7 @@ export default function StockTransferPage() {
       if (!res.ok) throw new Error(data.error || "Transfer failed");
 
       toast.success(
-        `Successfully transferred ${itemsToTransfer.length} products`
+        `Successfully transferred ${transferItems.length} product(s)`
       );
       router.push("/dashboard/admin/inventory");
     } catch (error: any) {
@@ -220,224 +240,369 @@ export default function StockTransferPage() {
     }
   };
 
-  const filteredProducts = sourceProducts.filter(
-    (p) =>
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.sku.toLowerCase().includes(searchQuery.toLowerCase())
+  const selectedProduct = sourceProducts.find(
+    (p) => p.id === selectedProductId
+  );
+  const totalItems = transferItems.reduce(
+    (sum, item) => sum + item.quantity,
+    0
   );
 
   if (loading && locations.length === 0) {
     return (
-      <div className="flex justify-center items-center h-96">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="flex justify-center items-center h-screen bg-gray-50/50">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
       </div>
     );
   }
 
+  // --- New Design Layout ---
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      <div className="flex items-center gap-4">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => router.push("/dashboard/admin/inventory")}
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold">Bulk Stock Transfer</h1>
-          <p className="text-muted-foreground text-sm">
-            Move multiple products between locations.
-          </p>
+    <div className=" bg-gray-50/50 pb-20">
+      {/* Top Navigation Bar */}
+      <div className="bg-white border-b sticky top-0 z-10">
+        <div className="container max-w-6xl mx-auto py-4">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => router.back()}>
+              <ArrowLeft className="w-5 h-5 text-gray-500" />
+            </Button>
+            <div>
+              <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                <Truck className="w-5 h-5" /> Stock Transfer
+              </h1>
+              <p className="text-sm text-gray-500">
+                Move inventory between warehouses
+              </p>
+            </div>
+            <div className="ml-auto flex items-center gap-3">
+              <Button
+                variant="outline"
+                onClick={() => router.push("/dashboard/admin/inventory")}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSubmit}
+                disabled={
+                  submitting ||
+                  !sourceId ||
+                  !destId ||
+                  transferItems.length === 0
+                }
+              >
+                {submitting && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                Confirm Transfer
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
-      <Card>
-        <CardHeader>
-          <CardTitle>Configuration</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
-            <div className="space-y-2">
-              <Label>From Location (Source)</Label>
-              <Select value={sourceId} onValueChange={setSourceId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Source" />
-                </SelectTrigger>
-                <SelectContent>
-                  {locations.map((loc) => (
-                    <SelectItem key={loc.id} value={loc.id}>
-                      {loc.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
 
-            <div className="hidden md:flex justify-center pb-2">
-              <ArrowRight className="text-muted-foreground" />
-            </div>
-
-            <div className="space-y-2">
-              <Label>To Location (Destination)</Label>
-              <Select value={destId} onValueChange={setDestId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Destination" />
-                </SelectTrigger>
-                <SelectContent>
-                  {locations
-                    .filter((l) => l.id !== sourceId)
-                    .map((loc) => (
-                      <SelectItem key={loc.id} value={loc.id}>
-                        {loc.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Transfer Reason / Reference</Label>
-            <Input
-              placeholder="e.g. Weekly Restock"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-            />
-          </div>
-        </CardContent>
-      </Card>
-      {/* Product Selection Table */}
-      {sourceId && (
-        <Card>
+      <div className="container  mx-auto py-8 space-y-8">
+        {/* Step 1: Configuration Card */}
+        <Card className="shadow-sm border-0 ring-1 ring-gray-200">
           <CardHeader>
-            <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-              <CardTitle>Select Products</CardTitle>
-              <div className="relative w-full md:w-64">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <CardTitle className="text-lg font-medium flex items-center gap-2">
+              <span className="bg-primary/10 text-primary w-6 h-6 rounded-full flex items-center justify-center text-xs">
+                1
+              </span>
+              Transfer Route & Details
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="bg-gray-50/80 p-6 rounded-xl border border-dashed border-gray-200">
+              <div className="flex flex-col md:flex-row items-center gap-6">
+                {/* Source */}
+                <div className="flex-1 w-full space-y-2">
+                  <Label className="text-xs font-semibold uppercase text-gray-500 tracking-wider">
+                    From Location
+                  </Label>
+                  <Select value={sourceId} onValueChange={setSourceId}>
+                    <SelectTrigger className="h-12 w-full bg-white border-gray-300 shadow-sm text-base">
+                      <div className="flex items-center gap-3">
+                        <Warehouse className="w-4 h-4 text-gray-400" />
+                        <SelectValue placeholder="Select Source" />
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {locations.map((loc) => (
+                        <SelectItem
+                          key={loc.id}
+                          value={loc.id}
+                          className="py-3"
+                        >
+                          <span className="font-medium">{loc.name}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Arrow Divider */}
+                <div className="flex items-center justify-center pt-6">
+                  <div className="bg-white p-2 rounded-full border shadow-sm">
+                    <ArrowRight className="w-5 h-5 text-primary" />
+                  </div>
+                </div>
+
+                {/* Destination */}
+                <div className="flex-1 w-full space-y-2">
+                  <Label className="text-xs font-semibold uppercase text-gray-500 tracking-wider">
+                    To Location
+                  </Label>
+                  <Select
+                    value={destId}
+                    onValueChange={setDestId}
+                    disabled={!sourceId}
+                  >
+                    <SelectTrigger className="h-12 w-full bg-white border-gray-300 shadow-sm text-base">
+                      <div className="flex items-center gap-3">
+                        <Warehouse className="w-4 h-4 text-gray-400" />
+                        <SelectValue placeholder="Select Destination" />
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {locations
+                        .filter((l) => l.id !== sourceId)
+                        .map((loc) => (
+                          <SelectItem
+                            key={loc.id}
+                            value={loc.id}
+                            className="py-3"
+                          >
+                            <span className="font-medium">{loc.name}</span>
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Reference Note</Label>
                 <Input
-                  placeholder="Search products..."
-                  className="pl-9"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="e.g. Weekly Restock #442"
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  className="h-11"
                 />
               </div>
             </div>
-            <CardDescription>
-              Enter quantities to transfer. Max available quantity is pre-filled
-              when checking the box.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {stockLoading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : sourceProducts.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No stock available at this source location.
-              </div>
-            ) : (
-              <div className="border rounded-md">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[50px]">
-                        <Checkbox
-                          checked={
-                            filteredProducts.length > 0 &&
-                            filteredProducts.every(
-                              (p) => selectedItems[p.id] !== undefined
-                            )
-                          }
-                          onCheckedChange={handleSelectAll}
-                        />
-                      </TableHead>
-                      <TableHead>Product Details</TableHead>
-                      <TableHead className="text-right">Available</TableHead>
-                      <TableHead className="text-right w-[150px]">
-                        Transfer Qty
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredProducts.map((product) => {
-                      const isSelected =
-                        selectedItems[product.id] !== undefined;
-                      const transferQty = selectedItems[product.id] ?? ""; // Empty string if undefined
-
-                      return (
-                        <TableRow
-                          key={product.id}
-                          className={isSelected ? "bg-muted/30" : ""}
-                        >
-                          <TableCell>
-                            <Checkbox
-                              checked={isSelected}
-                              onCheckedChange={() =>
-                                handleToggle(product.id, product.quantity)
-                              }
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <div className="font-medium">{product.name}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {product.sku}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {product.quantity}{" "}
-                            <span className="text-xs text-muted-foreground">
-                              {product.unit_of_measure}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Input
-                              type="number"
-                              min="0"
-                              max={product.quantity}
-                              className="h-8 text-right font-medium"
-                              placeholder="0"
-                              value={transferQty}
-                              onChange={(e) =>
-                                handleQtyChange(
-                                  product.id,
-                                  e.target.value,
-                                  product.quantity
-                                )
-                              }
-                            />
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
           </CardContent>
         </Card>
-      )}
-      {/* Footer Actions */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t flex justify-end gap-4 items-center px-8 z-50 shadow-md">
-        <div className="text-sm text-muted-foreground mr-auto font-medium">
-          {Object.keys(selectedItems).length} product(s) selected for transfer
-        </div>
-        <Button variant="outline" onClick={() => router.back()}>
-          Cancel
-        </Button>
-        <Button
-          onClick={handleTransfer}
-          disabled={submitting || Object.keys(selectedItems).length === 0}
-        >
-          {submitting ? (
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-          ) : (
-            <Save className="w-4 h-4 mr-2" />
-          )}
-          Confirm Transfer
-        </Button>
+
+        {/* Step 2: Add Products */}
+        {sourceId && (
+          <Card className="shadow-sm border-0 ring-1 ring-gray-200">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg font-medium flex items-center gap-2">
+                <span className="bg-primary/10 text-primary w-6 h-6 rounded-full flex items-center justify-center text-xs">
+                  2
+                </span>
+                Add Products
+              </CardTitle>
+              <CardDescription>
+                Select items from available inventory
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {stockLoading ? (
+                <div className="py-8 flex flex-col items-center justify-center text-gray-500">
+                  <Loader2 className="w-6 h-6 animate-spin mb-2" />
+                  Loading inventory...
+                </div>
+              ) : sourceProducts.length === 0 ? (
+                <div className="py-8 flex flex-col items-center justify-center bg-gray-50 rounded-lg border border-dashed">
+                  <Package className="w-8 h-8 text-gray-300 mb-2" />
+                  <p className="text-gray-500">
+                    No stock available at this location
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Unified Input Bar */}
+                  <div className="flex flex-col md:flex-row gap-4 items-start md:items-end bg-gray-50/50 p-4 rounded-xl border">
+                    <div className="flex-1 w-full space-y-2">
+                      <Label className="text-xs font-semibold uppercase text-gray-500">
+                        Select Product
+                      </Label>
+                      <Select
+                        value={selectedProductId}
+                        onValueChange={setSelectedProductId}
+                      >
+                        <SelectTrigger className="h-12 bg-white w-full">
+                          <div className="flex items-center gap-2 text-left">
+                            <Search className="w-4 h-4 text-gray-400" />
+                            <SelectValue placeholder="Search product..." />
+                          </div>
+                        </SelectTrigger>
+                        <SelectContent className="max-h-[300px]">
+                          {sourceProducts.map((product) => (
+                            <SelectItem key={product.id} value={product.id}>
+                              <div className="flex items-center justify-between w-[var(--radix-select-trigger-width)] pr-4">
+                                <div className="flex flex-col text-left">
+                                  <span className="font-medium">
+                                    {product.name}
+                                  </span>
+                                  <span className="text-xs text-gray-400">
+                                    {product.sku}
+                                  </span>
+                                </div>
+                                <Badge variant="secondary" className="ml-2">
+                                  {product.available_quantity} avl
+                                </Badge>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="w-full md:w-32 space-y-2">
+                      <Label className="text-xs font-semibold uppercase text-gray-500">
+                        Qty
+                      </Label>
+                      <Input
+                        type="number"
+                        className="h-12 bg-white text-center text-lg font-medium"
+                        placeholder="0"
+                        value={quantity}
+                        onChange={(e) => setQuantity(e.target.value)}
+                        onKeyDown={(e) =>
+                          e.key === "Enter" && handleAddProduct()
+                        }
+                        max={selectedProduct?.available_quantity}
+                      />
+                    </div>
+
+                    <Button
+                      size="lg"
+                      className="h-12 w-full md:w-auto px-6"
+                      onClick={handleAddProduct}
+                      disabled={!selectedProductId || !quantity}
+                    >
+                      <Plus className="w-5 h-5 mr-2" /> Add
+                    </Button>
+                  </div>
+
+                  {/* Selected Product Preview (Helper) */}
+                  {selectedProduct && (
+                    <div className="flex items-center justify-between px-4 py-2 bg-blue-50/50 border border-blue-100 rounded-lg text-sm text-blue-700">
+                      <span className="font-medium">
+                        {selectedProduct.name}
+                      </span>
+                      <span>
+                        Max Available:{" "}
+                        <strong>{selectedProduct.available_quantity}</strong>
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Step 3: Review Table */}
+        {transferItems.length > 0 && (
+          <Card className="shadow-md border-0 ring-1 ring-gray-200 overflow-hidden">
+            <CardHeader className="bg-gray-50/50 border-b">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg font-medium">
+                  Review Items
+                </CardTitle>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                  onClick={() => setTransferItems([])}
+                >
+                  Clear All
+                </Button>
+              </div>
+            </CardHeader>
+
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[40%]">Product</TableHead>
+                    <TableHead>SKU</TableHead>
+                    <TableHead className="text-center">Stock</TableHead>
+                    <TableHead className="text-right">Transfer Qty</TableHead>
+                    <TableHead className="w-[50px]"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {transferItems.map((item) => (
+                    <TableRow
+                      key={item.productId}
+                      className="hover:bg-gray-50/50"
+                    >
+                      <TableCell>
+                        <div className="font-medium text-gray-900">
+                          {item.productName}
+                        </div>
+                        {item.category && (
+                          <div className="text-xs text-gray-500">
+                            {item.category}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <code className="text-xs bg-gray-100 px-2 py-1 rounded border">
+                          {item.sku}
+                        </code>
+                      </TableCell>
+                      <TableCell className="text-center text-gray-500">
+                        {item.availableQuantity}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Badge
+                          variant="outline"
+                          className="text-base px-3 py-0.5 border-gray-400 font-bold"
+                        >
+                          {item.quantity}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleRemoveItem(item.productId)}
+                          className="h-8 w-8 text-gray-400 hover:text-red-600"
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Summary Footer */}
+            <div className="bg-gray-50 border-t p-4 flex justify-end items-center gap-6">
+              <div className="text-sm text-gray-500">
+                Total Products:{" "}
+                <span className="font-medium text-gray-900">
+                  {transferItems.length}
+                </span>
+              </div>
+              <div className="text-sm text-gray-500">
+                Total Quantity:{" "}
+                <span className="font-bold text-lg text-primary ml-2">
+                  {totalItems}
+                </span>
+              </div>
+            </div>
+          </Card>
+        )}
       </div>
-      <div className="h-16" /> {/* Spacer for fixed footer */}
     </div>
   );
 }
