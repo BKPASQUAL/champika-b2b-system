@@ -1,4 +1,3 @@
-// app/dashboard/admin/purchases/create/page.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -12,6 +11,7 @@ import {
   Loader2,
   Check,
   ChevronsUpDown,
+  Building2, // Added Icon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,7 +54,6 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-// Types matching your API response
 interface Product {
   id: string;
   sku: string;
@@ -63,11 +62,17 @@ interface Product {
   costPrice: number;
   mrp: number;
   stock: number;
-  unitOfMeasure: string; // <--- CHANGED: Matches API response key
+  unitOfMeasure: string;
   supplier: string;
 }
 
 interface Supplier {
+  id: string;
+  name: string;
+}
+
+// ✅ Added Business Interface
+interface Business {
   id: string;
   name: string;
 }
@@ -82,10 +87,10 @@ interface PurchaseItem {
   unit: string;
   mrp: number;
   sellingPrice: number;
-  unitPrice: number; // Gross Cost Price
+  unitPrice: number;
   discountPercent: number;
   discountAmount: number;
-  finalPrice: number; // Net Cost Price
+  finalPrice: number;
   total: number;
 }
 
@@ -97,9 +102,11 @@ export default function CreatePurchasePage() {
   // Data States
   const [products, setProducts] = useState<Product[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [businesses, setBusinesses] = useState<Business[]>([]); // ✅ Added business state
 
   // Form States
   const [supplierId, setSupplierId] = useState<string | null>(null);
+  const [businessId, setBusinessId] = useState<string | null>(null); // ✅ Added businessId state
   const [purchaseDate, setPurchaseDate] = useState(
     new Date().toISOString().split("T")[0]
   );
@@ -120,29 +127,25 @@ export default function CreatePurchasePage() {
     freeQuantity: 0,
     mrp: 0,
     sellingPrice: 0,
-    unitPrice: 0, // Gross Cost
+    unitPrice: 0,
     discountPercent: 0,
-    unit: "", // <--- ADDED: To store selected product unit
+    unit: "",
   });
 
   // --- Fetch Data on Mount ---
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [prodRes, supRes] = await Promise.all([
+        // ✅ Fetched Businesses
+        const [prodRes, supRes, bizRes] = await Promise.all([
           fetch("/api/products"),
           fetch("/api/suppliers"),
+          fetch("/api/settings/business"),
         ]);
 
-        if (prodRes.ok) {
-          const prodData = await prodRes.json();
-          setProducts(prodData);
-        }
-
-        if (supRes.ok) {
-          const supData = await supRes.json();
-          setSuppliers(supData);
-        }
+        if (prodRes.ok) setProducts(await prodRes.json());
+        if (supRes.ok) setSuppliers(await supRes.json());
+        if (bizRes.ok) setBusinesses(await bizRes.json());
       } catch (error) {
         toast.error("Failed to load initial data");
       } finally {
@@ -155,19 +158,16 @@ export default function CreatePurchasePage() {
 
   // --- Handlers ---
 
-  // Handle Supplier Change
   const handleSupplierChange = (newSupplierId: string) => {
-    // If items exist, confirm before changing as it clears the list
     if (items.length > 0) {
       const confirmChange = window.confirm(
         "Changing supplier will clear the current items. Continue?"
       );
       if (!confirmChange) return;
-      setItems([]); // Clear items
+      setItems([]);
     }
     setSupplierId(newSupplierId);
 
-    // Reset current item selection
     setCurrentItem({
       productId: "",
       sku: "",
@@ -184,7 +184,6 @@ export default function CreatePurchasePage() {
   const handleProductSelect = (productId: string) => {
     const product = products.find((p) => p.id === productId);
     if (product) {
-      // Default logic: Pre-fill with existing product data
       const selling = product.sellingPrice || 0;
       const cost = product.costPrice || 0;
 
@@ -194,11 +193,11 @@ export default function CreatePurchasePage() {
         sku: product.sku,
         mrp: product.mrp,
         sellingPrice: selling,
-        unitPrice: cost, // Pre-fill Cost Price
+        unitPrice: cost,
         discountPercent: 0,
         freeQuantity: 0,
         quantity: 1,
-        unit: product.unitOfMeasure || "Pcs", // <--- UPDATED: Set unit from product
+        unit: product.unitOfMeasure || "Pcs",
       });
       setProductSearchOpen(false);
     }
@@ -228,7 +227,6 @@ export default function CreatePurchasePage() {
     const product = products.find((p) => p.id === currentItem.productId);
     if (!product) return;
 
-    // Calculations
     const unitDiscountAmount =
       (currentItem.unitPrice * currentItem.discountPercent) / 100;
     const netUnitPrice = currentItem.unitPrice - unitDiscountAmount;
@@ -243,7 +241,7 @@ export default function CreatePurchasePage() {
       productName: product.name,
       quantity: currentItem.quantity,
       freeQuantity: currentItem.freeQuantity,
-      unit: currentItem.unit, // <--- UPDATED: Use state unit
+      unit: currentItem.unit,
       mrp: currentItem.mrp,
       sellingPrice: currentItem.sellingPrice,
       unitPrice: currentItem.unitPrice,
@@ -255,7 +253,6 @@ export default function CreatePurchasePage() {
 
     setItems([...items, newItem]);
 
-    // Reset Item Form
     setCurrentItem({
       productId: "",
       sku: "",
@@ -273,7 +270,6 @@ export default function CreatePurchasePage() {
     setItems(items.filter((item) => item.id !== id));
   };
 
-  // Totals
   const subtotal = items.reduce((sum, item) => sum + item.total, 0);
   const totalDiscount = items.reduce(
     (sum, item) => sum + item.discountAmount,
@@ -294,11 +290,17 @@ export default function CreatePurchasePage() {
       toast.error("Select a supplier");
       return;
     }
+    // ✅ Optional: Check if business is selected (you can make this optional if desired)
+    if (!businessId) {
+      toast.error("Please select a business");
+      return;
+    }
 
     setSubmitting(true);
 
     const purchasePayload = {
       supplier_id: supplierId,
+      business_id: businessId, // ✅ Send business_id
       purchase_date: purchaseDate,
       arrival_date: arrivalDate || "",
       invoice_number: invoiceNumber || "",
@@ -326,7 +328,6 @@ export default function CreatePurchasePage() {
     }
   };
 
-  // --- Product Filtering Logic ---
   const selectedSupplier = suppliers.find((s) => s.id === supplierId);
 
   const availableProducts = products.filter((product) => {
@@ -398,6 +399,29 @@ export default function CreatePurchasePage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
+                {/* ✅ Added Business Selector */}
+                <div className="space-y-2">
+                  <Label>Purchasing Business</Label>
+                  <Select
+                    value={businessId || ""}
+                    onValueChange={setBusinessId}
+                  >
+                    <SelectTrigger className="w-full">
+                      <div className="flex items-center gap-2">
+                        <Building2 className="w-4 h-4 text-muted-foreground" />
+                        <SelectValue placeholder="Select Business" />
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {businesses.map((b) => (
+                        <SelectItem key={b.id} value={b.id}>
+                          {b.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <div className="space-y-2">
                   <Label>Supplier</Label>
                   <Select
@@ -426,9 +450,7 @@ export default function CreatePurchasePage() {
                     onChange={(e) => setPurchaseDate(e.target.value)}
                   />
                 </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="invoice">Invoice Number</Label>
                   <Input
@@ -453,7 +475,7 @@ export default function CreatePurchasePage() {
             </CardContent>
           </Card>
 
-          {/* 2. Add Items Card */}
+          {/* 2. Add Items Card (Existing code...) */}
           <Card>
             <CardHeader>
               <CardTitle>Add Items</CardTitle>
@@ -465,6 +487,7 @@ export default function CreatePurchasePage() {
                   : "Select a supplier to see available products"}
               </CardDescription>
             </CardHeader>
+            {/* ... Rest of item selection/table code remains identical to your existing code ... */}
             <CardContent>
               <div className="space-y-4">
                 {/* Row 1: Product Search */}
@@ -555,7 +578,7 @@ export default function CreatePurchasePage() {
                     />
                   </div>
 
-                  {/* ADDED: Unit of Measure Field */}
+                  {/* Unit of Measure Field */}
                   <div className="col-span-1">
                     <Label className="mb-2 block text-xs">Unit</Label>
                     <Input
@@ -698,7 +721,7 @@ export default function CreatePurchasePage() {
             </CardContent>
           </Card>
 
-          {/* 3. Items List Table */}
+          {/* 3. Items List Table (Existing code...) */}
           <Card>
             <CardHeader>
               <CardTitle>Purchase Items</CardTitle>
@@ -795,6 +818,14 @@ export default function CreatePurchasePage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
+                {/* ✅ Added Business Summary */}
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Business:</span>
+                  <span className="font-medium">
+                    {businesses.find((b) => b.id === businessId)?.name ||
+                      "Not selected"}
+                  </span>
+                </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Supplier:</span>
                   <span className="font-medium">

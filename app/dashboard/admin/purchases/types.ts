@@ -8,20 +8,23 @@ export interface PurchaseItem {
   productId: string;
   productName: string;
   quantity: number;
-  mrp: number; // Added MRP
+  mrp: number;
   unitCost: number;
-  discount: number; // Added Discount %
+  discount: number;
   totalCost: number;
 }
 
 export interface Purchase {
   id: string;
-  purchaseId: string; // PO Number
+  purchaseId: string;
   supplierId: string;
   supplierName: string;
-  invoiceNo?: string; // External Bill Number
+  invoiceNo?: string;
 
-  // Date Fields
+  // ✅ ADD THESE FIELDS
+  businessId?: string | null;
+  businessName?: string | null;
+
   purchaseDate: string;
   billingDate?: string;
   arrivalDate?: string;
@@ -47,6 +50,9 @@ export interface PurchaseFormData {
   supplierId: string;
   supplierName: string;
   invoiceNo: string;
+
+  // ✅ ADD THESE FIELDS
+  businessId?: string;
 
   purchaseDate: string;
   billingDate: string;

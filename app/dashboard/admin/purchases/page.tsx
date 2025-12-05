@@ -49,6 +49,8 @@ export default function PurchasesPage() {
         paymentStatus: p.paymentStatus,
         totalAmount: p.totalAmount,
         paidAmount: p.paidAmount,
+        businessId: p.businessId || null,
+        businessName: p.businessName || null,
         items: [], // Empty for list view
       }));
 

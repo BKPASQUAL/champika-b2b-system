@@ -11,11 +11,11 @@ import { Button } from "@/components/ui/button";
 import {
   Edit,
   Trash2,
-  Eye,
   FileText,
   ChevronLeft,
   ChevronRight,
   Loader2,
+  Building2, // Added icon
 } from "lucide-react";
 import { Purchase, SortField, SortOrder, PaymentStatus } from "../types";
 
@@ -72,6 +72,8 @@ export function PurchaseTable({
             <TableRow>
               <TableHead>Date</TableHead>
               <TableHead>PO Number</TableHead>
+              {/* ✅ Added Business Column Header */}
+              <TableHead>Business</TableHead>
               <TableHead>Supplier</TableHead>
               <TableHead>Payment Status</TableHead>
               <TableHead className="text-right">Total Amount</TableHead>
@@ -83,7 +85,7 @@ export function PurchaseTable({
             {purchases.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={7}
+                  colSpan={8} // Increased colSpan to account for new column
                   className="text-center py-8 text-muted-foreground"
                 >
                   No purchases found
@@ -94,7 +96,6 @@ export function PurchaseTable({
                 const unpaid = purchase.totalAmount - purchase.paidAmount;
                 return (
                   <TableRow key={purchase.id}>
-                    {/* Fix: Used purchaseDate instead of date */}
                     <TableCell>{purchase.purchaseDate}</TableCell>
                     <TableCell>
                       <div className="flex flex-col">
@@ -107,6 +108,17 @@ export function PurchaseTable({
                         </span>
                       </div>
                     </TableCell>
+
+                    {/* ✅ Added Business Data Cell */}
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Building2 className="w-4 h-4 text-muted-foreground" />
+                        <span className="font-medium">
+                          {purchase.businessName || "N/A"}
+                        </span>
+                      </div>
+                    </TableCell>
+
                     <TableCell className="font-medium">
                       {purchase.supplierName}
                     </TableCell>
