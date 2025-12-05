@@ -35,7 +35,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Checkbox } from "@/components/ui/checkbox"; // Ensure you have this component
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 
@@ -174,7 +174,7 @@ export function LocationSettings() {
               id="main-wh"
               checked={isMainWarehouse}
               onCheckedChange={handleMainCheckChange}
-              disabled={mainWarehouseExists}
+              disabled={mainWarehouseExists} // Disable if one already exists
             />
             <div className="grid gap-1.5 leading-none">
               <Label
@@ -216,8 +216,7 @@ export function LocationSettings() {
                 value={selectedBusiness}
                 onValueChange={setSelectedBusiness}
               >
-                {/* ✅ ADDED: w-full to make it match input width */}
-                <SelectTrigger className="w-full">
+                <SelectTrigger>
                   <SelectValue placeholder="Select Business" />
                 </SelectTrigger>
                 <SelectContent>

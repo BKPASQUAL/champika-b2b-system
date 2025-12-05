@@ -40,7 +40,6 @@ interface NavSection {
 
 export const roleNavItems: Record<UserRole, NavSection[]> = {
   admin: [
-    // ... (Keep existing Admin config) ...
     {
       items: [
         { name: "Overview", href: "/dashboard/admin", icon: LayoutDashboard },
@@ -134,6 +133,7 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           href: "/dashboard/admin/products",
           icon: Package,
         },
+        // Ensure this item appears only ONCE here
         {
           name: "Stock Control",
           href: "/dashboard/admin/inventory",
@@ -170,7 +170,6 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
     },
   ],
 
-  // --- UPDATED OFFICE LAYOUT ---
   office: [
     {
       items: [
@@ -274,7 +273,6 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
     },
   ],
 
-  // ... (Keep rep/delivery roles) ...
   rep: [
     {
       items: [

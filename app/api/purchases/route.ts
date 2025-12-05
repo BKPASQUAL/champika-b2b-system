@@ -19,7 +19,7 @@ const itemSchema = z.object({
 
 const purchaseSchema = z.object({
   supplier_id: z.string().min(1, "Supplier is required"),
-  business_id: z.string().min(1, "Business is required"), // Business is now required
+  business_id: z.string().min(1, "Business is required"),
   invoice_number: z.string().optional().or(z.literal("")),
   purchase_date: z.string(),
   arrival_date: z.string().optional().or(z.literal("")),
@@ -72,22 +72,22 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const val = purchaseSchema.parse(body);
 
-    // 1. Get or Create "Main Warehouse" for this Business
-    // We need a location ID to store the stock.
+    // 1. Find the Global Main Warehouse
+    // We look for a location named "Main Warehouse" that has NO business_id (is null)
     let { data: location } = await supabaseAdmin
       .from("locations")
       .select("id")
-      .eq("business_id", val.business_id)
+      .is("business_id", null)
       .eq("name", "Main Warehouse")
-      .single();
+      .maybeSingle();
 
-    // If no Main Warehouse exists, create one automatically
+    // Failsafe: Create it if it doesn't exist (Global)
     if (!location) {
       const { data: newLocation, error: locError } = await supabaseAdmin
         .from("locations")
         .insert({
           name: "Main Warehouse",
-          business_id: val.business_id,
+          business_id: null, // Explicitly null for global
         })
         .select("id")
         .single();
@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
       .insert({
         purchase_id: purchaseId,
         supplier_id: val.supplier_id,
-        business_id: val.business_id,
+        business_id: val.business_id, // Record which business bought it
         invoice_no: val.invoice_number,
         purchase_date: val.purchase_date,
         arrival_date: val.arrival_date || null,
@@ -142,16 +142,16 @@ export async function POST(request: NextRequest) {
       .insert(itemsData);
 
     if (itemsError) {
+      // Rollback
       await supabaseAdmin.from("purchases").delete().eq("id", purchase.id);
       throw itemsError;
     }
 
-    // 5. Update Stock (Total & Location Specific)
+    // 5. Update Stock (Global & Location Specific)
     for (const item of val.items) {
       const totalQty = item.quantity + item.freeQuantity;
 
       // A. Update Global Product Data (Total Stock & Prices)
-      // First, get current stock to increment safely
       const { data: currentProduct } = await supabaseAdmin
         .from("products")
         .select("stock_quantity")
@@ -170,13 +170,12 @@ export async function POST(request: NextRequest) {
         })
         .eq("id", item.productId);
 
-      // B. Update Location Specific Stock (Main Warehouse)
-      // Check if stock record exists for this product + location
+      // B. Update Location Specific Stock (Global Main Warehouse)
       const { data: currentStockRec } = await supabaseAdmin
         .from("product_stocks")
         .select("quantity")
         .eq("product_id", item.productId)
-        .eq("location_id", location.id)
+        .eq("location_id", location!.id)
         .single();
 
       if (currentStockRec) {
@@ -188,12 +187,12 @@ export async function POST(request: NextRequest) {
             last_updated: new Date().toISOString(),
           })
           .eq("product_id", item.productId)
-          .eq("location_id", location.id);
+          .eq("location_id", location!.id);
       } else {
         // Create new record
         await supabaseAdmin.from("product_stocks").insert({
           product_id: item.productId,
-          location_id: location.id,
+          location_id: location!.id,
           quantity: totalQty,
         });
       }
