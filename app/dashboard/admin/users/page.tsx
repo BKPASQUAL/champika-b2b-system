@@ -19,18 +19,23 @@ import { User, UserFormData } from "./types";
 import { UserTable } from "./_components/UserTable";
 import { UserDialogs } from "./_components/UserDialogs";
 import { toast } from "sonner";
-import { useRouter } from "next/navigation"; // Import router
+import { useRouter } from "next/navigation";
+
+// Define Business type locally or import
+interface Business {
+  id: string;
+  name: string;
+}
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
+  const [businesses, setBusinesses] = useState<Business[]>([]); // New State
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Dialog States
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
@@ -42,7 +47,7 @@ export default function UsersPage() {
   const handleViewUser = (user: User) => {
     router.push(`/dashboard/admin/users/${user.id}`);
   };
-  // Form State
+
   const [formData, setFormData] = useState<UserFormData>({
     fullName: "",
     username: "",
@@ -50,33 +55,44 @@ export default function UsersPage() {
     password: "",
     role: "office",
     status: "Active",
+    businessId: "", // Initialize
   });
 
-  // --- 1. FETCH USERS ---
-  const fetchUsers = useCallback(async () => {
+  // --- 1. FETCH DATA (Users + Businesses) ---
+  const fetchData = useCallback(async () => {
     try {
       setIsLoading(true);
-      const response = await fetch("/api/users");
-      if (!response.ok) throw new Error("Failed to fetch users");
-      const data = await response.json();
-      setUsers(data);
+      // Run both fetches in parallel
+      const [usersRes, businessRes] = await Promise.all([
+        fetch("/api/users"),
+        fetch("/api/settings/business"),
+      ]);
+
+      if (!usersRes.ok) throw new Error("Failed to fetch users");
+      if (businessRes.ok) {
+        setBusinesses(await businessRes.json());
+      }
+
+      setUsers(await usersRes.json());
     } catch (error) {
-      toast.error("Failed to load users");
+      toast.error("Failed to load data");
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
+    fetchData();
+  }, [fetchData]);
 
   // --- 2. FILTERING ---
   const filteredUsers = users.filter(
     (user) =>
       user.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.toLowerCase())
+      user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (user.businessName &&
+        user.businessName.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
@@ -90,7 +106,6 @@ export default function UsersPage() {
   }, [searchQuery]);
 
   // --- 3. ACTION HANDLERS ---
-
   const handleAddNew = () => {
     setSelectedUser(null);
     setFormData({
@@ -100,6 +115,7 @@ export default function UsersPage() {
       password: "",
       role: "office",
       status: "Active",
+      businessId: "",
     });
     setIsAddDialogOpen(true);
   };
@@ -110,9 +126,10 @@ export default function UsersPage() {
       fullName: user.fullName,
       username: user.username,
       email: user.email,
-      password: "", // Keep blank unless changing
+      password: "",
       role: user.role,
-      status: user.status,
+      status: user.status as any,
+      businessId: user.businessId || "", // Populate business
     });
     setIsAddDialogOpen(true);
   };
@@ -123,9 +140,7 @@ export default function UsersPage() {
   };
 
   // --- 4. API INTEGRATION ---
-
   const handleSaveUser = async () => {
-    // Simple Validation
     if (!formData.fullName || !formData.username || !formData.email) {
       toast.error("Please fill in all required fields");
       return;
@@ -158,7 +173,7 @@ export default function UsersPage() {
 
       toast.success(selectedUser ? "User updated!" : "User created!");
       setIsAddDialogOpen(false);
-      fetchUsers(); // Refresh List
+      fetchData(); // Refresh List
     } catch (error: any) {
       toast.error(error.message);
     }
@@ -176,13 +191,12 @@ export default function UsersPage() {
       }
       toast.success("User deleted");
       setIsDeleteDialogOpen(false);
-      fetchUsers();
+      fetchData();
     } catch (error: any) {
       toast.error(error.message);
     }
   };
 
-  // Status Switch Logic
   const handleStatusClick = (user: User, checked: boolean) => {
     setSelectedUser(user);
     setPendingStatus(checked);
@@ -203,12 +217,7 @@ export default function UsersPage() {
         const newStatus = pendingStatus ? "Active" : "Inactive";
         toast.success(`User marked as ${newStatus}`);
 
-        // Optimistic Update
-        setUsers(
-          users.map((u) =>
-            u.id === selectedUser.id ? { ...u, status: newStatus } : u
-          )
-        );
+        fetchData(); // Reload to ensure sync
       } catch (error) {
         toast.error("Failed to update status");
       } finally {
@@ -220,7 +229,6 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">System Users</h1>
@@ -230,7 +238,7 @@ export default function UsersPage() {
           <Button
             variant="outline"
             size="icon"
-            onClick={fetchUsers}
+            onClick={fetchData}
             title="Refresh"
           >
             <RefreshCw
@@ -243,7 +251,6 @@ export default function UsersPage() {
         </div>
       </div>
 
-      {/* Table Card */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -272,7 +279,7 @@ export default function UsersPage() {
               onEdit={handleEdit}
               onDelete={handleDelete}
               onStatusChange={handleStatusClick}
-              onView={handleViewUser} // Pass the handler here
+              onView={handleViewUser}
               currentPage={currentPage}
               totalPages={totalPages}
               onPageChange={setCurrentPage}
@@ -281,7 +288,6 @@ export default function UsersPage() {
         </CardContent>
       </Card>
 
-      {/* Dialogs */}
       <UserDialogs
         isAddDialogOpen={isAddDialogOpen}
         setIsAddDialogOpen={setIsAddDialogOpen}
@@ -292,9 +298,9 @@ export default function UsersPage() {
         isDeleteDialogOpen={isDeleteDialogOpen}
         setIsDeleteDialogOpen={setIsDeleteDialogOpen}
         onDeleteConfirm={confirmDelete}
+        businesses={businesses} // Pass businesses
       />
 
-      {/* Status Confirmation Alert */}
       <AlertDialog
         open={isStatusDialogOpen}
         onOpenChange={setIsStatusDialogOpen}

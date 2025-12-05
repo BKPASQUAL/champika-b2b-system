@@ -3,6 +3,7 @@
 import React from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CategorySettings } from "./_components/CategorySettings";
+import { BusinessSettings } from "./_components/BusinessSettings"; // Import the new component
 import {
   Card,
   CardContent,
@@ -14,7 +15,14 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Settings, Shield, Bell, Database, Percent } from "lucide-react";
+import {
+  Settings,
+  Shield,
+  Bell,
+  Database,
+  Percent,
+  Briefcase,
+} from "lucide-react"; // Import Briefcase icon
 import { CommissionSettings } from "./_components/CommissionSettings";
 
 export default function SettingsPage() {
@@ -27,13 +35,17 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="commissions" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2 lg:grid-cols-5 h-auto">
+      <Tabs defaultValue="general" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-3 lg:grid-cols-6 h-auto">
           <TabsTrigger value="general" className="flex items-center gap-2">
             <Settings className="h-4 w-4" /> General
           </TabsTrigger>
           <TabsTrigger value="categories" className="flex items-center gap-2">
             <Database className="h-4 w-4" /> Categories
+          </TabsTrigger>
+          {/* NEW BUSINESS TAB */}
+          <TabsTrigger value="business" className="flex items-center gap-2">
+            <Briefcase className="h-4 w-4" /> Business
           </TabsTrigger>
           <TabsTrigger value="commissions" className="flex items-center gap-2">
             <Percent className="h-4 w-4" /> Commissions
@@ -95,14 +107,21 @@ export default function SettingsPage() {
           </div>
         </TabsContent>
 
-        {/* 3. Commissions Settings (NEW) */}
+        {/* 3. NEW Business Settings Tab Content */}
+        <TabsContent value="business">
+          <div className="max-w-6xl">
+            <BusinessSettings />
+          </div>
+        </TabsContent>
+
+        {/* 4. Commissions Settings */}
         <TabsContent value="commissions">
           <div className="max-w-6xl">
             <CommissionSettings />
           </div>
         </TabsContent>
 
-        {/* 4. Notifications */}
+        {/* 5. Notifications */}
         <TabsContent value="notifications">
           <Card>
             <CardHeader>
@@ -134,7 +153,7 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* 5. Security */}
+        {/* 6. Security */}
         <TabsContent value="security">
           <Card>
             <CardHeader>

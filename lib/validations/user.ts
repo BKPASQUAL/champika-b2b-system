@@ -11,19 +11,20 @@ export const createUserSchema = z.object({
     .enum(["Active", "Inactive", "Suspended"])
     .optional()
     .default("Active"),
+  businessId: z.string().optional().nullable(), // Added
 });
 
-// Schema for Updating a User (Password is optional here)
+// Schema for Updating a User
 export const updateUserSchema = z.object({
   fullName: z.string().min(2).optional(),
   username: z.string().min(3).optional(),
   email: z.string().email().optional(),
-  password: z.string().min(6).optional().or(z.literal("")), // Allow empty string to ignore
+  password: z.string().min(6).optional().or(z.literal("")),
   role: z.enum(["admin", "office", "rep", "delivery"]).optional(),
   status: z.enum(["Active", "Inactive", "Suspended"]).optional(),
+  businessId: z.string().optional().nullable(), // Added
 });
 
-// Schema for Status Toggle
 export const toggleStatusSchema = z.object({
   isActive: z.boolean(),
 });

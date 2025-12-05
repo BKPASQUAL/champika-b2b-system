@@ -2,41 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { updateUserSchema } from "@/lib/validations/user";
 
-// 1. GET: Fetch single user by ID (This was missing)
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params;
-
-  try {
-    const { data: profile, error } = await supabaseAdmin
-      .from("profiles")
-      .select("*")
-      .eq("id", id)
-      .single();
-
-    if (error || !profile) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    // Return data matching the UserProfile interface in your View Page
-    return NextResponse.json({
-      id: profile.id,
-      full_name: profile.full_name,
-      username: profile.username,
-      email: profile.email,
-      role: profile.role,
-      is_active: profile.is_active,
-      created_at: profile.created_at,
-      updated_at: profile.updated_at,
-    });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-}
-
-// 2. PATCH: Update user details
+// PATCH: Update user details including Business
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -55,6 +21,11 @@ export async function PATCH(
     if (validatedData.role) profileUpdates.role = validatedData.role;
     if (validatedData.status)
       profileUpdates.is_active = validatedData.status === "Active";
+
+    // Allow updating business_id (check undefined to distinguish between clearing and not updating)
+    if (validatedData.businessId !== undefined) {
+      profileUpdates.business_id = validatedData.businessId || null;
+    }
 
     const { error: profileError } = await supabaseAdmin
       .from("profiles")
@@ -85,7 +56,40 @@ export async function PATCH(
   }
 }
 
-// 3. DELETE: Remove user
+// Include GET and DELETE functions as they were (no major changes needed unless you fetch specific fields in GET)
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  try {
+    // Fetch profile with business info
+    const { data: profile, error } = await supabaseAdmin
+      .from("profiles")
+      .select("*, businesses(name)")
+      .eq("id", id)
+      .single();
+
+    if (error || !profile)
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+
+    return NextResponse.json({
+      id: profile.id,
+      full_name: profile.full_name,
+      username: profile.username,
+      email: profile.email,
+      role: profile.role,
+      is_active: profile.is_active,
+      created_at: profile.created_at,
+      updated_at: profile.updated_at,
+      business_id: profile.business_id, // Return ID
+      business_name: profile.businesses?.name, // Return Name
+    });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

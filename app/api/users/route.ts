@@ -3,18 +3,25 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { createUserSchema } from "@/lib/validations/user";
 import { ZodError } from "zod";
 
-// GET: Fetch all users
+// GET: Fetch all users with Business info
 export async function GET() {
   try {
+    // Select profiles AND join with businesses table to get the name
     const { data: profiles, error } = await supabaseAdmin
       .from("profiles")
-      .select("*")
+      .select(
+        `
+        *,
+        businesses (
+          name
+        )
+      `
+      )
       .order("created_at", { ascending: false });
 
     if (error) throw error;
 
-    // Map DB fields to Frontend "User" type
-    const users = profiles.map((profile) => ({
+    const users = profiles.map((profile: any) => ({
       id: profile.id,
       fullName: profile.full_name,
       username: profile.username,
@@ -22,6 +29,8 @@ export async function GET() {
       role: profile.role,
       status: profile.is_active ? "Active" : "Inactive",
       lastActive: profile.updated_at,
+      businessId: profile.business_id, // Map ID
+      businessName: profile.businesses?.name, // Map Name from join
     }));
 
     return NextResponse.json(users);
@@ -30,7 +39,7 @@ export async function GET() {
   }
 }
 
-// POST: Create a new user
+// POST: Create a new user with Business ID
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -56,7 +65,7 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
 
-    // 2. Create Profile Record (Use INSERT, not UPDATE)
+    // 2. Create Profile Record
     const { error: profileError } = await supabaseAdmin
       .from("profiles")
       .insert({
@@ -66,9 +75,9 @@ export async function POST(request: NextRequest) {
         email: validatedData.email,
         role: validatedData.role,
         is_active: validatedData.status === "Active",
+        business_id: validatedData.businessId || null, // Save Business ID
       });
 
-    // Rollback Auth user if profile creation fails
     if (profileError) {
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
       return NextResponse.json(

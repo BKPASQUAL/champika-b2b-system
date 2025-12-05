@@ -10,6 +10,8 @@ export interface User {
   role: UserRole;
   status: UserStatus;
   lastActive: string;
+  businessId?: string | null; // Added businessId
+  businessName?: string | null; // Added for display
 }
 
 export interface UserFormData {
@@ -19,4 +21,5 @@ export interface UserFormData {
   password: string;
   role: UserRole;
   status: UserStatus;
+  businessId?: string; // Added businessId
 }

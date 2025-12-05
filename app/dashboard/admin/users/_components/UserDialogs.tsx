@@ -20,20 +20,24 @@ import {
 } from "@/components/ui/select";
 import { User, UserFormData, UserStatus } from "../types";
 import { UserRole } from "@/app/config/nav-config";
+import { Building2 } from "lucide-react"; // Import icon
+
+interface Business {
+  id: string;
+  name: string;
+}
 
 interface UserDialogsProps {
-  // Add/Edit Dialog
   isAddDialogOpen: boolean;
   setIsAddDialogOpen: (open: boolean) => void;
   formData: UserFormData;
   setFormData: (data: UserFormData) => void;
   onSave: () => void;
   selectedUser: User | null;
-
-  // Delete Dialog
   isDeleteDialogOpen: boolean;
   setIsDeleteDialogOpen: (open: boolean) => void;
   onDeleteConfirm: () => void;
+  businesses: Business[]; // Added prop
 }
 
 export function UserDialogs({
@@ -46,10 +50,10 @@ export function UserDialogs({
   isDeleteDialogOpen,
   setIsDeleteDialogOpen,
   onDeleteConfirm,
+  businesses, // Receive businesses
 }: UserDialogsProps) {
   return (
     <>
-      {/* Add/Edit User Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -96,7 +100,6 @@ export function UserDialogs({
                     setFormData({ ...formData, role: val as UserRole })
                   }
                 >
-                  {/* Added className="w-full" here */}
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select role" />
                   </SelectTrigger>
@@ -108,6 +111,37 @@ export function UserDialogs({
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            {/* NEW BUSINESS SELECTOR */}
+            <div className="grid gap-2">
+              <Label htmlFor="business">Assign Business</Label>
+              <Select
+                value={formData.businessId || "none"}
+                onValueChange={(val) =>
+                  setFormData({
+                    ...formData,
+                    businessId: val === "none" ? "" : val,
+                  })
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-muted-foreground" />
+                    <SelectValue placeholder="Select Business (Optional)" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none" className="text-muted-foreground">
+                    -- No Business Assigned --
+                  </SelectItem>
+                  {businesses.map((b) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      {b.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="grid gap-2">
@@ -150,7 +184,6 @@ export function UserDialogs({
                   setFormData({ ...formData, status: val as UserStatus })
                 }
               >
-                {/* Added className="w-full" here as well */}
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
@@ -174,7 +207,7 @@ export function UserDialogs({
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
+      {/* Delete Dialog remains the same... */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
