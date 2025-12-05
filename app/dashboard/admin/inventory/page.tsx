@@ -88,7 +88,10 @@ export default function InventoryPage() {
           <Button variant="outline" onClick={fetchData}>
             <RefreshCw className="w-4 h-4 mr-2" /> Refresh
           </Button>
-          <Button>
+          {/* UPDATED: Added navigation to transfer page */}
+          <Button
+            onClick={() => router.push("/dashboard/admin/inventory/transfer")}
+          >
             <ArrowRightLeft className="w-4 h-4 mr-2" /> Stock Transfer
           </Button>
         </div>
