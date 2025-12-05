@@ -1,4 +1,3 @@
-// app/dashboard/admin/invoices/create/page.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -52,6 +51,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner"; // Assuming you use sonner for toasts
 
 // --- Types ---
 
@@ -83,6 +83,7 @@ interface InvoiceItem {
 export default function CreateInvoicePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [stockLoading, setStockLoading] = useState(false); // New loading state for products
 
   // Data State
   const [products, setProducts] = useState<Product[]>([]);
@@ -98,7 +99,6 @@ export default function CreateInvoicePage() {
   );
   const [invoiceNumber, setInvoiceNumber] = useState("INV-NEW");
   const [salesRepId, setSalesRepId] = useState<string>("");
-  // ADDED: Order Status State
   const [orderStatus, setOrderStatus] = useState<string>("Delivered");
 
   // Items State
@@ -123,26 +123,11 @@ export default function CreateInvoicePage() {
     stockAvailable: 0,
   });
 
-  // --- Fetch Data on Mount ---
+  // --- 1. Fetch Initial Data (Customers & Reps Only) ---
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchInitialData = async () => {
       setLoading(true);
       try {
-        // Fetch Products
-        const productsRes = await fetch("/api/products");
-        const productsData = await productsRes.json();
-        setProducts(
-          productsData.map((p: any) => ({
-            id: p.id,
-            sku: p.sku,
-            name: p.name,
-            selling_price: p.sellingPrice,
-            mrp: p.mrp,
-            stock_quantity: p.stock,
-            unit_of_measure: p.unitOfMeasure || "unit",
-          }))
-        );
-
         // Fetch Customers
         const customersRes = await fetch("/api/customers");
         const customersData = await customersRes.json();
@@ -157,7 +142,7 @@ export default function CreateInvoicePage() {
         const usersRes = await fetch("/api/users");
         const usersData = await usersRes.json();
         const salesReps = usersData
-          .filter((u: any) => u.role === "rep") // Ensure this matches your role string
+          .filter((u: any) => u.role === "rep")
           .map((u: any) => ({
             id: u.id,
             name: u.fullName,
@@ -165,14 +150,54 @@ export default function CreateInvoicePage() {
         setReps(salesReps);
       } catch (error) {
         console.error("Error fetching data:", error);
-        alert("Failed to load data");
+        toast.error("Failed to load initial data");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchData();
+    fetchInitialData();
   }, []);
+
+  // --- 2. Fetch Products When Rep Changes ---
+  useEffect(() => {
+    const fetchRepStock = async () => {
+      if (!salesRepId) {
+        setProducts([]); // Clear products if no rep selected
+        return;
+      }
+
+      setStockLoading(true);
+      try {
+        // Use the new API endpoint to get stock for this specific user/rep
+        const res = await fetch(`/api/rep/stock?userId=${salesRepId}`);
+        if (!res.ok) throw new Error("Failed to load stock");
+
+        const productsData = await res.json();
+
+        // Map the response to our Product interface
+        setProducts(
+          productsData.map((p: any) => ({
+            id: p.id,
+            sku: p.sku,
+            name: p.name,
+            selling_price: p.selling_price,
+            mrp: p.mrp,
+            stock_quantity: p.stock_quantity,
+            unit_of_measure: p.unit_of_measure || "unit",
+          }))
+        );
+      } catch (error) {
+        console.error("Error fetching stock:", error);
+        toast.error("Failed to load products for this representative");
+        setProducts([]);
+      } finally {
+        setStockLoading(false);
+      }
+    };
+
+    fetchRepStock();
+  }, [salesRepId]); // Re-run whenever salesRepId changes
 
   // --- Product Selection Handler ---
   const handleProductSelect = (productId: string) => {
@@ -195,13 +220,15 @@ export default function CreateInvoicePage() {
   // --- Add Item to Invoice ---
   const handleAddItem = () => {
     if (!currentItem.productId) {
-      alert("Please select a product");
+      toast.error("Please select a product");
       return;
     }
 
     const totalReqQty = currentItem.quantity + currentItem.freeQuantity;
     if (totalReqQty > currentItem.stockAvailable) {
-      alert(`Insufficient stock! Available: ${currentItem.stockAvailable}`);
+      toast.error(
+        `Insufficient stock! Available: ${currentItem.stockAvailable}`
+      );
       return;
     }
 
@@ -248,15 +275,15 @@ export default function CreateInvoicePage() {
 
   const handleSaveInvoice = async () => {
     if (!customerId) {
-      alert("Please select a customer.");
+      toast.error("Please select a customer.");
       return;
     }
     if (!salesRepId) {
-      alert("Please select a sales representative.");
+      toast.error("Please select a sales representative.");
       return;
     }
     if (items.length === 0) {
-      alert("Please add items to the invoice.");
+      toast.error("Please add items to the invoice.");
       return;
     }
 
@@ -272,10 +299,8 @@ export default function CreateInvoicePage() {
       extraDiscountPercent: extraDiscount,
       extraDiscountAmount: extraDiscountAmount,
       grandTotal: grandTotal,
-      orderStatus, // Pass the selected status
+      orderStatus,
     };
-
-    console.log("Saving Invoice...", invoiceData);
 
     try {
       const res = await fetch("/api/invoices", {
@@ -290,10 +315,10 @@ export default function CreateInvoicePage() {
         throw new Error(data.error || "Failed to create invoice");
       }
 
-      alert("Invoice Created Successfully!");
+      toast.success("Invoice Created Successfully!");
       router.push("/dashboard/admin/invoices");
     } catch (error: any) {
-      alert(error.message || "Failed to create invoice");
+      toast.error(error.message || "Failed to create invoice");
     } finally {
       setLoading(false);
     }
@@ -310,7 +335,6 @@ export default function CreateInvoicePage() {
     0
   );
 
-  // Extra Discount Calculation
   const extraDiscountAmount = (subtotal * extraDiscount) / 100;
   const grandTotal = subtotal - extraDiscountAmount;
 
@@ -324,7 +348,7 @@ export default function CreateInvoicePage() {
       currentItem.discountPercent) /
     100;
 
-  if (loading && products.length === 0) {
+  if (loading && customers.length === 0) {
     return (
       <div className="flex justify-center items-center h-full min-h-64">
         <Loader2 className="h-6 w-6 animate-spin mr-2" />
@@ -445,7 +469,9 @@ export default function CreateInvoicePage() {
 
                 {/* Sales Representative - Searchable */}
                 <div className="space-y-2">
-                  <Label>Sales Representative</Label>
+                  <Label>
+                    Sales Representative <span className="text-red-500">*</span>
+                  </Label>
                   <Popover open={salesRepOpen} onOpenChange={setSalesRepOpen}>
                     <PopoverTrigger asChild>
                       <Button
@@ -475,6 +501,28 @@ export default function CreateInvoicePage() {
                                 value={rep.name}
                                 onSelect={() => {
                                   setSalesRepId(rep.id);
+                                  // Clear selected product items if rep changes to prevent mismatches
+                                  if (
+                                    items.length > 0 &&
+                                    confirm(
+                                      "Changing rep will clear current items. Continue?"
+                                    )
+                                  ) {
+                                    setItems([]);
+                                    setCurrentItem({
+                                      productId: "",
+                                      sku: "",
+                                      quantity: 1,
+                                      freeQuantity: 0,
+                                      unit: "",
+                                      mrp: 0,
+                                      unitPrice: 0,
+                                      discountPercent: 0,
+                                      stockAvailable: 0,
+                                    });
+                                  } else if (items.length > 0) {
+                                    return; // Cancel change
+                                  }
                                   setSalesRepOpen(false);
                                 }}
                               >
@@ -494,6 +542,9 @@ export default function CreateInvoicePage() {
                       </Command>
                     </PopoverContent>
                   </Popover>
+                  <p className="text-xs text-muted-foreground">
+                    Select a rep to load their stock.
+                  </p>
                 </div>
               </div>
 
@@ -528,7 +579,12 @@ export default function CreateInvoicePage() {
               {/* Product Selection - Searchable */}
               <div className="grid grid-cols-4 gap-4">
                 <div className="col-span-4 space-y-2">
-                  <Label>Product</Label>
+                  <Label>
+                    Product{" "}
+                    {stockLoading && (
+                      <Loader2 className="inline h-3 w-3 animate-spin ml-2" />
+                    )}
+                  </Label>
                   <Popover open={productOpen} onOpenChange={setProductOpen}>
                     <PopoverTrigger asChild>
                       <Button
@@ -536,11 +592,16 @@ export default function CreateInvoicePage() {
                         role="combobox"
                         aria-expanded={productOpen}
                         className="w-full justify-between"
+                        disabled={!salesRepId || stockLoading}
                       >
                         {currentItem.productId
                           ? products.find((p) => p.id === currentItem.productId)
                               ?.name
-                          : "Select Product"}
+                          : salesRepId
+                          ? stockLoading
+                            ? "Loading stock..."
+                            : "Select Product"
+                          : "Select Representative First"}
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
                     </PopoverTrigger>
@@ -551,7 +612,11 @@ export default function CreateInvoicePage() {
                       <Command>
                         <CommandInput placeholder="Search product..." />
                         <CommandList>
-                          <CommandEmpty>No product found.</CommandEmpty>
+                          <CommandEmpty>
+                            {salesRepId
+                              ? "No products found in this rep's stock."
+                              : "Please select a representative."}
+                          </CommandEmpty>
                           <CommandGroup>
                             {availableProducts.map((product) => (
                               <CommandItem

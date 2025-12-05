@@ -196,9 +196,23 @@ export async function POST(request: NextRequest) {
         .eq("id", val.customerId);
     }
 
-    // 7. Deduct Stock
+    // 7. Deduct Stock (Global & Location Specific)
+
+    // 7a. Find the Location assigned to this Rep
+    const { data: assignments } = await supabaseAdmin
+      .from("location_assignments")
+      .select("location_id")
+      .eq("user_id", val.salesRepId)
+      .limit(1);
+
+    // Use the first assigned location if available
+    const locationId =
+      assignments && assignments.length > 0 ? assignments[0].location_id : null;
+
     for (const item of val.items) {
       const totalQty = item.quantity + item.freeQuantity;
+
+      // 7b. Update GLOBAL Stock (Legacy/Master record in products table)
       const { data: product } = await supabaseAdmin
         .from("products")
         .select("stock_quantity")
@@ -215,6 +229,26 @@ export async function POST(request: NextRequest) {
             ),
           })
           .eq("id", item.productId);
+      }
+
+      // 7c. Update LOCATION Stock (product_stocks table)
+      if (locationId) {
+        const { data: pStock } = await supabaseAdmin
+          .from("product_stocks")
+          .select("quantity")
+          .eq("location_id", locationId)
+          .eq("product_id", item.productId)
+          .single();
+
+        if (pStock) {
+          await supabaseAdmin
+            .from("product_stocks")
+            .update({
+              quantity: Math.max(0, (pStock.quantity || 0) - totalQty),
+            })
+            .eq("location_id", locationId)
+            .eq("product_id", item.productId);
+        }
       }
     }
 

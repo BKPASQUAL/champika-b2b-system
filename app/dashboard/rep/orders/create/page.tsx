@@ -128,14 +128,15 @@ export default function CreateOrderPage() {
       setLoading(true);
       try {
         // 1. Load Current User from Local Storage
+        let userId = "";
+
         if (typeof window !== "undefined") {
           const storedUser = localStorage.getItem("currentUser");
           if (storedUser) {
             const parsedUser = JSON.parse(storedUser);
-            // Ensure we have the ID. If not, you might need to fetch profile by email
-            // For now assuming the login process saved the ID.
+            // Ensure we have the ID.
             if (!parsedUser.id) {
-              // Fallback: Try to fetch user by email if ID is missing (optional safety)
+              // Fallback: Try to fetch user by email if ID is missing
               const userRes = await fetch("/api/users");
               const users = await userRes.json();
               const found = users.find(
@@ -144,26 +145,39 @@ export default function CreateOrderPage() {
               if (found) parsedUser.id = found.id;
             }
             setCurrentUser(parsedUser);
+            userId = parsedUser.id;
           }
         }
 
-        // 2. Fetch Products
-        const productsRes = await fetch("/api/products");
+        if (!userId) {
+          // If no user is logged in, we can't load their stock
+          toast.error("User not identified. Please login.");
+          setLoading(false);
+          return;
+        }
+
+        // 2. Fetch Products (Specific to Rep's Location)
+        const productsRes = await fetch(`/api/rep/stock?userId=${userId}`);
+
+        if (!productsRes.ok) {
+          throw new Error("Failed to load rep stock");
+        }
+
         const productsData = await productsRes.json();
+
         setProducts(
           productsData.map((p: any) => ({
             id: p.id,
             sku: p.sku,
             name: p.name,
-            selling_price: p.sellingPrice,
+            selling_price: p.selling_price,
             mrp: p.mrp,
-            stock_quantity: p.stock,
-            unit_of_measure: p.unitOfMeasure || "unit",
+            stock_quantity: p.stock_quantity,
+            unit_of_measure: p.unit_of_measure || "unit",
           }))
         );
 
         // 3. Fetch Customers
-        // If the Rep ID is available, you could filter customers here: /api/customers?repId=${currentUser.id}
         const customersRes = await fetch("/api/customers");
         const customersData = await customersRes.json();
         setCustomers(
@@ -344,7 +358,7 @@ export default function CreateOrderPage() {
     return (
       <div className="flex justify-center items-center h-full min-h-64">
         <Loader2 className="h-6 w-6 animate-spin mr-2" />
-        <p className="text-lg text-muted-foreground">Loading Catalog...</p>
+        <p className="text-lg text-muted-foreground">Loading Your Stock...</p>
       </div>
     );
   }
@@ -491,7 +505,9 @@ export default function CreateOrderPage() {
           <Card>
             <CardHeader>
               <CardTitle>Add Products</CardTitle>
-              <CardDescription>Select items from the catalog</CardDescription>
+              <CardDescription>
+                Select items from your assigned stock
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Product Selection */}
@@ -519,7 +535,9 @@ export default function CreateOrderPage() {
                     <Command className="bg-blue-50">
                       <CommandInput placeholder="Search product by name or SKU..." />
                       <CommandList>
-                        <CommandEmpty>No product found.</CommandEmpty>
+                        <CommandEmpty>
+                          No product found in your stock.
+                        </CommandEmpty>
                         <CommandGroup>
                           {availableProducts.map((product) => (
                             <CommandItem

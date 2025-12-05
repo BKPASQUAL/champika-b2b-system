@@ -2,13 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -28,10 +22,12 @@ import {
   Package,
   DollarSign,
   Loader2,
-  Calendar,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
+
+// Import the settings component
+import { LocationSettingsSheet } from "./_components/LocationSettingsSheet";
 
 export default function LocationInventoryPage() {
   const params = useParams();
@@ -40,11 +36,17 @@ export default function LocationInventoryPage() {
   const [data, setData] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
+  // 1. Safely extract locationId and handle potential array/undefined types
+  const rawId = params?.id;
+  const locationId = Array.isArray(rawId) ? rawId[0] : rawId;
+
   useEffect(() => {
     const fetchData = async () => {
+      if (!locationId) return; // Skip if no ID
+
       try {
         setLoading(true);
-        const res = await fetch(`/api/inventory/${params.id}`);
+        const res = await fetch(`/api/inventory/${locationId}`);
         if (!res.ok) throw new Error("Failed to load location data");
         setData(await res.json());
       } catch (error) {
@@ -54,8 +56,8 @@ export default function LocationInventoryPage() {
       }
     };
 
-    if (params.id) fetchData();
-  }, [params.id]);
+    fetchData();
+  }, [locationId]);
 
   if (loading) {
     return (
@@ -65,7 +67,11 @@ export default function LocationInventoryPage() {
     );
   }
 
-  if (!data) return <div>Location not found</div>;
+  // 2. Guard clause: If data is missing OR locationId is undefined, show error/not found
+  // This narrows the type of locationId to 'string' for the rest of the component
+  if (!data || !locationId) {
+    return <div>Location not found</div>;
+  }
 
   const filteredStocks = data.stocks.filter(
     (s: any) =>
@@ -80,7 +86,7 @@ export default function LocationInventoryPage() {
         <Button variant="ghost" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="w-5 h-5" />
         </Button>
-        <div>
+        <div className="flex-1">
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <MapPin className="w-6 h-6 text-primary" />
             {data.location.name}
@@ -100,6 +106,15 @@ export default function LocationInventoryPage() {
               <Badge variant="destructive">Inactive</Badge>
             )}
           </div>
+        </div>
+
+        {/* Settings Button (Top Right) */}
+        <div>
+          {/* TypeScript now knows locationId is string because of the guard clause above */}
+          <LocationSettingsSheet
+            locationId={locationId}
+            locationName={data.location.name}
+          />
         </div>
       </div>
 
