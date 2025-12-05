@@ -33,7 +33,6 @@ export async function GET(request: NextRequest) {
         .order("created_at", { ascending: false });
     } else {
       // Admin View: Fetch all
-      // We explicitly select businesses(name) to get the joined data
       query = supabaseAdmin
         .from("customers")
         .select("*, businesses(name)")
@@ -60,8 +59,8 @@ export async function GET(request: NextRequest) {
         ? new Date(c.updated_at).toISOString().split("T")[0]
         : "-",
       totalOrders: 0,
-      businessId: c.business_id, // Important for Edit form
-      businessName: c.businesses?.name || "N/A", // Important for Table display
+      businessId: c.business_id, 
+      businessName: c.businesses?.name || "N/A",
     }));
 
     return NextResponse.json(mappedCustomers);
@@ -100,45 +99,6 @@ export async function POST(request: NextRequest) {
       { message: "Customer created successfully", data },
       { status: 201 }
     );
-  } catch (error: any) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: error.issues[0].message },
-        { status: 400 }
-      );
-    }
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-}
-
-// PATCH: Update a customer
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params;
-    const body = await request.json();
-    const val = customerSchema.parse(body);
-
-    const { error } = await supabaseAdmin
-      .from("customers")
-      .update({
-        shop_name: val.shopName,
-        owner_name: val.ownerName,
-        phone: val.phone,
-        email: val.email,
-        address: val.address,
-        route: val.route,
-        status: val.status,
-        credit_limit: val.creditLimit,
-        business_id: val.businessId,
-      })
-      .eq("id", id);
-
-    if (error) throw error;
-
-    return NextResponse.json({ message: "Customer updated successfully" });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
