@@ -68,7 +68,6 @@ export async function GET() {
     // Map to frontend format
     const invoices = data.map((inv: any) => {
       const repName = inv.orders?.profiles?.full_name || "Unknown";
-      // ✅ EXTRACT ORDER STATUS
       const orderStatus = inv.orders?.status || "Pending";
 
       return {
@@ -82,7 +81,7 @@ export async function GET() {
         paidAmount: inv.paid_amount,
         dueAmount: inv.due_amount,
         status: inv.status,
-        orderStatus: orderStatus, // ✅ ADDED
+        orderStatus: orderStatus,
         dueDate: inv.due_date,
         createdAt: inv.created_at,
       };
@@ -145,16 +144,49 @@ export async function POST(request: NextRequest) {
 
     if (orderError) throw orderError;
 
-    // 4. Insert Order Items
-    const orderItems = val.items.map((item) => ({
-      order_id: orderData.id,
-      product_id: item.productId,
-      quantity: item.quantity,
-      free_quantity: item.freeQuantity,
-      unit_price: item.unitPrice,
-      total_price: item.total,
-      commission_earned: 0,
-    }));
+    // --- 4. Prepare Order Items & Calculate Commissions ---
+
+    // 4a. Fetch Product Commission Info
+    const productIds = val.items.map((i) => i.productId);
+    const { data: products } = await supabaseAdmin
+      .from("products")
+      .select("id, commission_type, commission_value")
+      .in("id", productIds);
+
+    let totalCommissionForOrder = 0;
+
+    // 4b. Map items with calculated commission
+    const orderItems = val.items.map((item) => {
+      const product = products?.find((p) => p.id === item.productId);
+
+      let commissionEarned = 0;
+
+      // Calculate Commission Item-Wise
+      if (product) {
+        if (product.commission_type === "percentage") {
+          // (Unit Price * Qty * Rate) / 100
+          // Note: Usually commission is on sold qty, not free qty
+          const itemTotal = item.unitPrice * item.quantity;
+          commissionEarned =
+            (itemTotal * (product.commission_value || 0)) / 100;
+        } else if (product.commission_type === "fixed") {
+          // Rate * Qty
+          commissionEarned = (product.commission_value || 0) * item.quantity;
+        }
+      }
+
+      totalCommissionForOrder += commissionEarned;
+
+      return {
+        order_id: orderData.id,
+        product_id: item.productId,
+        quantity: item.quantity,
+        free_quantity: item.freeQuantity,
+        unit_price: item.unitPrice,
+        total_price: item.total,
+        commission_earned: commissionEarned, // Saved per item
+      };
+    });
 
     const { error: itemsError } = await supabaseAdmin
       .from("order_items")
@@ -162,7 +194,18 @@ export async function POST(request: NextRequest) {
 
     if (itemsError) throw itemsError;
 
-    // 5. Create Invoice Record
+    // --- 5. Record Total Rep Commission ---
+    if (totalCommissionForOrder > 0) {
+      await supabaseAdmin.from("rep_commissions").insert({
+        rep_id: val.salesRepId,
+        order_id: orderData.id,
+        total_commission_amount: totalCommissionForOrder,
+        status: "Pending", // Default status
+        payout_date: null,
+      });
+    }
+
+    // 6. Create Invoice Record
     const { data: invoiceData, error: invoiceError } = await supabaseAdmin
       .from("invoices")
       .insert({
@@ -179,7 +222,7 @@ export async function POST(request: NextRequest) {
 
     if (invoiceError) throw invoiceError;
 
-    // 6. Update Customer Balance
+    // 7. Update Customer Balance
     const { data: customer } = await supabaseAdmin
       .from("customers")
       .select("outstanding_balance")
@@ -196,23 +239,20 @@ export async function POST(request: NextRequest) {
         .eq("id", val.customerId);
     }
 
-    // 7. Deduct Stock (Global & Location Specific)
-
-    // 7a. Find the Location assigned to this Rep
+    // 8. Deduct Stock (Global & Location Specific)
     const { data: assignments } = await supabaseAdmin
       .from("location_assignments")
       .select("location_id")
       .eq("user_id", val.salesRepId)
       .limit(1);
 
-    // Use the first assigned location if available
     const locationId =
       assignments && assignments.length > 0 ? assignments[0].location_id : null;
 
     for (const item of val.items) {
       const totalQty = item.quantity + item.freeQuantity;
 
-      // 7b. Update GLOBAL Stock (Legacy/Master record in products table)
+      // Global Stock
       const { data: product } = await supabaseAdmin
         .from("products")
         .select("stock_quantity")
@@ -231,7 +271,7 @@ export async function POST(request: NextRequest) {
           .eq("id", item.productId);
       }
 
-      // 7c. Update LOCATION Stock (product_stocks table)
+      // Location Stock
       if (locationId) {
         const { data: pStock } = await supabaseAdmin
           .from("product_stocks")
