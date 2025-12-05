@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { MapPin, Loader2 } from "lucide-react";
+import { MapPin, Loader2, Building2 } from "lucide-react";
 import { Customer, CustomerFormData, CustomerStatus } from "../types";
 
 interface CustomerDialogsProps {
@@ -47,32 +47,35 @@ export function CustomerDialogs({
   onDeleteConfirm,
 }: CustomerDialogsProps) {
   const [routes, setRoutes] = useState<{ id: string; name: string }[]>([]);
-  const [loadingRoutes, setLoadingRoutes] = useState(false);
+  const [businesses, setBusinesses] = useState<{ id: string; name: string }[]>(
+    []
+  );
+  const [loading, setLoading] = useState(false);
 
-  // Fetch Routes from Settings API for the dropdown
   useEffect(() => {
-    const fetchRoutes = async () => {
+    const fetchData = async () => {
       if (!isAddDialogOpen) return;
       try {
-        setLoadingRoutes(true);
-        const res = await fetch("/api/settings/categories?type=route");
-        if (res.ok) {
-          const data = await res.json();
-          setRoutes(data);
-        }
+        setLoading(true);
+        const [routesRes, businessRes] = await Promise.all([
+          fetch("/api/settings/categories?type=route"),
+          fetch("/api/settings/business"),
+        ]);
+
+        if (routesRes.ok) setRoutes(await routesRes.json());
+        if (businessRes.ok) setBusinesses(await businessRes.json());
       } catch (error) {
-        console.error("Failed to fetch routes", error);
+        console.error("Failed to fetch data", error);
       } finally {
-        setLoadingRoutes(false);
+        setLoading(false);
       }
     };
 
-    fetchRoutes();
+    fetchData();
   }, [isAddDialogOpen]);
 
   return (
     <>
-      {/* Add/Edit Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -87,6 +90,32 @@ export function CustomerDialogs({
           </DialogHeader>
 
           <div className="grid grid-cols-2 gap-4 py-4">
+            {/* Business Dropdown */}
+            <div className="col-span-2 space-y-2">
+              <Label className="flex items-center gap-2">
+                <Building2 className="w-3 h-3" /> Select Business *
+              </Label>
+              <Select
+                value={formData.businessId}
+                onValueChange={(val) =>
+                  setFormData({ ...formData, businessId: val })
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue
+                    placeholder={loading ? "Loading..." : "Select Business"}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {businesses.map((b) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      {b.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Shop Name */}
             <div className="col-span-2 space-y-2">
               <Label>Shop Name *</Label>
@@ -160,11 +189,11 @@ export function CustomerDialogs({
               >
                 <SelectTrigger className="w-full">
                   <SelectValue
-                    placeholder={loadingRoutes ? "Loading..." : "Select Route"}
+                    placeholder={loading ? "Loading..." : "Select Route"}
                   />
                 </SelectTrigger>
                 <SelectContent>
-                  {routes.length === 0 && !loadingRoutes && (
+                  {routes.length === 0 && !loading && (
                     <SelectItem value="General">General (Default)</SelectItem>
                   )}
                   {routes.map((r) => (
@@ -224,7 +253,7 @@ export function CustomerDialogs({
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
+      {/* Delete Confirmation (Standard) */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>

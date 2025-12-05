@@ -13,9 +13,10 @@ const customerSchema = z.object({
   route: z.string().min(1, "Route is required"),
   status: z.enum(["Active", "Inactive", "Blocked"]).default("Active"),
   creditLimit: z.number().min(0).default(0),
+  businessId: z.string().min(1, "Business is required"),
 });
 
-// GET: Fetch customers (Optional: Filter by Rep ID)
+// GET: Fetch customers
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -24,18 +25,18 @@ export async function GET(request: NextRequest) {
     let query;
 
     if (repId) {
-      // If repId is provided, perform an INNER JOIN on orders to filter customers
-      // who have at least one order created by this sales_rep
+      // Rep View: Filter by assigned orders
       query = supabaseAdmin
         .from("customers")
-        .select("*, orders!inner(sales_rep_id)")
+        .select("*, businesses(name), orders!inner(sales_rep_id)")
         .eq("orders.sales_rep_id", repId)
         .order("created_at", { ascending: false });
     } else {
-      // Default: Fetch all customers (for Admin)
+      // Admin View: Fetch all
+      // We explicitly select businesses(name) to get the joined data
       query = supabaseAdmin
         .from("customers")
-        .select("*")
+        .select("*, businesses(name)")
         .order("created_at", { ascending: false });
     }
 
@@ -43,8 +44,6 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
 
-    // Map DB fields (snake_case) to Frontend types (camelCase)
-    // Note: We ignore the 'orders' property that might be present in the rep-filtered response
     const mappedCustomers = customers.map((c: any) => ({
       id: c.id,
       customerId: c.id.substring(0, 8).toUpperCase(),
@@ -61,6 +60,8 @@ export async function GET(request: NextRequest) {
         ? new Date(c.updated_at).toISOString().split("T")[0]
         : "-",
       totalOrders: 0,
+      businessId: c.business_id, // Important for Edit form
+      businessName: c.businesses?.name || "N/A", // Important for Table display
     }));
 
     return NextResponse.json(mappedCustomers);
@@ -87,6 +88,7 @@ export async function POST(request: NextRequest) {
         route: val.route,
         status: val.status,
         credit_limit: val.creditLimit,
+        business_id: val.businessId,
         outstanding_balance: 0,
       })
       .select()
@@ -98,6 +100,45 @@ export async function POST(request: NextRequest) {
       { message: "Customer created successfully", data },
       { status: 201 }
     );
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: error.issues[0].message },
+        { status: 400 }
+      );
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+// PATCH: Update a customer
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const body = await request.json();
+    const val = customerSchema.parse(body);
+
+    const { error } = await supabaseAdmin
+      .from("customers")
+      .update({
+        shop_name: val.shopName,
+        owner_name: val.ownerName,
+        phone: val.phone,
+        email: val.email,
+        address: val.address,
+        route: val.route,
+        status: val.status,
+        credit_limit: val.creditLimit,
+        business_id: val.businessId,
+      })
+      .eq("id", id);
+
+    if (error) throw error;
+
+    return NextResponse.json({ message: "Customer updated successfully" });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

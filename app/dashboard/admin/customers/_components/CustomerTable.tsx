@@ -23,6 +23,7 @@ import {
   CheckCircle2,
   XCircle,
   AlertOctagon,
+  Building2,
 } from "lucide-react";
 import { Customer, SortField, SortOrder, CustomerStatus } from "../types";
 
@@ -106,8 +107,16 @@ export function CustomerTable({
                 onClick={() => onSort("shopName")}
               >
                 <div className="flex items-center">
-                  Customer{" "}
-                  <span className="ml-1">{getSortIcon("shopName")}</span>
+                  Customer {getSortIcon("shopName")}
+                </div>
+              </TableHead>
+              {/* Added Business Column */}
+              <TableHead
+                className="cursor-pointer hover:bg-muted/50"
+                onClick={() => onSort("businessName")}
+              >
+                <div className="flex items-center">
+                  Business {getSortIcon("businessName")}
                 </div>
               </TableHead>
               <TableHead
@@ -141,7 +150,7 @@ export function CustomerTable({
             {customers.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={5}
+                  colSpan={6}
                   className="text-center py-8 text-muted-foreground"
                 >
                   No customers found
@@ -150,6 +159,7 @@ export function CustomerTable({
             ) : (
               customers.map((customer) => (
                 <TableRow key={customer.id}>
+                  {/* Customer Name & Phone */}
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-3">
                       <Avatar className="h-9 w-9 bg-blue-100 text-blue-700">
@@ -172,12 +182,26 @@ export function CustomerTable({
                       </div>
                     </div>
                   </TableCell>
+
+                  {/* Business Name */}
+                  <TableCell>
+                    <div className="flex items-center text-sm">
+                      <Building2 className="w-3 h-3 mr-2 text-muted-foreground" />
+                      {customer.businessName}
+                    </div>
+                  </TableCell>
+
+                  {/* Route */}
                   <TableCell>
                     <div className="flex items-center text-sm text-muted-foreground">
                       <MapPin className="w-3 h-3 mr-1" /> {customer.route}
                     </div>
                   </TableCell>
+
+                  {/* Status */}
                   <TableCell>{renderStatusBadge(customer.status)}</TableCell>
+
+                  {/* Balance */}
                   <TableCell className="text-right">
                     <div className="flex flex-col items-end">
                       <span
@@ -194,6 +218,8 @@ export function CustomerTable({
                       </span>
                     </div>
                   </TableCell>
+
+                  {/* Actions */}
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
                       <Button
