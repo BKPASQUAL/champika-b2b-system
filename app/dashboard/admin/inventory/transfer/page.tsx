@@ -1,17 +1,9 @@
-// app/dashboard/admin/inventory/transfer/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  CardFooter,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -31,22 +23,20 @@ import {
 } from "@/components/ui/table";
 import {
   ArrowLeft,
-  ArrowRight,
   Loader2,
   Plus,
   X,
   Package,
-  Warehouse,
-  CheckCircle2,
-  ArrowRightLeft,
-  Search,
+  MapPin,
+  ClipboardList,
   Truck,
+  CalendarIcon,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 
-// --- Interfaces (Kept exactly same) ---
+// --- Interfaces ---
 interface Location {
   id: string;
   name: string;
@@ -59,6 +49,7 @@ interface Product {
   category?: string;
   brand?: string;
   available_quantity: number;
+  unit: string; // Added Unit
 }
 
 interface TransferItem {
@@ -68,16 +59,20 @@ interface TransferItem {
   category?: string;
   quantity: number;
   availableQuantity: number;
+  unit: string; // Added Unit
 }
 
-export default function BulkStockTransferPage() {
+export default function StockTransferPage() {
   const router = useRouter();
 
-  // --- State (Kept exactly same) ---
+  // --- State ---
   const [locations, setLocations] = useState<Location[]>([]);
   const [sourceId, setSourceId] = useState("");
   const [destId, setDestId] = useState("");
   const [reason, setReason] = useState("");
+  const [transferDate, setTransferDate] = useState(
+    new Date().toISOString().split("T")[0]
+  );
 
   const [sourceProducts, setSourceProducts] = useState<Product[]>([]);
   const [selectedProductId, setSelectedProductId] = useState("");
@@ -89,7 +84,7 @@ export default function BulkStockTransferPage() {
   const [stockLoading, setStockLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // --- Effects & Fetch Logic (Kept exactly same) ---
+  // --- Effects ---
   useEffect(() => {
     fetchLocations();
   }, []);
@@ -105,6 +100,7 @@ export default function BulkStockTransferPage() {
     }
   }, [sourceId]);
 
+  // --- Fetch Data ---
   const fetchLocations = async () => {
     try {
       const res = await fetch("/api/settings/locations");
@@ -132,6 +128,7 @@ export default function BulkStockTransferPage() {
         category: stock.category,
         brand: stock.brand,
         available_quantity: stock.quantity,
+        unit: stock.unit_of_measure || "Units", // Map unit from API
       }));
 
       setSourceProducts(products);
@@ -142,14 +139,14 @@ export default function BulkStockTransferPage() {
     }
   };
 
-  // --- Handlers (Kept exactly same) ---
+  // --- Handlers ---
   const handleAddProduct = () => {
     if (!selectedProductId) {
       toast.error("Please select a product");
       return;
     }
 
-    const qty = parseInt(quantity, 10);
+    const qty = parseFloat(quantity); // Changed to parseFloat to allow decimals if needed
     if (isNaN(qty) || qty <= 0) {
       toast.error("Please enter a valid quantity");
       return;
@@ -160,7 +157,7 @@ export default function BulkStockTransferPage() {
 
     if (qty > product.available_quantity) {
       toast.error(
-        `Maximum available quantity is ${product.available_quantity}`
+        `Max available is ${product.available_quantity} ${product.unit}`
       );
       return;
     }
@@ -173,18 +170,21 @@ export default function BulkStockTransferPage() {
       const updatedItems = [...transferItems];
       updatedItems[existingIndex].quantity = qty;
       setTransferItems(updatedItems);
-      toast.success("Product quantity updated");
+      toast.success("Quantity updated");
     } else {
-      const newItem: TransferItem = {
-        productId: product.id,
-        productName: product.name,
-        sku: product.sku,
-        category: product.category,
-        quantity: qty,
-        availableQuantity: product.available_quantity,
-      };
-      setTransferItems([...transferItems, newItem]);
-      toast.success("Product added to transfer list");
+      setTransferItems([
+        ...transferItems,
+        {
+          productId: product.id,
+          productName: product.name,
+          sku: product.sku,
+          category: product.category,
+          quantity: qty,
+          availableQuantity: product.available_quantity,
+          unit: product.unit,
+        },
+      ]);
+      toast.success("Added to list");
     }
 
     setSelectedProductId("");
@@ -192,19 +192,20 @@ export default function BulkStockTransferPage() {
   };
 
   const handleRemoveItem = (productId: string) => {
-    setTransferItems(
-      transferItems.filter((item) => item.productId !== productId)
-    );
-    toast.success("Product removed from transfer list");
+    setTransferItems(transferItems.filter((i) => i.productId !== productId));
   };
 
   const handleSubmit = async () => {
     if (!sourceId || !destId) {
-      toast.error("Please select source and destination locations");
+      toast.error("Select source and destination");
       return;
     }
     if (transferItems.length === 0) {
-      toast.error("Please add at least one product to transfer");
+      toast.error("Add products to transfer");
+      return;
+    }
+    if (!transferDate) {
+      toast.error("Select a transfer date");
       return;
     }
 
@@ -217,7 +218,8 @@ export default function BulkStockTransferPage() {
           productId: item.productId,
           quantity: item.quantity,
         })),
-        reason: reason || "Bulk Stock Transfer",
+        reason: reason || "Stock Transfer",
+        transferDate: transferDate,
       };
 
       const res = await fetch("/api/inventory/transfer", {
@@ -229,9 +231,7 @@ export default function BulkStockTransferPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Transfer failed");
 
-      toast.success(
-        `Successfully transferred ${transferItems.length} product(s)`
-      );
+      toast.success("Transfer completed successfully");
       router.push("/dashboard/admin/inventory");
     } catch (error: any) {
       toast.error(error.message);
@@ -243,261 +243,218 @@ export default function BulkStockTransferPage() {
   const selectedProduct = sourceProducts.find(
     (p) => p.id === selectedProductId
   );
-  const totalItems = transferItems.reduce(
-    (sum, item) => sum + item.quantity,
-    0
-  );
 
   if (loading && locations.length === 0) {
     return (
-      <div className="flex justify-center items-center h-screen bg-gray-50/50">
-        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      <div className="flex justify-center p-10">
+        <Loader2 className="animate-spin h-8 w-8 text-muted-foreground" />
       </div>
     );
   }
 
-  // --- New Design Layout ---
   return (
-    <div className=" bg-gray-50/50 pb-20">
-      {/* Top Navigation Bar */}
-      <div className="bg-white border-b sticky top-0 z-10">
-        <div className="container max-w-6xl mx-auto py-4">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => router.back()}>
-              <ArrowLeft className="w-5 h-5 text-gray-500" />
+    <div className="space-y-6">
+      {/* 1. Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="-ml-2 h-8 w-8 text-muted-foreground"
+              onClick={() => router.back()}
+            >
+              <ArrowLeft className="w-4 h-4" />
             </Button>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                <Truck className="w-5 h-5" /> Stock Transfer
-              </h1>
-              <p className="text-sm text-gray-500">
-                Move inventory between warehouses
-              </p>
-            </div>
-            <div className="ml-auto flex items-center gap-3">
-              <Button
-                variant="outline"
-                onClick={() => router.push("/dashboard/admin/inventory")}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleSubmit}
-                disabled={
-                  submitting ||
-                  !sourceId ||
-                  !destId ||
-                  transferItems.length === 0
-                }
-              >
-                {submitting && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                )}
-                Confirm Transfer
-              </Button>
-            </div>
+            <h1 className="text-3xl font-bold tracking-tight">
+              Stock Transfer
+            </h1>
           </div>
+          <p className="text-muted-foreground mt-1 ml-8">
+            Move inventory between warehouses and locations.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => router.push("/dashboard/admin/inventory")}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={
+              submitting || !sourceId || !destId || transferItems.length === 0
+            }
+          >
+            {submitting ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Truck className="mr-2 h-4 w-4" />
+            )}
+            Confirm Transfer
+          </Button>
         </div>
       </div>
 
-      <div className="container  mx-auto py-8 space-y-8">
-        {/* Step 1: Configuration Card */}
-        <Card className="shadow-sm border-0 ring-1 ring-gray-200">
-          <CardHeader>
-            <CardTitle className="text-lg font-medium flex items-center gap-2">
-              <span className="bg-primary/10 text-primary w-6 h-6 rounded-full flex items-center justify-center text-xs">
-                1
-              </span>
-              Transfer Route & Details
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="bg-gray-50/80 p-6 rounded-xl border border-dashed border-gray-200">
-              <div className="flex flex-col md:flex-row items-center gap-6">
-                {/* Source */}
-                <div className="flex-1 w-full space-y-2">
-                  <Label className="text-xs font-semibold uppercase text-gray-500 tracking-wider">
-                    From Location
-                  </Label>
+      {/* 2. Main Grid Content */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* LEFT COLUMN: Controls */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* A. Route & Date Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <MapPin className="w-4 h-4 text-primary" /> Transfer Details
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>From Location</Label>
                   <Select value={sourceId} onValueChange={setSourceId}>
-                    <SelectTrigger className="h-12 w-full bg-white border-gray-300 shadow-sm text-base">
-                      <div className="flex items-center gap-3">
-                        <Warehouse className="w-4 h-4 text-gray-400" />
-                        <SelectValue placeholder="Select Source" />
-                      </div>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select Source" />
                     </SelectTrigger>
                     <SelectContent>
                       {locations.map((loc) => (
-                        <SelectItem
-                          key={loc.id}
-                          value={loc.id}
-                          className="py-3"
-                        >
-                          <span className="font-medium">{loc.name}</span>
+                        <SelectItem key={loc.id} value={loc.id}>
+                          {loc.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
 
-                {/* Arrow Divider */}
-                <div className="flex items-center justify-center pt-6">
-                  <div className="bg-white p-2 rounded-full border shadow-sm">
-                    <ArrowRight className="w-5 h-5 text-primary" />
-                  </div>
-                </div>
-
-                {/* Destination */}
-                <div className="flex-1 w-full space-y-2">
-                  <Label className="text-xs font-semibold uppercase text-gray-500 tracking-wider">
-                    To Location
-                  </Label>
+                <div className="space-y-2">
+                  <Label>To Location</Label>
                   <Select
                     value={destId}
                     onValueChange={setDestId}
                     disabled={!sourceId}
                   >
-                    <SelectTrigger className="h-12 w-full bg-white border-gray-300 shadow-sm text-base">
-                      <div className="flex items-center gap-3">
-                        <Warehouse className="w-4 h-4 text-gray-400" />
-                        <SelectValue placeholder="Select Destination" />
-                      </div>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select Destination" />
                     </SelectTrigger>
                     <SelectContent>
                       {locations
                         .filter((l) => l.id !== sourceId)
                         .map((loc) => (
-                          <SelectItem
-                            key={loc.id}
-                            value={loc.id}
-                            className="py-3"
-                          >
-                            <span className="font-medium">{loc.name}</span>
+                          <SelectItem key={loc.id} value={loc.id}>
+                            {loc.name}
                           </SelectItem>
                         ))}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
-            </div>
 
-            <div className="grid md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Reference Note</Label>
-                <Input
-                  placeholder="e.g. Weekly Restock #442"
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  className="h-11"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Transfer Date</Label>
+                  <div className="relative">
+                    <Input
+                      type="date"
+                      className="w-full pl-10"
+                      value={transferDate}
+                      onChange={(e) => setTransferDate(e.target.value)}
+                    />
+                    <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Reference / Reason</Label>
+                  <Input
+                    placeholder="e.g. Weekly Restock"
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                  />
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        {/* Step 2: Add Products */}
-        {sourceId && (
-          <Card className="shadow-sm border-0 ring-1 ring-gray-200">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg font-medium flex items-center gap-2">
-                <span className="bg-primary/10 text-primary w-6 h-6 rounded-full flex items-center justify-center text-xs">
-                  2
-                </span>
-                Add Products
+          {/* B. Add Product Card */}
+          <Card className={!sourceId ? "opacity-60 pointer-events-none" : ""}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Package className="w-4 h-4 text-primary" /> Select Products
               </CardTitle>
-              <CardDescription>
-                Select items from available inventory
-              </CardDescription>
             </CardHeader>
             <CardContent>
               {stockLoading ? (
-                <div className="py-8 flex flex-col items-center justify-center text-gray-500">
-                  <Loader2 className="w-6 h-6 animate-spin mb-2" />
-                  Loading inventory...
-                </div>
-              ) : sourceProducts.length === 0 ? (
-                <div className="py-8 flex flex-col items-center justify-center bg-gray-50 rounded-lg border border-dashed">
-                  <Package className="w-8 h-8 text-gray-300 mb-2" />
-                  <p className="text-gray-500">
-                    No stock available at this location
-                  </p>
+                <div className="flex justify-center py-4 text-muted-foreground">
+                  <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading
+                  stock...
                 </div>
               ) : (
-                <div className="space-y-6">
-                  {/* Unified Input Bar */}
-                  <div className="flex flex-col md:flex-row gap-4 items-start md:items-end bg-gray-50/50 p-4 rounded-xl border">
+                <div className="space-y-4">
+                  <div className="flex flex-col md:flex-row gap-4 items-end">
                     <div className="flex-1 w-full space-y-2">
-                      <Label className="text-xs font-semibold uppercase text-gray-500">
-                        Select Product
-                      </Label>
+                      <Label>Product</Label>
                       <Select
                         value={selectedProductId}
                         onValueChange={setSelectedProductId}
                       >
-                        <SelectTrigger className="h-12 bg-white w-full">
-                          <div className="flex items-center gap-2 text-left">
-                            <Search className="w-4 h-4 text-gray-400" />
+                        <SelectTrigger className="w-full">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Search className="w-4 h-4" />
                             <SelectValue placeholder="Search product..." />
                           </div>
                         </SelectTrigger>
                         <SelectContent className="max-h-[300px]">
-                          {sourceProducts.map((product) => (
-                            <SelectItem key={product.id} value={product.id}>
-                              <div className="flex items-center justify-between w-[var(--radix-select-trigger-width)] pr-4">
-                                <div className="flex flex-col text-left">
-                                  <span className="font-medium">
-                                    {product.name}
-                                  </span>
-                                  <span className="text-xs text-gray-400">
-                                    {product.sku}
-                                  </span>
+                          {sourceProducts.length === 0 ? (
+                            <div className="p-2 text-sm text-center text-muted-foreground">
+                              No Stock
+                            </div>
+                          ) : (
+                            sourceProducts.map((p) => (
+                              <SelectItem key={p.id} value={p.id}>
+                                <div className="flex justify-between w-full gap-4">
+                                  <span>{p.name}</span>
+                                  <Badge
+                                    variant="secondary"
+                                    className="text-xs"
+                                  >
+                                    {p.available_quantity} {p.unit} avl
+                                  </Badge>
                                 </div>
-                                <Badge variant="secondary" className="ml-2">
-                                  {product.available_quantity} avl
-                                </Badge>
-                              </div>
-                            </SelectItem>
-                          ))}
+                              </SelectItem>
+                            ))
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
 
                     <div className="w-full md:w-32 space-y-2">
-                      <Label className="text-xs font-semibold uppercase text-gray-500">
-                        Qty
-                      </Label>
+                      <Label>Quantity</Label>
                       <Input
                         type="number"
-                        className="h-12 bg-white text-center text-lg font-medium"
+                        className="w-full"
                         placeholder="0"
                         value={quantity}
                         onChange={(e) => setQuantity(e.target.value)}
                         onKeyDown={(e) =>
                           e.key === "Enter" && handleAddProduct()
                         }
-                        max={selectedProduct?.available_quantity}
                       />
                     </div>
-
                     <Button
-                      size="lg"
-                      className="h-12 w-full md:w-auto px-6"
                       onClick={handleAddProduct}
                       disabled={!selectedProductId || !quantity}
                     >
-                      <Plus className="w-5 h-5 mr-2" /> Add
+                      <Plus className="w-4 h-4" />
                     </Button>
                   </div>
 
-                  {/* Selected Product Preview (Helper) */}
                   {selectedProduct && (
-                    <div className="flex items-center justify-between px-4 py-2 bg-blue-50/50 border border-blue-100 rounded-lg text-sm text-blue-700">
-                      <span className="font-medium">
-                        {selectedProduct.name}
+                    <div className="text-sm text-blue-600 bg-blue-50 px-3 py-2 rounded border border-blue-100 flex justify-between">
+                      <span>
+                        Selected: <strong>{selectedProduct.name}</strong>
                       </span>
                       <span>
-                        Max Available:{" "}
-                        <strong>{selectedProduct.available_quantity}</strong>
+                        Available: {selectedProduct.available_quantity}{" "}
+                        {selectedProduct.unit}
                       </span>
                     </div>
                   )}
@@ -505,103 +462,91 @@ export default function BulkStockTransferPage() {
               )}
             </CardContent>
           </Card>
-        )}
+        </div>
 
-        {/* Step 3: Review Table */}
-        {transferItems.length > 0 && (
-          <Card className="shadow-md border-0 ring-1 ring-gray-200 overflow-hidden">
-            <CardHeader className="bg-gray-50/50 border-b">
+        {/* RIGHT COLUMN: Review Table */}
+        <div className="space-y-6">
+          <Card className="h-full flex flex-col">
+            <CardHeader className="border-b pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-lg font-medium">
-                  Review Items
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <ClipboardList className="w-4 h-4 text-primary" /> Transfer
+                  List
                 </CardTitle>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-red-500 hover:text-red-600 hover:bg-red-50"
-                  onClick={() => setTransferItems([])}
-                >
-                  Clear All
-                </Button>
+                {transferItems.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 text-destructive"
+                    onClick={() => setTransferItems([])}
+                  >
+                    Clear
+                  </Button>
+                )}
               </div>
             </CardHeader>
+            <CardContent className="flex-1 p-0 overflow-hidden min-h-[300px]">
+              {transferItems.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
+                  <Package className="w-10 h-10 opacity-20 mb-2" />
+                  <p>No items added yet</p>
+                </div>
+              ) : (
+                <div className="max-h-[500px] overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/50">
+                        <TableHead className="pl-4">Item</TableHead>
+                        <TableHead className="text-right">Qty</TableHead>
+                        <TableHead className="w-[40px]"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {transferItems.map((item) => (
+                        <TableRow key={item.productId}>
+                          <TableCell className="pl-4 py-3">
+                            <div className="font-medium text-sm">
+                              {item.productName}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {item.sku}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            {item.quantity}{" "}
+                            <span className="text-xs text-muted-foreground font-normal ml-0.5">
+                              {item.unit}
+                            </span>
+                          </TableCell>
+                          <TableCell className="pr-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                              onClick={() => handleRemoveItem(item.productId)}
+                            >
+                              <X className="w-3 h-3" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
 
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[40%]">Product</TableHead>
-                    <TableHead>SKU</TableHead>
-                    <TableHead className="text-center">Stock</TableHead>
-                    <TableHead className="text-right">Transfer Qty</TableHead>
-                    <TableHead className="w-[50px]"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {transferItems.map((item) => (
-                    <TableRow
-                      key={item.productId}
-                      className="hover:bg-gray-50/50"
-                    >
-                      <TableCell>
-                        <div className="font-medium text-gray-900">
-                          {item.productName}
-                        </div>
-                        {item.category && (
-                          <div className="text-xs text-gray-500">
-                            {item.category}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <code className="text-xs bg-gray-100 px-2 py-1 rounded border">
-                          {item.sku}
-                        </code>
-                      </TableCell>
-                      <TableCell className="text-center text-gray-500">
-                        {item.availableQuantity}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Badge
-                          variant="outline"
-                          className="text-base px-3 py-0.5 border-gray-400 font-bold"
-                        >
-                          {item.quantity}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleRemoveItem(item.productId)}
-                          className="h-8 w-8 text-gray-400 hover:text-red-600"
-                        >
-                          <X className="w-4 h-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-
-            {/* Summary Footer */}
-            <div className="bg-gray-50 border-t p-4 flex justify-end items-center gap-6">
-              <div className="text-sm text-gray-500">
-                Total Products:{" "}
-                <span className="font-medium text-gray-900">
-                  {transferItems.length}
-                </span>
-              </div>
-              <div className="text-sm text-gray-500">
-                Total Quantity:{" "}
-                <span className="font-bold text-lg text-primary ml-2">
-                  {totalItems}
+            {/* Footer Summary */}
+            <div className="p-4 border-t bg-muted/20">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground">Total Items</span>
+                <span className="font-bold text-lg">
+                  {transferItems.reduce((acc, i) => acc + i.quantity, 0)}
                 </span>
               </div>
             </div>
           </Card>
-        )}
+        </div>
       </div>
     </div>
   );
