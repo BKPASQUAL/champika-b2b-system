@@ -40,6 +40,7 @@ interface ExpenseFormDialogProps {
   onSubmit: (data: ExpenseFormData) => Promise<void>;
   initialData?: Expense | null;
   isLoadLocked?: boolean;
+  defaultLoadId?: string; // 🆕 ADD THIS: To pass the ID when locked
 }
 
 // 1. ✅ DEFINE THE LOAD INTERFACE
@@ -70,6 +71,7 @@ export function ExpenseFormDialog({
   onSubmit,
   initialData,
   isLoadLocked = false,
+  defaultLoadId = "", // 🆕 Default to empty
 }: ExpenseFormDialogProps) {
   const [loading, setLoading] = useState(false);
 
@@ -124,7 +126,7 @@ export function ExpenseFormDialog({
         expenseDate: new Date().toISOString().split("T")[0],
         paymentMethod: "Cash",
         referenceNo: "",
-        loadId: initialData?.loadId || "", // Preserve locked load ID
+        loadId: isLoadLocked ? defaultLoadId : "",
       });
     }
   }, [initialData, open]);
