@@ -29,27 +29,24 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
   ArrowLeft,
   Loader2,
   CheckCircle2,
   Edit3,
-  CreditCard,
-  Package,
   AlertCircle,
-  DollarSign,
   User,
-  ArrowUpRight,
-  ArrowDownRight,
   Lock,
+  Plus,
+  Receipt,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
+// Import Expense Components
+// Adjust the path based on your folder structure if needed
+import { ExpenseFormDialog } from "@/app/dashboard/admin/expenses/_components/ExpenseDialogs";
+import { ExpenseFormData } from "@/app/dashboard/admin/expenses/types";
 
 interface OrderItem {
   id: string;
@@ -61,6 +58,13 @@ interface OrderItem {
   originalAmount: number;
   status: string;
   paymentStatus: string;
+}
+
+interface ExpenseItem {
+  id: string;
+  description: string;
+  amount: number;
+  category: string;
 }
 
 interface ReconcileState {
@@ -83,85 +87,94 @@ export default function ReconcileLoadPage({
   const [submitting, setSubmitting] = useState(false);
   const [loadDetails, setLoadDetails] = useState<any>(null);
   const [orders, setOrders] = useState<OrderItem[]>([]);
+  const [loadExpenses, setLoadExpenses] = useState<ExpenseItem[]>([]);
   const [currentUser, setCurrentUser] = useState<{
     id: string;
     name: string;
   } | null>(null);
 
+  // Dialog State
+  const [isExpenseDialogOpen, setIsExpenseDialogOpen] = useState(false);
+
   // State to track status/notes
   const [reconcileData, setReconcileData] = useState<ReconcileState>({});
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-
-        // 1. Load User
-        if (typeof window !== "undefined") {
-          const stored = localStorage.getItem("currentUser");
-          if (stored) {
-            try {
-              const parsedUser = JSON.parse(stored);
-              // Validate user object has ID
-              if (parsedUser && parsedUser.id) {
-                setCurrentUser(parsedUser);
-              } else {
-                console.warn("Invalid user session found");
-              }
-            } catch (e) {
-              console.error("Error parsing user session");
+  const fetchData = async () => {
+    try {
+      // 1. Load User
+      if (typeof window !== "undefined") {
+        const stored = localStorage.getItem("currentUser");
+        if (stored) {
+          try {
+            const parsedUser = JSON.parse(stored);
+            if (parsedUser && parsedUser.id) {
+              setCurrentUser(parsedUser);
             }
+          } catch (e) {
+            console.error("Error parsing user session");
           }
         }
+      }
 
-        // 2. Load Sheet Details
-        const res = await fetch(`/api/orders/loading/history/${id}`);
-        if (!res.ok) throw new Error("Failed to load data");
-        const data = await res.json();
-        setLoadDetails(data);
+      // 2. Load Sheet Details
+      const res = await fetch(`/api/orders/loading/history/${id}`);
+      if (!res.ok) throw new Error("Failed to load data");
+      const data = await res.json();
+      setLoadDetails(data);
 
-        // 3. Fetch History for Differences
-        const ordersWithHistory = await Promise.all(
-          data.orders.map(async (o: any) => {
-            let originalAmount = o.totalAmount;
+      // 3. Load Expenses for this Load
+      // We fetch all and filter client-side for simplicity, or use a filtered API if available
+      const expRes = await fetch("/api/expenses");
+      if (expRes.ok) {
+        const allExpenses = await expRes.json();
+        // Filter expenses strictly for this loadId
+        const linkedExpenses = allExpenses.filter((e: any) => e.loadId === id);
+        setLoadExpenses(linkedExpenses);
+      }
 
-            if (o.invoiceId) {
-              try {
-                const histRes = await fetch(
-                  `/api/invoices/${o.invoiceId}/history`
-                );
-                if (histRes.ok) {
-                  const history = await histRes.json();
-                  if (history.length > 0) {
-                    originalAmount = history[history.length - 1].previousTotal;
-                  }
+      // 4. Fetch History for Differences
+      const ordersWithHistory = await Promise.all(
+        data.orders.map(async (o: any) => {
+          let originalAmount = o.totalAmount;
+
+          if (o.invoiceId) {
+            try {
+              const histRes = await fetch(
+                `/api/invoices/${o.invoiceId}/history`
+              );
+              if (histRes.ok) {
+                const history = await histRes.json();
+                if (history.length > 0) {
+                  originalAmount = history[history.length - 1].previousTotal;
                 }
-              } catch (err) {
-                console.error("Failed to load history for", o.invoiceId);
               }
+            } catch (err) {
+              console.error("Failed to load history for", o.invoiceId);
             }
+          }
 
-            return {
-              id: o.id,
-              orderId: o.orderId,
-              invoiceId: o.invoiceId,
-              invoiceNo: o.invoiceNo || "N/A",
-              customer: o.customer.shopName,
-              currentAmount: o.totalAmount,
-              originalAmount: originalAmount,
-              status: o.status,
-              paymentStatus: "Credit",
-            };
-          })
-        );
+          return {
+            id: o.id,
+            orderId: o.orderId,
+            invoiceId: o.invoiceId,
+            invoiceNo: o.invoiceNo || "N/A",
+            customer: o.customer.shopName,
+            currentAmount: o.totalAmount,
+            originalAmount: originalAmount,
+            status: o.status,
+            paymentStatus: "Credit",
+          };
+        })
+      );
 
-        setOrders(ordersWithHistory);
+      setOrders(ordersWithHistory);
 
-        // Initialize Reconcile State
+      // Initialize Reconcile State if empty
+      setReconcileData((prev) => {
+        if (Object.keys(prev).length > 0) return prev; // Don't overwrite if already editing
         const initialState: ReconcileState = {};
         ordersWithHistory.forEach((o: OrderItem) => {
           initialState[o.id] = {
-            // Default to 'Delivered' if it's currently 'In Transit' or 'Loading'
             status:
               o.status === "In Transit" || o.status === "Loading"
                 ? "Delivered"
@@ -170,18 +183,21 @@ export default function ReconcileLoadPage({
             notes: "",
           };
         });
-        setReconcileData(initialState);
-      } catch (error) {
-        toast.error("Failed to load delivery sheet");
-      } finally {
-        setLoading(false);
-      }
-    };
+        return initialState;
+      });
+    } catch (error) {
+      toast.error("Failed to load delivery sheet");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    setLoading(true);
     fetchData();
   }, [id]);
 
   const updateOrderState = (orderId: string, field: string, value: any) => {
-    // Prevent editing if load is completed
     if (loadDetails?.status === "Completed") return;
 
     setReconcileData((prev) => ({
@@ -205,6 +221,50 @@ export default function ReconcileLoadPage({
     router.push(
       `/dashboard/admin/invoices/${invoiceId}/edit?returnTo=/dashboard/admin/orders/loading/reconcile/${id}`
     );
+  };
+
+  // --- Expense Handlers ---
+
+  const handleAddExpense = () => {
+    setIsExpenseDialogOpen(true);
+  };
+
+  const handleSubmitExpense = async (data: ExpenseFormData) => {
+    try {
+      // Force the loadId to be the current page's ID
+      const payload = {
+        ...data,
+        loadId: id,
+      };
+
+      const res = await fetch("/api/expenses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) throw new Error("Failed to add expense");
+
+      toast.success("Expense added to load");
+      fetchData(); // Refresh data to show new expense
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to save expense");
+    }
+  };
+
+  const handleDeleteExpense = async (expenseId: string) => {
+    if (!confirm("Remove this expense from the load?")) return;
+    try {
+      const res = await fetch(`/api/expenses/${expenseId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed");
+      toast.success("Expense removed");
+      fetchData();
+    } catch (error) {
+      toast.error("Could not delete expense");
+    }
   };
 
   const handleFinalize = async () => {
@@ -254,7 +314,7 @@ export default function ReconcileLoadPage({
   const isCompleted = loadDetails?.status === "Completed";
   const isUserMissing = !currentUser?.id;
 
-  // Stats
+  // Stats Calculations
   const totalDispatchedValue = orders.reduce(
     (sum, order) => sum + order.originalAmount,
     0
@@ -263,10 +323,15 @@ export default function ReconcileLoadPage({
     (sum, order) => sum + order.currentAmount,
     0
   );
+  const totalExpenses = loadExpenses.reduce((sum, e) => sum + e.amount, 0);
+
+  // Cash Calculation: Final Sales - Expenses
+  const expectedCash = totalFinalValue - totalExpenses;
+
   const valueDifference = totalFinalValue - totalDispatchedValue;
 
   return (
-    <div className="space-y-6 pb-10">
+    <div className="space-y-6 pb-20">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -336,179 +401,262 @@ export default function ReconcileLoadPage({
         </Alert>
       )}
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Original Dispatched Value</CardDescription>
-            <CardTitle className="text-2xl font-mono text-muted-foreground">
-              LKR {totalDispatchedValue.toLocaleString()}
-            </CardTitle>
-          </CardHeader>
-        </Card>
+      <div className="grid gap-6 md:grid-cols-3">
+        {/* Left Column: Stats & Expenses */}
+        <div className="space-y-6 md:col-span-1">
+          {/* Summary Card */}
+          <Card className="bg-slate-50 border-slate-200">
+            <CardHeader className="pb-3">
+              <CardTitle>Financial Summary</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground">Original Value</span>
+                <span>{totalDispatchedValue.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground">Final Order Value</span>
+                <span className="font-semibold">
+                  {totalFinalValue.toLocaleString()}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground">Expenses</span>
+                <span className="text-red-600">
+                  - {totalExpenses.toLocaleString()}
+                </span>
+              </div>
+              <div className="border-t pt-3 mt-2 flex justify-between items-center">
+                <span className="font-bold">Net Cash Expected</span>
+                <Badge
+                  variant="outline"
+                  className="text-lg px-3 py-1 bg-white border-slate-300"
+                >
+                  LKR {expectedCash.toLocaleString()}
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Final Reconciled Value</CardDescription>
-            <CardTitle className="text-2xl font-bold text-blue-700">
-              LKR {totalFinalValue.toLocaleString()}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-
-        <Card
-          className={
-            valueDifference < 0
-              ? "bg-red-50 border-red-100"
-              : valueDifference > 0
-              ? "bg-green-50 border-green-100"
-              : ""
-          }
-        >
-          <CardHeader className="pb-2">
-            <CardDescription>Total Difference</CardDescription>
-            <div className="flex items-center gap-2">
-              <CardTitle
-                className={`text-2xl font-bold ${
-                  valueDifference < 0
-                    ? "text-red-700"
-                    : valueDifference > 0
-                    ? "text-green-700"
-                    : "text-slate-700"
-                }`}
+          {/* Expenses Card */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div className="space-y-1">
+                <CardTitle className="text-base">Load Expenses</CardTitle>
+                <CardDescription>Fuel, meals, etc.</CardDescription>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleAddExpense}
+                disabled={isCompleted}
               >
-                {valueDifference > 0 ? "+" : ""}
-                LKR {valueDifference.toLocaleString()}
-              </CardTitle>
-            </div>
-          </CardHeader>
-        </Card>
+                <Plus className="w-4 h-4 mr-1" /> Add
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {loadExpenses.length === 0 ? (
+                <div className="text-center py-6 text-sm text-muted-foreground border-2 border-dashed rounded-md">
+                  No expenses added
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {loadExpenses.map((exp) => (
+                    <div
+                      key={exp.id}
+                      className="flex justify-between items-center p-2 rounded-md bg-white border hover:bg-slate-50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-red-50 text-red-600 rounded-full">
+                          <Receipt className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">{exp.category}</p>
+                          <p
+                            className="text-xs text-muted-foreground truncate max-w-[120px]"
+                            title={exp.description}
+                          >
+                            {exp.description}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono text-sm font-semibold">
+                          {exp.amount.toLocaleString()}
+                        </span>
+                        {!isCompleted && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-muted-foreground hover:text-red-600"
+                            onClick={() => handleDeleteExpense(exp.id)}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  <div className="pt-2 text-right text-sm font-medium text-muted-foreground border-t">
+                    Total: LKR {totalExpenses.toLocaleString()}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right Column: Order Table */}
+        <div className="md:col-span-2">
+          <Card className="h-full">
+            <CardHeader>
+              <CardTitle>Order Reconciliation</CardTitle>
+              <CardDescription>
+                {isCompleted
+                  ? "Load completed. Records locked."
+                  : "Update statuses and edit amounts if necessary."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-slate-50">
+                      <TableHead className="w-[100px]">Order</TableHead>
+                      <TableHead>Customer</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Final</TableHead>
+                      <TableHead className="text-right">Diff</TableHead>
+                      <TableHead className="w-[150px]">Notes</TableHead>
+                      <TableHead className="text-right">Edit</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {orders.map((order) => {
+                      const state = reconcileData[order.id] || {};
+                      const diff = order.currentAmount - order.originalAmount;
+
+                      return (
+                        <TableRow key={order.id}>
+                          <TableCell className="font-medium">
+                            <div className="text-sm">{order.orderId}</div>
+                            <div className="text-xs text-muted-foreground font-mono">
+                              {order.invoiceNo}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <span
+                              className="text-sm truncate block max-w-[120px]"
+                              title={order.customer}
+                            >
+                              {order.customer}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <Select
+                              disabled={isCompleted}
+                              value={state.status || "Delivered"}
+                              onValueChange={(val) =>
+                                updateOrderState(order.id, "status", val)
+                              }
+                            >
+                              <SelectTrigger className="w-[110px] h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Delivered">
+                                  Delivered
+                                </SelectItem>
+                                <SelectItem value="Partial">Partial</SelectItem>
+                                <SelectItem value="Returned">
+                                  Returned
+                                </SelectItem>
+                                <SelectItem value="Loading">
+                                  Reschedule
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+
+                          <TableCell className="text-right">
+                            <span className="font-bold font-mono text-sm">
+                              {order.currentAmount.toLocaleString()}
+                            </span>
+                          </TableCell>
+
+                          <TableCell className="text-right">
+                            {diff !== 0 ? (
+                              <span
+                                className={`text-xs font-mono font-bold ${
+                                  diff > 0 ? "text-green-600" : "text-red-600"
+                                }`}
+                              >
+                                {diff > 0 ? "+" : ""}
+                                {diff.toLocaleString()}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">
+                                -
+                              </span>
+                            )}
+                          </TableCell>
+
+                          <TableCell>
+                            <Input
+                              disabled={isCompleted}
+                              placeholder="Note..."
+                              value={state.notes || ""}
+                              onChange={(e) =>
+                                updateOrderState(
+                                  order.id,
+                                  "notes",
+                                  e.target.value
+                                )
+                              }
+                              className="w-full h-8 text-xs bg-white"
+                            />
+                          </TableCell>
+
+                          <TableCell className="text-right">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={isCompleted}
+                              onClick={() => handleEditInvoice(order.invoiceId)}
+                              className="h-8 w-8 p-0 text-blue-600 hover:bg-blue-50"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
-      {/* Orders Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Order Reconciliation</CardTitle>
-          <CardDescription>
-            {isCompleted
-              ? "This load has been completed. Records are read-only."
-              : "Verify status and amounts. Use 'Edit Invoice' to correct any discrepancies."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-slate-50">
-                  <TableHead className="w-[120px]">Order ID</TableHead>
-                  <TableHead className="w-[200px]">Customer</TableHead>
-                  <TableHead className="w-[140px]">Status</TableHead>
-                  <TableHead className="text-right">Sent Amount</TableHead>
-                  <TableHead className="text-right">Final Amount</TableHead>
-                  <TableHead className="text-right">Diff</TableHead>
-                  <TableHead className="w-[200px] pl-6">Notes</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {orders.map((order) => {
-                  const state = reconcileData[order.id] || {};
-                  const diff = order.currentAmount - order.originalAmount;
-
-                  return (
-                    <TableRow key={order.id}>
-                      <TableCell className="font-medium">
-                        {order.orderId}
-                        <div className="text-xs text-muted-foreground font-mono">
-                          {order.invoiceNo}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <span className="font-medium text-sm">
-                          {order.customer}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <Select
-                          disabled={isCompleted}
-                          value={state.status || "Delivered"}
-                          onValueChange={(val) =>
-                            updateOrderState(order.id, "status", val)
-                          }
-                        >
-                          <SelectTrigger className="w-[130px] h-8">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Delivered">Delivered</SelectItem>
-                            <SelectItem value="Partial">Partial</SelectItem>
-                            <SelectItem value="Returned">Returned</SelectItem>
-                            <SelectItem value="Loading">Reschedule</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-
-                      <TableCell className="text-right font-mono text-muted-foreground">
-                        {order.originalAmount.toLocaleString()}
-                      </TableCell>
-
-                      <TableCell className="text-right">
-                        <span className="font-bold font-mono text-sm">
-                          {order.currentAmount.toLocaleString()}
-                        </span>
-                      </TableCell>
-
-                      <TableCell className="text-right">
-                        {diff !== 0 && (
-                          <Badge
-                            variant="outline"
-                            className={`font-mono ${
-                              diff > 0
-                                ? "text-green-600 bg-green-50"
-                                : "text-red-600 bg-red-50"
-                            }`}
-                          >
-                            {diff > 0 ? "+" : ""}
-                            {diff.toLocaleString()}
-                          </Badge>
-                        )}
-                        {diff === 0 && (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-
-                      <TableCell className="pl-6">
-                        <Input
-                          disabled={isCompleted}
-                          placeholder="Note..."
-                          value={state.notes || ""}
-                          onChange={(e) =>
-                            updateOrderState(order.id, "notes", e.target.value)
-                          }
-                          className="w-full h-8 text-xs bg-white"
-                        />
-                      </TableCell>
-
-                      <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={isCompleted}
-                          onClick={() => handleEditInvoice(order.invoiceId)}
-                          className="h-8 text-blue-600 border-blue-200 hover:bg-blue-50"
-                        >
-                          <Edit3 className="w-3.5 h-3.5 mr-1.5" />
-                          Edit
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Expense Dialog */}
+      <ExpenseFormDialog
+        open={isExpenseDialogOpen}
+        onOpenChange={setIsExpenseDialogOpen}
+        onSubmit={handleSubmitExpense}
+        isLoadLocked={true} // ✅ LOCK THE LOAD ID
+        initialData={
+          {
+            description: "",
+            amount: 0,
+            category: "Fuel",
+            expenseDate: new Date().toISOString().split("T")[0],
+            paymentMethod: "Cash",
+            referenceNo: "",
+            loadId: id, // ✅ PRE-FILL WITH CURRENT PAGE ID
+          } as any
+        }
+      />
     </div>
   );
 }

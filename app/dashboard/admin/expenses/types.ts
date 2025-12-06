@@ -1,11 +1,13 @@
 export interface Expense {
   id: string;
-  description: string;
+  description?: string; // Made optional
   amount: number;
   category: string;
   expenseDate: string;
   paymentMethod: string;
   referenceNo?: string;
+  loadId?: string;
+  loadRef?: string;
 }
 
 export type ExpenseCategory =
@@ -21,10 +23,11 @@ export type ExpenseCategory =
   | "Other";
 
 export interface ExpenseFormData {
-  description: string;
+  description?: string; // Made optional
   amount: number | string;
   category: ExpenseCategory;
   expenseDate: string;
   paymentMethod: string;
   referenceNo: string;
+  loadId?: string;
 }

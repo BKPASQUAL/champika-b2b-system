@@ -3,14 +3,15 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(request: NextRequest) {
   try {
+    // Fetch expenses AND the related load_id string from loading_sheets table
     const { data, error } = await supabaseAdmin
       .from("expenses")
-      .select("*")
+      .select("*, loading_sheets(load_id)")
       .order("expense_date", { ascending: false });
 
     if (error) throw error;
 
-    const mapped = data.map((e) => ({
+    const mapped = data.map((e: any) => ({
       id: e.id,
       description: e.description,
       amount: e.amount,
@@ -18,6 +19,8 @@ export async function GET(request: NextRequest) {
       expenseDate: e.expense_date,
       paymentMethod: e.payment_method,
       referenceNo: e.reference_no,
+      loadId: e.load_id,
+      loadRef: e.loading_sheets?.load_id || null, // Map the joined load name
     }));
 
     return NextResponse.json(mapped);
@@ -39,6 +42,7 @@ export async function POST(request: NextRequest) {
         expense_date: body.expenseDate,
         payment_method: body.paymentMethod,
         reference_no: body.referenceNo,
+        load_id: body.loadId || null, // Save the Load ID
       })
       .select()
       .single();

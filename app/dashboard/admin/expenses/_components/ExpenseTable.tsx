@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Edit, Trash2, Calendar, CreditCard } from "lucide-react";
+import { Edit, Trash2, Calendar, CreditCard, Truck } from "lucide-react";
 import { Expense } from "../types";
 
 interface ExpenseTableProps {
@@ -30,6 +30,7 @@ export function ExpenseTable({
             <TableHead>Date</TableHead>
             <TableHead>Category</TableHead>
             <TableHead>Description</TableHead>
+            <TableHead>Delivery / Load</TableHead>
             <TableHead>Reference</TableHead>
             <TableHead>Payment</TableHead>
             <TableHead className="text-right">Amount</TableHead>
@@ -40,7 +41,7 @@ export function ExpenseTable({
           {expenses.length === 0 ? (
             <TableRow>
               <TableCell
-                colSpan={7}
+                colSpan={8}
                 className="text-center py-8 text-muted-foreground"
               >
                 No expenses found
@@ -64,6 +65,16 @@ export function ExpenseTable({
                   </Badge>
                 </TableCell>
                 <TableCell>{expense.description}</TableCell>
+                <TableCell>
+                  {expense.loadRef ? (
+                    <Badge variant="secondary" className="font-mono text-xs">
+                      <Truck className="w-3 h-3 mr-1" />
+                      {expense.loadRef}
+                    </Badge>
+                  ) : (
+                    <span className="text-muted-foreground text-xs">-</span>
+                  )}
+                </TableCell>
                 <TableCell className="text-muted-foreground text-sm">
                   {expense.referenceNo || "-"}
                 </TableCell>
