@@ -1,4 +1,5 @@
 // app/dashboard/admin/products/_components/ProductTable.tsx
+
 import {
   Table,
   TableBody,
@@ -21,6 +22,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  Percent, // Import icon
 } from "lucide-react";
 import { Product, SortField, SortOrder } from "../types";
 
@@ -98,6 +100,10 @@ export function ProductTable({
                   Supplier {getSortIcon("supplier")}
                 </div>
               </TableHead>
+
+              {/* Added Commission Column */}
+              <TableHead className="text-right">Commission</TableHead>
+
               <TableHead
                 className="text-right cursor-pointer hover:bg-muted/50"
                 onClick={() => onSort("stock")}
@@ -123,7 +129,6 @@ export function ProductTable({
                   MRP {getSortIcon("mrp")}
                 </div>
               </TableHead>
-              <TableHead className="text-right">Total Cost</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -131,7 +136,7 @@ export function ProductTable({
             {products.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={9}
+                  colSpan={10} // Increased colSpan
                   className="text-center py-8 text-muted-foreground"
                 >
                   No products found
@@ -165,6 +170,15 @@ export function ProductTable({
                       <Building2 className="w-3 h-3 mr-1" /> {product.supplier}
                     </span>
                   </TableCell>
+
+                  {/* Display Commission Value */}
+                  <TableCell className="text-right">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700">
+                      <Percent className="w-3 h-3 mr-1" />
+                      {product.commissionValue ?? 0}%
+                    </span>
+                  </TableCell>
+
                   <TableCell className="text-right">
                     <span
                       className={
@@ -175,10 +189,7 @@ export function ProductTable({
                           : ""
                       }
                     >
-                      {product.stock} {product.unitOfMeasure} 
-                    </span>
-                    <span className="text-xs text-muted-foreground block">
-                      Min: {product.minStock}
+                      {product.stock} {product.unitOfMeasure}
                     </span>
                   </TableCell>
                   <TableCell className="text-right text-blue-600">
@@ -189,9 +200,6 @@ export function ProductTable({
                   </TableCell>
                   <TableCell className="text-right">
                     LKR {product.mrp.toLocaleString()}
-                  </TableCell>
-                  <TableCell className="text-right font-medium">
-                    LKR {product.totalCost.toLocaleString()}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">

@@ -9,7 +9,7 @@ export interface Product {
   brand?: string;
   subBrand?: string;
   modelType?: string;
-  subModel?: string; // <--- ADD THIS
+  subModel?: string;
   sizeSpec?: string;
   supplier: string;
   stock: number;
@@ -23,6 +23,9 @@ export interface Product {
   profitMargin: number;
   images: string[];
   unitOfMeasure: string;
+  // Added commission fields
+  commissionType?: string;
+  commissionValue?: number;
 }
 
 export type SortField =
@@ -34,7 +37,8 @@ export type SortField =
   | "costPrice"
   | "sellingPrice"
   | "mrp"
-  | "totalCost";
+  | "totalCost"
+  | "commissionValue"; // Added sort option
 
 export type SortOrder = "asc" | "desc";
 
@@ -45,10 +49,9 @@ export interface ProductFormData {
   brand: string;
   subBrand: string;
   modelType: string;
-  subModel: string; // <--- ADD THIS
+  subModel: string;
   sizeSpec: string;
   supplier: string;
-  // Updated to allow string (for empty state)
   stock: number | string;
   minStock: number | string;
   mrp: number | string;

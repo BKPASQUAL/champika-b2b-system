@@ -9,6 +9,7 @@ import {
   AlertCircle,
   Briefcase,
   Tag,
+  Globe, // Icon for "All Categories"
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,6 +48,7 @@ interface Supplier {
 interface Category {
   id: string;
   name: string;
+  parent_id: string | null;
 }
 
 interface CommissionRule {
@@ -75,7 +77,6 @@ export function CommissionSettings() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      // Fetch Suppliers, Categories, and Existing Rules
       const [supRes, catRes, rulesRes] = await Promise.all([
         fetch("/api/suppliers"),
         fetch("/api/settings/categories?type=category"),
@@ -99,6 +100,7 @@ export function CommissionSettings() {
 
   // --- 2. Handlers ---
   const handleAddRule = async () => {
+    // Validate inputs
     if (!selectedSupplier || !selectedCategory || !commissionRate) {
       toast.error("Please select Supplier, Category and enter a Rate.");
       return;
@@ -111,7 +113,7 @@ export function CommissionSettings() {
       const payload = {
         supplierId: selectedSupplier,
         supplierName: supplierObj?.name || "Unknown",
-        category: selectedCategory,
+        category: selectedCategory, // This will be "ALL" or a specific category
         rate: parseFloat(commissionRate),
       };
 
@@ -121,16 +123,26 @@ export function CommissionSettings() {
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) throw new Error("Failed to save rule");
+      const data = await res.json();
+
+      if (!res.ok) {
+        // Show the specific error message from the API (e.g. "Rule already exists")
+        if (res.status === 409) {
+          toast.error(data.error);
+        } else {
+          toast.error(data.error || "Failed to save rule");
+        }
+        return;
+      }
 
       toast.success("Commission rule added successfully");
-      
+
       // Reset Form
       setCommissionRate("");
       setSelectedCategory("");
-      
+
       // Refresh list
-      fetchData(); 
+      fetchData();
     } catch (error) {
       console.error(error);
       toast.error("Error saving rule");
@@ -142,9 +154,11 @@ export function CommissionSettings() {
   const handleDeleteRule = async (id: string) => {
     if (!confirm("Are you sure you want to delete this rule?")) return;
     try {
-      const res = await fetch(`/api/settings/commissions?id=${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/settings/commissions?id=${id}`, {
+        method: "DELETE",
+      });
       if (!res.ok) throw new Error("Failed to delete");
-      
+
       toast.success("Rule removed");
       setRules(rules.filter((r) => r.id !== id));
     } catch (error) {
@@ -200,11 +214,19 @@ export function CommissionSettings() {
                 <SelectValue placeholder="Select Category" />
               </SelectTrigger>
               <SelectContent>
-                {categories.map((c) => (
-                  <SelectItem key={c.id} value={c.name}>
-                    {c.name}
-                  </SelectItem>
-                ))}
+                {/* DEFAULT OPTION FOR ALL CATEGORIES */}
+                <SelectItem value="ALL" className="text-blue-600 font-semibold">
+                  All Categories (Default)
+                </SelectItem>
+
+                {/* Main Categories Only */}
+                {categories
+                  .filter((c) => !c.parent_id)
+                  .map((c) => (
+                    <SelectItem key={c.id} value={c.name}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>
@@ -246,7 +268,7 @@ export function CommissionSettings() {
         <CardHeader>
           <CardTitle>Active Commission Rules</CardTitle>
           <CardDescription>
-            These rates will be applied to new products automatically.
+            Specific category rules take priority over "All Categories" rules.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -277,8 +299,16 @@ export function CommissionSettings() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <Tag className="w-4 h-4 text-muted-foreground" />
-                          {rule.category}
+                          {rule.category === "ALL" ? (
+                            <span className="inline-flex items-center text-blue-600 font-medium">
+                              <Globe className="w-4 h-4 mr-1" /> All Categories
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center">
+                              <Tag className="w-4 h-4 mr-1 text-muted-foreground" />{" "}
+                              {rule.category}
+                            </span>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell className="text-right">

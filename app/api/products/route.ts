@@ -1,3 +1,5 @@
+// app/api/products/route.ts
+
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
@@ -10,7 +12,7 @@ const productSchema = z.object({
   brand: z.string().optional(),
   subBrand: z.string().optional(),
   modelType: z.string().optional(),
-  subModel: z.string().optional(), // <--- Validation
+  subModel: z.string().optional(),
   sizeSpec: z.string().optional(),
   supplier: z.string().min(1, "Supplier required"),
   stock: z.number().min(0),
@@ -40,7 +42,7 @@ export async function GET() {
       brand: p.brand,
       subBrand: p.sub_brand,
       modelType: p.model_type,
-      subModel: p.sub_model, // <--- Map from DB
+      subModel: p.sub_model,
       sizeSpec: p.size_spec,
       supplier: p.supplier_name,
       stock: p.stock_quantity || 0,
@@ -50,6 +52,8 @@ export async function GET() {
       costPrice: p.cost_price || 0,
       images: p.images || [],
       unitOfMeasure: p.unit_of_measure || "Pcs",
+      commissionType: p.commission_type || "percentage",
+      commissionValue: p.commission_value || 0,
       discountPercent:
         p.mrp > 0 ? ((p.mrp - p.selling_price) / p.mrp) * 100 : 0,
       totalValue: (p.stock_quantity || 0) * (p.selling_price || 0),
@@ -76,6 +80,30 @@ export async function POST(request: NextRequest) {
       sku = `SKU-${Date.now().toString().slice(-6)}`;
     }
 
+    // 1. COMMISSION LOGIC: Priority Lookup
+    // Fetch ALL rules for this supplier to determine priority
+    const { data: rules } = await supabaseAdmin
+      .from("commission_rules")
+      .select("category, rate")
+      .eq("supplier_name", val.supplier);
+
+    let commissionRate = 0;
+
+    if (rules && rules.length > 0) {
+      // Priority 1: Check for Specific Category Rule
+      const specificRule = rules.find((r) => r.category === val.category);
+      
+      // Priority 2: Check for "All Categories" Rule
+      const generalRule = rules.find((r) => r.category === "ALL");
+
+      if (specificRule) {
+        commissionRate = specificRule.rate;
+      } else if (generalRule) {
+        commissionRate = generalRule.rate;
+      }
+    }
+
+    // 2. Insert Product with determined commission
     const { data, error } = await supabaseAdmin
       .from("products")
       .insert({
@@ -86,7 +114,7 @@ export async function POST(request: NextRequest) {
         brand: val.brand,
         sub_brand: val.subBrand,
         model_type: val.modelType,
-        sub_model: val.subModel, // <--- Save to DB
+        sub_model: val.subModel,
         size_spec: val.sizeSpec,
         supplier_name: val.supplier,
         stock_quantity: val.stock,
@@ -96,6 +124,9 @@ export async function POST(request: NextRequest) {
         cost_price: val.costPrice,
         images: val.images || [],
         unit_of_measure: val.unitOfMeasure || "Pcs",
+        // Apply Commission
+        commission_type: "percentage",
+        commission_value: commissionRate,
       })
       .select()
       .single();

@@ -1,3 +1,4 @@
+// app/api/settings/commissions/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
@@ -6,7 +7,7 @@ import { z } from "zod";
 const ruleSchema = z.object({
   supplierId: z.string().min(1),
   supplierName: z.string().optional(),
-  category: z.string().min(1),
+  category: z.string().min(1), // Can be "ALL" or a specific category name
   rate: z.number().min(0),
 });
 
@@ -19,7 +20,6 @@ export async function GET() {
       .order("created_at", { ascending: false });
 
     if (error) {
-      // Fail gracefully if table doesn't exist yet
       if (error.code === "42P01") return NextResponse.json([]);
       throw error;
     }
@@ -44,7 +44,28 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const val = ruleSchema.parse(body);
 
-    // Insert new rule
+    // 1. CHECK FOR DUPLICATES
+    // Check if a rule for this Supplier + Category already exists
+    const { data: existing } = await supabaseAdmin
+      .from("commission_rules")
+      .select("id")
+      .eq("supplier_id", val.supplierId)
+      .eq("category", val.category)
+      .maybeSingle();
+
+    if (existing) {
+      return NextResponse.json(
+        {
+          error:
+            val.category === "ALL"
+              ? `A default 'All Categories' rule for this supplier already exists.`
+              : `A rule for this Supplier and Category ('${val.category}') already exists.`,
+        },
+        { status: 409 } // 409 Conflict status code
+      );
+    }
+
+    // 2. Insert new rule
     const { data, error } = await supabaseAdmin
       .from("commission_rules")
       .insert({
@@ -58,19 +79,21 @@ export async function POST(request: NextRequest) {
 
     if (error) throw error;
 
-    // OPTIONAL: Apply this rule to existing products immediately
-    // This updates the commission_value of products matching this supplier & category
-    await supabaseAdmin
-      .from("products")
-      .update({
-        commission_type: "percentage",
-        commission_value: val.rate,
-      })
-      .eq("supplier_name", val.supplierName)
-      .eq("category", val.category);
+    // 3. OPTIONAL: Update existing products
+    // Only update specific products if it's NOT the "ALL" rule (to be safe)
+    if (val.category !== "ALL") {
+      await supabaseAdmin
+        .from("products")
+        .update({
+          commission_type: "percentage",
+          commission_value: val.rate,
+        })
+        .eq("supplier_name", val.supplierName)
+        .eq("category", val.category);
+    }
 
     return NextResponse.json(
-      { message: "Rule created and applied", data },
+      { message: "Rule created", data },
       { status: 201 }
     );
   } catch (error: any) {
