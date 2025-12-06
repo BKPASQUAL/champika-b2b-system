@@ -39,7 +39,6 @@ export async function PATCH(
     if (val.brand !== undefined) dbUpdates.brand = val.brand || null;
     if (val.subBrand !== undefined) dbUpdates.sub_brand = val.subBrand || null;
 
-    // ✅ FIXED: Allow empty strings to clear the database values
     if (val.modelType !== undefined)
       dbUpdates.model_type = val.modelType || null;
     if (val.subModel !== undefined) dbUpdates.sub_model = val.subModel || null;
@@ -54,6 +53,49 @@ export async function PATCH(
     if (val.costPrice !== undefined) dbUpdates.cost_price = val.costPrice;
     if (val.unitOfMeasure) dbUpdates.unit_of_measure = val.unitOfMeasure;
     if (val.images) dbUpdates.images = val.images;
+
+    // --- AUTOMATIC COMMISSION RE-CALCULATION ---
+    // If Supplier or Category is changing, we must re-check the commission rules.
+    if (val.supplier || val.category) {
+      // 1. Fetch current product details to get the missing field
+      // (e.g., if only Category changed, we need the existing Supplier name)
+      const { data: currentProduct } = await supabaseAdmin
+        .from("products")
+        .select("supplier_name, category")
+        .eq("id", id)
+        .single();
+
+      if (currentProduct) {
+        const targetSupplier = val.supplier || currentProduct.supplier_name;
+        const targetCategory = val.category || currentProduct.category;
+
+        // 2. Fetch all rules for this supplier
+        const { data: rules } = await supabaseAdmin
+          .from("commission_rules")
+          .select("category, rate")
+          .eq("supplier_name", targetSupplier);
+
+        let newRate = 0;
+
+        if (rules && rules.length > 0) {
+          // Priority 1: Specific Category Rule
+          const specificRule = rules.find((r) => r.category === targetCategory);
+          // Priority 2: "All Categories" Rule
+          const generalRule = rules.find((r) => r.category === "ALL");
+
+          if (specificRule) {
+            newRate = specificRule.rate;
+          } else if (generalRule) {
+            newRate = generalRule.rate;
+          }
+        }
+
+        // 3. Apply the new rate to the update
+        dbUpdates.commission_value = newRate;
+        dbUpdates.commission_type = "percentage";
+      }
+    }
+    // -------------------------------------------
 
     dbUpdates.updated_at = new Date().toISOString();
 

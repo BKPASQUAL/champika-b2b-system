@@ -38,7 +38,7 @@ export async function GET() {
   }
 }
 
-// POST: Add a new rule
+// POST: Add a new rule and update relevant products
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -78,8 +78,10 @@ export async function POST(request: NextRequest) {
 
     if (error) throw error;
 
-    // 3. Update existing products (Only if it's a specific rule)
+    // 3. UPDATE EXISTING PRODUCTS
     if (val.category !== "ALL") {
+      // --- Case A: Adding a Specific Category Rule ---
+      // Update only products in this specific category
       await supabaseAdmin
         .from("products")
         .update({
@@ -88,10 +90,44 @@ export async function POST(request: NextRequest) {
         })
         .eq("supplier_name", val.supplierName)
         .eq("category", val.category);
+    } else {
+      // --- Case B: Adding an "All Categories" (Global) Rule ---
+      // We must update all products for this supplier,
+      // EXCEPT those that belong to a category that has its own specific rule.
+
+      // 1. Find all other specific rules for this supplier to exclude them
+      const { data: specificRules } = await supabaseAdmin
+        .from("commission_rules")
+        .select("category")
+        .eq("supplier_id", val.supplierId)
+        .neq("category", "ALL"); // Don't include the rule we just made
+
+      const excludedCategories =
+        specificRules?.map((r: any) => r.category) || [];
+
+      // 2. Prepare update query
+      let query = supabaseAdmin
+        .from("products")
+        .update({
+          commission_type: "percentage",
+          commission_value: val.rate,
+        })
+        .eq("supplier_name", val.supplierName);
+
+      // 3. Apply exclusion filter if there are specific categories to protect
+      if (excludedCategories.length > 0) {
+        // Format for PostgREST: ("Cat1","Cat2")
+        const formattedList = `(${excludedCategories
+          .map((c: string) => `"${c}"`)
+          .join(",")})`;
+        query = query.filter("category", "not.in", formattedList);
+      }
+
+      await query;
     }
 
     return NextResponse.json(
-      { message: "Rule created", data },
+      { message: "Rule created and products updated", data },
       { status: 201 }
     );
   } catch (error: any) {
@@ -99,7 +135,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// DELETE: Remove a rule and update associated products
+// DELETE: Remove a rule and reset/recalculate product commissions
 export async function DELETE(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
@@ -110,7 +146,7 @@ export async function DELETE(request: NextRequest) {
     // 1. Fetch the rule first so we know what to update
     const { data: deletedRules, error: fetchError } = await supabaseAdmin
       .from("commission_rules")
-      .delete() // Delete and return the record
+      .delete()
       .eq("id", id)
       .select();
 
@@ -145,16 +181,14 @@ export async function DELETE(request: NextRequest) {
     } else {
       // --- Case B: Deleting the "ALL" (Default) Rule ---
 
-      // We need to reset all products for this supplier to 0,
+      // Reset all products for this supplier to 0,
       // EXCEPT those that have a specific rule defined.
 
-      // Fetch all remaining specific categories for this supplier
       const { data: remainingRules } = await supabaseAdmin
         .from("commission_rules")
         .select("category")
         .eq("supplier_id", supplier_id);
 
-      // List of categories we should NOT touch
       const protectedCategories =
         remainingRules?.map((r: any) => r.category) || [];
 
@@ -163,9 +197,7 @@ export async function DELETE(request: NextRequest) {
         .update({ commission_value: 0 })
         .eq("supplier_name", supplier_name);
 
-      // Apply "NOT IN" filter if there are protected categories
       if (protectedCategories.length > 0) {
-        // Format categories for PostgREST syntax: ("Cat1","Cat2")
         const formattedList = `(${protectedCategories
           .map((c: string) => `"${c}"`)
           .join(",")})`;
