@@ -12,9 +12,9 @@ export interface ProfitItem {
   id: string;
   name: string;
   category: string;
-  soldQuantity: number;
-  avgSellingPrice: number;
-  unitCost: number;
+  sold: number; // Matches API
+  revenue: number; // Matches API
+  cost: number; // Matches API
 }
 
 interface ProfitMarginTableProps {
@@ -38,10 +38,11 @@ export function ProfitMarginTable({ data }: ProfitMarginTableProps) {
         </TableHeader>
         <TableBody>
           {data.map((item) => {
-            const totalRevenue = item.avgSellingPrice * item.soldQuantity;
-            const totalCost = item.unitCost * item.soldQuantity;
-            const profit = totalRevenue - totalCost;
-            const margin = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
+            const profit = item.revenue - item.cost;
+            const margin = item.revenue > 0 ? (profit / item.revenue) * 100 : 0;
+            const avgSellingPrice =
+              item.sold > 0 ? item.revenue / item.sold : 0;
+            const unitCost = item.sold > 0 ? item.cost / item.sold : 0;
 
             return (
               <TableRow key={item.id}>
@@ -49,21 +50,28 @@ export function ProfitMarginTable({ data }: ProfitMarginTableProps) {
                 <TableCell>
                   <Badge variant="outline">{item.category}</Badge>
                 </TableCell>
+                <TableCell className="text-right">{item.sold}</TableCell>
                 <TableCell className="text-right">
-                  {item.soldQuantity}
-                </TableCell>
-                <TableCell className="text-right">
-                  {item.avgSellingPrice.toLocaleString()}
+                  {avgSellingPrice.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
                 </TableCell>
                 <TableCell className="text-right text-muted-foreground">
-                  {item.unitCost.toLocaleString()}
+                  {unitCost.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
                 </TableCell>
                 <TableCell
                   className={`text-right font-bold ${
                     profit >= 0 ? "text-green-600" : "text-red-600"
                   }`}
                 >
-                  {profit.toLocaleString()}
+                  {profit.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
                 </TableCell>
                 <TableCell className="text-right">
                   <Badge

@@ -13,12 +13,11 @@ import { Button } from "@/components/ui/button";
 import { Download, Calendar, Loader2 } from "lucide-react";
 import { OverviewStats } from "./_components/OverviewStats";
 import { BusinessReportTable } from "./_components/BusinessReportTable";
-import { ProductReportTable } from "./_components/ProductReportTable";
+// Replaced ProductReportTable with ProfitMarginTable
+import { ProfitMarginTable } from "./_components/ProfitMarginTable";
 import { CustomerReportTable } from "./_components/CustomerReportTable";
 import { RepReportTable } from "./_components/RepReportTable";
 import { OrderReportTable } from "./_components/OrderReportTable";
-
-
 
 export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
@@ -123,7 +122,8 @@ export default function ReportsPage() {
               <CardDescription>Profitability by product.</CardDescription>
             </CardHeader>
             <CardContent>
-              <ProductReportTable data={data.products} />
+              {/* Used ProfitMarginTable here */}
+              <ProfitMarginTable data={data.products} />
             </CardContent>
           </Card>
         </TabsContent>

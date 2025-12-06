@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase-admin"; //
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +22,7 @@ export async function GET(request: Request) {
     const fromDate = searchParams.get("from") || firstDay;
     const toDate = searchParams.get("to") || lastDay;
 
-    // 2. Fetch Data
+    // 2. Fetch Data (Filtered by Completed/Delivered status)
     const { data: orders, error } = await supabaseAdmin
       .from("orders")
       .select(
@@ -38,7 +38,8 @@ export async function GET(request: Request) {
       )
       .gte("created_at", fromDate)
       .lte("created_at", toDate)
-      .neq("status", "Cancelled");
+      // Change: Filter only for Delivered or Completed orders
+      .in("status", ["Delivered", "Completed"]);
 
     if (error) throw error;
 
@@ -48,7 +49,7 @@ export async function GET(request: Request) {
 
     const productsMap: Record<string, any> = {};
     const customersMap: Record<string, any> = {};
-    const repsMap: Record<string, any> = {}; // <--- We will update this
+    const repsMap: Record<string, any> = {};
     const businessMap: Record<string, any> = {};
     const ordersList: any[] = [];
 
@@ -92,7 +93,7 @@ export async function GET(request: Request) {
       totalRevenue += orderRevenue;
       totalCost += orderCost;
 
-      // --- NEW: Rep Aggregation with Profit ---
+      // Rep Aggregation
       const rId = order.sales_rep_id;
       if (rId) {
         if (!repsMap[rId]) {
@@ -100,17 +101,16 @@ export async function GET(request: Request) {
             id: rId,
             name: order.rep?.full_name || "Unknown Rep",
             sales: 0,
-            cost: 0, // Track cost
-            profit: 0, // Track profit
+            cost: 0,
+            profit: 0,
             orders: 0,
           };
         }
         repsMap[rId].sales += orderRevenue;
-        repsMap[rId].cost += orderCost; // Add cost
-        repsMap[rId].profit += orderProfit; // Add profit
+        repsMap[rId].cost += orderCost;
+        repsMap[rId].profit += orderProfit;
         repsMap[rId].orders += 1;
       }
-      // ----------------------------------------
 
       // Customer Stats
       const cId = order.customer?.id;
@@ -153,6 +153,7 @@ export async function GET(request: Request) {
         total: orderRevenue,
         cost: orderCost,
         profit: orderProfit,
+        status: order.status,
       });
     });
 
@@ -172,12 +173,9 @@ export async function GET(request: Request) {
       customers: Object.values(customersMap).sort(
         (a: any, b: any) => b.revenue - a.revenue
       ),
-
-      // Sort Reps by Profit instead of Sales if you prefer
       reps: Object.values(repsMap).sort(
         (a: any, b: any) => b.profit - a.profit
       ),
-
       orders: ordersList.sort(
         (a: any, b: any) =>
           new Date(b.date).getTime() - new Date(a.date).getTime()
