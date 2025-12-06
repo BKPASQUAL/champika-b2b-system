@@ -167,7 +167,7 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
         },
         {
           name: "Expenses",
-          href: "/dashboard/admin/finance/expenses",
+          href: "/dashboard/admin/expenses",
           icon: Coins,
         },
       ],
