@@ -45,7 +45,6 @@ export async function POST(request: NextRequest) {
     const val = ruleSchema.parse(body);
 
     // 1. CHECK FOR DUPLICATES
-    // Check if a rule for this Supplier + Category already exists
     const { data: existing } = await supabaseAdmin
       .from("commission_rules")
       .select("id")
@@ -61,7 +60,7 @@ export async function POST(request: NextRequest) {
               ? `A default 'All Categories' rule for this supplier already exists.`
               : `A rule for this Supplier and Category ('${val.category}') already exists.`,
         },
-        { status: 409 } // 409 Conflict status code
+        { status: 409 }
       );
     }
 
@@ -79,8 +78,7 @@ export async function POST(request: NextRequest) {
 
     if (error) throw error;
 
-    // 3. OPTIONAL: Update existing products
-    // Only update specific products if it's NOT the "ALL" rule (to be safe)
+    // 3. Update existing products (Only if it's a specific rule)
     if (val.category !== "ALL") {
       await supabaseAdmin
         .from("products")
@@ -101,7 +99,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// DELETE: Remove a rule
+// DELETE: Remove a rule and update associated products
 export async function DELETE(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
@@ -109,14 +107,75 @@ export async function DELETE(request: NextRequest) {
   if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
 
   try {
-    const { error } = await supabaseAdmin
+    // 1. Fetch the rule first so we know what to update
+    const { data: deletedRules, error: fetchError } = await supabaseAdmin
       .from("commission_rules")
-      .delete()
-      .eq("id", id);
+      .delete() // Delete and return the record
+      .eq("id", id)
+      .select();
 
-    if (error) throw error;
+    if (fetchError) throw fetchError;
+    if (!deletedRules || deletedRules.length === 0) {
+      return NextResponse.json({ message: "Rule not found" });
+    }
 
-    return NextResponse.json({ message: "Rule deleted" });
+    const deletedRule = deletedRules[0];
+    const { supplier_name, category, supplier_id } = deletedRule;
+
+    // 2. Logic to update products
+    if (category !== "ALL") {
+      // --- Case A: Deleting a Specific Category Rule ---
+
+      // Check if there is a fallback "ALL" rule for this supplier
+      const { data: allRule } = await supabaseAdmin
+        .from("commission_rules")
+        .select("rate")
+        .eq("supplier_id", supplier_id)
+        .eq("category", "ALL")
+        .maybeSingle();
+
+      const newRate = allRule ? allRule.rate : 0;
+
+      // Update products in this specific category to the fallback rate (or 0)
+      await supabaseAdmin
+        .from("products")
+        .update({ commission_value: newRate })
+        .eq("supplier_name", supplier_name)
+        .eq("category", category);
+    } else {
+      // --- Case B: Deleting the "ALL" (Default) Rule ---
+
+      // We need to reset all products for this supplier to 0,
+      // EXCEPT those that have a specific rule defined.
+
+      // Fetch all remaining specific categories for this supplier
+      const { data: remainingRules } = await supabaseAdmin
+        .from("commission_rules")
+        .select("category")
+        .eq("supplier_id", supplier_id);
+
+      // List of categories we should NOT touch
+      const protectedCategories =
+        remainingRules?.map((r: any) => r.category) || [];
+
+      let query = supabaseAdmin
+        .from("products")
+        .update({ commission_value: 0 })
+        .eq("supplier_name", supplier_name);
+
+      // Apply "NOT IN" filter if there are protected categories
+      if (protectedCategories.length > 0) {
+        // Format categories for PostgREST syntax: ("Cat1","Cat2")
+        const formattedList = `(${protectedCategories
+          .map((c: string) => `"${c}"`)
+          .join(",")})`;
+        query = query.filter("category", "not.in", formattedList);
+      }
+
+      await query;
+    }
+
+    return NextResponse.json({ message: "Rule deleted and products updated" });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
