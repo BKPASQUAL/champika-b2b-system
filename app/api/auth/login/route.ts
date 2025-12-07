@@ -1,9 +1,9 @@
+// app/api/auth/login/route.ts
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 // Initialize Supabase Client
-// Note: Using Service Role key to bypass RLS for login checks
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -42,11 +42,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. Fetch User Role & Details from Profiles Table
-    // UPDATED: Selecting full_name and username
+    // 3. Fetch User Profile with Business Information
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("role, is_active, full_name, username")
+      .select(
+        `
+        role, 
+        is_active, 
+        full_name, 
+        username,
+        business_id,
+        businesses (
+          id,
+          name,
+          description
+        )
+      `
+      )
       .eq("id", authData.user.id)
       .single();
 
@@ -64,7 +76,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Return Success with Role, Session, and User Info
+    // 4. Extract Business Information
+    const businessInfo = Array.isArray(profile.businesses)
+      ? profile.businesses[0]
+      : profile.businesses;
+
+    // 5. Return Success with Complete Context
     return NextResponse.json({
       message: "Login successful",
       role: profile.role,
@@ -74,6 +91,13 @@ export async function POST(request: NextRequest) {
         name: profile.full_name || "User",
         username: profile.username || "",
       },
+      business: businessInfo
+        ? {
+            id: businessInfo.id,
+            name: businessInfo.name,
+            description: businessInfo.description,
+          }
+        : null,
       session: authData.session,
     });
   } catch (error) {
@@ -83,6 +107,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+    console.error("Login error:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 }

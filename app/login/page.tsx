@@ -24,7 +24,7 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      // Call the Login API
+      // Call the Enhanced Login API
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -37,47 +37,62 @@ export default function LoginPage() {
         throw new Error(data.error || "Login failed");
       }
 
-      // --- SAVE USER DATA (FIXED) ---
+      // --- SAVE USER DATA WITH BUSINESS CONTEXT ---
       if (typeof window !== "undefined") {
-        localStorage.setItem(
-          "currentUser",
-          JSON.stringify({
-            id: data.user.id, // <--- ADDED THIS (Required for Reconciliation)
-            name: data.user.name,
-            email: data.user.email,
-            role: data.role,
-            // Create simple initials from name (e.g. "Ajith Bandara" -> "AB")
-            initials: data.user.name
-              .split(" ")
-              .map((n: string) => n[0])
-              .join("")
-              .substring(0, 2)
-              .toUpperCase(),
-          })
-        );
+        const userContext = {
+          id: data.user.id,
+          name: data.user.name,
+          email: data.user.email,
+          role: data.role,
+          businessId: data.business?.id || null,
+          businessName: data.business?.name || null,
+          businessDescription: data.business?.description || null,
+          initials: data.user.name
+            .split(" ")
+            .map((n: string) => n[0])
+            .join("")
+            .substring(0, 2)
+            .toUpperCase(),
+        };
+
+        localStorage.setItem("currentUser", JSON.stringify(userContext));
       }
       // ---------------------
 
       // Successful Login
       toast.success(`Welcome back, ${data.user.name}`);
 
-      // Redirect based on Role
-      switch (data.role) {
-        case "office":
+      // Redirect based on Role and Business
+      if (data.role === "office" && data.business) {
+        // Check if it's retail business
+        const isRetail =
+          data.business.name.toLowerCase().includes("retail") ||
+          data.business.name.toLowerCase().includes("champika hardware");
+
+        if (isRetail) {
+          router.push("/dashboard/office/retail");
+        } else {
           router.push("/dashboard/office");
-          break;
-        case "rep":
-          router.push("/dashboard/rep");
-          break;
-        case "delivery":
-          router.push("/dashboard/delivery");
-          break;
-        case "admin":
-        case "super_admin":
-          router.push("/dashboard/admin");
-          break;
-        default:
-          router.push("/dashboard");
+        }
+      } else {
+        // Default role-based routing
+        switch (data.role) {
+          case "office":
+            router.push("/dashboard/office");
+            break;
+          case "rep":
+            router.push("/dashboard/rep");
+            break;
+          case "delivery":
+            router.push("/dashboard/delivery");
+            break;
+          case "admin":
+          case "super_admin":
+            router.push("/dashboard/admin");
+            break;
+          default:
+            router.push("/dashboard");
+        }
       }
     } catch (error: any) {
       toast.error(error.message);
@@ -97,7 +112,7 @@ export default function LoginPage() {
           </div>
           <div className="space-y-1">
             <h1 className="text-3xl font-bold tracking-tight text-black">
-              Zavora Farm
+              Champika B2B
             </h1>
             <p className="text-[#78716c]">Integrated Management Portal</p>
           </div>
@@ -122,13 +137,14 @@ export default function LoginPage() {
               <Input
                 id="email"
                 type="email"
-                placeholder="admin@zavora.farm"
+                placeholder="your@email.com"
                 className="h-11 bg-white border-[#e7e5e4] focus-visible:ring-black focus-visible:border-black rounded-lg px-4"
                 required
                 value={formData.email}
                 onChange={(e) =>
                   setFormData({ ...formData, email: e.target.value })
                 }
+                disabled={isLoading}
               />
             </div>
 
@@ -163,11 +179,13 @@ export default function LoginPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, password: e.target.value })
                   }
+                  disabled={isLoading}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-3 text-[#a8a29e] hover:text-[#57534e] transition-colors"
+                  disabled={isLoading}
                 >
                   {showPassword ? (
                     <EyeOff className="h-5 w-5" />
@@ -231,7 +249,7 @@ export default function LoginPage() {
 
         {/* 3. Footer */}
         <p className="text-center text-sm text-[#a8a29e]">
-          © 2025 Zavora Farm. All rights reserved.
+          © 2025 Champika B2B System. All rights reserved.
         </p>
       </div>
     </div>
