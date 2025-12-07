@@ -147,7 +147,7 @@ export function ExpenseFormDialog({
         expenseDate: new Date().toISOString().split("T")[0],
         paymentMethod: "Cash",
         referenceNo: "",
-        loadId: initialData?.loadId || "",
+        loadId: "",
         businessId: "",
       });
     }
