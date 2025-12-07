@@ -14,6 +14,10 @@ import {
   Printer,
   Download,
   Filter,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import {
   Table,
@@ -58,6 +62,10 @@ export default function RetailInvoicesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
   // Business Context State
   const [businessName, setBusinessName] = useState("");
   const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(
@@ -72,7 +80,6 @@ export default function RetailInvoicesPage() {
 
       const data = await response.json();
       setInvoices(data);
-      // We don't setFilteredInvoices here because the useEffect handles the filtering
     } catch (error: any) {
       toast.error(error.message || "Failed to load invoices");
     } finally {
@@ -115,7 +122,14 @@ export default function RetailInvoicesPage() {
     }
 
     setFilteredInvoices(filtered);
+    setCurrentPage(1); // Reset to first page when filters change
   }, [searchQuery, statusFilter, invoices, currentBusinessId]);
+
+  // Pagination Logic
+  const totalPages = Math.ceil(filteredInvoices.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedInvoices = filteredInvoices.slice(startIndex, endIndex);
 
   const getStatusBadge = (status: PaymentStatus) => {
     const variants: Record<PaymentStatus, { variant: any; className: string }> =
@@ -187,7 +201,7 @@ export default function RetailInvoicesPage() {
     });
   };
 
-  // Calculate stats based on FILTERED invoices (so stats reflect the specific business)
+  // Calculate stats based on FILTERED invoices
   const stats = {
     total: filteredInvoices.length,
     paid: filteredInvoices.filter((i) => i.status === "Paid").length,
@@ -321,77 +335,135 @@ export default function RetailInvoicesPage() {
               )}
             </div>
           ) : (
-            <div className="border rounded-lg overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-gray-50">
-                    <TableHead className="font-semibold">Invoice No</TableHead>
-                    <TableHead className="font-semibold">Date</TableHead>
-                    <TableHead className="font-semibold">Customer</TableHead>
-                    <TableHead className="text-right font-semibold">
-                      Amount
-                    </TableHead>
-                    <TableHead className="text-right font-semibold">
-                      Paid
-                    </TableHead>
-                    <TableHead className="text-right font-semibold">
-                      Due
-                    </TableHead>
-                    <TableHead className="text-center font-semibold">
-                      Payment
-                    </TableHead>
-                    <TableHead className="text-center font-semibold">
-                      Status
-                    </TableHead>
-                    <TableHead className="text-right font-semibold">
-                      Actions
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredInvoices.map((invoice) => (
-                    <TableRow key={invoice.id} className="hover:bg-gray-50">
-                      <TableCell className="font-medium">
-                        {invoice.invoiceNo}
-                      </TableCell>
-                      <TableCell>{formatDate(invoice.date)}</TableCell>
-                      <TableCell>{invoice.customerName}</TableCell>
-                      <TableCell className="text-right font-medium">
-                        {formatCurrency(invoice.totalAmount)}
-                      </TableCell>
-                      <TableCell className="text-right text-green-600">
-                        {formatCurrency(invoice.paidAmount)}
-                      </TableCell>
-                      <TableCell className="text-right text-red-600">
-                        {formatCurrency(invoice.dueAmount)}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {getStatusBadge(invoice.status)}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {getOrderStatusBadge(invoice.orderStatus)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Link
-                            href={`/dashboard/office/retail/invoices/${invoice.id}`}
-                          >
-                            <Button variant="ghost" size="icon">
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          </Link>
-                          <Button variant="ghost" size="icon">
-                            <Printer className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon">
-                            <Download className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
+            <div className="space-y-4">
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-gray-50">
+                      <TableHead className="font-semibold">
+                        Invoice No
+                      </TableHead>
+                      <TableHead className="font-semibold">Date</TableHead>
+                      <TableHead className="font-semibold">Customer</TableHead>
+                      <TableHead className="text-right font-semibold">
+                        Amount
+                      </TableHead>
+                      <TableHead className="text-right font-semibold">
+                        Paid
+                      </TableHead>
+                      <TableHead className="text-right font-semibold">
+                        Due
+                      </TableHead>
+                      <TableHead className="text-center font-semibold">
+                        Payment
+                      </TableHead>
+                      <TableHead className="text-center font-semibold">
+                        Status
+                      </TableHead>
+                      <TableHead className="text-right font-semibold">
+                        Actions
+                      </TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedInvoices.map((invoice) => (
+                      <TableRow key={invoice.id} className="hover:bg-gray-50">
+                        <TableCell className="font-medium">
+                          {invoice.invoiceNo}
+                        </TableCell>
+                        <TableCell>{formatDate(invoice.date)}</TableCell>
+                        <TableCell>{invoice.customerName}</TableCell>
+                        <TableCell className="text-right font-medium">
+                          {formatCurrency(invoice.totalAmount)}
+                        </TableCell>
+                        <TableCell className="text-right text-green-600">
+                          {formatCurrency(invoice.paidAmount)}
+                        </TableCell>
+                        <TableCell className="text-right text-red-600">
+                          {formatCurrency(invoice.dueAmount)}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {getStatusBadge(invoice.status)}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {getOrderStatusBadge(invoice.orderStatus)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <Link
+                              href={`/dashboard/office/retail/invoices/${invoice.id}`}
+                            >
+                              <Button variant="ghost" size="icon">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </Link>
+                            <Button variant="ghost" size="icon">
+                              <Printer className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon">
+                              <Download className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Pagination Controls */}
+              <div className="flex items-center justify-between px-2">
+                <div className="text-sm text-muted-foreground">
+                  Showing {startIndex + 1} to{" "}
+                  {Math.min(endIndex, filteredInvoices.length)} of{" "}
+                  {filteredInvoices.length} entries
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setCurrentPage(1)}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronsLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() =>
+                      setCurrentPage((prev) => Math.max(prev - 1, 1))
+                    }
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <div className="text-sm font-medium">
+                    Page {currentPage} of {totalPages || 1}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() =>
+                      setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                    }
+                    disabled={currentPage === totalPages || totalPages === 0}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={currentPage === totalPages || totalPages === 0}
+                  >
+                    <ChevronsRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
         </CardContent>

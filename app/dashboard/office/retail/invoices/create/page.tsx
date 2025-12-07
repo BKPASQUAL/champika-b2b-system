@@ -12,6 +12,8 @@ import {
   Loader2,
   Check,
   ChevronsUpDown,
+  Printer,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -90,6 +92,18 @@ interface InvoiceItem {
   total: number;
 }
 
+interface CurrentItemState {
+  productId: string;
+  sku: string;
+  quantity: number | "";
+  freeQuantity: number | "";
+  unit: string;
+  mrp: number | "";
+  unitPrice: number | "";
+  discountPercent: number | "";
+  stockAvailable: number;
+}
+
 export default function CreateRetailInvoicePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -98,7 +112,7 @@ export default function CreateRetailInvoicePage() {
   // Business Context
   const [businessId, setBusinessId] = useState<string | null>(null);
   const [businessName, setBusinessName] = useState<string>("");
-  const [userId, setUserId] = useState<string | null>(null); // NEW: Capture User ID
+  const [userId, setUserId] = useState<string | null>(null);
 
   // Data State
   const [products, setProducts] = useState<Product[]>([]);
@@ -121,16 +135,16 @@ export default function CreateRetailInvoicePage() {
   const [customerOpen, setCustomerOpen] = useState(false);
   const [productOpen, setProductOpen] = useState(false);
 
-  // Current Item Being Added
-  const [currentItem, setCurrentItem] = useState({
+  // Current Item Being Added - Initialized with empty values
+  const [currentItem, setCurrentItem] = useState<CurrentItemState>({
     productId: "",
     sku: "",
-    quantity: 1,
-    freeQuantity: 0,
+    quantity: "",
+    freeQuantity: "",
     unit: "",
-    mrp: 0,
-    unitPrice: 0,
-    discountPercent: 0,
+    mrp: "",
+    unitPrice: "",
+    discountPercent: "",
     stockAvailable: 0,
   });
 
@@ -139,7 +153,6 @@ export default function CreateRetailInvoicePage() {
     const fetchInitialData = async () => {
       setLoading(true);
       try {
-        // Get business context
         const user = getUserBusinessContext();
         if (!user) {
           toast.error("User context not found");
@@ -155,15 +168,13 @@ export default function CreateRetailInvoicePage() {
 
         setBusinessId(user.businessId);
         setBusinessName(user.businessName || "Retail Business");
-        setUserId(user.id); // NEW: Set the current user ID
+        setUserId(user.id);
 
-        // Fetch ALL Customers first
         const customersRes = await fetch("/api/customers");
         const customersData = await customersRes.json();
 
         setAllCustomers(customersData);
 
-        // Filter customers by business_id
         const retailCustomers = customersData.filter((c: any) => {
           return (
             c.business_id === user.businessId ||
@@ -188,22 +199,38 @@ export default function CreateRetailInvoicePage() {
           }))
         );
 
-        // Fetch Products
         setStockLoading(true);
-        const productsRes = await fetch("/api/products");
+        const productsRes = await fetch(`/api/rep/stock?userId=${user.id}`);
+
+        if (!productsRes.ok) {
+          throw new Error("Failed to fetch assigned stock");
+        }
+
         const productsData = await productsRes.json();
 
-        setProducts(
-          productsData.map((p: any) => ({
-            id: p.id,
-            sku: p.sku,
-            name: p.name,
-            selling_price: p.selling_price || 0,
-            mrp: p.mrp || 0,
-            stock_quantity: p.stock_quantity || 0,
-            unit_of_measure: p.unit_of_measure || "unit",
-          }))
-        );
+        if (Array.isArray(productsData)) {
+          setProducts(
+            productsData.map((p: any) => ({
+              id: p.id,
+              sku: p.sku,
+              name: p.name,
+              selling_price: p.selling_price || 0,
+              mrp: p.mrp || 0,
+              stock_quantity: p.stock_quantity || 0,
+              unit_of_measure: p.unit_of_measure || "unit",
+            }))
+          );
+
+          if (productsData.length === 0) {
+            toast.warning(
+              "No stock found. Please check your Warehouse Assignments."
+            );
+          }
+        } else {
+          console.error("Invalid product data format", productsData);
+          setProducts([]);
+        }
+
         setStockLoading(false);
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -224,12 +251,12 @@ export default function CreateRetailInvoicePage() {
     setCurrentItem({
       productId: product.id,
       sku: product.sku,
-      quantity: 1,
-      freeQuantity: 0,
+      quantity: "", // Start empty
+      freeQuantity: "", // Start empty
       unit: product.unit_of_measure,
       mrp: product.mrp,
       unitPrice: product.selling_price,
-      discountPercent: 0,
+      discountPercent: "", // Start empty
       stockAvailable: product.stock_quantity,
     });
   };
@@ -241,7 +268,17 @@ export default function CreateRetailInvoicePage() {
       return;
     }
 
-    const totalReqQty = currentItem.quantity + currentItem.freeQuantity;
+    // Convert empty strings to 0 for validation/calculation
+    const qty = currentItem.quantity === "" ? 0 : currentItem.quantity;
+    const freeQty =
+      currentItem.freeQuantity === "" ? 0 : currentItem.freeQuantity;
+
+    if (qty <= 0) {
+      toast.error("Quantity must be greater than 0");
+      return;
+    }
+
+    const totalReqQty = qty + freeQty;
     if (totalReqQty > currentItem.stockAvailable) {
       toast.error(
         `Insufficient stock! Available: ${currentItem.stockAvailable}`
@@ -252,8 +289,13 @@ export default function CreateRetailInvoicePage() {
     const product = products.find((p) => p.id === currentItem.productId);
     if (!product) return;
 
-    const grossTotal = currentItem.unitPrice * currentItem.quantity;
-    const discountAmount = (grossTotal * currentItem.discountPercent) / 100;
+    const unitPrice = currentItem.unitPrice === "" ? 0 : currentItem.unitPrice;
+    const mrp = currentItem.mrp === "" ? 0 : currentItem.mrp;
+    const discountPercent =
+      currentItem.discountPercent === "" ? 0 : currentItem.discountPercent;
+
+    const grossTotal = unitPrice * qty;
+    const discountAmount = (grossTotal * discountPercent) / 100;
     const netTotal = grossTotal - discountAmount;
 
     const newItem: InvoiceItem = {
@@ -262,26 +304,27 @@ export default function CreateRetailInvoicePage() {
       sku: product.sku,
       productName: product.name,
       unit: product.unit_of_measure,
-      quantity: currentItem.quantity,
-      freeQuantity: currentItem.freeQuantity,
-      mrp: currentItem.mrp,
-      unitPrice: currentItem.unitPrice,
-      discountPercent: currentItem.discountPercent,
+      quantity: qty,
+      freeQuantity: freeQty,
+      mrp: mrp,
+      unitPrice: unitPrice,
+      discountPercent: discountPercent,
       discountAmount: discountAmount,
       total: netTotal,
     };
 
     setItems([...items, newItem]);
 
+    // Reset current item to empty values
     setCurrentItem({
       productId: "",
       sku: "",
-      quantity: 1,
-      freeQuantity: 0,
+      quantity: "",
+      freeQuantity: "",
       unit: "",
-      mrp: 0,
-      unitPrice: 0,
-      discountPercent: 0,
+      mrp: "",
+      unitPrice: "",
+      discountPercent: "",
       stockAvailable: 0,
     });
   };
@@ -290,7 +333,7 @@ export default function CreateRetailInvoicePage() {
     setItems(items.filter((item) => item.id !== id));
   };
 
-  const handleSaveInvoice = async () => {
+  const handleSaveAction = async (action: "save" | "print" | "download") => {
     if (!customerId) {
       toast.error("Please select a customer.");
       return;
@@ -308,9 +351,7 @@ export default function CreateRetailInvoicePage() {
 
     const invoiceData = {
       customerId,
-      // FIX: Use the actual User ID for salesRepId (to satisfy FK constraint)
       salesRepId: userId,
-      // FIX: Pass businessId separately to be saved in the new column
       businessId: businessId,
       items,
       invoiceNumber,
@@ -339,7 +380,18 @@ export default function CreateRetailInvoicePage() {
       }
 
       toast.success("Invoice Created Successfully!");
-      router.push("/dashboard/office/retail/invoices");
+
+      if (action === "save") {
+        router.push("/dashboard/office/retail/invoices");
+      } else if (action === "print") {
+        router.push(
+          `/dashboard/office/retail/invoices/${data.data.id}?print=true`
+        );
+      } else if (action === "download") {
+        router.push(
+          `/dashboard/office/retail/invoices/${data.data.id}?download=true`
+        );
+      }
     } catch (error: any) {
       toast.error(error.message || "Failed to create invoice");
     } finally {
@@ -365,11 +417,15 @@ export default function CreateRetailInvoicePage() {
     (p) => !items.some((i) => i.productId === p.id)
   );
 
+  // Helper for current item calculation
+  const safeUnitPrice =
+    currentItem.unitPrice === "" ? 0 : currentItem.unitPrice;
+  const safeQuantity = currentItem.quantity === "" ? 0 : currentItem.quantity;
+  const safeDiscount =
+    currentItem.discountPercent === "" ? 0 : currentItem.discountPercent;
+
   const currentDiscountAmt =
-    (currentItem.unitPrice *
-      currentItem.quantity *
-      currentItem.discountPercent) /
-    100;
+    (safeUnitPrice * safeQuantity * safeDiscount) / 100;
 
   if (loading && customers.length === 0 && allCustomers.length === 0) {
     return (
@@ -380,37 +436,67 @@ export default function CreateRetailInvoicePage() {
     );
   }
 
-  // ... (Rest of the JSX remains exactly the same as previous corrected version)
   return (
     <div className="space-y-4 mx-auto">
-      <div className="flex items-center gap-4">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => router.push("/dashboard/office/retail/invoices")}
-        >
-          <ArrowLeft className="w-4 h-4" />
-        </Button>
-        <div className="flex-1">
-          <h1 className="text-3xl font-bold tracking-tight">
-            New Retail Invoice
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            {businessName} - Create a new customer invoice
-          </p>
+      <div className="flex flex-col md:flex-row items-center gap-4">
+        <div className="flex items-center gap-4 w-full md:w-auto">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => router.push("/dashboard/office/retail/invoices")}
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
+          <div className="flex-1">
+            <h1 className="text-3xl font-bold tracking-tight">
+              New Retail Invoice
+            </h1>
+            <p className="text-muted-foreground mt-1">
+              {businessName} - Create a new customer invoice
+            </p>
+          </div>
         </div>
-        <Button
-          onClick={handleSaveInvoice}
-          disabled={items.length === 0 || loading}
-          className="bg-green-600 hover:bg-green-700"
-        >
-          {loading ? (
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-          ) : (
-            <Save className="w-4 h-4 mr-2" />
-          )}
-          Save Invoice
-        </Button>
+
+        <div className="flex items-center gap-2 ml-auto">
+          <Button
+            variant="outline"
+            onClick={() => handleSaveAction("download")}
+            disabled={items.length === 0 || loading}
+          >
+            {loading ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Download className="w-4 h-4 mr-2" />
+            )}
+            Save & Download
+          </Button>
+
+          <Button
+            variant="outline"
+            onClick={() => handleSaveAction("print")}
+            disabled={items.length === 0 || loading}
+          >
+            {loading ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Printer className="w-4 h-4 mr-2" />
+            )}
+            Save & Print
+          </Button>
+
+          <Button
+            onClick={() => handleSaveAction("save")}
+            disabled={items.length === 0 || loading}
+            className="bg-green-600 hover:bg-green-700"
+          >
+            {loading ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Save className="w-4 h-4 mr-2" />
+            )}
+            Save Invoice
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -426,7 +512,7 @@ export default function CreateRetailInvoicePage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                {/* Customer Selection - FILTERED BY BUSINESS */}
+                {/* Customer Selection */}
                 <div className="space-y-2">
                   <Label>
                     Customer <span className="text-red-500">*</span>
@@ -517,7 +603,7 @@ export default function CreateRetailInvoicePage() {
                   <Input value={invoiceNumber} disabled className="bg-muted" />
                 </div>
 
-                {/* Payment Type - Cash or Credit */}
+                {/* Payment Type */}
                 <div className="space-y-2">
                   <Label>
                     Payment Type <span className="text-red-500">*</span>
@@ -558,7 +644,7 @@ export default function CreateRetailInvoicePage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Product Selection - Searchable */}
+              {/* Product Selection */}
               <div className="grid grid-cols-4 gap-4">
                 <div className="col-span-4 space-y-2">
                   <Label>
@@ -592,7 +678,11 @@ export default function CreateRetailInvoicePage() {
                       <Command>
                         <CommandInput placeholder="Search product..." />
                         <CommandList>
-                          <CommandEmpty>No products found.</CommandEmpty>
+                          <CommandEmpty>
+                            {products.length === 0
+                              ? "No assigned stock found"
+                              : "No products found."}
+                          </CommandEmpty>
                           <CommandGroup>
                             {availableProducts.map((product) => (
                               <CommandItem
@@ -628,6 +718,9 @@ export default function CreateRetailInvoicePage() {
                       </Command>
                     </PopoverContent>
                   </Popover>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Showing products from your assigned warehouse locations.
+                  </p>
                 </div>
               </div>
 
@@ -642,7 +735,8 @@ export default function CreateRetailInvoicePage() {
                     onChange={(e) =>
                       setCurrentItem({
                         ...currentItem,
-                        quantity: Number(e.target.value),
+                        quantity:
+                          e.target.value === "" ? "" : Number(e.target.value),
                       })
                     }
                   />
@@ -656,7 +750,8 @@ export default function CreateRetailInvoicePage() {
                     onChange={(e) =>
                       setCurrentItem({
                         ...currentItem,
-                        freeQuantity: Number(e.target.value),
+                        freeQuantity:
+                          e.target.value === "" ? "" : Number(e.target.value),
                       })
                     }
                   />
@@ -690,11 +785,12 @@ export default function CreateRetailInvoicePage() {
                   <Label>MRP</Label>
                   <Input
                     type="number"
-                    value={currentItem.mrp || ""}
+                    value={currentItem.mrp}
                     onChange={(e) =>
                       setCurrentItem({
                         ...currentItem,
-                        mrp: Number(e.target.value),
+                        mrp:
+                          e.target.value === "" ? "" : Number(e.target.value),
                       })
                     }
                     placeholder="0.00"
@@ -704,11 +800,12 @@ export default function CreateRetailInvoicePage() {
                   <Label>Unit Price</Label>
                   <Input
                     type="number"
-                    value={currentItem.unitPrice || ""}
+                    value={currentItem.unitPrice}
                     onChange={(e) =>
                       setCurrentItem({
                         ...currentItem,
-                        unitPrice: Number(e.target.value),
+                        unitPrice:
+                          e.target.value === "" ? "" : Number(e.target.value),
                       })
                     }
                     placeholder="0.00"
@@ -720,11 +817,12 @@ export default function CreateRetailInvoicePage() {
                     type="number"
                     min="0"
                     max="100"
-                    value={currentItem.discountPercent || ""}
+                    value={currentItem.discountPercent}
                     onChange={(e) =>
                       setCurrentItem({
                         ...currentItem,
-                        discountPercent: Number(e.target.value),
+                        discountPercent:
+                          e.target.value === "" ? "" : Number(e.target.value),
                       })
                     }
                     placeholder="0"
@@ -734,7 +832,7 @@ export default function CreateRetailInvoicePage() {
                   <Label>Total</Label>
                   <Input
                     value={(
-                      currentItem.unitPrice * currentItem.quantity -
+                      safeUnitPrice * safeQuantity -
                       currentDiscountAmt
                     ).toFixed(2)}
                     disabled
