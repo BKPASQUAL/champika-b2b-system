@@ -3,10 +3,16 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(request: NextRequest) {
   try {
-    // Fetch expenses AND the related load_id string from loading_sheets table
+    // Fetch expenses with Load AND Business details
     const { data, error } = await supabaseAdmin
       .from("expenses")
-      .select("*, loading_sheets(load_id)")
+      .select(
+        `
+        *,
+        loading_sheets (load_id),
+        businesses (name)
+      `
+      )
       .order("expense_date", { ascending: false });
 
     if (error) throw error;
@@ -20,7 +26,9 @@ export async function GET(request: NextRequest) {
       paymentMethod: e.payment_method,
       referenceNo: e.reference_no,
       loadId: e.load_id,
-      loadRef: e.loading_sheets?.load_id || null, // Map the joined load name
+      loadRef: e.loading_sheets?.load_id || null,
+      businessId: e.business_id, // ✅ Map Business ID
+      businessName: e.businesses?.name || "Global", // ✅ Map Business Name
     }));
 
     return NextResponse.json(mapped);
@@ -33,6 +41,13 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
+    // Convert empty string to null for optional fields
+    const businessId =
+      body.businessId === "global" || body.businessId === ""
+        ? null
+        : body.businessId;
+    const loadId = body.loadId === "" ? null : body.loadId;
+
     const { data, error } = await supabaseAdmin
       .from("expenses")
       .insert({
@@ -42,7 +57,8 @@ export async function POST(request: NextRequest) {
         expense_date: body.expenseDate,
         payment_method: body.paymentMethod,
         reference_no: body.referenceNo,
-        load_id: body.loadId || null, // Save the Load ID
+        load_id: loadId,
+        business_id: businessId, // ✅ Save Business ID
       })
       .select()
       .single();

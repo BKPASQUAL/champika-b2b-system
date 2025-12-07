@@ -1,6 +1,6 @@
 export interface Expense {
   id: string;
-  description?: string; // Made optional
+  description?: string;
   amount: number;
   category: string;
   expenseDate: string;
@@ -8,6 +8,8 @@ export interface Expense {
   referenceNo?: string;
   loadId?: string;
   loadRef?: string;
+  businessId?: string; // ✅ NEW
+  businessName?: string; // ✅ NEW
 }
 
 export type ExpenseCategory =
@@ -23,11 +25,12 @@ export type ExpenseCategory =
   | "Other";
 
 export interface ExpenseFormData {
-  description?: string; // Made optional
+  description?: string;
   amount: number | string;
   category: ExpenseCategory;
   expenseDate: string;
   paymentMethod: string;
   referenceNo: string;
   loadId?: string;
+  businessId?: string; // ✅ NEW
 }

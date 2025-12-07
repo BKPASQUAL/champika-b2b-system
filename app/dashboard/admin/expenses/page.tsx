@@ -6,7 +6,7 @@ import { Plus, TrendingDown } from "lucide-react";
 import { toast } from "sonner";
 import { ExpenseTable } from "./_components/ExpenseTable";
 import { ExpenseFormDialog } from "./_components/ExpenseDialogs";
-import { ExpenseFilters } from "./_components/ExpenseFilters"; // Import the filters
+import { ExpenseFilters } from "./_components/ExpenseFilters";
 import { Expense, ExpenseFormData } from "./types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -19,7 +19,7 @@ export default function ExpensesPage() {
   // --- Filtering State ---
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState("ALL");
-  const [filterMonth, setFilterMonth] = useState(""); // YYYY-MM
+  const [filterMonth, setFilterMonth] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
@@ -44,8 +44,9 @@ export default function ExpensesPage() {
   // --- Filter Logic ---
   const filteredExpenses = useMemo(() => {
     return expenses.filter((expense) => {
-      // 1. Search
-      const matchesSearch = expense.description
+      // ✅ FIX: Handle optional description safely
+      const description = expense.description || "";
+      const matchesSearch = description
         .toLowerCase()
         .includes(searchQuery.toLowerCase());
 
@@ -57,10 +58,8 @@ export default function ExpensesPage() {
       let matchesDate = true;
 
       if (filterMonth) {
-        // If Month is selected (YYYY-MM), check if expense date starts with it
         matchesDate = expense.expenseDate.startsWith(filterMonth);
       } else if (startDate || endDate) {
-        // Custom Range
         const expDate = new Date(expense.expenseDate);
         if (startDate) {
           matchesDate = matchesDate && expDate >= new Date(startDate);
@@ -74,10 +73,9 @@ export default function ExpensesPage() {
     });
   }, [expenses, searchQuery, filterCategory, filterMonth, startDate, endDate]);
 
-  // --- Stats Calculation (Based on Filtered Data) ---
+  // --- Stats Calculation ---
   const totalExpenses = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
 
-  // Calculate "Today" based on actual current date, not filtered data
   const todayStr = new Date().toISOString().split("T")[0];
   const todayExpenses = expenses
     .filter((e) => e.expenseDate === todayStr)
@@ -137,7 +135,7 @@ export default function ExpensesPage() {
   };
 
   return (
-    <div className="space-y-6 ">
+    <div className="space-y-6 p-8">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>

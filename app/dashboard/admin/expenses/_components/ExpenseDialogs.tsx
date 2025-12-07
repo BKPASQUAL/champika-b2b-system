@@ -29,7 +29,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Check, ChevronsUpDown, Lock } from "lucide-react";
+import {
+  Loader2,
+  Check,
+  ChevronsUpDown,
+  Lock,
+  Building2,
+  Globe,
+} from "lucide-react";
 import { Expense, ExpenseCategory, ExpenseFormData } from "../types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -40,15 +47,19 @@ interface ExpenseFormDialogProps {
   onSubmit: (data: ExpenseFormData) => Promise<void>;
   initialData?: Expense | null;
   isLoadLocked?: boolean;
-  defaultLoadId?: string; // 🆕 ADD THIS: To pass the ID when locked
 }
 
-// 1. ✅ DEFINE THE LOAD INTERFACE
+// ✅ 1. Define Interfaces
 interface Load {
   id: string;
-  load_id: string; // API returns snake_case
-  loading_date: string; // API returns snake_case
-  lorry_number: string; // API returns snake_case
+  load_id: string;
+  loading_date: string;
+  lorry_number: string;
+}
+
+interface Business {
+  id: string;
+  name: string;
 }
 
 const CATEGORIES: ExpenseCategory[] = [
@@ -61,6 +72,7 @@ const CATEGORIES: ExpenseCategory[] = [
   "Dinner",
   "Guest",
   "Foods",
+  "Other",
 ];
 
 const PAYMENT_METHODS = ["Cash", "Card", "Transfer", "Cheque"];
@@ -71,12 +83,12 @@ export function ExpenseFormDialog({
   onSubmit,
   initialData,
   isLoadLocked = false,
-  defaultLoadId = "", // 🆕 Default to empty
 }: ExpenseFormDialogProps) {
   const [loading, setLoading] = useState(false);
 
-  // 2. ✅ FIX: TYPE THE STATE AS Load[]
+  // ✅ 2. Fix: Explicitly type the state as Load[]
   const [loads, setLoads] = useState<Load[]>([]);
+  const [businesses, setBusinesses] = useState<Business[]>([]);
   const [openLoadSelect, setOpenLoadSelect] = useState(false);
 
   const [formData, setFormData] = useState<ExpenseFormData>({
@@ -87,23 +99,31 @@ export function ExpenseFormDialog({
     paymentMethod: "Cash",
     referenceNo: "",
     loadId: "",
+    businessId: "",
   });
 
   useEffect(() => {
     if (open) {
+      // Fetch Loads
       fetch("/api/expenses/loads")
         .then((res) => res.json())
         .then((data) => {
-          if (Array.isArray(data)) {
-            setLoads(data);
-          } else {
-            setLoads([]);
-          }
+          if (Array.isArray(data)) setLoads(data);
+          else setLoads([]);
         })
         .catch((err) => {
           console.error("Failed to fetch loads", err);
           setLoads([]);
         });
+
+      // Fetch Businesses
+      fetch("/api/settings/business")
+        .then((res) => res.json())
+        .then((data) => {
+          if (Array.isArray(data)) setBusinesses(data);
+          else setBusinesses([]);
+        })
+        .catch((err) => console.error("Failed to fetch businesses", err));
     }
   }, [open]);
 
@@ -117,6 +137,7 @@ export function ExpenseFormDialog({
         paymentMethod: initialData.paymentMethod,
         referenceNo: initialData.referenceNo || "",
         loadId: initialData.loadId || "",
+        businessId: initialData.businessId || "",
       });
     } else {
       setFormData({
@@ -126,7 +147,8 @@ export function ExpenseFormDialog({
         expenseDate: new Date().toISOString().split("T")[0],
         paymentMethod: "Cash",
         referenceNo: "",
-        loadId: isLoadLocked ? defaultLoadId : "",
+        loadId: initialData?.loadId || "",
+        businessId: "",
       });
     }
   }, [initialData, open]);
@@ -152,10 +174,7 @@ export function ExpenseFormDialog({
   const getLoadDisplayText = () => {
     if (!formData.loadId) return "Select delivery load...";
     const found = loads.find((load) => load.id === formData.loadId);
-
-    // 3. ✅ FIX: USE CORRECT PROPERTY (load_id)
     if (found) return found.load_id;
-
     if (isLoadLocked && formData.loadId) return "Current Load (Linked)";
     return "Selected Load";
   };
@@ -169,6 +188,42 @@ export function ExpenseFormDialog({
           </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label>Business Allocation</Label>
+            <Select
+              value={formData.businessId || "global"}
+              onValueChange={(val) =>
+                setFormData({
+                  ...formData,
+                  businessId: val === "global" ? "" : val,
+                })
+              }
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select Business" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem
+                  value="global"
+                  className="text-blue-600 font-medium"
+                >
+                  <div className="flex items-center">
+                    <Globe className="w-4 h-4 mr-2" />
+                    Global / Shared Expense
+                  </div>
+                </SelectItem>
+                {businesses.map((biz) => (
+                  <SelectItem key={biz.id} value={biz.id}>
+                    <div className="flex items-center">
+                      <Building2 className="w-4 h-4 mr-2 opacity-50" />
+                      {biz.name}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Category</Label>
@@ -178,7 +233,7 @@ export function ExpenseFormDialog({
                   setFormData({ ...formData, category: val as ExpenseCategory })
                 }
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -248,7 +303,7 @@ export function ExpenseFormDialog({
                       {loads.map((load) => (
                         <CommandItem
                           key={load.id}
-                          // 4. ✅ FIX: USE CORRECT PROPERTY (load_id)
+                          // ✅ 3. Fix: Use `load_id` (from API) not `loadId`
                           value={load.load_id}
                           onSelect={() => {
                             setFormData({
@@ -268,7 +323,7 @@ export function ExpenseFormDialog({
                             )}
                           />
                           <div className="flex flex-col">
-                            {/* 5. ✅ FIX: USE CORRECT PROPERTY (load_id) */}
+                            {/* ✅ 4. Fix: Use `load_id` */}
                             <span className="font-medium">{load.load_id}</span>
                             <span className="text-xs text-muted-foreground">
                               {new Date(load.loading_date).toLocaleDateString()}{" "}
@@ -320,7 +375,7 @@ export function ExpenseFormDialog({
                   setFormData({ ...formData, paymentMethod: val })
                 }
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

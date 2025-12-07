@@ -8,7 +8,15 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Edit, Trash2, Calendar, CreditCard, Truck } from "lucide-react";
+import {
+  Edit,
+  Trash2,
+  Calendar,
+  CreditCard,
+  Truck,
+  Building2,
+  Globe,
+} from "lucide-react";
 import { Expense } from "../types";
 
 interface ExpenseTableProps {
@@ -28,6 +36,7 @@ export function ExpenseTable({
         <TableHeader>
           <TableRow>
             <TableHead>Date</TableHead>
+            <TableHead>Business</TableHead> {/* ✅ NEW COLUMN */}
             <TableHead>Category</TableHead>
             <TableHead>Description</TableHead>
             <TableHead>Delivery / Load</TableHead>
@@ -41,7 +50,7 @@ export function ExpenseTable({
           {expenses.length === 0 ? (
             <TableRow>
               <TableCell
-                colSpan={8}
+                colSpan={9}
                 className="text-center py-8 text-muted-foreground"
               >
                 No expenses found
@@ -50,21 +59,50 @@ export function ExpenseTable({
           ) : (
             expenses.map((expense) => (
               <TableRow key={expense.id}>
+                {/* Date */}
                 <TableCell className="font-medium text-muted-foreground">
                   <div className="flex items-center gap-2">
                     <Calendar className="w-3 h-3" />
                     {new Date(expense.expenseDate).toLocaleDateString()}
                   </div>
                 </TableCell>
+
+                {/* ✅ Business Column */}
+                <TableCell>
+                  {expense.businessName && expense.businessName !== "Global" ? (
+                    <div className="flex items-center gap-1.5 text-blue-700 bg-blue-50 px-2 py-1 rounded-md w-fit text-xs font-medium border border-blue-100">
+                      <Building2 className="w-3 h-3" />
+                      {expense.businessName}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 text-gray-600 bg-gray-100 px-2 py-1 rounded-md w-fit text-xs font-medium border border-gray-200">
+                      <Globe className="w-3 h-3" />
+                      Global
+                    </div>
+                  )}
+                </TableCell>
+
+                {/* Category */}
                 <TableCell>
                   <Badge
                     variant="outline"
-                    className="bg-blue-50 text-blue-700 border-blue-200"
+                    className="bg-slate-50 text-slate-700 border-slate-200"
                   >
                     {expense.category}
                   </Badge>
                 </TableCell>
-                <TableCell>{expense.description}</TableCell>
+
+                {/* Description */}
+                <TableCell
+                  className="max-w-[200px] truncate"
+                  title={expense.description}
+                >
+                  {expense.description || (
+                    <span className="text-muted-foreground italic">-</span>
+                  )}
+                </TableCell>
+
+                {/* Delivery / Load */}
                 <TableCell>
                   {expense.loadRef ? (
                     <Badge variant="secondary" className="font-mono text-xs">
@@ -75,18 +113,26 @@ export function ExpenseTable({
                     <span className="text-muted-foreground text-xs">-</span>
                   )}
                 </TableCell>
+
+                {/* Reference */}
                 <TableCell className="text-muted-foreground text-sm">
                   {expense.referenceNo || "-"}
                 </TableCell>
+
+                {/* Payment */}
                 <TableCell>
                   <div className="flex items-center gap-1 text-sm">
                     <CreditCard className="w-3 h-3 text-muted-foreground" />
                     {expense.paymentMethod}
                   </div>
                 </TableCell>
+
+                {/* Amount */}
                 <TableCell className="text-right font-bold text-red-600">
                   - LKR {expense.amount.toLocaleString()}
                 </TableCell>
+
+                {/* Actions */}
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2">
                     <Button
