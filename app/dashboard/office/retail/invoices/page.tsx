@@ -48,6 +48,7 @@ interface Invoice {
   dueAmount: number;
   status: PaymentStatus;
   orderStatus: OrderStatus;
+  businessId?: string;
 }
 
 export default function RetailInvoicesPage() {
@@ -56,7 +57,12 @@ export default function RetailInvoicesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+
+  // Business Context State
   const [businessName, setBusinessName] = useState("");
+  const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(
+    null
+  );
 
   const fetchInvoices = useCallback(async () => {
     try {
@@ -66,7 +72,7 @@ export default function RetailInvoicesPage() {
 
       const data = await response.json();
       setInvoices(data);
-      setFilteredInvoices(data);
+      // We don't setFilteredInvoices here because the useEffect handles the filtering
     } catch (error: any) {
       toast.error(error.message || "Failed to load invoices");
     } finally {
@@ -77,18 +83,24 @@ export default function RetailInvoicesPage() {
   useEffect(() => {
     // Get business context
     const user = getUserBusinessContext();
-    if (user?.businessName) {
-      setBusinessName(user.businessName);
+    if (user) {
+      setBusinessName(user.businessName || "");
+      setCurrentBusinessId(user.businessId);
     }
 
     fetchInvoices();
   }, [fetchInvoices]);
 
-  // Filter invoices based on search and status
+  // Filter invoices based on Search, Status, AND Business ID
   useEffect(() => {
     let filtered = invoices;
 
-    // Search filter
+    // 1. Business Filter
+    if (currentBusinessId) {
+      filtered = filtered.filter((inv) => inv.businessId === currentBusinessId);
+    }
+
+    // 2. Search filter
     if (searchQuery) {
       filtered = filtered.filter(
         (inv) =>
@@ -97,13 +109,13 @@ export default function RetailInvoicesPage() {
       );
     }
 
-    // Status filter
+    // 3. Status filter
     if (statusFilter !== "all") {
       filtered = filtered.filter((inv) => inv.status === statusFilter);
     }
 
     setFilteredInvoices(filtered);
-  }, [searchQuery, statusFilter, invoices]);
+  }, [searchQuery, statusFilter, invoices, currentBusinessId]);
 
   const getStatusBadge = (status: PaymentStatus) => {
     const variants: Record<PaymentStatus, { variant: any; className: string }> =
@@ -123,7 +135,7 @@ export default function RetailInvoicesPage() {
         Overdue: { variant: "destructive", className: "" },
       };
 
-    const config = variants[status];
+    const config = variants[status] || variants.Unpaid;
     return (
       <Badge variant={config.variant} className={config.className}>
         {status}
@@ -175,11 +187,12 @@ export default function RetailInvoicesPage() {
     });
   };
 
+  // Calculate stats based on FILTERED invoices (so stats reflect the specific business)
   const stats = {
-    total: invoices.length,
-    paid: invoices.filter((i) => i.status === "Paid").length,
-    unpaid: invoices.filter((i) => i.status === "Unpaid").length,
-    totalValue: invoices.reduce((sum, i) => sum + i.totalAmount, 0),
+    total: filteredInvoices.length,
+    paid: filteredInvoices.filter((i) => i.status === "Paid").length,
+    unpaid: filteredInvoices.filter((i) => i.status === "Unpaid").length,
+    totalValue: filteredInvoices.reduce((sum, i) => sum + i.totalAmount, 0),
   };
 
   return (
@@ -291,7 +304,7 @@ export default function RetailInvoicesPage() {
             <div className="text-center py-12">
               <FileText className="h-12 w-12 mx-auto text-gray-300 mb-3" />
               <h3 className="text-lg font-medium text-gray-900 mb-1">
-                No invoices found
+                No invoices found for {businessName}
               </h3>
               <p className="text-gray-500">
                 {searchQuery || statusFilter !== "all"

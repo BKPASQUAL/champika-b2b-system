@@ -45,15 +45,20 @@ export async function GET() {
       subModel: p.sub_model,
       sizeSpec: p.size_spec,
       supplier: p.supplier_name,
-      stock: p.stock_quantity || 0,
-      minStock: p.min_stock_level || 0,
+
+      // --- FIX: Use snake_case to match Frontend expectations ---
+      stock_quantity: p.stock_quantity || 0, // Was 'stock'
+      min_stock_level: p.min_stock_level || 0, // Was 'minStock'
       mrp: p.mrp || 0,
-      sellingPrice: p.selling_price || 0,
-      costPrice: p.cost_price || 0,
+      selling_price: p.selling_price || 0, // Was 'sellingPrice'
+      cost_price: p.cost_price || 0, // Was 'costPrice'
+      unit_of_measure: p.unit_of_measure || "Pcs", // Was 'unitOfMeasure'
+
       images: p.images || [],
-      unitOfMeasure: p.unit_of_measure || "Pcs",
       commissionType: p.commission_type || "percentage",
       commissionValue: p.commission_value || 0,
+
+      // Calculations (These are fine as they use internal 'p' values)
       discountPercent:
         p.mrp > 0 ? ((p.mrp - p.selling_price) / p.mrp) * 100 : 0,
       totalValue: (p.stock_quantity || 0) * (p.selling_price || 0),
@@ -92,7 +97,7 @@ export async function POST(request: NextRequest) {
     if (rules && rules.length > 0) {
       // Priority 1: Check for Specific Category Rule
       const specificRule = rules.find((r) => r.category === val.category);
-      
+
       // Priority 2: Check for "All Categories" Rule
       const generalRule = rules.find((r) => r.category === "ALL");
 

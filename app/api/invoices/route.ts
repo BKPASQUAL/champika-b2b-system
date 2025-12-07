@@ -1,3 +1,5 @@
+// app/api/invoices/route.ts
+
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
@@ -21,6 +23,7 @@ const invoiceItemSchema = z.object({
 const invoiceSchema = z.object({
   customerId: z.string().min(1, "Customer is required"),
   salesRepId: z.string().min(1, "Sales representative is required"),
+  businessId: z.string().optional(),
   invoiceDate: z.string().optional(),
   dueDate: z.string().optional(),
   items: z.array(invoiceItemSchema).min(1, "At least one item is required"),
@@ -39,6 +42,10 @@ const invoiceSchema = z.object({
       "Cancelled",
     ])
     .default("Pending"),
+  // Payment Fields
+  paymentType: z.enum(["Cash", "Credit", "Cheque"]).default("Cash"),
+  paymentStatus: z.enum(["Paid", "Unpaid", "Partial"]).default("Unpaid"),
+  paidAmount: z.number().default(0),
 });
 
 // --- GET: Fetch All Invoices ---
@@ -54,7 +61,8 @@ export async function GET() {
           owner_name
         ),
         orders (
-          status, 
+          status,
+          business_id, 
           profiles!orders_sales_rep_id_fkey (
             full_name
           )
@@ -69,6 +77,7 @@ export async function GET() {
     const invoices = data.map((inv: any) => {
       const repName = inv.orders?.profiles?.full_name || "Unknown";
       const orderStatus = inv.orders?.status || "Pending";
+      const businessId = inv.orders?.business_id;
 
       return {
         id: inv.id,
@@ -84,6 +93,7 @@ export async function GET() {
         orderStatus: orderStatus,
         dueDate: inv.due_date,
         createdAt: inv.created_at,
+        businessId: businessId, // Return business ID for filtering
       };
     });
 
@@ -138,6 +148,7 @@ export async function POST(request: NextRequest) {
         total_amount: val.grandTotal,
         notes: val.notes || null,
         created_by: val.salesRepId,
+        business_id: val.businessId, // Save Business ID
       })
       .select()
       .single();
@@ -165,7 +176,6 @@ export async function POST(request: NextRequest) {
       if (product) {
         if (product.commission_type === "percentage") {
           // (Unit Price * Qty * Rate) / 100
-          // Note: Usually commission is on sold qty, not free qty
           const itemTotal = item.unitPrice * item.quantity;
           commissionEarned =
             (itemTotal * (product.commission_value || 0)) / 100;
@@ -184,7 +194,7 @@ export async function POST(request: NextRequest) {
         free_quantity: item.freeQuantity,
         unit_price: item.unitPrice,
         total_price: item.total,
-        commission_earned: commissionEarned, // Saved per item
+        commission_earned: commissionEarned,
       };
     });
 
@@ -200,7 +210,7 @@ export async function POST(request: NextRequest) {
         rep_id: val.salesRepId,
         order_id: orderData.id,
         total_commission_amount: totalCommissionForOrder,
-        status: "Pending", // Default status
+        status: "Pending",
         payout_date: null,
       });
     }
@@ -213,8 +223,8 @@ export async function POST(request: NextRequest) {
         order_id: orderData.id,
         customer_id: val.customerId,
         total_amount: val.grandTotal,
-        paid_amount: 0,
-        status: "Unpaid",
+        paid_amount: val.paidAmount, // Use actual paid amount
+        status: val.paymentStatus, // Use actual status (Paid/Unpaid)
         due_date: dueDate,
       })
       .select()
@@ -222,7 +232,20 @@ export async function POST(request: NextRequest) {
 
     if (invoiceError) throw invoiceError;
 
-    // 7. Update Customer Balance
+    // 7. Record Payment (If Paid)
+    if (val.paidAmount > 0) {
+      await supabaseAdmin.from("payments").insert({
+        invoice_id: invoiceData.id,
+        customer_id: val.customerId,
+        amount: val.paidAmount,
+        payment_date: invoiceDate,
+        method: val.paymentType,
+        collected_by: val.salesRepId,
+        cheque_status: val.paymentType === "Cheque" ? "Pending" : "Cleared",
+      });
+    }
+
+    // 8. Update Customer Balance (Only add the UNPAID portion)
     const { data: customer } = await supabaseAdmin
       .from("customers")
       .select("outstanding_balance")
@@ -230,16 +253,20 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (customer) {
-      await supabaseAdmin
-        .from("customers")
-        .update({
-          outstanding_balance:
-            (customer.outstanding_balance || 0) + val.grandTotal,
-        })
-        .eq("id", val.customerId);
+      const pendingAmount = val.grandTotal - val.paidAmount;
+
+      if (pendingAmount !== 0) {
+        await supabaseAdmin
+          .from("customers")
+          .update({
+            outstanding_balance:
+              (customer.outstanding_balance || 0) + pendingAmount,
+          })
+          .eq("id", val.customerId);
+      }
     }
 
-    // 8. Deduct Stock (Global & Location Specific)
+    // 9. Deduct Stock (Global & Location Specific)
     const { data: assignments } = await supabaseAdmin
       .from("location_assignments")
       .select("location_id")

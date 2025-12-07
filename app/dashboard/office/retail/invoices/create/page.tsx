@@ -98,11 +98,12 @@ export default function CreateRetailInvoicePage() {
   // Business Context
   const [businessId, setBusinessId] = useState<string | null>(null);
   const [businessName, setBusinessName] = useState<string>("");
+  const [userId, setUserId] = useState<string | null>(null); // NEW: Capture User ID
 
   // Data State
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [allCustomers, setAllCustomers] = useState<Customer[]>([]); // For debugging
+  const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
 
   // Form State
   const [customerId, setCustomerId] = useState<string | null>(null);
@@ -110,8 +111,7 @@ export default function CreateRetailInvoicePage() {
     new Date().toISOString().split("T")[0]
   );
   const [invoiceNumber, setInvoiceNumber] = useState("INV-NEW");
-  const [paymentType, setPaymentType] = useState<string>("Cash"); // Default to Cash
-  // Order status is always "Delivered" for retail invoices
+  const [paymentType, setPaymentType] = useState<string>("Cash");
 
   // Items State
   const [items, setItems] = useState<InvoiceItem[]>([]);
@@ -155,25 +155,21 @@ export default function CreateRetailInvoicePage() {
 
         setBusinessId(user.businessId);
         setBusinessName(user.businessName || "Retail Business");
+        setUserId(user.id); // NEW: Set the current user ID
 
         // Fetch ALL Customers first
         const customersRes = await fetch("/api/customers");
         const customersData = await customersRes.json();
 
-        setAllCustomers(customersData); // Store all for debugging
+        setAllCustomers(customersData);
 
         // Filter customers by business_id
         const retailCustomers = customersData.filter((c: any) => {
-          // Check if customer is assigned to this business
           return (
             c.business_id === user.businessId ||
             c.businessId === user.businessId
           );
         });
-
-        console.log("Total customers:", customersData.length);
-        console.log("Retail business ID:", user.businessId);
-        console.log("Filtered retail customers:", retailCustomers.length);
 
         if (retailCustomers.length === 0) {
           toast.info(
@@ -202,9 +198,9 @@ export default function CreateRetailInvoicePage() {
             id: p.id,
             sku: p.sku,
             name: p.name,
-            selling_price: p.selling_price,
-            mrp: p.mrp,
-            stock_quantity: p.stock_quantity,
+            selling_price: p.selling_price || 0,
+            mrp: p.mrp || 0,
+            stock_quantity: p.stock_quantity || 0,
             unit_of_measure: p.unit_of_measure || "unit",
           }))
         );
@@ -299,8 +295,8 @@ export default function CreateRetailInvoicePage() {
       toast.error("Please select a customer.");
       return;
     }
-    if (!businessId) {
-      toast.error("Business context not found.");
+    if (!businessId || !userId) {
+      toast.error("Session invalid. Please refresh.");
       return;
     }
     if (items.length === 0) {
@@ -312,8 +308,10 @@ export default function CreateRetailInvoicePage() {
 
     const invoiceData = {
       customerId,
-      salesRepId: businessId, // Using business ID instead of rep ID
-      businessId: businessId, // Explicitly pass business ID
+      // FIX: Use the actual User ID for salesRepId (to satisfy FK constraint)
+      salesRepId: userId,
+      // FIX: Pass businessId separately to be saved in the new column
+      businessId: businessId,
       items,
       invoiceNumber,
       invoiceDate,
@@ -321,10 +319,10 @@ export default function CreateRetailInvoicePage() {
       extraDiscountPercent: extraDiscount,
       extraDiscountAmount: extraDiscountAmount,
       grandTotal: grandTotal,
-      orderStatus: "Delivered", // Always Delivered for retail
-      paymentType: paymentType, // Cash or Credit
-      paymentStatus: paymentType === "Cash" ? "Paid" : "Unpaid", // Auto-set based on payment type
-      paidAmount: paymentType === "Cash" ? grandTotal : 0, // Full if cash, 0 if credit
+      orderStatus: "Delivered",
+      paymentType: paymentType,
+      paymentStatus: paymentType === "Cash" ? "Paid" : "Unpaid",
+      paidAmount: paymentType === "Cash" ? grandTotal : 0,
     };
 
     try {
@@ -382,6 +380,7 @@ export default function CreateRetailInvoicePage() {
     );
   }
 
+  // ... (Rest of the JSX remains exactly the same as previous corrected version)
   return (
     <div className="space-y-4 mx-auto">
       <div className="flex items-center gap-4">
@@ -547,19 +546,6 @@ export default function CreateRetailInvoicePage() {
                   </p>
                 </div>
               </div>
-
-              {/* Business Info Display */}
-              {/* <div className="rounded-lg bg-green-50 border border-green-200 p-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-green-800">
-                    <span className="font-semibold">Business:</span>{" "}
-                    {businessName}
-                  </p>
-                  <p className="text-xs text-green-700 bg-green-100 px-2 py-1 rounded">
-                    ✓ Delivered
-                  </p>
-                </div>
-              </div> */}
             </CardContent>
           </Card>
 
