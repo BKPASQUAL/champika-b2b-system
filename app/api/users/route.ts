@@ -3,11 +3,15 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { createUserSchema } from "@/lib/validations/user";
 import { ZodError } from "zod";
 
-// GET: Fetch all users with Business info
-export async function GET() {
+// GET: Fetch users (optionally filtered by role) with Business info
+export async function GET(request: NextRequest) {
   try {
-    // Select profiles AND join with businesses table to get the name
-    const { data: profiles, error } = await supabaseAdmin
+    // 1. Extract 'role' from query params (e.g., /api/users?role=rep)
+    const { searchParams } = new URL(request.url);
+    const role = searchParams.get("role");
+
+    // 2. Build the base query
+    let query = supabaseAdmin
       .from("profiles")
       .select(
         `
@@ -19,8 +23,16 @@ export async function GET() {
       )
       .order("created_at", { ascending: false });
 
+    // 3. Apply role filter if provided
+    if (role) {
+      query = query.eq("role", role);
+    }
+
+    const { data: profiles, error } = await query;
+
     if (error) throw error;
 
+    // 4. Map to response format
     const users = profiles.map((profile: any) => ({
       id: profile.id,
       fullName: profile.full_name,
@@ -29,8 +41,8 @@ export async function GET() {
       role: profile.role,
       status: profile.is_active ? "Active" : "Inactive",
       lastActive: profile.updated_at,
-      businessId: profile.business_id, // Map ID
-      businessName: profile.businesses?.name, // Map Name from join
+      businessId: profile.business_id,
+      businessName: profile.businesses?.name,
     }));
 
     return NextResponse.json(users);

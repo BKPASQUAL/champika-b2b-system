@@ -1,11 +1,16 @@
-// app/dashboard/admin/orders/page.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download, FileSpreadsheet, FileText, Plus } from "lucide-react";
+import {
+  Download,
+  FileSpreadsheet,
+  FileText,
+  Plus,
+  Loader2,
+} from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,86 +23,71 @@ import { OrderStats } from "./_components/OrderStats";
 import { OrderFilters } from "./_components/OrderFilters";
 import { OrderTable } from "./_components/OrderTable";
 
-// Mock Data
-const mockOrders: Order[] = [
-  {
-    id: "1",
-    orderId: "ORD-2025-001",
-    customerName: "Saman Kumara",
-    shopName: "Saman Electronics",
-    date: "2025-02-20",
-    totalAmount: 15400,
-    itemCount: 12,
-    status: "Pending",
-    paymentStatus: "Unpaid",
-    salesRep: "Ajith Bandara",
-  },
-  {
-    id: "2",
-    orderId: "ORD-2025-002",
-    customerName: "Nimal Perera",
-    shopName: "City Hardware",
-    date: "2025-02-19",
-    totalAmount: 85000,
-    itemCount: 45,
-    status: "Processing",
-    paymentStatus: "Unpaid",
-    salesRep: "Chathura Perera",
-  },
-  {
-    id: "3",
-    orderId: "ORD-2025-003",
-    customerName: "Kamal Silva",
-    shopName: "Lanka Traders",
-    date: "2025-02-19",
-    totalAmount: 24500,
-    itemCount: 8,
-    status: "Checking",
-    paymentStatus: "Unpaid",
-    salesRep: "Dilshan Silva",
-  },
-  {
-    id: "4",
-    orderId: "ORD-2025-004",
-    customerName: "Sunil Das",
-    shopName: "Ruhuna Motors",
-    date: "2025-02-18",
-    totalAmount: 120000,
-    itemCount: 60,
-    status: "Loading",
-    paymentStatus: "Partial",
-    salesRep: "Ajith Bandara",
-  },
-  {
-    id: "5",
-    orderId: "ORD-2025-005",
-    customerName: "Mahesh",
-    shopName: "Global Paints",
-    date: "2025-02-18",
-    totalAmount: 45000,
-    itemCount: 22,
-    status: "Delivered",
-    paymentStatus: "Paid",
-    salesRep: "Chathura Perera",
-  },
-];
-
 export default function OrdersPage() {
   const router = useRouter();
-  const [orders, setOrders] = useState<Order[]>(mockOrders);
 
-  // Filters
+  // State for data
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [reps, setReps] = useState<string[]>([]); // State for reps
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Filters State
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [repFilter, setRepFilter] = useState("all");
 
-  // Sort & Page
+  // Sort & Pagination State
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Logic
+  // 1. Fetch Orders
+  const fetchOrders = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await fetch("/api/orders");
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch orders");
+      }
+
+      const data = await response.json();
+      setOrders(data);
+    } catch (err: any) {
+      console.error("Error loading orders:", err);
+      setError("Failed to load orders. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 2. Fetch Reps
+  const fetchReps = async () => {
+    try {
+      const response = await fetch("/api/users?role=rep");
+
+      if (response.ok) {
+        const users = await response.json();
+        // Extract full names from the user objects
+        const repNames = users.map((u: any) => u.fullName); // Use .fullName, not .full_name          .filter((name: any) => typeof name === "string");
+
+        setReps(repNames);
+      }
+    } catch (err) {
+      console.error("Failed to fetch reps:", err);
+    }
+  };
+
+  // Initial load
+  useEffect(() => {
+    fetchOrders();
+    fetchReps();
+  }, []);
+
+  // Filter Logic
   const filteredOrders = orders.filter((order) => {
     const matchesSearch =
       order.orderId.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -111,6 +101,7 @@ export default function OrdersPage() {
     return matchesSearch && matchesStatus && matchesRep;
   });
 
+  // Sorting Logic
   const sortedOrders = [...filteredOrders].sort((a, b) => {
     let aVal: any = a[sortField];
     let bVal: any = b[sortField];
@@ -131,6 +122,7 @@ export default function OrdersPage() {
     return 0;
   });
 
+  // Pagination Logic
   const totalPages = Math.ceil(sortedOrders.length / itemsPerPage);
   const paginatedOrders = sortedOrders.slice(
     (currentPage - 1) * itemsPerPage,
@@ -146,13 +138,44 @@ export default function OrdersPage() {
     }
   };
 
-  const handleUpdateStatus = (order: Order, newStatus: OrderStatus) => {
-    // Simulate API call
-    const updated = orders.map((o) =>
+  const handleUpdateStatus = async (order: Order, newStatus: OrderStatus) => {
+    const previousOrders = [...orders];
+    const updatedOrders = orders.map((o) =>
       o.id === order.id ? { ...o, status: newStatus } : o
     );
-    setOrders(updated);
+    setOrders(updatedOrders);
+
+    try {
+      const response = await fetch(`/api/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      if (!response.ok) throw new Error("Failed");
+    } catch (error) {
+      console.error("Update failed:", error);
+      setOrders(previousOrders);
+      alert("Failed to update order status.");
+    }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex h-[50vh] w-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex h-[50vh] w-full flex-col items-center justify-center gap-4">
+        <p className="text-red-500">{error}</p>
+        <Button onClick={fetchOrders}>Retry</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -187,12 +210,11 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      {/* Order Workflow Stats */}
       <OrderStats orders={orders} />
 
-      {/* Filters & Table */}
       <Card>
         <CardHeader>
+          {/* Passed reps prop here */}
           <OrderFilters
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
@@ -200,6 +222,7 @@ export default function OrdersPage() {
             setStatusFilter={setStatusFilter}
             repFilter={repFilter}
             setRepFilter={setRepFilter}
+            reps={reps}
           />
         </CardHeader>
         <CardContent>
@@ -211,7 +234,9 @@ export default function OrdersPage() {
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={setCurrentPage}
-            onView={(order) => console.log("View order", order.id)}
+            onView={(order) =>
+              router.push(`/dashboard/admin/orders/${order.id}`)
+            }
             onUpdateStatus={handleUpdateStatus}
           />
         </CardContent>

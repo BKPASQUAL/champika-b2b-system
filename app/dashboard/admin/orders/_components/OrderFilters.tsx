@@ -1,4 +1,3 @@
-// app/dashboard/admin/orders/_components/OrderFilters.tsx
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -16,6 +15,7 @@ interface OrderFiltersProps {
   setStatusFilter: (val: string) => void;
   repFilter: string;
   setRepFilter: (val: string) => void;
+  reps: string[]; // ADDED: Array of rep names
 }
 
 export function OrderFilters({
@@ -25,6 +25,7 @@ export function OrderFilters({
   setStatusFilter,
   repFilter,
   setRepFilter,
+  reps, // Destructure the new prop
 }: OrderFiltersProps) {
   return (
     <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -48,7 +49,9 @@ export function OrderFilters({
             <SelectItem value="Processing">Processing</SelectItem>
             <SelectItem value="Checking">Checking</SelectItem>
             <SelectItem value="Loading">Loading</SelectItem>
+            <SelectItem value="In Transit">In Transit</SelectItem>
             <SelectItem value="Delivered">Delivered</SelectItem>
+            <SelectItem value="Completed">Completed</SelectItem>
             <SelectItem value="Cancelled">Cancelled</SelectItem>
           </SelectContent>
         </Select>
@@ -59,9 +62,12 @@ export function OrderFilters({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Reps</SelectItem>
-            <SelectItem value="Ajith Bandara">Ajith Bandara</SelectItem>
-            <SelectItem value="Chathura Perera">Chathura Perera</SelectItem>
-            <SelectItem value="Dilshan Silva">Dilshan Silva</SelectItem>
+            {/* Map through the dynamic reps list */}
+            {reps.map((rep) => (
+              <SelectItem key={rep} value={rep}>
+                {rep}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>

@@ -1,4 +1,3 @@
-// app/dashboard/admin/orders/_components/OrderStats.tsx
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   ShoppingCart,
@@ -6,6 +5,7 @@ import {
   Loader2,
   ClipboardCheck,
   Truck,
+  MapPin, // Icon for In Transit
 } from "lucide-react";
 import { Order } from "../types";
 
@@ -15,15 +15,20 @@ interface OrderStatsProps {
 
 export function OrderStats({ orders }: OrderStatsProps) {
   const totalOrders = orders.length;
+
+  // Count orders by status
   const pendingCount = orders.filter((o) => o.status === "Pending").length;
   const processingCount = orders.filter(
     (o) => o.status === "Processing"
   ).length;
   const checkingCount = orders.filter((o) => o.status === "Checking").length;
   const loadingCount = orders.filter((o) => o.status === "Loading").length;
+  const inTransitCount = orders.filter((o) => o.status === "In Transit").length;
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
+      {/* Changed grid-cols-5 to grid-cols-6 to fit the new card */}
+
       {/* Total Orders */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -91,6 +96,20 @@ export function OrderStats({ orders }: OrderStatsProps) {
             {loadingCount}
           </div>
           <p className="text-xs text-muted-foreground mt-1">Ready to ship</p>
+        </CardContent>
+      </Card>
+
+      {/* 5. In Transit (NEW CARD) */}
+      <Card className="border-l-4 border-l-orange-500">
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardTitle className="text-sm font-medium">5. In Transit</CardTitle>
+          <MapPin className="w-4 h-4 text-orange-600" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold text-orange-600">
+            {inTransitCount}
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">On the way</p>
         </CardContent>
       </Card>
     </div>
