@@ -36,7 +36,8 @@ export function ExpenseTable({
         <TableHeader>
           <TableRow>
             <TableHead>Date</TableHead>
-            <TableHead>Business</TableHead> {/* ✅ NEW COLUMN */}
+            {/* Comments removed from here to prevent hydration error */}
+            <TableHead>Business</TableHead>
             <TableHead>Category</TableHead>
             <TableHead>Description</TableHead>
             <TableHead>Delivery / Load</TableHead>
@@ -59,7 +60,7 @@ export function ExpenseTable({
           ) : (
             expenses.map((expense) => (
               <TableRow key={expense.id}>
-                {/* Date */}
+                {/* Comments removed from direct TableRow children */}
                 <TableCell className="font-medium text-muted-foreground">
                   <div className="flex items-center gap-2">
                     <Calendar className="w-3 h-3" />
@@ -67,7 +68,6 @@ export function ExpenseTable({
                   </div>
                 </TableCell>
 
-                {/* ✅ Business Column */}
                 <TableCell>
                   {expense.businessName && expense.businessName !== "Global" ? (
                     <div className="flex items-center gap-1.5 text-blue-700 bg-blue-50 px-2 py-1 rounded-md w-fit text-xs font-medium border border-blue-100">
@@ -82,7 +82,6 @@ export function ExpenseTable({
                   )}
                 </TableCell>
 
-                {/* Category */}
                 <TableCell>
                   <Badge
                     variant="outline"
@@ -92,7 +91,6 @@ export function ExpenseTable({
                   </Badge>
                 </TableCell>
 
-                {/* Description */}
                 <TableCell
                   className="max-w-[200px] truncate"
                   title={expense.description}
@@ -102,7 +100,6 @@ export function ExpenseTable({
                   )}
                 </TableCell>
 
-                {/* Delivery / Load */}
                 <TableCell>
                   {expense.loadRef ? (
                     <Badge variant="secondary" className="font-mono text-xs">
@@ -114,12 +111,10 @@ export function ExpenseTable({
                   )}
                 </TableCell>
 
-                {/* Reference */}
                 <TableCell className="text-muted-foreground text-sm">
                   {expense.referenceNo || "-"}
                 </TableCell>
 
-                {/* Payment */}
                 <TableCell>
                   <div className="flex items-center gap-1 text-sm">
                     <CreditCard className="w-3 h-3 text-muted-foreground" />
@@ -127,12 +122,10 @@ export function ExpenseTable({
                   </div>
                 </TableCell>
 
-                {/* Amount */}
                 <TableCell className="text-right font-bold text-red-600">
                   - LKR {expense.amount.toLocaleString()}
                 </TableCell>
 
-                {/* Actions */}
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2">
                     <Button
