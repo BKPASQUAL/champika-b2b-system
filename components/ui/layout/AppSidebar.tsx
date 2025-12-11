@@ -5,23 +5,36 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { LogOut, Package, Store } from "lucide-react";
+import { LogOut, Package, Store, Globe } from "lucide-react";
 import { roleNavItems, UserRole } from "@/app/config/nav-config";
 import { retailOfficeNavItems } from "@/app/config/retail-nav-config";
+import { orangeOfficeNavItems } from "@/app/config/orange-nav-config";
 import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 
 interface AppSidebarProps {
   role: UserRole;
   isRetail?: boolean; // Flag to show retail navigation
+  isOrange?: boolean; // Flag to show orange agency navigation
 }
 
-export function AppSidebar({ role, isRetail = false }: AppSidebarProps) {
+export function AppSidebar({
+  role,
+  isRetail = false,
+  isOrange = false,
+}: AppSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
 
   // Determine which navigation to show
-  const navSections = isRetail ? retailOfficeNavItems : roleNavItems[role];
+  let navSections;
+  if (isOrange) {
+    navSections = orangeOfficeNavItems;
+  } else if (isRetail) {
+    navSections = retailOfficeNavItems;
+  } else {
+    navSections = roleNavItems[role];
+  }
 
   // --- STATE FOR USER INFO ---
   const [user, setUser] = useState({
@@ -70,7 +83,14 @@ export function AppSidebar({ role, isRetail = false }: AppSidebarProps) {
     <div className="hidden lg:flex w-64 border-r bg-card h-screen sticky top-0 flex-col shadow-sm z-40">
       {/* Logo Header */}
       <div className="h-16 flex items-center border-b px-6 shrink-0">
-        {isRetail ? (
+        {isOrange ? (
+          <>
+            <Globe className="h-6 w-6 text-orange-600 shrink-0" />
+            <span className="ml-2 text-lg font-semibold truncate">
+              Orange Agency
+            </span>
+          </>
+        ) : isRetail ? (
           <>
             <Store className="h-6 w-6 text-green-600 shrink-0" />
             <span className="ml-2 text-lg font-semibold truncate">
@@ -91,7 +111,11 @@ export function AppSidebar({ role, isRetail = false }: AppSidebarProps) {
       {user.businessName && (
         <div className="px-4 py-3 border-b bg-muted/30">
           <Badge variant="secondary" className="w-full justify-center">
-            <Store className="h-3 w-3 mr-1" />
+            {isOrange ? (
+              <Globe className="h-3 w-3 mr-1" />
+            ) : (
+              <Store className="h-3 w-3 mr-1" />
+            )}
             {user.businessName}
           </Badge>
         </div>

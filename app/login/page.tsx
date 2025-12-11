@@ -53,6 +53,8 @@ export default function LoginPage() {
             .join("")
             .substring(0, 2)
             .toUpperCase(),
+          // 👇 CRITICAL: Save the token so we can use it in API calls
+          accessToken: data.session.access_token,
         };
 
         localStorage.setItem("currentUser", JSON.stringify(userContext));
@@ -64,14 +66,21 @@ export default function LoginPage() {
 
       // Redirect based on Role and Business
       if (data.role === "office" && data.business) {
-        // Check if it's retail business
-        const isRetail =
-          data.business.name.toLowerCase().includes("retail") ||
-          data.business.name.toLowerCase().includes("champika hardware");
+        const businessName = data.business.name.toLowerCase();
 
-        if (isRetail) {
+        // 1. Check for Orange Agency
+        if (businessName.includes("orange agency")) {
+          router.push("/dashboard/office/orange");
+        }
+        // 2. Check for Retail Business
+        else if (
+          businessName.includes("retail") ||
+          businessName.includes("champika hardware")
+        ) {
           router.push("/dashboard/office/retail");
-        } else {
+        }
+        // 3. Default Office Dashboard
+        else {
           router.push("/dashboard/office");
         }
       } else {
