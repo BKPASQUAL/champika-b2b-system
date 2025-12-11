@@ -528,9 +528,9 @@ export default function CreateRetailInvoicePage() {
           <Card>
             <CardHeader>
               <CardTitle>Invoice Details</CardTitle>
-              <CardDescription>
+              {/* <CardDescription>
                 Customer and billing information
-              </CardDescription>
+              </CardDescription> */}
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -622,9 +622,9 @@ export default function CreateRetailInvoicePage() {
                       </Command>
                     </PopoverContent>
                   </Popover>
-                  <p className="text-xs text-muted-foreground">
+                  {/* <p className="text-xs text-muted-foreground">
                     Showing {customers.length} retail customers only
-                  </p>
+                  </p> */}
                 </div>
 
                 {/* Invoice Date */}
@@ -667,11 +667,11 @@ export default function CreateRetailInvoicePage() {
                       </SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground">
+                  {/* <p className="text-xs text-muted-foreground">
                     {paymentType === "Cash"
                       ? "✓ Invoice will be marked as Paid"
                       : "⏳ Customer can pay later"}
-                  </p>
+                  </p> */}
                 </div>
               </div>
             </CardContent>
@@ -681,9 +681,9 @@ export default function CreateRetailInvoicePage() {
           <Card>
             <CardHeader>
               <CardTitle>Add Products</CardTitle>
-              <CardDescription>
+              {/* <CardDescription>
                 Search and add products to the invoice
-              </CardDescription>
+              </CardDescription> */}
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Product Selection */}
@@ -760,9 +760,9 @@ export default function CreateRetailInvoicePage() {
                       </Command>
                     </PopoverContent>
                   </Popover>
-                  <p className="text-xs text-muted-foreground mt-1">
+                  {/* <p className="text-xs text-muted-foreground mt-1">
                     Showing products from your assigned warehouse locations.
-                  </p>
+                  </p> */}
                 </div>
               </div>
 
@@ -1040,6 +1040,7 @@ export default function CreateRetailInvoicePage() {
                 <div className="space-y-2">
                   <Label className="text-xs">Extra Discount %</Label>
                   <Input
+                    className=""
                     type="number"
                     min="0"
                     max="100"
