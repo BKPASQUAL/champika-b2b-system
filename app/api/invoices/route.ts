@@ -38,20 +38,29 @@ const invoiceSchema = z.object({
       "Processing",
       "Checking",
       "Loading",
+      "In Transit",
       "Delivered",
+      "Completed",
       "Cancelled",
     ])
     .default("Pending"),
   // Payment Fields
   paymentType: z.enum(["Cash", "Credit", "Cheque"]).default("Cash"),
-  paymentStatus: z.enum(["Paid", "Unpaid", "Partial"]).default("Unpaid"),
+  paymentStatus: z
+    .enum(["Paid", "Unpaid", "Partial", "Overdue"])
+    .default("Unpaid"),
   paidAmount: z.number().default(0),
 });
 
 // --- GET: Fetch All Invoices ---
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const { data, error } = await supabaseAdmin
+    const { searchParams } = new URL(request.url);
+    const businessId = searchParams.get("businessId");
+
+    // Start building the query
+    // We use !inner on orders to allow filtering the parent (invoices) by the child's (orders) property
+    let query = supabaseAdmin
       .from("invoices")
       .select(
         `
@@ -60,7 +69,7 @@ export async function GET() {
           shop_name,
           owner_name
         ),
-        orders (
+        orders!inner (
           status,
           business_id, 
           profiles!orders_sales_rep_id_fkey (
@@ -71,13 +80,20 @@ export async function GET() {
       )
       .order("created_at", { ascending: false });
 
+    // Apply Business Filter if provided
+    if (businessId) {
+      query = query.eq("orders.business_id", businessId);
+    }
+
+    const { data, error } = await query;
+
     if (error) throw error;
 
     // Map to frontend format
     const invoices = data.map((inv: any) => {
       const repName = inv.orders?.profiles?.full_name || "Unknown";
       const orderStatus = inv.orders?.status || "Pending";
-      const businessId = inv.orders?.business_id;
+      const bId = inv.orders?.business_id;
 
       return {
         id: inv.id,
@@ -93,7 +109,7 @@ export async function GET() {
         orderStatus: orderStatus,
         dueDate: inv.due_date,
         createdAt: inv.created_at,
-        businessId: businessId, // Return business ID for filtering
+        businessId: bId, // Return business ID for frontend use
       };
     });
 

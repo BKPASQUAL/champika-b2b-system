@@ -46,26 +46,28 @@ export async function GET() {
       sizeSpec: p.size_spec,
       supplier: p.supplier_name,
 
-      // --- FIX: Use snake_case to match Frontend expectations ---
-      stock_quantity: p.stock_quantity || 0, // Was 'stock'
-      min_stock_level: p.min_stock_level || 0, // Was 'minStock'
+      // --- FIX: Mapped correctly to camelCase to match Frontend 'Product' type ---
+      stock: p.stock_quantity || 0,
+      minStock: p.min_stock_level || 0,
       mrp: p.mrp || 0,
-      selling_price: p.selling_price || 0, // Was 'sellingPrice'
-      cost_price: p.cost_price || 0, // Was 'costPrice'
-      unit_of_measure: p.unit_of_measure || "Pcs", // Was 'unitOfMeasure'
+      sellingPrice: p.selling_price || 0,
+      costPrice: p.cost_price || 0,
+      unitOfMeasure: p.unit_of_measure || "Pcs",
 
       images: p.images || [],
       commissionType: p.commission_type || "percentage",
       commissionValue: p.commission_value || 0,
 
-      // Calculations (These are fine as they use internal 'p' values)
+      // Calculations
       discountPercent:
-        p.mrp > 0 ? ((p.mrp - p.selling_price) / p.mrp) * 100 : 0,
+        p.mrp > 0 ? ((p.mrp - (p.selling_price || 0)) / p.mrp) * 100 : 0,
       totalValue: (p.stock_quantity || 0) * (p.selling_price || 0),
       totalCost: (p.stock_quantity || 0) * (p.cost_price || 0),
       profitMargin:
-        p.selling_price > 0
-          ? ((p.selling_price - p.cost_price) / p.selling_price) * 100
+        (p.selling_price || 0) > 0
+          ? (((p.selling_price || 0) - (p.cost_price || 0)) /
+              (p.selling_price || 0)) *
+            100
           : 0,
     }));
 
