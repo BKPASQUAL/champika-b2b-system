@@ -1,198 +1,203 @@
-// app/dashboard/office/orange/customers/page.tsx
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import {
   Download,
   Plus,
+  FileSpreadsheet,
   Search,
-  MapPin,
-  Phone,
-  MoreVertical,
-  Edit,
-  Trash2,
+  RefreshCw,
 } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 
-// --- Types ---
-interface AgencyCustomer {
-  id: string;
-  shopName: string;
-  ownerName: string;
-  phone: string;
-  address: string;
-  route: string;
-  status: "Active" | "Inactive";
-  businessId: string;
-}
+// Import local components and types
+import { Customer, SortField, SortOrder, CustomerFormData } from "./types";
+import { CustomerTable } from "./_components/CustomerTable";
+import { CustomerDialogs } from "./_components/CustomerDialogs";
 
 export default function AgencyCustomersPage() {
-  const router = useRouter();
-  const [customers, setCustomers] = useState<AgencyCustomer[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // State for business context
   const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(
     null
   );
 
-  // Filters
+  // Filters & State
   const [searchQuery, setSearchQuery] = useState("");
+  const [routeFilter, setRouteFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sortField, setSortField] = useState<SortField>("shopName");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
-  // Dialog State
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [editingCustomer, setEditingCustomer] = useState<AgencyCustomer | null>(
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
     null
   );
 
-  // Form Data
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<CustomerFormData>({
     shopName: "",
     ownerName: "",
     phone: "",
+    email: "",
     address: "",
-    route: "Main Route",
+    route: "",
+    status: "Active",
+    creditLimit: 0,
+    businessId: "",
   });
 
-  // --- Helper: Get Auth Token ---
-  const getAuthToken = () => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("currentUser");
-      if (stored) {
-        try {
-          const data = JSON.parse(stored);
-          return data.accessToken;
-        } catch (e) {
-          return null;
-        }
-      }
-    }
-    return null;
-  };
-
-  // --- Fetch Data ---
-  const fetchCustomers = useCallback(async () => {
+  // 1. Initialize User Context Safely (Prevents Loop)
+  useEffect(() => {
     const user = getUserBusinessContext();
-    if (!user || !user.businessId) return;
-    setCurrentBusinessId(user.businessId);
-
-    try {
-      setLoading(true);
-      const res = await fetch(`/api/customers?businessId=${user.businessId}`);
-
-      if (!res.ok) throw new Error("Failed to fetch customers");
-      const data = await res.json();
-
-      setCustomers(data);
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to load customer list");
-    } finally {
-      setLoading(false);
+    if (user && user.businessId) {
+      setCurrentBusinessId(user.businessId);
+      setFormData((prev) => ({ ...prev, businessId: user.businessId! }));
     }
   }, []);
 
+  // 2. Fetch Customers (Depends only on currentBusinessId)
+  const fetchCustomers = useCallback(async () => {
+    if (!currentBusinessId) return;
+
+    try {
+      setLoading(true);
+      const res = await fetch(`/api/customers?businessId=${currentBusinessId}`);
+      if (!res.ok) throw new Error("Failed to fetch customers");
+      const data = await res.json();
+      setCustomers(data);
+    } catch (error) {
+      console.error(error);
+      toast.error("Error loading customer data");
+    } finally {
+      setLoading(false);
+    }
+  }, [currentBusinessId]);
+
+  // 3. Trigger Fetch when Business ID is set
   useEffect(() => {
     fetchCustomers();
   }, [fetchCustomers]);
 
-  // --- Handlers ---
-  const handleSave = async () => {
-    if (!formData.shopName || !formData.phone) {
-      toast.error("Shop Name and Phone are required");
+  // Derived Data
+  const routes = ["all", ...Array.from(new Set(customers.map((c) => c.route)))];
+
+  // Filter & Sort
+  const filteredCustomers = customers.filter((customer) => {
+    const matchesSearch =
+      customer.shopName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      customer.ownerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      customer.phone.includes(searchQuery);
+    const matchesRoute =
+      routeFilter === "all" || customer.route === routeFilter;
+    const matchesStatus =
+      statusFilter === "all" || customer.status === statusFilter;
+    return matchesSearch && matchesRoute && matchesStatus;
+  });
+
+  const sortedCustomers = [...filteredCustomers].sort((a, b) => {
+    let aValue: any = a[sortField];
+    let bValue: any = b[sortField];
+    if (typeof aValue === "string") {
+      aValue = aValue.toLowerCase();
+      bValue = bValue.toLowerCase();
+    }
+    if (aValue < bValue) return sortOrder === "asc" ? -1 : 1;
+    if (aValue > bValue) return sortOrder === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  const totalPages = Math.ceil(sortedCustomers.length / itemsPerPage);
+  const paginatedCustomers = sortedCustomers.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  // Handlers
+  const handleSort = (field: SortField) => {
+    if (sortField === field) setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    else {
+      setSortField(field);
+      setSortOrder("asc");
+    }
+  };
+
+  const handleSaveCustomer = async () => {
+    if (!formData.shopName || !formData.phone || !formData.route) {
+      toast.error("Please fill required fields (Shop, Phone, Route)");
       return;
     }
 
-    const token = getAuthToken();
-    if (!token) {
-      toast.error("Session expired. Please log in again.");
-      router.push("/login");
-      return;
+    // Ensure businessId is present
+    if (!formData.businessId && currentBusinessId) {
+      formData.businessId = currentBusinessId;
     }
 
-    setIsSubmitting(true);
     try {
-      const payload = {
-        ...formData,
-        status: "Active",
-      };
-
-      const headers = {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      };
-
-      let res;
-      if (editingCustomer) {
-        // Update
-        res = await fetch(`/api/customers/${editingCustomer.id}`, {
+      if (selectedCustomer) {
+        // UPDATE
+        const res = await fetch(`/api/customers/${selectedCustomer.id}`, {
           method: "PATCH",
-          headers,
-          body: JSON.stringify(payload),
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
         });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to update");
+        toast.success("Customer updated successfully");
       } else {
-        // Create
-        res = await fetch("/api/customers", {
+        // CREATE
+        const res = await fetch("/api/customers", {
           method: "POST",
-          headers,
-          body: JSON.stringify(payload),
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
         });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to create");
+        toast.success("Customer created successfully");
       }
-
-      const responseData = await res.json();
-
-      if (!res.ok) {
-        throw new Error(responseData.error || "Operation failed");
-      }
-
-      toast.success(editingCustomer ? "Customer updated" : "Customer created");
-      setIsDialogOpen(false);
+      setIsAddDialogOpen(false);
       resetForm();
       fetchCustomers();
     } catch (error: any) {
       toast.error(error.message);
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this customer?")) return;
+  const handleDeleteConfirm = async () => {
+    if (!selectedCustomer) return;
     try {
-      const res = await fetch(`/api/customers/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/customers/${selectedCustomer.id}`, {
+        method: "DELETE",
+      });
       if (!res.ok) throw new Error("Failed to delete");
       toast.success("Customer deleted");
+      setIsDeleteDialogOpen(false);
+      setSelectedCustomer(null);
       fetchCustomers();
-    } catch (error) {
-      toast.error("Could not delete customer");
+    } catch (error: any) {
+      toast.error(error.message);
     }
   };
 
@@ -201,248 +206,150 @@ export default function AgencyCustomersPage() {
       shopName: "",
       ownerName: "",
       phone: "",
+      email: "",
       address: "",
-      route: "Main Route",
+      route: "",
+      status: "Active",
+      creditLimit: 0,
+      businessId: currentBusinessId || "",
     });
-    setEditingCustomer(null);
+    setSelectedCustomer(null);
   };
 
-  const handleExport = () => {
-    const data = customers.map((c) => ({
-      "Shop Name": c.shopName,
+  const generateExcel = () => {
+    if (sortedCustomers.length === 0) return;
+    const data = sortedCustomers.map((c) => ({
+      Shop: c.shopName,
       Owner: c.ownerName,
       Phone: c.phone,
-      Address: c.address,
       Route: c.route,
+      Address: c.address,
+      Status: c.status,
+      "Outstanding (LKR)": c.outstandingBalance,
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Customers");
-    XLSX.writeFile(wb, "Distribution_Customers.xlsx");
+    XLSX.writeFile(wb, "orange_customers.xlsx");
   };
-
-  // --- Rendering ---
-  const filteredCustomers = customers.filter(
-    (c) =>
-      c.shopName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.phone.includes(searchQuery)
-  );
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">
+          <h1 className="text-3xl font-bold tracking-tight text-orange-900">
             Distributors & Shops
           </h1>
-          <p className="text-gray-500">
-            Manage your distribution customer base
+          <p className="text-muted-foreground mt-1">
+            Manage distribution customer database
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={handleExport}>
-            <Download className="mr-2 h-4 w-4" /> Export
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={fetchCustomers}
+            disabled={loading}
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <Download className="w-4 h-4 mr-2" /> Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={generateExcel}>
+                <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" />{" "}
+                Export Excel
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button
             onClick={() => {
               resetForm();
-              setIsDialogOpen(true);
+              setIsAddDialogOpen(true);
             }}
             className="bg-orange-600 hover:bg-orange-700"
           >
-            <Plus className="mr-2 h-4 w-4" /> Add Customer
+            <Plus className="w-4 h-4 mr-2" /> Add Customer
           </Button>
         </div>
       </div>
 
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-4">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex-1 max-w-sm relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search shops or phone numbers..."
-                className="pl-9"
+                placeholder="Search..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
               />
+            </div>
+            <div className="flex items-center gap-2">
+              <Select value={routeFilter} onValueChange={setRouteFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Route" />
+                </SelectTrigger>
+                <SelectContent>
+                  {routes.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {r === "all" ? "All Routes" : r}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Shop Details</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead>Location / Route</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center">
-                      Loading...
-                    </TableCell>
-                  </TableRow>
-                ) : filteredCustomers.length === 0 ? (
-                  <TableRow>
-                    <TableCell
-                      colSpan={5}
-                      className="h-24 text-center text-gray-500"
-                    >
-                      No customers found. Add your first shop.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredCustomers.map((customer) => (
-                    <TableRow key={customer.id}>
-                      <TableCell>
-                        <div className="font-medium">{customer.shopName}</div>
-                        <div className="text-xs text-gray-500">
-                          {customer.ownerName}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Phone className="h-3 w-3" /> {customer.phone}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2 text-sm">
-                          <MapPin className="h-3 w-3 text-gray-400" />
-                          {customer.address || "No address"}
-                        </div>
-                        <Badge variant="outline" className="mt-1 text-xs">
-                          {customer.route}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="secondary"
-                          className="bg-green-100 text-green-700 hover:bg-green-100"
-                        >
-                          Active
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => {
-                                setEditingCustomer(customer);
-                                setFormData({
-                                  shopName: customer.shopName,
-                                  ownerName: customer.ownerName,
-                                  phone: customer.phone,
-                                  address: customer.address,
-                                  route: customer.route,
-                                });
-                                setIsDialogOpen(true);
-                              }}
-                            >
-                              <Edit className="mr-2 h-4 w-4" /> Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="text-red-600"
-                              onClick={() => handleDelete(customer.id)}
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" /> Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+          <CustomerTable
+            customers={paginatedCustomers}
+            loading={loading}
+            sortField={sortField}
+            sortOrder={sortOrder}
+            onSort={handleSort}
+            onEdit={(c) => {
+              setFormData({
+                shopName: c.shopName,
+                ownerName: c.ownerName,
+                phone: c.phone,
+                email: c.email,
+                address: c.address,
+                route: c.route,
+                status: c.status,
+                creditLimit: c.creditLimit,
+                businessId: currentBusinessId || "",
+              });
+              setSelectedCustomer(c);
+              setIsAddDialogOpen(true);
+            }}
+            onDelete={(c) => {
+              setSelectedCustomer(c);
+              setIsDeleteDialogOpen(true);
+            }}
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+          />
         </CardContent>
       </Card>
 
-      {/* Add/Edit Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {editingCustomer ? "Edit Shop" : "Add New Shop"}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label>Shop Name *</Label>
-              <Input
-                value={formData.shopName}
-                onChange={(e) =>
-                  setFormData({ ...formData, shopName: e.target.value })
-                }
-                placeholder="e.g. Orange Mart"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label>Owner Name</Label>
-                <Input
-                  value={formData.ownerName}
-                  onChange={(e) =>
-                    setFormData({ ...formData, ownerName: e.target.value })
-                  }
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>Phone Number *</Label>
-                <Input
-                  value={formData.phone}
-                  onChange={(e) =>
-                    setFormData({ ...formData, phone: e.target.value })
-                  }
-                  placeholder="077..."
-                />
-              </div>
-            </div>
-            <div className="grid gap-2">
-              <Label>Distribution Route</Label>
-              <Input
-                value={formData.route}
-                onChange={(e) =>
-                  setFormData({ ...formData, route: e.target.value })
-                }
-                placeholder="e.g. Galle Road"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label>Address</Label>
-              <Input
-                value={formData.address}
-                onChange={(e) =>
-                  setFormData({ ...formData, address: e.target.value })
-                }
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSave}
-              disabled={isSubmitting}
-              className="bg-orange-600 hover:bg-orange-700"
-            >
-              {isSubmitting ? "Saving..." : "Save Customer"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CustomerDialogs
+        isAddDialogOpen={isAddDialogOpen}
+        setIsAddDialogOpen={setIsAddDialogOpen}
+        formData={formData}
+        setFormData={setFormData}
+        onSave={handleSaveCustomer}
+        selectedCustomer={selectedCustomer}
+        isDeleteDialogOpen={isDeleteDialogOpen}
+        setIsDeleteDialogOpen={setIsDeleteDialogOpen}
+        onDeleteConfirm={handleDeleteConfirm}
+      />
     </div>
   );
 }

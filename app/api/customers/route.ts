@@ -1,4 +1,3 @@
-// app/api/customers/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
@@ -21,6 +20,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const repId = searchParams.get("repId");
+    const businessId = searchParams.get("businessId");
 
     let query;
 
@@ -31,8 +31,15 @@ export async function GET(request: NextRequest) {
         .select("*, businesses(name), orders!inner(sales_rep_id)")
         .eq("orders.sales_rep_id", repId)
         .order("created_at", { ascending: false });
+    } else if (businessId) {
+      // Business View: Filter by specific business
+      query = supabaseAdmin
+        .from("customers")
+        .select("*, businesses(name)")
+        .eq("business_id", businessId)
+        .order("created_at", { ascending: false });
     } else {
-      // Admin View: Fetch all
+      // Admin View: Fetch all (if no filters)
       query = supabaseAdmin
         .from("customers")
         .select("*, businesses(name)")
@@ -59,7 +66,7 @@ export async function GET(request: NextRequest) {
         ? new Date(c.updated_at).toISOString().split("T")[0]
         : "-",
       totalOrders: 0,
-      businessId: c.business_id, 
+      businessId: c.business_id,
       businessName: c.businesses?.name || "N/A",
     }));
 
