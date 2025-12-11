@@ -49,12 +49,12 @@ export const retailOfficeNavItems: RetailNavSection[] = [
   {
     title: "Sales & Orders",
     items: [
-      {
-        name: "Retail Orders",
-        href: "/dashboard/office/retail/orders",
-        icon: ShoppingCart,
-        description: "Manage retail customer orders",
-      },
+      // {
+      //   name: "Retail Orders",
+      //   href: "/dashboard/office/retail/orders",
+      //   icon: ShoppingCart,
+      //   description: "Manage retail customer orders",
+      // },
       {
         name: "Walk-in Sales",
         href: "/dashboard/office/retail/walkin-sales",
@@ -77,13 +77,7 @@ export const retailOfficeNavItems: RetailNavSection[] = [
         href: "/dashboard/office/retail/customers",
         icon: Users,
         description: "Retail customer management",
-      },
-      {
-        name: "Customer Accounts",
-        href: "/dashboard/office/retail/accounts",
-        icon: Wallet,
-        description: "Customer credit and payments",
-      },
+      }
     ],
   },
   {
@@ -95,12 +89,12 @@ export const retailOfficeNavItems: RetailNavSection[] = [
         icon: Package,
         description: "Retail location inventory",
       },
-      {
-        name: "Stock Requests",
-        href: "/dashboard/office/retail/stock-requests",
-        icon: PackageCheck,
-        description: "Request stock from main warehouse",
-      },
+      // {
+      //   name: "Stock Requests",
+      //   href: "/dashboard/office/retail/stock-requests",
+      //   icon: PackageCheck,
+      //   description: "Request stock from main warehouse",
+      // },
     ],
   },
   {
