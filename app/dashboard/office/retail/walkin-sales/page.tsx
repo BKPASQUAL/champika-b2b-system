@@ -1,4 +1,4 @@
-// app/dashboard/office/retail/invoices/create/page.tsx
+// app/dashboard/office/retail/walkin-sales/page.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -201,6 +201,8 @@ export default function CreateRetailInvoicePage() {
 
         if (guest) {
           setGuestCustomerId(guest.id);
+          // Auto-select the Walk-in customer by default
+          setCustomerId(guest.id);
         }
         // ------------------------------------------------
 
@@ -470,11 +472,9 @@ export default function CreateRetailInvoicePage() {
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div className="flex-1">
-            <h1 className="text-3xl font-bold tracking-tight">
-              New Retail Invoice
-            </h1>
+            <h1 className="text-3xl font-bold tracking-tight">Walk-in Sale</h1>
             <p className="text-muted-foreground mt-1">
-              {businessName} - Create a new customer invoice
+              {businessName} - Create a new walk-in sale
             </p>
           </div>
         </div>
@@ -542,7 +542,7 @@ export default function CreateRetailInvoicePage() {
                     </Label>
 
                     {/* --- NEW: Quick Select Button for Walk-in Customer --- */}
-                    {guestCustomerId && (
+                    {guestCustomerId && customerId !== guestCustomerId && (
                       <Button
                         variant="secondary"
                         size="sm"
