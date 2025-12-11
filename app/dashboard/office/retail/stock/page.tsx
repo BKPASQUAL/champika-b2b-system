@@ -12,6 +12,9 @@ import {
   Layers,
   ArrowLeft,
   Filter,
+  Download,
+  FileText,
+  FileSpreadsheet,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,6 +26,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import {
@@ -31,6 +42,9 @@ import {
   SortField,
   SortOrder,
 } from "./_components/StockTable";
+import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 export default function RetailStockPage() {
   const router = useRouter();
@@ -124,7 +138,83 @@ export default function RetailStockPage() {
     }
   };
 
-  // Totals for Cards (based on filtered result)
+  // --- Report Generation ---
+  const generateExcel = () => {
+    if (sortedItems.length === 0) {
+      toast.error("No data to export");
+      return;
+    }
+
+    const data = sortedItems.map((item) => ({
+      SKU: item.sku,
+      "Product Name": item.name,
+      Category: item.category || "-",
+      "Unit Price (LKR)": item.selling_price,
+      "Stock Quantity": item.stock_quantity,
+      Unit: item.unit_of_measure,
+      "Total Value (LKR)": item.selling_price * item.stock_quantity,
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Stock Report");
+
+    // Generate filename with date
+    const dateStr = new Date().toISOString().split("T")[0];
+    XLSX.writeFile(wb, `Retail_Stock_Report_${dateStr}.xlsx`);
+    toast.success("Excel report generated successfully");
+  };
+
+  const generatePDF = () => {
+    if (sortedItems.length === 0) {
+      toast.error("No data to export");
+      return;
+    }
+
+    const doc = new jsPDF();
+    const dateStr = new Date().toLocaleDateString();
+
+    // Title
+    doc.setFontSize(16);
+    doc.text(`${businessName} - Inventory Report`, 14, 15);
+
+    doc.setFontSize(10);
+    doc.text(`Generated on: ${dateStr}`, 14, 22);
+    doc.text(`Total Products: ${sortedItems.length}`, 14, 27);
+    doc.text(`Total Value: LKR ${totalValue.toLocaleString()}`, 14, 32);
+
+    // Table
+    const tableColumn = [
+      "SKU",
+      "Product Name",
+      "Category",
+      "Price",
+      "Stock",
+      "Value",
+    ];
+    const tableRows = sortedItems.map((item) => [
+      item.sku,
+      item.name,
+      item.category || "-",
+      item.selling_price.toLocaleString(),
+      `${item.stock_quantity} ${item.unit_of_measure}`,
+      (item.selling_price * item.stock_quantity).toLocaleString(),
+    ]);
+
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: 40,
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [22, 163, 74] }, // Green header
+    });
+
+    const fileNameDate = new Date().toISOString().split("T")[0];
+    doc.save(`Retail_Stock_Report_${fileNameDate}.pdf`);
+    toast.success("PDF report generated successfully");
+  };
+
+  // Totals for Cards
   const totalValue = filteredItems.reduce(
     (sum, item) => sum + item.selling_price * item.stock_quantity,
     0
@@ -160,14 +250,36 @@ export default function RetailStockPage() {
             />
             Refresh
           </Button>
-          {/* <Button
+
+          {/* Export Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <Download className="w-4 h-4 mr-2" /> Reports
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Export Options</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={generateExcel}>
+                <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" />
+                Export as Excel
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={generatePDF}>
+                <FileText className="w-4 h-4 mr-2 text-red-600" />
+                Export as PDF
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Button
             onClick={() =>
               router.push("/dashboard/office/retail/stock-requests")
             }
             className="bg-green-600 hover:bg-green-700"
           >
             <ArrowRightLeft className="w-4 h-4 mr-2" /> Request Stock
-          </Button> */}
+          </Button>
         </div>
       </div>
 
