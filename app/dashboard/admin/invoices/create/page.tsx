@@ -1,3 +1,4 @@
+// app/dashboard/admin/invoices/create/page.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -51,7 +52,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner"; // Assuming you use sonner for toasts
+import { toast } from "sonner";
 
 // --- Types ---
 
@@ -83,7 +84,7 @@ interface InvoiceItem {
 export default function CreateInvoicePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [stockLoading, setStockLoading] = useState(false); // New loading state for products
+  const [stockLoading, setStockLoading] = useState(false);
 
   // Data State
   const [products, setProducts] = useState<Product[]>([]);
@@ -197,7 +198,7 @@ export default function CreateInvoicePage() {
     };
 
     fetchRepStock();
-  }, [salesRepId]); // Re-run whenever salesRepId changes
+  }, [salesRepId]);
 
   // --- Product Selection Handler ---
   const handleProductSelect = (productId: string) => {
@@ -846,7 +847,7 @@ export default function CreateInvoicePage() {
                           <TableCell>
                             <Button
                               variant="ghost"
-                              size="icon-sm"
+                              size="icon"
                               onClick={() => handleRemoveItem(item.id)}
                             >
                               <Trash2 className="w-4 h-4 text-destructive" />

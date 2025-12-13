@@ -92,10 +92,8 @@ export function ProductDialogs({
     (b) => b.parent_id && b.parent_id === selectedBrandId
   );
 
-  // ✅ NEW: Model Logic - Filter by Category
-  // Only show models that belong to the selected category
+  // Model Logic - Filter by Category
   const categoryModels = models.filter((m) => {
-    // Main models (parent) that belong to this category
     return !m.parent_id && m.category_id === selectedCatId;
   });
 
@@ -103,13 +101,11 @@ export function ProductDialogs({
     (m) => m.name.trim() === formData.modelType?.trim()
   )?.id;
 
-  // Sub models - children of selected model
   const subModels = models.filter(
     (m) => m.parent_id && m.parent_id === selectedModelId
   );
 
-  // ✅ NEW: Specification Logic - Filter by Category
-  // Only show specs that belong to the selected category
+  // Specification Logic - Filter by Category
   const categorySpecs = specs.filter((s) => {
     return s.category_id === selectedCatId;
   });
@@ -178,8 +174,20 @@ export function ProductDialogs({
           </DialogHeader>
 
           <div className="grid grid-cols-2 gap-4 py-4">
+            {/* --- ITEM CODE (SKU) INPUT --- */}
+            <div className="col-span-1 space-y-2">
+              <Label>Item Code (SKU)</Label>
+              <Input
+                value={formData.sku}
+                onChange={(e) =>
+                  setFormData({ ...formData, sku: e.target.value })
+                }
+                placeholder="Leave blank to auto-generate"
+              />
+            </div>
+
             {/* Product Name */}
-            <div className="col-span-2 space-y-2">
+            <div className="col-span-1 space-y-2">
               <Label>Product Name *</Label>
               <Input
                 value={formData.name}
@@ -196,7 +204,6 @@ export function ProductDialogs({
               <Select
                 value={formData.category}
                 onValueChange={(val) => {
-                  // ✅ When category changes, clear dependent fields
                   setFormData({
                     ...formData,
                     category: val,
@@ -305,7 +312,7 @@ export function ProductDialogs({
               </Select>
             </div>
 
-            {/* ✅ Models - Filtered by Category */}
+            {/* Models - Filtered by Category */}
             <div className="space-y-2">
               <Label>Model</Label>
               <Select
@@ -373,7 +380,7 @@ export function ProductDialogs({
               </Select>
             </div>
 
-            {/* ✅ Specification - Filtered by Category */}
+            {/* Specification - Filtered by Category */}
             <div className="space-y-2">
               <Label>Specification</Label>
               <Select
@@ -409,7 +416,6 @@ export function ProductDialogs({
                   )}
                 </SelectContent>
               </Select>
-             
             </div>
 
             {/* Supplier */}

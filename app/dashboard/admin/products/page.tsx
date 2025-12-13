@@ -43,18 +43,19 @@ export default function ProductsPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
-  // Form Data - Initialized with empty strings for numeric fields
+  // Form Data
   const [formData, setFormData] = useState<ProductFormData>({
+    sku: "",
     name: "",
     category: "",
     subCategory: "",
     brand: "",
     subBrand: "",
     modelType: "",
-    subModel: "", 
+    subModel: "",
     sizeSpec: "",
     supplier: "",
-    stock: "", 
+    stock: "",
     minStock: "",
     mrp: "",
     sellingPrice: "",
@@ -92,7 +93,8 @@ export default function ProductsPage() {
     const matchesSearch =
       product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       product.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.supplier.toLowerCase().includes(searchQuery.toLowerCase());
+      product.supplier.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      product.sku.toLowerCase().includes(searchQuery.toLowerCase()); // Added SKU search
 
     const matchesCategory =
       categoryFilter === "all" || product.category === categoryFilter;
@@ -165,7 +167,13 @@ export default function ProductsPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
-        if (!res.ok) throw new Error("Failed update");
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || "Failed update");
+        }
+
         toast.success("Product updated successfully");
       } else {
         // CREATE
@@ -174,15 +182,21 @@ export default function ProductsPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
-        if (!res.ok) throw new Error("Failed create");
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || "Failed create");
+        }
+
         toast.success("Product created successfully");
       }
 
       setIsAddDialogOpen(false);
       resetForm();
       fetchData(); // Refresh data
-    } catch (error) {
-      toast.error("Operation failed");
+    } catch (error: any) {
+      toast.error(error.message || "Operation failed");
     }
   };
 
@@ -205,6 +219,7 @@ export default function ProductsPage() {
 
   const resetForm = () => {
     setFormData({
+      sku: "",
       name: "",
       category: "",
       subCategory: "",
@@ -214,11 +229,11 @@ export default function ProductsPage() {
       subModel: "",
       sizeSpec: "",
       supplier: "",
-      stock: "", // Reset to empty
-      minStock: "", // Reset to empty
-      mrp: "", // Reset to empty
-      sellingPrice: "", // Reset to empty
-      costPrice: "", // Reset to empty
+      stock: "",
+      minStock: "",
+      mrp: "",
+      sellingPrice: "",
+      costPrice: "",
       images: [],
       unitOfMeasure: "Pcs",
     });
@@ -311,13 +326,14 @@ export default function ProductsPage() {
             onSort={handleSort}
             onEdit={(p) => {
               setFormData({
+                sku: p.sku, // Load SKU on edit
                 name: p.name,
                 category: p.category,
                 subCategory: p.subCategory || "",
                 brand: p.brand || "",
                 subBrand: p.subBrand || "",
                 modelType: p.modelType || "",
-                subModel: p.subModel || "", 
+                subModel: p.subModel || "",
                 sizeSpec: p.sizeSpec || "",
                 supplier: p.supplier,
                 stock: p.stock,

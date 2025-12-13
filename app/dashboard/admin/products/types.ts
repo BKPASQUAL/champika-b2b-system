@@ -23,7 +23,6 @@ export interface Product {
   profitMargin: number;
   images: string[];
   unitOfMeasure: string;
-  // Added commission fields
   commissionType?: string;
   commissionValue?: number;
 }
@@ -38,11 +37,12 @@ export type SortField =
   | "sellingPrice"
   | "mrp"
   | "totalCost"
-  | "commissionValue"; // Added sort option
+  | "commissionValue";
 
 export type SortOrder = "asc" | "desc";
 
 export interface ProductFormData {
+  sku: string; // Added SKU field
   name: string;
   category: string;
   subCategory: string;
