@@ -20,6 +20,11 @@ import {
 } from "@/components/ui/select";
 import { Supplier, SupplierFormData, SupplierStatus } from "../types";
 
+interface BusinessOption {
+  id: string;
+  name: string;
+}
+
 interface SupplierDialogsProps {
   // Add/Edit Dialog
   isAddDialogOpen: boolean;
@@ -29,8 +34,10 @@ interface SupplierDialogsProps {
   onSave: () => void;
   selectedSupplier: Supplier | null;
 
-  // New Prop for Categories
   categoryOptions: { id: string; name: string }[];
+
+  // ✅ Added Business Options Prop
+  businessOptions: BusinessOption[];
 
   // Delete Dialog
   isDeleteDialogOpen: boolean;
@@ -46,6 +53,7 @@ export function SupplierDialogs({
   onSave,
   selectedSupplier,
   categoryOptions,
+  businessOptions, // ✅ Destructure new prop
   isDeleteDialogOpen,
   setIsDeleteDialogOpen,
   onDeleteConfirm,
@@ -64,6 +72,34 @@ export function SupplierDialogs({
             </DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-4">
+            {/* ✅ Business Selector (Full Width) */}
+            <div className="col-span-2 space-y-2">
+              <Label>Assigned Business *</Label>
+              <Select
+                value={formData.businessId || ""}
+                onValueChange={(val) =>
+                  setFormData({ ...formData, businessId: val })
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select Business Entity" />
+                </SelectTrigger>
+                <SelectContent>
+                  {businessOptions.length === 0 ? (
+                    <SelectItem value="none" disabled>
+                      No businesses found
+                    </SelectItem>
+                  ) : (
+                    businessOptions.map((biz) => (
+                      <SelectItem key={biz.id} value={biz.id}>
+                        {biz.name}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="col-span-2 space-y-2">
               <Label>Company Name *</Label>
               <Input
@@ -110,7 +146,7 @@ export function SupplierDialogs({
               />
             </div>
 
-            {/* Category Dropdown with w-full */}
+            {/* Category Dropdown */}
             <div className="space-y-2">
               <Label>Category</Label>
               <Select
@@ -152,7 +188,7 @@ export function SupplierDialogs({
               />
             </div>
 
-            {/* Status Dropdown with w-full */}
+            {/* Status Dropdown */}
             <div className="space-y-2">
               <Label>Status</Label>
               <Select

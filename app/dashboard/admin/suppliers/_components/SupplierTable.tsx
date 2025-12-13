@@ -8,7 +8,6 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import {
   Edit,
   Trash2,
@@ -24,6 +23,7 @@ import {
   XCircle,
   Clock,
   Eye,
+  Building2, // Added Icon
 } from "lucide-react";
 import { Supplier, SortField, SortOrder, SupplierStatus } from "../types";
 
@@ -110,6 +110,12 @@ export function SupplierTable({
                   Supplier Info {getSortIcon("name")}
                 </div>
               </TableHead>
+
+              {/* ✅ Added Business Column Header */}
+              <TableHead className="cursor-pointer hover:bg-muted/50">
+                <div className="flex items-center">Business</div>
+              </TableHead>
+
               <TableHead
                 className="hidden md:table-cell cursor-pointer hover:bg-muted/50"
                 onClick={() => onSort("contactPerson")}
@@ -140,14 +146,6 @@ export function SupplierTable({
               >
                 <div className="flex items-center justify-end">
                   Due Amount {getSortIcon("duePayment")}
-                </div>
-              </TableHead>
-              <TableHead
-                className="text-right hidden lg:table-cell cursor-pointer hover:bg-muted/50"
-                onClick={() => onSort("totalOrderValue")}
-              >
-                <div className="flex items-center justify-end">
-                  Total Value {getSortIcon("totalOrderValue")}
                 </div>
               </TableHead>
               <TableHead className="text-right">Actions</TableHead>
@@ -186,6 +184,21 @@ export function SupplierTable({
                       </div>
                     </div>
                   </TableCell>
+
+                  {/* ✅ Added Business Column Data */}
+                  <TableCell>
+                    {supplier.businessName ? (
+                      <div className="flex items-center gap-2 text-sm text-gray-700">
+                        <Building2 className="w-3 h-3 text-muted-foreground" />
+                        {supplier.businessName}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground italic">
+                        Global / Not Set
+                      </span>
+                    )}
+                  </TableCell>
+
                   <TableCell className="hidden md:table-cell">
                     <div className="flex flex-col text-sm">
                       <span className="font-medium">
@@ -213,18 +226,8 @@ export function SupplierTable({
                       LKR {supplier.duePayment.toLocaleString()}
                     </span>
                   </TableCell>
-                  <TableCell className="text-right font-medium hidden lg:table-cell text-muted-foreground">
-                    LKR {supplier.totalOrderValue.toLocaleString()}
-                  </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => onEdit(supplier)}
-                      >
-                        <Eye className="w-4 h-4" />
-                      </Button>
                       <Button
                         variant="ghost"
                         size="icon-sm"

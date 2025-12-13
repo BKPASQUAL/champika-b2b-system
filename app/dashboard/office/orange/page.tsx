@@ -1,374 +1,292 @@
-// app/dashboard/office/orange/page.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
-  TrendingUp,
-  Users,
-  DollarSign,
-  ArrowUpRight,
-  ArrowDownRight,
-  Plus,
-  Package,
-  Receipt,
-  Truck,
-  AlertCircle,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Search,
+  Filter,
+  RefreshCw,
   Factory,
+  Calendar,
+  FileText,
+  Eye,
+  Wallet,
 } from "lucide-react";
-import Link from "next/link";
+import { toast } from "sonner";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 
-interface DashboardStats {
-  monthlyRevenue: number;
-  revenueChange: number;
-  totalReceivables: number; // Due from customers
-  receivablesChange: number;
-  totalPayables: number; // Due to suppliers
-  payablesChange: number;
-  lowStockCount: number;
+interface Purchase {
+  id: string;
+  purchaseId: string;
+  supplierName: string;
+  invoiceNo: string;
+  purchaseDate: string;
+  status: string;
+  paymentStatus: "Paid" | "Unpaid" | "Partial";
+  totalAmount: number;
+  paidAmount: number;
 }
 
-export default function OrangeDistributionDashboard() {
-  const [businessName, setBusinessName] = useState("");
-  const [stats, setStats] = useState<DashboardStats>({
-    monthlyRevenue: 0,
-    revenueChange: 0,
-    totalReceivables: 0,
-    receivablesChange: 0,
-    totalPayables: 0,
-    payablesChange: 0,
-    lowStockCount: 0,
-  });
-  const [isLoading, setIsLoading] = useState(true);
+export default function OrelBillsPage() {
+  const router = useRouter();
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(
+    null
+  );
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [paymentFilter, setPaymentFilter] = useState("all");
 
   useEffect(() => {
-    // Get user business context
     const user = getUserBusinessContext();
-    if (user?.businessName) {
-      setBusinessName(user.businessName);
+    if (user && user.businessId) {
+      setCurrentBusinessId(user.businessId);
     }
-
-    // Fetch dashboard stats
-    fetchDashboardStats();
   }, []);
 
-  const fetchDashboardStats = async () => {
+  const fetchBills = useCallback(async () => {
+    if (!currentBusinessId) return;
+
     try {
-      setIsLoading(true);
-      // Mock Data for Distribution Business
-      setTimeout(() => {
-        setStats({
-          monthlyRevenue: 2450000.0,
-          revenueChange: 12.5,
-          totalReceivables: 850000.0, // Money waiting to be collected
-          receivablesChange: -5.2, // Decreased (Good)
-          totalPayables: 420000.0, // Money owed to suppliers
-          payablesChange: 8.4,
-          lowStockCount: 12,
-        });
-        setIsLoading(false);
-      }, 800);
+      setLoading(true);
+      // ✅ Now strictly filtered on the server side
+      const res = await fetch(`/api/purchases?businessId=${currentBusinessId}`);
+      if (!res.ok) throw new Error("Failed to fetch bills");
+      const data = await res.json();
+
+      const orelBills: Purchase[] = data.map((p: any) => ({
+        id: p.id,
+        purchaseId: p.purchaseId,
+        supplierName: p.supplierName || "Orel Corporation Pvt Ltd",
+        invoiceNo: p.invoiceNo || "-",
+        purchaseDate: p.purchaseDate,
+        status: p.status,
+        paymentStatus: p.paymentStatus,
+        totalAmount: p.totalAmount,
+        paidAmount: p.paidAmount,
+      }));
+
+      setPurchases(orelBills);
     } catch (error) {
-      console.error("Failed to fetch dashboard stats:", error);
-      setIsLoading(false);
+      console.error("Error fetching bills:", error);
+      toast.error("Failed to load bills");
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [currentBusinessId]);
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-LK", {
-      style: "currency",
-      currency: "LKR",
-      minimumFractionDigits: 2,
-    }).format(amount);
-  };
+  useEffect(() => {
+    fetchBills();
+  }, [fetchBills]);
 
-  const StatCard = ({
-    title,
-    value,
-    change,
-    icon: Icon,
-    color,
-    reverseTrend = false,
-  }: {
-    title: string;
-    value: string | number;
-    change?: number;
-    icon: any;
-    color: string;
-    reverseTrend?: boolean;
-  }) => (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium text-gray-600">
-          {title}
-        </CardTitle>
-        <div className={`p-2 rounded-lg ${color}`}>
-          <Icon className="h-4 w-4 text-white" />
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
-        {change !== undefined && (
-          <div className="flex items-center text-xs mt-1">
-            {change >= 0 ? (
-              <ArrowUpRight className="h-3 w-3 text-green-500 mr-1" />
-            ) : (
-              <ArrowDownRight className="h-3 w-3 text-red-500 mr-1" />
-            )}
-            <span
-              className={
-                (change >= 0 && !reverseTrend) || (change < 0 && reverseTrend)
-                  ? "text-green-500"
-                  : "text-red-500"
-              }
-            >
-              {Math.abs(change)}%
-            </span>
-            <span className="text-gray-500 ml-1">vs last month</span>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+  const filteredPurchases = purchases.filter((p) => {
+    const matchesSearch =
+      p.purchaseId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.invoiceNo.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesPayment =
+      paymentFilter === "all" || p.paymentStatus === paymentFilter;
+    return matchesSearch && matchesPayment;
+  });
+
+  const totalDue = filteredPurchases.reduce(
+    (sum, p) => sum + (p.totalAmount - p.paidAmount),
+    0
   );
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Overview</h1>
-          <p className="text-gray-500 mt-1">
-            {businessName} - Distribution Center
+          <h1 className="text-3xl font-bold tracking-tight text-orange-900 flex items-center gap-2">
+            Supplier Bills <Factory className="w-6 h-6 text-orange-600" />
+          </h1>
+          <p className="text-muted-foreground mt-1 font-medium">
+            Exclusive Supplier:{" "}
+            <strong>Orel Corporation Private Limited</strong>
           </p>
         </div>
-        <div className="flex gap-2">
-          <Link href="/dashboard/office/orange/bills">
-            <Button variant="outline">
-              <Truck className="h-4 w-4 mr-2" />
-              Incoming Stock
-            </Button>
-          </Link>
-          <Link href="/dashboard/office/orange/invoices/create">
-            <Button className="bg-orange-600 hover:bg-orange-700">
-              <Plus className="h-4 w-4 mr-2" />
-              New Sale
-            </Button>
-          </Link>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={fetchBills}
+            disabled={loading}
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+          <Button
+            onClick={() =>
+              router.push("/dashboard/office/orange/purchases/create")
+            }
+            className="bg-orange-600 hover:bg-orange-700 text-white"
+          >
+            Create New Bill
+          </Button>
         </div>
       </div>
 
-      {/* Stats Grid */}
-      {isLoading ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Card key={i} className="animate-pulse">
-              <CardHeader className="pb-2">
-                <div className="h-4 bg-gray-200 rounded w-24"></div>
-              </CardHeader>
-              <CardContent>
-                <div className="h-8 bg-gray-200 rounded w-32 mb-2"></div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            title="Monthly Revenue"
-            value={formatCurrency(stats.monthlyRevenue)}
-            change={stats.revenueChange}
-            icon={TrendingUp}
-            color="bg-green-500"
-          />
-          <StatCard
-            title="To Collect (Receivables)"
-            value={formatCurrency(stats.totalReceivables)}
-            change={stats.receivablesChange}
-            icon={DollarSign}
-            color="bg-blue-500"
-            reverseTrend={true} // Less is usually better for outstanding payments
-          />
-          <StatCard
-            title="To Pay (Suppliers)"
-            value={formatCurrency(stats.totalPayables)}
-            change={stats.payablesChange}
-            icon={Factory}
-            color="bg-orange-500"
-          />
-          <StatCard
-            title="Low Stock Alerts"
-            value={stats.lowStockCount}
-            change={0}
-            icon={AlertCircle}
-            color="bg-red-500"
-            reverseTrend={true}
-          />
-        </div>
-      )}
-
-      {/* Quick Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-            <Link href="/dashboard/office/orange/invoices">
-              <Button variant="outline" className="w-full justify-start">
-                <Receipt className="h-4 w-4 mr-2" />
-                Sales Invoices
-              </Button>
-            </Link>
-            <Link href="/dashboard/office/orange/customers">
-              <Button variant="outline" className="w-full justify-start">
-                <Users className="h-4 w-4 mr-2" />
-                Manage Shops
-              </Button>
-            </Link>
-            <Link href="/dashboard/office/orange/inventory">
-              <Button variant="outline" className="w-full justify-start">
-                <Package className="h-4 w-4 mr-2" />
-                Inventory Check
-              </Button>
-            </Link>
-            <Link href="/dashboard/office/orange/suppliers/payments">
-              <Button variant="outline" className="w-full justify-start">
-                <DollarSign className="h-4 w-4 mr-2" />
-                Supplier Payments
-              </Button>
-            </Link>
+      <Card className="bg-orange-50 border-orange-200">
+        <CardContent className="p-6 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center">
+              <Wallet className="h-6 w-6 text-orange-600" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-orange-800">
+                Total Payable to Orel Corp
+              </p>
+              <h2 className="text-2xl font-bold text-orange-950">
+                LKR {totalDue.toLocaleString()}
+              </h2>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Recent Activity */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Recent Sales</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {[
-                {
-                  inv: "INV-001",
-                  customer: "Galle Electronics",
-                  amount: 45000,
-                  status: "Paid",
-                },
-                {
-                  inv: "INV-002",
-                  customer: "City Mobile",
-                  amount: 12500,
-                  status: "Pending",
-                },
-                {
-                  inv: "INV-003",
-                  customer: "Tech Zone",
-                  amount: 85000,
-                  status: "Paid",
-                },
-              ].map((item, i) => (
-                <div
-                  key={i}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="h-8 w-8 bg-green-100 rounded flex items-center justify-center">
-                      <Receipt className="h-4 w-4 text-green-600" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-sm">{item.inv}</p>
-                      <p className="text-xs text-gray-500">{item.customer}</p>
-                    </div>
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+            <div className="relative w-full md:flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search PO # or Invoice..."
+                className="pl-9 w-full"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-2 w-full md:w-auto">
+              <Select value={paymentFilter} onValueChange={setPaymentFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Filter className="w-3 h-3" />
+                    <SelectValue placeholder="Payment Status" />
                   </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-sm">
-                      {formatCurrency(item.amount)}
-                    </p>
-                    <span
-                      className={`text-xs ${
-                        item.status === "Paid"
-                          ? "text-green-600"
-                          : "text-orange-600"
-                      }`}
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Payments</SelectItem>
+                  <SelectItem value="Unpaid">Unpaid</SelectItem>
+                  <SelectItem value="Partial">Partial</SelectItem>
+                  <SelectItem value="Paid">Paid</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader className="bg-muted/50">
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>PO Number</TableHead>
+                  <TableHead>Supplier Invoice</TableHead>
+                  <TableHead>Supplier</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Payment</TableHead>
+                  <TableHead className="text-right">Total Amount</TableHead>
+                  <TableHead className="text-right">Due Balance</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredPurchases.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={9}
+                      className="text-center py-12 text-muted-foreground"
                     >
-                      {item.status}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <Link href="/dashboard/office/orange/invoices">
-              <Button variant="link" className="w-full mt-3">
-                View All Sales →
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Pending Supplier Bills</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {[
-                {
-                  bill: "SUP-BILL-88",
-                  supplier: "Orange Imports",
-                  amount: 150000,
-                  due: "Today",
-                },
-                {
-                  bill: "SUP-BILL-92",
-                  supplier: "Local Logistics",
-                  amount: 25000,
-                  due: "Tomorrow",
-                },
-                {
-                  bill: "SUP-BILL-95",
-                  supplier: "ABC Packaging",
-                  amount: 12000,
-                  due: "In 3 days",
-                },
-              ].map((item, i) => (
-                <div
-                  key={i}
-                  className="flex items-center justify-between p-3 bg-orange-50 rounded-lg border border-orange-100"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="h-8 w-8 bg-orange-100 rounded flex items-center justify-center">
-                      <Factory className="h-4 w-4 text-orange-600" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-sm text-gray-700">
-                        {item.supplier}
-                      </p>
-                      <p className="text-xs text-gray-500">{item.bill}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-sm">
-                      {formatCurrency(item.amount)}
-                    </p>
-                    <p className="text-xs text-red-500 font-medium">
-                      Due: {item.due}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <Link href="/dashboard/office/orange/suppliers/payments">
-              <Button variant="link" className="w-full mt-3">
-                View Payables →
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
+                      No bills found for Orel Corporation.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredPurchases.map((bill) => {
+                    const due = bill.totalAmount - bill.paidAmount;
+                    return (
+                      <TableRow key={bill.id} className="hover:bg-muted/50">
+                        <TableCell>
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Calendar className="w-3 h-3" />
+                            {bill.purchaseDate}
+                          </div>
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {bill.purchaseId}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <FileText className="w-3 h-3 text-muted-foreground" />
+                            {bill.invoiceNo}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm font-medium text-orange-800">
+                          {bill.supplierName}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{bill.status}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <span
+                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium 
+                                ${
+                                  bill.paymentStatus === "Paid"
+                                    ? "bg-green-100 text-green-700"
+                                    : bill.paymentStatus === "Unpaid"
+                                    ? "bg-red-100 text-red-700"
+                                    : "bg-yellow-100 text-yellow-700"
+                                }`}
+                          >
+                            {bill.paymentStatus}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right font-medium">
+                          LKR {bill.totalAmount.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right font-bold text-red-600">
+                          {due > 0 ? `LKR ${due.toLocaleString()}` : "-"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() =>
+                              router.push(
+                                `/dashboard/office/orange/purchases/${bill.id}`
+                              )
+                            }
+                          >
+                            <Eye className="w-4 h-4 text-muted-foreground" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

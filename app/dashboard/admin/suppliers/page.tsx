@@ -1,8 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { CheckCircle2, X, Loader2 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -22,7 +20,10 @@ export default function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [categoryOptions, setCategoryOptions] = useState<
     { id: string; name: string }[]
-  >([]); // <--- New State
+  >([]);
+  const [businessOptions, setBusinessOptions] = useState<
+    { id: string; name: string }[]
+  >([]); // ✅ New State for Businesses
   const [loading, setLoading] = useState(true);
 
   // Filters & Sort
@@ -53,6 +54,7 @@ export default function SuppliersPage() {
     category: "",
     status: "Active",
     duePayment: 0,
+    businessId: "", // ✅ Init businessId
   });
 
   // --- 1. Fetch Suppliers ---
@@ -62,6 +64,9 @@ export default function SuppliersPage() {
       const response = await fetch("/api/suppliers");
       if (!response.ok) throw new Error("Failed to fetch suppliers");
       const data = await response.json();
+
+      // Map API response to match Supplier type with business info if available
+      // Assuming API returns business_id or expands business name
       setSuppliers(data);
     } catch (error) {
       toast.error("Error loading suppliers");
@@ -71,26 +76,27 @@ export default function SuppliersPage() {
     }
   }, []);
 
-  // --- 2. Fetch Categories (New) ---
-  const fetchCategories = useCallback(async () => {
+  // --- 2. Fetch Categories & Businesses ---
+  const fetchData = useCallback(async () => {
     try {
-      const response = await fetch("/api/settings/categories?type=supplier");
-      if (response.ok) {
-        const data = await response.json();
-        setCategoryOptions(data);
-      }
+      const [catRes, bizRes] = await Promise.all([
+        fetch("/api/settings/categories?type=supplier"),
+        fetch("/api/settings/business"), // ✅ Fetch Businesses
+      ]);
+
+      if (catRes.ok) setCategoryOptions(await catRes.json());
+      if (bizRes.ok) setBusinessOptions(await bizRes.json());
     } catch (error) {
-      console.error("Failed to fetch categories", error);
+      console.error("Failed to fetch settings data", error);
     }
   }, []);
 
   useEffect(() => {
     fetchSuppliers();
-    fetchCategories(); // Call category fetch on mount
-  }, [fetchSuppliers, fetchCategories]);
+    fetchData();
+  }, [fetchSuppliers, fetchData]);
 
   // --- Logic ---
-  // Filter drop-down based on current data
   const availableCategories = [
     "all",
     ...new Set(suppliers.map((s) => s.category || "Uncategorized")),
@@ -146,6 +152,12 @@ export default function SuppliersPage() {
   const handleSaveSupplier = async () => {
     if (!formData.name || !formData.contactPerson || !formData.phone) {
       toast.error("Please fill in all required fields");
+      return;
+    }
+
+    // ✅ Check if business is selected
+    if (!formData.businessId) {
+      toast.error("Please select an assigned business");
       return;
     }
 
@@ -206,6 +218,7 @@ export default function SuppliersPage() {
       category: "",
       status: "Active",
       duePayment: 0,
+      businessId: "", // Reset business ID
     });
     setSelectedSupplier(null);
   };
@@ -219,6 +232,7 @@ export default function SuppliersPage() {
     const excelData = sortedSuppliers.map((s) => ({
       ID: s.supplierId,
       Name: s.name,
+      Business: s.businessName || "N/A", // Included Business in report
       Category: s.category,
       Contact: s.contactPerson,
       Phone: s.phone,
@@ -242,10 +256,11 @@ export default function SuppliersPage() {
     const doc = new jsPDF();
     doc.text("Suppliers Report", 14, 15);
     autoTable(doc, {
-      head: [["ID", "Name", "Contact", "Phone", "Status", "Due"]],
+      head: [["ID", "Name", "Business", "Contact", "Phone", "Status", "Due"]],
       body: sortedSuppliers.map((s) => [
         s.supplierId,
         s.name,
+        s.businessName || "-", // Included Business in report
         s.contactPerson,
         s.phone,
         s.status,
@@ -298,6 +313,7 @@ export default function SuppliersPage() {
                 category: s.category,
                 status: s.status,
                 duePayment: s.duePayment,
+                businessId: s.businessId || "", // ✅ Load existing businessId
               });
               setSelectedSupplier(s);
               setIsAddDialogOpen(true);
@@ -320,7 +336,8 @@ export default function SuppliersPage() {
         setFormData={setFormData}
         onSave={handleSaveSupplier}
         selectedSupplier={selectedSupplier}
-        categoryOptions={categoryOptions} // <--- Passed here
+        categoryOptions={categoryOptions}
+        businessOptions={businessOptions} // ✅ Pass Business Options
         isDeleteDialogOpen={isDeleteDialogOpen}
         setIsDeleteDialogOpen={setIsDeleteDialogOpen}
         onDeleteConfirm={handleDeleteConfirm}

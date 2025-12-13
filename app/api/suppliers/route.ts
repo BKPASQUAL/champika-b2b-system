@@ -12,20 +12,26 @@ const supplierSchema = z.object({
   category: z.string().optional(),
   status: z.enum(["Active", "Inactive", "Pending"]).default("Active"),
   duePayment: z.number().default(0),
-  businessId: z.string().optional(), // ✅ Added businessId
+  businessId: z.string().optional().or(z.literal("")),
 });
 
 export async function GET(request: NextRequest) {
   try {
-    // Optional: Filter by businessId if provided in URL params
     const { searchParams } = new URL(request.url);
     const businessId = searchParams.get("businessId");
 
+    // Start Query
     let query = supabaseAdmin
       .from("suppliers")
-      .select("*")
+      .select(
+        `
+        *,
+        businesses ( name )
+      `
+      )
       .order("created_at", { ascending: false });
 
+    // ✅ Filter by Business ID if provided
     if (businessId) {
       query = query.eq("business_id", businessId);
     }
@@ -34,8 +40,8 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
 
-    // Map DB fields to Frontend types
-    const mappedSuppliers = suppliers.map((s) => ({
+    // Map to Frontend Types
+    const mappedSuppliers = suppliers.map((s: any) => ({
       id: s.id,
       supplierId: s.supplier_id,
       name: s.name,
@@ -49,7 +55,8 @@ export async function GET(request: NextRequest) {
       totalOrders: 0,
       totalOrderValue: 0,
       duePayment: parseFloat(s.due_payment) || 0,
-      businessId: s.business_id, // ✅ Map back to frontend
+      businessId: s.business_id,
+      businessName: s.businesses?.name || null,
     }));
 
     return NextResponse.json(mappedSuppliers);
@@ -63,7 +70,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const val = supplierSchema.parse(body);
 
-    // Generate custom Supplier ID (e.g., S-1001)
     const { count, error: countError } = await supabaseAdmin
       .from("suppliers")
       .select("*", { count: "exact", head: true });
@@ -73,7 +79,6 @@ export async function POST(request: NextRequest) {
     const nextId = (count || 0) + 1001;
     const supplierId = `S-${nextId}`;
 
-    // Insert into DB with business_id
     const { data, error } = await supabaseAdmin
       .from("suppliers")
       .insert({
@@ -86,7 +91,7 @@ export async function POST(request: NextRequest) {
         category: val.category,
         status: val.status,
         due_payment: val.duePayment,
-        business_id: val.businessId || null, // ✅ Save the business association
+        business_id: val.businessId || null,
       })
       .select()
       .single();
