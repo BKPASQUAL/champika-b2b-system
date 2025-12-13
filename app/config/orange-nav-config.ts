@@ -75,7 +75,7 @@ export const orangeOfficeNavItems: OrangeNavSection[] = [
       },
       {
         name: "Purchases",
-        href: "/dashboard/office/orange/bills", // Or /purchases
+        href: "/dashboard/office/orange/purchases", // Or /purchases
         icon: FileText,
       },
       {

@@ -12,14 +12,25 @@ const supplierSchema = z.object({
   category: z.string().optional(),
   status: z.enum(["Active", "Inactive", "Pending"]).default("Active"),
   duePayment: z.number().default(0),
+  businessId: z.string().optional(), // ✅ Added businessId
 });
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const { data: suppliers, error } = await supabaseAdmin
+    // Optional: Filter by businessId if provided in URL params
+    const { searchParams } = new URL(request.url);
+    const businessId = searchParams.get("businessId");
+
+    let query = supabaseAdmin
       .from("suppliers")
       .select("*")
       .order("created_at", { ascending: false });
+
+    if (businessId) {
+      query = query.eq("business_id", businessId);
+    }
+
+    const { data: suppliers, error } = await query;
 
     if (error) throw error;
 
@@ -34,10 +45,11 @@ export async function GET() {
       address: s.address || "",
       category: s.category || "General",
       status: s.status,
-      lastOrderDate: "-", // Placeholder until purchases logic is connected
-      totalOrders: 0, // Placeholder
-      totalOrderValue: 0, // Placeholder
+      lastOrderDate: "-",
+      totalOrders: 0,
+      totalOrderValue: 0,
       duePayment: parseFloat(s.due_payment) || 0,
+      businessId: s.business_id, // ✅ Map back to frontend
     }));
 
     return NextResponse.json(mappedSuppliers);
@@ -61,7 +73,7 @@ export async function POST(request: NextRequest) {
     const nextId = (count || 0) + 1001;
     const supplierId = `S-${nextId}`;
 
-    // Insert into DB
+    // Insert into DB with business_id
     const { data, error } = await supabaseAdmin
       .from("suppliers")
       .insert({
@@ -74,6 +86,7 @@ export async function POST(request: NextRequest) {
         category: val.category,
         status: val.status,
         due_payment: val.duePayment,
+        business_id: val.businessId || null, // ✅ Save the business association
       })
       .select()
       .single();
