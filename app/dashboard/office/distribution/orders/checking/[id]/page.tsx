@@ -245,7 +245,7 @@ export default function CheckOrderPage({
       if (!res.ok) throw new Error("Failed to update order");
 
       toast.success("QC Passed! Order moved to Loading.");
-      router.push("/dashboard/admin/orders/checking");
+      router.push("/dashboard/office/distribution/orders/checking");
     } catch (error) {
       toast.error("Something went wrong");
     } finally {

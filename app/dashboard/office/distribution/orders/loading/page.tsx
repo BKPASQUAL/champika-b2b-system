@@ -29,8 +29,7 @@ import {
   MapPin,
 } from "lucide-react";
 import { toast } from "sonner";
-import { LoadingSheetDialog } from "../_components/LoadingSheetDialog";
-import { BUSINESS_IDS } from "@/app/config/business-constants";
+import { LoadingSheetDialog } from "@/app/dashboard/admin/orders/_components/LoadingSheetDialog"; // Reusing Admin component
 
 interface Order {
   id: string;
@@ -38,7 +37,7 @@ interface Order {
   invoiceNo?: string;
   shopName: string;
   route: string;
-  salesRepName: string;
+  salesRepName: string; // Ensure backend returns this or map it
   totalAmount: number;
   status: string;
   date?: string;
@@ -46,7 +45,6 @@ interface Order {
 
 export default function DistributionLoadingOrdersPage() {
   const router = useRouter();
-  const distributionBusinessId = BUSINESS_IDS.CHAMPIKA_DISTRIBUTION;
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,10 +55,8 @@ export default function DistributionLoadingOrdersPage() {
   const fetchOrders = useCallback(async () => {
     try {
       setLoading(true);
-      // Fetches only Distribution orders
-      const res = await fetch(
-        `/api/orders/loading?businessId=${distributionBusinessId}`
-      );
+      // Fetch orders with 'Loading' status
+      const res = await fetch("/api/orders/loading");
       if (!res.ok) throw new Error("Failed to fetch loading orders");
       const data = await res.json();
       setOrders(data);
@@ -71,20 +67,26 @@ export default function DistributionLoadingOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [distributionBusinessId]);
+  }, []);
 
   useEffect(() => {
     fetchOrders();
   }, [fetchOrders]);
 
-  const filteredOrders = orders.filter(
-    (order) =>
-      (order.invoiceNo &&
-        order.invoiceNo.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      order.orderId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.shopName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.salesRepName.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredOrders = orders.filter((order) => {
+    const searchLower = searchQuery.toLowerCase();
+    const invoiceMatch = order.invoiceNo
+      ? order.invoiceNo.toLowerCase().includes(searchLower)
+      : false;
+
+    return (
+      invoiceMatch ||
+      order.orderId.toLowerCase().includes(searchLower) ||
+      order.shopName.toLowerCase().includes(searchLower) ||
+      (order.salesRepName &&
+        order.salesRepName.toLowerCase().includes(searchLower))
+    );
+  });
 
   const toggleSelectOrder = (orderId: string) => {
     setSelectedOrders((prev) =>
@@ -127,6 +129,7 @@ export default function DistributionLoadingOrdersPage() {
       toast.success(`Load Sheet ${result.loadId} Created!`);
 
       fetchOrders();
+      // Redirect to History or Active Loads in Distribution Portal
       router.push("/dashboard/office/distribution/orders/loading/history");
     } catch (error: any) {
       console.error("Create Load Error:", error);
@@ -147,11 +150,9 @@ export default function DistributionLoadingOrdersPage() {
       {/* Header Section */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-blue-900">
-            Loading Orders (Distribution)
-          </h1>
+          <h1 className="text-2xl font-bold tracking-tight">Loading Orders</h1>
           <p className="text-muted-foreground text-sm">
-            Select distribution orders to create a delivery load.
+            Select checked orders to create a delivery load.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -178,7 +179,7 @@ export default function DistributionLoadingOrdersPage() {
           {selectedOrders.length > 0 && (
             <Button
               onClick={() => setIsDialogOpen(true)}
-              className="animate-in fade-in zoom-in duration-300 bg-blue-600 hover:bg-blue-700 text-white"
+              className="animate-in fade-in zoom-in duration-300 bg-indigo-600 hover:bg-indigo-700 text-white"
             >
               <PlusCircle className="w-4 h-4 mr-2" /> Create Load (
               {selectedOrders.length})
@@ -207,13 +208,13 @@ export default function DistributionLoadingOrdersPage() {
         </CardHeader>
 
         <CardContent className="px-0 sm:px-6 pt-0">
-          {/* --- MOBILE VIEW --- */}
+          {/* --- MOBILE VIEW: CARDS (md:hidden) --- */}
           <div className="grid grid-cols-1 gap-3 md:hidden">
             {filteredOrders.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground bg-slate-50 rounded-lg border border-dashed">
                 <div className="flex flex-col items-center gap-2">
                   <Truck className="h-10 w-10 text-muted-foreground/20" />
-                  <p>No distribution orders ready for loading</p>
+                  <p>No orders ready for loading</p>
                 </div>
               </div>
             ) : (
@@ -226,12 +227,13 @@ export default function DistributionLoadingOrdersPage() {
                       bg-white border rounded-xl p-4 shadow-sm flex flex-col gap-3 transition-all duration-200
                       ${
                         isSelected
-                          ? "border-blue-500 ring-1 ring-blue-500 bg-blue-50/10"
+                          ? "border-indigo-500 ring-1 ring-indigo-500 bg-indigo-50/10"
                           : "border-slate-200"
                       }
                     `}
                     onClick={() => toggleSelectOrder(order.id)}
                   >
+                    {/* Row 1: Checkbox, ID, Route */}
                     <div className="flex items-start gap-3">
                       <Checkbox
                         checked={isSelected}
@@ -241,7 +243,7 @@ export default function DistributionLoadingOrdersPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1">
                           <div className="flex items-center gap-2">
-                            <span className="font-mono font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded text-xs">
+                            <span className="font-mono font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded text-xs">
                               <FileText className="h-3 w-3 inline mr-1" />
                               {order.invoiceNo || "N/A"}
                             </span>
@@ -263,6 +265,7 @@ export default function DistributionLoadingOrdersPage() {
                       </Badge>
                     </div>
 
+                    {/* Row 2: Shop Details */}
                     <div className="pl-7">
                       <p className="font-medium text-sm text-slate-900 truncate">
                         {order.shopName}
@@ -273,6 +276,7 @@ export default function DistributionLoadingOrdersPage() {
                       </div>
                     </div>
 
+                    {/* Row 3: Totals */}
                     <div className="flex justify-end border-t pt-2 pl-7">
                       <p className="font-bold text-slate-900">
                         LKR {order.totalAmount.toLocaleString()}
@@ -284,7 +288,7 @@ export default function DistributionLoadingOrdersPage() {
             )}
           </div>
 
-          {/* --- DESKTOP VIEW --- */}
+          {/* --- DESKTOP VIEW: TABLE (hidden md:block) --- */}
           <div className="hidden md:block rounded-md border bg-white overflow-hidden">
             <Table>
               <TableHeader className="bg-slate-50">
@@ -318,6 +322,9 @@ export default function DistributionLoadingOrdersPage() {
                         <p className="font-medium">
                           No orders ready for loading
                         </p>
+                        <p className="text-sm">
+                          Orders will appear here once they pass quality checks
+                        </p>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -326,7 +333,9 @@ export default function DistributionLoadingOrdersPage() {
                     <TableRow
                       key={order.id}
                       className={`hover:bg-slate-50 cursor-pointer ${
-                        selectedOrders.includes(order.id) ? "bg-blue-50/30" : ""
+                        selectedOrders.includes(order.id)
+                          ? "bg-indigo-50/30"
+                          : ""
                       }`}
                       onClick={() => toggleSelectOrder(order.id)}
                     >
@@ -338,7 +347,7 @@ export default function DistributionLoadingOrdersPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col">
-                          <span className="font-medium font-mono text-blue-700 text-xs flex items-center gap-1">
+                          <span className="font-medium font-mono text-indigo-700 text-xs flex items-center gap-1">
                             <FileText className="h-3 w-3" />
                             {order.invoiceNo || "N/A"}
                           </span>
@@ -362,11 +371,13 @@ export default function DistributionLoadingOrdersPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <div className="h-6 w-6 rounded-full bg-blue-50 flex items-center justify-center text-[10px] font-bold text-blue-600 border border-blue-100">
-                            {order.salesRepName.charAt(0).toUpperCase()}
+                          <div className="h-6 w-6 rounded-full bg-indigo-50 flex items-center justify-center text-[10px] font-bold text-indigo-600 border border-indigo-100">
+                            {order.salesRepName
+                              ? order.salesRepName.charAt(0).toUpperCase()
+                              : "U"}
                           </div>
                           <span className="text-sm text-muted-foreground">
-                            {order.salesRepName}
+                            {order.salesRepName || "Unknown"}
                           </span>
                         </div>
                       </TableCell>

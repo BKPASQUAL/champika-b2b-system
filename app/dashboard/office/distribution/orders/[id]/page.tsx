@@ -196,7 +196,7 @@ export default function ViewOrderPage({
       if (!res.ok) throw new Error("Failed to approve order");
 
       toast.success("Order Approved! Moved to Processing.");
-      router.push("/dashboard/admin/orders/pending");
+      router.push("/dashboard/office/distribution/orders");
     } catch (error: any) {
       toast.error(error.message || "Failed to update status");
     } finally {
@@ -217,7 +217,7 @@ export default function ViewOrderPage({
       if (!res.ok) throw new Error("Failed to cancel order");
 
       toast.success("Order Cancelled.");
-      router.push("/dashboard/admin/orders");
+      router.push("/dashboard/admin/orders/pending");
     } catch (error: any) {
       toast.error(error.message || "Failed to cancel order");
     } finally {

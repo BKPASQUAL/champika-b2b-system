@@ -247,7 +247,7 @@ export default function ProcessOrderPage({
       if (!res.ok) throw new Error("Failed to update order");
 
       toast.success("Order moved to Checking!");
-      router.push("/dashboard/admin/orders/processing");
+      router.push("/dashboard/office/distribution/orders/processing");
     } catch (error) {
       toast.error("Something went wrong");
     } finally {
