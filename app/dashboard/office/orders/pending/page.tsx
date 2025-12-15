@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 
-import { Order } from "../../orders/types";
+import { Order } from "../types";
 
 export default function OfficePendingOrdersPage() {
   const router = useRouter();

@@ -1,10 +1,9 @@
+// app/api/users/login/route.ts
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 // Initialize Supabase Client
-// Note: For the login route, using the Service Role key is recommended to securely
-// fetch the user profile role, bypassing any Row Level Security (RLS) policies that might block public access.
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -43,11 +42,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. Fetch User Role from Profiles Table
-    // We query the 'profiles' table using the auth user's ID
+    // 3. Fetch User Profile AND Business Details
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("role, is_active")
+      .select(
+        `
+        role, 
+        is_active, 
+        full_name,
+        business_id,
+        businesses (
+          id,
+          name,
+          description
+        )
+      `
+      )
       .eq("id", authData.user.id)
       .single();
 
@@ -65,10 +75,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Return Success with Role and Session
+    // 4. Construct Response
+    // FIX: Handle Supabase returning relations as arrays
+    // @ts-ignore
+    const rawBusiness = profile.businesses;
+    // Check if it's an array and take the first item, otherwise use it directly
+    const businessData = Array.isArray(rawBusiness)
+      ? rawBusiness[0]
+      : rawBusiness;
+
     return NextResponse.json({
       message: "Login successful",
       role: profile.role,
+      user: {
+        id: authData.user.id,
+        email: authData.user.email,
+        // @ts-ignore
+        name: profile.full_name || authData.user.email,
+      },
+      // Check if businessData exists before accessing properties
+      business: businessData
+        ? {
+            id: businessData.id,
+            name: businessData.name,
+            description: businessData.description,
+          }
+        : null,
       session: authData.session,
     });
   } catch (error) {
@@ -78,6 +110,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+    console.error("Login Error:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 }

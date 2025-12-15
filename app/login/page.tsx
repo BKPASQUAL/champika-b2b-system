@@ -24,7 +24,6 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      // Call the Enhanced Login API
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -37,7 +36,7 @@ export default function LoginPage() {
         throw new Error(data.error || "Login failed");
       }
 
-      // --- SAVE USER DATA WITH BUSINESS CONTEXT ---
+      // --- SAVE USER DATA ---
       if (typeof window !== "undefined") {
         const userContext = {
           id: data.user.id,
@@ -48,43 +47,43 @@ export default function LoginPage() {
           businessName: data.business?.name || null,
           businessDescription: data.business?.description || null,
           initials: data.user.name
-            .split(" ")
-            .map((n: string) => n[0])
-            .join("")
-            .substring(0, 2)
-            .toUpperCase(),
-          // 👇 CRITICAL: Save the token so we can use it in API calls
-          accessToken: data.session.access_token,
+            ? data.user.name
+                .split(" ")
+                .map((n: string) => n[0])
+                .join("")
+                .substring(0, 2)
+                .toUpperCase()
+            : "U",
         };
 
         localStorage.setItem("currentUser", JSON.stringify(userContext));
       }
       // ---------------------
 
-      // Successful Login
       toast.success(`Welcome back, ${data.user.name}`);
 
-      // Redirect based on Role and Business
+      // --- REDIRECT LOGIC ---
       if (data.role === "office" && data.business) {
         const businessName = data.business.name.toLowerCase();
 
-        // 1. Check for Orange Agency
-        if (businessName.includes("orange agency")) {
-          router.push("/dashboard/office/orange");
-        }
-        // 2. Check for Retail Business
-        else if (
-          businessName.includes("retail") ||
-          businessName.includes("champika hardware")
+        // Check 1: Distribution Center (Prioritize this based on your request)
+        if (
+          businessName.includes("distribution") ||
+          (businessName.includes("champika hardware") &&
+            !businessName.includes("retail"))
         ) {
+          router.push("/dashboard/office/distribution");
+        }
+        // Check 2: Retail Branch
+        else if (businessName.includes("retail")) {
           router.push("/dashboard/office/retail");
         }
-        // 3. Default Office Dashboard
+        // Fallback: Standard Office
         else {
           router.push("/dashboard/office");
         }
       } else {
-        // Default role-based routing
+        // Standard Role Routing
         switch (data.role) {
           case "office":
             router.push("/dashboard/office");
@@ -112,9 +111,8 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-center bg-[#F5F5F4] p-4 font-sans text-gray-900">
-      {/* Main Login Container */}
       <div className="w-full max-w-[440px] space-y-8">
-        {/* 1. Logo & Brand Header */}
+        {/* Header */}
         <div className="flex flex-col items-center text-center space-y-4">
           <div className="h-14 w-14 bg-black rounded-2xl flex items-center justify-center shadow-xl shadow-black/5">
             <Sprout className="h-7 w-7 text-white stroke-[1.5]" />
@@ -127,9 +125,8 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* 2. The Card */}
+        {/* Card */}
         <div className="bg-white rounded-2xl shadow-sm border border-[#e7e5e4] p-8 md:p-10 space-y-8">
-          {/* Card Header Text */}
           <div className="space-y-1">
             <h2 className="text-xl font-semibold text-black">Secure Sign In</h2>
             <p className="text-sm text-[#78716c]">
@@ -138,7 +135,6 @@ export default function LoginPage() {
           </div>
 
           <form onSubmit={handleLogin} className="space-y-6">
-            {/* Email Field */}
             <div className="space-y-2">
               <Label htmlFor="email" className="text-sm font-medium text-black">
                 Email Address
@@ -146,7 +142,7 @@ export default function LoginPage() {
               <Input
                 id="email"
                 type="email"
-                placeholder="your@email.com"
+                placeholder="user@champikahardware.com"
                 className="h-11 bg-white border-[#e7e5e4] focus-visible:ring-black focus-visible:border-black rounded-lg px-4"
                 required
                 value={formData.email}
@@ -157,7 +153,6 @@ export default function LoginPage() {
               />
             </div>
 
-            {/* Password Field */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label
@@ -205,21 +200,6 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Remember Me Checkbox */}
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="remember"
-                className="border-[#d6d3d1] data-[state=checked]:bg-black data-[state=checked]:border-black rounded"
-              />
-              <label
-                htmlFor="remember"
-                className="text-sm text-[#57534e] leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 select-none cursor-pointer"
-              >
-                Keep me signed in
-              </label>
-            </div>
-
-            {/* Sign In Button */}
             <Button
               className="w-full h-11 bg-black hover:bg-[#262626] text-white font-medium rounded-lg text-[15px] shadow-lg shadow-black/5 transition-all active:scale-[0.98]"
               disabled={isLoading}
@@ -235,28 +215,18 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          {/* Divider */}
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
               <span className="w-full border-t border-[#e7e5e4]" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
               <span className="bg-white px-2 text-[#a8a29e] tracking-wider font-medium">
-                Restricted Area
+                Authorized Personnel Only
               </span>
             </div>
           </div>
-
-          {/* Contact Link */}
-          <div className="text-center text-sm text-[#78716c]">
-            Having trouble?{" "}
-            <a href="#" className="font-semibold text-black hover:underline">
-              Contact Support
-            </a>
-          </div>
         </div>
 
-        {/* 3. Footer */}
         <p className="text-center text-sm text-[#a8a29e]">
           © 2025 Champika B2B System. All rights reserved.
         </p>
