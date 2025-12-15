@@ -4,35 +4,35 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X, Store, Package, Globe } from "lucide-react";
+import { Menu, X, Store, Package, Warehouse } from "lucide-react"; // Added Warehouse
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { roleNavItems, UserRole } from "@/app/config/nav-config";
 import { retailOfficeNavItems } from "@/app/config/retail-nav-config";
-import { orangeOfficeNavItems } from "@/app/config/orange-nav-config";
+import { distributionNavItems } from "@/app/config/distribution-nav-config"; // Import Distribution Config
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 
 interface MobileNavProps {
   role: UserRole;
   isRetail?: boolean;
-  isOrange?: boolean;
+  isDistribution?: boolean; // Added isDistribution prop
 }
 
 export function MobileNav({
   role,
   isRetail = false,
-  isOrange = false,
+  isDistribution = false,
 }: MobileNavProps) {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
 
   // Determine which navigation to show
   let navSections;
-  if (isOrange) {
-    navSections = orangeOfficeNavItems;
-  } else if (isRetail) {
+  if (isRetail) {
     navSections = retailOfficeNavItems;
+  } else if (isDistribution) {
+    navSections = distributionNavItems;
   } else {
     navSections = roleNavItems[role];
   }
@@ -69,15 +69,15 @@ export function MobileNav({
       <SheetContent side="left" className="w-72 p-0">
         {/* Logo Header */}
         <div className="h-16 flex items-center border-b px-6">
-          {isOrange ? (
-            <>
-              <Globe className="h-6 w-6 text-orange-600 shrink-0" />
-              <span className="ml-2 text-lg font-semibold">Orange Agency</span>
-            </>
-          ) : isRetail ? (
+          {isRetail ? (
             <>
               <Store className="h-6 w-6 text-green-600 shrink-0" />
               <span className="ml-2 text-lg font-semibold">Retail Portal</span>
+            </>
+          ) : isDistribution ? (
+            <>
+              <Warehouse className="h-6 w-6 text-blue-600 shrink-0" />
+              <span className="ml-2 text-lg font-semibold">Distribution</span>
             </>
           ) : (
             <>
@@ -91,11 +91,11 @@ export function MobileNav({
         {user.businessName && (
           <div className="px-4 py-3 border-b bg-muted/30">
             <Badge variant="secondary" className="w-full justify-center">
-              {isOrange ? (
-                <Globe className="h-3 w-3 mr-1" />
-              ) : (
+              {isRetail ? (
                 <Store className="h-3 w-3 mr-1" />
-              )}
+              ) : isDistribution ? (
+                <Warehouse className="h-3 w-3 mr-1" />
+              ) : null}
               {user.businessName}
             </Badge>
           </div>

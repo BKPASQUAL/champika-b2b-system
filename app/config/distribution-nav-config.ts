@@ -4,15 +4,18 @@ import {
   ShoppingCart,
   ClipboardCheck,
   Package,
-  Truck,
-  History,
-  BarChart3,
   Loader2,
   Box,
   Send,
   LucideIcon,
   Clock,
-  Warehouse,
+  Briefcase,
+  Receipt,
+  Banknote,
+  AlertCircle,
+  Factory,
+  FileText,
+  Layers,
 } from "lucide-react";
 
 interface DistNavItem {
@@ -31,79 +34,104 @@ export const distributionNavItems: DistNavSection[] = [
   {
     items: [
       {
-        name: "Distribution Dashboard",
+        name: "Dashboard",
         href: "/dashboard/office/distribution",
         icon: LayoutDashboard,
       },
     ],
   },
   {
-    title: "Order Fulfillment",
+    title: "Order Workflow",
     items: [
       {
-        name: "1. Pending Orders",
-        href: "/dashboard/office/orders/pending",
+        name: "All Orders",
+        href: "/dashboard/office/distribution/orders",
+        icon: ShoppingCart,
+      },
+      {
+        name: "1. Pending",
+        href: "/dashboard/office/distribution/orders/pending",
         icon: Clock,
       },
       {
         name: "2. Processing",
-        href: "/dashboard/office/orders/processing",
+        href: "/dashboard/office/distribution/orders/processing",
         icon: Loader2,
       },
       {
-        name: "3. Final Checking",
-        href: "/dashboard/office/orders/checking",
+        name: "3. Checking",
+        href: "/dashboard/office/distribution/orders/checking",
         icon: ClipboardCheck,
       },
       {
-        name: "4. Loading Bay",
-        href: "/dashboard/office/orders/loading",
+        name: "4. Loading",
+        href: "/dashboard/office/distribution/orders/loading",
         icon: Box,
       },
       {
         name: "5. Dispatched",
-        href: "/dashboard/office/orders/loading/active",
+        href: "/dashboard/office/distribution/orders/loading/active",
         icon: Send,
       },
     ],
   },
   {
-    title: "Logistics",
+    title: "Customer Finance",
     items: [
       {
-        name: "Active Loads",
-        href: "/dashboard/office/distribution/loads/active",
-        icon: Truck,
+        name: "Customers",
+        href: "/dashboard/office/distribution/customers",
+        icon: Briefcase,
       },
       {
-        name: "Load History",
-        href: "/dashboard/office/distribution/loads/history",
-        icon: History,
+        name: "Bills / Invoice",
+        href: "/dashboard/office/distribution/invoices",
+        icon: Receipt,
+      },
+      {
+        name: "Payments Recv",
+        href: "/dashboard/office/distribution/payments",
+        icon: Banknote,
+      },
+      {
+        name: "Due Alerts",
+        href: "/dashboard/office/distribution/invoices/due",
+        icon: AlertCircle,
       },
     ],
   },
   {
-    title: "Warehouse",
+    title: "Suppliers",
     items: [
       {
-        name: "Main Inventory",
-        href: "/dashboard/office/inventory",
-        icon: Warehouse,
+        name: "Supplier List",
+        href: "/dashboard/office/distribution/suppliers",
+        icon: Factory,
       },
       {
-        name: "Stock Requests",
-        href: "/dashboard/office/distribution/requests",
+        name: "Purchases",
+        href: "/dashboard/office/distribution/purchases",
+        icon: FileText,
+      },
+      {
+        name: "Payments Out",
+        href: "/dashboard/office/distribution/suppliers/payments",
+        icon: Banknote,
+      },
+    ],
+  },
+  {
+    title: "Inventory",
+    items: [
+      {
+        name: "Product Catalog",
+        href: "/dashboard/office/distribution/products",
         icon: Package,
       },
-    ],
-  },
-  {
-    title: "Reports",
-    items: [
       {
-        name: "Dispatch Reports",
-        href: "/dashboard/office/distribution/reports",
-        icon: BarChart3,
+        name: "Stock Control",
+        href: "/dashboard/office/distribution/inventory",
+        icon: Layers,
       },
     ],
   },

@@ -5,17 +5,19 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { LogOut, Package, Store, Warehouse } from "lucide-react"; // Import Warehouse
+import { LogOut, Package, Store, Warehouse } from "lucide-react";
 import { roleNavItems, UserRole } from "@/app/config/nav-config";
 import { retailOfficeNavItems } from "@/app/config/retail-nav-config";
-import { distributionNavItems } from "@/app/config/distribution-nav-config"; // Import new config
+// --- ENSURE THIS IMPORT IS PRESENT ---
+import { distributionNavItems } from "@/app/config/distribution-nav-config";
+// -------------------------------------
 import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 
 interface AppSidebarProps {
   role: UserRole;
   isRetail?: boolean;
-  isDistribution?: boolean; // New prop
+  isDistribution?: boolean; // Ensure this prop exists
 }
 
 export function AppSidebar({
@@ -26,17 +28,20 @@ export function AppSidebar({
   const pathname = usePathname();
   const router = useRouter();
 
-  // Determine which navigation to show
+  // --- NAVIGATION SELECTION LOGIC ---
   let navSections;
   if (isRetail) {
     navSections = retailOfficeNavItems;
   } else if (isDistribution) {
-    navSections = distributionNavItems;
+    navSections = distributionNavItems; // Uses the file we just created
   } else {
     navSections = roleNavItems[role];
   }
+  // ----------------------------------
 
-  // --- STATE FOR USER INFO ---
+  // ... (Rest of your component code: User state, Logout, Render)
+  // No changes needed below if the logic above is correct.
+
   const [user, setUser] = useState({
     name: "Loading...",
     email: "",
@@ -155,7 +160,7 @@ export function AppSidebar({
         </div>
       </nav>
 
-      {/* User Profile & Logout */}
+      {/* Footer */}
       <div className="border-t p-4 space-y-3 shrink-0">
         <div className="flex items-center gap-3 px-2">
           <div className="h-9 w-9 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold text-sm shrink-0">

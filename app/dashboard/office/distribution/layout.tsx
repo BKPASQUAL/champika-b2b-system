@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppSidebar } from "@/components/ui/layout/AppSidebar";
 import { MobileNav } from "@/components/ui/layout/MobileNav";
-import { Factory, Warehouse } from "lucide-react";
+import { Warehouse } from "lucide-react";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 
 export default function DistributionOfficeLayout({
@@ -18,7 +18,7 @@ export default function DistributionOfficeLayout({
   const [isAuthorized, setIsAuthorized] = useState<boolean>(false);
 
   useEffect(() => {
-    // Check if user has access to distribution business
+    // 1. Check if user has access to distribution business
     const user = getUserBusinessContext();
 
     if (!user) {
@@ -26,30 +26,26 @@ export default function DistributionOfficeLayout({
       return;
     }
 
-    // Verify user is office staff
+    // 2. Verify user is office staff
     if (user.role !== "office") {
       router.push("/dashboard/office");
       return;
     }
 
-    // Verify user is assigned to distribution business
-    // We check for 'distribution' or fallback to the main 'champika hardware' name
-    // which usually implies the main distribution center
+    // 3. Verify user is assigned to distribution business
     const isDistribution =
       user.businessName?.toLowerCase().includes("distribution") ||
       user.businessName?.toLowerCase().includes("champika hardware");
 
     if (!isDistribution) {
-      // If authorized for retail but not distribution, redirect to retail or main
       router.push("/dashboard/office");
       return;
     }
 
-    setBusinessName(user.businessName || "Champika Hardware - Distribution");
+    setBusinessName(user.businessName || "Distribution Center");
     setIsAuthorized(true);
   }, [router]);
 
-  // Show loading while checking authorization
   if (!isAuthorized) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
@@ -63,20 +59,15 @@ export default function DistributionOfficeLayout({
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      {/* Desktop Sidebar 
-          We use role="office" without isRetail flag to load the 
-          Standard/Distribution navigation (Orders, Loading, Dispatched) 
-      */}
-      <AppSidebar role="office" />
+      {/* Sidebar with isDistribution flag for Blue Theme */}
+      <AppSidebar role="office" isDistribution={true} />
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Mobile Header */}
         <header className="lg:hidden h-14 bg-white border-b flex items-center px-4 sticky top-0 z-30">
-          <MobileNav role="office" />
-          <span className="ml-4 font-bold text-gray-700">
-            Distribution Portal
-          </span>
+          <MobileNav role="office" isDistribution={true} />
+          <span className="ml-4 font-bold text-gray-700">Distribution</span>
         </header>
 
         {/* Desktop Header */}
@@ -89,9 +80,7 @@ export default function DistributionOfficeLayout({
               <h1 className="text-sm font-semibold text-gray-900">
                 {businessName}
               </h1>
-              <p className="text-xs text-gray-500">
-                Office Portal - Distribution
-              </p>
+              <p className="text-xs text-gray-500">Distribution Portal</p>
             </div>
           </div>
           <div className="flex items-center gap-4">
