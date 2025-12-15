@@ -26,8 +26,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-// Update the import to point to your Office/Distribution types
-import { Order } from "@/app/dashboard/office/orders/types";
+// ✅ FIXED IMPORT: Points to the correct types file in the parent folder
+import { Order } from "../types";
 
 export default function DistributionCheckingOrdersPage() {
   const router = useRouter();
@@ -60,6 +60,7 @@ export default function DistributionCheckingOrdersPage() {
   // --- 2. Filter Logic ---
   const filteredOrders = orders.filter((order) => {
     const searchLower = searchQuery.toLowerCase();
+    // Safe access to invoiceNo if it exists on the type or extended type
     const invoiceMatch = (order as any).invoiceNo
       ? (order as any).invoiceNo.toLowerCase().includes(searchLower)
       : false;
@@ -85,7 +86,7 @@ export default function DistributionCheckingOrdersPage() {
       {/* Header Section */}
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between mb-1">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Checking Orderss</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Checking Orders</h1>
           <p className="text-muted-foreground text-sm">
             Quality control and final item verification.
           </p>

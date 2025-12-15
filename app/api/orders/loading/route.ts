@@ -12,9 +12,12 @@ const createLoadSchema = z.object({
   orderIds: z.array(z.string()).min(1, "Select at least one order"),
 });
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const { data: orders, error } = await supabaseAdmin
+    const { searchParams } = new URL(request.url);
+    const businessId = searchParams.get("businessId");
+
+    let query = supabaseAdmin
       .from("orders")
       .select(
         `
@@ -32,8 +35,16 @@ export async function GET() {
         )
       `
       )
-      .eq("status", "Loading")
-      .order("created_at", { ascending: false });
+      .eq("status", "Loading");
+
+    // ✅ Filter by Business ID if provided
+    if (businessId) {
+      query = query.eq("business_id", businessId);
+    }
+
+    const { data: orders, error } = await query.order("created_at", {
+      ascending: false,
+    });
 
     if (error) throw error;
 
@@ -85,12 +96,11 @@ export async function POST(request: NextRequest) {
     if (loadError) throw loadError;
 
     // Update Orders
-    // CHANGED: Status is now 'In Transit', NOT 'Delivered'
     const { error: updateError } = await supabaseAdmin
       .from("orders")
       .update({
         load_id: loadData.id,
-        status: "In Transit", // Updated status
+        status: "In Transit",
       })
       .in("id", val.orderIds);
 

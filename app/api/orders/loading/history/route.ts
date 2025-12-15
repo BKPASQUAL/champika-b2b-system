@@ -1,11 +1,14 @@
-// FILE PATH: app/api/orders/loading/history/route.ts
+// app/api/orders/loading/history/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(request: NextRequest) {
   try {
-    // Fetch all loading sheets with related data
-    const { data: loadingSheets, error } = await supabaseAdmin
+    const { searchParams } = new URL(request.url);
+    const businessId = searchParams.get("businessId");
+
+    // Start Query
+    let query = supabaseAdmin
       .from("loading_sheets")
       .select(
         `
@@ -19,15 +22,23 @@ export async function GET(request: NextRequest) {
         profiles!loading_sheets_driver_id_fkey (
           full_name
         ),
-        orders (
+        orders!inner (
           id,
           order_id,
-          total_amount
+          total_amount,
+          business_id
         )
       `
       )
       .order("loading_date", { ascending: false })
       .order("created_at", { ascending: false });
+
+    // ✅ Filter by Business ID (via the inner join on orders)
+    if (businessId) {
+      query = query.eq("orders.business_id", businessId);
+    }
+
+    const { data: loadingSheets, error } = await query;
 
     if (error) throw error;
 

@@ -8,6 +8,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
+  Search,
+  Filter,
+  ArrowRight,
+  Loader2,
+  Package,
+  User,
+  Calendar,
+  FileText,
+  AlertCircle,
+} from "lucide-react";
+import {
   Table,
   TableBody,
   TableCell,
@@ -15,20 +26,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Search,
-  Filter,
-  ArrowRight,
-  Loader2,
-  PackageCheck,
-  Eye,
-  User,
-  Calendar,
-  FileText,
-} from "lucide-react";
 import { toast } from "sonner";
-// Updated import path for Office/Distribution context
-import { Order } from "@/app/dashboard/office/orders/types";
+// ✅ FIXED IMPORT: Points to the correct types file in the parent folder
+import { Order } from "../types";
 
 export default function DistributionProcessingOrdersPage() {
   const router = useRouter();
@@ -42,7 +42,7 @@ export default function DistributionProcessingOrdersPage() {
     const fetchOrders = async () => {
       try {
         setLoading(true);
-        // Using the same API, filtering by status
+        // Fetch only Processing orders
         const res = await fetch("/api/orders?status=Processing");
         if (!res.ok) throw new Error("Failed to load processing orders");
         const data = await res.json();
@@ -61,7 +61,6 @@ export default function DistributionProcessingOrdersPage() {
   // --- 2. Filter Logic ---
   const filteredOrders = orders.filter((order) => {
     const searchLower = searchQuery.toLowerCase();
-    // Safe access to invoiceNo in case it's undefined
     const invoiceMatch = (order as any).invoiceNo
       ? (order as any).invoiceNo.toLowerCase().includes(searchLower)
       : false;
@@ -85,12 +84,12 @@ export default function DistributionProcessingOrdersPage() {
   return (
     <div className="">
       {/* Header Section */}
-      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between mb-4">
-        <div className="">
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between mb-1">
+        <div>
           <h1 className="text-2xl font-bold tracking-tight">
             Processing Orders
           </h1>
-          <p className="text-muted-foreground text-sm ">
+          <p className="text-muted-foreground text-sm">
             Orders currently being picked and packed.
           </p>
         </div>
@@ -100,7 +99,7 @@ export default function DistributionProcessingOrdersPage() {
       <Card className="border-0 sm:border shadow-none sm:shadow-sm bg-transparent sm:bg-card">
         <CardHeader className="px-0 sm:px-6 pb-2 pt-2">
           <div className="flex items-center gap-2">
-            <div className="relative flex-1 " >
+            <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search Invoice, Order ID or Shop..."
@@ -121,7 +120,7 @@ export default function DistributionProcessingOrdersPage() {
             {filteredOrders.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground bg-slate-50 rounded-lg border border-dashed">
                 <div className="flex flex-col items-center justify-center">
-                  <PackageCheck className="h-10 w-10 text-muted-foreground/20 mb-3" />
+                  <AlertCircle className="h-10 w-10 text-muted-foreground/20 mb-3" />
                   <p>No orders in processing.</p>
                 </div>
               </div>
@@ -131,7 +130,6 @@ export default function DistributionProcessingOrdersPage() {
                   key={order.id}
                   className="bg-white border rounded-xl p-4 shadow-sm flex flex-col gap-3 active:scale-[0.99] transition-transform"
                   onClick={() =>
-                    // Navigate to Distribution specific Processing Details
                     router.push(
                       `/dashboard/office/distribution/orders/processing/${order.id}`
                     )
@@ -144,10 +142,9 @@ export default function DistributionProcessingOrdersPage() {
                         <FileText className="h-3 w-3" />
                         {(order as any).invoiceNo || "N/A"}
                       </div>
-                      <div className="flex items-center text-xs text-muted-foreground">
-                        <Calendar className="mr-1 h-3 w-3" />
-                        {new Date(order.date).toLocaleDateString()}
-                      </div>
+                      <span className="text-[10px] text-muted-foreground font-mono">
+                        ({order.orderId})
+                      </span>
                     </div>
                     <Badge
                       variant="outline"
@@ -163,9 +160,10 @@ export default function DistributionProcessingOrdersPage() {
                       <p className="text-sm font-bold text-slate-900 truncate">
                         {order.shopName}
                       </p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {order.customerName}
-                      </p>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Calendar className="h-3 w-3" />
+                        {new Date(order.date).toLocaleDateString()}
+                      </div>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0 bg-slate-50 border border-slate-100 text-slate-600 px-2 py-1 rounded text-xs font-medium">
                       <User className="h-3 w-3" />
@@ -192,9 +190,9 @@ export default function DistributionProcessingOrdersPage() {
                   {/* Row 4: Action Button */}
                   <Button
                     size="sm"
-                    className="w-full mt-1 bg-indigo-600 hover:bg-indigo-700 text-white h-9"
+                    className="w-full mt-1 bg-blue-600 hover:bg-blue-700 text-white h-9"
                   >
-                    Process Order <ArrowRight className="ml-2 h-3 w-3" />
+                    Pack Order <ArrowRight className="ml-2 h-3 w-3" />
                   </Button>
                 </div>
               ))
@@ -224,8 +222,8 @@ export default function DistributionProcessingOrdersPage() {
                       className="text-center py-12 text-muted-foreground"
                     >
                       <div className="flex flex-col items-center justify-center">
-                        <PackageCheck className="h-12 w-12 text-muted-foreground/20 mb-4" />
-                        <p>No orders in processing.</p>
+                        <Package className="h-12 w-12 text-muted-foreground/20 mb-4" />
+                        <p>No processing orders found.</p>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -274,37 +272,17 @@ export default function DistributionProcessingOrdersPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          {/* View Details (General View) */}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() =>
-                              // Distribution Generic Order View
-                              router.push(
-                                `/dashboard/office/distribution/orders/${order.id}`
-                              )
-                            }
-                            title="View Details"
-                            className="h-8 w-8"
-                          >
-                            <Eye className="h-4 w-4 text-muted-foreground" />
-                          </Button>
-
-                          {/* Process Order (Navigate to Packing Page) */}
-                          <Button
-                            size="sm"
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white h-8 text-xs"
-                            onClick={() =>
-                              // Distribution Processing/Packing View
-                              router.push(
-                                `/dashboard/office/distribution/orders/processing/${order.id}`
-                              )
-                            }
-                          >
-                            Process <ArrowRight className="ml-1 h-3 w-3" />
-                          </Button>
-                        </div>
+                        <Button
+                          size="sm"
+                          className="bg-blue-600 hover:bg-blue-700 text-white h-8 text-xs"
+                          onClick={() =>
+                            router.push(
+                              `/dashboard/office/distribution/orders/processing/${order.id}`
+                            )
+                          }
+                        >
+                          Pack <ArrowRight className="ml-1 h-3 w-3" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))

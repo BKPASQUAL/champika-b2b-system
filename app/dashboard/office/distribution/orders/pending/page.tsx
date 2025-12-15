@@ -8,6 +8,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
+  Search,
+  Filter,
+  ArrowRight,
+  Loader2,
+  Clock,
+  User,
+  Calendar,
+  FileText,
+  AlertCircle,
+} from "lucide-react";
+import {
   Table,
   TableBody,
   TableCell,
@@ -15,19 +26,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Search,
-  Filter,
-  ArrowRight,
-  Loader2,
-  ClipboardList,
-  User,
-  Calendar,
-  FileText,
-} from "lucide-react";
 import { toast } from "sonner";
-// We can reuse the types from the general office or admin folder
-import { Order } from "@/app/dashboard/office/orders/types";
+// ✅ FIXED IMPORT: Points to the correct types file in the parent folder
+import { Order } from "../types";
 
 export default function DistributionPendingOrdersPage() {
   const router = useRouter();
@@ -38,29 +39,28 @@ export default function DistributionPendingOrdersPage() {
 
   // --- 1. Fetch Pending Orders ---
   useEffect(() => {
-    const fetchPendingOrders = async () => {
+    const fetchOrders = async () => {
       try {
         setLoading(true);
-        // Using the same API endpoint to get Pending orders
+        // Fetch only Pending orders
         const res = await fetch("/api/orders?status=Pending");
         if (!res.ok) throw new Error("Failed to load pending orders");
         const data = await res.json();
         setOrders(data);
       } catch (error) {
         console.error(error);
-        toast.error("Error loading pending orders");
+        toast.error("Failed to load orders");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchPendingOrders();
+    fetchOrders();
   }, []);
 
   // --- 2. Filter Logic ---
   const filteredOrders = orders.filter((order) => {
     const searchLower = searchQuery.toLowerCase();
-    // Helper to safely check Invoice No (in case type definition varies)
     const invoiceMatch = (order as any).invoiceNo
       ? (order as any).invoiceNo.toLowerCase().includes(searchLower)
       : false;
@@ -84,11 +84,11 @@ export default function DistributionPendingOrdersPage() {
   return (
     <div className="">
       {/* Header Section */}
-      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between mb-4">
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between mb-1">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Pending Orders</h1>
           <p className="text-muted-foreground text-sm">
-            Review new orders and approve them for distribution.
+            Orders waiting for approval or processing.
           </p>
         </div>
       </div>
@@ -118,7 +118,7 @@ export default function DistributionPendingOrdersPage() {
             {filteredOrders.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground bg-slate-50 rounded-lg border border-dashed">
                 <div className="flex flex-col items-center justify-center">
-                  <ClipboardList className="h-10 w-10 text-muted-foreground/20 mb-3" />
+                  <AlertCircle className="h-10 w-10 text-muted-foreground/20 mb-3" />
                   <p>No pending orders found.</p>
                 </div>
               </div>
@@ -128,7 +128,6 @@ export default function DistributionPendingOrdersPage() {
                   key={order.id}
                   className="bg-white border rounded-xl p-4 shadow-sm flex flex-col gap-3 active:scale-[0.99] transition-transform"
                   onClick={() =>
-                    // Navigate to Distribution specific Order View
                     router.push(
                       `/dashboard/office/distribution/orders/${order.id}`
                     )
@@ -137,14 +136,13 @@ export default function DistributionPendingOrdersPage() {
                   {/* Row 1: Invoice No, Date, Status */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-1 font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded text-xs">
+                      <div className="flex items-center gap-1 font-mono font-bold text-yellow-700 bg-yellow-50 px-2 py-0.5 rounded text-xs">
                         <FileText className="h-3 w-3" />
                         {(order as any).invoiceNo || "N/A"}
                       </div>
-                      <div className="flex items-center text-xs text-muted-foreground">
-                        <Calendar className="mr-1 h-3 w-3" />
-                        {new Date(order.date).toLocaleDateString()}
-                      </div>
+                      <span className="text-[10px] text-muted-foreground font-mono">
+                        ({order.orderId})
+                      </span>
                     </div>
                     <Badge
                       variant="outline"
@@ -160,9 +158,10 @@ export default function DistributionPendingOrdersPage() {
                       <p className="text-sm font-bold text-slate-900 truncate">
                         {order.shopName}
                       </p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {order.customerName}
-                      </p>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Calendar className="h-3 w-3" />
+                        {new Date(order.date).toLocaleDateString()}
+                      </div>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0 bg-slate-50 border border-slate-100 text-slate-600 px-2 py-1 rounded text-xs font-medium">
                       <User className="h-3 w-3" />
@@ -189,9 +188,9 @@ export default function DistributionPendingOrdersPage() {
                   {/* Row 4: Action Button */}
                   <Button
                     size="sm"
-                    className="w-full mt-1 bg-blue-600 hover:bg-blue-700 text-white h-9"
+                    className="w-full mt-1 bg-yellow-600 hover:bg-yellow-700 text-white h-9"
                   >
-                    Review Order <ArrowRight className="ml-2 h-3 w-3" />
+                    Process Order <ArrowRight className="ml-2 h-3 w-3" />
                   </Button>
                 </div>
               ))
@@ -221,7 +220,7 @@ export default function DistributionPendingOrdersPage() {
                       className="text-center py-12 text-muted-foreground"
                     >
                       <div className="flex flex-col items-center justify-center">
-                        <ClipboardList className="h-12 w-12 text-muted-foreground/20 mb-4" />
+                        <AlertCircle className="h-12 w-12 text-muted-foreground/20 mb-4" />
                         <p>No pending orders found.</p>
                       </div>
                     </TableCell>
@@ -234,7 +233,7 @@ export default function DistributionPendingOrdersPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col">
-                          <span className="font-medium font-mono text-blue-700 text-xs flex items-center gap-1">
+                          <span className="font-medium font-mono text-yellow-700 text-xs flex items-center gap-1">
                             <FileText className="h-3 w-3" />
                             {(order as any).invoiceNo || "N/A"}
                           </span>
@@ -273,14 +272,14 @@ export default function DistributionPendingOrdersPage() {
                       <TableCell className="text-right">
                         <Button
                           size="sm"
-                          className="bg-blue-600 hover:bg-blue-700 text-white h-8 text-xs"
+                          className="bg-yellow-600 hover:bg-yellow-700 text-white h-8 text-xs"
                           onClick={() =>
                             router.push(
                               `/dashboard/office/distribution/orders/${order.id}`
                             )
                           }
                         >
-                          Review <ArrowRight className="ml-1 h-3 w-3" />
+                          Process <ArrowRight className="ml-1 h-3 w-3" />
                         </Button>
                       </TableCell>
                     </TableRow>
