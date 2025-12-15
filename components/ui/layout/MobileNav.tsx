@@ -4,32 +4,37 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X, Store, Package, Warehouse } from "lucide-react"; // Added Warehouse
+import { Menu, Store, Package, Warehouse, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { roleNavItems, UserRole } from "@/app/config/nav-config";
 import { retailOfficeNavItems } from "@/app/config/retail-nav-config";
-import { distributionNavItems } from "@/app/config/distribution-nav-config"; // Import Distribution Config
+import { distributionNavItems } from "@/app/config/distribution-nav-config";
+import { orangeOfficeNavItems } from "@/app/config/orange-nav-config";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 
 interface MobileNavProps {
   role: UserRole;
   isRetail?: boolean;
-  isDistribution?: boolean; // Added isDistribution prop
+  isDistribution?: boolean;
+  isOrange?: boolean;
 }
 
 export function MobileNav({
   role,
   isRetail = false,
   isDistribution = false,
+  isOrange = false,
 }: MobileNavProps) {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
 
   // Determine which navigation to show
   let navSections;
-  if (isRetail) {
+  if (isOrange) {
+    navSections = orangeOfficeNavItems;
+  } else if (isRetail) {
     navSections = retailOfficeNavItems;
   } else if (isDistribution) {
     navSections = distributionNavItems;
@@ -69,7 +74,12 @@ export function MobileNav({
       <SheetContent side="left" className="w-72 p-0">
         {/* Logo Header */}
         <div className="h-16 flex items-center border-b px-6">
-          {isRetail ? (
+          {isOrange ? (
+            <>
+              <Globe className="h-6 w-6 text-orange-600 shrink-0" />
+              <span className="ml-2 text-lg font-semibold">Agency Portal</span>
+            </>
+          ) : isRetail ? (
             <>
               <Store className="h-6 w-6 text-green-600 shrink-0" />
               <span className="ml-2 text-lg font-semibold">Retail Portal</span>
@@ -90,12 +100,18 @@ export function MobileNav({
         {/* Business Badge */}
         {user.businessName && (
           <div className="px-4 py-3 border-b bg-muted/30">
-            <Badge variant="secondary" className="w-full justify-center">
-              {isRetail ? (
-                <Store className="h-3 w-3 mr-1" />
-              ) : isDistribution ? (
-                <Warehouse className="h-3 w-3 mr-1" />
-              ) : null}
+            <Badge
+              variant="secondary"
+              className={cn(
+                "w-full justify-center",
+                isOrange && "bg-orange-100 text-orange-700 border-orange-200",
+                isRetail && "bg-green-100 text-green-700 border-green-200",
+                isDistribution && "bg-blue-100 text-blue-700 border-blue-200"
+              )}
+            >
+              {isOrange && <Globe className="h-3 w-3 mr-1" />}
+              {isRetail && <Store className="h-3 w-3 mr-1" />}
+              {isDistribution && <Warehouse className="h-3 w-3 mr-1" />}
               {user.businessName}
             </Badge>
           </div>
@@ -129,7 +145,13 @@ export function MobileNav({
                           className={cn(
                             "w-full justify-start gap-3 h-10 px-3",
                             isActive
-                              ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                              ? isOrange
+                                ? "bg-orange-100 text-orange-700 hover:bg-orange-200"
+                                : isRetail
+                                ? "bg-green-100 text-green-700 hover:bg-green-200"
+                                : isDistribution
+                                ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                                : "bg-primary text-primary-foreground hover:bg-primary/90"
                               : "hover:bg-accent"
                           )}
                         >

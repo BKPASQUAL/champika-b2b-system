@@ -1,10 +1,14 @@
-// middleware/businessAuth.ts
+// app/middleware/businessAuth.ts
 /**
  * Business-Aware Authentication Middleware
  * Provides utilities for filtering navigation and validating business access
  */
 
 import { UserRole } from "@/app/config/nav-config";
+import {
+  BUSINESS_IDS,
+  getBusinessRoute,
+} from "@/app/config/business-constants";
 
 export interface UserBusinessContext {
   id: string;
@@ -23,7 +27,7 @@ export function hasBusinessAccess(
   user: UserBusinessContext,
   requiredBusinessId?: string
 ): boolean {
-  // Admin and super_admin have access to all businesses
+  // Admin has access to all businesses
   if (user.role === "admin") {
     return true;
   }
@@ -38,21 +42,35 @@ export function hasBusinessAccess(
 }
 
 /**
- * Check if user can access retail business features
+ * Check if user can access Orange Agency
  */
-export function canAccessRetailBusiness(user: UserBusinessContext): boolean {
-  // Only office staff can access retail business
+export function canAccessOrangeAgency(user: UserBusinessContext): boolean {
   if (user.role !== "office") {
     return false;
   }
+  return user.businessId === BUSINESS_IDS.ORANGE_AGENCY;
+}
 
-  // Check if user is assigned to retail business
-  // You can either check by business name or ID
-  const hasRetailBusiness =
-    user.businessName?.toLowerCase().includes("retail") ||
-    user.businessName?.toLowerCase().includes("champika hardware");
+/**
+ * Check if user can access retail business
+ */
+export function canAccessRetailBusiness(user: UserBusinessContext): boolean {
+  if (user.role !== "office") {
+    return false;
+  }
+  return user.businessId === BUSINESS_IDS.CHAMPIKA_RETAIL;
+}
 
-  return hasRetailBusiness ?? false;
+/**
+ * Check if user can access distribution business
+ */
+export function canAccessDistributionBusiness(
+  user: UserBusinessContext
+): boolean {
+  if (user.role !== "office") {
+    return false;
+  }
+  return user.businessId === BUSINESS_IDS.CHAMPIKA_DISTRIBUTION;
 }
 
 /**
@@ -73,6 +91,34 @@ export function getUserBusinessContext(): UserBusinessContext | null {
 }
 
 /**
+ * Get the appropriate dashboard route for a user based on their business
+ */
+export function getUserBusinessRoute(user: UserBusinessContext): string {
+  // Admin can go to admin dashboard
+  if (user.role === "admin") {
+    return "/dashboard/admin";
+  }
+
+  // Office staff get routed to their business-specific layout
+  if (user.role === "office" && user.businessId) {
+    return getBusinessRoute(user.businessId);
+  }
+
+  // Sales reps
+  if (user.role === "rep") {
+    return "/dashboard/rep";
+  }
+
+  // Delivery drivers
+  if (user.role === "delivery") {
+    return "/dashboard/delivery";
+  }
+
+  // Default fallback
+  return "/dashboard/office";
+}
+
+/**
  * Filter navigation items based on business access
  */
 export function filterNavByBusiness<T extends { businessRequired?: string }>(
@@ -83,4 +129,36 @@ export function filterNavByBusiness<T extends { businessRequired?: string }>(
     if (!item.businessRequired) return true;
     return hasBusinessAccess(user, item.businessRequired);
   });
+}
+
+/**
+ * Verify user can access a specific business route
+ */
+export function verifyBusinessRouteAccess(
+  user: UserBusinessContext,
+  businessId: string
+): { canAccess: boolean; redirectTo: string | null } {
+  // Admin can access everything
+  if (user.role === "admin") {
+    return { canAccess: true, redirectTo: null };
+  }
+
+  // Office staff can only access their assigned business
+  if (user.role === "office") {
+    if (user.businessId === businessId) {
+      return { canAccess: true, redirectTo: null };
+    } else {
+      // Redirect to their actual business
+      return {
+        canAccess: false,
+        redirectTo: getUserBusinessRoute(user),
+      };
+    }
+  }
+
+  // Other roles can't access office business routes
+  return {
+    canAccess: false,
+    redirectTo: getUserBusinessRoute(user),
+  };
 }

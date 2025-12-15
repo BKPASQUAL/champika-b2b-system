@@ -5,42 +5,42 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { LogOut, Package, Store, Warehouse } from "lucide-react";
+import { LogOut, Package, Store, Warehouse, Globe } from "lucide-react";
 import { roleNavItems, UserRole } from "@/app/config/nav-config";
 import { retailOfficeNavItems } from "@/app/config/retail-nav-config";
-// --- ENSURE THIS IMPORT IS PRESENT ---
 import { distributionNavItems } from "@/app/config/distribution-nav-config";
-// -------------------------------------
+import { orangeOfficeNavItems } from "@/app/config/orange-nav-config";
 import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 
 interface AppSidebarProps {
   role: UserRole;
   isRetail?: boolean;
-  isDistribution?: boolean; // Ensure this prop exists
+  isDistribution?: boolean;
+  isOrange?: boolean;
 }
 
 export function AppSidebar({
   role,
   isRetail = false,
   isDistribution = false,
+  isOrange = false,
 }: AppSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
 
   // --- NAVIGATION SELECTION LOGIC ---
   let navSections;
-  if (isRetail) {
+  if (isOrange) {
+    navSections = orangeOfficeNavItems;
+  } else if (isRetail) {
     navSections = retailOfficeNavItems;
   } else if (isDistribution) {
-    navSections = distributionNavItems; // Uses the file we just created
+    navSections = distributionNavItems;
   } else {
     navSections = roleNavItems[role];
   }
   // ----------------------------------
-
-  // ... (Rest of your component code: User state, Logout, Render)
-  // No changes needed below if the logic above is correct.
 
   const [user, setUser] = useState({
     name: "Loading...",
@@ -83,7 +83,14 @@ export function AppSidebar({
     <div className="hidden lg:flex w-64 border-r bg-card h-screen sticky top-0 flex-col shadow-sm z-40">
       {/* Logo Header */}
       <div className="h-16 flex items-center border-b px-6 shrink-0">
-        {isRetail ? (
+        {isOrange ? (
+          <>
+            <Globe className="h-6 w-6 text-orange-600 shrink-0" />
+            <span className="ml-2 text-lg font-semibold truncate">
+              Agency Portal
+            </span>
+          </>
+        ) : isRetail ? (
           <>
             <Store className="h-6 w-6 text-green-600 shrink-0" />
             <span className="ml-2 text-lg font-semibold truncate">
@@ -109,25 +116,31 @@ export function AppSidebar({
 
       {/* Business Badge */}
       {user.businessName && (
-        <div className="px-4 py-3 border-b bg-muted/30">
-          <Badge variant="secondary" className="w-full justify-center">
-            {isRetail ? (
-              <Store className="h-3 w-3 mr-1" />
-            ) : isDistribution ? (
-              <Warehouse className="h-3 w-3 mr-1" />
-            ) : null}
+        <div className="px-4 pt-4 pb-2">
+          <Badge
+            variant="secondary"
+            className={cn(
+              "w-full justify-center",
+              isOrange && "bg-orange-100 text-orange-700 border-orange-200",
+              isRetail && "bg-green-100 text-green-700 border-green-200",
+              isDistribution && "bg-blue-100 text-blue-700 border-blue-200"
+            )}
+          >
+            {isOrange && <Globe className="h-3 w-3 mr-1" />}
+            {isRetail && <Store className="h-3 w-3 mr-1" />}
+            {isDistribution && <Warehouse className="h-3 w-3 mr-1" />}
             {user.businessName}
           </Badge>
         </div>
       )}
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-4 py-2">
-        <div className="space-y-3">
+      <nav className="flex-1 overflow-y-auto px-4 py-4">
+        <div className="space-y-4">
           {navSections.map((section, sectionIdx) => (
             <div key={sectionIdx}>
               {section.title && (
-                <h3 className="mb-1 px-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                <h3 className="mb-2 px-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   {section.title}
                 </h3>
               )}
@@ -137,15 +150,21 @@ export function AppSidebar({
                   const isActive = pathname === item.href;
 
                   return (
-                    <Link key={item.href} href={item.href} className="block">
+                    <Link key={item.href} href={item.href}>
                       <Button
                         variant="ghost"
                         size="sm"
                         className={cn(
-                          "w-full justify-start gap-3 h-9 px-3 text-sm",
+                          "w-full justify-start gap-3 h-10 px-3",
                           isActive
-                            ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
-                            : "hover:bg-accent hover:text-accent-foreground"
+                            ? isOrange
+                              ? "bg-orange-100 text-orange-700 hover:bg-orange-200"
+                              : isRetail
+                              ? "bg-green-100 text-green-700 hover:bg-green-200"
+                              : isDistribution
+                              ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                              : "bg-primary text-primary-foreground hover:bg-primary/90"
+                            : "hover:bg-accent"
                         )}
                       >
                         <Icon className="h-4 w-4 shrink-0" />
@@ -160,10 +179,21 @@ export function AppSidebar({
         </div>
       </nav>
 
-      {/* Footer */}
-      <div className="border-t p-4 space-y-3 shrink-0">
-        <div className="flex items-center gap-3 px-2">
-          <div className="h-9 w-9 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold text-sm shrink-0">
+      {/* User Profile Footer */}
+      <div className="border-t p-4 shrink-0">
+        <div className="flex items-center gap-3 px-2 mb-3">
+          <div
+            className={cn(
+              "h-9 w-9 rounded-full flex items-center justify-center font-bold text-xs",
+              isOrange && "bg-orange-100 text-orange-700",
+              isRetail && "bg-green-100 text-green-700",
+              isDistribution && "bg-blue-100 text-blue-700",
+              !isOrange &&
+                !isRetail &&
+                !isDistribution &&
+                "bg-primary/10 text-primary"
+            )}
+          >
             {user.initials}
           </div>
           <div className="flex-1 min-w-0">
@@ -173,12 +203,18 @@ export function AppSidebar({
             </p>
           </div>
         </div>
+
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
-          className="w-full justify-start gap-2"
           onClick={handleLogout}
           disabled={isLoggingOut}
+          className={cn(
+            "w-full justify-start gap-2",
+            isOrange && "hover:bg-orange-50 hover:text-orange-600",
+            isRetail && "hover:bg-green-50 hover:text-green-600",
+            isDistribution && "hover:bg-blue-50 hover:text-blue-600"
+          )}
         >
           <LogOut className="h-4 w-4" />
           {isLoggingOut ? "Logging out..." : "Logout"}

@@ -6,7 +6,11 @@ import { useRouter } from "next/navigation";
 import { AppSidebar } from "@/components/ui/layout/AppSidebar";
 import { MobileNav } from "@/components/ui/layout/MobileNav";
 import { Globe } from "lucide-react";
-import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import {
+  getUserBusinessContext,
+  verifyBusinessRouteAccess,
+} from "@/app/middleware/businessAuth";
+import { BUSINESS_IDS, getBusinessName } from "@/app/config/business-constants";
 
 export default function OrangeAgencyLayout({
   children,
@@ -21,40 +25,27 @@ export default function OrangeAgencyLayout({
     // 1. Get User Context
     const user = getUserBusinessContext();
 
-    // 2. Safety Check: If no user, send to login
+    // 2. If no user, redirect to login
     if (!user) {
       router.push("/login");
       return;
     }
 
-    // 3. Safety Check: If not office staff, send to main dashboard
-    if (user.role !== "office") {
-      router.push("/dashboard/office");
+    // 3. Verify access to Orange Agency
+    const { canAccess, redirectTo } = verifyBusinessRouteAccess(
+      user,
+      BUSINESS_IDS.ORANGE_AGENCY
+    );
+
+    if (!canAccess && redirectTo) {
+      router.push(redirectTo);
       return;
     }
 
-    // 4. Check Business Name (SAFE MODE)
-    // We use || "" to ensure we always have a string to check, preventing crashes
-    const currentBusiness = (user.businessName || "").toLowerCase();
-    const isAgency = currentBusiness.includes("orange agency");
-
-    if (!isAgency) {
-      console.log("Not Orange Agency, redirecting..."); // Debug log
-
-      // Fallback redirection logic
-      if (
-        currentBusiness.includes("retail") ||
-        currentBusiness.includes("champika hardware")
-      ) {
-        router.push("/dashboard/office/retail");
-      } else {
-        router.push("/dashboard/office");
-      }
-      return;
-    }
-
-    // 5. Success!
-    setBusinessName(user.businessName || "Orange Agency");
+    // 4. Success - User has access
+    setBusinessName(
+      user.businessName || getBusinessName(BUSINESS_IDS.ORANGE_AGENCY)
+    );
     setIsAuthorized(true);
   }, [router]);
 
