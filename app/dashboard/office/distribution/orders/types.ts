@@ -1,3 +1,5 @@
+// app/dashboard/office/distribution/orders/types.ts
+
 export type OrderStatus =
   | "Pending"
   | "Processing"
@@ -5,22 +7,19 @@ export type OrderStatus =
   | "Loading"
   | "In Transit"
   | "Delivered"
-  | "Cancelled"
-  | "Completed";
-
-export type PaymentStatus = "Paid" | "Unpaid" | "Partial";
+  | "Completed"
+  | "Cancelled";
 
 export interface Order {
   id: string;
   orderId: string;
+  date: string;
   customerName: string;
   shopName: string;
-  date: string;
-  totalAmount: number;
-  itemCount: number;
-  status: OrderStatus;
-  paymentStatus: PaymentStatus;
   salesRep: string;
+  itemCount: number;
+  totalAmount: number;
+  status: OrderStatus;
 }
 
 export type SortField =
@@ -29,5 +28,4 @@ export type SortField =
   | "customerName"
   | "totalAmount"
   | "status";
-
 export type SortOrder = "asc" | "desc";
