@@ -82,7 +82,8 @@ interface Bank {
 interface CompanyAccount {
   id: string;
   account_name: string;
-  account_type: "saving" | "current" | "cash";
+  // Updated to allow "savings" (plural) which is standard
+  account_type: "savings" | "saving" | "current" | "cash";
   account_number: string | null;
   current_balance: number;
   banks?: {
@@ -103,7 +104,17 @@ interface Payment {
   notes: string | null;
   cheque_number: string | null;
   cheque_date: string | null;
-  cheque_status: "pending" | "deposited" | "passed" | "returned" | null;
+  // Updated to include Capitalized statuses (common from API)
+  cheque_status:
+    | "Pending"
+    | "Deposited"
+    | "Passed"
+    | "Returned"
+    | "pending"
+    | "deposited"
+    | "passed"
+    | "returned"
+    | null;
   bank_id: string | null;
   deposit_account_id: string | null;
   customers?: {
@@ -112,6 +123,7 @@ interface Payment {
   orders?: {
     order_number: string;
     total_amount: number;
+    business_name?: string;
   } | null;
   banks?: {
     bank_code: string;
@@ -120,7 +132,7 @@ interface Payment {
   company_accounts?: {
     account_name: string;
     account_type: string;
-  };
+  } | null;
 }
 
 interface Order {
@@ -132,97 +144,8 @@ interface Order {
   total_amount: number;
   paid_amount: number;
   balance: number;
+  paymentStatus: string;
 }
-
-// --- Mock Data ---
-const MOCK_BANKS: Bank[] = [
-  { id: "B1", bank_code: "7010", bank_name: "Commercial Bank" },
-  { id: "B2", bank_code: "7083", bank_name: "Sampath Bank" },
-  { id: "B3", bank_code: "7135", bank_name: "Peoples Bank" },
-];
-
-const MOCK_ACCOUNTS: CompanyAccount[] = [
-  {
-    id: "ACC1",
-    account_name: "Main Cash",
-    account_type: "cash",
-    account_number: null,
-    current_balance: 150000,
-    banks: null,
-  },
-  {
-    id: "ACC2",
-    account_name: "ComBank Current",
-    account_type: "current",
-    account_number: "11001100",
-    current_balance: 4500000,
-    banks: { bank_code: "7010", bank_name: "Commercial Bank" },
-  },
-];
-
-const MOCK_UNPAID_ORDERS: Order[] = [
-  {
-    id: "ORD-001",
-    order_number: "INV-2024-001",
-    customer_id: "C1",
-    customer_name: "Saman Electronics",
-    order_date: "2024-02-15",
-    total_amount: 150000,
-    paid_amount: 50000,
-    balance: 100000,
-  },
-  {
-    id: "ORD-002",
-    order_number: "INV-2024-002",
-    customer_id: "C2",
-    customer_name: "City Hardware",
-    order_date: "2024-02-18",
-    total_amount: 75000,
-    paid_amount: 0,
-    balance: 75000,
-  },
-];
-
-const MOCK_PAYMENTS: Payment[] = [
-  {
-    id: "P1",
-    payment_number: "PAY-1708101",
-    payment_date: "2024-02-10",
-    order_id: "ORD-001",
-    customer_id: "C1",
-    amount: 50000,
-    payment_method: "cash",
-    reference_number: null,
-    notes: "Partial payment",
-    cheque_number: null,
-    cheque_date: null,
-    cheque_status: null,
-    bank_id: null,
-    deposit_account_id: "ACC1",
-    customers: { name: "Saman Electronics" },
-    orders: { order_number: "INV-2024-001", total_amount: 150000 },
-    company_accounts: { account_name: "Main Cash", account_type: "cash" },
-  },
-  {
-    id: "P2",
-    payment_number: "PAY-1708102",
-    payment_date: "2024-02-12",
-    order_id: null,
-    customer_id: "C3",
-    amount: 120000,
-    payment_method: "cheque",
-    reference_number: null,
-    notes: "Advance for new order",
-    cheque_number: "882910",
-    cheque_date: "2024-02-20",
-    cheque_status: "pending",
-    bank_id: "B2",
-    deposit_account_id: null,
-    customers: { name: "Lanka Traders" },
-    orders: null,
-    banks: { bank_code: "7083", bank_name: "Sampath Bank" },
-  },
-];
 
 export default function PaymentsPage() {
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -250,21 +173,77 @@ export default function PaymentsPage() {
     date: new Date().toISOString().split("T")[0],
     method: "cash",
     bankId: "",
-    depositAccountId: "", // New field for deposit account
+    depositAccountId: "",
     chequeNo: "",
     chequeDate: "",
     notes: "",
   });
 
-  useEffect(() => {
-    // Simulate Data Fetching
-    setTimeout(() => {
-      setPayments(MOCK_PAYMENTS);
-      setUnpaidOrders(MOCK_UNPAID_ORDERS);
-      setBanks(MOCK_BANKS);
-      setCompanyAccounts(MOCK_ACCOUNTS);
+  // Fetch all necessary data
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [paymentsRes, ordersRes, accountsRes, banksRes] = await Promise.all(
+        [
+          fetch("/api/payments"),
+          fetch("/api/orders"),
+          fetch("/api/finance/accounts"),
+          fetch("/api/finance/bank-codes"),
+        ]
+      );
+
+      if (!paymentsRes.ok) throw new Error("Failed to fetch payments");
+      if (!ordersRes.ok) throw new Error("Failed to fetch orders");
+      if (!accountsRes.ok) throw new Error("Failed to fetch accounts");
+      if (!banksRes.ok) throw new Error("Failed to fetch bank codes");
+
+      const paymentsData = await paymentsRes.json();
+      const ordersData = await ordersRes.json();
+      const accountsData = await accountsRes.json();
+      const banksData = await banksRes.json();
+
+      setPayments(paymentsData);
+
+      const mappedOrders: Order[] = ordersData
+        .filter((o: any) => o.paymentStatus !== "Paid")
+        .map((o: any) => ({
+          id: o.id,
+          order_number: o.invoiceNo !== "N/A" ? o.invoiceNo : o.orderId,
+          customer_id: "",
+          customer_name: o.customerName,
+          order_date: o.date,
+          total_amount: o.totalAmount,
+          balance: o.totalAmount,
+          paid_amount: 0,
+          paymentStatus: o.paymentStatus,
+        }));
+      setUnpaidOrders(mappedOrders);
+
+      // Map Accounts to match UI interface
+      const mappedAccounts = accountsData.map((acc: any) => ({
+        id: acc.id,
+        account_name: acc.account_name,
+        // Normalize to 'savings' if API returns it, or handle variations
+        account_type: acc.account_type.toLowerCase().includes("cash")
+          ? "cash"
+          : acc.account_type.toLowerCase(),
+        account_number: acc.account_number,
+        current_balance: acc.current_balance,
+        banks: acc.bank_codes,
+      }));
+      setCompanyAccounts(mappedAccounts);
+
+      setBanks(banksData);
+    } catch (error) {
+      console.error("Error loading data:", error);
+      toast.error("Failed to load initial data");
+    } finally {
       setLoading(false);
-    }, 600);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
   }, []);
 
   // Reset page to 1 when filters change
@@ -289,11 +268,12 @@ export default function PaymentsPage() {
       methodFilter === "all" ||
       payment.payment_method.toLowerCase() === methodFilter.toLowerCase();
 
+    // Safe lowercase check for cheque status
     const matchesChequeStatus =
       chequeStatusFilter === "all" ||
       (chequeStatusFilter === "cheque" &&
         payment.payment_method.toLowerCase() === "cheque") ||
-      payment.cheque_status === chequeStatusFilter;
+      payment.cheque_status?.toLowerCase() === chequeStatusFilter.toLowerCase();
 
     return (
       matchesSearch && matchesCustomer && matchesMethod && matchesChequeStatus
@@ -303,11 +283,15 @@ export default function PaymentsPage() {
   // Calculate stats
   const totalPayments = payments.length;
   const totalReceived = payments.reduce((sum, p) => sum + p.amount, 0);
+
+  // Fixed: Check for both Title Case and lowercase
   const pendingCheques = payments.filter(
-    (p) => p.cheque_status === "pending" || p.cheque_status === "deposited"
+    (p) => p.cheque_status === "Pending" || p.cheque_status === "pending"
   ).length;
+
+  // Fixed: Check for both Title Case and lowercase
   const returnedCheques = payments.filter(
-    (p) => p.cheque_status === "returned"
+    (p) => p.cheque_status === "Returned" || p.cheque_status === "returned"
   ).length;
 
   // Pagination logic
@@ -330,29 +314,20 @@ export default function PaymentsPage() {
     if (formData.method === "cash") {
       return companyAccounts.filter((acc) => acc.account_type === "cash");
     } else if (formData.method === "bank" || formData.method === "cheque") {
+      // Fixed: Check for 'savings' (plural) and 'saving' (singular) to be safe
       return companyAccounts.filter(
-        (acc) => acc.account_type === "saving" || acc.account_type === "current"
+        (acc) =>
+          acc.account_type === "savings" ||
+          acc.account_type === "saving" ||
+          acc.account_type === "current"
       );
     }
     return [];
   };
 
-  const handleAddPayment = () => {
+  const handleAddPayment = async () => {
     if (!formData.orderId || formData.amount <= 0) {
       toast.error("Please select an order and enter valid amount");
-      return;
-    }
-
-    // Validate payment amount doesn't exceed balance
-    const selectedOrder = unpaidOrders.find((o) => o.id === formData.orderId);
-    if (selectedOrder && formData.amount > selectedOrder.balance) {
-      toast.error(
-        `Payment amount (${formatCurrency(
-          formData.amount
-        )}) cannot exceed remaining balance (${formatCurrency(
-          selectedOrder.balance
-        )})`
-      );
       return;
     }
 
@@ -378,53 +353,44 @@ export default function PaymentsPage() {
 
     setIsSubmitting(true);
 
-    // SIMULATE API POST
-    setTimeout(() => {
-      const newPayment: Payment = {
-        id: `P${Date.now()}`,
-        payment_number: `PAY-${Date.now()}`,
-        payment_date: formData.date,
-        order_id: formData.orderId,
-        customer_id: selectedOrder?.customer_id || "",
+    try {
+      const payload = {
+        orderId: formData.orderId,
         amount: formData.amount,
-        payment_method: formData.method,
-        deposit_account_id:
-          formData.method === "cheque" ? null : formData.depositAccountId,
-        reference_number: null,
-        notes: formData.notes || null,
-        cheque_number: formData.method === "cheque" ? formData.chequeNo : null,
-        cheque_date: formData.method === "cheque" ? formData.chequeDate : null,
-        cheque_status: formData.method === "cheque" ? "pending" : null,
-        bank_id: formData.method === "cheque" ? formData.bankId : null,
-        customers: { name: selectedOrder?.customer_name || "Unknown" },
-        orders: {
-          order_number: selectedOrder?.order_number || "",
-          total_amount: selectedOrder?.total_amount || 0,
-        },
-        company_accounts: companyAccounts.find(
-          (a) => a.id === formData.depositAccountId
-        )
-          ? {
-              account_name:
-                companyAccounts.find((a) => a.id === formData.depositAccountId)
-                  ?.account_name || "",
-              account_type:
-                companyAccounts.find((a) => a.id === formData.depositAccountId)
-                  ?.account_type || "",
-            }
-          : undefined,
-        banks:
-          formData.method === "cheque"
-            ? banks.find((b) => b.id === formData.bankId)
+        date: formData.date,
+        method: formData.method,
+        notes: formData.notes,
+        chequeNo: formData.method === "cheque" ? formData.chequeNo : undefined,
+        chequeDate:
+          formData.method === "cheque" ? formData.chequeDate : undefined,
+        bankId: formData.method === "cheque" ? formData.bankId : undefined,
+        depositAccountId:
+          formData.method === "cash" || formData.method === "bank"
+            ? formData.depositAccountId
             : undefined,
       };
 
-      setPayments([newPayment, ...payments]);
+      const res = await fetch("/api/payments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to record payment");
+      }
+
       toast.success("Payment recorded successfully!");
       setIsAddDialogOpen(false);
       resetForm();
+      fetchData();
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
       setIsSubmitting(false);
-    }, 1000);
+    }
   };
 
   const resetForm = () => {
@@ -441,17 +407,17 @@ export default function PaymentsPage() {
     });
   };
 
-  // Updated function to handle 'deposited' status
   const getChequeStatusBadge = (
-    status: Payment["cheque_status"],
+    status: string | null | undefined,
     chequeDate: string | null
   ) => {
     if (!status) return null;
+    const lowerStatus = status.toLowerCase();
 
     const today = new Date();
     const chequeDateObj = chequeDate ? new Date(chequeDate) : null;
     const isOverdue =
-      chequeDateObj && status === "pending" && chequeDateObj < today;
+      chequeDateObj && lowerStatus === "pending" && chequeDateObj < today;
 
     const statusConfig: any = {
       pending: {
@@ -480,7 +446,7 @@ export default function PaymentsPage() {
       },
     };
 
-    const config = statusConfig[status];
+    const config = statusConfig[lowerStatus];
 
     if (!config) {
       return (
@@ -607,7 +573,8 @@ export default function PaymentsPage() {
                 value={chequeStatusFilter}
                 onValueChange={setChequeStatusFilter}
               >
-                <SelectTrigger className="w-[160px]">
+                {/* Fixed: Replaced w-[160px] with w-40 */}
+                <SelectTrigger className="w-40">
                   <SelectValue placeholder="Cheque status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -655,7 +622,16 @@ export default function PaymentsPage() {
                     <TableCell>
                       {payment.orders?.order_number || "N/A"}
                     </TableCell>
-                    <TableCell>{payment.customers?.name || "N/A"}</TableCell>
+                    <TableCell>
+                      <div>
+                        <div className="font-medium">
+                          {payment.customers?.name || "N/A"}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {payment.orders?.business_name}
+                        </div>
+                      </div>
+                    </TableCell>
                     <TableCell className="text-right font-medium">
                       {formatCurrency(payment.amount)}
                     </TableCell>
@@ -778,9 +754,7 @@ export default function PaymentsPage() {
                               (o) => o.id === formData.orderId
                             );
                             return order
-                              ? `${order.order_number} - ${
-                                  order.customer_name
-                                } (${formatCurrency(order.balance)})`
+                              ? `${order.order_number} - ${order.customer_name}`
                               : "Select an order...";
                           })()
                         : "Select an order..."}
@@ -790,19 +764,19 @@ export default function PaymentsPage() {
                 </PopoverTrigger>
                 <PopoverContent className="w-[500px] p-0" align="start">
                   <Command>
-                    <CommandInput placeholder="Search by order, customer, or balance..." />
+                    <CommandInput placeholder="Search by order, customer..." />
                     <CommandList>
                       <CommandEmpty>No unpaid orders found.</CommandEmpty>
                       <CommandGroup>
                         {unpaidOrders.map((order) => (
                           <CommandItem
                             key={order.id}
-                            value={`${order.order_number} ${order.customer_name} ${order.balance}`}
+                            value={`${order.order_number} ${order.customer_name}`}
                             onSelect={() => {
                               setFormData({
                                 ...formData,
                                 orderId: order.id,
-                                amount: order.balance,
+                                amount: order.balance, // Default to full balance
                               });
                               setOrderSearchOpen(false);
                             }}
