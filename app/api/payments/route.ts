@@ -1,5 +1,3 @@
-// app/api/payments/route.ts
-
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
@@ -61,7 +59,6 @@ export async function GET(request: NextRequest) {
 
     // Map database results to the frontend 'Payment' interface
     const formattedPayments = data.map((p: any) => {
-      // Handle potential array returns from joins
       const customerObj = Array.isArray(p.customers)
         ? p.customers[0]
         : p.customers;
@@ -91,7 +88,6 @@ export async function GET(request: NextRequest) {
         cheque_date: p.cheque_date,
         cheque_status: p.cheque_status,
 
-        // Relationships for UI Table
         customers: {
           name: customerObj?.shop_name || "Unknown",
         },
@@ -100,7 +96,6 @@ export async function GET(request: NextRequest) {
           total_amount: totalAmount,
           business_name: businessName,
         },
-        // We return generic info here as the deposit link is transactional, not direct key
         company_accounts:
           p.method === "cash" || p.method === "bank"
             ? { account_name: "Deposit Account", account_type: "N/A" }
@@ -120,12 +115,14 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const val = paymentSchema.parse(body);
 
-    // 1. Fetch the Invoice and Order details using the Order ID
+    // 1. Fetch Order, Invoice, and Customer Details
+    // Added: business_id and shop_name for better transaction records
     const { data: orderData, error: orderError } = await supabaseAdmin
       .from("orders")
       .select(
         `
         id,
+        business_id, 
         total_amount,
         invoices (
           id,
@@ -136,6 +133,7 @@ export async function POST(request: NextRequest) {
         ),
         customers (
           id,
+          shop_name,
           outstanding_balance
         )
       `
@@ -150,7 +148,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Handle nested arrays returned by Supabase
     const invoice = Array.isArray(orderData.invoices)
       ? orderData.invoices[0]
       : orderData.invoices;
@@ -219,7 +216,8 @@ export async function POST(request: NextRequest) {
 
     if (customerUpdateError) throw customerUpdateError;
 
-    // 5. Handle Deposit Transaction (if Account ID provided)
+    // 5. Create Account Transaction (For Cash & Bank only)
+    // This ensures the payment appears in the Account History table
     if (
       (val.method === "cash" || val.method === "bank") &&
       val.depositAccountId
@@ -227,13 +225,17 @@ export async function POST(request: NextRequest) {
       const { error: transactionError } = await supabaseAdmin
         .from("account_transactions")
         .insert({
-          transaction_no: `TXN-${Date.now()}`,
+          transaction_no: `TXN-${Date.now()}-${Math.floor(
+            Math.random() * 1000
+          )}`, // Unique ID
           transaction_type: "Deposit",
-          to_account_id: val.depositAccountId,
+          to_account_id: val.depositAccountId, // This links it to the account table (Credit)
+          from_account_id: null,
           amount: val.amount,
-          description: `Payment for ${invoice.invoice_no}`,
+          description: `Payment from ${customer.shop_name} - ${invoice.invoice_no}`, // Clear description
           transaction_date: val.date,
           reference_no: invoice.invoice_no,
+          business_id: orderData.business_id, // Link to business
         });
 
       if (transactionError) {

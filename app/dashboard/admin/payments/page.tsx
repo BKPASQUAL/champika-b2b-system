@@ -82,7 +82,6 @@ interface Bank {
 interface CompanyAccount {
   id: string;
   account_name: string;
-  // Updated to allow "savings" (plural) which is standard
   account_type: "savings" | "saving" | "current" | "cash";
   account_number: string | null;
   current_balance: number;
@@ -104,7 +103,6 @@ interface Payment {
   notes: string | null;
   cheque_number: string | null;
   cheque_date: string | null;
-  // Updated to include Capitalized statuses (common from API)
   cheque_status:
     | "Pending"
     | "Deposited"
@@ -145,6 +143,7 @@ interface Order {
   paid_amount: number;
   balance: number;
   paymentStatus: string;
+  status: string; // Added status field
 }
 
 export default function PaymentsPage() {
@@ -204,8 +203,15 @@ export default function PaymentsPage() {
 
       setPayments(paymentsData);
 
+      // Filter and Map Orders:
+      // 1. Not fully paid (paymentStatus !== "Paid")
+      // 2. Status is Delivered or Completed
       const mappedOrders: Order[] = ordersData
-        .filter((o: any) => o.paymentStatus !== "Paid")
+        .filter(
+          (o: any) =>
+            o.paymentStatus !== "Paid" &&
+            (o.status === "Delivered" || o.status === "Completed")
+        )
         .map((o: any) => ({
           id: o.id,
           order_number: o.invoiceNo !== "N/A" ? o.invoiceNo : o.orderId,
@@ -216,14 +222,14 @@ export default function PaymentsPage() {
           balance: o.totalAmount,
           paid_amount: 0,
           paymentStatus: o.paymentStatus,
+          status: o.status,
         }));
       setUnpaidOrders(mappedOrders);
 
-      // Map Accounts to match UI interface
+      // Map Accounts
       const mappedAccounts = accountsData.map((acc: any) => ({
         id: acc.id,
         account_name: acc.account_name,
-        // Normalize to 'savings' if API returns it, or handle variations
         account_type: acc.account_type.toLowerCase().includes("cash")
           ? "cash"
           : acc.account_type.toLowerCase(),
@@ -268,7 +274,6 @@ export default function PaymentsPage() {
       methodFilter === "all" ||
       payment.payment_method.toLowerCase() === methodFilter.toLowerCase();
 
-    // Safe lowercase check for cheque status
     const matchesChequeStatus =
       chequeStatusFilter === "all" ||
       (chequeStatusFilter === "cheque" &&
@@ -284,12 +289,10 @@ export default function PaymentsPage() {
   const totalPayments = payments.length;
   const totalReceived = payments.reduce((sum, p) => sum + p.amount, 0);
 
-  // Fixed: Check for both Title Case and lowercase
   const pendingCheques = payments.filter(
     (p) => p.cheque_status === "Pending" || p.cheque_status === "pending"
   ).length;
 
-  // Fixed: Check for both Title Case and lowercase
   const returnedCheques = payments.filter(
     (p) => p.cheque_status === "Returned" || p.cheque_status === "returned"
   ).length;
@@ -314,7 +317,6 @@ export default function PaymentsPage() {
     if (formData.method === "cash") {
       return companyAccounts.filter((acc) => acc.account_type === "cash");
     } else if (formData.method === "bank" || formData.method === "cheque") {
-      // Fixed: Check for 'savings' (plural) and 'saving' (singular) to be safe
       return companyAccounts.filter(
         (acc) =>
           acc.account_type === "savings" ||
@@ -573,7 +575,6 @@ export default function PaymentsPage() {
                 value={chequeStatusFilter}
                 onValueChange={setChequeStatusFilter}
               >
-                {/* Fixed: Replaced w-[160px] with w-40 */}
                 <SelectTrigger className="w-40">
                   <SelectValue placeholder="Cheque status" />
                 </SelectTrigger>
@@ -799,6 +800,9 @@ export default function PaymentsPage() {
                                   {new Date(
                                     order.order_date
                                   ).toLocaleDateString()}
+                                </span>
+                                <span className="text-xs text-muted-foreground capitalize">
+                                  Status: {order.status}
                                 </span>
                               </div>
                               <span className="font-medium">
