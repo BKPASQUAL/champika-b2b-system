@@ -9,26 +9,14 @@ export async function GET(request: Request) {
 
     // 1. Date Filters
     const now = new Date();
-    // Default to this year if looking for monthly trends, otherwise default to this month
-    // You might want to default to a larger range if the user asks for "analytics",
-    // but here we respect the passed params or default to current month.
-    // For "Monthly" view to work well, the frontend should ideally request a longer range (e.g. 'this-year').
-    const firstDay = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      1
-    ).toISOString();
-    const lastDay = new Date(
-      now.getFullYear(),
-      now.getMonth() + 1,
-      0
-    ).toISOString();
+    const firstDay = new Date(now.getFullYear(), 0, 1).toISOString();
+    const lastDay = new Date(now.getFullYear(), 11, 31).toISOString();
 
     const fromDate = searchParams.get("from") || firstDay;
     const toDate = searchParams.get("to") || lastDay;
 
-    // 2. Fetch Data
-    const { data: orders, error } = await supabaseAdmin
+    // 2. Fetch Orders
+    const { data: orders, error: ordersError } = await supabaseAdmin
       .from("orders")
       .select(
         `
@@ -45,59 +33,73 @@ export async function GET(request: Request) {
       .lte("created_at", toDate)
       .in("status", ["Delivered", "Completed"]);
 
-    if (error) throw error;
+    if (ordersError) throw ordersError;
 
-    // 3. Stats Containers
+    // 3. Fetch Expenses
+    const { data: expenses, error: expensesError } = await supabaseAdmin
+      .from("expenses")
+      .select("id, amount, category, expense_date, business_id")
+      .gte("expense_date", fromDate)
+      .lte("expense_date", toDate);
+
+    if (expensesError) throw expensesError;
+
+    // 4. Stats Containers
     let totalRevenue = 0;
-    let totalCost = 0;
+    let totalCostOfGoods = 0;
+    let totalExpenses = 0;
 
     const productsMap: Record<string, any> = {};
     const customersMap: Record<string, any> = {};
     const repsMap: Record<string, any> = {};
     const businessMap: Record<string, any> = {};
-    const monthlyMap: Record<string, any> = {}; // New Monthly Map
-    const ordersList: any[] = [];
+    const monthlyMap: Record<string, any> = {};
+    const expenseCategoryMap: Record<string, any> = {};
     const repCustomers: Record<string, Set<string>> = {};
+    const ordersList: any[] = [];
 
-    // 4. Calculation Loop
-    orders?.forEach((order: any) => {
-      const orderRevenue = Number(order.total_amount) || 0;
-      let orderCost = 0;
-      const orderDate = new Date(order.created_at);
-
-      // --- Monthly Aggregation ---
-      const monthKey = `${orderDate.getFullYear()}-${String(
-        orderDate.getMonth() + 1
+    const initMonth = (dateObj: Date) => {
+      const key = `${dateObj.getFullYear()}-${String(
+        dateObj.getMonth() + 1
       ).padStart(2, "0")}`;
-      if (!monthlyMap[monthKey]) {
-        monthlyMap[monthKey] = {
-          key: monthKey, // for sorting
-          name: orderDate.toLocaleString("default", {
+      if (!monthlyMap[key]) {
+        monthlyMap[key] = {
+          key,
+          name: dateObj.toLocaleString("default", {
             month: "long",
             year: "numeric",
           }),
           revenue: 0,
-          cost: 0,
-          profit: 0,
+          cogs: 0,
+          grossProfit: 0,
+          expenses: 0,
+          netProfit: 0,
           orders: 0,
         };
       }
+      return key;
+    };
 
-      // Calculate Order Cost from Items
+    // 5. Process Orders
+    orders?.forEach((order: any) => {
+      const orderRevenue = Number(order.total_amount) || 0;
+      let orderCost = 0;
+
+      const orderDate = new Date(order.created_at);
+      const monthKey = initMonth(orderDate);
+
       if (order.items) {
         order.items.forEach((item: any) => {
           const qty = Number(item.quantity) || 0;
           const costPrice = Number(item.product?.cost_price) || 0;
           const sellingPrice = Number(item.unit_price) || 0;
-
-          const itemCost = qty * costPrice;
           const itemRevenue = Number(item.total_price) || qty * sellingPrice;
+          const itemCost = qty * costPrice;
 
           orderCost += itemCost;
 
-          // Product Stats
-          const pId = item.product?.id;
-          if (pId) {
+          if (item.product?.id) {
+            const pId = item.product.id;
             if (!productsMap[pId])
               productsMap[pId] = {
                 id: pId,
@@ -114,57 +116,17 @@ export async function GET(request: Request) {
         });
       }
 
-      const orderProfit = orderRevenue - orderCost;
-      totalRevenue += orderRevenue;
-      totalCost += orderCost;
+      const orderGrossProfit = orderRevenue - orderCost;
 
-      // Update Monthly Stats
+      totalRevenue += orderRevenue;
+      totalCostOfGoods += orderCost;
+
       monthlyMap[monthKey].revenue += orderRevenue;
-      monthlyMap[monthKey].cost += orderCost;
-      monthlyMap[monthKey].profit += orderProfit;
+      monthlyMap[monthKey].cogs += orderCost;
+      monthlyMap[monthKey].grossProfit += orderGrossProfit;
       monthlyMap[monthKey].orders += 1;
 
-      // Rep Aggregation
-      const rId = order.sales_rep_id;
-      if (rId) {
-        if (!repsMap[rId]) {
-          repsMap[rId] = {
-            id: rId,
-            name: order.rep?.full_name || "Unknown Rep",
-            sales: 0,
-            cost: 0,
-            profit: 0,
-            orders: 0,
-          };
-          repCustomers[rId] = new Set();
-        }
-        repsMap[rId].sales += orderRevenue;
-        repsMap[rId].cost += orderCost;
-        repsMap[rId].profit += orderProfit;
-        repsMap[rId].orders += 1;
-        if (order.customer?.id) {
-          repCustomers[rId].add(order.customer.id);
-        }
-      }
-
-      // Customer Stats
-      const cId = order.customer?.id;
-      if (cId) {
-        if (!customersMap[cId])
-          customersMap[cId] = {
-            id: cId,
-            name: order.customer.shop_name,
-            owner: order.customer.owner_name,
-            orders: 0,
-            revenue: 0,
-            profit: 0,
-          };
-        customersMap[cId].orders += 1;
-        customersMap[cId].revenue += orderRevenue;
-        customersMap[cId].profit += orderProfit;
-      }
-
-      // Business Stats
+      // --- FIX: Added Cost aggregation here ---
       const bId = order.customer?.business_id;
       if (bId) {
         if (!businessMap[bId])
@@ -172,17 +134,49 @@ export async function GET(request: Request) {
             id: bId,
             name: order.customer?.business?.name,
             revenue: 0,
-            cost: 0,
+            cost: 0, // Initialize cost
             profit: 0,
             orders: 0,
           };
         businessMap[bId].revenue += orderRevenue;
-        businessMap[bId].cost += orderCost;
-        businessMap[bId].profit += orderProfit;
+        businessMap[bId].cost += orderCost; // Add cost
+        businessMap[bId].profit += orderGrossProfit;
         businessMap[bId].orders += 1;
       }
 
-      // Order List
+      const cId = order.customer?.id;
+      if (cId) {
+        if (!customersMap[cId])
+          customersMap[cId] = {
+            id: cId,
+            name: order.customer.shop_name,
+            orders: 0,
+            revenue: 0,
+            profit: 0,
+          };
+        customersMap[cId].orders += 1;
+        customersMap[cId].revenue += orderRevenue;
+        customersMap[cId].profit += orderGrossProfit;
+      }
+
+      const rId = order.sales_rep_id;
+      if (rId) {
+        if (!repsMap[rId]) {
+          repsMap[rId] = {
+            id: rId,
+            name: order.rep?.full_name || "Unknown Rep",
+            revenue: 0,
+            profit: 0,
+            orders: 0,
+          };
+          repCustomers[rId] = new Set();
+        }
+        repsMap[rId].revenue += orderRevenue;
+        repsMap[rId].profit += orderGrossProfit;
+        repsMap[rId].orders += 1;
+        if (order.customer?.id) repCustomers[rId].add(order.customer.id);
+      }
+
       ordersList.push({
         id: order.order_id,
         date: order.created_at.split("T")[0],
@@ -190,40 +184,71 @@ export async function GET(request: Request) {
         business: order.customer?.business?.name || "-",
         revenue: orderRevenue,
         cost: orderCost,
-        profit: orderProfit,
+        profit: orderGrossProfit,
         status: order.status,
       });
     });
 
-    const grossProfit = totalRevenue - totalCost;
-    const margin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
+    // 6. Process Expenses
+    expenses?.forEach((exp: any) => {
+      const amount = Number(exp.amount) || 0;
+      const date = new Date(exp.expense_date);
+      const monthKey = initMonth(date);
 
-    // Finalize Reps
-    const repsArray = Object.values(repsMap).map((rep: any) => ({
-      ...rep,
-      revenue: rep.sales,
-      customers: repCustomers[rep.id]?.size || 0,
-    }));
+      totalExpenses += amount;
+      monthlyMap[monthKey].expenses += amount;
 
-    // Sort Monthly Data
+      const cat = exp.category || "Other";
+      if (!expenseCategoryMap[cat]) expenseCategoryMap[cat] = 0;
+      expenseCategoryMap[cat] += amount;
+    });
+
+    // 7. Final Calculations
+    const grossProfit = totalRevenue - totalCostOfGoods;
+    const netProfit = grossProfit - totalExpenses;
+    const grossMargin =
+      totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
+    const netMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
+
+    Object.values(monthlyMap).forEach((m: any) => {
+      m.netProfit = m.grossProfit - m.expenses;
+      m.margin = m.revenue > 0 ? (m.netProfit / m.revenue) * 100 : 0;
+    });
+
     const monthlyArray = Object.values(monthlyMap).sort((a: any, b: any) =>
       a.key.localeCompare(b.key)
     );
+    const expenseCategoryArray = Object.entries(expenseCategoryMap)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a: any, b: any) => b.value - a.value);
+
+    const repsArray = Object.values(repsMap)
+      .map((rep: any) => ({
+        ...rep,
+        customers: repCustomers[rep.id]?.size || 0,
+        margin: rep.revenue > 0 ? (rep.profit / rep.revenue) * 100 : 0,
+      }))
+      .sort((a: any, b: any) => b.revenue - a.revenue);
 
     return NextResponse.json({
       overview: {
         revenue: totalRevenue,
-        cost: totalCost,
-        profit: grossProfit,
-        margin,
+        cogs: totalCostOfGoods,
+        grossProfit,
+        expenses: totalExpenses,
+        netProfit,
+        grossMargin,
+        netMargin,
       },
+      monthly: monthlyArray,
+      expensesByCategory: expenseCategoryArray,
       products: Object.values(productsMap).sort(
         (a: any, b: any) => b.revenue - a.revenue
       ),
       customers: Object.values(customersMap).sort(
         (a: any, b: any) => b.revenue - a.revenue
       ),
-      reps: repsArray.sort((a: any, b: any) => b.profit - a.profit),
+      reps: repsArray,
       orders: ordersList.sort(
         (a: any, b: any) =>
           new Date(b.date).getTime() - new Date(a.date).getTime()
@@ -231,7 +256,6 @@ export async function GET(request: Request) {
       business: Object.values(businessMap).sort(
         (a: any, b: any) => b.revenue - a.revenue
       ),
-      monthly: monthlyArray, // Added this field
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
