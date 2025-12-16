@@ -24,6 +24,8 @@ import {
   ChevronRight,
   Wallet,
   ArrowDownRight,
+  Truck,
+  CreditCard,
 } from "lucide-react";
 import {
   BarChart,
@@ -69,8 +71,8 @@ export default function AdminReportsPage() {
   const [activeTab, setActiveTab] = useState("overview");
   const [loading, setLoading] = useState(true);
   const [orderPage, setOrderPage] = useState(1);
+  const [deliveryPage, setDeliveryPage] = useState(1);
 
-  // State for data
   const [overview, setOverview] = useState<any>({
     revenue: 0,
     cogs: 0,
@@ -88,9 +90,10 @@ export default function AdminReportsPage() {
   const [productData, setProductData] = useState<any[]>([]);
   const [repData, setRepData] = useState<any[]>([]);
   const [orderData, setOrderData] = useState<any[]>([]);
+  const [deliveryData, setDeliveryData] = useState<any[]>([]);
   const [revenueTrend, setRevenueTrend] = useState<any[]>([]);
 
-  // Derived Pagination Data
+  // Pagination Logic
   const totalOrderPages = Math.ceil(orderData.length / ITEMS_PER_PAGE);
   const startOrderIndex = (orderPage - 1) * ITEMS_PER_PAGE;
   const currentOrders = orderData.slice(
@@ -98,7 +101,14 @@ export default function AdminReportsPage() {
     startOrderIndex + ITEMS_PER_PAGE
   );
 
-  // Calculate Date Ranges
+  const totalDeliveryPages = Math.ceil(deliveryData.length / ITEMS_PER_PAGE);
+  const startDeliveryIndex = (deliveryPage - 1) * ITEMS_PER_PAGE;
+  const currentDeliveries = deliveryData.slice(
+    startDeliveryIndex,
+    startDeliveryIndex + ITEMS_PER_PAGE
+  );
+
+  // Date Range Logic
   const getDateRange = (period: string) => {
     const now = new Date();
     const today = new Date(now.setHours(0, 0, 0, 0));
@@ -146,6 +156,7 @@ export default function AdminReportsPage() {
   useEffect(() => {
     fetchReports();
     setOrderPage(1);
+    setDeliveryPage(1);
   }, [timePeriod]);
 
   const fetchReports = async () => {
@@ -159,15 +170,14 @@ export default function AdminReportsPage() {
       setOverview(data.overview);
       setMonthlyData(data.monthly || []);
       setExpensesByCategory(data.expensesByCategory || []);
+      setDeliveryData(data.deliveries || []);
 
-      // Process Orders List
       const processedOrders = data.orders.map((o: any) => ({
         ...o,
         margin: o.revenue > 0 ? (o.profit / o.revenue) * 100 : 0,
       }));
       setOrderData(processedOrders);
 
-      // Revenue Trend for Area Chart
       const trendMap: Record<string, any> = {};
       data.orders.forEach((o: any) => {
         if (!trendMap[o.date])
@@ -182,7 +192,6 @@ export default function AdminReportsPage() {
         )
       );
 
-      // Other Data Sets
       setBusinessData(
         data.business.map((b: any) => ({
           ...b,
@@ -255,7 +264,6 @@ export default function AdminReportsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">
@@ -299,11 +307,11 @@ export default function AdminReportsPage() {
         onValueChange={setActiveTab}
         className="space-y-6"
       >
-        <TabsList className="grid w-full grid-cols-2 lg:grid-cols-8">
+        <TabsList className="grid w-full grid-cols-2 lg:grid-cols-9">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="monthly">Monthly</TabsTrigger>
-          <TabsTrigger value="expenses">Expenses</TabsTrigger>{" "}
-          {/* New Expenses Tab */}
+          <TabsTrigger value="expenses">Expenses</TabsTrigger>
+          <TabsTrigger value="deliveries">Deliveries</TabsTrigger>
           <TabsTrigger value="business">Business</TabsTrigger>
           <TabsTrigger value="customer">Customer</TabsTrigger>
           <TabsTrigger value="product">Product</TabsTrigger>
@@ -311,10 +319,10 @@ export default function AdminReportsPage() {
           <TabsTrigger value="order">Orders</TabsTrigger>
         </TabsList>
 
-        {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-6">
-          {/* Detailed Metrics Grid */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+          {/* UPDATED: Overview Cards Grid with Gross Profit */}
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {/* 1. Revenue */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
@@ -332,6 +340,7 @@ export default function AdminReportsPage() {
               </CardContent>
             </Card>
 
+            {/* 2. COGS */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
@@ -349,6 +358,25 @@ export default function AdminReportsPage() {
               </CardContent>
             </Card>
 
+            {/* 3. Gross Profit (Revenue - COGS) */}
+            <Card className="bg-primary/5 border-primary/20">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-primary">
+                  Gross Profit
+                </CardTitle>
+                <CreditCard className="h-4 w-4 text-primary" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-primary">
+                  LKR {overview.grossProfit?.toLocaleString()}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Profit before expenses
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* 4. Expenses */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
@@ -366,23 +394,25 @@ export default function AdminReportsPage() {
               </CardContent>
             </Card>
 
-            <Card>
+            {/* 5. Net Profit (Gross - Expenses) */}
+            <Card className="bg-green-50 border-green-200 dark:bg-green-900/10 dark:border-green-900/50">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
+                <CardTitle className="text-sm font-medium text-green-700 dark:text-green-400">
                   Net Profit
                 </CardTitle>
                 <Wallet className="h-4 w-4 text-green-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-green-600">
+                <div className="text-2xl font-bold text-green-700 dark:text-green-400">
                   LKR {overview.netProfit?.toLocaleString()}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  After costs & expenses
+                  Final profit after expenses
                 </p>
               </CardContent>
             </Card>
 
+            {/* 6. Net Margin */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
@@ -445,7 +475,6 @@ export default function AdminReportsPage() {
               </CardContent>
             </Card>
 
-            {/* Expense Breakdown Mini Chart */}
             <Card>
               <CardHeader>
                 <CardTitle>Expenses by Category</CardTitle>
@@ -477,7 +506,6 @@ export default function AdminReportsPage() {
             </Card>
           </div>
 
-          {/* Top Performers (RESTORED) */}
           <div className="grid gap-4 md:grid-cols-3">
             <Card>
               <CardHeader>
@@ -593,7 +621,6 @@ export default function AdminReportsPage() {
           </Card>
         </TabsContent>
 
-        {/* Expenses Tab */}
         <TabsContent value="expenses" className="space-y-6">
           <Card>
             <CardHeader>
@@ -660,7 +687,109 @@ export default function AdminReportsPage() {
           </Card>
         </TabsContent>
 
-        {/* Monthly Tab */}
+        <TabsContent value="deliveries" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Loading Deliveries Profitability</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Load ID</TableHead>
+                    <TableHead>Driver / Lorry</TableHead>
+                    <TableHead className="text-right">Revenue</TableHead>
+                    <TableHead className="text-right">COGS</TableHead>
+                    <TableHead className="text-right">Gross Profit</TableHead>
+                    <TableHead className="text-right">Expenses</TableHead>
+                    <TableHead className="text-right">Net Profit</TableHead>
+                    <TableHead className="text-right">Margin</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {currentDeliveries.map((d: any) => (
+                    <TableRow key={d.id}>
+                      <TableCell>{d.date}</TableCell>
+                      <TableCell className="font-medium">{d.loadId}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span>{d.driver}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {d.lorry}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        LKR {d.revenue.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        LKR {d.cogs.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        LKR {d.grossProfit.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right text-red-500">
+                        LKR {d.expenses.toLocaleString()}
+                      </TableCell>
+                      <TableCell
+                        className={`text-right font-bold ${
+                          d.netProfit >= 0 ? "text-green-600" : "text-red-600"
+                        }`}
+                      >
+                        LKR {d.netProfit.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Badge
+                          variant={d.margin > 15 ? "default" : "secondary"}
+                        >
+                          {d.margin.toFixed(1)}%
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {currentDeliveries.length === 0 && (
+                    <TableRow>
+                      <TableCell
+                        colSpan={9}
+                        className="text-center h-24 text-muted-foreground"
+                      >
+                        No deliveries found in this period.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+
+              {deliveryData.length > 0 && (
+                <div className="flex items-center justify-end space-x-2 py-4">
+                  <div className="text-sm text-muted-foreground">
+                    Page {deliveryPage} of {totalDeliveryPages}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDeliveryPage(deliveryPage - 1)}
+                    disabled={deliveryPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDeliveryPage(deliveryPage + 1)}
+                    disabled={deliveryPage === totalDeliveryPages}
+                  >
+                    Next
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="monthly" className="space-y-6">
           <Card>
             <CardHeader>
@@ -753,7 +882,6 @@ export default function AdminReportsPage() {
           </Card>
         </TabsContent>
 
-        {/* By Business Tab */}
         <TabsContent value="business" className="space-y-6">
           <Card>
             <CardHeader>
@@ -787,7 +915,7 @@ export default function AdminReportsPage() {
                         LKR {business.revenue.toLocaleString()}
                       </TableCell>
                       <TableCell className="text-right">
-                        LKR {business.cost.toLocaleString()}
+                        LKR {(business.cost || 0).toLocaleString()}
                       </TableCell>
                       <TableCell className="text-right font-medium text-green-600">
                         LKR {business.profit.toLocaleString()}
@@ -859,7 +987,6 @@ export default function AdminReportsPage() {
           </div>
         </TabsContent>
 
-        {/* By Customer Tab */}
         <TabsContent value="customer" className="space-y-6">
           <Card>
             <CardHeader>
@@ -932,7 +1059,6 @@ export default function AdminReportsPage() {
           </Card>
         </TabsContent>
 
-        {/* By Product Tab */}
         <TabsContent value="product" className="space-y-6">
           <Card>
             <CardHeader>
@@ -1035,7 +1161,6 @@ export default function AdminReportsPage() {
           </div>
         </TabsContent>
 
-        {/* By Representative Tab */}
         <TabsContent value="representative" className="space-y-6">
           <Card>
             <CardHeader>
@@ -1131,7 +1256,6 @@ export default function AdminReportsPage() {
           </div>
         </TabsContent>
 
-        {/* By Order Tab (Detailed) */}
         <TabsContent value="order" className="space-y-6">
           <Card>
             <CardHeader>
@@ -1186,7 +1310,7 @@ export default function AdminReportsPage() {
                 </TableBody>
               </Table>
 
-              {/* Pagination Controls */}
+              {/* Pagination Controls for Orders */}
               {orderData.length > 0 && (
                 <div className="flex items-center justify-end space-x-2 py-4">
                   <div className="text-sm text-muted-foreground">
@@ -1198,8 +1322,7 @@ export default function AdminReportsPage() {
                     onClick={() => setOrderPage(orderPage - 1)}
                     disabled={orderPage === 1}
                   >
-                    <ChevronLeft className="h-4 w-4" />
-                    Previous
+                    <ChevronLeft className="h-4 w-4" /> Previous
                   </Button>
                   <Button
                     variant="outline"
@@ -1207,8 +1330,7 @@ export default function AdminReportsPage() {
                     onClick={() => setOrderPage(orderPage + 1)}
                     disabled={orderPage === totalOrderPages}
                   >
-                    Next
-                    <ChevronRight className="h-4 w-4" />
+                    Next <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
               )}

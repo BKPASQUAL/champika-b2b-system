@@ -15,12 +15,26 @@ export async function GET(request: Request) {
     const fromDate = searchParams.get("from") || firstDay;
     const toDate = searchParams.get("to") || lastDay;
 
-    // 2. Fetch Orders
+    // 2. Fetch Loading Sheets (Deliveries)
+    const { data: loadingSheets, error: loadsError } = await supabaseAdmin
+      .from("loading_sheets")
+      .select(
+        `
+        id, load_id, lorry_number, loading_date, status,
+        driver:profiles!loading_sheets_driver_id_fkey(full_name)
+      `
+      )
+      .gte("loading_date", fromDate)
+      .lte("loading_date", toDate);
+
+    if (loadsError) throw loadsError;
+
+    // 3. Fetch Orders (Revenue & COGS)
     const { data: orders, error: ordersError } = await supabaseAdmin
       .from("orders")
       .select(
         `
-        id, order_id, total_amount, status, created_at, sales_rep_id,
+        id, order_id, total_amount, status, created_at, sales_rep_id, load_id,
         customer:customers (id, shop_name, owner_name, business_id, business:businesses(id, name)),
         rep:profiles!orders_sales_rep_id_fkey (id, full_name),
         items:order_items (
@@ -35,16 +49,16 @@ export async function GET(request: Request) {
 
     if (ordersError) throw ordersError;
 
-    // 3. Fetch Expenses
+    // 4. Fetch Expenses
     const { data: expenses, error: expensesError } = await supabaseAdmin
       .from("expenses")
-      .select("id, amount, category, expense_date, business_id")
+      .select("id, amount, category, expense_date, business_id, load_id") // Added load_id
       .gte("expense_date", fromDate)
       .lte("expense_date", toDate);
 
     if (expensesError) throw expensesError;
 
-    // 4. Stats Containers
+    // 5. Stats Containers
     let totalRevenue = 0;
     let totalCostOfGoods = 0;
     let totalExpenses = 0;
@@ -55,6 +69,7 @@ export async function GET(request: Request) {
     const businessMap: Record<string, any> = {};
     const monthlyMap: Record<string, any> = {};
     const expenseCategoryMap: Record<string, any> = {};
+    const deliveriesMap: Record<string, any> = {}; // New Map for Deliveries
     const repCustomers: Record<string, Set<string>> = {};
     const ordersList: any[] = [];
 
@@ -80,7 +95,25 @@ export async function GET(request: Request) {
       return key;
     };
 
-    // 5. Process Orders
+    // Initialize Deliveries Map
+    loadingSheets?.forEach((load: any) => {
+      deliveriesMap[load.id] = {
+        id: load.id,
+        loadId: load.load_id,
+        date: load.loading_date,
+        driver: load.driver?.full_name || "Unknown",
+        lorry: load.lorry_number,
+        status: load.status,
+        revenue: 0,
+        cogs: 0,
+        grossProfit: 0,
+        expenses: 0,
+        netProfit: 0,
+        ordersCount: 0,
+      };
+    });
+
+    // 6. Process Orders
     orders?.forEach((order: any) => {
       const orderRevenue = Number(order.total_amount) || 0;
       let orderCost = 0;
@@ -121,12 +154,21 @@ export async function GET(request: Request) {
       totalRevenue += orderRevenue;
       totalCostOfGoods += orderCost;
 
+      // Delivery Aggregation
+      if (order.load_id && deliveriesMap[order.load_id]) {
+        deliveriesMap[order.load_id].revenue += orderRevenue;
+        deliveriesMap[order.load_id].cogs += orderCost;
+        deliveriesMap[order.load_id].grossProfit += orderGrossProfit;
+        deliveriesMap[order.load_id].ordersCount += 1;
+      }
+
+      // Monthly Aggregation
       monthlyMap[monthKey].revenue += orderRevenue;
       monthlyMap[monthKey].cogs += orderCost;
       monthlyMap[monthKey].grossProfit += orderGrossProfit;
       monthlyMap[monthKey].orders += 1;
 
-      // --- FIX: Added Cost aggregation here ---
+      // Business Stats
       const bId = order.customer?.business_id;
       if (bId) {
         if (!businessMap[bId])
@@ -134,16 +176,17 @@ export async function GET(request: Request) {
             id: bId,
             name: order.customer?.business?.name,
             revenue: 0,
-            cost: 0, // Initialize cost
+            cost: 0,
             profit: 0,
             orders: 0,
           };
         businessMap[bId].revenue += orderRevenue;
-        businessMap[bId].cost += orderCost; // Add cost
+        businessMap[bId].cost += orderCost;
         businessMap[bId].profit += orderGrossProfit;
         businessMap[bId].orders += 1;
       }
 
+      // Customer Stats
       const cId = order.customer?.id;
       if (cId) {
         if (!customersMap[cId])
@@ -159,6 +202,7 @@ export async function GET(request: Request) {
         customersMap[cId].profit += orderGrossProfit;
       }
 
+      // Rep Stats
       const rId = order.sales_rep_id;
       if (rId) {
         if (!repsMap[rId]) {
@@ -189,7 +233,7 @@ export async function GET(request: Request) {
       });
     });
 
-    // 6. Process Expenses
+    // 7. Process Expenses
     expenses?.forEach((exp: any) => {
       const amount = Number(exp.amount) || 0;
       const date = new Date(exp.expense_date);
@@ -198,17 +242,37 @@ export async function GET(request: Request) {
       totalExpenses += amount;
       monthlyMap[monthKey].expenses += amount;
 
+      // Delivery Expense Mapping
+      if (exp.load_id && deliveriesMap[exp.load_id]) {
+        deliveriesMap[exp.load_id].expenses += amount;
+      }
+
       const cat = exp.category || "Other";
       if (!expenseCategoryMap[cat]) expenseCategoryMap[cat] = 0;
       expenseCategoryMap[cat] += amount;
     });
 
-    // 7. Final Calculations
+    // 8. Final Calculations
     const grossProfit = totalRevenue - totalCostOfGoods;
     const netProfit = grossProfit - totalExpenses;
     const grossMargin =
       totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
     const netMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
+
+    // Finalize Deliveries
+    const deliveriesArray = Object.values(deliveriesMap)
+      .map((d: any) => {
+        const net = d.grossProfit - d.expenses;
+        return {
+          ...d,
+          netProfit: net,
+          margin: d.revenue > 0 ? (net / d.revenue) * 100 : 0,
+        };
+      })
+      .sort(
+        (a: any, b: any) =>
+          new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
 
     Object.values(monthlyMap).forEach((m: any) => {
       m.netProfit = m.grossProfit - m.expenses;
@@ -256,6 +320,7 @@ export async function GET(request: Request) {
       business: Object.values(businessMap).sort(
         (a: any, b: any) => b.revenue - a.revenue
       ),
+      deliveries: deliveriesArray, // Added Deliveries
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
