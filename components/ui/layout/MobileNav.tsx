@@ -11,7 +11,12 @@ import { roleNavItems, UserRole } from "@/app/config/nav-config";
 import { retailOfficeNavItems } from "@/app/config/retail-nav-config";
 import { distributionNavItems } from "@/app/config/distribution-nav-config";
 import { orangeOfficeNavItems } from "@/app/config/orange-nav-config";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 
 interface MobileNavProps {
@@ -72,6 +77,8 @@ export function MobileNav({
         </Button>
       </SheetTrigger>
       <SheetContent side="left" className="w-72 p-0">
+        <SheetTitle className="sr-only">Mobile Navigation Menu</SheetTitle>
+
         {/* Logo Header */}
         <div className="h-16 flex items-center border-b px-6">
           {isOrange ? (
