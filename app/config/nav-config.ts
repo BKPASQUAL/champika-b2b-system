@@ -162,7 +162,7 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
         },
         {
           name: "Cheque Registry",
-          href: "/dashboard/admin/finance/checks",
+          href: "/dashboard/admin/finance/check-registry",
           icon: ScrollText,
         },
         {
