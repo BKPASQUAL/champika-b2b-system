@@ -19,7 +19,6 @@ import {
   Download,
   Calendar,
   BarChart3,
-  ArrowUpRight,
   Loader2,
   ChevronLeft,
   ChevronRight,
@@ -38,6 +37,8 @@ import {
   ResponsiveContainer,
   Area,
   AreaChart,
+  Line,
+  ComposedChart,
 } from "recharts";
 import {
   Table,
@@ -54,7 +55,7 @@ const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8"];
 const ITEMS_PER_PAGE = 10;
 
 export default function AdminReportsPage() {
-  const [timePeriod, setTimePeriod] = useState("this-month");
+  const [timePeriod, setTimePeriod] = useState("this-year");
   const [activeTab, setActiveTab] = useState("overview");
   const [loading, setLoading] = useState(true);
 
@@ -74,8 +75,9 @@ export default function AdminReportsPage() {
   const [repData, setRepData] = useState<any[]>([]);
   const [orderData, setOrderData] = useState<any[]>([]);
   const [revenueTrend, setRevenueTrend] = useState<any[]>([]);
+  const [monthlyData, setMonthlyData] = useState<any[]>([]);
 
-  // Derived Pagination Data
+  // Derived Pagination Data for "By Order" tab
   const totalOrderPages = Math.ceil(orderData.length / ITEMS_PER_PAGE);
   const startOrderIndex = (orderPage - 1) * ITEMS_PER_PAGE;
   const currentOrders = orderData.slice(
@@ -130,7 +132,7 @@ export default function AdminReportsPage() {
 
   useEffect(() => {
     fetchReports();
-    setOrderPage(1); // Reset pagination on filter change
+    setOrderPage(1);
   }, [timePeriod]);
 
   const fetchReports = async () => {
@@ -142,6 +144,13 @@ export default function AdminReportsPage() {
       const data = await res.json();
 
       setOverview(data.overview);
+
+      // Process Monthly Data
+      const processedMonthly = (data.monthly || []).map((m: any) => ({
+        ...m,
+        margin: m.revenue > 0 ? (m.profit / m.revenue) * 100 : 0,
+      }));
+      setMonthlyData(processedMonthly);
 
       // Process Orders List
       const processedOrders = data.orders.map((o: any) => ({
@@ -300,8 +309,9 @@ export default function AdminReportsPage() {
         onValueChange={setActiveTab}
         className="space-y-6"
       >
-        <TabsList className="grid w-full grid-cols-2 lg:grid-cols-6">
+        <TabsList className="grid w-full grid-cols-2 lg:grid-cols-7">
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="monthly">Monthly</TabsTrigger>
           <TabsTrigger value="business">By Business</TabsTrigger>
           <TabsTrigger value="customer">By Customer</TabsTrigger>
           <TabsTrigger value="product">By Product</TabsTrigger>
@@ -373,7 +383,7 @@ export default function AdminReportsPage() {
             {/* Revenue Trend */}
             <Card>
               <CardHeader>
-                <CardTitle>Revenue Trend</CardTitle>
+                <CardTitle>Daily Revenue Trend</CardTitle>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
@@ -461,7 +471,7 @@ export default function AdminReportsPage() {
             </Card>
           </div>
 
-          {/* Top Performers */}
+          {/* Top Performers (RESTORED) */}
           <div className="grid gap-4 md:grid-cols-3">
             {/* Top Products */}
             <Card>
@@ -549,7 +559,7 @@ export default function AdminReportsPage() {
             </Card>
           </div>
 
-          {/* Detailed Transactions */}
+          {/* Recent Transactions (RESTORED) */}
           <Card>
             <CardHeader>
               <CardTitle>Recent Transactions</CardTitle>
@@ -593,6 +603,113 @@ export default function AdminReportsPage() {
                       </TableCell>
                     </TableRow>
                   ))}
+                  {orderData.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={9} className="h-24 text-center">
+                        No orders found.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* MONTHLY TAB */}
+        <TabsContent value="monthly" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Monthly Analytics (Revenue vs Profit)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={400}>
+                <ComposedChart data={monthlyData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" />
+                  <YAxis yAxisId="left" />
+                  <YAxis yAxisId="right" orientation="right" />
+                  <Tooltip />
+                  <Legend />
+                  <Bar
+                    yAxisId="left"
+                    dataKey="revenue"
+                    fill="#0088FE"
+                    name="Revenue"
+                    barSize={40}
+                  />
+                  <Bar
+                    yAxisId="left"
+                    dataKey="profit"
+                    fill="#00C49F"
+                    name="Profit"
+                    barSize={40}
+                  />
+                  <Line
+                    yAxisId="right"
+                    type="monotone"
+                    dataKey="margin"
+                    stroke="#ff7300"
+                    name="Margin %"
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Monthly Breakdown</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Month</TableHead>
+                    <TableHead className="text-right">Orders</TableHead>
+                    <TableHead className="text-right">Revenue</TableHead>
+                    <TableHead className="text-right">Cost</TableHead>
+                    <TableHead className="text-right">Profit</TableHead>
+                    <TableHead className="text-right">Margin %</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {monthlyData.map((month) => (
+                    <TableRow key={month.key}>
+                      <TableCell className="font-medium">
+                        {month.name}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {month.orders}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        LKR {month.revenue.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        LKR {month.cost.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right text-green-600 font-medium">
+                        LKR {month.profit.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Badge
+                          variant={month.margin > 20 ? "default" : "secondary"}
+                        >
+                          {month.margin.toFixed(1)}%
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {monthlyData.length === 0 && (
+                    <TableRow>
+                      <TableCell
+                        colSpan={6}
+                        className="text-center h-24 text-muted-foreground"
+                      >
+                        No monthly data available for the selected period.
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
@@ -977,7 +1094,7 @@ export default function AdminReportsPage() {
           </div>
         </TabsContent>
 
-        {/* By Order Tab */}
+        {/* By Order Tab (Detailed) */}
         <TabsContent value="order" className="space-y-6">
           <Card>
             <CardHeader>

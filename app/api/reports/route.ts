@@ -9,6 +9,10 @@ export async function GET(request: Request) {
 
     // 1. Date Filters
     const now = new Date();
+    // Default to this year if looking for monthly trends, otherwise default to this month
+    // You might want to default to a larger range if the user asks for "analytics",
+    // but here we respect the passed params or default to current month.
+    // For "Monthly" view to work well, the frontend should ideally request a longer range (e.g. 'this-year').
     const firstDay = new Date(
       now.getFullYear(),
       now.getMonth(),
@@ -19,10 +23,11 @@ export async function GET(request: Request) {
       now.getMonth() + 1,
       0
     ).toISOString();
+
     const fromDate = searchParams.get("from") || firstDay;
     const toDate = searchParams.get("to") || lastDay;
 
-    // 2. Fetch Data (Filtered by Completed/Delivered status)
+    // 2. Fetch Data
     const { data: orders, error } = await supabaseAdmin
       .from("orders")
       .select(
@@ -50,15 +55,33 @@ export async function GET(request: Request) {
     const customersMap: Record<string, any> = {};
     const repsMap: Record<string, any> = {};
     const businessMap: Record<string, any> = {};
+    const monthlyMap: Record<string, any> = {}; // New Monthly Map
     const ordersList: any[] = [];
-
-    // Helper to track unique customers per rep
     const repCustomers: Record<string, Set<string>> = {};
 
     // 4. Calculation Loop
     orders?.forEach((order: any) => {
       const orderRevenue = Number(order.total_amount) || 0;
       let orderCost = 0;
+      const orderDate = new Date(order.created_at);
+
+      // --- Monthly Aggregation ---
+      const monthKey = `${orderDate.getFullYear()}-${String(
+        orderDate.getMonth() + 1
+      ).padStart(2, "0")}`;
+      if (!monthlyMap[monthKey]) {
+        monthlyMap[monthKey] = {
+          key: monthKey, // for sorting
+          name: orderDate.toLocaleString("default", {
+            month: "long",
+            year: "numeric",
+          }),
+          revenue: 0,
+          cost: 0,
+          profit: 0,
+          orders: 0,
+        };
+      }
 
       // Calculate Order Cost from Items
       if (order.items) {
@@ -95,6 +118,12 @@ export async function GET(request: Request) {
       totalRevenue += orderRevenue;
       totalCost += orderCost;
 
+      // Update Monthly Stats
+      monthlyMap[monthKey].revenue += orderRevenue;
+      monthlyMap[monthKey].cost += orderCost;
+      monthlyMap[monthKey].profit += orderProfit;
+      monthlyMap[monthKey].orders += 1;
+
       // Rep Aggregation
       const rId = order.sales_rep_id;
       if (rId) {
@@ -113,7 +142,6 @@ export async function GET(request: Request) {
         repsMap[rId].cost += orderCost;
         repsMap[rId].profit += orderProfit;
         repsMap[rId].orders += 1;
-
         if (order.customer?.id) {
           repCustomers[rId].add(order.customer.id);
         }
@@ -125,9 +153,9 @@ export async function GET(request: Request) {
         if (!customersMap[cId])
           customersMap[cId] = {
             id: cId,
-            name: order.customer.shop_name, // Changed key from 'shop' to 'name' to match UI
+            name: order.customer.shop_name,
             owner: order.customer.owner_name,
-            orders: 0, // Changed key from 'count' to 'orders' to match UI
+            orders: 0,
             revenue: 0,
             profit: 0,
           };
@@ -159,23 +187,28 @@ export async function GET(request: Request) {
         id: order.order_id,
         date: order.created_at.split("T")[0],
         customer: order.customer?.shop_name || "Unknown",
-        business: order.customer?.business?.name || "-", // Added business name
-        revenue: orderRevenue, // Changed from 'total' to 'revenue' to match UI
+        business: order.customer?.business?.name || "-",
+        revenue: orderRevenue,
         cost: orderCost,
         profit: orderProfit,
         status: order.status,
       });
     });
 
-    // Finalize Reps (add customer count)
+    const grossProfit = totalRevenue - totalCost;
+    const margin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
+
+    // Finalize Reps
     const repsArray = Object.values(repsMap).map((rep: any) => ({
       ...rep,
-      revenue: rep.sales, // Aliasing sales to revenue for consistency
+      revenue: rep.sales,
       customers: repCustomers[rep.id]?.size || 0,
     }));
 
-    const grossProfit = totalRevenue - totalCost;
-    const margin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
+    // Sort Monthly Data
+    const monthlyArray = Object.values(monthlyMap).sort((a: any, b: any) =>
+      a.key.localeCompare(b.key)
+    );
 
     return NextResponse.json({
       overview: {
@@ -198,6 +231,7 @@ export async function GET(request: Request) {
       business: Object.values(businessMap).sort(
         (a: any, b: any) => b.revenue - a.revenue
       ),
+      monthly: monthlyArray, // Added this field
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
