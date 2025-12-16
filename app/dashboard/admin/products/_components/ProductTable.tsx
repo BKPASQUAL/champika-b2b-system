@@ -1,4 +1,5 @@
 // app/dashboard/admin/products/_components/ProductTable.tsx
+"use client";
 
 import {
   Table,
@@ -22,8 +23,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
-  Percent, // Import icon
+  Percent,
 } from "lucide-react";
+import { useRouter } from "next/navigation"; // Added for smooth navigation
 import { Product, SortField, SortOrder } from "../types";
 
 interface ProductTableProps {
@@ -51,6 +53,8 @@ export function ProductTable({
   totalPages,
   onPageChange,
 }: ProductTableProps) {
+  const router = useRouter(); // Initialize router
+
   const getSortIcon = (field: SortField) => {
     if (sortField !== field)
       return <ArrowUpDown className="w-4 h-4 ml-1 opacity-40" />;
@@ -101,7 +105,7 @@ export function ProductTable({
                 </div>
               </TableHead>
 
-              {/* Added Commission Column */}
+              {/* Commission Column */}
               <TableHead className="text-right">Commission</TableHead>
 
               <TableHead
@@ -136,7 +140,7 @@ export function ProductTable({
             {products.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={10} // Increased colSpan
+                  colSpan={10}
                   className="text-center py-8 text-muted-foreground"
                 >
                   No products found
@@ -207,7 +211,8 @@ export function ProductTable({
                         variant="ghost"
                         size="icon-sm"
                         onClick={() =>
-                          (window.location.href = `/products/${product.id}`)
+                          // FIX: Use Correct Path with router.push
+                          router.push(`/dashboard/admin/products/${product.id}`)
                         }
                       >
                         <Eye className="w-4 h-4" />

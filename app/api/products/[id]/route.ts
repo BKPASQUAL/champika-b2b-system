@@ -128,3 +128,45 @@ export async function DELETE(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("products")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (error) throw error;
+
+    const product = {
+      id: data.id,
+      sku: data.sku,
+      name: data.name,
+      category: data.category,
+      subCategory: data.sub_category,
+      brand: data.brand,
+      subBrand: data.sub_brand,
+      modelType: data.model_type,
+      subModel: data.sub_model,
+      sizeSpec: data.size_spec,
+      supplier: data.supplier_name,
+      stock: data.stock_quantity || 0,
+      minStock: data.min_stock_level || 0,
+      mrp: data.mrp || 0,
+      sellingPrice: data.selling_price || 0,
+      costPrice: data.cost_price || 0,
+      unitOfMeasure: data.unit_of_measure || "Pcs",
+      images: data.images || [],
+      commissionType: data.commission_type,
+      commissionValue: data.commission_value,
+    };
+
+    return NextResponse.json(product);
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
