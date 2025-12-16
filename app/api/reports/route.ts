@@ -38,7 +38,6 @@ export async function GET(request: Request) {
       )
       .gte("created_at", fromDate)
       .lte("created_at", toDate)
-      // Change: Filter only for Delivered or Completed orders
       .in("status", ["Delivered", "Completed"]);
 
     if (error) throw error;
@@ -52,6 +51,9 @@ export async function GET(request: Request) {
     const repsMap: Record<string, any> = {};
     const businessMap: Record<string, any> = {};
     const ordersList: any[] = [];
+
+    // Helper to track unique customers per rep
+    const repCustomers: Record<string, Set<string>> = {};
 
     // 4. Calculation Loop
     orders?.forEach((order: any) => {
@@ -105,11 +107,16 @@ export async function GET(request: Request) {
             profit: 0,
             orders: 0,
           };
+          repCustomers[rId] = new Set();
         }
         repsMap[rId].sales += orderRevenue;
         repsMap[rId].cost += orderCost;
         repsMap[rId].profit += orderProfit;
         repsMap[rId].orders += 1;
+
+        if (order.customer?.id) {
+          repCustomers[rId].add(order.customer.id);
+        }
       }
 
       // Customer Stats
@@ -118,13 +125,13 @@ export async function GET(request: Request) {
         if (!customersMap[cId])
           customersMap[cId] = {
             id: cId,
-            shop: order.customer.shop_name,
+            name: order.customer.shop_name, // Changed key from 'shop' to 'name' to match UI
             owner: order.customer.owner_name,
-            count: 0,
+            orders: 0, // Changed key from 'count' to 'orders' to match UI
             revenue: 0,
             profit: 0,
           };
-        customersMap[cId].count += 1;
+        customersMap[cId].orders += 1;
         customersMap[cId].revenue += orderRevenue;
         customersMap[cId].profit += orderProfit;
       }
@@ -137,10 +144,12 @@ export async function GET(request: Request) {
             id: bId,
             name: order.customer?.business?.name,
             revenue: 0,
+            cost: 0,
             profit: 0,
             orders: 0,
           };
         businessMap[bId].revenue += orderRevenue;
+        businessMap[bId].cost += orderCost;
         businessMap[bId].profit += orderProfit;
         businessMap[bId].orders += 1;
       }
@@ -150,12 +159,20 @@ export async function GET(request: Request) {
         id: order.order_id,
         date: order.created_at.split("T")[0],
         customer: order.customer?.shop_name || "Unknown",
-        total: orderRevenue,
+        business: order.customer?.business?.name || "-", // Added business name
+        revenue: orderRevenue, // Changed from 'total' to 'revenue' to match UI
         cost: orderCost,
         profit: orderProfit,
         status: order.status,
       });
     });
+
+    // Finalize Reps (add customer count)
+    const repsArray = Object.values(repsMap).map((rep: any) => ({
+      ...rep,
+      revenue: rep.sales, // Aliasing sales to revenue for consistency
+      customers: repCustomers[rep.id]?.size || 0,
+    }));
 
     const grossProfit = totalRevenue - totalCost;
     const margin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
@@ -173,9 +190,7 @@ export async function GET(request: Request) {
       customers: Object.values(customersMap).sort(
         (a: any, b: any) => b.revenue - a.revenue
       ),
-      reps: Object.values(repsMap).sort(
-        (a: any, b: any) => b.profit - a.profit
-      ),
+      reps: repsArray.sort((a: any, b: any) => b.profit - a.profit),
       orders: ordersList.sort(
         (a: any, b: any) =>
           new Date(b.date).getTime() - new Date(a.date).getTime()

@@ -1,7 +1,6 @@
-// app/admin/reports/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -21,11 +20,11 @@ import {
   Calendar,
   BarChart3,
   ArrowUpRight,
-  ArrowDownRight,
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import {
-  LineChart,
-  Line,
   BarChart,
   Bar,
   PieChart,
@@ -49,246 +48,210 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-
-// Sample data - Replace with actual API calls
-const revenueData = [
-  { date: "Dec 1", revenue: 4500, cost: 3200, profit: 1300 },
-  { date: "Dec 3", revenue: 5200, cost: 3800, profit: 1400 },
-  { date: "Dec 5", revenue: 6100, cost: 4500, profit: 1600 },
-  { date: "Dec 7", revenue: 5800, cost: 4200, profit: 1600 },
-  { date: "Dec 9", revenue: 7200, cost: 5300, profit: 1900 },
-  { date: "Dec 11", revenue: 6800, cost: 4900, profit: 1900 },
-  { date: "Dec 13", revenue: 8100, cost: 5900, profit: 2200 },
-  { date: "Dec 15", revenue: 9200, cost: 6800, profit: 2400 },
-];
-
-const businessData = [
-  {
-    name: "Champika Hardware",
-    revenue: 32500,
-    cost: 23800,
-    profit: 8700,
-    margin: 26.8,
-    orders: 245,
-  },
-  {
-    name: "Orange Agency",
-    revenue: 20921,
-    cost: 15257,
-    profit: 5664,
-    margin: 27.1,
-    orders: 89,
-  },
-];
-
-const customerData = [
-  {
-    id: 1,
-    name: "ABC Construction",
-    revenue: 12500,
-    orders: 45,
-    avgOrder: 278,
-    margin: 28.5,
-  },
-  {
-    id: 2,
-    name: "XYZ Builders",
-    revenue: 10200,
-    orders: 38,
-    avgOrder: 268,
-    margin: 25.2,
-  },
-  {
-    id: 3,
-    name: "Quick Mart",
-    revenue: 8900,
-    orders: 67,
-    avgOrder: 133,
-    margin: 31.2,
-  },
-  {
-    id: 4,
-    name: "Home Plus",
-    revenue: 7800,
-    orders: 52,
-    avgOrder: 150,
-    margin: 24.8,
-  },
-  {
-    id: 5,
-    name: "City Hardware",
-    revenue: 6500,
-    orders: 41,
-    avgOrder: 159,
-    margin: 29.1,
-  },
-];
-
-const productData = [
-  {
-    id: 1,
-    name: "Premium Cement",
-    category: "Cement",
-    sold: 450,
-    revenue: 15600,
-    cost: 11200,
-    profit: 4400,
-    margin: 28.2,
-  },
-  {
-    id: 2,
-    name: "Steel Rods 12mm",
-    category: "Steel",
-    sold: 320,
-    revenue: 12800,
-    cost: 9400,
-    profit: 3400,
-    margin: 26.6,
-  },
-  {
-    id: 3,
-    name: "Paint White 5L",
-    category: "Paint",
-    sold: 280,
-    revenue: 9800,
-    cost: 6800,
-    profit: 3000,
-    margin: 30.6,
-  },
-  {
-    id: 4,
-    name: "Tiles Ceramic",
-    category: "Tiles",
-    sold: 210,
-    revenue: 8400,
-    cost: 6200,
-    profit: 2200,
-    margin: 26.2,
-  },
-  {
-    id: 5,
-    name: "Wiring Cable",
-    category: "Electrical",
-    sold: 380,
-    revenue: 7600,
-    cost: 5200,
-    profit: 2400,
-    margin: 31.6,
-  },
-];
-
-const repData = [
-  {
-    id: 1,
-    name: "Kamal Silva",
-    orders: 78,
-    revenue: 18500,
-    profit: 4920,
-    margin: 26.6,
-    customers: 34,
-  },
-  {
-    id: 2,
-    name: "Nimal Perera",
-    orders: 65,
-    revenue: 15200,
-    profit: 4180,
-    margin: 27.5,
-    customers: 28,
-  },
-  {
-    id: 3,
-    name: "Sunil Fernando",
-    orders: 54,
-    revenue: 12900,
-    profit: 3350,
-    margin: 26.0,
-    customers: 25,
-  },
-  {
-    id: 4,
-    name: "Pradeep Kumar",
-    orders: 48,
-    revenue: 11200,
-    profit: 2912,
-    margin: 26.0,
-    customers: 22,
-  },
-];
-
-const orderData = [
-  {
-    id: "INV-2024-1234",
-    date: "2024-12-15",
-    customer: "ABC Construction",
-    business: "Champika Hardware",
-    items: 8,
-    revenue: 4500,
-    cost: 3200,
-    profit: 1300,
-    margin: 28.9,
-    status: "Completed",
-  },
-  {
-    id: "INV-2024-1233",
-    date: "2024-12-15",
-    customer: "XYZ Builders",
-    business: "Orange Agency",
-    items: 5,
-    revenue: 3200,
-    cost: 2400,
-    profit: 800,
-    margin: 25.0,
-    status: "Completed",
-  },
-  {
-    id: "INV-2024-1232",
-    date: "2024-12-14",
-    customer: "Quick Mart",
-    business: "Champika Hardware",
-    items: 12,
-    revenue: 2800,
-    cost: 1900,
-    profit: 900,
-    margin: 32.1,
-    status: "Completed",
-  },
-  {
-    id: "INV-2024-1231",
-    date: "2024-12-14",
-    customer: "Home Plus",
-    business: "Champika Hardware",
-    items: 6,
-    revenue: 3600,
-    cost: 2700,
-    profit: 900,
-    margin: 25.0,
-    status: "Pending",
-  },
-  {
-    id: "INV-2024-1230",
-    date: "2024-12-13",
-    customer: "City Hardware",
-    business: "Orange Agency",
-    items: 9,
-    revenue: 5100,
-    cost: 3800,
-    profit: 1300,
-    margin: 25.5,
-    status: "Completed",
-  },
-];
+import { toast } from "sonner";
 
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8"];
+const ITEMS_PER_PAGE = 10;
 
 export default function AdminReportsPage() {
   const [timePeriod, setTimePeriod] = useState("this-month");
   const [activeTab, setActiveTab] = useState("overview");
+  const [loading, setLoading] = useState(true);
+
+  // Pagination State
+  const [orderPage, setOrderPage] = useState(1);
+
+  // State for data
+  const [overview, setOverview] = useState<any>({
+    revenue: 0,
+    cost: 0,
+    profit: 0,
+    margin: 0,
+  });
+  const [businessData, setBusinessData] = useState<any[]>([]);
+  const [customerData, setCustomerData] = useState<any[]>([]);
+  const [productData, setProductData] = useState<any[]>([]);
+  const [repData, setRepData] = useState<any[]>([]);
+  const [orderData, setOrderData] = useState<any[]>([]);
+  const [revenueTrend, setRevenueTrend] = useState<any[]>([]);
+
+  // Derived Pagination Data
+  const totalOrderPages = Math.ceil(orderData.length / ITEMS_PER_PAGE);
+  const startOrderIndex = (orderPage - 1) * ITEMS_PER_PAGE;
+  const currentOrders = orderData.slice(
+    startOrderIndex,
+    startOrderIndex + ITEMS_PER_PAGE
+  );
+
+  // Calculate Date Ranges
+  const getDateRange = (period: string) => {
+    const now = new Date();
+    const today = new Date(now.setHours(0, 0, 0, 0));
+    let from = new Date(today);
+    let to = new Date(now.setHours(23, 59, 59, 999));
+
+    switch (period) {
+      case "today":
+        break;
+      case "yesterday":
+        from.setDate(today.getDate() - 1);
+        to = new Date(from);
+        to.setHours(23, 59, 59, 999);
+        break;
+      case "this-week":
+        const day = today.getDay() || 7;
+        if (day !== 1) from.setHours(-24 * (day - 1));
+        to = new Date();
+        break;
+      case "last-week":
+        const lastWeekDay = today.getDay() || 7;
+        from.setDate(today.getDate() - lastWeekDay - 6);
+        to.setDate(from.getDate() + 6);
+        to.setHours(23, 59, 59, 999);
+        break;
+      case "this-month":
+        from = new Date(now.getFullYear(), now.getMonth(), 1);
+        to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        break;
+      case "last-month":
+        from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        to = new Date(now.getFullYear(), now.getMonth(), 0);
+        break;
+      case "this-year":
+        from = new Date(now.getFullYear(), 0, 1);
+        to = new Date(now.getFullYear(), 11, 31);
+        break;
+      default:
+        from = new Date(now.getFullYear(), now.getMonth(), 1);
+        to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    }
+    return { from: from.toISOString(), to: to.toISOString() };
+  };
+
+  useEffect(() => {
+    fetchReports();
+    setOrderPage(1); // Reset pagination on filter change
+  }, [timePeriod]);
+
+  const fetchReports = async () => {
+    setLoading(true);
+    try {
+      const { from, to } = getDateRange(timePeriod);
+      const res = await fetch(`/api/reports?from=${from}&to=${to}`);
+      if (!res.ok) throw new Error("Failed to fetch reports");
+      const data = await res.json();
+
+      setOverview(data.overview);
+
+      // Process Orders List
+      const processedOrders = data.orders.map((o: any) => ({
+        ...o,
+        margin: o.revenue > 0 ? (o.profit / o.revenue) * 100 : 0,
+      }));
+      setOrderData(processedOrders);
+
+      // Process Revenue Trend
+      const trendMap: Record<string, any> = {};
+      data.orders.forEach((o: any) => {
+        if (!trendMap[o.date]) {
+          trendMap[o.date] = { date: o.date, revenue: 0, cost: 0, profit: 0 };
+        }
+        trendMap[o.date].revenue += o.revenue;
+        trendMap[o.date].cost += o.cost;
+        trendMap[o.date].profit += o.profit;
+      });
+      setRevenueTrend(
+        Object.values(trendMap).sort(
+          (a: any, b: any) =>
+            new Date(a.date).getTime() - new Date(b.date).getTime()
+        )
+      );
+
+      // Process Business Data
+      const processedBusiness = data.business.map((b: any) => ({
+        ...b,
+        margin: b.revenue > 0 ? (b.profit / b.revenue) * 100 : 0,
+      }));
+      setBusinessData(processedBusiness);
+
+      // Process Customer Data
+      const processedCustomers = data.customers.map((c: any) => ({
+        ...c,
+        avgOrder: c.orders > 0 ? c.revenue / c.orders : 0,
+        margin: c.revenue > 0 ? (c.profit / c.revenue) * 100 : 0,
+      }));
+      setCustomerData(processedCustomers);
+
+      // Process Product Data
+      const processedProducts = data.products.map((p: any) => ({
+        ...p,
+        margin: p.revenue > 0 ? ((p.revenue - p.cost) / p.revenue) * 100 : 0,
+        profit: p.revenue - p.cost,
+      }));
+      setProductData(processedProducts);
+
+      // Process Rep Data
+      const processedReps = data.reps.map((r: any) => ({
+        ...r,
+        margin: r.revenue > 0 ? (r.profit / r.revenue) * 100 : 0,
+      }));
+      setRepData(processedReps);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to load report data");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleExport = () => {
-    // Implement export functionality
-    console.log("Exporting report...");
+    const headers = [
+      "ID",
+      "Date",
+      "Customer",
+      "Business",
+      "Revenue",
+      "Profit",
+      "Status",
+    ];
+    const rows = orderData.map((o) => [
+      o.id,
+      o.date,
+      o.customer,
+      o.business,
+      o.revenue,
+      o.profit,
+      o.status,
+    ]);
+
+    let csvContent =
+      "data:text/csv;charset=utf-8," +
+      headers.join(",") +
+      "\n" +
+      rows.map((e) => e.join(",")).join("\n");
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `report-${timePeriod}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalOrderPages) {
+      setOrderPage(newPage);
+    }
+  };
+
+  if (loading && !overview.revenue) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -315,17 +278,21 @@ export default function AdminReportsPage() {
               <SelectItem value="last-week">Last Week</SelectItem>
               <SelectItem value="this-month">This Month</SelectItem>
               <SelectItem value="last-month">Last Month</SelectItem>
-              <SelectItem value="this-quarter">This Quarter</SelectItem>
               <SelectItem value="this-year">This Year</SelectItem>
-              <SelectItem value="custom">Custom Range</SelectItem>
             </SelectContent>
           </Select>
-          <Button onClick={handleExport}>
+          <Button onClick={handleExport} variant="outline">
             <Download className="mr-2 h-4 w-4" />
-            Export
+            Export CSV
           </Button>
         </div>
       </div>
+
+      {loading && (
+        <div className="w-full text-center py-2 text-sm text-muted-foreground">
+          Refreshing data...
+        </div>
+      )}
 
       {/* Tabs */}
       <Tabs
@@ -354,11 +321,8 @@ export default function AdminReportsPage() {
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">LKR 53,421.34</div>
-                <div className="flex items-center text-xs text-muted-foreground mt-1">
-                  <ArrowUpRight className="mr-1 h-3 w-3 text-green-600" />
-                  <span className="text-green-600 font-medium">12.5%</span>
-                  <span className="ml-1">vs last month</span>
+                <div className="text-2xl font-bold">
+                  LKR {overview.revenue?.toLocaleString()}
                 </div>
               </CardContent>
             </Card>
@@ -371,11 +335,8 @@ export default function AdminReportsPage() {
                 <Package className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">LKR 39,057.00</div>
-                <div className="flex items-center text-xs text-muted-foreground mt-1">
-                  <ArrowUpRight className="mr-1 h-3 w-3 text-orange-600" />
-                  <span className="text-orange-600 font-medium">8.2%</span>
-                  <span className="ml-1">vs last month</span>
+                <div className="text-2xl font-bold">
+                  LKR {overview.cost?.toLocaleString()}
                 </div>
               </CardContent>
             </Card>
@@ -388,11 +349,8 @@ export default function AdminReportsPage() {
                 <TrendingUp className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">LKR 14,364.34</div>
-                <div className="flex items-center text-xs text-muted-foreground mt-1">
-                  <ArrowUpRight className="mr-1 h-3 w-3 text-green-600" />
-                  <span className="text-green-600 font-medium">18.3%</span>
-                  <span className="ml-1">vs last month</span>
+                <div className="text-2xl font-bold text-green-600">
+                  LKR {overview.profit?.toLocaleString()}
                 </div>
               </CardContent>
             </Card>
@@ -403,11 +361,8 @@ export default function AdminReportsPage() {
                 <BarChart3 className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">26.9%</div>
-                <div className="flex items-center text-xs text-muted-foreground mt-1">
-                  <ArrowUpRight className="mr-1 h-3 w-3 text-green-600" />
-                  <span className="text-green-600 font-medium">1.2%</span>
-                  <span className="ml-1">vs last month</span>
+                <div className="text-2xl font-bold">
+                  {overview.margin?.toFixed(1)}%
                 </div>
               </CardContent>
             </Card>
@@ -422,7 +377,7 @@ export default function AdminReportsPage() {
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
-                  <AreaChart data={revenueData}>
+                  <AreaChart data={revenueTrend}>
                     <defs>
                       <linearGradient
                         id="colorRevenue"
@@ -615,7 +570,7 @@ export default function AdminReportsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {orderData.map((order) => (
+                  {orderData.slice(0, 10).map((order) => (
                     <TableRow key={order.id}>
                       <TableCell className="font-medium">{order.id}</TableCell>
                       <TableCell>{order.date}</TableCell>
@@ -634,15 +589,7 @@ export default function AdminReportsPage() {
                         {order.margin.toFixed(1)}%
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          variant={
-                            order.status === "Completed"
-                              ? "default"
-                              : "secondary"
-                          }
-                        >
-                          {order.status}
-                        </Badge>
+                        <Badge variant="default">{order.status}</Badge>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -695,7 +642,10 @@ export default function AdminReportsPage() {
                         {business.margin.toFixed(1)}%
                       </TableCell>
                       <TableCell className="text-right">
-                        LKR {(business.revenue / business.orders).toFixed(2)}
+                        LKR{" "}
+                        {business.orders > 0
+                          ? (business.revenue / business.orders).toFixed(2)
+                          : "0.00"}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -815,7 +765,7 @@ export default function AdminReportsPage() {
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={customerData} layout="vertical">
+                <BarChart data={customerData.slice(0, 10)} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis type="number" />
                   <YAxis dataKey="name" type="category" width={150} />
@@ -879,19 +829,19 @@ export default function AdminReportsPage() {
           <div className="grid gap-4 md:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle>Product Revenue Distribution</CardTitle>
+                <CardTitle>Product Revenue Distribution (Top 10)</CardTitle>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie
-                      data={productData}
+                      data={productData.slice(0, 10)}
                       dataKey="revenue"
                       nameKey="name"
                       cx="50%"
                       cy="50%"
                       outerRadius={100}
-                      label
+                      label={false}
                     >
                       {productData.map((entry, index) => (
                         <Cell
@@ -913,7 +863,7 @@ export default function AdminReportsPage() {
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={productData}>
+                  <BarChart data={productData.slice(0, 10)}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis
                       dataKey="name"
@@ -968,7 +918,10 @@ export default function AdminReportsPage() {
                         {rep.margin.toFixed(1)}%
                       </TableCell>
                       <TableCell className="text-right">
-                        LKR {(rep.revenue / rep.orders).toFixed(2)}
+                        LKR{" "}
+                        {rep.orders > 0
+                          ? (rep.revenue / rep.orders).toFixed(2)
+                          : "0.00"}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -1038,7 +991,6 @@ export default function AdminReportsPage() {
                     <TableHead>Date</TableHead>
                     <TableHead>Customer</TableHead>
                     <TableHead>Business</TableHead>
-                    <TableHead className="text-right">Items</TableHead>
                     <TableHead className="text-right">Revenue</TableHead>
                     <TableHead className="text-right">Cost</TableHead>
                     <TableHead className="text-right">Profit</TableHead>
@@ -1047,15 +999,12 @@ export default function AdminReportsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {orderData.map((order) => (
+                  {currentOrders.map((order) => (
                     <TableRow key={order.id}>
                       <TableCell className="font-medium">{order.id}</TableCell>
                       <TableCell>{order.date}</TableCell>
                       <TableCell>{order.customer}</TableCell>
                       <TableCell>{order.business}</TableCell>
-                      <TableCell className="text-right">
-                        {order.items}
-                      </TableCell>
                       <TableCell className="text-right">
                         LKR {order.revenue.toLocaleString()}
                       </TableCell>
@@ -1069,76 +1018,48 @@ export default function AdminReportsPage() {
                         {order.margin.toFixed(1)}%
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          variant={
-                            order.status === "Completed"
-                              ? "default"
-                              : "secondary"
-                          }
-                        >
-                          {order.status}
-                        </Badge>
+                        <Badge variant="default">{order.status}</Badge>
                       </TableCell>
                     </TableRow>
                   ))}
+                  {currentOrders.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={9} className="h-24 text-center">
+                        No orders found.
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
+
+              {/* Pagination Controls */}
+              {orderData.length > 0 && (
+                <div className="flex items-center justify-end space-x-2 py-4">
+                  <div className="text-sm text-muted-foreground">
+                    Page {orderPage} of {totalOrderPages}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(orderPage - 1)}
+                    disabled={orderPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(orderPage + 1)}
+                    disabled={orderPage === totalOrderPages}
+                  >
+                    Next
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Order Value Distribution</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={orderData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis
-                      dataKey="id"
-                      angle={-45}
-                      textAnchor="end"
-                      height={100}
-                    />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="revenue" fill="#0088FE" name="Revenue" />
-                    <Bar dataKey="profit" fill="#00C49F" name="Profit" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Order Status Overview</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={[
-                        { name: "Completed", value: 4 },
-                        { name: "Pending", value: 1 },
-                      ]}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={100}
-                      label
-                    >
-                      <Cell fill="#00C49F" />
-                      <Cell fill="#FFBB28" />
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </div>
         </TabsContent>
       </Tabs>
     </div>
