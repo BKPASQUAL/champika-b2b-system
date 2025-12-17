@@ -36,7 +36,8 @@ export async function POST(req: Request) {
       reason,
       business_id,
       customer_id,
-      invoice_no, // Ensure this is read
+      invoice_no,
+      invoice_id, // Accept invoice_id as a fallback
     } = body;
 
     // 1. Get current user
@@ -68,7 +69,7 @@ export async function POST(req: Request) {
 
     if (returnError) throw returnError;
 
-    // 4. Update Product Stocks
+    // 4. Update Product Stocks (Inventory)
     const { data: existingStock } = await supabase
       .from("product_stocks")
       .select("*")
@@ -98,7 +99,7 @@ export async function POST(req: Request) {
       });
     }
 
-    // 5. Update Master Product Total & Invoice
+    // 5. Update Master Product Totals
     const { data: product } = await supabase
       .from("products")
       .select("stock_quantity, damaged_quantity, selling_price")
@@ -106,7 +107,6 @@ export async function POST(req: Request) {
       .single();
 
     if (product) {
-      // Update Product
       const updateProdData: any = {};
       if (return_type === "Good") {
         updateProdData.stock_quantity =
@@ -120,46 +120,105 @@ export async function POST(req: Request) {
         .update(updateProdData)
         .eq("id", product_id);
 
-      // --- 6. UPDATE INVOICE TOTALS ---
-      if (invoice_no) {
-        const { data: invoice } = await supabase
+      // --- 6. UPDATE INVOICE ITEMS & RECALCULATE TOTALS ---
+      // We check for invoice_no OR invoice_id
+      if (invoice_no || invoice_id) {
+        let invoiceQuery = supabase
           .from("invoices")
-          .select("id, order_id, total_amount, due_amount")
-          .eq("invoice_no", invoice_no)
-          .single();
+          .select(
+            "id, order_id, total_amount, due_amount, customer_id, paid_amount"
+          );
 
-        if (invoice) {
-          // Determine Price to Refund
-          let refundUnitPrice = product.selling_price;
+        if (invoice_id) {
+          invoiceQuery = invoiceQuery.eq("id", invoice_id);
+        } else if (invoice_no) {
+          invoiceQuery = invoiceQuery.eq("invoice_no", invoice_no);
+        }
 
-          if (invoice.order_id) {
-            // Try to find exact price paid
-            const { data: orderItem } = await supabase
+        const { data: invoice } = await invoiceQuery.single();
+
+        if (invoice && invoice.order_id) {
+          // A. Find the specific Order Item to reduce quantity
+          const { data: orderItem } = await supabase
+            .from("order_items")
+            .select("*")
+            .eq("order_id", invoice.order_id)
+            .eq("product_id", product_id)
+            .single();
+
+          if (orderItem) {
+            const unitPrice = Number(orderItem.unit_price);
+
+            // Reduce Quantity in Order Items
+            const newQuantity = Math.max(
+              0,
+              Number(orderItem.quantity) - Number(quantity)
+            );
+            const newItemTotal = newQuantity * unitPrice;
+
+            // Update the Line Item
+            await supabase
               .from("order_items")
-              .select("unit_price")
-              .eq("order_id", invoice.order_id)
-              .eq("product_id", product_id)
-              .single();
+              .update({
+                quantity: newQuantity,
+                total_price: newItemTotal,
+              })
+              .eq("id", orderItem.id);
 
-            if (orderItem && orderItem.unit_price) {
-              refundUnitPrice = Number(orderItem.unit_price);
+            // B. RECALCULATE Grand Total from Scratch (Safest Method)
+            // Fetch all items for this order to get the true sum
+            const { data: allItems } = await supabase
+              .from("order_items")
+              .select("total_price")
+              .eq("order_id", invoice.order_id);
+
+            if (allItems) {
+              const newGrandTotal = allItems.reduce(
+                (sum, item) => sum + Number(item.total_price),
+                0
+              );
+              const newDue = newGrandTotal - Number(invoice.paid_amount || 0);
+
+              // Update Invoice Total
+              await supabase
+                .from("invoices")
+                .update({
+                  total_amount: newGrandTotal,
+                  due_amount: newDue,
+                })
+                .eq("id", invoice.id);
+
+              // Update Order Total
+              await supabase
+                .from("orders")
+                .update({
+                  total_amount: newGrandTotal,
+                })
+                .eq("id", invoice.order_id);
+
+              // C. Update Customer Outstanding Balance (Recalculate accurately)
+              // We calculate the difference between Old Invoice Total and New Invoice Total
+              const diff = Number(invoice.total_amount) - newGrandTotal;
+
+              if (invoice.customer_id && diff > 0) {
+                const { data: customer } = await supabase
+                  .from("customers")
+                  .select("outstanding_balance")
+                  .eq("id", invoice.customer_id)
+                  .single();
+
+                if (customer) {
+                  const currentBalance = Number(
+                    customer.outstanding_balance || 0
+                  );
+                  await supabase
+                    .from("customers")
+                    .update({ outstanding_balance: currentBalance - diff })
+                    .eq("id", invoice.customer_id);
+                }
+              }
             }
           }
-
-          const refundTotal = Number(quantity) * refundUnitPrice;
-          const newTotal = Math.max(
-            0,
-            Number(invoice.total_amount) - refundTotal
-          );
-          const newDue = Number(invoice.due_amount) - refundTotal; // Can be negative (credit)
-
-          await supabase
-            .from("invoices")
-            .update({
-              total_amount: newTotal,
-              due_amount: newDue,
-            })
-            .eq("id", invoice.id);
         }
       }
     }

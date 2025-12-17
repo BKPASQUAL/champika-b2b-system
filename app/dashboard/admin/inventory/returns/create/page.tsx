@@ -336,7 +336,7 @@ export default function CreateReturnPage() {
   }
 
   return (
-    <div className="space-y-4 mx-auto max-w-6xl">
+    <div className="space-y-4 mx-auto ">
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="w-4 h-4" />

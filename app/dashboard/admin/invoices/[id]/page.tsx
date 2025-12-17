@@ -18,6 +18,7 @@ import {
   CreditCard,
   Undo2,
   Banknote,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,7 +36,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  TableFooter, // Import TableFooter
+  TableFooter,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -212,17 +213,20 @@ export default function ViewInvoicePage({
     return acc + r.quantity * (r.products?.selling_price || 0);
   }, 0);
 
-  // 2. Total Paid Value (Calculated from payments array if available, else fallback)
+  // 2. Payments
   const paymentsList: PaymentRecord[] = invoice.payments || [];
   const totalPaid = paymentsList.reduce((acc, p) => acc + Number(p.amount), 0);
 
-  // 3. Net Total (Grand Total - Returns)
-  const netTotal = invoice.grandTotal - totalRefunded;
+  // 3. Current Invoice Total (Net Amount from DB)
+  const netTotal = invoice.grandTotal;
 
-  // 4. Balance Due (Net Total - Paid)
+  // 4. Gross Total (Net + Returns)
+  const grossTotal = netTotal + totalRefunded;
+
+  // 5. Balance Due (Net Total - Paid)
   const balanceDue = netTotal - totalPaid;
 
-  // 5. Items Totals
+  // 6. Items Totals
   const totalItemsQty = invoice.items.reduce(
     (acc: number, item: any) => acc + item.quantity,
     0
@@ -484,7 +488,6 @@ export default function ViewInvoicePage({
                       </TableRow>
                     ))}
                   </TableBody>
-                  {/* NEW: Table Footer for Totals */}
                   <TableFooter className="bg-slate-50/50">
                     <TableRow>
                       <TableCell className="pl-6 font-semibold">
@@ -501,7 +504,7 @@ export default function ViewInvoicePage({
                         className="text-right pr-6 font-bold font-mono text-base"
                       >
                         LKR{" "}
-                        {invoice.grandTotal.toLocaleString("en-LK", {
+                        {netTotal.toLocaleString("en-LK", {
                           minimumFractionDigits: 2,
                         })}
                       </TableCell>
@@ -525,8 +528,8 @@ export default function ViewInvoicePage({
                     </Badge>
                   </div>
                   <CardDescription>
-                    Items returned against this invoice. These amounts have been
-                    deducted from the total due.
+                    Items returned against this invoice. These items have been
+                    deducted from the invoice quantity.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -595,7 +598,7 @@ export default function ViewInvoicePage({
                     Processed by: {returns[0]?.profiles?.full_name}
                   </div>
                   <div className="text-sm font-medium text-orange-700">
-                    Est. Refund Value: LKR{" "}
+                    Total Value of Returns: LKR{" "}
                     {totalRefunded.toLocaleString(undefined, {
                       minimumFractionDigits: 2,
                     })}
@@ -604,7 +607,7 @@ export default function ViewInvoicePage({
               </Card>
             )}
 
-            {/* NEW: Payment History Section */}
+            {/* Payment History Section */}
             <Card className="shadow-sm border-l-4 border-l-emerald-500 overflow-hidden">
               <CardHeader className="bg-emerald-50/50 border-b py-4">
                 <div className="flex justify-between items-center">
@@ -764,25 +767,23 @@ export default function ViewInvoicePage({
                   </span>
                   <span className="font-medium font-mono">
                     LKR{" "}
-                    {invoice.grandTotal.toLocaleString("en-LK", {
+                    {grossTotal.toLocaleString("en-LK", {
                       minimumFractionDigits: 2,
                     })}
                   </span>
                 </div>
 
-                {totalRefunded > 0 && (
-                  <div className="flex justify-between text-sm text-orange-600">
-                    <span className="flex items-center gap-1">
-                      <Undo2 className="w-3 h-3" /> Returns
-                    </span>
-                    <span className="font-medium font-mono">
-                      - LKR{" "}
-                      {totalRefunded.toLocaleString("en-LK", {
-                        minimumFractionDigits: 2,
-                      })}
-                    </span>
-                  </div>
-                )}
+                <div className="flex justify-between text-sm text-orange-600">
+                  <span className="flex items-center gap-1">
+                    <Undo2 className="w-3 h-3" /> Returns
+                  </span>
+                  <span className="font-medium font-mono">
+                    - LKR{" "}
+                    {totalRefunded.toLocaleString("en-LK", {
+                      minimumFractionDigits: 2,
+                    })}
+                  </span>
+                </div>
 
                 <Separator className="my-2 bg-slate-100" />
 
