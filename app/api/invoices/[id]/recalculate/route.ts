@@ -39,7 +39,7 @@ export async function POST(
     if (invError || !invoice)
       return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
 
-    // 2. Recalculate Totals from Order Items
+    // 2. Recalculate Totals from Order Items (Sum of Available Items)
     const { data: items } = await supabase
       .from("order_items")
       .select("total_price, commission_earned")
@@ -48,6 +48,7 @@ export async function POST(
     if (!items)
       return NextResponse.json({ error: "No items found" }, { status: 400 });
 
+    // Just SUM the items. Returns have already reduced these values in the DB.
     const newGrandTotal = items.reduce(
       (sum, item) => sum + Number(item.total_price),
       0
@@ -56,12 +57,14 @@ export async function POST(
       (sum, item) => sum + Number(item.commission_earned || 0),
       0
     );
-    const newDue = newGrandTotal - Number(invoice.paid_amount || 0);
+
+    // Note: We don't update due_amount if it is a generated column.
+    // If it's not generated, you can uncomment the due_amount update.
 
     // 3. Update Invoice
     await supabase
       .from("invoices")
-      .update({ total_amount: newGrandTotal, due_amount: newDue })
+      .update({ total_amount: newGrandTotal })
       .eq("id", id);
 
     // 4. Update Order
@@ -71,7 +74,6 @@ export async function POST(
       .eq("id", invoice.order_id);
 
     // 5. Update Rep Commission
-    // Check if record exists first
     const { data: repComm } = await supabase
       .from("rep_commissions")
       .select("id")
