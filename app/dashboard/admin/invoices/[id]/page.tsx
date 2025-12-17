@@ -218,9 +218,11 @@ export default function ViewInvoicePage({
   const totalPaid = paymentsList.reduce((acc, p) => acc + Number(p.amount), 0);
 
   // 3. Current Invoice Total (Net Amount from DB)
+  // Logic: The DB 'grandTotal' will now be correctly updated by route.ts
   const netTotal = invoice.grandTotal;
 
   // 4. Gross Total (Net + Returns)
+  // Logic: We display the "Original" amount by adding returns back to the Net
   const grossTotal = netTotal + totalRefunded;
 
   // 5. Balance Due (Net Total - Paid)

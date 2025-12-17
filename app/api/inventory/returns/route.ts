@@ -36,8 +36,8 @@ export async function POST(req: Request) {
       reason,
       business_id,
       customer_id,
-      invoice_no,
-      invoice_id, // Accept invoice_id as a fallback
+      invoice_no, // Required to link return to invoice
+      invoice_id,
     } = body;
 
     // 1. Get current user
@@ -120,8 +120,8 @@ export async function POST(req: Request) {
         .update(updateProdData)
         .eq("id", product_id);
 
-      // --- 6. UPDATE INVOICE ITEMS & RECALCULATE TOTALS ---
-      // We check for invoice_no OR invoice_id
+      // --- 6. AUTO-UPDATE INVOICE FINANCIALS ---
+      // This section ensures the invoice grand total is reduced immediately
       if (invoice_no || invoice_id) {
         let invoiceQuery = supabase
           .from("invoices")
@@ -138,7 +138,7 @@ export async function POST(req: Request) {
         const { data: invoice } = await invoiceQuery.single();
 
         if (invoice && invoice.order_id) {
-          // A. Find the specific Order Item to reduce quantity
+          // A. Update the specific Order Item (Reduce Quantity & Price)
           const { data: orderItem } = await supabase
             .from("order_items")
             .select("*")
@@ -148,28 +148,32 @@ export async function POST(req: Request) {
 
           if (orderItem) {
             const unitPrice = Number(orderItem.unit_price);
+            const oldQty = Number(orderItem.quantity);
+            const oldCommission = Number(orderItem.commission_earned || 0);
 
-            // Reduce Quantity in Order Items
-            const newQuantity = Math.max(
-              0,
-              Number(orderItem.quantity) - Number(quantity)
-            );
+            // Calculate Commission per unit
+            const unitCommission = oldQty > 0 ? oldCommission / oldQty : 0;
+
+            const returnQty = Number(quantity);
+            const newQuantity = Math.max(0, oldQty - returnQty);
             const newItemTotal = newQuantity * unitPrice;
+            const newCommissionTotal = newQuantity * unitCommission;
 
-            // Update the Line Item
+            // Update Line Item in DB
             await supabase
               .from("order_items")
               .update({
                 quantity: newQuantity,
                 total_price: newItemTotal,
+                commission_earned: newCommissionTotal,
               })
               .eq("id", orderItem.id);
 
-            // B. RECALCULATE Grand Total from Scratch (Safest Method)
-            // Fetch all items for this order to get the true sum
+            // B. RECALCULATE Grand Total (Summing all items freshly)
+            // This fixes the "Grand Total not changing" issue
             const { data: allItems } = await supabase
               .from("order_items")
-              .select("total_price")
+              .select("total_price, commission_earned")
               .eq("order_id", invoice.order_id);
 
             if (allItems) {
@@ -177,9 +181,16 @@ export async function POST(req: Request) {
                 (sum, item) => sum + Number(item.total_price),
                 0
               );
+
+              const newTotalCommission = allItems.reduce(
+                (sum, item) => sum + Number(item.commission_earned || 0),
+                0
+              );
+
+              // Calculate new Due Amount
               const newDue = newGrandTotal - Number(invoice.paid_amount || 0);
 
-              // Update Invoice Total
+              // Update Invoice Total & Due Amount
               await supabase
                 .from("invoices")
                 .update({
@@ -196,11 +207,26 @@ export async function POST(req: Request) {
                 })
                 .eq("id", invoice.order_id);
 
-              // C. Update Customer Outstanding Balance (Recalculate accurately)
-              // We calculate the difference between Old Invoice Total and New Invoice Total
+              // Update Rep Commission
+              const { data: repComm } = await supabase
+                .from("rep_commissions")
+                .select("id")
+                .eq("order_id", invoice.order_id)
+                .single();
+
+              if (repComm) {
+                await supabase
+                  .from("rep_commissions")
+                  .update({
+                    total_commission_amount: newTotalCommission,
+                  })
+                  .eq("id", repComm.id);
+              }
+
+              // C. Update Customer Outstanding Balance
               const diff = Number(invoice.total_amount) - newGrandTotal;
 
-              if (invoice.customer_id && diff > 0) {
+              if (invoice.customer_id && diff !== 0) {
                 const { data: customer } = await supabase
                   .from("customers")
                   .select("outstanding_balance")
