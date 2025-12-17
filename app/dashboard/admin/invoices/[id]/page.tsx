@@ -8,19 +8,16 @@ import {
   FileText,
   Calendar,
   User,
-  MapPin,
   History,
   Edit,
   Loader2,
   Phone,
-  Building2,
   CheckCircle2,
   Clock,
   Package,
   CreditCard,
-  Mail,
   Undo2,
-  AlertCircle,
+  Banknote,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,11 +35,11 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TableFooter, // Import TableFooter
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Label } from "@/components/ui/label";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Sheet,
   SheetContent,
@@ -52,7 +49,7 @@ import {
 } from "@/components/ui/sheet";
 import { printInvoice } from "../print-utils";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils"; // <--- ADDED THIS IMPORT
+import { cn } from "@/lib/utils";
 
 // --- Interfaces ---
 interface InvoiceHistory {
@@ -78,6 +75,16 @@ interface ReturnRecord {
   profiles: {
     full_name: string;
   };
+}
+
+interface PaymentRecord {
+  id: string;
+  amount: number;
+  payment_date: string;
+  method: string;
+  cheque_no?: string;
+  cheque_status?: string;
+  cheque_date?: string;
 }
 
 export default function ViewInvoicePage({
@@ -198,10 +205,32 @@ export default function ViewInvoicePage({
 
   if (!invoice) return null;
 
-  // Calculate Total Refunded Value (Approximate based on selling price)
+  // --- Calculations ---
+
+  // 1. Total Refunded Value
   const totalRefunded = returns.reduce((acc, r) => {
     return acc + r.quantity * (r.products?.selling_price || 0);
   }, 0);
+
+  // 2. Total Paid Value (Calculated from payments array if available, else fallback)
+  const paymentsList: PaymentRecord[] = invoice.payments || [];
+  const totalPaid = paymentsList.reduce((acc, p) => acc + Number(p.amount), 0);
+
+  // 3. Net Total (Grand Total - Returns)
+  const netTotal = invoice.grandTotal - totalRefunded;
+
+  // 4. Balance Due (Net Total - Paid)
+  const balanceDue = netTotal - totalPaid;
+
+  // 5. Items Totals
+  const totalItemsQty = invoice.items.reduce(
+    (acc: number, item: any) => acc + item.quantity,
+    0
+  );
+  const totalFreeQty = invoice.items.reduce(
+    (acc: number, item: any) => acc + item.freeQuantity,
+    0
+  );
 
   return (
     <div className="min-h-screen bg-muted/40  ">
@@ -455,11 +484,34 @@ export default function ViewInvoicePage({
                       </TableRow>
                     ))}
                   </TableBody>
+                  {/* NEW: Table Footer for Totals */}
+                  <TableFooter className="bg-slate-50/50">
+                    <TableRow>
+                      <TableCell className="pl-6 font-semibold">
+                        Total
+                      </TableCell>
+                      <TableCell className="text-center font-semibold">
+                        {totalItemsQty}
+                      </TableCell>
+                      <TableCell className="text-center font-semibold">
+                        {totalFreeQty > 0 ? totalFreeQty : "-"}
+                      </TableCell>
+                      <TableCell
+                        colSpan={2}
+                        className="text-right pr-6 font-bold font-mono text-base"
+                      >
+                        LKR{" "}
+                        {invoice.grandTotal.toLocaleString("en-LK", {
+                          minimumFractionDigits: 2,
+                        })}
+                      </TableCell>
+                    </TableRow>
+                  </TableFooter>
                 </Table>
               </CardContent>
             </Card>
 
-            {/* NEW: Returns & Adjustments Section */}
+            {/* Returns & Adjustments Section */}
             {returns.length > 0 && (
               <Card className="shadow-sm border-l-4 border-l-orange-500 overflow-hidden">
                 <CardHeader className="bg-orange-50/50 border-b py-4">
@@ -551,6 +603,105 @@ export default function ViewInvoicePage({
                 </CardFooter>
               </Card>
             )}
+
+            {/* NEW: Payment History Section */}
+            <Card className="shadow-sm border-l-4 border-l-emerald-500 overflow-hidden">
+              <CardHeader className="bg-emerald-50/50 border-b py-4">
+                <div className="flex justify-between items-center">
+                  <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                    <Banknote className="h-5 w-5 text-emerald-600" />
+                    Payment History
+                  </CardTitle>
+                  <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-none">
+                    {paymentsList.length} Payment(s)
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                {paymentsList.length === 0 ? (
+                  <div className="p-8 text-center text-muted-foreground text-sm">
+                    No payments recorded for this invoice yet.
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-emerald-50/30 hover:bg-emerald-50/30">
+                        <TableHead className="pl-6">Date</TableHead>
+                        <TableHead>Method</TableHead>
+                        <TableHead>Reference / Cheque</TableHead>
+                        <TableHead className="text-right pr-6">
+                          Amount
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paymentsList.map((pay) => (
+                        <TableRow
+                          key={pay.id}
+                          className="hover:bg-emerald-50/10"
+                        >
+                          <TableCell className="pl-6 text-sm">
+                            {new Date(pay.payment_date).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            <Badge
+                              variant="secondary"
+                              className="font-normal text-xs"
+                            >
+                              {pay.method}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {pay.method === "Cheque" ? (
+                              <div className="flex flex-col">
+                                <span className="font-mono text-xs font-medium text-foreground">
+                                  {pay.cheque_no}
+                                </span>
+                                <span className="text-[10px]">
+                                  Due:{" "}
+                                  {new Date(
+                                    pay.cheque_date!
+                                  ).toLocaleDateString()}
+                                </span>
+                                {pay.cheque_status && (
+                                  <span className="text-[10px] italic">
+                                    ({pay.cheque_status})
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              "-"
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right pr-6 font-mono font-medium">
+                            LKR{" "}
+                            {Number(pay.amount).toLocaleString("en-LK", {
+                              minimumFractionDigits: 2,
+                            })}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                    <TableFooter className="bg-emerald-50/30">
+                      <TableRow>
+                        <TableCell
+                          colSpan={3}
+                          className="pl-6 text-emerald-700 font-medium text-right"
+                        >
+                          Total Paid
+                        </TableCell>
+                        <TableCell className="pr-6 text-right font-bold font-mono text-emerald-700">
+                          LKR{" "}
+                          {totalPaid.toLocaleString("en-LK", {
+                            minimumFractionDigits: 2,
+                          })}
+                        </TableCell>
+                      </TableRow>
+                    </TableFooter>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
           </div>
 
           {/* RIGHT COLUMN (Summary) */}
@@ -581,16 +732,19 @@ export default function ViewInvoicePage({
                   <span className="text-sm font-medium">Payment Status</span>
                   <Badge
                     variant={
-                      invoice.paidAmount >= invoice.totalAmount
-                        ? "default"
-                        : "destructive"
+                      balanceDue <= 0
+                        ? "default" // Paid
+                        : totalPaid > 0
+                        ? "secondary" // Partial
+                        : "destructive" // Unpaid
                     }
                     className="rounded-full px-3"
                   >
-                    {invoice.status ||
-                      (invoice.paidAmount >= invoice.totalAmount
-                        ? "Paid"
-                        : "Unpaid")}
+                    {balanceDue <= 0
+                      ? "Paid"
+                      : totalPaid > 0
+                      ? "Partial"
+                      : "Unpaid"}
                   </Badge>
                 </div>
               </CardContent>
@@ -605,9 +759,14 @@ export default function ViewInvoicePage({
               </CardHeader>
               <CardContent className="space-y-4 pt-6">
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="text-muted-foreground">
+                    Subtotal (Gross)
+                  </span>
                   <span className="font-medium font-mono">
-                    LKR {(invoice.grandTotal + totalRefunded).toFixed(2)}
+                    LKR{" "}
+                    {invoice.grandTotal.toLocaleString("en-LK", {
+                      minimumFractionDigits: 2,
+                    })}
                   </span>
                 </div>
 
@@ -617,26 +776,55 @@ export default function ViewInvoicePage({
                       <Undo2 className="w-3 h-3" /> Returns
                     </span>
                     <span className="font-medium font-mono">
-                      - LKR {totalRefunded.toFixed(2)}
+                      - LKR{" "}
+                      {totalRefunded.toLocaleString("en-LK", {
+                        minimumFractionDigits: 2,
+                      })}
                     </span>
                   </div>
                 )}
 
+                <Separator className="my-2 bg-slate-100" />
+
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Discount</span>
-                  <span className="text-emerald-600 font-medium font-mono">
-                    - LKR 0.00
+                  <span className="font-medium text-slate-700">
+                    Net Invoice Amount
+                  </span>
+                  <span className="font-bold font-mono text-slate-700">
+                    LKR{" "}
+                    {netTotal.toLocaleString("en-LK", {
+                      minimumFractionDigits: 2,
+                    })}
                   </span>
                 </div>
+
+                {totalPaid > 0 && (
+                  <div className="flex justify-between text-sm text-emerald-600 mt-2">
+                    <span className="flex items-center gap-1">
+                      <Banknote className="w-3 h-3" /> Paid
+                    </span>
+                    <span className="font-medium font-mono">
+                      - LKR{" "}
+                      {totalPaid.toLocaleString("en-LK", {
+                        minimumFractionDigits: 2,
+                      })}
+                    </span>
+                  </div>
+                )}
 
                 <Separator className="my-2" />
 
                 <div className="flex justify-between items-end pb-2">
-                  <span className="font-bold text-lg">Total Due</span>
+                  <span className="font-bold text-lg">Balance Due</span>
                   <div className="text-right">
-                    <span className="block font-bold text-2xl text-primary font-mono tracking-tight">
+                    <span
+                      className={cn(
+                        "block font-bold text-2xl font-mono tracking-tight",
+                        balanceDue > 0 ? "text-red-600" : "text-emerald-600"
+                      )}
+                    >
                       LKR{" "}
-                      {invoice.grandTotal.toLocaleString("en-LK", {
+                      {Math.max(0, balanceDue).toLocaleString("en-LK", {
                         minimumFractionDigits: 2,
                       })}
                     </span>

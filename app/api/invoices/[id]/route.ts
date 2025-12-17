@@ -65,6 +65,7 @@ export async function GET(
 
     if (invError || !invoice) throw new Error("Invoice not found");
 
+    // Fetch Order Items
     const { data: items, error: itemsError } = await supabaseAdmin
       .from("order_items")
       .select(
@@ -85,6 +86,15 @@ export async function GET(
 
     if (itemsError) throw itemsError;
 
+    // Fetch Payments
+    const { data: payments, error: paymentsError } = await supabaseAdmin
+      .from("payments")
+      .select("*")
+      .eq("invoice_id", id)
+      .order("payment_date", { ascending: false });
+
+    if (paymentsError) throw paymentsError;
+
     const fullInvoice = {
       id: invoice.id,
       invoiceNo: invoice.invoice_no,
@@ -94,6 +104,8 @@ export async function GET(
       orderStatus: invoice.orders?.status,
       notes: invoice.orders?.notes,
       grandTotal: invoice.total_amount,
+      paidAmount: invoice.paid_amount, // Database value
+
       // For Print Utils
       customer: {
         shop: invoice.customers?.shop_name || "",
@@ -103,6 +115,7 @@ export async function GET(
       },
       salesRep: invoice.orders?.profiles?.full_name || "Unknown",
       totals: { grandTotal: invoice.total_amount },
+
       // Items
       items: items.map((item: any) => ({
         id: item.id,
@@ -126,6 +139,9 @@ export async function GET(
           item.quantity +
           item.free_quantity,
       })),
+
+      // Payments
+      payments: payments || [],
     };
 
     return NextResponse.json(fullInvoice);
@@ -145,7 +161,6 @@ export async function PATCH(
     const val = updateInvoiceSchema.parse(body);
 
     // 1. Fetch Current Invoice State (Snapshot for History)
-    // FIX: We removed 'order_items (*)' from this query because they are not directly on invoices table
     const { data: currentInvoice, error: invError } = await supabaseAdmin
       .from("invoices")
       .select(
@@ -158,7 +173,7 @@ export async function PATCH(
       .single();
 
     if (invError || !currentInvoice) {
-      console.error("Invoice fetch error:", invError); // Log the actual error
+      console.error("Invoice fetch error:", invError);
       return NextResponse.json(
         { error: "Invoice not found or DB error" },
         { status: 404 }
@@ -173,7 +188,6 @@ export async function PATCH(
 
     // 3. Save Snapshot to History
     if (val.userId) {
-      // Combine invoice and items for the snapshot record
       const snapshotData = {
         ...currentInvoice,
         items: currentItems,
@@ -181,7 +195,7 @@ export async function PATCH(
 
       await supabaseAdmin.from("invoice_history").insert({
         invoice_id: id,
-        previous_data: snapshotData, // Save complete object
+        previous_data: snapshotData,
         changed_by: val.userId,
         change_reason: val.changeReason || "Updated details",
       });
@@ -208,7 +222,7 @@ export async function PATCH(
         .eq("id", currentInvoice.customer_id);
     }
 
-    // B. Revert Stock (Using the items fetched in step 2)
+    // B. Revert Stock
     if (currentItems) {
       for (const item of currentItems) {
         const { data: prod } = await supabaseAdmin

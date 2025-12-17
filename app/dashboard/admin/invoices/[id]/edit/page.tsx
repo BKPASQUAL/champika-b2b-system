@@ -17,6 +17,7 @@ import {
   History,
   FileText,
   AlertTriangle,
+  Undo2, // Added Undo2 icon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -84,6 +85,15 @@ interface InvoiceItem {
   total: number;
 }
 
+// Added ReturnRecord interface
+interface ReturnRecord {
+  id: string;
+  quantity: number;
+  products: {
+    selling_price: number;
+  };
+}
+
 export default function EditInvoicePage({
   params,
 }: {
@@ -108,6 +118,7 @@ export default function EditInvoicePage({
   );
   const [reps, setReps] = useState<{ id: string; name: string }[]>([]);
   const [historyLogs, setHistoryLogs] = useState<InvoiceHistory[]>([]);
+  const [returns, setReturns] = useState<ReturnRecord[]>([]); // Added returns state
 
   // Form State
   const [customerId, setCustomerId] = useState<string | null>(null);
@@ -167,11 +178,12 @@ export default function EditInvoicePage({
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [prodRes, custRes, usersRes, invRes] = await Promise.all([
+        const [prodRes, custRes, usersRes, invRes, retRes] = await Promise.all([
           fetch("/api/products"),
           fetch("/api/customers"),
           fetch("/api/users"),
           fetch(`/api/invoices/${id}`),
+          fetch(`/api/invoices/${id}/returns`), // Fetch returns
         ]);
 
         const prodData = await prodRes.json();
@@ -194,6 +206,16 @@ export default function EditInvoicePage({
           usersData
             .filter((u: any) => u.role === "rep")
             .map((u: any) => ({ id: u.id, name: u.fullName }))
+        );
+
+        const retData = await retRes.json();
+        setReturns(retData);
+
+        // Calculate total refunded value
+        const currentRefunds = retData.reduce(
+          (acc: number, r: any) =>
+            acc + r.quantity * (r.products?.selling_price || 0),
+          0
         );
 
         const invoice = await invRes.json();
@@ -223,8 +245,14 @@ export default function EditInvoicePage({
           (sum: number, i: any) => sum + i.total,
           0
         );
-        const diff = itemsTotal - invoice.grandTotal;
-        if (diff > 0 && itemsTotal > 0) {
+
+        // ✅ Correctly calculate initial discount by subtracting Refunds first
+        // Formula: GrandTotal = ItemsTotal - RefundTotal - DiscountAmount
+        // Therefore: DiscountAmount = ItemsTotal - RefundTotal - GrandTotal
+        const expectedTotalFromItems = itemsTotal - currentRefunds;
+        const diff = expectedTotalFromItems - invoice.grandTotal;
+
+        if (diff > 0.01 && itemsTotal > 0) {
           const percent = (diff / itemsTotal) * 100;
           setExtraDiscount(parseFloat(percent.toFixed(2)));
         }
@@ -373,9 +401,20 @@ export default function EditInvoicePage({
   };
 
   // --- Calculations ---
+  // 1. Calculate Subtotal from Items
   const subtotal = items.reduce((sum, item) => sum + item.total, 0);
+
+  // 2. Calculate Refunds from Returns
+  const refundTotal = returns.reduce(
+    (acc, r) => acc + r.quantity * (r.products?.selling_price || 0),
+    0
+  );
+
+  // 3. Calculate Extra Discount Amount
   const extraDiscountAmount = (subtotal * extraDiscount) / 100;
-  const grandTotal = subtotal - extraDiscountAmount;
+
+  // 4. Calculate Grand Total (Subtotal - Discount - Refunds)
+  const grandTotal = subtotal - extraDiscountAmount - refundTotal;
 
   // --- Save / Update Logic ---
   const handleUpdateInvoice = async (asDraft = false) => {
@@ -405,7 +444,7 @@ export default function EditInvoicePage({
       invoiceDate,
       orderStatus,
       items,
-      grandTotal,
+      grandTotal, // This now correctly includes the deduction for returns
       isDraft: asDraft,
       userId: userId,
       changeReason:
@@ -1030,6 +1069,17 @@ export default function EditInvoicePage({
                 <span className="text-muted-foreground">Subtotal:</span>
                 <span className="font-medium">LKR {subtotal.toFixed(2)}</span>
               </div>
+
+              {refundTotal > 0 && (
+                <div className="flex justify-between text-sm text-orange-600 border-t pt-2">
+                  <span className="flex items-center gap-1">
+                    <Undo2 className="w-3 h-3" /> Less Returns:
+                  </span>
+                  <span className="font-medium">
+                    - LKR {refundTotal.toFixed(2)}
+                  </span>
+                </div>
+              )}
 
               <div className="space-y-2 pt-2 border-t">
                 <Label>Extra Discount (%)</Label>
