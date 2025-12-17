@@ -31,7 +31,7 @@ import {
   Store,
   Building2,
   ArrowRightLeft,
-  Undo2, // Import Undo2 icon
+  // Undo2, // Removed unused import
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -98,13 +98,7 @@ export default function InventoryPage() {
             <RefreshCw className="w-4 h-4" />
           </Button>
 
-          {/* Link to Returns Page */}
-          <Button
-            variant="secondary"
-            onClick={() => router.push("/dashboard/admin/inventory/returns")}
-          >
-            <Undo2 className="w-4 h-4 mr-2" /> Returns & Damages
-          </Button>
+          {/* Returns Button Removed */}
 
           <Button
             onClick={() => router.push("/dashboard/admin/inventory/transfer")}

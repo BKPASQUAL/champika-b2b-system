@@ -1,12 +1,7 @@
-// app/api/auth/login/route.ts
-import { createClient } from "@supabase/supabase-js";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-
-// Initialize Supabase Client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Validation Schema
 const loginSchema = z.object({
@@ -21,7 +16,28 @@ export async function POST(request: NextRequest) {
     // 1. Validate Input
     const { email, password } = loginSchema.parse(body);
 
-    // 2. Authenticate with Supabase Auth
+    const cookieStore = await cookies();
+
+    // 2. Initialize Supabase with Cookie Management (Critical for Auth)
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll();
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            );
+          },
+        },
+      }
+    );
+
+    // 3. Authenticate
+    // This will now automatically set the session cookies on the response
     const { data: authData, error: authError } =
       await supabase.auth.signInWithPassword({
         email,
@@ -42,7 +58,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. Fetch User Profile with Business Information
+    // 4. Fetch User Profile with Business Information
+    // We use the same supabase client which is now authenticated as the user
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select(
@@ -76,12 +93,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Extract Business Information
+    // 5. Extract Business Information
     const businessInfo = Array.isArray(profile.businesses)
       ? profile.businesses[0]
       : profile.businesses;
 
-    // 5. Return Success with Complete Context
+    // 6. Return Success
     return NextResponse.json({
       message: "Login successful",
       role: profile.role,

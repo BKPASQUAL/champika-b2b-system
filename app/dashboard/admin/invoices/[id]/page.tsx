@@ -19,6 +19,8 @@ import {
   Package,
   CreditCard,
   Mail,
+  Undo2,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,6 +52,7 @@ import {
 } from "@/components/ui/sheet";
 import { printInvoice } from "../print-utils";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils"; // <--- ADDED THIS IMPORT
 
 // --- Interfaces ---
 interface InvoiceHistory {
@@ -58,6 +61,23 @@ interface InvoiceHistory {
   changedBy: string;
   reason: string;
   previousTotal: number;
+}
+
+interface ReturnRecord {
+  id: string;
+  return_number: string;
+  created_at: string;
+  quantity: number;
+  return_type: string;
+  reason: string;
+  products: {
+    name: string;
+    sku: string;
+    selling_price: number;
+  };
+  profiles: {
+    full_name: string;
+  };
 }
 
 export default function ViewInvoicePage({
@@ -75,6 +95,10 @@ export default function ViewInvoicePage({
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyLogs, setHistoryLogs] = useState<InvoiceHistory[]>([]);
 
+  // Returns State
+  const [returnsLoading, setReturnsLoading] = useState(true);
+  const [returns, setReturns] = useState<ReturnRecord[]>([]);
+
   useEffect(() => {
     const fetchInvoice = async () => {
       try {
@@ -89,7 +113,23 @@ export default function ViewInvoicePage({
         setLoading(false);
       }
     };
+
+    const fetchReturns = async () => {
+      try {
+        const res = await fetch(`/api/invoices/${id}/returns`);
+        if (res.ok) {
+          const data = await res.json();
+          setReturns(data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch returns");
+      } finally {
+        setReturnsLoading(false);
+      }
+    };
+
     fetchInvoice();
+    fetchReturns();
   }, [id, router]);
 
   const fetchHistory = async () => {
@@ -118,28 +158,23 @@ export default function ViewInvoicePage({
 
   const renderOrderStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
-      Pending:
-        "bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-50",
-      Processing: "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-50",
-      Loading:
-        "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-50",
-      "In Transit":
-        "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-50",
-      Delivered:
-        "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-50",
-      Cancelled: "bg-red-50 text-red-700 border-red-200 hover:bg-red-50",
+      Pending: "bg-yellow-50 text-yellow-700 border-yellow-200",
+      Processing: "bg-blue-50 text-blue-700 border-blue-200",
+      Loading: "bg-indigo-50 text-indigo-700 border-indigo-200",
+      "In Transit": "bg-purple-50 text-purple-700 border-purple-200",
+      Delivered: "bg-emerald-50 text-emerald-700 border-emerald-200",
+      Cancelled: "bg-red-50 text-red-700 border-red-200",
     };
 
     const icons: Record<string, any> = {
       Pending: Clock,
       Processing: Package,
       Loading: Package,
-      "In Transit": Truck, // Assuming you import Truck
+      "In Transit": Package,
       Delivered: CheckCircle2,
-      Cancelled: X, // Assuming you import X
+      Cancelled: Package,
     };
 
-    // Import icons or use generic fallback
     const Icon = icons[status] || FileText;
 
     return (
@@ -153,10 +188,6 @@ export default function ViewInvoicePage({
     );
   };
 
-  // Fix imports for badge icons if needed (Truck, X were not in original import list)
-  const Truck = Package; // Fallback
-  const X = Package; // Fallback
-
   if (loading) {
     return (
       <div className="flex justify-center items-center h-[80vh]">
@@ -167,11 +198,14 @@ export default function ViewInvoicePage({
 
   if (!invoice) return null;
 
+  // Calculate Total Refunded Value (Approximate based on selling price)
+  const totalRefunded = returns.reduce((acc, r) => {
+    return acc + r.quantity * (r.products?.selling_price || 0);
+  }, 0);
+
   return (
-    <div className="min-h-screen bg-muted/40 -m-6 p-6">
-      {" "}
-      {/* Full background styling */}
-      <div className=" mx-auto space-y-8">
+    <div className="min-h-screen bg-muted/40  ">
+      <div className="mx-auto space-y-8 ">
         {/* --- Top Header Section --- */}
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
           <div className="space-y-1">
@@ -286,9 +320,8 @@ export default function ViewInvoicePage({
         <div className="grid gap-6 lg:grid-cols-3">
           {/* LEFT COLUMN (Details & Items) */}
           <div className="lg:col-span-2 space-y-6">
-            {/* 1. Stakeholders Card (Customer & Rep) */}
+            {/* Stakeholders Card */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Customer Card */}
               <Card className="shadow-sm border-l-4 border-l-blue-500">
                 <CardHeader className="pb-2">
                   <CardDescription className="text-xs font-semibold uppercase tracking-wider text-blue-600">
@@ -312,17 +345,10 @@ export default function ViewInvoicePage({
                       <Phone className="w-3 h-3" />{" "}
                       <span>{invoice.customer?.phone || "N/A"}</span>
                     </div>
-                    <div className="flex items-start gap-2 text-xs text-muted-foreground">
-                      <MapPin className="w-3 h-3 mt-0.5" />{" "}
-                      <span className="line-clamp-2">
-                        {invoice.customer?.address || "No Address"}
-                      </span>
-                    </div>
                   </div>
                 </CardContent>
               </Card>
 
-              {/* Sales Rep Card */}
               <Card className="shadow-sm">
                 <CardHeader className="pb-2">
                   <CardDescription className="text-xs font-semibold uppercase tracking-wider">
@@ -342,21 +368,12 @@ export default function ViewInvoicePage({
                     <p className="text-xs text-muted-foreground">
                       Authorized Agent
                     </p>
-                    <Badge
-                      variant="secondary"
-                      className="mt-1 font-normal text-xs"
-                    >
-                      Employee ID:{" "}
-                      {invoice.salesRepId
-                        ? invoice.salesRepId.substring(0, 8)
-                        : "---"}
-                    </Badge>
                   </div>
                 </CardContent>
               </Card>
             </div>
 
-            {/* 2. Items Table */}
+            {/* Line Items Table */}
             <Card className="shadow-sm overflow-hidden">
               <CardHeader className="bg-slate-50/50 border-b py-4">
                 <div className="flex justify-between items-center">
@@ -440,13 +457,104 @@ export default function ViewInvoicePage({
                   </TableBody>
                 </Table>
               </CardContent>
-              {/* Optional footer for table stats if needed */}
             </Card>
+
+            {/* NEW: Returns & Adjustments Section */}
+            {returns.length > 0 && (
+              <Card className="shadow-sm border-l-4 border-l-orange-500 overflow-hidden">
+                <CardHeader className="bg-orange-50/50 border-b py-4">
+                  <div className="flex justify-between items-center">
+                    <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                      <Undo2 className="h-5 w-5 text-orange-600" />
+                      Returns & Adjustments
+                    </CardTitle>
+                    <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-200 border-none">
+                      {returns.length} Record(s) found
+                    </Badge>
+                  </div>
+                  <CardDescription>
+                    Items returned against this invoice. These amounts have been
+                    deducted from the total due.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-orange-50/30 hover:bg-orange-50/30">
+                        <TableHead className="pl-6">Return #</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Product</TableHead>
+                        <TableHead className="text-center">Type</TableHead>
+                        <TableHead className="text-right">Qty</TableHead>
+                        <TableHead className="pr-6">Reason</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {returns.map((ret) => (
+                        <TableRow
+                          key={ret.id}
+                          className="hover:bg-orange-50/10"
+                        >
+                          <TableCell className="pl-6 font-mono text-xs font-medium">
+                            {ret.return_number}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {new Date(ret.created_at).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell>
+                            <div className="font-medium text-sm">
+                              {ret.products?.name}
+                            </div>
+                            <div className="text-[10px] text-muted-foreground">
+                              {ret.products?.sku}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "text-[10px] h-5 px-1.5",
+                                ret.return_type === "Good"
+                                  ? "text-green-600 bg-green-50 border-green-200"
+                                  : "text-red-600 bg-red-50 border-red-200"
+                              )}
+                            >
+                              {ret.return_type}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-bold text-sm">
+                            -{ret.quantity}
+                          </TableCell>
+                          <TableCell
+                            className="pr-6 text-xs text-muted-foreground max-w-[150px] truncate"
+                            title={ret.reason}
+                          >
+                            {ret.reason
+                              ?.replace(`[${invoice.invoiceNo}]`, "")
+                              .trim() || "-"}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+                <CardFooter className="bg-orange-50/30 border-t py-3 flex justify-between">
+                  <div className="text-xs text-muted-foreground">
+                    Processed by: {returns[0]?.profiles?.full_name}
+                  </div>
+                  <div className="text-sm font-medium text-orange-700">
+                    Est. Refund Value: LKR{" "}
+                    {totalRefunded.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                    })}
+                  </div>
+                </CardFooter>
+              </Card>
+            )}
           </div>
 
           {/* RIGHT COLUMN (Summary) */}
           <div className="space-y-6">
-            {/* Metadata Card */}
             <Card className="shadow-sm">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
@@ -471,7 +579,6 @@ export default function ViewInvoicePage({
                 <Separator />
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-medium">Payment Status</span>
-                  {/* Assuming payment status is available or default to Unpaid logic */}
                   <Badge
                     variant={
                       invoice.paidAmount >= invoice.totalAmount
@@ -489,7 +596,6 @@ export default function ViewInvoicePage({
               </CardContent>
             </Card>
 
-            {/* Financial Summary */}
             <Card className="shadow-sm border-t-4 border-t-primary sticky top-6">
               <CardHeader className="bg-muted/20 pb-4">
                 <CardTitle className="flex items-center gap-2">
@@ -501,21 +607,25 @@ export default function ViewInvoicePage({
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Subtotal</span>
                   <span className="font-medium font-mono">
-                    LKR {invoice.grandTotal.toFixed(2)}
+                    LKR {(invoice.grandTotal + totalRefunded).toFixed(2)}
                   </span>
                 </div>
+
+                {totalRefunded > 0 && (
+                  <div className="flex justify-between text-sm text-orange-600">
+                    <span className="flex items-center gap-1">
+                      <Undo2 className="w-3 h-3" /> Returns
+                    </span>
+                    <span className="font-medium font-mono">
+                      - LKR {totalRefunded.toFixed(2)}
+                    </span>
+                  </div>
+                )}
 
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Discount</span>
                   <span className="text-emerald-600 font-medium font-mono">
                     - LKR 0.00
-                  </span>
-                </div>
-
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Tax</span>
-                  <span className="text-muted-foreground font-mono">
-                    LKR 0.00
                   </span>
                 </div>
 

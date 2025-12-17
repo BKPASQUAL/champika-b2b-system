@@ -5,10 +5,8 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  // Await cookies (Required for Next.js 15/16)
   const cookieStore = await cookies();
 
-  // Create a Supabase client with the user's cookies
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -22,11 +20,7 @@ export async function POST(req: Request) {
             cookiesToSet.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, options)
             );
-          } catch {
-            // The `setAll` method was called from a Server Component.
-            // This can be ignored if you have middleware refreshing
-            // user sessions.
-          }
+          } catch {}
         },
       },
     }
@@ -42,6 +36,7 @@ export async function POST(req: Request) {
       reason,
       business_id,
       customer_id,
+      invoice_no, // Ensure this is read
     } = body;
 
     // 1. Get current user
@@ -81,8 +76,6 @@ export async function POST(req: Request) {
       .eq("location_id", location_id)
       .single();
 
-    let stockError;
-
     if (existingStock) {
       const updateData: any = {};
       if (return_type === "Good") {
@@ -91,34 +84,29 @@ export async function POST(req: Request) {
         updateData.damaged_quantity =
           Number(existingStock.damaged_quantity || 0) + Number(quantity);
       }
-
-      const { error } = await supabase
+      await supabase
         .from("product_stocks")
         .update(updateData)
         .eq("id", existingStock.id);
-      stockError = error;
     } else {
-      // Create new stock record if it doesn't exist
-      const { error } = await supabase.from("product_stocks").insert({
+      await supabase.from("product_stocks").insert({
         product_id,
         location_id,
         quantity: return_type === "Good" ? quantity : 0,
         damaged_quantity: return_type === "Damage" ? quantity : 0,
         last_updated: new Date().toISOString(),
       });
-      stockError = error;
     }
 
-    if (stockError) throw stockError;
-
-    // 5. Update Master Product Total (Optional)
+    // 5. Update Master Product Total & Invoice
     const { data: product } = await supabase
       .from("products")
-      .select("stock_quantity, damaged_quantity")
+      .select("stock_quantity, damaged_quantity, selling_price")
       .eq("id", product_id)
       .single();
 
     if (product) {
+      // Update Product
       const updateProdData: any = {};
       if (return_type === "Good") {
         updateProdData.stock_quantity =
@@ -131,6 +119,49 @@ export async function POST(req: Request) {
         .from("products")
         .update(updateProdData)
         .eq("id", product_id);
+
+      // --- 6. UPDATE INVOICE TOTALS ---
+      if (invoice_no) {
+        const { data: invoice } = await supabase
+          .from("invoices")
+          .select("id, order_id, total_amount, due_amount")
+          .eq("invoice_no", invoice_no)
+          .single();
+
+        if (invoice) {
+          // Determine Price to Refund
+          let refundUnitPrice = product.selling_price;
+
+          if (invoice.order_id) {
+            // Try to find exact price paid
+            const { data: orderItem } = await supabase
+              .from("order_items")
+              .select("unit_price")
+              .eq("order_id", invoice.order_id)
+              .eq("product_id", product_id)
+              .single();
+
+            if (orderItem && orderItem.unit_price) {
+              refundUnitPrice = Number(orderItem.unit_price);
+            }
+          }
+
+          const refundTotal = Number(quantity) * refundUnitPrice;
+          const newTotal = Math.max(
+            0,
+            Number(invoice.total_amount) - refundTotal
+          );
+          const newDue = Number(invoice.due_amount) - refundTotal; // Can be negative (credit)
+
+          await supabase
+            .from("invoices")
+            .update({
+              total_amount: newTotal,
+              due_amount: newDue,
+            })
+            .eq("id", invoice.id);
+        }
+      }
     }
 
     return NextResponse.json(returnRecord);
@@ -142,7 +173,6 @@ export async function POST(req: Request) {
 
 export async function GET(req: Request) {
   const cookieStore = await cookies();
-
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
