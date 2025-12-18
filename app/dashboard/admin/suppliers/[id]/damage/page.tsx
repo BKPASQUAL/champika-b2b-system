@@ -45,6 +45,7 @@ import {
   Printer,
   Eye,
   ChevronRight,
+  XCircle, // <--- Added Icon
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -71,6 +72,11 @@ export default function SupplierDamagePage() {
   const [isSendDialogOpen, setIsSendDialogOpen] = useState(false);
   const [isClaimDialogOpen, setIsClaimDialogOpen] = useState(false);
   const [isViewBatchDialogOpen, setIsViewBatchDialogOpen] = useState(false);
+
+  // --- NEW: Business Loss State ---
+  const [isLossDialogOpen, setIsLossDialogOpen] = useState(false);
+  const [lossReason, setLossReason] = useState("");
+  // --------------------------------
 
   // Active Batch for Claim/View
   const [selectedBatch, setSelectedBatch] = useState<any>(null);
@@ -155,6 +161,31 @@ export default function SupplierDamagePage() {
       setSubmitting(false);
     }
   };
+
+  // --- NEW: Mark as Loss Handler ---
+  const handleMarkAsLoss = async () => {
+    // Reason is now optional based on your request
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/suppliers/mark-loss", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemIds: selectedItemIds, reason: lossReason }),
+      });
+
+      if (!res.ok) throw new Error("Failed to mark as loss");
+
+      toast.success("Items marked as Business Loss");
+      setIsLossDialogOpen(false);
+      setLossReason("");
+      fetchData(); // Refresh the list
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  // ---------------------------------
 
   // CLAIM Handlers
   const openClaimDialog = (batch: any) => {
@@ -425,10 +456,20 @@ export default function SupplierDamagePage() {
               Select items to generate a Return Note/Gate Pass.
             </div>
             {selectedItemIds.length > 0 && (
-              <Button onClick={() => setIsSendDialogOpen(true)}>
-                <Send className="w-4 h-4 mr-2" /> Send Selected (
-                {selectedItemIds.length})
-              </Button>
+              <div className="flex gap-2">
+                {/* --- MARK AS LOSS BUTTON --- */}
+                <Button
+                  variant="destructive"
+                  onClick={() => setIsLossDialogOpen(true)}
+                >
+                  <XCircle className="w-4 h-4 mr-2" /> Mark as Loss
+                </Button>
+                {/* --------------------------- */}
+                <Button onClick={() => setIsSendDialogOpen(true)}>
+                  <Send className="w-4 h-4 mr-2" /> Send Selected (
+                  {selectedItemIds.length})
+                </Button>
+              </div>
             )}
           </div>
           {renderItemTable()}
@@ -466,6 +507,52 @@ export default function SupplierDamagePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* --- BUSINESS LOSS DIALOG --- */}
+      <Dialog open={isLossDialogOpen} onOpenChange={setIsLossDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-red-600">
+              Confirm Business Loss
+            </DialogTitle>
+            <CardDescription>
+              These items will NOT be returned to the supplier. They will be
+              removed from stock as a company loss.
+            </CardDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="font-medium">
+              Selected Items: {selectedItemIds.length}
+            </div>
+            <div className="space-y-2">
+              <Label>Reason for Loss (Optional)</Label>
+              <Input
+                placeholder="e.g., Expired, Damaged in Store, Theft"
+                value={lossReason}
+                onChange={(e) => setLossReason(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsLossDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleMarkAsLoss}
+              disabled={submitting}
+            >
+              Confirm Loss
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* --------------------------- */}
 
       {/* DIALOG: View Batch Items */}
       <Dialog

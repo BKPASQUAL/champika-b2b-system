@@ -24,61 +24,56 @@ export async function GET(
       );
     }
 
-    // 2. Fetch Purchases (Recent 50 for table)
-    const { data: recentPurchases, error: purchError } = await supabaseAdmin
+    // 2. Fetch Recent Purchases
+    const { data: purchases } = await supabaseAdmin
       .from("purchases")
       .select("*")
       .eq("supplier_id", id)
       .order("purchase_date", { ascending: false })
       .limit(50);
 
-    if (purchError) throw purchError;
-
-    // 3. Fetch All Purchases (For Totals Calculation)
-    const { data: allPurchases, error: allPurchError } = await supabaseAdmin
+    const { data: allPurchases } = await supabaseAdmin
       .from("purchases")
       .select("total_amount, paid_amount")
       .eq("supplier_id", id);
 
-    if (allPurchError) throw allPurchError;
-
-    // 4. Fetch Payments (Recent 50)
-    const { data: payments, error: payError } = await supabaseAdmin
+    // 3. Fetch Payments
+    const { data: payments } = await supabaseAdmin
       .from("supplier_payments")
       .select("*")
       .eq("supplier_id", id)
       .order("payment_date", { ascending: false })
       .limit(50);
 
-    if (payError) throw payError;
-
-    // 5. Fetch Products (Matching by Supplier Name)
-    // Note: This relies on exact name match.
-    const { data: products, error: prodError } = await supabaseAdmin
+    // 4. Fetch Products (Good & Damaged Stock)
+    const { data: products } = await supabaseAdmin
       .from("products")
-      .select("stock_quantity, damaged_quantity, cost_price, supplier_name")
-      .eq("supplier_name", supplier.name);
+      .select(
+        "id, name, sku, stock_quantity, damaged_quantity, cost_price, supplier_name"
+      )
+      .eq("supplier_name", supplier.name); // Matching by name
 
-    if (prodError) throw prodError;
+    // 5. NEW: Fetch Return History (Items sent back to this supplier)
+    // Assuming you log supplier returns in 'inventory_returns' with a specific type or note,
+    // OR if you have a 'supplier_returns' table.
+    // For now, let's assume we filter 'inventory_returns' where metadata matches, or we just rely on current damaged stock.
+    // If you don't have a specific table for "Sent back to supplier", we will build the feature to deduct from stock.
 
     // --- Calculations ---
 
-    // A. Total Purchased (Lifetime)
-    const totalPurchased = allPurchases.reduce(
-      (sum, p) => sum + Number(p.total_amount || 0),
-      0
-    );
+    // A. Financials
+    const totalPurchased =
+      allPurchases?.reduce((sum, p) => sum + Number(p.total_amount || 0), 0) ||
+      0;
+    const totalPaid =
+      allPurchases?.reduce((sum, p) => sum + Number(p.paid_amount || 0), 0) ||
+      0;
+    const totalPayable = totalPurchased - totalPaid;
 
-    // B. Total Payable (Outstanding Balance)
-    const totalPayable = allPurchases.reduce(
-      (sum, p) =>
-        sum + (Number(p.total_amount || 0) - Number(p.paid_amount || 0)),
-      0
-    );
-
-    // C. Stock Values (at Cost)
+    // B. Stock Values
     let availableStockValue = 0;
-    let damagedStockValue = 0;
+    let damagedStockValue = 0; // Value of damaged items currently in stock
+    const damagedItems: any[] = [];
 
     (products || []).forEach((p) => {
       const cost = Number(p.cost_price || 0);
@@ -86,7 +81,14 @@ export async function GET(
       const badQty = Number(p.damaged_quantity || 0);
 
       availableStockValue += goodQty * cost;
-      damagedStockValue += badQty * cost;
+
+      if (badQty > 0) {
+        damagedStockValue += badQty * cost;
+        damagedItems.push({
+          ...p,
+          value: badQty * cost,
+        });
+      }
     });
 
     const totalStockValue = availableStockValue + damagedStockValue;
@@ -94,17 +96,19 @@ export async function GET(
     const stats = {
       totalPurchased,
       totalPayable,
-      availableStockValue, // Good Stock Value
-      damagedStockValue, // Damaged Stock Value
-      totalStockValue, // Combined Value
-      orderCount: allPurchases.length,
+      availableStockValue,
+      damagedStockValue,
+      totalStockValue,
+      orderCount: allPurchases?.length || 0,
       productCount: products?.length || 0,
+      damagedCount: damagedItems.length,
     };
 
     return NextResponse.json({
       supplier,
-      purchases: recentPurchases,
+      purchases,
       payments,
+      damagedItems, // List of products with damages
       stats,
     });
   } catch (error: any) {

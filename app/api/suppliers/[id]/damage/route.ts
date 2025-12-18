@@ -25,7 +25,6 @@ export async function GET(
     }
 
     // 2. Find "Main Warehouse" Location ID
-    // We explicitly look up the ID to ensure the filter works correctly
     const { data: mainLocation } = await supabaseAdmin
       .from("locations")
       .select("id")
@@ -46,15 +45,13 @@ export async function GET(
       .eq("return_type", "Damage")
       .eq("products.supplier_name", supplier.name)
       .is("return_batch_id", null) // Only items NOT in a batch
-      .neq("status", "Returned"); // Exclude items already sent
+      .neq("status", "Returned") // Exclude items already sent
+      .neq("status", "Business Loss"); // <--- ADDED: Exclude Business Losses
 
     // Apply Main Warehouse Filter if found
     if (mainLocation) {
       query = query.eq("location_id", mainLocation.id);
     } else {
-      // If Main Warehouse not found, fallback to name match (legacy) or return empty?
-      // We'll try the name match as a backup in case the ID lookup failed unexpectedly
-      // but usually, if ID isn't found, this won't return anything either.
       console.warn(
         "Main Warehouse location not found by ID, trying join filter"
       );
