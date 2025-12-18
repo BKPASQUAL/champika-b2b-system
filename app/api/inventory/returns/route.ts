@@ -28,8 +28,7 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    console.log("--- RETURN API CALLED (Direct Item Update) ---");
-    console.log("Payload:", JSON.stringify(body, null, 2));
+    console.log("--- RETURN API CALLED ---");
 
     let {
       product_id,
@@ -49,7 +48,7 @@ export async function POST(req: Request) {
     if (!user)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    // --- Auto-detect Invoice ---
+    // --- 1. Auto-detect Invoice Context ---
     if ((!invoice_no || invoice_no === "all") && customer_id && product_id) {
       const { data: latestOrder } = await supabase
         .from("orders")
@@ -71,7 +70,7 @@ export async function POST(req: Request) {
 
     const return_number = `RET-${Date.now().toString().slice(-6)}`;
 
-    // --- Create Return ---
+    // --- 2. Create Return Record ---
     const { data: returnRecord, error: returnError } = await supabase
       .from("inventory_returns")
       .insert({
@@ -90,7 +89,7 @@ export async function POST(req: Request) {
 
     if (returnError) throw returnError;
 
-    // --- Update Stock ---
+    // --- 3. Update Location-Specific Stock (product_stocks) ---
     const { data: existingStock } = await supabase
       .from("product_stocks")
       .select("*")
@@ -120,10 +119,10 @@ export async function POST(req: Request) {
       });
     }
 
-    // --- Update Product Master ---
+    // --- 4. Update Product Catalog (Master Stock) ---
     const { data: product } = await supabase
       .from("products")
-      .select("stock_quantity, damaged_quantity")
+      .select("name, stock_quantity, damaged_quantity")
       .eq("id", product_id)
       .single();
 
@@ -136,16 +135,30 @@ export async function POST(req: Request) {
         updateProdData.damaged_quantity =
           Number(product.damaged_quantity || 0) + Number(quantity);
       }
+
       await supabase
         .from("products")
         .update(updateProdData)
         .eq("id", product_id);
+
+      // --- 5. Record in Transaction History ---
+      await supabase.from("account_transactions").insert({
+        transaction_type: "INVENTORY_RETURN",
+        description: `Return (${return_type}): ${quantity} units of ${product.name}. Reason: ${reason}`,
+        amount: 0,
+        transaction_date: new Date().toISOString(),
+        business_id: business_id,
+        metadata: {
+          return_id: returnRecord.id,
+          product_id,
+          quantity,
+          type: return_type,
+          invoice_no,
+        },
+      });
     }
 
-    // --- FINANCIAL UPDATE (Modify Order Items Directly) ---
-    console.log("--- START FINANCIAL UPDATE ---");
-    let debugInfo = {};
-
+    // --- 6. Financial Updates (Invoice, Order, Customer Balance) ---
     if (invoice_no || invoice_id) {
       let invoiceQuery = supabase
         .from("invoices")
@@ -160,7 +173,6 @@ export async function POST(req: Request) {
       const { data: invoice } = await invoiceQuery.single();
 
       if (invoice && invoice.order_id) {
-        // 1. Find the specific Order Item
         const { data: orderItem } = await supabase
           .from("order_items")
           .select("*")
@@ -169,22 +181,16 @@ export async function POST(req: Request) {
           .single();
 
         if (orderItem) {
-          console.log(`Updating Order Item: ${orderItem.id}`);
-
-          // Calculate New Values for the Item
+          // Adjust Order Item
           const oldQty = Number(orderItem.quantity);
           const returnQty = Number(quantity);
           const newQty = Math.max(0, oldQty - returnQty);
-
           const unitPrice = Number(orderItem.unit_price);
           const newTotalItemPrice = newQty * unitPrice;
 
-          // Pro-rate commission
           const oldComm = Number(orderItem.commission_earned || 0);
-          const commPerUnit = oldQty > 0 ? oldComm / oldQty : 0;
-          const newComm = newQty * commPerUnit;
+          const newComm = newQty * (oldQty > 0 ? oldComm / oldQty : 0);
 
-          // Update the Item in DB
           await supabase
             .from("order_items")
             .update({
@@ -194,7 +200,7 @@ export async function POST(req: Request) {
             })
             .eq("id", orderItem.id);
 
-          // 2. Recalculate Grand Total (Sum of Available Products)
+          // Recalculate Totals
           const { data: allItems } = await supabase
             .from("order_items")
             .select("total_price, commission_earned")
@@ -214,24 +220,17 @@ export async function POST(req: Request) {
             );
           }
 
-          console.log(`New Grand Total (Sum of Items): ${newGrandTotal}`);
-
-          // 3. Update Invoice & Order
-          // We do NOT subtract returns again, because the items themselves are reduced.
           await supabase
             .from("invoices")
             .update({ total_amount: newGrandTotal })
             .eq("id", invoice.id);
-
           await supabase
             .from("orders")
             .update({ total_amount: newGrandTotal })
             .eq("id", invoice.order_id);
 
-          // 4. Update Customer Balance
+          // Update Customer Balance
           const diff = Number(invoice.total_amount) - newGrandTotal;
-          console.log(`Adjusting Customer Balance by diff: ${diff}`);
-
           if (invoice.customer_id && diff !== 0) {
             const { data: customer } = await supabase
               .from("customers")
@@ -240,8 +239,7 @@ export async function POST(req: Request) {
               .single();
 
             if (customer) {
-              const oldBal = Number(customer.outstanding_balance || 0);
-              const newBal = oldBal - diff;
+              const newBal = Number(customer.outstanding_balance || 0) - diff;
               await supabase
                 .from("customers")
                 .update({ outstanding_balance: newBal })
@@ -249,7 +247,7 @@ export async function POST(req: Request) {
             }
           }
 
-          // 5. Update Commission
+          // Update Rep Commission
           const { data: repComm } = await supabase
             .from("rep_commissions")
             .select("id")
@@ -283,13 +281,7 @@ export async function GET(req: Request) {
         getAll() {
           return cookieStore.getAll();
         },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            );
-          } catch {}
-        },
+        setAll() {},
       },
     }
   );
@@ -299,20 +291,10 @@ export async function GET(req: Request) {
 
   let query = supabase
     .from("inventory_returns")
-    .select(
-      `
-      *,
-      products (name, sku),
-      locations (name),
-      profiles (full_name)
-    `
-    )
+    .select(`*, products (name, sku), locations (name), profiles (full_name)`)
     .order("created_at", { ascending: false });
 
-  if (businessId) {
-    query = query.eq("business_id", businessId);
-  }
-
+  if (businessId) query = query.eq("business_id", businessId);
   const { data, error } = await query;
 
   if (error)

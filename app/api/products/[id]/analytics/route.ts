@@ -33,7 +33,7 @@ export async function GET(
 
     if (orderError) throw orderError;
 
-    // --- 2. Fetch PURCHASES (New) ---
+    // --- 2. Fetch PURCHASES ---
     const { data: purchaseItems, error: purchaseError } = await supabaseAdmin
       .from("purchase_items")
       .select(
@@ -50,7 +50,22 @@ export async function GET(
 
     if (purchaseError) throw purchaseError;
 
-    // --- 3. Process Sales Data ---
+    // --- 3. Fetch RETURNS & DAMAGES ---
+    const { data: returnItems, error: returnError } = await supabaseAdmin
+      .from("inventory_returns")
+      .select(
+        `
+        id, quantity, return_type, reason, created_at,
+        customer:customers (shop_name),
+        location:locations (name)
+      `
+      )
+      .eq("product_id", id)
+      .order("created_at", { ascending: false });
+
+    if (returnError) throw returnError;
+
+    // --- 4. Process Sales Data & Charts ---
     const history: any[] = [];
     const monthlyStats: Record<string, any> = {};
     const businessStats: Record<string, any> = {};
@@ -75,7 +90,7 @@ export async function GET(
       const profit = revenue - cost;
       const qty = Number(item.quantity) || 0;
 
-      // History Entry
+      // History Entry (Sales)
       history.push({
         id: item.id,
         orderId: item.order.order_id,
@@ -83,13 +98,14 @@ export async function GET(
         customer: item.order.customer?.shop_name || "Unknown",
         business: businessName,
         rep: repName,
-        quantity: qty,
+        quantity: -qty, // Negative for stock out
         unitPrice: item.unit_price,
         total: revenue,
         status: item.order.status,
+        type: "SALE",
       });
 
-      // Aggregations
+      // Aggregations for Charts
       if (!monthlyStats[monthKey]) {
         monthlyStats[monthKey] = {
           name: date.toLocaleString("default", {
@@ -99,7 +115,7 @@ export async function GET(
           revenue: 0,
           profit: 0,
           units: 0,
-          dateStr: monthKey, // Helper for sorting
+          dateStr: monthKey,
         };
       }
       monthlyStats[monthKey].revenue += revenue;
@@ -125,21 +141,50 @@ export async function GET(
       totalUnitsSold += qty;
     });
 
-    // --- 4. Process Purchase Data ---
-    const purchaseHistory = purchaseItems.map((item: any) => ({
+    // --- 5. Process Purchase History ---
+    const purchaseHistory = (purchaseItems || []).map((item: any) => ({
       id: item.id,
       date: item.purchase?.purchase_date || item.created_at.split("T")[0],
-      purchaseId: item.purchase?.purchase_id || "N/A",
-      supplier: item.purchase?.supplier?.name || "Unknown",
-      quantity: item.quantity,
-      unitCost: item.unit_cost,
-      total: item.total_cost,
+      type: "PURCHASE",
+      quantity: Number(item.quantity), // Positive
+      customer: item.purchase?.supplier?.name || "Unknown",
+      reference: item.purchase?.purchase_id || "N/A",
+      notes: "Purchase from Supplier",
       status: item.purchase?.status || "Completed",
     }));
 
+    // --- 6. Process Return History ---
+    const returnHistory = (returnItems || []).map((item: any) => ({
+      id: item.id,
+      date: item.created_at.split("T")[0],
+      type: item.return_type === "Damage" ? "DAMAGE" : "RETURN",
+      quantity:
+        item.return_type === "Damage"
+          ? -Number(item.quantity)
+          : Number(item.quantity), // Damage is loss (negative), Good return is gain (positive) in context of *usable* stock?
+      // Actually, usually in a transaction history:
+      // Sale = -qty
+      // Purchase = +qty
+      // Good Return = +qty (back to stock)
+      // Damage Return = often just logged. If we treat it as stock entering "Damage Pile", it's +qty.
+      // However, frontend usually renders "Green" for adds, "Red" for subtracts.
+      // Let's keep Damage as negative or neutral if it doesn't add to sellable stock.
+      // For now, let's mark Good Return as + (Green) and Damage as - (Red) to distinguish visually.
+
+      customer: item.customer?.shop_name || "N/A",
+      reference: "RETURN",
+      notes: `${item.return_type}: ${item.reason || "No reason"}`,
+    }));
+
+    // --- 7. Unified & Sorted List ---
+    const allTransactions = [
+      ...history,
+      ...purchaseHistory,
+      ...returnHistory,
+    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
     return NextResponse.json({
-      history,
-      purchaseHistory, // Added this field
+      allTransactions, // The unified list
       monthly: Object.values(monthlyStats).sort((a: any, b: any) =>
         a.dateStr.localeCompare(b.dateStr)
       ),

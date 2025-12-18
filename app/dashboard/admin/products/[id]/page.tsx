@@ -1,4 +1,3 @@
-// app/products/[id]/page.tsx
 "use client";
 
 import { useState, useEffect, use } from "react";
@@ -33,6 +32,7 @@ import {
   ChevronRight,
   TrendingDown,
   User,
+  RotateCcw,
 } from "lucide-react";
 import {
   BarChart,
@@ -54,14 +54,13 @@ import { toast } from "sonner";
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8"];
 const ITEMS_PER_PAGE = 10;
 
-// Combined transaction type
+// Transaction Interface
 interface Transaction {
   id: string;
   date: string;
-  type: "SALE" | "PURCHASE";
+  type: "SALE" | "PURCHASE" | "RETURN" | "DAMAGE";
   quantity: number;
   customer?: string;
-  supplier?: string;
   reference: string;
   notes: string;
 }
@@ -89,7 +88,7 @@ export default function ProductDetailsPage({
         const prodData = await prodRes.json();
         setProduct(prodData);
 
-        // 2. Fetch Analytics (Sales + Purchases)
+        // 2. Fetch Analytics (Unified)
         const analyticsRes = await fetch(`/api/products/${id}/analytics`);
         if (!analyticsRes.ok) throw new Error("Failed to fetch analytics");
         const analyticsData = await analyticsRes.json();
@@ -115,30 +114,9 @@ export default function ProductDetailsPage({
 
   if (!product || !analytics) return <div>Product not found</div>;
 
-  // Combine sales and purchases into unified transaction list
-  const allTransactions: Transaction[] = [
-    ...(analytics.history || []).map((sale: any) => ({
-      id: sale.id,
-      date: sale.date,
-      type: "SALE" as const,
-      quantity: -Math.abs(sale.quantity), // Negative for sales
-      customer: sale.customer,
-      reference: sale.orderId || "",
-      notes: `Sale - Order ${sale.orderId}`,
-    })),
-    ...(analytics.purchaseHistory || []).map((purchase: any) => ({
-      id: purchase.id,
-      date: purchase.date,
-      type: "PURCHASE" as const,
-      quantity: Math.abs(purchase.quantity), // Positive for purchases
-      supplier: purchase.supplier,
-      reference: purchase.purchaseId || "",
-      notes:
-        purchase.notes || `Stock addition from purchase ${purchase.purchaseId}`,
-    })),
-  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); // Sort by date descending
+  const allTransactions: Transaction[] = analytics.allTransactions || [];
 
-  // Pagination for unified transactions
+  // Pagination
   const totalTransactionPages = Math.ceil(
     allTransactions.length / ITEMS_PER_PAGE
   );
@@ -241,20 +219,30 @@ export default function ProductDetailsPage({
             <CardHeader>
               <CardTitle>Transaction History</CardTitle>
               <CardDescription>
-                All transactions for this product (each line item shown
-                separately)
+                All transactions (Sales, Purchases, Returns)
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Table>
+              <Table className="w-full">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[120px]">Date</TableHead>
-                    <TableHead className="w-[120px]">Type</TableHead>
-                    <TableHead className="w-[100px]">Quantity</TableHead>
-                    <TableHead>Customer</TableHead>
-                    <TableHead className="w-[120px]">Reference</TableHead>
-                    <TableHead>Notes</TableHead>
+                    {/* UPDATED: Percentage Widths to manage columns and use full space */}
+                    <TableHead className="w-[12%] min-w-[100px]">
+                      Date
+                    </TableHead>
+                    <TableHead className="w-[13%] min-w-[120px]">
+                      Type
+                    </TableHead>
+                    <TableHead className="w-[10%] min-w-[80px]">
+                      Quantity
+                    </TableHead>
+                    <TableHead className="w-[20%] min-w-[150px]">
+                      Party
+                    </TableHead>
+                    <TableHead className="w-[15%] min-w-[120px]">
+                      Reference
+                    </TableHead>
+                    <TableHead className="w-[30%]">Notes</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -270,19 +258,35 @@ export default function ProductDetailsPage({
                   ) : (
                     paginatedTransactions.map((transaction) => (
                       <TableRow key={transaction.id}>
-                        <TableCell className="text-muted-foreground">
+                        <TableCell className="text-muted-foreground whitespace-nowrap">
                           {transaction.date}
                         </TableCell>
                         <TableCell>
-                          {transaction.type === "SALE" ? (
-                            <Badge className="bg-black text-white hover:bg-black/90 gap-1">
+                          {transaction.type === "SALE" && (
+                            <Badge className="bg-black text-white hover:bg-black/90 gap-1 whitespace-nowrap">
                               <TrendingDown className="h-3 w-3" />
                               SALE
                             </Badge>
-                          ) : (
-                            <Badge variant="outline" className="gap-1">
+                          )}
+                          {transaction.type === "PURCHASE" && (
+                            <Badge
+                              variant="outline"
+                              className="gap-1 border-green-600 text-green-600 whitespace-nowrap"
+                            >
                               <TrendingUp className="h-3 w-3" />
                               PURCHASE
+                            </Badge>
+                          )}
+                          {transaction.type === "RETURN" && (
+                            <Badge className="bg-blue-500 text-white hover:bg-blue-600 gap-1 whitespace-nowrap">
+                              <RotateCcw className="h-3 w-3" />
+                              RETURN (GOOD)
+                            </Badge>
+                          )}
+                          {transaction.type === "DAMAGE" && (
+                            <Badge className="bg-red-500 text-white hover:bg-red-600 gap-1 whitespace-nowrap">
+                              <AlertTriangle className="h-3 w-3" />
+                              DAMAGE
                             </Badge>
                           )}
                         </TableCell>
@@ -294,15 +298,16 @@ export default function ProductDetailsPage({
                           }`}
                         >
                           {transaction.quantity > 0 ? "+" : ""}
-                          {transaction.quantity} rolls
+                          {transaction.quantity}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <User className="h-3 w-3 text-muted-foreground" />
-                            <span>
-                              {transaction.customer ||
-                                transaction.supplier ||
-                                "-"}
+                            <span
+                              className="truncate max-w-[180px]"
+                              title={transaction.customer}
+                            >
+                              {transaction.customer || "-"}
                             </span>
                           </div>
                         </TableCell>
@@ -424,8 +429,8 @@ export default function ProductDetailsPage({
                       ))}
                     </Pie>
                     <Tooltip
-                      formatter={(value: number) =>
-                        `LKR ${value.toLocaleString()}`
+                      formatter={(value: any) =>
+                        `LKR ${(Number(value) || 0).toLocaleString()}`
                       }
                     />
                   </PieChart>
@@ -444,8 +449,8 @@ export default function ProductDetailsPage({
                     <XAxis type="number" hide />
                     <YAxis dataKey="name" type="category" width={100} />
                     <Tooltip
-                      formatter={(value: number) =>
-                        `LKR ${value.toLocaleString()}`
+                      formatter={(value: any) =>
+                        `LKR ${(Number(value) || 0).toLocaleString()}`
                       }
                     />
                     <Bar dataKey="value" fill="#8884d8" name="Revenue">
