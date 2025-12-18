@@ -1,4 +1,5 @@
 import { UserRole } from "@/app/config/nav-config";
+import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { AppSidebar } from "@/components/ui/layout/AppSidebar";
 import { MobileNav } from "@/components/ui/layout/MobileNav";
 
@@ -11,7 +12,6 @@ export default function DashboardLayout({
   const userRole: UserRole = "admin";
 
   return (
-    // Changed min-h-screen to h-screen and added overflow-hidden to fix the layout height to the viewport
     <div className="flex h-screen w-full bg-gray-50 overflow-hidden">
       {/* Desktop Sidebar - Hidden on Mobile, Visible on Desktop */}
       <AppSidebar role={userRole} />
@@ -24,9 +24,11 @@ export default function DashboardLayout({
           <span className="ml-4 font-bold text-gray-700">Champika HW</span>
         </header>
 
-        {/* Desktop Header - Fixed at top because it's outside the scrollable area */}
-        <header className="hidden lg:flex h-16 bg-white border-b items-center justify-between px-8 flex-shrink-0 z-10">
-          <h1 className="text-sm font-semibold text-gray-500">Overview</h1>
+        {/* Desktop Header - Fixed at top */}
+        <header className="hidden lg:flex h-14 bg-white border-b items-center justify-between px-8 flex-shrink-0 z-10">
+          {/* Replaced Static "Overview" with Dynamic Breadcrumbs */}
+          <Breadcrumbs />
+
           <div className="flex items-center gap-4">
             <div className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold text-xs">
               AD
@@ -34,7 +36,7 @@ export default function DashboardLayout({
           </div>
         </header>
 
-        {/* Page Content - This is the only part that scrolls */}
+        {/* Page Content */}
         <div className="flex-1 p-4 md:p-8 overflow-y-auto">{children}</div>
       </main>
     </div>
