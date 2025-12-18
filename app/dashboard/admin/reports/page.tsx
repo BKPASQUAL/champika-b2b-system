@@ -12,10 +12,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  TrendingUp,
   DollarSign,
   Package,
-  Users,
   Download,
   Calendar,
   BarChart3,
@@ -24,8 +22,8 @@ import {
   ChevronRight,
   Wallet,
   ArrowDownRight,
-  Truck,
   CreditCard,
+  AlertOctagon, // Added for Business Loss
 } from "lucide-react";
 import {
   BarChart,
@@ -78,6 +76,7 @@ export default function AdminReportsPage() {
     cogs: 0,
     grossProfit: 0,
     expenses: 0,
+    businessLoss: 0, // Added field
     netProfit: 0,
     grossMargin: 0,
     netMargin: 0,
@@ -89,7 +88,7 @@ export default function AdminReportsPage() {
   const [customerData, setCustomerData] = useState<any[]>([]);
   const [productData, setProductData] = useState<any[]>([]);
   const [repData, setRepData] = useState<any[]>([]);
-  const [orderData, setOrderData] = useState<any[]>([]);
+  const [orderData, setOrderData] = useState<any[]>([]); // This now holds all transactions
   const [deliveryData, setDeliveryData] = useState<any[]>([]);
   const [revenueTrend, setRevenueTrend] = useState<any[]>([]);
 
@@ -172,18 +171,23 @@ export default function AdminReportsPage() {
       setExpensesByCategory(data.expensesByCategory || []);
       setDeliveryData(data.deliveries || []);
 
+      // Orders (Unified Transactions)
+      // Note: 'amount' property used for Revenue/Loss Value
       const processedOrders = data.orders.map((o: any) => ({
         ...o,
-        margin: o.revenue > 0 ? (o.profit / o.revenue) * 100 : 0,
+        margin: o.amount > 0 ? (o.profit / o.amount) * 100 : 0,
       }));
       setOrderData(processedOrders);
 
+      // Trend (Only Revenue Orders)
       const trendMap: Record<string, any> = {};
       data.orders.forEach((o: any) => {
-        if (!trendMap[o.date])
-          trendMap[o.date] = { date: o.date, revenue: 0, profit: 0 };
-        trendMap[o.date].revenue += o.revenue;
-        trendMap[o.date].profit += o.profit;
+        if (o.type === "Order") {
+          if (!trendMap[o.date])
+            trendMap[o.date] = { date: o.date, revenue: 0, profit: 0 };
+          trendMap[o.date].revenue += o.amount;
+          trendMap[o.date].profit += o.profit;
+        }
       });
       setRevenueTrend(
         Object.values(trendMap).sort(
@@ -226,8 +230,8 @@ export default function AdminReportsPage() {
       "ID",
       "Date",
       "Customer",
-      "Business",
-      "Revenue",
+      "Type",
+      "Amount",
       "Profit",
       "Status",
     ];
@@ -235,8 +239,8 @@ export default function AdminReportsPage() {
       o.id,
       o.date,
       o.customer,
-      o.business,
-      o.revenue,
+      o.type || "Order",
+      o.amount,
       o.profit,
       o.status,
     ]);
@@ -270,7 +274,7 @@ export default function AdminReportsPage() {
             Financial Reports
           </h1>
           <p className="text-muted-foreground">
-            Profit margins, expenses, and net performance
+            Profit margins, expenses, losses, and net performance
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -320,8 +324,8 @@ export default function AdminReportsPage() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
-          {/* UPDATED: Overview Cards Grid with Gross Profit */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {/* UPDATED: Overview Cards Grid with Loss */}
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             {/* 1. Revenue */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -358,7 +362,7 @@ export default function AdminReportsPage() {
               </CardContent>
             </Card>
 
-            {/* 3. Gross Profit (Revenue - COGS) */}
+            {/* 3. Gross Profit */}
             <Card className="bg-primary/5 border-primary/20">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-primary">
@@ -382,10 +386,10 @@ export default function AdminReportsPage() {
                 <CardTitle className="text-sm font-medium">
                   Total Expenses
                 </CardTitle>
-                <ArrowDownRight className="h-4 w-4 text-red-500" />
+                <ArrowDownRight className="h-4 w-4 text-orange-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-red-600">
+                <div className="text-2xl font-bold text-orange-600">
                   LKR {overview.expenses?.toLocaleString()}
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -394,39 +398,49 @@ export default function AdminReportsPage() {
               </CardContent>
             </Card>
 
-            {/* 5. Net Profit (Gross - Expenses) */}
-            <Card className="bg-green-50 border-green-200 dark:bg-green-900/10 dark:border-green-900/50">
+            {/* 5. Business Loss (NEW) */}
+            <Card className="bg-red-50 border-red-200">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-green-700 dark:text-green-400">
+                <CardTitle className="text-sm font-medium text-red-700">
+                  Business Losses
+                </CardTitle>
+                <AlertOctagon className="h-4 w-4 text-red-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-red-700">
+                  LKR {overview.businessLoss?.toLocaleString()}
+                </div>
+                <p className="text-xs text-red-600/80">
+                  Damages marked as company loss
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* 6. Net Profit */}
+            <Card className="bg-green-50 border-green-200 lg:col-span-2">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-green-700">
                   Net Profit
                 </CardTitle>
                 <Wallet className="h-4 w-4 text-green-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-green-700 dark:text-green-400">
-                  LKR {overview.netProfit?.toLocaleString()}
+                <div className="flex justify-between items-end">
+                  <div>
+                    <div className="text-3xl font-bold text-green-700">
+                      LKR {overview.netProfit?.toLocaleString()}
+                    </div>
+                    <p className="text-xs text-green-700/80">
+                      Gross - Expenses - Losses
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xl font-bold text-green-700">
+                      {overview.netMargin?.toFixed(1)}%
+                    </div>
+                    <p className="text-xs text-green-700/80">Net Margin</p>
+                  </div>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Final profit after expenses
-                </p>
-              </CardContent>
-            </Card>
-
-            {/* 6. Net Margin */}
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  Net Margin
-                </CardTitle>
-                <BarChart3 className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {overview.netMargin?.toFixed(1)}%
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Profitability ratio
-                </p>
               </CardContent>
             </Card>
           </div>
@@ -506,30 +520,39 @@ export default function AdminReportsPage() {
             </Card>
           </div>
 
+          {/* UPDATED: Top Tables with Loss Column */}
           <div className="grid gap-4 md:grid-cols-3">
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Top Products</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  {productData.slice(0, 5).map((p, i) => (
-                    <div
-                      key={p.id}
-                      className="flex justify-between items-center text-sm"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-muted-foreground">
-                          {i + 1}.
-                        </span>
-                        <span>{p.name}</span>
-                      </div>
-                      <span className="font-medium">
-                        LKR {p.revenue.toLocaleString()}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead className="text-right">Rev</TableHead>
+                      <TableHead className="text-right text-red-600">
+                        Loss
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {productData.slice(0, 5).map((p, i) => (
+                      <TableRow key={p.id}>
+                        <TableCell className="font-medium text-xs">
+                          {p.name}
+                        </TableCell>
+                        <TableCell className="text-right text-xs">
+                          {p.revenue.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right text-xs text-red-600">
+                          {p.loss > 0 ? p.loss.toLocaleString() : "-"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
             <Card>
@@ -537,24 +560,32 @@ export default function AdminReportsPage() {
                 <CardTitle className="text-base">Top Customers</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  {customerData.slice(0, 5).map((c, i) => (
-                    <div
-                      key={c.id}
-                      className="flex justify-between items-center text-sm"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-muted-foreground">
-                          {i + 1}.
-                        </span>
-                        <span>{c.name}</span>
-                      </div>
-                      <span className="font-medium">
-                        LKR {c.revenue.toLocaleString()}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead className="text-right">Rev</TableHead>
+                      <TableHead className="text-right text-red-600">
+                        Loss
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {customerData.slice(0, 5).map((c, i) => (
+                      <TableRow key={c.id}>
+                        <TableCell className="font-medium text-xs">
+                          {c.name}
+                        </TableCell>
+                        <TableCell className="text-right text-xs">
+                          {c.revenue.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right text-xs text-red-600">
+                          {c.loss > 0 ? c.loss.toLocaleString() : "-"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
             <Card>
@@ -562,31 +593,39 @@ export default function AdminReportsPage() {
                 <CardTitle className="text-base">Top Reps</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  {repData.slice(0, 5).map((r, i) => (
-                    <div
-                      key={r.id}
-                      className="flex justify-between items-center text-sm"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-muted-foreground">
-                          {i + 1}.
-                        </span>
-                        <span>{r.name}</span>
-                      </div>
-                      <span className="font-medium">
-                        LKR {r.revenue.toLocaleString()}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead className="text-right">Rev</TableHead>
+                      <TableHead className="text-right text-red-600">
+                        Loss
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {repData.slice(0, 5).map((r, i) => (
+                      <TableRow key={r.id}>
+                        <TableCell className="font-medium text-xs">
+                          {r.name}
+                        </TableCell>
+                        <TableCell className="text-right text-xs">
+                          {r.revenue.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right text-xs text-red-600">
+                          {r.loss > 0 ? r.loss.toLocaleString() : "-"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
           </div>
 
           <Card>
             <CardHeader>
-              <CardTitle>Recent Transactions</CardTitle>
+              <CardTitle>Recent Transactions (Orders & Losses)</CardTitle>
             </CardHeader>
             <CardContent>
               <Table>
@@ -594,24 +633,34 @@ export default function AdminReportsPage() {
                   <TableRow>
                     <TableHead>Date</TableHead>
                     <TableHead>Customer</TableHead>
-                    <TableHead className="text-right">Revenue</TableHead>
-                    <TableHead className="text-right">Profit</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {orderData.slice(0, 5).map((order) => (
-                    <TableRow key={order.id}>
-                      <TableCell>{order.date}</TableCell>
-                      <TableCell>{order.customer}</TableCell>
-                      <TableCell className="text-right">
-                        LKR {order.revenue.toLocaleString()}
+                  {orderData.slice(0, 5).map((txn) => (
+                    <TableRow key={txn.id}>
+                      <TableCell>{txn.date}</TableCell>
+                      <TableCell>{txn.customer}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            txn.type === "Loss" ? "destructive" : "outline"
+                          }
+                        >
+                          {txn.type || "Order"}
+                        </Badge>
                       </TableCell>
-                      <TableCell className="text-right text-green-600">
-                        LKR {order.profit.toLocaleString()}
+                      <TableCell
+                        className={`text-right ${
+                          txn.type === "Loss" ? "text-red-600" : ""
+                        }`}
+                      >
+                        LKR {txn.amount.toLocaleString()}
                       </TableCell>
                       <TableCell>
-                        <Badge>{order.status}</Badge>
+                        <Badge variant="secondary">{txn.status}</Badge>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -809,14 +858,21 @@ export default function AdminReportsPage() {
                     dataKey="grossProfit"
                     fill="#00C49F"
                     name="Gross Profit"
-                    barSize={30}
+                    barSize={20}
                   />
                   <Bar
                     yAxisId="left"
                     dataKey="expenses"
                     fill="#ff8042"
                     name="Expenses"
-                    barSize={30}
+                    barSize={20}
+                  />
+                  <Bar
+                    yAxisId="left"
+                    dataKey="losses"
+                    fill="#ef4444"
+                    name="Losses"
+                    barSize={20}
                   />
                   <Line
                     yAxisId="right"
@@ -844,6 +900,7 @@ export default function AdminReportsPage() {
                     <TableHead className="text-right">COGS</TableHead>
                     <TableHead className="text-right">Gross Profit</TableHead>
                     <TableHead className="text-right">Expenses</TableHead>
+                    <TableHead className="text-right">Losses</TableHead>
                     <TableHead className="text-right">Net Profit</TableHead>
                     <TableHead className="text-right">Net Margin</TableHead>
                   </TableRow>
@@ -861,8 +918,11 @@ export default function AdminReportsPage() {
                       <TableCell className="text-right text-green-600">
                         LKR {m.grossProfit.toLocaleString()}
                       </TableCell>
-                      <TableCell className="text-right text-red-500">
+                      <TableCell className="text-right text-orange-500">
                         LKR {m.expenses.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right text-red-600 font-medium">
+                        LKR {m.losses.toLocaleString()}
                       </TableCell>
                       <TableCell className="text-right font-bold">
                         LKR {m.netProfit.toLocaleString()}
@@ -1284,19 +1344,29 @@ export default function AdminReportsPage() {
                       <TableCell>{order.customer}</TableCell>
                       <TableCell>{order.business}</TableCell>
                       <TableCell className="text-right">
-                        LKR {order.revenue.toLocaleString()}
+                        LKR {order.amount?.toLocaleString()}
                       </TableCell>
                       <TableCell className="text-right">
-                        LKR {order.cost.toLocaleString()}
+                        LKR {order.cost?.toLocaleString() || "0"}
                       </TableCell>
-                      <TableCell className="text-right font-medium text-green-600">
-                        LKR {order.profit.toLocaleString()}
+                      <TableCell
+                        className={`text-right font-medium ${
+                          order.profit >= 0 ? "text-green-600" : "text-red-600"
+                        }`}
+                      >
+                        LKR {order.profit?.toLocaleString()}
                       </TableCell>
                       <TableCell className="text-right">
-                        {order.margin.toFixed(1)}%
+                        {order.margin?.toFixed(1)}%
                       </TableCell>
                       <TableCell>
-                        <Badge variant="default">{order.status}</Badge>
+                        <Badge
+                          variant={
+                            order.type === "Loss" ? "destructive" : "default"
+                          }
+                        >
+                          {order.status}
+                        </Badge>
                       </TableCell>
                     </TableRow>
                   ))}
