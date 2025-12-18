@@ -1,3 +1,5 @@
+"use client";
+
 import {
   Table,
   TableBody,
@@ -11,7 +13,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Edit,
   Trash2,
-  Phone,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
@@ -23,9 +24,11 @@ import {
   XCircle,
   Clock,
   Eye,
-  Building2, // Added Icon
+  Phone,
+  Building2,
 } from "lucide-react";
 import { Supplier, SortField, SortOrder, SupplierStatus } from "../types";
+import { useRouter } from "next/navigation";
 
 interface SupplierTableProps {
   suppliers: Supplier[];
@@ -52,6 +55,8 @@ export function SupplierTable({
   totalPages,
   onPageChange,
 }: SupplierTableProps) {
+  const router = useRouter();
+
   const getSortIcon = (field: SortField) => {
     if (sortField !== field)
       return <ArrowUpDown className="w-4 h-4 ml-1 opacity-40" />;
@@ -111,7 +116,6 @@ export function SupplierTable({
                 </div>
               </TableHead>
 
-              {/* ✅ Added Business Column Header */}
               <TableHead className="cursor-pointer hover:bg-muted/50">
                 <div className="flex items-center">Business</div>
               </TableHead>
@@ -163,7 +167,13 @@ export function SupplierTable({
               </TableRow>
             ) : (
               suppliers.map((supplier) => (
-                <TableRow key={supplier.id}>
+                <TableRow
+                  key={supplier.id}
+                  className="cursor-pointer hover:bg-muted/50 transition-colors"
+                  onClick={() =>
+                    router.push(`/dashboard/admin/suppliers/${supplier.id}`)
+                  }
+                >
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-3">
                       <Avatar className="h-9 w-9">
@@ -185,7 +195,6 @@ export function SupplierTable({
                     </div>
                   </TableCell>
 
-                  {/* ✅ Added Business Column Data */}
                   <TableCell>
                     {supplier.businessName ? (
                       <div className="flex items-center gap-2 text-sm text-gray-700">
@@ -227,20 +236,40 @@ export function SupplierTable({
                     </span>
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
+                    <div
+                      className="flex items-center justify-end gap-2"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <Button
                         variant="ghost"
-                        size="icon-sm"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground"
+                        onClick={() =>
+                          router.push(
+                            `/dashboard/admin/suppliers/${supplier.id}`
+                          )
+                        }
+                        title="View Details"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-blue-600"
                         onClick={() => onEdit(supplier)}
+                        title="Edit"
                       >
                         <Edit className="w-4 h-4" />
                       </Button>
                       <Button
                         variant="ghost"
-                        size="icon-sm"
+                        size="icon"
+                        className="h-8 w-8 text-destructive"
                         onClick={() => onDelete(supplier)}
+                        title="Delete"
                       >
-                        <Trash2 className="w-4 h-4 text-destructive" />
+                        <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>
                   </TableCell>
