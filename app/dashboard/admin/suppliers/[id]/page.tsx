@@ -31,6 +31,7 @@ import {
   Package,
   PackageCheck, // Icon for Available
   Archive, // Icon for Total Stock
+  AlertTriangle, // Icon for Damage
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -107,31 +108,45 @@ export default function SupplierDetailsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => router.back()}>
-          <ArrowLeft className="w-5 h-5" />
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            {supplier.name}
-            <Badge
-              variant={supplier.status === "Active" ? "default" : "secondary"}
-              className={
-                supplier.status === "Active"
-                  ? "bg-green-600 hover:bg-green-700"
-                  : ""
-              }
-            >
-              {supplier.status}
-            </Badge>
-          </h1>
-          <div className="flex items-center gap-2 text-muted-foreground text-sm">
-            <Building2 className="w-3 h-3" />
-            {supplier.supplier_id}
-            <span className="text-gray-300">|</span>
-            <span>{supplier.category || "General Supplier"}</span>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={() => router.back()}>
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              {supplier.name}
+              <Badge
+                variant={supplier.status === "Active" ? "default" : "secondary"}
+                className={
+                  supplier.status === "Active"
+                    ? "bg-green-600 hover:bg-green-700"
+                    : ""
+                }
+              >
+                {supplier.status}
+              </Badge>
+            </h1>
+            <div className="flex items-center gap-2 text-muted-foreground text-sm">
+              <Building2 className="w-3 h-3" />
+              {supplier.supplier_id}
+              <span className="text-gray-300">|</span>
+              <span>{supplier.category || "General Supplier"}</span>
+            </div>
           </div>
         </div>
+
+        {/* ACTION BUTTON ADDED HERE */}
+        <Button
+          variant="outline"
+          className="text-red-600 border-red-200 hover:bg-red-50"
+          onClick={() =>
+            router.push(`/dashboard/admin/suppliers/${supplierId}/damage`)
+          }
+        >
+          <AlertTriangle className="w-4 h-4 mr-2" />
+          View Damage History
+        </Button>
       </div>
 
       {/* Info & Stats Grid */}
