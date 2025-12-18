@@ -21,6 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"; // Import RadioGroup
 import {
   ArrowLeft,
   Loader2,
@@ -32,6 +33,7 @@ import {
   Truck,
   CalendarIcon,
   Search,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -49,7 +51,10 @@ interface Product {
   category?: string;
   brand?: string;
   available_quantity: number;
-  unit: string; // Added Unit
+  unit: string;
+  // Store raw values to re-calc on toggle
+  raw_qty: number;
+  raw_damaged: number;
 }
 
 interface TransferItem {
@@ -59,7 +64,7 @@ interface TransferItem {
   category?: string;
   quantity: number;
   availableQuantity: number;
-  unit: string; // Added Unit
+  unit: string;
 }
 
 export default function StockTransferPage() {
@@ -73,6 +78,9 @@ export default function StockTransferPage() {
   const [transferDate, setTransferDate] = useState(
     new Date().toISOString().split("T")[0]
   );
+
+  // New State: Transfer Type
+  const [transferType, setTransferType] = useState<"Good" | "Damage">("Good");
 
   const [sourceProducts, setSourceProducts] = useState<Product[]>([]);
   const [selectedProductId, setSelectedProductId] = useState("");
@@ -98,7 +106,7 @@ export default function StockTransferPage() {
       setSelectedProductId("");
       setQuantity("");
     }
-  }, [sourceId]);
+  }, [sourceId, transferType]); // Re-fetch/Re-calc when type changes
 
   // --- Fetch Data ---
   const fetchLocations = async () => {
@@ -127,11 +135,25 @@ export default function StockTransferPage() {
         name: stock.name,
         category: stock.category,
         brand: stock.brand,
-        available_quantity: stock.quantity,
-        unit: stock.unit_of_measure || "Units", // Map unit from API
+        // Map available quantity based on selected Type
+        available_quantity:
+          transferType === "Good"
+            ? Number(stock.quantity || 0)
+            : Number(stock.damaged_quantity || 0),
+        raw_qty: Number(stock.quantity || 0),
+        raw_damaged: Number(stock.damaged_quantity || 0),
+        unit: stock.unit_of_measure || "Units",
       }));
 
-      setSourceProducts(products);
+      // Filter out items with 0 stock for the selected type to clean up the list
+      const availableProducts = products.filter(
+        (p: any) => p.available_quantity > 0
+      );
+
+      setSourceProducts(availableProducts);
+      // Clear selection if type changes to prevent stale data
+      setSelectedProductId("");
+      setTransferItems([]);
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -146,7 +168,7 @@ export default function StockTransferPage() {
       return;
     }
 
-    const qty = parseFloat(quantity); // Changed to parseFloat to allow decimals if needed
+    const qty = parseFloat(quantity);
     if (isNaN(qty) || qty <= 0) {
       toast.error("Please enter a valid quantity");
       return;
@@ -218,8 +240,9 @@ export default function StockTransferPage() {
           productId: item.productId,
           quantity: item.quantity,
         })),
-        reason: reason || "Stock Transfer",
+        reason: reason || `Stock Transfer (${transferType})`,
         transferDate: transferDate,
+        transferType: transferType, // Send type to API
       };
 
       const res = await fetch("/api/inventory/transfer", {
@@ -349,6 +372,34 @@ export default function StockTransferPage() {
                 </div>
               </div>
 
+              {/* Transfer Type Selector */}
+              <div className="space-y-2 pt-2">
+                <Label>Stock Condition</Label>
+                <RadioGroup
+                  defaultValue="Good"
+                  value={transferType}
+                  onValueChange={(val: "Good" | "Damage") =>
+                    setTransferType(val)
+                  }
+                  className="flex gap-4"
+                >
+                  <div className="flex items-center space-x-2 border rounded-md p-3 w-full cursor-pointer hover:bg-muted/50">
+                    <RadioGroupItem value="Good" id="good" />
+                    <Label htmlFor="good" className="cursor-pointer flex-1">
+                      Good Stock
+                    </Label>
+                    <Package className="w-4 h-4 text-green-600" />
+                  </div>
+                  <div className="flex items-center space-x-2 border rounded-md p-3 w-full cursor-pointer hover:bg-muted/50">
+                    <RadioGroupItem value="Damage" id="damage" />
+                    <Label htmlFor="damage" className="cursor-pointer flex-1">
+                      Damaged / Returns
+                    </Label>
+                    <AlertTriangle className="w-4 h-4 text-red-600" />
+                  </div>
+                </RadioGroup>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Transfer Date</Label>
@@ -391,7 +442,7 @@ export default function StockTransferPage() {
                 <div className="space-y-4">
                   <div className="flex flex-col md:flex-row gap-4 items-end">
                     <div className="flex-1 w-full space-y-2">
-                      <Label>Product</Label>
+                      <Label>Product ({transferType})</Label>
                       <Select
                         value={selectedProductId}
                         onValueChange={setSelectedProductId}
@@ -405,7 +456,7 @@ export default function StockTransferPage() {
                         <SelectContent className="max-h-[300px]">
                           {sourceProducts.length === 0 ? (
                             <div className="p-2 text-sm text-center text-muted-foreground">
-                              No Stock
+                              No {transferType} Stock Available
                             </div>
                           ) : (
                             sourceProducts.map((p) => (
@@ -413,7 +464,11 @@ export default function StockTransferPage() {
                                 <div className="flex justify-between w-full gap-4">
                                   <span>{p.name}</span>
                                   <Badge
-                                    variant="secondary"
+                                    variant={
+                                      transferType === "Good"
+                                        ? "secondary"
+                                        : "destructive"
+                                    }
                                     className="text-xs"
                                   >
                                     {p.available_quantity} {p.unit} avl
@@ -448,12 +503,19 @@ export default function StockTransferPage() {
                   </div>
 
                   {selectedProduct && (
-                    <div className="text-sm text-blue-600 bg-blue-50 px-3 py-2 rounded border border-blue-100 flex justify-between">
+                    <div
+                      className={`text-sm px-3 py-2 rounded border flex justify-between ${
+                        transferType === "Good"
+                          ? "bg-blue-50 border-blue-100 text-blue-600"
+                          : "bg-red-50 border-red-100 text-red-600"
+                      }`}
+                    >
                       <span>
                         Selected: <strong>{selectedProduct.name}</strong>
                       </span>
                       <span>
-                        Available: {selectedProduct.available_quantity}{" "}
+                        Available ({transferType}):{" "}
+                        {selectedProduct.available_quantity}{" "}
                         {selectedProduct.unit}
                       </span>
                     </div>
@@ -490,6 +552,9 @@ export default function StockTransferPage() {
                 <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
                   <Package className="w-10 h-10 opacity-20 mb-2" />
                   <p>No items added yet</p>
+                  <Badge variant="outline" className="mt-2">
+                    {transferType} Mode
+                  </Badge>
                 </div>
               ) : (
                 <div className="max-h-[500px] overflow-y-auto">

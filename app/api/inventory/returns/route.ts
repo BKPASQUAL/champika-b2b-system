@@ -288,16 +288,50 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url);
   const businessId = searchParams.get("businessId");
+  const page = parseInt(searchParams.get("page") || "1");
+  const limit = parseInt(searchParams.get("limit") || "10");
+  const startDate = searchParams.get("startDate");
+  const endDate = searchParams.get("endDate");
+  const search = searchParams.get("search") || "";
+
+  // Pagination calculations
+  const start = (page - 1) * limit;
+  const end = start + limit - 1;
 
   let query = supabase
     .from("inventory_returns")
-    .select(`*, products (name, sku), locations (name), profiles (full_name)`)
-    .order("created_at", { ascending: false });
+    .select(`*, products (name, sku), locations (name), profiles (full_name)`, {
+      count: "exact",
+    });
 
   if (businessId) query = query.eq("business_id", businessId);
-  const { data, error } = await query;
+
+  // Date Filtering
+  if (startDate) query = query.gte("created_at", startDate);
+  if (endDate) {
+    // Ensure end date includes the full day (e.g. 23:59:59)
+    const endDateTime = new Date(endDate);
+    endDateTime.setHours(23, 59, 59, 999);
+    query = query.lte("created_at", endDateTime.toISOString());
+  }
+
+  // Search Filtering (Server-side search can be tricky with joins,
+  // currently applying return_number filter directly)
+  if (search) {
+    query = query.ilike("return_number", `%${search}%`);
+  }
+
+  query = query.order("created_at", { ascending: false }).range(start, end);
+
+  const { data, count, error } = await query;
 
   if (error)
     return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data);
+
+  return NextResponse.json({
+    data,
+    total: count || 0,
+    page,
+    totalPages: Math.ceil((count || 0) / limit),
+  });
 }

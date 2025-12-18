@@ -28,242 +28,152 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    let {
-      product_id,
-      location_id,
-      quantity,
-      return_type,
+    const {
+      sourceLocationId,
+      destLocationId,
+      items,
       reason,
-      business_id,
-      customer_id,
-      invoice_no,
-      invoice_id,
+      transferDate,
+      transferType = "Good", // Default to Good
     } = body;
 
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (!user)
+
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    // --- 1. Auto-detect Invoice ---
-    if ((!invoice_no || invoice_no === "all") && customer_id && product_id) {
-      const { data: latestOrder } = await supabase
-        .from("orders")
-        .select("invoice_no, id, created_at, order_items!inner(product_id)")
-        .eq("customer_id", customer_id)
-        .eq("order_items.product_id", product_id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
-
-      if (latestOrder && latestOrder.invoice_no) {
-        invoice_no = latestOrder.invoice_no;
-        const tag = `[${invoice_no}]`;
-        if (!reason?.includes(tag)) {
-          reason = `${tag} ${reason || ""}`.trim();
-        }
-      }
     }
 
-    const return_number = `RET-${Date.now().toString().slice(-6)}`;
+    if (!sourceLocationId || !destLocationId || !items || items.length === 0) {
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { status: 400 }
+      );
+    }
 
-    // --- 2. Create Return Record ---
-    const { data: returnRecord, error: returnError } = await supabase
-      .from("inventory_returns")
+    // 1. Generate Transfer Number
+    const transferNo = `TRN-${Date.now().toString().slice(-6)}`;
+
+    // 2. Create Transfer Record
+    const { data: transfer, error: transferError } = await supabase
+      .from("stock_transfers")
       .insert({
-        return_number,
-        product_id,
-        location_id,
-        business_id,
-        customer_id,
-        quantity,
-        return_type,
-        reason,
-        returned_by: user.id,
+        transfer_no: transferNo,
+        source_location_id: sourceLocationId,
+        dest_location_id: destLocationId,
+        reason: `${reason} [${transferType}]`, // Tag the type in reason
+        transfer_date: transferDate,
+        created_by: user.id,
+        status: "Completed",
       })
       .select()
       .single();
 
-    if (returnError) throw returnError;
+    if (transferError) throw transferError;
 
-    // --- 3. Update Specific Location Stock ---
-    const { data: existingStock } = await supabase
-      .from("product_stocks")
-      .select("*")
-      .eq("product_id", product_id)
-      .eq("location_id", location_id)
-      .single();
+    // 3. Process Items
+    for (const item of items) {
+      const { productId, quantity } = item;
+      const qty = Number(quantity);
 
-    if (existingStock) {
-      const updateData: any = {};
-      if (return_type === "Good") {
-        updateData.quantity = Number(existingStock.quantity) + Number(quantity);
-      } else {
-        updateData.damaged_quantity =
-          Number(existingStock.damaged_quantity || 0) + Number(quantity);
+      // A. Verify Source Stock
+      const { data: sourceStock } = await supabase
+        .from("product_stocks")
+        .select("*")
+        .eq("product_id", productId)
+        .eq("location_id", sourceLocationId)
+        .single();
+
+      if (!sourceStock) {
+        throw new Error(`Product ${productId} not found in source location`);
       }
+
+      // Determine which column to check/update based on type
+      const sourceAvailable =
+        transferType === "Good"
+          ? Number(sourceStock.quantity || 0)
+          : Number(sourceStock.damaged_quantity || 0);
+
+      if (sourceAvailable < qty) {
+        throw new Error(
+          `Insufficient ${transferType} stock for product ${productId}`
+        );
+      }
+
+      // B. Deduct from Source
+      const updateSourceData: any = {};
+      if (transferType === "Good") {
+        updateSourceData.quantity = sourceAvailable - qty;
+      } else {
+        updateSourceData.damaged_quantity = sourceAvailable - qty;
+      }
+
       await supabase
         .from("product_stocks")
-        .update(updateData)
-        .eq("id", existingStock.id);
-    } else {
-      await supabase.from("product_stocks").insert({
-        product_id,
-        location_id,
-        quantity: return_type === "Good" ? quantity : 0,
-        damaged_quantity: return_type === "Damage" ? quantity : 0,
-        last_updated: new Date().toISOString(),
-      });
-    }
+        .update(updateSourceData)
+        .eq("id", sourceStock.id);
 
-    // --- 4. Update Product Catalog (Visible in Products Page) ---
-    const { data: product } = await supabase
-      .from("products")
-      .select("name, stock_quantity, damaged_quantity")
-      .eq("id", product_id)
-      .single();
+      // C. Add to Destination
+      const { data: destStock } = await supabase
+        .from("product_stocks")
+        .select("*")
+        .eq("product_id", productId)
+        .eq("location_id", destLocationId)
+        .single();
 
-    if (product) {
-      const updateProdData: any = {};
-      if (return_type === "Good") {
-        updateProdData.stock_quantity =
-          Number(product.stock_quantity || 0) + Number(quantity);
+      if (destStock) {
+        const destCurrent =
+          transferType === "Good"
+            ? Number(destStock.quantity || 0)
+            : Number(destStock.damaged_quantity || 0);
+
+        const updateDestData: any = {};
+        if (transferType === "Good") {
+          updateDestData.quantity = destCurrent + qty;
+        } else {
+          updateDestData.damaged_quantity = destCurrent + qty;
+        }
+
+        await supabase
+          .from("product_stocks")
+          .update(updateDestData)
+          .eq("id", destStock.id);
       } else {
-        updateProdData.damaged_quantity =
-          Number(product.damaged_quantity || 0) + Number(quantity);
+        // Create new stock record if it doesn't exist
+        await supabase.from("product_stocks").insert({
+          product_id: productId,
+          location_id: destLocationId,
+          quantity: transferType === "Good" ? qty : 0,
+          damaged_quantity: transferType === "Damage" ? qty : 0,
+          last_updated: new Date().toISOString(),
+        });
       }
-      await supabase
-        .from("products")
-        .update(updateProdData)
-        .eq("id", product_id);
 
-      // --- 5. Log to Transaction History Page ---
+      // D. Record Transfer Item
+      await supabase.from("stock_transfer_items").insert({
+        transfer_id: transfer.id,
+        product_id: productId,
+        quantity: qty,
+      });
+
+      // E. Log Transaction (Optional but good for history)
       await supabase.from("account_transactions").insert({
-        transaction_type: "INVENTORY_RETURN",
-        description: `Return (${return_type}): ${quantity} units of ${product.name}. Reason: ${reason}`,
+        transaction_type: "STOCK_TRANSFER",
+        description: `Transferred ${qty} (${transferType}) of Product ${productId} from ${sourceLocationId} to ${destLocationId}`,
         amount: 0,
         transaction_date: new Date().toISOString(),
-        business_id: business_id,
         metadata: {
-          return_id: returnRecord.id,
-          product_id,
-          quantity,
-          type: return_type,
-          invoice_no,
+          transfer_id: transfer.id,
+          product_id: productId,
+          type: transferType,
         },
       });
     }
 
-    // --- 6. Recalculate Financials ---
-    if (invoice_no || invoice_id) {
-      let invoiceQuery = supabase.from("invoices").select("*");
-      if (invoice_id) invoiceQuery = invoiceQuery.eq("id", invoice_id);
-      else invoiceQuery = invoiceQuery.eq("invoice_no", invoice_no);
-
-      const { data: invoice } = await invoiceQuery.single();
-      if (invoice && invoice.order_id) {
-        const { data: orderItem } = await supabase
-          .from("order_items")
-          .select("*")
-          .eq("order_id", invoice.order_id)
-          .eq("product_id", product_id)
-          .single();
-
-        if (orderItem) {
-          const oldQty = Number(orderItem.quantity);
-          const newQty = Math.max(0, oldQty - Number(quantity));
-          const unitPrice = Number(orderItem.unit_price);
-          const newTotalItemPrice = newQty * unitPrice;
-
-          const oldComm = Number(orderItem.commission_earned || 0);
-          const newComm = newQty * (oldQty > 0 ? oldComm / oldQty : 0);
-
-          await supabase
-            .from("order_items")
-            .update({
-              quantity: newQty,
-              total_price: newTotalItemPrice,
-              commission_earned: newComm,
-            })
-            .eq("id", orderItem.id);
-
-          const { data: allItems } = await supabase
-            .from("order_items")
-            .select("total_price, commission_earned")
-            .eq("order_id", invoice.order_id);
-
-          const newTotal =
-            allItems?.reduce((sum, i) => sum + Number(i.total_price), 0) || 0;
-          const newCommTotal =
-            allItems?.reduce(
-              (sum, i) => sum + Number(i.commission_earned || 0),
-              0
-            ) || 0;
-
-          await supabase
-            .from("invoices")
-            .update({ total_amount: newTotal })
-            .eq("id", invoice.id);
-          await supabase
-            .from("orders")
-            .update({ total_amount: newTotal })
-            .eq("id", invoice.order_id);
-
-          const diff = Number(invoice.total_amount) - newTotal;
-          if (invoice.customer_id && diff !== 0) {
-            const { data: cust } = await supabase
-              .from("customers")
-              .select("outstanding_balance")
-              .eq("id", invoice.customer_id)
-              .single();
-            if (cust) {
-              await supabase
-                .from("customers")
-                .update({
-                  outstanding_balance: Number(cust.outstanding_balance) - diff,
-                })
-                .eq("id", invoice.customer_id);
-            }
-          }
-          await supabase
-            .from("rep_commissions")
-            .update({ total_commission_amount: newCommTotal })
-            .eq("order_id", invoice.order_id);
-        }
-      }
-    }
-
-    return NextResponse.json(returnRecord);
+    return NextResponse.json({ success: true, transfer });
   } catch (error: any) {
+    console.error("Transfer Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-}
-
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const businessId = searchParams.get("businessId");
-  const cookieStore = await cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll() {},
-      },
-    }
-  );
-
-  let query = supabase
-    .from("inventory_returns")
-    .select("*, products(name, sku), locations(name), profiles(full_name)")
-    .order("created_at", { ascending: false });
-  if (businessId) query = query.eq("business_id", businessId);
-  const { data, error } = await query;
-  if (error)
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data);
 }
