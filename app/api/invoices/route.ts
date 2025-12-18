@@ -59,7 +59,6 @@ export async function GET(request: NextRequest) {
     const businessId = searchParams.get("businessId");
 
     // Start building the query
-    // We use !inner on orders to allow filtering the parent (invoices) by the child's (orders) property
     let query = supabaseAdmin
       .from("invoices")
       .select(
@@ -109,7 +108,7 @@ export async function GET(request: NextRequest) {
         orderStatus: orderStatus,
         dueDate: inv.due_date,
         createdAt: inv.created_at,
-        businessId: bId, // Return business ID for frontend use
+        businessId: bId,
       };
     });
 
@@ -164,7 +163,7 @@ export async function POST(request: NextRequest) {
         total_amount: val.grandTotal,
         notes: val.notes || null,
         created_by: val.salesRepId,
-        business_id: val.businessId, // Save Business ID
+        business_id: val.businessId,
       })
       .select()
       .single();
@@ -173,16 +172,18 @@ export async function POST(request: NextRequest) {
 
     // --- 4. Prepare Order Items & Calculate Commissions ---
 
-    // 4a. Fetch Product Commission Info
+    // 4a. Fetch Product Info (Including Cost Price for History)
     const productIds = val.items.map((i) => i.productId);
+
+    // ✅ SNAPSHOT LOGIC: Fetch current cost_price to save it
     const { data: products } = await supabaseAdmin
       .from("products")
-      .select("id, commission_type, commission_value")
+      .select("id, commission_type, commission_value, cost_price")
       .in("id", productIds);
 
     let totalCommissionForOrder = 0;
 
-    // 4b. Map items with calculated commission
+    // 4b. Map items with calculated commission & ACTUAL PRICE
     const orderItems = val.items.map((item) => {
       const product = products?.find((p) => p.id === item.productId);
 
@@ -191,24 +192,34 @@ export async function POST(request: NextRequest) {
       // Calculate Commission Item-Wise
       if (product) {
         if (product.commission_type === "percentage") {
-          // (Unit Price * Qty * Rate) / 100
           const itemTotal = item.unitPrice * item.quantity;
           commissionEarned =
             (itemTotal * (product.commission_value || 0)) / 100;
         } else if (product.commission_type === "fixed") {
-          // Rate * Qty
           commissionEarned = (product.commission_value || 0) * item.quantity;
         }
       }
 
       totalCommissionForOrder += commissionEarned;
 
+      // --- CALCULATIONS ---
+      // 1. Actual Selling Price (Avg Price)
+      const totalQty = item.quantity + item.freeQuantity;
+      const actualUnitPrice = item.total / totalQty;
+
+      // 2. Snapshot of Current Cost Price (Historical Cost)
+      const historicalCost = product?.cost_price || 0;
+
       return {
         order_id: orderData.id,
         product_id: item.productId,
         quantity: item.quantity,
         free_quantity: item.freeQuantity,
-        unit_price: item.unitPrice,
+
+        unit_price: item.unitPrice, // Bill Price
+        actual_unit_price: actualUnitPrice, // Real Selling Price
+        actual_unit_cost: historicalCost, // ✅ SAVED: Real Cost at time of order
+
         total_price: item.total,
         commission_earned: commissionEarned,
       };
@@ -239,8 +250,8 @@ export async function POST(request: NextRequest) {
         order_id: orderData.id,
         customer_id: val.customerId,
         total_amount: val.grandTotal,
-        paid_amount: val.paidAmount, // Use actual paid amount
-        status: val.paymentStatus, // Use actual status (Paid/Unpaid)
+        paid_amount: val.paidAmount,
+        status: val.paymentStatus,
         due_date: dueDate,
       })
       .select()
@@ -261,7 +272,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 8. Update Customer Balance (Only add the UNPAID portion)
+    // 8. Update Customer Balance
     const { data: customer } = await supabaseAdmin
       .from("customers")
       .select("outstanding_balance")

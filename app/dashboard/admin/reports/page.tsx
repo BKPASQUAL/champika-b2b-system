@@ -23,7 +23,7 @@ import {
   Wallet,
   ArrowDownRight,
   CreditCard,
-  AlertOctagon, // Added for Business Loss
+  AlertOctagon,
 } from "lucide-react";
 import {
   BarChart,
@@ -76,7 +76,7 @@ export default function AdminReportsPage() {
     cogs: 0,
     grossProfit: 0,
     expenses: 0,
-    businessLoss: 0, // Added field
+    businessLoss: 0,
     netProfit: 0,
     grossMargin: 0,
     netMargin: 0,
@@ -88,7 +88,7 @@ export default function AdminReportsPage() {
   const [customerData, setCustomerData] = useState<any[]>([]);
   const [productData, setProductData] = useState<any[]>([]);
   const [repData, setRepData] = useState<any[]>([]);
-  const [orderData, setOrderData] = useState<any[]>([]); // This now holds all transactions
+  const [orderData, setOrderData] = useState<any[]>([]);
   const [deliveryData, setDeliveryData] = useState<any[]>([]);
   const [revenueTrend, setRevenueTrend] = useState<any[]>([]);
 
@@ -171,8 +171,6 @@ export default function AdminReportsPage() {
       setExpensesByCategory(data.expensesByCategory || []);
       setDeliveryData(data.deliveries || []);
 
-      // Orders (Unified Transactions)
-      // Note: 'amount' property used for Revenue/Loss Value
       const processedOrders = data.orders.map((o: any) => ({
         ...o,
         margin: o.amount > 0 ? (o.profit / o.amount) * 100 : 0,
@@ -300,12 +298,6 @@ export default function AdminReportsPage() {
         </div>
       </div>
 
-      {loading && (
-        <div className="w-full text-center py-2 text-sm text-muted-foreground">
-          Refreshing data...
-        </div>
-      )}
-
       <Tabs
         value={activeTab}
         onValueChange={setActiveTab}
@@ -324,9 +316,7 @@ export default function AdminReportsPage() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
-          {/* UPDATED: Overview Cards Grid with Loss */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {/* 1. Revenue */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
@@ -344,7 +334,6 @@ export default function AdminReportsPage() {
               </CardContent>
             </Card>
 
-            {/* 2. COGS */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
@@ -357,12 +346,11 @@ export default function AdminReportsPage() {
                   LKR {overview.cogs?.toLocaleString()}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Total product cost
+                  Total product cost (Inc. Free Items)
                 </p>
               </CardContent>
             </Card>
 
-            {/* 3. Gross Profit */}
             <Card className="bg-primary/5 border-primary/20">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-primary">
@@ -374,13 +362,10 @@ export default function AdminReportsPage() {
                 <div className="text-2xl font-bold text-primary">
                   LKR {overview.grossProfit?.toLocaleString()}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Profit before expenses
-                </p>
+                <p className="text-xs text-muted-foreground">Revenue - COGS</p>
               </CardContent>
             </Card>
 
-            {/* 4. Expenses */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
@@ -398,7 +383,6 @@ export default function AdminReportsPage() {
               </CardContent>
             </Card>
 
-            {/* 5. Business Loss (NEW) */}
             <Card className="bg-red-50 border-red-200">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-red-700">
@@ -416,7 +400,6 @@ export default function AdminReportsPage() {
               </CardContent>
             </Card>
 
-            {/* 6. Net Profit */}
             <Card className="bg-green-50 border-green-200 lg:col-span-2">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-green-700">
@@ -520,7 +503,7 @@ export default function AdminReportsPage() {
             </Card>
           </div>
 
-          {/* UPDATED: Top Tables with Loss Column */}
+          {/* Top Tables with Loss Column */}
           <div className="grid gap-4 md:grid-cols-3">
             <Card>
               <CardHeader>
@@ -661,6 +644,109 @@ export default function AdminReportsPage() {
                       </TableCell>
                       <TableCell>
                         <Badge variant="secondary">{txn.status}</Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="monthly" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Monthly Net Profit Analysis</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={400}>
+                <ComposedChart data={monthlyData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" />
+                  <YAxis yAxisId="left" />
+                  <YAxis yAxisId="right" orientation="right" />
+                  <Tooltip />
+                  <Legend />
+                  <Bar
+                    yAxisId="left"
+                    dataKey="grossProfit"
+                    fill="#00C49F"
+                    name="Gross Profit"
+                    barSize={20}
+                  />
+                  <Bar
+                    yAxisId="left"
+                    dataKey="expenses"
+                    fill="#ff8042"
+                    name="Expenses"
+                    barSize={20}
+                  />
+                  <Bar
+                    yAxisId="left"
+                    dataKey="losses"
+                    fill="#ef4444"
+                    name="Losses"
+                    barSize={20}
+                  />
+                  <Line
+                    yAxisId="right"
+                    type="monotone"
+                    dataKey="netProfit"
+                    stroke="#0088FE"
+                    strokeWidth={3}
+                    name="Net Profit"
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Monthly Breakdown Table</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Month</TableHead>
+                    <TableHead className="text-right">Revenue</TableHead>
+                    <TableHead className="text-right">COGS</TableHead>
+                    <TableHead className="text-right">Gross Profit</TableHead>
+                    <TableHead className="text-right">Expenses</TableHead>
+                    <TableHead className="text-right">Losses</TableHead>
+                    <TableHead className="text-right">Net Profit</TableHead>
+                    <TableHead className="text-right">Net Margin</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {monthlyData.map((m: any) => (
+                    <TableRow key={m.key}>
+                      <TableCell>{m.name}</TableCell>
+                      <TableCell className="text-right">
+                        LKR {m.revenue.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        LKR {m.cogs.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right text-green-600">
+                        LKR {m.grossProfit.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right text-orange-500">
+                        LKR {m.expenses.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right text-red-600 font-medium">
+                        LKR {m.losses.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right font-bold">
+                        LKR {m.netProfit.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Badge
+                          variant={m.margin > 15 ? "default" : "secondary"}
+                        >
+                          {m.margin.toFixed(1)}%
+                        </Badge>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -835,109 +921,6 @@ export default function AdminReportsPage() {
                   </Button>
                 </div>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="monthly" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Monthly Net Profit Analysis</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={400}>
-                <ComposedChart data={monthlyData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis yAxisId="left" />
-                  <YAxis yAxisId="right" orientation="right" />
-                  <Tooltip />
-                  <Legend />
-                  <Bar
-                    yAxisId="left"
-                    dataKey="grossProfit"
-                    fill="#00C49F"
-                    name="Gross Profit"
-                    barSize={20}
-                  />
-                  <Bar
-                    yAxisId="left"
-                    dataKey="expenses"
-                    fill="#ff8042"
-                    name="Expenses"
-                    barSize={20}
-                  />
-                  <Bar
-                    yAxisId="left"
-                    dataKey="losses"
-                    fill="#ef4444"
-                    name="Losses"
-                    barSize={20}
-                  />
-                  <Line
-                    yAxisId="right"
-                    type="monotone"
-                    dataKey="netProfit"
-                    stroke="#0088FE"
-                    strokeWidth={3}
-                    name="Net Profit"
-                  />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Monthly Breakdown Table</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Month</TableHead>
-                    <TableHead className="text-right">Revenue</TableHead>
-                    <TableHead className="text-right">COGS</TableHead>
-                    <TableHead className="text-right">Gross Profit</TableHead>
-                    <TableHead className="text-right">Expenses</TableHead>
-                    <TableHead className="text-right">Losses</TableHead>
-                    <TableHead className="text-right">Net Profit</TableHead>
-                    <TableHead className="text-right">Net Margin</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {monthlyData.map((m: any) => (
-                    <TableRow key={m.key}>
-                      <TableCell>{m.name}</TableCell>
-                      <TableCell className="text-right">
-                        LKR {m.revenue.toLocaleString()}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        LKR {m.cogs.toLocaleString()}
-                      </TableCell>
-                      <TableCell className="text-right text-green-600">
-                        LKR {m.grossProfit.toLocaleString()}
-                      </TableCell>
-                      <TableCell className="text-right text-orange-500">
-                        LKR {m.expenses.toLocaleString()}
-                      </TableCell>
-                      <TableCell className="text-right text-red-600 font-medium">
-                        LKR {m.losses.toLocaleString()}
-                      </TableCell>
-                      <TableCell className="text-right font-bold">
-                        LKR {m.netProfit.toLocaleString()}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Badge
-                          variant={m.margin > 15 ? "default" : "secondary"}
-                        >
-                          {m.margin.toFixed(1)}%
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
             </CardContent>
           </Card>
         </TabsContent>
@@ -1131,6 +1114,9 @@ export default function AdminReportsPage() {
                     <TableHead>Product Name</TableHead>
                     <TableHead>Category</TableHead>
                     <TableHead className="text-right">Units Sold</TableHead>
+                    {/* Added Actual Price & Cost Columns */}
+                    <TableHead className="text-right">Actual Price</TableHead>
+                    <TableHead className="text-right">Actual Cost</TableHead>
                     <TableHead className="text-right">Revenue</TableHead>
                     <TableHead className="text-right">Cost</TableHead>
                     <TableHead className="text-right">Profit</TableHead>
@@ -1138,29 +1124,50 @@ export default function AdminReportsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {productData.map((product) => (
-                    <TableRow key={product.id}>
-                      <TableCell className="font-medium">
-                        {product.name}
-                      </TableCell>
-                      <TableCell>{product.category}</TableCell>
-                      <TableCell className="text-right">
-                        {product.sold}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        LKR {product.revenue.toLocaleString()}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        LKR {product.cost.toLocaleString()}
-                      </TableCell>
-                      <TableCell className="text-right font-medium text-green-600">
-                        LKR {product.profit.toLocaleString()}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {product.margin.toFixed(1)}%
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {productData.map((product) => {
+                    // Calculation for displaying per-unit metrics based on Actual Quantity (Sold + Free)
+                    const actualPrice =
+                      product.sold > 0 ? product.revenue / product.sold : 0;
+                    const actualCost =
+                      product.sold > 0 ? product.cost / product.sold : 0;
+
+                    return (
+                      <TableRow key={product.id}>
+                        <TableCell className="font-medium">
+                          {product.name}
+                        </TableCell>
+                        <TableCell>{product.category}</TableCell>
+                        <TableCell className="text-right">
+                          {product.sold}
+                        </TableCell>
+                        {/* Display Actual Price & Cost */}
+                        <TableCell className="text-right text-blue-600">
+                          {actualPrice.toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </TableCell>
+                        <TableCell className="text-right text-orange-600">
+                          {actualCost.toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          LKR {product.revenue.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          LKR {product.cost.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right font-medium text-green-600">
+                          LKR {product.profit.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {product.margin.toFixed(1)}%
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </CardContent>
@@ -1330,49 +1337,64 @@ export default function AdminReportsPage() {
                     <TableHead>Customer</TableHead>
                     <TableHead>Business</TableHead>
                     <TableHead className="text-right">Revenue</TableHead>
-                    <TableHead className="text-right">Cost</TableHead>
+                    {/* Added Calculated Cost Column */}
+                    <TableHead className="text-right">
+                      Calculated Cost
+                    </TableHead>
                     <TableHead className="text-right">Profit</TableHead>
                     <TableHead className="text-right">Margin</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {currentOrders.map((order) => (
-                    <TableRow key={order.id}>
-                      <TableCell className="font-medium">{order.id}</TableCell>
-                      <TableCell>{order.date}</TableCell>
-                      <TableCell>{order.customer}</TableCell>
-                      <TableCell>{order.business}</TableCell>
-                      <TableCell className="text-right">
-                        LKR {order.amount?.toLocaleString()}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        LKR {order.cost?.toLocaleString() || "0"}
-                      </TableCell>
-                      <TableCell
-                        className={`text-right font-medium ${
-                          order.profit >= 0 ? "text-green-600" : "text-red-600"
-                        }`}
-                      >
-                        LKR {order.profit?.toLocaleString()}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {order.margin?.toFixed(1)}%
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            order.type === "Loss" ? "destructive" : "default"
-                          }
+                  {currentOrders.map((order) => {
+                    // Calculated cost derived from Revenue - Profit (which uses the historical cost)
+                    const calculatedCost = order.amount - order.profit;
+                    return (
+                      <TableRow key={order.id}>
+                        <TableCell className="font-medium">
+                          {order.id}
+                        </TableCell>
+                        <TableCell>{order.date}</TableCell>
+                        <TableCell>{order.customer}</TableCell>
+                        <TableCell>{order.business}</TableCell>
+                        <TableCell className="text-right">
+                          LKR {order.amount?.toLocaleString()}
+                        </TableCell>
+                        {/* Display Calculated Cost */}
+                        <TableCell className="text-right">
+                          LKR {calculatedCost.toLocaleString()}
+                        </TableCell>
+                        <TableCell
+                          className={`text-right font-medium ${
+                            order.profit >= 0
+                              ? "text-green-600"
+                              : "text-red-600"
+                          }`}
                         >
-                          {order.status}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                          LKR {order.profit?.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {order.margin?.toFixed(1)}%
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              order.type === "Loss" ? "destructive" : "default"
+                            }
+                          >
+                            {order.status}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                   {currentOrders.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={9} className="h-24 text-center">
+                      <TableCell
+                        colSpan={9}
+                        className="h-24 text-center text-muted-foreground"
+                      >
                         No orders found.
                       </TableCell>
                     </TableRow>

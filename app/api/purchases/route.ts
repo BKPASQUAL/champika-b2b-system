@@ -1,3 +1,5 @@
+// app/api/purchases/route.ts
+
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
@@ -8,7 +10,7 @@ const itemSchema = z.object({
   productId: z.string(),
   quantity: z.number().min(1),
   freeQuantity: z.number().default(0),
-  unitPrice: z.number(),
+  unitPrice: z.number(), // This is the BILL Price (e.g., 1000)
   mrp: z.number(),
   sellingPrice: z.number(),
   discountPercent: z.number(),
@@ -33,7 +35,6 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const businessId = searchParams.get("businessId");
 
-    // Start building the query
     let query = supabaseAdmin
       .from("purchases")
       .select(
@@ -45,13 +46,11 @@ export async function GET(request: NextRequest) {
       )
       .order("created_at", { ascending: false });
 
-    // ✅ APPLY FILTER: If businessId is provided, ONLY return that business's data
     if (businessId) {
       query = query.eq("business_id", businessId);
     }
 
     const { data, error } = await query;
-
     if (error) throw error;
 
     const purchases = data.map((p: any) => ({
@@ -68,7 +67,7 @@ export async function GET(request: NextRequest) {
       paymentStatus: p.payment_status,
       totalAmount: p.total_amount,
       paidAmount: p.paid_amount,
-      itemsCount: 0,
+      itemsCount: 0, // You can populate this if needed
     }));
 
     return NextResponse.json(purchases);
@@ -128,19 +127,31 @@ export async function POST(request: NextRequest) {
 
     if (purchaseError) throw purchaseError;
 
-    // 4. Insert Items
-    const itemsData = val.items.map((item) => ({
-      purchase_id: purchase.id,
-      product_id: item.productId,
-      quantity: item.quantity,
-      free_quantity: item.freeQuantity,
-      unit_cost: item.unitPrice,
-      mrp: item.mrp,
-      selling_price: item.sellingPrice,
-      discount_percent: item.discountPercent,
-      discount_amount: item.discountAmount,
-      total_cost: item.total,
-    }));
+    // 4. Prepare Items Data (Calculate Costs Here)
+    const itemsData = val.items.map((item) => {
+      const totalQty = item.quantity + item.freeQuantity;
+
+      // FORMULA: Actual Cost = Total Price / (Qty + Free Qty)
+      const actualCost = item.total / totalQty;
+
+      return {
+        purchase_id: purchase.id,
+        product_id: item.productId,
+        quantity: item.quantity,
+        free_quantity: item.freeQuantity,
+
+        // --- SAVING BOTH COSTS ---
+        unit_cost: item.unitPrice, // 1. Bill Price (e.g. 1000)
+        actual_unit_cost: actualCost, // 2. Actual Price (e.g. 833.33) [Requires new DB column]
+        // -------------------------
+
+        mrp: item.mrp,
+        selling_price: item.sellingPrice,
+        discount_percent: item.discountPercent,
+        discount_amount: item.discountAmount,
+        total_cost: item.total,
+      };
+    });
 
     const { error: itemsError } = await supabaseAdmin
       .from("purchase_items")
@@ -151,9 +162,10 @@ export async function POST(request: NextRequest) {
       throw itemsError;
     }
 
-    // 5. Update Stock
+    // 5. Update Stock & Master Cost Price
     for (const item of val.items) {
       const totalQty = item.quantity + item.freeQuantity;
+      const actualCost = item.total / totalQty; // Recalculate or grab from map above
 
       // Update Product Global Values
       const { data: currentProduct } = await supabaseAdmin
@@ -166,7 +178,11 @@ export async function POST(request: NextRequest) {
         .from("products")
         .update({
           stock_quantity: (currentProduct?.stock_quantity || 0) + totalQty,
-          cost_price: item.finalPrice,
+
+          // We update the master cost_price to the ACTUAL cost
+          // This ensures your profit reports use the 833.33 figure
+          cost_price: actualCost,
+
           mrp: item.mrp,
           selling_price: item.sellingPrice,
         })

@@ -1,3 +1,5 @@
+// app/api/reports/route.ts
+
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
@@ -30,6 +32,7 @@ export async function GET(request: Request) {
     if (loadsError) throw loadsError;
 
     // 3. Fetch Orders (Revenue & COGS)
+    // ✅ ADDED: actual_unit_cost to selection for historical profit accuracy
     const { data: orders, error: ordersError } = await supabaseAdmin
       .from("orders")
       .select(
@@ -38,7 +41,7 @@ export async function GET(request: Request) {
         customer:customers (id, shop_name, owner_name, business_id, business:businesses(id, name)),
         rep:profiles!orders_sales_rep_id_fkey (id, full_name),
         items:order_items (
-          id, quantity, unit_price, total_price,
+          id, quantity, free_quantity, unit_price, total_price, actual_unit_cost,
           product:products (id, name, cost_price, category)
         )
       `
@@ -59,7 +62,6 @@ export async function GET(request: Request) {
     if (expensesError) throw expensesError;
 
     // 5. Fetch Business Losses (Damaged Items marked as Loss)
-    // We include customer/rep info if available to attribute the loss
     const { data: losses, error: lossesError } = await supabaseAdmin
       .from("inventory_returns")
       .select(
@@ -145,10 +147,22 @@ export async function GET(request: Request) {
       if (order.items) {
         order.items.forEach((item: any) => {
           const qty = Number(item.quantity) || 0;
-          const costPrice = Number(item.product?.cost_price) || 0;
+          const freeQty = Number(item.free_quantity) || 0;
+          const totalQty = qty + freeQty;
+
+          // --- CHANGED LOGIC START ---
+          // Use Historical Cost if available (for past orders), otherwise use current product cost
+          const costPrice =
+            Number(item.actual_unit_cost) ||
+            Number(item.product?.cost_price) ||
+            0;
+
           const sellingPrice = Number(item.unit_price) || 0;
           const itemRevenue = Number(item.total_price) || qty * sellingPrice;
-          const itemCost = qty * costPrice;
+
+          // Cost is calculated on TOTAL units (Bought + Free)
+          const itemCost = totalQty * costPrice;
+          // --- CHANGED LOGIC END ---
 
           orderCost += itemCost;
 
@@ -162,9 +176,10 @@ export async function GET(request: Request) {
                 sold: 0,
                 revenue: 0,
                 cost: 0,
-                loss: 0, // Init loss field
+                loss: 0,
               };
-            productsMap[pId].sold += qty;
+
+            productsMap[pId].sold += totalQty;
             productsMap[pId].revenue += itemRevenue;
             productsMap[pId].cost += itemCost;
           }
@@ -218,7 +233,7 @@ export async function GET(request: Request) {
             orders: 0,
             revenue: 0,
             profit: 0,
-            loss: 0, // Init loss field
+            loss: 0,
           };
         customersMap[cId].orders += 1;
         customersMap[cId].revenue += orderRevenue;
@@ -235,7 +250,7 @@ export async function GET(request: Request) {
             revenue: 0,
             profit: 0,
             orders: 0,
-            loss: 0, // Init loss field
+            loss: 0,
           };
           repCustomers[rId] = new Set();
         }
@@ -279,7 +294,7 @@ export async function GET(request: Request) {
     // 9. Process Business Losses
     losses?.forEach((loss: any) => {
       const qty = Number(loss.quantity) || 0;
-      const cost = Number(loss.product?.cost_price) || 0;
+      const cost = Number(loss.product?.cost_price) || 0; // Losses use Current Cost
       const val = qty * cost; // Value of Loss
 
       const date = new Date(loss.created_at);
@@ -404,7 +419,6 @@ export async function GET(request: Request) {
         (a: any, b: any) => b.revenue - a.revenue
       ),
       reps: repsArray,
-      // Sending the unified list as 'orders' for frontend compatibility
       orders: transactionsList.sort(
         (a: any, b: any) =>
           new Date(b.date).getTime() - new Date(a.date).getTime()
