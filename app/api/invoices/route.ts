@@ -172,13 +172,15 @@ export async function POST(request: NextRequest) {
 
     // --- 4. Prepare Order Items & Calculate Commissions ---
 
-    // 4a. Fetch Product Info (Including Cost Price for History)
+    // 4a. Fetch Product Info (Including Actual Cost Price)
     const productIds = val.items.map((i) => i.productId);
 
-    // ✅ SNAPSHOT LOGIC: Fetch current cost_price to save it
+    // ✅ SNAPSHOT LOGIC: Fetch 'actual_cost_price'
     const { data: products } = await supabaseAdmin
       .from("products")
-      .select("id, commission_type, commission_value, cost_price")
+      .select(
+        "id, commission_type, commission_value, cost_price, actual_cost_price"
+      )
       .in("id", productIds);
 
     let totalCommissionForOrder = 0;
@@ -207,8 +209,10 @@ export async function POST(request: NextRequest) {
       const totalQty = item.quantity + item.freeQuantity;
       const actualUnitPrice = item.total / totalQty;
 
-      // 2. Snapshot of Current Cost Price (Historical Cost)
-      const historicalCost = product?.cost_price || 0;
+      // 2. Snapshot of Cost Price (Historical Cost)
+      // ✅ LOGIC: Use 'actual_cost_price' (833) if available, otherwise 'cost_price' (1000)
+      const historicalCost =
+        product?.actual_cost_price || product?.cost_price || 0;
 
       return {
         order_id: orderData.id,
@@ -218,7 +222,7 @@ export async function POST(request: NextRequest) {
 
         unit_price: item.unitPrice, // Bill Price
         actual_unit_price: actualUnitPrice, // Real Selling Price
-        actual_unit_cost: historicalCost, // ✅ SAVED: Real Cost at time of order
+        actual_unit_cost: historicalCost, // ✅ SAVED: Real Cost (833.33)
 
         total_price: item.total,
         commission_earned: commissionEarned,

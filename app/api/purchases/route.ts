@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
       paymentStatus: p.payment_status,
       totalAmount: p.total_amount,
       paidAmount: p.paid_amount,
-      itemsCount: 0, // You can populate this if needed
+      itemsCount: 0,
     }));
 
     return NextResponse.json(purchases);
@@ -130,8 +130,7 @@ export async function POST(request: NextRequest) {
     // 4. Prepare Items Data (Calculate Costs Here)
     const itemsData = val.items.map((item) => {
       const totalQty = item.quantity + item.freeQuantity;
-
-      // FORMULA: Actual Cost = Total Price / (Qty + Free Qty)
+      // Formula: Actual Cost = Total Amount / (Qty + Free)
       const actualCost = item.total / totalQty;
 
       return {
@@ -139,12 +138,8 @@ export async function POST(request: NextRequest) {
         product_id: item.productId,
         quantity: item.quantity,
         free_quantity: item.freeQuantity,
-
-        // --- SAVING BOTH COSTS ---
-        unit_cost: item.unitPrice, // 1. Bill Price (e.g. 1000)
-        actual_unit_cost: actualCost, // 2. Actual Price (e.g. 833.33) [Requires new DB column]
-        // -------------------------
-
+        unit_cost: item.unitPrice, // Billed Price
+        actual_unit_cost: actualCost, // Actual Price (833.33)
         mrp: item.mrp,
         selling_price: item.sellingPrice,
         discount_percent: item.discountPercent,
@@ -162,12 +157,11 @@ export async function POST(request: NextRequest) {
       throw itemsError;
     }
 
-    // 5. Update Stock & Master Cost Price
+    // 5. Update Stock & Costs in Product Table
     for (const item of val.items) {
       const totalQty = item.quantity + item.freeQuantity;
-      const actualCost = item.total / totalQty; // Recalculate or grab from map above
+      const actualCost = item.total / totalQty;
 
-      // Update Product Global Values
       const { data: currentProduct } = await supabaseAdmin
         .from("products")
         .select("stock_quantity")
@@ -179,9 +173,11 @@ export async function POST(request: NextRequest) {
         .update({
           stock_quantity: (currentProduct?.stock_quantity || 0) + totalQty,
 
-          // We update the master cost_price to the ACTUAL cost
-          // This ensures your profit reports use the 833.33 figure
-          cost_price: actualCost,
+          // ✅ CRITICAL UPDATE:
+          // cost_price = Bill Price (1000) for Catalog display
+          // actual_cost_price = Calculated Cost (833.33) for Profit Reports
+          cost_price: item.unitPrice,
+          actual_cost_price: actualCost,
 
           mrp: item.mrp,
           selling_price: item.sellingPrice,
