@@ -12,8 +12,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // We fetch from 'orders' to ensure we can filter by Order Status (Delivered/Completed)
-    // and calculate commissions dynamically from the latest order items (handling edits).
+    // Fetch orders with related invoices and payments to determine the "Collection Date"
     const { data: orders, error } = await supabaseAdmin
       .from("orders")
       .select(
@@ -32,26 +31,63 @@ export async function GET(request: NextRequest) {
         ),
         rep_commissions (
           status
+        ),
+        invoices!inner (
+          status,
+          total_amount,
+          paid_amount,
+          payments (
+            payment_date
+          )
         )
       `
       )
       .eq("sales_rep_id", repId)
-      .in("status", ["Delivered", "Completed"]) // Only show commission for finalized orders
+      .in("status", ["Delivered", "Completed"])
       .order("created_at", { ascending: false });
 
     if (error) throw error;
 
     const formattedData = orders.map((order: any) => {
-      // Dynamic Calculation: Sum commission from current order items
-      // This ensures that if an order was edited, the commission updates automatically.
+      // Invoice Details
+      const invoice = Array.isArray(order.invoices)
+        ? order.invoices[0]
+        : order.invoices;
+
+      const invoiceTotal = invoice?.total_amount || 0;
+      const invoicePaid = invoice?.paid_amount || 0;
+      const orderDue = Math.max(0, invoiceTotal - invoicePaid);
+      const isInvoicePaid = invoice?.status === "Paid";
+
+      // --- DATE LOGIC ---
+      // Requirement: Show commission in the "Collected Month" (Payment Date), not "Selling Month".
+      // 1. If Paid: Use the Latest Payment Date.
+      // 2. If Unpaid: Fallback to Order Creation Date (to show it as pending in that month).
+      let effectiveDate = order.created_at;
+
+      if (isInvoicePaid && invoice?.payments && invoice.payments.length > 0) {
+        // Sort payments by date descending (newest first) to get the final payment date
+        const sortedPayments = invoice.payments.sort(
+          (a: any, b: any) =>
+            new Date(b.payment_date).getTime() -
+            new Date(a.payment_date).getTime()
+        );
+        effectiveDate = sortedPayments[0].payment_date;
+      }
+
+      // Commission Calculation
       const totalCommission = order.order_items?.reduce(
         (sum: number, item: any) => sum + (Number(item.commission_earned) || 0),
         0
       );
 
-      // Status Check: Check if a payout record exists and is marked as Paid
-      // Defaults to 'Pending' if no payout record exists yet.
-      const payoutStatus = order.rep_commissions?.[0]?.status || "Pending";
+      // Status Logic
+      let finalStatus = "Pending";
+      if (!isInvoicePaid) {
+        finalStatus = "Unpaid Order";
+      } else {
+        finalStatus = order.rep_commissions?.[0]?.status || "Pending";
+      }
 
       return {
         id: order.id,
@@ -59,8 +95,10 @@ export async function GET(request: NextRequest) {
         shopName: order.customers?.shop_name || "Unknown",
         orderTotal: order.total_amount || 0,
         commission: totalCommission,
-        status: payoutStatus,
-        date: order.created_at,
+        status: finalStatus,
+        date: effectiveDate, // Use Effective Date for filtering/sorting
+        originalDate: order.created_at, // Keep original date if needed
+        orderDue: orderDue,
       };
     });
 

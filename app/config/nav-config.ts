@@ -316,6 +316,11 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           href: "/dashboard/rep/commission",
           icon: CreditCard,
         },
+        {
+          name: "Salary",
+          href: "/dashboard/rep/salary",
+          icon: Banknote,
+        },
       ],
     },
   ],
