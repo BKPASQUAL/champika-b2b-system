@@ -21,7 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"; // Import RadioGroup
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   ArrowLeft,
   Loader2,
@@ -135,13 +135,13 @@ export default function StockTransferPage() {
         name: stock.name,
         category: stock.category,
         brand: stock.brand,
-        // Map available quantity based on selected Type
+        // FIX: Map using 'damagedQuantity' (from API) not 'damaged_quantity'
         available_quantity:
           transferType === "Good"
             ? Number(stock.quantity || 0)
-            : Number(stock.damaged_quantity || 0),
+            : Number(stock.damagedQuantity || 0),
         raw_qty: Number(stock.quantity || 0),
-        raw_damaged: Number(stock.damaged_quantity || 0),
+        raw_damaged: Number(stock.damagedQuantity || 0),
         unit: stock.unit_of_measure || "Units",
       }));
 

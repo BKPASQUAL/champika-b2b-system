@@ -10,10 +10,10 @@ export async function GET(
   try {
     const { id } = await params;
 
-    // 1. Supplier Info
+    // 1. Get Supplier Details (Include business_id)
     const { data: supplier, error: supError } = await supabaseAdmin
       .from("suppliers")
-      .select("name, id, address")
+      .select("name, id, address, business_id")
       .eq("id", id)
       .single();
 
@@ -24,9 +24,17 @@ export async function GET(
       );
     }
 
-    // 2. Fetch "Warehouse" Items (Not yet sent/batched)
-    // FIX: Removed .neq("status", "Completed") to show new items
-    const { data: warehouseItems, error: itemError } = await supabaseAdmin
+    // 2. Find "Main Warehouse" Location ID
+    // We explicitly look up the ID to ensure the filter works correctly
+    const { data: mainLocation } = await supabaseAdmin
+      .from("locations")
+      .select("id")
+      .eq("business_id", supplier.business_id)
+      .eq("name", "Main Warehouse")
+      .maybeSingle();
+
+    // 3. Fetch "Warehouse" Items
+    let query = supabaseAdmin
       .from("inventory_returns")
       .select(
         `
@@ -38,12 +46,30 @@ export async function GET(
       .eq("return_type", "Damage")
       .eq("products.supplier_name", supplier.name)
       .is("return_batch_id", null) // Only items NOT in a batch
-      .neq("status", "Returned") // Exclude items already sent to supplier
-      .order("created_at", { ascending: false });
+      .neq("status", "Returned"); // Exclude items already sent
+
+    // Apply Main Warehouse Filter if found
+    if (mainLocation) {
+      query = query.eq("location_id", mainLocation.id);
+    } else {
+      // If Main Warehouse not found, fallback to name match (legacy) or return empty?
+      // We'll try the name match as a backup in case the ID lookup failed unexpectedly
+      // but usually, if ID isn't found, this won't return anything either.
+      console.warn(
+        "Main Warehouse location not found by ID, trying join filter"
+      );
+      // @ts-ignore
+      query = query.filter("locations.name", "eq", "Main Warehouse");
+    }
+
+    const { data: warehouseItems, error: itemError } = await query.order(
+      "created_at",
+      { ascending: false }
+    );
 
     if (itemError) throw itemError;
 
-    // 3. Fetch Batches (Pending & History)
+    // 4. Fetch Batches (Pending & History)
     const { data: batches, error: batchError } = await supabaseAdmin
       .from("supplier_return_batches")
       .select(
@@ -62,8 +88,8 @@ export async function GET(
 
     return NextResponse.json({
       supplier,
-      warehouseItems,
-      batches,
+      warehouseItems: warehouseItems || [],
+      batches: batches || [],
     });
   } catch (error: any) {
     console.error("Supplier Damage API Error:", error);
