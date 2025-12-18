@@ -17,11 +17,13 @@ export async function GET(
 
     if (locError) throw new Error("Location not found");
 
-    // 2. Fetch Stocks for this Location
+    // 2. Fetch Stocks for this Location (Good OR Damaged > 0)
     const { data: stocks, error: stockError } = await supabaseAdmin
       .from("product_stocks")
-      .select(`
+      .select(
+        `
         quantity,
+        damaged_quantity,
         last_updated,
         products (
           id,
@@ -32,19 +34,29 @@ export async function GET(
           selling_price,
           cost_price
         )
-      `)
+      `
+      )
       .eq("location_id", id)
-      .gt("quantity", 0); // Only show items in stock
+      .or("quantity.gt.0,damaged_quantity.gt.0"); // Fetch if EITHER good OR damaged stock exists
 
     if (stockError) throw stockError;
 
     // 3. Calculate Stats
-    // Ensure we handle potential nulls safely with defaults
     const safeStocks = stocks || [];
-    
-    const totalItems = safeStocks.reduce((sum, item) => sum + Number(item.quantity), 0);
+
+    // Total Items = Good + Damaged
+    const totalItems = safeStocks.reduce(
+      (sum, item) => sum + Number(item.quantity),
+      0
+    );
+    const totalDamaged = safeStocks.reduce(
+      (sum, item) => sum + Number(item.damaged_quantity || 0),
+      0
+    );
+
     const totalValue = safeStocks.reduce(
-      (sum, item: any) => sum + Number(item.quantity) * (item.products?.selling_price || 0),
+      (sum, item: any) =>
+        sum + Number(item.quantity) * (item.products?.selling_price || 0),
       0
     );
 
@@ -56,11 +68,14 @@ export async function GET(
       stocks: safeStocks.map((stockItem: any) => ({
         ...stockItem.products, // Spread product details
         quantity: stockItem.quantity,
+        damagedQuantity: stockItem.damaged_quantity || 0, // Map damage qty
         lastUpdated: stockItem.last_updated,
-        value: Number(stockItem.quantity) * (stockItem.products?.selling_price || 0),
+        value:
+          Number(stockItem.quantity) * (stockItem.products?.selling_price || 0),
       })),
       stats: {
         totalItems,
+        totalDamaged,
         totalValue,
       },
     });

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     // 1. Fetch all Locations
@@ -18,11 +20,12 @@ export async function GET() {
 
     if (stockError) throw stockError;
 
-    // 3. Fetch All Products (for the main catalog view)
+    // 3. Fetch All Products (Master Catalog)
+    // FIX: Added 'damaged_quantity' to the select list
     const { data: products, error: prodError } = await supabaseAdmin
       .from("products")
       .select(
-        "id, name, sku, category, stock_quantity, min_stock_level, unit_of_measure"
+        "id, name, sku, category, stock_quantity, damaged_quantity, min_stock_level, unit_of_measure"
       )
       .order("name");
 
@@ -32,7 +35,6 @@ export async function GET() {
 
     // A. Calculate Stats Per Location
     const locationStats = locations.map((loc: any) => {
-      // Filter stocks for this location
       const locStocks = stocks.filter((s: any) => s.location_id === loc.id);
 
       const totalItems = locStocks.reduce(
@@ -61,15 +63,15 @@ export async function GET() {
       0
     );
     const lowStockCount = products.filter(
-      (p: any) => p.stock_quantity <= p.min_stock_level
+      (p: any) => (p.stock_quantity || 0) <= (p.min_stock_level || 0)
     ).length;
     const outOfStockCount = products.filter(
-      (p: any) => p.stock_quantity === 0
+      (p: any) => (p.stock_quantity || 0) === 0
     ).length;
 
     return NextResponse.json({
       locations: locationStats,
-      products: products, // Simplified product list for the table
+      products: products,
       stats: {
         totalValue: totalInventoryValue,
         lowStock: lowStockCount,

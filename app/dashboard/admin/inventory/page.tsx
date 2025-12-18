@@ -23,7 +23,6 @@ import { Input } from "@/components/ui/input";
 import {
   Layers,
   AlertTriangle,
-  Package,
   DollarSign,
   MapPin,
   Search,
@@ -31,16 +30,27 @@ import {
   Store,
   Building2,
   ArrowRightLeft,
-  // Undo2, // Removed unused import
   Trash2,
+  FileDown,
+  FileSpreadsheet,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import * as XLSX from "xlsx";
+
+const ITEMS_PER_PAGE = 10;
 
 export default function InventoryPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
 
   const fetchData = async () => {
     try {
@@ -60,6 +70,11 @@ export default function InventoryPage() {
     fetchData();
   }, []);
 
+  // Reset page when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
   // Filter Products
   const filteredProducts =
     data?.products?.filter(
@@ -67,6 +82,62 @@ export default function InventoryPage() {
         p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         p.sku.toLowerCase().includes(searchQuery.toLowerCase())
     ) || [];
+
+  // --- Pagination Logic ---
+  const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const paginatedProducts = filteredProducts.slice(
+    startIndex,
+    startIndex + ITEMS_PER_PAGE
+  );
+
+  // --- Export to PDF ---
+  const handleExportPDF = () => {
+    if (!data || filteredProducts.length === 0) return toast.error("No data");
+    const doc = new jsPDF();
+    const date = new Date().toLocaleDateString();
+    doc.setFontSize(16);
+    doc.text("Inventory Stock Report", 14, 15);
+    doc.setFontSize(10);
+    doc.text(`Generated: ${date}`, 14, 22);
+
+    const tableRows = filteredProducts.map((p: any) => [
+      p.sku,
+      p.name,
+      p.category || "-",
+      Number(p.stock_quantity) || 0,
+      Number(p.damaged_quantity) || 0,
+      (Number(p.stock_quantity) || 0) + (Number(p.damaged_quantity) || 0),
+      (Number(p.stock_quantity) || 0) <= p.min_stock_level ? "Low/Out" : "OK",
+    ]);
+
+    autoTable(doc, {
+      head: [["SKU", "Name", "Category", "Good", "Bad", "Total", "Status"]],
+      body: tableRows,
+      startY: 30,
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [0, 0, 0] },
+    });
+    doc.save(`Inventory_${date}.pdf`);
+  };
+
+  // --- Export to Excel ---
+  const handleExportExcel = () => {
+    if (!data || filteredProducts.length === 0) return toast.error("No data");
+    const excelData = filteredProducts.map((p: any) => ({
+      SKU: p.sku,
+      Name: p.name,
+      Category: p.category || "-",
+      "Good Stock": Number(p.stock_quantity) || 0,
+      "Damaged Stock": Number(p.damaged_quantity) || 0,
+      Total:
+        (Number(p.stock_quantity) || 0) + (Number(p.damaged_quantity) || 0),
+    }));
+    const ws = XLSX.utils.json_to_sheet(excelData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Inventory");
+    XLSX.writeFile(wb, `Inventory_${new Date().toLocaleDateString()}.xlsx`);
+  };
 
   if (loading) {
     return (
@@ -76,7 +147,6 @@ export default function InventoryPage() {
     );
   }
 
-  // Calculate Total Damaged from loaded products
   const totalDamaged = filteredProducts.reduce(
     (sum: number, p: any) => sum + (Number(p.damaged_quantity) || 0),
     0
@@ -89,31 +159,39 @@ export default function InventoryPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Stock Control</h1>
           <p className="text-muted-foreground mt-1">
-            Monitor inventory levels, returns, and damages across all
-            businesses.
+            Monitor inventory levels, returns, and damages.
           </p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={handleExportPDF} size="sm">
+            <FileDown className="w-4 h-4 mr-2" /> PDF
+          </Button>
+          <Button variant="outline" onClick={handleExportExcel} size="sm">
+            <FileSpreadsheet className="w-4 h-4 mr-2" /> Excel
+          </Button>
           <Button variant="outline" onClick={fetchData} size="sm">
             <RefreshCw className="w-4 h-4" />
           </Button>
-
-          {/* Returns Button Removed */}
-
           <Button
             onClick={() => router.push("/dashboard/admin/inventory/transfer")}
           >
             <ArrowRightLeft className="w-4 h-4 mr-2" /> Stock Transfer
           </Button>
+          <Button
+            variant="destructive"
+            onClick={() => router.push("/dashboard/admin/inventory/damage")}
+          >
+            <Trash2 className="w-4 h-4 mr-2" /> Report Damage
+          </Button>
         </div>
       </div>
 
-      {/* 1. KPI Cards */}
+      {/* KPI Cards */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">
-              Total Inventory Value
+              Inventory Value
             </CardTitle>
             <DollarSign className="w-4 h-4 text-green-600" />
           </CardHeader>
@@ -124,7 +202,6 @@ export default function InventoryPage() {
             <p className="text-xs text-muted-foreground">Good Stock Value</p>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Out of Stock</CardTitle>
@@ -137,8 +214,6 @@ export default function InventoryPage() {
             <p className="text-xs text-muted-foreground">Items unavailable</p>
           </CardContent>
         </Card>
-
-        {/* NEW KPI: Damaged Stock */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Damaged Stock</CardTitle>
@@ -148,17 +223,12 @@ export default function InventoryPage() {
             <div className="text-2xl font-bold text-orange-600">
               {totalDamaged}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Units marked as damaged
-            </p>
+            <p className="text-xs text-muted-foreground">Marked as damaged</p>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">
-              Low Stock Alerts
-            </CardTitle>
+            <CardTitle className="text-sm font-medium">Low Stock</CardTitle>
             <AlertTriangle className="w-4 h-4 text-amber-600" />
           </CardHeader>
           <CardContent>
@@ -170,7 +240,7 @@ export default function InventoryPage() {
         </Card>
       </div>
 
-      {/* 2. Locations Table (Existing Code kept same) */}
+      {/* Location Table */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -218,7 +288,7 @@ export default function InventoryPage() {
                         variant="outline"
                         className={
                           loc.status === "Active"
-                            ? "bg-green-50 text-green-700 border-green-200"
+                            ? "bg-green-50 text-green-700"
                             : ""
                         }
                       >
@@ -239,7 +309,7 @@ export default function InventoryPage() {
         </CardContent>
       </Card>
 
-      {/* 3. Product Stock Table with Damaged Column */}
+      {/* Master Inventory Table (With Pagination & Damage) */}
       <Card>
         <CardHeader>
           <div className="flex flex-col md:flex-row justify-between gap-4 items-center">
@@ -279,52 +349,92 @@ export default function InventoryPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredProducts.slice(0, 10).map((product: any) => {
-                  const damaged = Number(product.damaged_quantity) || 0;
-                  const good = Number(product.stock_quantity) || 0;
-                  return (
-                    <TableRow key={product.id}>
-                      <TableCell className="font-mono text-xs text-muted-foreground">
-                        {product.sku}
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {product.name}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="font-normal">
-                          {product.category}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right font-bold text-green-700">
-                        {good}
-                      </TableCell>
-                      <TableCell className="text-right font-bold text-red-600">
-                        {damaged > 0 ? damaged : "-"}
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-xs">
-                        {good + damaged}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {good === 0 ? (
-                          <Badge variant="destructive">Out of Stock</Badge>
-                        ) : good <= product.min_stock_level ? (
-                          <Badge className="bg-amber-500 hover:bg-amber-600">
-                            Low Stock
+                {paginatedProducts.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={7}
+                      className="text-center py-8 text-muted-foreground"
+                    >
+                      No products found
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  paginatedProducts.map((product: any) => {
+                    const damaged = Number(product.damaged_quantity) || 0;
+                    const good = Number(product.stock_quantity) || 0;
+                    return (
+                      <TableRow key={product.id}>
+                        <TableCell className="font-mono text-xs text-muted-foreground">
+                          {product.sku}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {product.name}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="font-normal">
+                            {product.category}
                           </Badge>
-                        ) : (
-                          <Badge
-                            variant="outline"
-                            className="text-green-600 border-green-200 bg-green-50"
-                          >
-                            In Stock
-                          </Badge>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                        </TableCell>
+                        <TableCell className="text-right font-bold text-green-700">
+                          {good}
+                        </TableCell>
+                        <TableCell className="text-right font-bold text-red-600">
+                          {damaged > 0 ? damaged : "-"}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-xs">
+                          {good + damaged}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {good === 0 ? (
+                            <Badge variant="destructive">Out of Stock</Badge>
+                          ) : good <= product.min_stock_level ? (
+                            <Badge className="bg-amber-500 hover:bg-amber-600">
+                              Low Stock
+                            </Badge>
+                          ) : (
+                            <Badge
+                              variant="outline"
+                              className="text-green-600 bg-green-50"
+                            >
+                              In Stock
+                            </Badge>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
               </TableBody>
             </Table>
+          </div>
+
+          {/* Pagination Controls */}
+          <div className="flex items-center justify-between py-4">
+            <div className="text-sm text-muted-foreground">
+              Showing {filteredProducts.length > 0 ? startIndex + 1 : 0} to{" "}
+              {Math.min(startIndex + ITEMS_PER_PAGE, filteredProducts.length)}{" "}
+              of {filteredProducts.length} entries
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft className="h-4 w-4 mr-1" /> Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setCurrentPage((p) => Math.min(totalPages, p + 1))
+                }
+                disabled={currentPage === totalPages || totalPages === 0}
+              >
+                Next <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
