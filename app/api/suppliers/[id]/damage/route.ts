@@ -10,10 +10,10 @@ export async function GET(
   try {
     const { id } = await params;
 
-    // 1. Get Supplier Details (Name is needed to filter products)
+    // 1. Supplier Info
     const { data: supplier, error: supError } = await supabaseAdmin
       .from("suppliers")
-      .select("name, id")
+      .select("name, id, address")
       .eq("id", id)
       .single();
 
@@ -24,33 +24,46 @@ export async function GET(
       );
     }
 
-    // 2. Fetch "Damage" records for products belonging to this supplier
-    // We select 'cost_price' to calculate the value of damages
-    const { data: damages, error: damageError } = await supabaseAdmin
+    // 2. Fetch "Warehouse" Items (Not yet sent/batched)
+    // FIX: Removed .neq("status", "Completed") to show new items
+    const { data: warehouseItems, error: itemError } = await supabaseAdmin
       .from("inventory_returns")
       .select(
         `
-        id, 
-        return_number, 
-        quantity, 
-        reason, 
-        created_at, 
-        return_type,
-        customer_id,
+        id, return_number, quantity, reason, status, created_at, 
         products!inner (name, sku, supplier_name, cost_price),
-        locations (name),
-        profiles (full_name)
+        locations (name)
       `
       )
-      .eq("return_type", "Damage") // Filter only Damage records
-      .eq("products.supplier_name", supplier.name) // Filter by Supplier Name
+      .eq("return_type", "Damage")
+      .eq("products.supplier_name", supplier.name)
+      .is("return_batch_id", null) // Only items NOT in a batch
+      .neq("status", "Returned") // Exclude items already sent to supplier
       .order("created_at", { ascending: false });
 
-    if (damageError) throw damageError;
+    if (itemError) throw itemError;
+
+    // 3. Fetch Batches (Pending & History)
+    const { data: batches, error: batchError } = await supabaseAdmin
+      .from("supplier_return_batches")
+      .select(
+        `
+        *,
+        items:inventory_returns (
+           id, return_number, quantity, reason, status, created_at,
+           products (name, sku, cost_price)
+        )
+      `
+      )
+      .eq("supplier_id", id)
+      .order("created_at", { ascending: false });
+
+    if (batchError) throw batchError;
 
     return NextResponse.json({
       supplier,
-      damages,
+      warehouseItems,
+      batches,
     });
   } catch (error: any) {
     console.error("Supplier Damage API Error:", error);

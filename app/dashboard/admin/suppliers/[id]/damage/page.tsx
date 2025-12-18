@@ -24,65 +24,82 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import {
   ArrowLeft,
   Loader2,
   Search,
   AlertTriangle,
-  Calendar,
-  MapPin,
-  User,
-  DollarSign,
   Truck,
   CheckCircle2,
-  FileText, // Icon for PDF
-  Sheet, // Icon for Excel
-  Download, // Icon for Download
+  FileText,
+  DollarSign,
+  AlertCircle,
+  Send,
+  History,
+  Printer,
+  Eye,
+  ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
-
-// --- Import Export Libraries ---
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import * as XLSX from "xlsx";
 
 export default function SupplierDamagePage() {
   const params = useParams();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<any>(null);
-  const [searchQuery, setSearchQuery] = useState("");
 
-  // Selection State
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  // Data State
+  const [supplier, setSupplier] = useState<any>(null);
+  const [warehouseItems, setWarehouseItems] = useState<any[]>([]);
+  const [batches, setBatches] = useState<any[]>([]);
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState("to_return");
+
+  // Selection for Warehouse Items
+  const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
+
+  // Dialog States
+  const [isSendDialogOpen, setIsSendDialogOpen] = useState(false);
   const [isClaimDialogOpen, setIsClaimDialogOpen] = useState(false);
+  const [isViewBatchDialogOpen, setIsViewBatchDialogOpen] = useState(false);
+
+  // Active Batch for Claim/View
+  const [selectedBatch, setSelectedBatch] = useState<any>(null);
+
+  // Financial State
   const [unpaidPurchases, setUnpaidPurchases] = useState<any[]>([]);
   const [allocations, setAllocations] = useState<Record<string, number>>({});
+  const [negotiatedAmount, setNegotiatedAmount] = useState<number>(0);
+  const [approvalNote, setApprovalNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const rawId = params?.id;
   const supplierId = Array.isArray(rawId) ? rawId[0] : rawId;
 
   useEffect(() => {
-    if (supplierId) {
-      fetchSupplierDamages();
-    }
+    if (supplierId) fetchData();
   }, [supplierId]);
 
-  const fetchSupplierDamages = async () => {
+  const fetchData = async () => {
     try {
       setLoading(true);
       const res = await fetch(`/api/suppliers/${supplierId}/damage`);
-      if (!res.ok) throw new Error("Failed to load damage history");
-      const jsonData = await res.json();
-      setData(jsonData);
+      if (!res.ok) throw new Error("Failed to load data");
+      const json = await res.json();
+      setSupplier(json.supplier);
+      setWarehouseItems(json.warehouseItems || []);
+      setBatches(json.batches || []);
+      setSelectedItemIds([]);
     } catch (error) {
-      console.error(error);
       toast.error("Error loading damage data");
     } finally {
       setLoading(false);
@@ -94,224 +111,44 @@ export default function SupplierDamagePage() {
       const res = await fetch(`/api/suppliers/${supplierId}`);
       if (res.ok) {
         const json = await res.json();
-        const unpaid = json.purchases.filter(
-          (p: any) => p.payment_status !== "Paid"
+        setUnpaidPurchases(
+          json.purchases.filter((p: any) => p.payment_status !== "Paid")
         );
-        setUnpaidPurchases(unpaid);
       }
     } catch (e) {
       console.error(e);
     }
   };
 
-  if (loading) {
+  if (loading)
     return (
-      <div className="flex justify-center items-center h-96">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="flex justify-center h-96 items-center">
+        <Loader2 className="animate-spin" />
       </div>
     );
-  }
-
-  if (!data || !data.supplier) {
-    return <div className="p-8 text-center">Supplier not found.</div>;
-  }
-
-  const { supplier, damages } = data;
+  if (!supplier) return <div className="p-8">Supplier not found.</div>;
 
   // Filter Logic
-  const activeDamages = damages.filter(
-    (d: any) => !d.reason?.includes("[CLAIMED]")
-  );
+  const pendingBatches = batches.filter((b) => b.status === "Pending Credit");
+  const historyBatches = batches.filter((b) => b.status === "Completed");
 
-  const filteredDamages = activeDamages.filter(
-    (item: any) =>
-      item.products?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.return_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.locations?.name?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  // --- Calculations ---
-  const totalQty = activeDamages.reduce(
-    (acc: number, item: any) => acc + (Number(item.quantity) || 0),
-    0
-  );
-
-  const totalValue = activeDamages.reduce((acc: number, item: any) => {
-    return (
-      acc +
-      (Number(item.quantity) || 0) * (Number(item.products?.cost_price) || 0)
-    );
-  }, 0);
-
-  // --- Export Functions ---
-
-  const generatePDF = () => {
-    const doc = new jsPDF();
-
-    // Title
-    doc.setFontSize(18);
-    doc.text(`${supplier.name} - Damage Report`, 14, 20);
-    doc.setFontSize(10);
-    doc.text(`Generated on: ${format(new Date(), "PPpp")}`, 14, 26);
-    doc.text(`Total Damage Value: Rs. ${totalValue.toLocaleString()}`, 14, 32);
-
-    // Table Data
-    const tableData = filteredDamages.map((item: any, index: number) => {
-      const cost = Number(item.products?.cost_price) || 0;
-      const val = (Number(item.quantity) || 0) * cost;
-      return [
-        index + 1,
-        format(new Date(item.created_at), "yyyy-MM-dd"),
-        item.return_number,
-        item.products?.name,
-        item.locations?.name || "-",
-        item.quantity,
-        cost.toLocaleString(),
-        val.toLocaleString(),
-        item.reason || "-",
-      ];
-    });
-
-    autoTable(doc, {
-      head: [
-        [
-          "#",
-          "Date",
-          "Report No",
-          "Product",
-          "Location",
-          "Qty",
-          "Cost",
-          "Total Value",
-          "Reason",
-        ],
-      ],
-      body: tableData,
-      startY: 40,
-      headStyles: { fillColor: [220, 38, 38] }, // Red header
-      columnStyles: {
-        5: { halign: "right" },
-        6: { halign: "right" },
-        7: { halign: "right", fontStyle: "bold" },
-      },
-    });
-
-    doc.save(`${supplier.name}_Damage_Report.pdf`);
-  };
-
-  const generateExcel = () => {
-    const worksheetData = filteredDamages.map((item: any) => {
-      const cost = Number(item.products?.cost_price) || 0;
-      const val = (Number(item.quantity) || 0) * cost;
-
-      return {
-        Date: format(new Date(item.created_at), "yyyy-MM-dd"),
-        "Report No": item.return_number,
-        "Product Name": item.products?.name,
-        "Product SKU": item.products?.sku,
-        Location: item.locations?.name || "Unknown",
-        Quantity: Number(item.quantity),
-        "Unit Cost": cost,
-        "Total Value": val,
-        Reason: item.reason || "-",
-        "Reported By": item.profiles?.full_name || "System",
-      };
-    });
-
-    const worksheet = XLSX.utils.json_to_sheet(worksheetData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Damage Report");
-    XLSX.writeFile(workbook, `${supplier.name}_Damage_Report.xlsx`);
-  };
-
-  // --- Handlers ---
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      setSelectedIds(filteredDamages.map((d: any) => d.id));
-    } else {
-      setSelectedIds([]);
-    }
-  };
-
-  const handleSelectOne = (id: string, checked: boolean) => {
-    if (checked) setSelectedIds([...selectedIds, id]);
-    else setSelectedIds(selectedIds.filter((sid) => sid !== id));
-  };
-
-  const getSelectedValue = () => {
-    return activeDamages
-      .filter((d: any) => selectedIds.includes(d.id))
-      .reduce(
-        (acc: number, item: any) =>
-          acc +
-          (Number(item.quantity) || 0) *
-            (Number(item.products?.cost_price) || 0),
-        0
-      );
-  };
-
-  const openClaimDialog = () => {
-    fetchUnpaidPurchases();
-    setAllocations({});
-    setIsClaimDialogOpen(true);
-  };
-
-  const handleAllocate = (purchaseId: string, dueAmount: number) => {
-    const totalCredit = getSelectedValue();
-    const currentAllocated = Object.values(allocations).reduce(
-      (a, b) => a + b,
-      0
-    );
-    const remainingCredit = totalCredit - currentAllocated;
-
-    if (allocations[purchaseId]) {
-      const newAlloc = { ...allocations };
-      delete newAlloc[purchaseId];
-      setAllocations(newAlloc);
-      return;
-    }
-
-    if (remainingCredit <= 0)
-      return toast.error("No remaining credit to allocate");
-
-    const amountToAllocate = Math.min(remainingCredit, dueAmount);
-    setAllocations({ ...allocations, [purchaseId]: amountToAllocate });
-  };
-
-  const submitClaim = async () => {
-    const totalAllocated = Object.values(allocations).reduce(
-      (a, b) => a + b,
-      0
-    );
-
-    if (totalAllocated === 0)
-      return toast.error("Please allocate credit to at least one bill");
-
+  // SEND ITEMS Handlers
+  const handleSendStock = async () => {
     setSubmitting(true);
     try {
-      const payload = {
-        supplierId,
-        damageItemIds: selectedIds,
-        allocations: Object.entries(allocations).map(
-          ([purchaseId, amount]) => ({ purchaseId, amount })
-        ),
-      };
-
-      const res = await fetch("/api/suppliers/claims", {
+      const res = await fetch("/api/suppliers/return-stock", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ itemIds: selectedItemIds, supplierId }),
       });
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed");
-      }
+      if (!res.ok) throw new Error("Failed");
+      const data = await res.json();
 
-      toast.success("Return processed and credit applied!");
-      setIsClaimDialogOpen(false);
-      setSelectedIds([]);
-      fetchSupplierDamages();
+      toast.success(`Items Sent! Batch #${data.batchNumber} created.`);
+      setIsSendDialogOpen(false);
+      fetchData();
+      setActiveTab("pending_credit");
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -319,287 +156,444 @@ export default function SupplierDamagePage() {
     }
   };
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.back()}>
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              {supplier.name} - Damage History
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Manage returns and claim credits for damaged stock.
-            </p>
-          </div>
-        </div>
+  // CLAIM Handlers
+  const openClaimDialog = (batch: any) => {
+    setSelectedBatch(batch);
+    fetchUnpaidPurchases();
+    setAllocations({});
+    setNegotiatedAmount(Number(batch.total_value)); // Default to system value
+    setApprovalNote("");
+    setIsClaimDialogOpen(true);
+  };
 
-        {/* Action Buttons */}
-        <div className="flex gap-2">
-          {selectedIds.length > 0 ? (
-            <Button
-              onClick={openClaimDialog}
-              className="bg-red-600 hover:bg-red-700 text-white"
-            >
-              <Truck className="w-4 h-4 mr-2" />
-              Return & Claim (Rs. {getSelectedValue().toLocaleString()})
-            </Button>
-          ) : (
-            <>
-              {/* Export Buttons */}
-              <Button variant="outline" onClick={generatePDF}>
-                <FileText className="w-4 h-4 mr-2 text-red-500" /> PDF
-              </Button>
-              <Button variant="outline" onClick={generateExcel}>
-                <Sheet className="w-4 h-4 mr-2 text-green-600" /> Excel
-              </Button>
-            </>
-          )}
-        </div>
-      </div>
+  const submitClaim = async () => {
+    const totalAllocated = Object.values(allocations).reduce(
+      (a, b) => a + b,
+      0
+    );
+    const loss = Number(selectedBatch.total_value) - negotiatedAmount;
 
-      {/* Stats Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total Incidents
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{activeDamages.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Pending Resolution
-            </p>
-          </CardContent>
-        </Card>
+    if (totalAllocated === 0 && negotiatedAmount > 0)
+      return toast.error("Please allocate the credit.");
+    if (loss > 0 && !approvalNote)
+      return toast.error("Approver note required for loss.");
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Damaged Stock Value
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600 flex items-center gap-2">
-              <DollarSign className="w-5 h-5" />
-              Rs. {totalValue.toLocaleString()}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Available for Claim
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/suppliers/claims", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          supplierId,
+          batchId: selectedBatch.id,
+          negotiatedAmount,
+          approvalNote,
+          allocations: Object.entries(allocations).map(
+            ([purchaseId, amount]) => ({ purchaseId, amount })
+          ),
+        }),
+      });
 
-      {/* Main Content */}
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
-            <CardTitle className="flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-red-500" /> Damage Records
-            </CardTitle>
-            <div className="relative w-full md:w-64">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search..."
-                className="pl-9"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+      if (!res.ok) throw new Error("Failed");
+
+      toast.success("Claim processed!");
+      setIsClaimDialogOpen(false);
+      fetchData();
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleAllocate = (purchaseId: string, dueAmount: number) => {
+    const currentAllocated = Object.values(allocations).reduce(
+      (a, b) => a + b,
+      0
+    );
+    const currentBillAlloc = allocations[purchaseId] || 0;
+    const available = negotiatedAmount - (currentAllocated - currentBillAlloc);
+
+    if (allocations[purchaseId]) {
+      const newAlloc = { ...allocations };
+      delete newAlloc[purchaseId];
+      setAllocations(newAlloc);
+      return;
+    }
+    if (available <= 0) return toast.error("No credit remaining");
+    setAllocations({
+      ...allocations,
+      [purchaseId]: Math.min(available, dueAmount),
+    });
+  };
+
+  // PDF Generation
+  const generateReturnNote = (batch: any) => {
+    const doc = new jsPDF();
+    doc.setFontSize(18);
+    doc.text(`RETURN NOTE: ${supplier.name}`, 14, 20);
+    doc.setFontSize(10);
+    doc.text(`Gate Pass #: ${batch.batch_number}`, 14, 30);
+    doc.text(
+      `Date: ${format(new Date(batch.created_at), "yyyy-MM-dd")}`,
+      14,
+      36
+    );
+
+    const tableData = batch.items.map((item: any, i: number) => [
+      i + 1,
+      item.products?.name,
+      item.products?.sku,
+      item.quantity,
+      item.reason || "-",
+    ]);
+    autoTable(doc, {
+      startY: 45,
+      head: [["#", "Product", "SKU", "Qty", "Reason"]],
+      body: tableData,
+    });
+    doc.save(`ReturnNote_${batch.batch_number}.pdf`);
+  };
+
+  // Render Helpers
+  const renderItemTable = () => (
+    <div className="border rounded-md mt-4">
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-muted/50">
+            <TableHead className="w-[50px]">
+              <Checkbox
+                checked={
+                  selectedItemIds.length === warehouseItems.length &&
+                  warehouseItems.length > 0
+                }
+                onCheckedChange={(c) =>
+                  setSelectedItemIds(c ? warehouseItems.map((i) => i.id) : [])
+                }
               />
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {filteredDamages.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <p>No actionable damage records found.</p>
-            </div>
-          ) : (
-            <div className="border rounded-md">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/50">
-                    <TableHead className="w-[50px]">
-                      <Checkbox
-                        checked={
-                          selectedIds.length === filteredDamages.length &&
-                          filteredDamages.length > 0
-                        }
-                        onCheckedChange={handleSelectAll}
-                      />
-                    </TableHead>
-                    <TableHead>Report #</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Product</TableHead>
-                    <TableHead>Location</TableHead>
-                    <TableHead className="text-right">Qty</TableHead>
-                    <TableHead className="text-right">Value</TableHead>
-                    <TableHead className="text-right">Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredDamages.map((item: any) => {
-                    const itemCost = Number(item.products?.cost_price) || 0;
-                    const itemValue = (Number(item.quantity) || 0) * itemCost;
+            </TableHead>
+            <TableHead>Ref #</TableHead>
+            <TableHead>Date</TableHead>
+            <TableHead>Product</TableHead>
+            <TableHead className="text-right">Qty</TableHead>
+            <TableHead className="text-right">Value</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {warehouseItems.map((item: any) => {
+            const val =
+              (Number(item.quantity) || 0) *
+              (Number(item.products?.cost_price) || 0);
+            return (
+              <TableRow key={item.id}>
+                <TableCell>
+                  <Checkbox
+                    checked={selectedItemIds.includes(item.id)}
+                    onCheckedChange={(c) =>
+                      c
+                        ? setSelectedItemIds([...selectedItemIds, item.id])
+                        : setSelectedItemIds(
+                            selectedItemIds.filter((id) => id !== item.id)
+                          )
+                    }
+                  />
+                </TableCell>
+                <TableCell className="font-mono text-xs">
+                  {item.return_number}
+                </TableCell>
+                <TableCell className="text-xs text-muted-foreground">
+                  {format(new Date(item.created_at), "MMM d")}
+                </TableCell>
+                <TableCell>
+                  <div className="text-sm font-medium">
+                    {item.products?.name}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {item.products?.sku}
+                  </div>
+                </TableCell>
+                <TableCell className="text-right">{item.quantity}</TableCell>
+                <TableCell className="text-right">
+                  Rs. {val.toLocaleString()}
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </div>
+  );
 
-                    return (
-                      <TableRow key={item.id}>
-                        <TableCell>
-                          <Checkbox
-                            checked={selectedIds.includes(item.id)}
-                            onCheckedChange={(c) =>
-                              handleSelectOne(item.id, !!c)
-                            }
-                          />
-                        </TableCell>
-                        <TableCell className="font-mono text-xs font-medium">
-                          {item.return_number}
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-sm text-muted-foreground">
-                            {format(new Date(item.created_at), "MMM d, yyyy")}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col">
-                            <span className="font-medium text-sm">
-                              {item.products?.name}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {item.products?.sku}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-sm text-muted-foreground">
-                            {item.locations?.name || "Unknown"}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right font-medium">
-                          {item.quantity}
-                        </TableCell>
-                        <TableCell className="text-right font-medium text-red-600">
-                          {itemValue > 0
-                            ? `Rs. ${itemValue.toLocaleString()}`
-                            : "-"}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Badge
-                            variant="outline"
-                            className="border-red-200 text-red-600"
-                          >
-                            Pending Return
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Claim Dialog */}
-      <Dialog open={isClaimDialogOpen} onOpenChange={setIsClaimDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Return Items & Claim Credit</DialogTitle>
-            <CardDescription>
-              Sending {selectedIds.length} items back to supplier. Total Credit:{" "}
-              <span className="text-green-600 font-bold">
-                Rs. {getSelectedValue().toLocaleString()}
-              </span>
-            </CardDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <h4 className="text-sm font-medium">
-              Allocate Credit to Unpaid Bills
-            </h4>
-            {unpaidPurchases.length === 0 ? (
-              <div className="p-4 bg-muted rounded-md text-center text-sm text-muted-foreground">
-                No unpaid bills found. Credit will be applied to account balance
-                only.
+  const renderBatchTable = (batchList: any[], isHistory = false) => (
+    <div className="space-y-4 mt-4">
+      {batchList.map((batch: any) => (
+        <Card key={batch.id} className="overflow-hidden">
+          <div className="flex items-center justify-between p-4 bg-muted/20">
+            <div className="flex items-center gap-4">
+              <div className="h-10 w-10 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center">
+                <FileText className="w-5 h-5" />
               </div>
-            ) : (
-              <div className="border rounded-md max-h-[250px] overflow-y-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[50px]"></TableHead>
-                      <TableHead>PO Number</TableHead>
-                      <TableHead className="text-right">Due Amount</TableHead>
-                      <TableHead className="text-right">Allocate</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {unpaidPurchases.map((po) => {
-                      const due =
-                        Number(po.total_amount) - Number(po.paid_amount);
-                      const isSelected = !!allocations[po.id];
-                      return (
-                        <TableRow key={po.id}>
-                          <TableCell>
-                            <Checkbox
-                              checked={isSelected}
-                              onCheckedChange={() => handleAllocate(po.id, due)}
-                            />
-                          </TableCell>
-                          <TableCell>{po.purchase_id}</TableCell>
-                          <TableCell className="text-right">
-                            Rs. {due.toLocaleString()}
-                          </TableCell>
-                          <TableCell className="text-right font-bold text-green-600">
-                            {isSelected
-                              ? `Rs. ${allocations[po.id].toLocaleString()}`
-                              : "-"}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+              <div>
+                <h4 className="font-bold text-lg">{batch.batch_number}</h4>
+                <div className="text-xs text-muted-foreground flex gap-3">
+                  <span>{format(new Date(batch.created_at), "PPP p")}</span>
+                  <span>•</span>
+                  <span>{batch.items?.length} Items</span>
+                </div>
               </div>
-            )}
-
-            <div className="flex justify-between items-center text-sm px-2">
-              <span>Total Allocated:</span>
-              <span
+            </div>
+            <div className="text-right">
+              <div className="text-lg font-bold">
+                Rs. {Number(batch.total_value).toLocaleString()}
+              </div>
+              <Badge
+                variant={isHistory ? "outline" : "default"}
                 className={
-                  Object.values(allocations).reduce((a, b) => a + b, 0) >
-                  getSelectedValue()
-                    ? "text-red-500 font-bold"
-                    : "font-bold"
+                  isHistory ? "text-green-600 border-green-200" : "bg-blue-600"
                 }
               >
-                Rs.{" "}
-                {Object.values(allocations)
-                  .reduce((a, b) => a + b, 0)
-                  .toLocaleString()}
-              </span>
+                {batch.status}
+              </Badge>
             </div>
           </div>
+          <div className="bg-white p-3 border-t flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => generateReturnNote(batch)}
+            >
+              <Printer className="w-4 h-4 mr-2" /> Note
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSelectedBatch(batch);
+                setIsViewBatchDialogOpen(true);
+              }}
+            >
+              <Eye className="w-4 h-4 mr-2" /> Items
+            </Button>
+            {!isHistory && (
+              <Button
+                size="sm"
+                className="bg-green-600 hover:bg-green-700"
+                onClick={() => openClaimDialog(batch)}
+              >
+                Process Credit <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            )}
+          </div>
+        </Card>
+      ))}
+      {batchList.length === 0 && (
+        <div className="text-center py-10 text-muted-foreground">
+          No records found.
+        </div>
+      )}
+    </div>
+  );
 
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <Button variant="ghost" size="icon" onClick={() => router.back()}>
+          <ArrowLeft className="w-5 h-5" />
+        </Button>
+        <div>
+          <h1 className="text-2xl font-bold">{supplier.name} - Returns</h1>
+          <p className="text-sm text-muted-foreground">
+            Manage warehouse returns, gate passes, and credit claims.
+          </p>
+        </div>
+      </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-3 lg:w-[400px]">
+          <TabsTrigger value="to_return">
+            Warehouse ({warehouseItems.length})
+          </TabsTrigger>
+          <TabsTrigger value="pending_credit">
+            Pending ({pendingBatches.length})
+          </TabsTrigger>
+          <TabsTrigger value="history">History</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="to_return">
+          <div className="flex justify-between items-center my-4">
+            <div className="text-sm text-muted-foreground">
+              Select items to generate a Return Note/Gate Pass.
+            </div>
+            {selectedItemIds.length > 0 && (
+              <Button onClick={() => setIsSendDialogOpen(true)}>
+                <Send className="w-4 h-4 mr-2" /> Send Selected (
+                {selectedItemIds.length})
+              </Button>
+            )}
+          </div>
+          {renderItemTable()}
+        </TabsContent>
+
+        <TabsContent value="pending_credit">
+          {renderBatchTable(pendingBatches)}
+        </TabsContent>
+
+        <TabsContent value="history">
+          {renderBatchTable(historyBatches, true)}
+        </TabsContent>
+      </Tabs>
+
+      {/* DIALOG: Send/Create Batch */}
+      <Dialog open={isSendDialogOpen} onOpenChange={setIsSendDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Return Note</DialogTitle>
+          </DialogHeader>
+          <p>
+            This will group {selectedItemIds.length} items into a Gate
+            Pass/Return Note and deduct them from stock.
+          </p>
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setIsClaimDialogOpen(false)}
+              onClick={() => setIsSendDialogOpen(false)}
             >
               Cancel
             </Button>
+            <Button onClick={handleSendStock} disabled={submitting}>
+              Confirm Send
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG: View Batch Items */}
+      <Dialog
+        open={isViewBatchDialogOpen}
+        onOpenChange={setIsViewBatchDialogOpen}
+      >
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Return Note: {selectedBatch?.batch_number}
+            </DialogTitle>
+            <CardDescription>
+              Total Value: Rs.{" "}
+              {Number(selectedBatch?.total_value).toLocaleString()}
+            </CardDescription>
+          </DialogHeader>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Product</TableHead>
+                <TableHead className="text-right">Qty</TableHead>
+                <TableHead className="text-right">Reason</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {selectedBatch?.items?.map((item: any) => (
+                <TableRow key={item.id}>
+                  <TableCell>
+                    {item.products?.name}
+                    <br />
+                    <span className="text-xs text-muted-foreground">
+                      {item.products?.sku}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-right">{item.quantity}</TableCell>
+                  <TableCell className="text-right text-xs">
+                    {item.reason}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG: Claim Credit */}
+      <Dialog open={isClaimDialogOpen} onOpenChange={setIsClaimDialogOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>
+              Process Credit for {selectedBatch?.batch_number}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="grid grid-cols-3 gap-4 p-4 border rounded bg-slate-50">
+            <div>
+              <Label>Book Value</Label>
+              <div className="text-xl font-bold">
+                Rs. {Number(selectedBatch?.total_value).toLocaleString()}
+              </div>
+            </div>
+            <div>
+              <Label>Negotiated Value</Label>
+              <Input
+                type="number"
+                value={negotiatedAmount}
+                onChange={(e) => setNegotiatedAmount(Number(e.target.value))}
+                className="font-bold border-green-400"
+              />
+            </div>
+            <div>
+              <Label>Loss</Label>
+              <div
+                className={`text-xl font-bold ${
+                  Number(selectedBatch?.total_value) - negotiatedAmount > 0
+                    ? "text-red-600"
+                    : "text-gray-400"
+                }`}
+              >
+                Rs.{" "}
+                {(
+                  Number(selectedBatch?.total_value) - negotiatedAmount
+                ).toLocaleString()}
+              </div>
+            </div>
+            <div className="col-span-3">
+              <Label>Note</Label>
+              <Input
+                placeholder="Approval note..."
+                value={approvalNote}
+                onChange={(e) => setApprovalNote(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="mt-4 border rounded p-2 max-h-48 overflow-y-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Bill</TableHead>
+                  <TableHead className="text-right">Due</TableHead>
+                  <TableHead className="text-right">Allocated</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {unpaidPurchases.map((po) => {
+                  const due = Number(po.total_amount) - Number(po.paid_amount);
+                  return (
+                    <TableRow key={po.id}>
+                      <TableCell>{po.purchase_id}</TableCell>
+                      <TableCell className="text-right">
+                        Rs. {due.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Checkbox
+                          checked={!!allocations[po.id]}
+                          onCheckedChange={() => handleAllocate(po.id, due)}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+          <DialogFooter>
             <Button onClick={submitClaim} disabled={submitting}>
-              {submitting ? (
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-              ) : (
-                <CheckCircle2 className="w-4 h-4 mr-2" />
-              )}
-              Confirm Return & Credit
+              Process Claim
             </Button>
           </DialogFooter>
         </DialogContent>
