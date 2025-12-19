@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
+import { BUSINESS_IDS } from "@/app/config/business-constants"; // Import Business IDs
 
 // --- Validation Schemas ---
 
@@ -274,6 +275,45 @@ export async function POST(request: NextRequest) {
         collected_by: val.salesRepId,
         cheque_status: val.paymentType === "Cheque" ? "Pending" : "Cleared",
       });
+
+      // -------------------------------------------------------------
+      // ✅ AUTO-DEPOSIT to "Retail Cash" for Retail Sales
+      // -------------------------------------------------------------
+      if (
+        val.paymentType === "Cash" &&
+        val.businessId === BUSINESS_IDS.CHAMPIKA_RETAIL
+      ) {
+        // 1. Find the "Retail Cash" Account AND Fetch Current Balance
+        const { data: retailCashAccount } = await supabaseAdmin
+          .from("bank_accounts")
+          .select("id, current_balance")
+          .eq("account_name", "Retail Cash")
+          .single();
+
+        // 2. Insert Deposit Transaction AND Manually Update Balance
+        if (retailCashAccount) {
+          // A. Insert Transaction
+          await supabaseAdmin.from("account_transactions").insert({
+            transaction_no: `TXN-${Date.now()}`,
+            transaction_type: "Sales",
+            from_account_id: null,
+            to_account_id: retailCashAccount.id,
+            amount: val.paidAmount,
+            description: `Walk-in Sale - ${invoiceNo}`,
+            transaction_date: invoiceDate,
+          });
+
+          // B. Update Account Balance Manually (Fix for 0 balance issue)
+          const newBalance =
+            (retailCashAccount.current_balance || 0) + val.paidAmount;
+
+          await supabaseAdmin
+            .from("bank_accounts")
+            .update({ current_balance: newBalance })
+            .eq("id", retailCashAccount.id);
+        }
+      }
+      // -------------------------------------------------------------
     }
 
     // 8. Update Customer Balance
@@ -297,20 +337,24 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // ------------------------------------------------------------------
     // 9. Deduct Stock (Global & Location Specific)
+    // ------------------------------------------------------------------
+
+    // A. Get ALL assigned locations for the user (Removed .limit(1) to fix bug)
     const { data: assignments } = await supabaseAdmin
       .from("location_assignments")
       .select("location_id")
-      .eq("user_id", val.salesRepId)
-      .limit(1);
+      .eq("user_id", val.salesRepId);
 
-    const locationId =
-      assignments && assignments.length > 0 ? assignments[0].location_id : null;
+    const assignedLocationIds = assignments
+      ? assignments.map((a) => a.location_id)
+      : [];
 
     for (const item of val.items) {
       const totalQty = item.quantity + item.freeQuantity;
 
-      // Global Stock
+      // B. Deduct Global Stock (products table)
       const { data: product } = await supabaseAdmin
         .from("products")
         .select("stock_quantity")
@@ -329,23 +373,37 @@ export async function POST(request: NextRequest) {
           .eq("id", item.productId);
       }
 
-      // Location Stock
-      if (locationId) {
-        const { data: pStock } = await supabaseAdmin
-          .from("product_stocks")
-          .select("quantity")
-          .eq("location_id", locationId)
-          .eq("product_id", item.productId)
-          .single();
+      // C. Deduct Location Stock (product_stocks table)
+      // Logic: Iterate through assigned locations and deduct from available stock
+      if (assignedLocationIds.length > 0) {
+        let remainingToDeduct = totalQty;
 
-        if (pStock) {
-          await supabaseAdmin
-            .from("product_stocks")
-            .update({
-              quantity: Math.max(0, (pStock.quantity || 0) - totalQty),
-            })
-            .eq("location_id", locationId)
-            .eq("product_id", item.productId);
+        // Fetch stock records for this product in user's locations
+        const { data: locationStocks } = await supabaseAdmin
+          .from("product_stocks")
+          .select("id, location_id, quantity")
+          .eq("product_id", item.productId)
+          .in("location_id", assignedLocationIds)
+          .gt("quantity", 0) // Only fetch positive stock
+          .order("quantity", { ascending: false }); // Deduct from largest pile first
+
+        if (locationStocks) {
+          for (const stockRec of locationStocks) {
+            if (remainingToDeduct <= 0) break;
+
+            const available = stockRec.quantity;
+            const deduct = Math.min(available, remainingToDeduct);
+
+            // Update this specific stock record
+            await supabaseAdmin
+              .from("product_stocks")
+              .update({
+                quantity: available - deduct,
+              })
+              .eq("id", stockRec.id);
+
+            remainingToDeduct -= deduct;
+          }
         }
       }
     }
