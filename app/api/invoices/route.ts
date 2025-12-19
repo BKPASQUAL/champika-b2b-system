@@ -1,9 +1,7 @@
-// app/api/invoices/route.ts
-
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
-import { BUSINESS_IDS } from "@/app/config/business-constants"; // Import Business IDs
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 // --- Validation Schemas ---
 
@@ -16,6 +14,7 @@ const invoiceItemSchema = z.object({
   unit: z.string().optional().or(z.literal("")),
   mrp: z.number(),
   unitPrice: z.number(),
+  // ✅ Discount Fields
   discountPercent: z.number().default(0),
   discountAmount: z.number().default(0),
   total: z.number(),
@@ -29,6 +28,7 @@ const invoiceSchema = z.object({
   dueDate: z.string().optional(),
   items: z.array(invoiceItemSchema).min(1, "At least one item is required"),
   subTotal: z.number(),
+  // ✅ Extra Discount Fields
   extraDiscountPercent: z.number().default(0),
   extraDiscountAmount: z.number().default(0),
   grandTotal: z.number(),
@@ -165,6 +165,9 @@ export async function POST(request: NextRequest) {
         notes: val.notes || null,
         created_by: val.salesRepId,
         business_id: val.businessId,
+        // ✅ SAVE EXTRA DISCOUNT (Bill-wise)
+        extra_discount_percent: val.extraDiscountPercent,
+        extra_discount_amount: val.extraDiscountAmount,
       })
       .select()
       .single();
@@ -227,6 +230,10 @@ export async function POST(request: NextRequest) {
 
         total_price: item.total,
         commission_earned: commissionEarned,
+
+        // ✅ SAVE ITEM DISCOUNT
+        discount_percent: item.discountPercent,
+        discount_amount: item.discountAmount,
       };
     });
 
@@ -341,7 +348,7 @@ export async function POST(request: NextRequest) {
     // 9. Deduct Stock (Global & Location Specific)
     // ------------------------------------------------------------------
 
-    // A. Get ALL assigned locations for the user (Removed .limit(1) to fix bug)
+    // A. Get ALL assigned locations for the user (Fix for missing stock deduction)
     const { data: assignments } = await supabaseAdmin
       .from("location_assignments")
       .select("location_id")

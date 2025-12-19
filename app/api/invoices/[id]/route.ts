@@ -12,6 +12,7 @@ const invoiceItemSchema = z.object({
   unit: z.string().optional(),
   mrp: z.number(),
   unitPrice: z.number(),
+  // ✅ Added Discount Fields
   discountPercent: z.number().default(0),
   discountAmount: z.number().default(0),
   total: z.number(),
@@ -24,6 +25,9 @@ const updateInvoiceSchema = z.object({
   orderStatus: z.string(),
   items: z.array(invoiceItemSchema).min(1),
   grandTotal: z.number(),
+  // ✅ Added Extra Discount Fields
+  extraDiscountPercent: z.number().default(0),
+  extraDiscountAmount: z.number().default(0),
   notes: z.string().optional(),
   userId: z.string().optional(),
   isDraft: z.boolean().optional(),
@@ -54,6 +58,8 @@ export async function GET(
           sales_rep_id,
           status,
           notes,
+          extra_discount_percent,
+          extra_discount_amount,
           profiles!orders_sales_rep_id_fkey (
             full_name
           )
@@ -104,7 +110,11 @@ export async function GET(
       orderStatus: invoice.orders?.status,
       notes: invoice.orders?.notes,
       grandTotal: invoice.total_amount,
-      paidAmount: invoice.paid_amount, // Database value
+      paidAmount: invoice.paid_amount,
+
+      // ✅ Map Extra Discount
+      extraDiscountPercent: invoice.orders?.extra_discount_percent || 0,
+      extraDiscountAmount: invoice.orders?.extra_discount_amount || 0,
 
       // For Print Utils
       customer: {
@@ -132,7 +142,11 @@ export async function GET(
         freeQuantity: item.free_quantity,
         mrp: item.products?.mrp,
         unitPrice: item.unit_price,
-        discountPercent: 0,
+
+        // ✅ Map Item Discount
+        discountPercent: item.discount_percent || 0,
+        discountAmount: item.discount_amount || 0,
+
         total: item.total_price,
         stockAvailable:
           (item.products?.stock_quantity || 0) +
@@ -222,7 +236,7 @@ export async function PATCH(
         .eq("id", currentInvoice.customer_id);
     }
 
-    // B. Revert Stock
+    // B. Revert Stock (Global Only - Simplification as we can't track exact location return without complex logs)
     if (currentItems) {
       for (const item of currentItems) {
         const { data: prod } = await supabaseAdmin
@@ -260,6 +274,9 @@ export async function PATCH(
         status: newStatus,
         total_amount: val.grandTotal,
         notes: val.notes,
+        // ✅ Update Extra Discount
+        extra_discount_percent: val.extraDiscountPercent,
+        extra_discount_amount: val.extraDiscountAmount,
       })
       .eq("id", currentInvoice.order_id);
 
@@ -281,6 +298,9 @@ export async function PATCH(
       unit_price: item.unitPrice,
       total_price: item.total,
       commission_earned: 0,
+      // ✅ Update Item Discount
+      discount_percent: item.discountPercent,
+      discount_amount: item.discountAmount,
     }));
 
     const { error: insertError } = await supabaseAdmin
@@ -289,9 +309,24 @@ export async function PATCH(
 
     if (insertError) throw insertError;
 
-    // Deduct New Stock
+    // ------------------------------------------------------------------
+    // Deduct New Stock (Global & Location Specific - Matching POST Logic)
+    // ------------------------------------------------------------------
+
+    // 1. Get ALL assigned locations for the user
+    const { data: assignments } = await supabaseAdmin
+      .from("location_assignments")
+      .select("location_id")
+      .eq("user_id", val.salesRepId);
+
+    const assignedLocationIds = assignments
+      ? assignments.map((a) => a.location_id)
+      : [];
+
     for (const item of val.items) {
       const totalQty = item.quantity + item.freeQuantity;
+
+      // 2. Deduct Global Stock
       const { data: prod } = await supabaseAdmin
         .from("products")
         .select("stock_quantity")
@@ -305,6 +340,39 @@ export async function PATCH(
             stock_quantity: Math.max(0, prod.stock_quantity - totalQty),
           })
           .eq("id", item.productId);
+      }
+
+      // 3. Deduct Location Stock (Smart Logic)
+      if (assignedLocationIds.length > 0) {
+        let remainingToDeduct = totalQty;
+
+        // Fetch stock records for this product in user's locations
+        const { data: locationStocks } = await supabaseAdmin
+          .from("product_stocks")
+          .select("id, location_id, quantity")
+          .eq("product_id", item.productId)
+          .in("location_id", assignedLocationIds)
+          .gt("quantity", 0)
+          .order("quantity", { ascending: false });
+
+        if (locationStocks) {
+          for (const stockRec of locationStocks) {
+            if (remainingToDeduct <= 0) break;
+
+            const available = stockRec.quantity;
+            const deduct = Math.min(available, remainingToDeduct);
+
+            // Update this specific stock record
+            await supabaseAdmin
+              .from("product_stocks")
+              .update({
+                quantity: available - deduct,
+              })
+              .eq("id", stockRec.id);
+
+            remainingToDeduct -= deduct;
+          }
+        }
       }
     }
 
