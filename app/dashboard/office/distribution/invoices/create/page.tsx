@@ -557,9 +557,6 @@ export default function CreateDistributionInvoicePage() {
                       </Command>
                     </PopoverContent>
                   </Popover>
-                  <p className="text-xs text-muted-foreground">
-                    Select a rep to load their stock.
-                  </p>
                 </div>
               </div>
 

@@ -1,4 +1,3 @@
-// app/dashboard/office/distribution/orders/page.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -24,12 +23,12 @@ import { OrderStats } from "./_components/OrderStats";
 import { OrderFilters } from "./_components/OrderFilters";
 import { OrderTable } from "./_components/OrderTable";
 
-export default function DistributionOrdersPage() {
+export default function OrdersPage() {
   const router = useRouter();
 
   // State for data
   const [orders, setOrders] = useState<Order[]>([]);
-  const [reps, setReps] = useState<string[]>([]);
+  const [reps, setReps] = useState<string[]>([]); // State for reps
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,7 +48,6 @@ export default function DistributionOrdersPage() {
     try {
       setIsLoading(true);
       setError(null);
-      // Fetching all orders; Filter logic is applied client-side below
       const response = await fetch("/api/orders");
 
       if (!response.ok) {
@@ -73,7 +71,9 @@ export default function DistributionOrdersPage() {
 
       if (response.ok) {
         const users = await response.json();
-        const repNames = users.map((u: any) => u.fullName);
+        // Extract full names from the user objects
+        const repNames = users.map((u: any) => u.fullName); // Use .fullName, not .full_name          .filter((name: any) => typeof name === "string");
+
         setReps(repNames);
       }
     } catch (err) {
@@ -89,7 +89,11 @@ export default function DistributionOrdersPage() {
 
   // Filter Logic
   const filteredOrders = orders.filter((order) => {
+    // Updated search to include invoiceNo
     const matchesSearch =
+      (order.invoiceNo?.toLowerCase() || "").includes(
+        searchQuery.toLowerCase()
+      ) ||
       order.orderId.toLowerCase().includes(searchQuery.toLowerCase()) ||
       order.shopName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       order.customerName.toLowerCase().includes(searchQuery.toLowerCase());
@@ -204,11 +208,7 @@ export default function DistributionOrdersPage() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <Button
-            onClick={() =>
-              router.push("/dashboard/office/distribution/orders/create")
-            }
-          >
+          <Button onClick={() => router.push("/dashboard/admin/orders/create")}>
             <Plus className="w-4 h-4 mr-2" /> Create Order
           </Button>
         </div>
@@ -218,6 +218,7 @@ export default function DistributionOrdersPage() {
 
       <Card>
         <CardHeader>
+          {/* Passed reps prop here */}
           <OrderFilters
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
@@ -237,9 +238,8 @@ export default function DistributionOrdersPage() {
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={setCurrentPage}
-            // Updated to route to Office Distribution order details
             onView={(order) =>
-              router.push(`/dashboard/office/distribution/orders/${order.id}`)
+              router.push(`/dashboard/admin/orders/${order.id}`)
             }
             onUpdateStatus={handleUpdateStatus}
           />

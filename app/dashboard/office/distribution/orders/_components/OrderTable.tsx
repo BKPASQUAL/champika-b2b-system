@@ -1,5 +1,3 @@
-// app/dashboard/office/distribution/orders/_components/OrderTable.tsx
-
 import {
   Table,
   TableBody,
@@ -100,12 +98,13 @@ export function OrderTable({
                   Date {getSortIcon("date")}
                 </div>
               </TableHead>
+              {/* Changed from Order ID to Invoice No */}
               <TableHead
-                onClick={() => onSort("orderId")}
+                onClick={() => onSort("invoiceNo")}
                 className="cursor-pointer hover:bg-muted/50"
               >
                 <div className="flex items-center">
-                  Order ID {getSortIcon("orderId")}
+                  Invoice No {getSortIcon("invoiceNo")}
                 </div>
               </TableHead>
               <TableHead
@@ -152,8 +151,9 @@ export function OrderTable({
                   <TableCell className="whitespace-nowrap">
                     {new Date(order.date).toLocaleDateString()}
                   </TableCell>
+                  {/* Display Invoice No instead of Order ID */}
                   <TableCell className="font-medium font-mono text-xs">
-                    {order.orderId}
+                    {order.invoiceNo || "-"}
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col">

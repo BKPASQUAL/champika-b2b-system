@@ -13,6 +13,7 @@ export type OrderStatus =
 export interface Order {
   id: string;
   orderId: string;
+  invoiceNo?: string; // Added to fix 'Property invoiceNo does not exist'
   date: string;
   customerName: string;
   shopName: string;
@@ -25,7 +26,9 @@ export interface Order {
 export type SortField =
   | "date"
   | "orderId"
+  | "invoiceNo" // Added to fix 'Argument of type "invoiceNo" is not assignable'
   | "customerName"
   | "totalAmount"
   | "status";
+
 export type SortOrder = "asc" | "desc";
