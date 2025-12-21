@@ -1,14 +1,8 @@
-// app/dashboard/admin/invoices/due/page.tsx
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -37,8 +31,10 @@ import {
   AlertOctagon,
   CalendarDays,
   ArrowUpRight,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 // --- Types ---
 interface OverdueInvoice {
@@ -50,73 +46,65 @@ interface OverdueInvoice {
   dueDate: string;
   amount: number;
   daysOverdue: number;
-  status: "Overdue";
+  status: string;
 }
-
-// --- Mock Data ---
-const MOCK_OVERDUE_INVOICES: OverdueInvoice[] = [
-  {
-    id: "INV-003",
-    invoiceNo: "INV-2024-003",
-    customerName: "Kamal Silva",
-    shopName: "Lanka Traders",
-    phone: "076-5554444",
-    dueDate: "2024-12-20",
-    amount: 240000,
-    daysOverdue: 65, // 60+ Days
-    status: "Overdue",
-  },
-  {
-    id: "INV-005",
-    invoiceNo: "INV-2024-005",
-    customerName: "Saman Kumara",
-    shopName: "Saman Electronics",
-    phone: "077-1234567",
-    dueDate: "2025-01-10",
-    amount: 45000,
-    daysOverdue: 42, // 30+ Days
-    status: "Overdue",
-  },
-  {
-    id: "INV-008",
-    invoiceNo: "INV-2024-008",
-    customerName: "Nimal Perera",
-    shopName: "City Hardware",
-    phone: "071-9876543",
-    dueDate: "2025-01-25",
-    amount: 15500,
-    daysOverdue: 28, // < 30 Days
-    status: "Overdue",
-  },
-  {
-    id: "INV-010",
-    invoiceNo: "INV-2024-010",
-    customerName: "Sunil Das",
-    shopName: "Ruhuna Motors",
-    phone: "077-8889999",
-    dueDate: "2024-11-15",
-    amount: 120000,
-    daysOverdue: 98, // 90+ Days
-    status: "Overdue",
-  },
-  {
-    id: "INV-012",
-    invoiceNo: "INV-2024-012",
-    customerName: "Mahesh",
-    shopName: "Global Paints",
-    phone: "075-1112222",
-    dueDate: "2025-01-05",
-    amount: 68000,
-    daysOverdue: 48, // 45+ Days
-    status: "Overdue",
-  },
-];
 
 export default function DueAlertsPage() {
   const router = useRouter();
-  const [invoices, setInvoices] = useState<OverdueInvoice[]>(MOCK_OVERDUE_INVOICES);
+  const [invoices, setInvoices] = useState<OverdueInvoice[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [ageFilter, setAgeFilter] = useState("all");
+
+  // --- Fetch Invoices & Calculate Overdue ---
+  const fetchOverdueInvoices = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await fetch("/api/invoices");
+      if (!res.ok) throw new Error("Failed to fetch invoices");
+      const data = await res.json();
+
+      const today = new Date();
+
+      // Map and Filter for Overdue items only
+      const mappedInvoices: OverdueInvoice[] = data
+        .map((inv: any) => {
+          // Determine Due Date (Fallback to 30 days after creation if not present)
+          const createdDate = new Date(inv.createdAt);
+          const dueDate = inv.dueDate
+            ? new Date(inv.dueDate)
+            : new Date(createdDate.setDate(createdDate.getDate() + 30));
+
+          // Calculate Days Overdue
+          const diffTime = today.getTime() - dueDate.getTime();
+          const daysOverdue = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+          return {
+            id: inv.id,
+            invoiceNo: inv.invoiceNo,
+            customerName: inv.customerName || "Unknown",
+            shopName: inv.customer?.shopName || inv.shopName || "-",
+            phone: inv.customer?.phone || inv.phone || "",
+            dueDate: dueDate.toISOString().split("T")[0],
+            amount: inv.dueAmount || 0,
+            daysOverdue: daysOverdue,
+            status: inv.status,
+          };
+        })
+        .filter((inv: OverdueInvoice) => inv.daysOverdue > 0 && inv.amount > 0); // Only show actual overdue items
+
+      setInvoices(mappedInvoices);
+    } catch (error) {
+      console.error("Error fetching overdue invoices:", error);
+      toast.error("Failed to load overdue alerts");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchOverdueInvoices();
+  }, [fetchOverdueInvoices]);
 
   // --- Filter Logic ---
   const filteredInvoices = invoices.filter((inv) => {
@@ -186,6 +174,17 @@ export default function DueAlertsPage() {
             Track and manage overdue customer payments.
           </p>
         </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={fetchOverdueInvoices}
+            disabled={loading}
+            title="Refresh Data"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+        </div>
       </div>
 
       {/* Stats Grid */}
@@ -196,8 +195,12 @@ export default function DueAlertsPage() {
             <ArrowUpRight className="w-4 h-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">LKR {(totalOverdue / 100000).toFixed(2)}L</div>
-            <p className="text-xs text-muted-foreground mt-1">All outstanding bills</p>
+            <div className="text-2xl font-bold">
+              LKR {(totalOverdue / 1000).toFixed(1)}k
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              All outstanding bills
+            </p>
           </CardContent>
         </Card>
 
@@ -210,7 +213,9 @@ export default function DueAlertsPage() {
             <div className="text-2xl font-bold text-yellow-700">
               LKR {(overdue30 / 1000).toFixed(1)}k
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Action required</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Action required
+            </p>
           </CardContent>
         </Card>
 
@@ -223,7 +228,9 @@ export default function DueAlertsPage() {
             <div className="text-2xl font-bold text-orange-700">
               LKR {(overdue60 / 1000).toFixed(1)}k
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Serious concern</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Serious concern
+            </p>
           </CardContent>
         </Card>
 
@@ -236,7 +243,9 @@ export default function DueAlertsPage() {
             <div className="text-2xl font-bold text-red-700">
               LKR {(overdue90 / 1000).toFixed(1)}k
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Critical status</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Critical status
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -286,7 +295,18 @@ export default function DueAlertsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredInvoices.length === 0 ? (
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-12">
+                      <div className="flex justify-center items-center">
+                        <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                        <span className="ml-2 text-muted-foreground">
+                          Checking invoices...
+                        </span>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : filteredInvoices.length === 0 ? (
                   <TableRow>
                     <TableCell
                       colSpan={6}
@@ -300,7 +320,10 @@ export default function DueAlertsPage() {
                   </TableRow>
                 ) : (
                   filteredInvoices.map((invoice) => (
-                    <TableRow key={invoice.id} className="hover:bg-red-50/10 transition-colors">
+                    <TableRow
+                      key={invoice.id}
+                      className="hover:bg-red-50/10 transition-colors"
+                    >
                       <TableCell className="font-medium font-mono">
                         {invoice.invoiceNo}
                       </TableCell>
@@ -310,7 +333,8 @@ export default function DueAlertsPage() {
                             {invoice.shopName}
                           </span>
                           <span className="text-xs text-muted-foreground">
-                            {invoice.customerName} • {invoice.phone}
+                            {invoice.customerName}{" "}
+                            {invoice.phone ? ` • ${invoice.phone}` : ""}
                           </span>
                         </div>
                       </TableCell>
@@ -330,18 +354,26 @@ export default function DueAlertsPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-blue-600 border-blue-200 hover:bg-blue-50"
-                            onClick={() => window.location.href = `tel:${invoice.phone}`}
-                          >
-                            <Phone className="w-3 h-3 mr-1" /> Call
-                          </Button>
+                          {invoice.phone && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                              onClick={() =>
+                                (window.location.href = `tel:${invoice.phone}`)
+                              }
+                            >
+                              <Phone className="w-3 h-3 mr-1" /> Call
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="icon-sm"
-                            onClick={() => router.push(`/dashboard/admin/invoices`)}
+                            onClick={() =>
+                              router.push(
+                                `/dashboard/admin/invoices/${invoice.id}`
+                              )
+                            }
                           >
                             <Eye className="w-4 h-4 text-muted-foreground" />
                           </Button>
