@@ -17,7 +17,7 @@ const invoiceItemSchema = z.object({
   // ✅ Discount Fields
   discountPercent: z.number().default(0),
   discountAmount: z.number().default(0),
-  total: z.number(),
+  total: z.number(), // Line total (Qty * Price - Item Discount)
 });
 
 const invoiceSchema = z.object({
@@ -179,7 +179,6 @@ export async function POST(request: NextRequest) {
     // 4a. Fetch Product Info (Including Actual Cost Price)
     const productIds = val.items.map((i) => i.productId);
 
-    // ✅ SNAPSHOT LOGIC: Fetch 'actual_cost_price'
     const { data: products } = await supabaseAdmin
       .from("products")
       .select(
@@ -188,6 +187,10 @@ export async function POST(request: NextRequest) {
       .in("id", productIds);
 
     let totalCommissionForOrder = 0;
+
+    // ✅ Calculate Gross Subtotal (Sum of all line totals) to distribute discount
+    const grossSubtotal = val.items.reduce((sum, item) => sum + item.total, 0);
+    const globalDiscountAmount = val.extraDiscountAmount || 0;
 
     // 4b. Map items with calculated commission & ACTUAL PRICE
     const orderItems = val.items.map((item) => {
@@ -208,13 +211,24 @@ export async function POST(request: NextRequest) {
 
       totalCommissionForOrder += commissionEarned;
 
-      // --- CALCULATIONS ---
-      // 1. Actual Selling Price (Avg Price)
+      // --- CALCULATIONS: Actual Selling Price ---
       const totalQty = item.quantity + item.freeQuantity;
-      const actualUnitPrice = item.total / totalQty;
 
-      // 2. Snapshot of Cost Price (Historical Cost)
-      // ✅ LOGIC: Use 'actual_cost_price' (833) if available, otherwise 'cost_price' (1000)
+      // 1. Calculate discount share for this item
+      // Share = (Line Total / Gross Subtotal) * Global Discount
+      const discountShare =
+        grossSubtotal > 0
+          ? (item.total / grossSubtotal) * globalDiscountAmount
+          : 0;
+
+      // 2. Calculate Net Line Total (Line Total - Share)
+      const netLineTotal = item.total - discountShare;
+
+      // 3. Calculate Actual Unit Price (Selling Price after all discounts)
+      const actualUnitPrice = netLineTotal / totalQty;
+
+      // 4. Snapshot of Cost Price (Historical Cost)
+      // Logic: Use 'actual_cost_price' if available, otherwise 'cost_price'
       const historicalCost =
         product?.actual_cost_price || product?.cost_price || 0;
 
@@ -224,11 +238,11 @@ export async function POST(request: NextRequest) {
         quantity: item.quantity,
         free_quantity: item.freeQuantity,
 
-        unit_price: item.unitPrice, // Bill Price
-        actual_unit_price: actualUnitPrice, // Real Selling Price
-        actual_unit_cost: historicalCost, // ✅ SAVED: Real Cost (833.33)
+        unit_price: item.unitPrice, // Bill Price (Display)
+        actual_unit_price: actualUnitPrice, // ✅ Updated: Real Net Selling Price (After Extra Disc)
+        actual_unit_cost: historicalCost, // ✅ Saved: Real Cost (Snapshot)
 
-        total_price: item.total,
+        total_price: item.total, // Line Total (before extra disc)
         commission_earned: commissionEarned,
 
         // ✅ SAVE ITEM DISCOUNT
@@ -263,6 +277,7 @@ export async function POST(request: NextRequest) {
         customer_id: val.customerId,
         total_amount: val.grandTotal,
         paid_amount: val.paidAmount,
+        // ❌ REMOVED: due_amount (Calculated by Database)
         status: val.paymentStatus,
         due_date: dueDate,
       })
@@ -310,7 +325,7 @@ export async function POST(request: NextRequest) {
             transaction_date: invoiceDate,
           });
 
-          // B. Update Account Balance Manually (Fix for 0 balance issue)
+          // B. Update Account Balance Manually
           const newBalance =
             (retailCashAccount.current_balance || 0) + val.paidAmount;
 
@@ -348,7 +363,7 @@ export async function POST(request: NextRequest) {
     // 9. Deduct Stock (Global & Location Specific)
     // ------------------------------------------------------------------
 
-    // A. Get ALL assigned locations for the user (Fix for missing stock deduction)
+    // A. Get ALL assigned locations for the user
     const { data: assignments } = await supabaseAdmin
       .from("location_assignments")
       .select("location_id")
