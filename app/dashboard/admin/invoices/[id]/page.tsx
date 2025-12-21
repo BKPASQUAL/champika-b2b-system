@@ -19,6 +19,7 @@ import {
   Undo2,
   Banknote,
   AlertCircle,
+  Percent,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -218,17 +219,19 @@ export default function ViewInvoicePage({
   const totalPaid = paymentsList.reduce((acc, p) => acc + Number(p.amount), 0);
 
   // 3. Current Invoice Total (Net Amount from DB)
-  // Logic: The DB 'grandTotal' will now be correctly updated by route.ts
   const netTotal = invoice.grandTotal;
 
-  // 4. Gross Total (Net + Returns)
-  // Logic: We display the "Original" amount by adding returns back to the Net
+  // 4. Gross Total (Net + Returns) (This acts as the Invoice Total BEFORE Returns)
   const grossTotal = netTotal + totalRefunded;
 
-  // 5. Balance Due (Net Total - Paid)
+  // 5. Original Items Total (Before Extra Discount)
+  const extraDiscountAmt = invoice.extraDiscountAmount || 0;
+  const originalItemsTotal = grossTotal + extraDiscountAmt;
+
+  // 6. Balance Due (Net Total - Paid)
   const balanceDue = netTotal - totalPaid;
 
-  // 6. Items Totals
+  // 7. Items Totals
   const totalItemsQty = invoice.items.reduce(
     (acc: number, item: any) => acc + item.quantity,
     0
@@ -424,15 +427,18 @@ export default function ViewInvoicePage({
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-slate-50/50 hover:bg-slate-50/50">
-                      <TableHead className="w-[40%] pl-6">
+                      <TableHead className="w-[35%] pl-6">
                         Product Details
                       </TableHead>
-                      <TableHead className="text-center w-[15%]">Qty</TableHead>
+                      <TableHead className="text-center w-[10%]">Qty</TableHead>
                       <TableHead className="text-center w-[10%]">
                         Free
                       </TableHead>
                       <TableHead className="text-right w-[15%]">
                         Price
+                      </TableHead>
+                      <TableHead className="text-center w-[10%]">
+                        Disc.
                       </TableHead>
                       <TableHead className="text-right w-[20%] pr-6">
                         Total
@@ -482,6 +488,25 @@ export default function ViewInvoicePage({
                             minimumFractionDigits: 2,
                           })}
                         </TableCell>
+                        {/* Discount Column */}
+                        <TableCell className="text-center text-sm">
+                          {item.discountPercent > 0 ? (
+                            <div className="flex flex-col items-center">
+                              <span className="font-medium text-red-600 bg-red-50 px-1.5 rounded text-xs">
+                                -{item.discountPercent}%
+                              </span>
+                              {item.discountAmount > 0 && (
+                                <span className="text-[10px] text-muted-foreground mt-0.5">
+                                  {item.discountAmount.toLocaleString("en-LK", {
+                                    maximumFractionDigits: 0,
+                                  })}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
                         <TableCell className="text-right pr-6 font-mono font-medium text-sm">
                           {item.total.toLocaleString("en-LK", {
                             minimumFractionDigits: 2,
@@ -501,14 +526,18 @@ export default function ViewInvoicePage({
                       <TableCell className="text-center font-semibold">
                         {totalFreeQty > 0 ? totalFreeQty : "-"}
                       </TableCell>
-                      <TableCell
-                        colSpan={2}
-                        className="text-right pr-6 font-bold font-mono text-base"
-                      >
-                        LKR{" "}
-                        {netTotal.toLocaleString("en-LK", {
-                          minimumFractionDigits: 2,
-                        })}
+                      <TableCell colSpan={3} className="text-right pr-6">
+                        <span className="text-xs text-muted-foreground uppercase mr-2">
+                          Items Subtotal:
+                        </span>
+                        <span className="font-bold font-mono text-base">
+                          LKR{" "}
+                          {invoice.items
+                            .reduce((sum: number, i: any) => sum + i.total, 0)
+                            .toLocaleString("en-LK", {
+                              minimumFractionDigits: 2,
+                            })}
+                        </span>
                       </TableCell>
                     </TableRow>
                   </TableFooter>
@@ -763,6 +792,36 @@ export default function ViewInvoicePage({
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4 pt-6">
+                {/* 1. Original Items Total (Sum of line items) */}
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Items Subtotal</span>
+                  <span className="font-medium font-mono">
+                    LKR{" "}
+                    {originalItemsTotal.toLocaleString("en-LK", {
+                      minimumFractionDigits: 2,
+                    })}
+                  </span>
+                </div>
+
+                {/* 2. Extra Discount (If Any) */}
+                {extraDiscountAmt > 0 && (
+                  <div className="flex justify-between text-sm text-red-600">
+                    <span className="flex items-center gap-1">
+                      <Percent className="w-3 h-3" /> Discount (
+                      {invoice.extraDiscountPercent}%)
+                    </span>
+                    <span className="font-medium font-mono">
+                      - LKR{" "}
+                      {extraDiscountAmt.toLocaleString("en-LK", {
+                        minimumFractionDigits: 2,
+                      })}
+                    </span>
+                  </div>
+                )}
+
+                <Separator className="my-2 bg-slate-100" />
+
+                {/* 3. Subtotal After Discount (Original Invoice Total) */}
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">
                     Subtotal (Gross)
@@ -775,6 +834,7 @@ export default function ViewInvoicePage({
                   </span>
                 </div>
 
+                {/* 4. Returns */}
                 <div className="flex justify-between text-sm text-orange-600">
                   <span className="flex items-center gap-1">
                     <Undo2 className="w-3 h-3" /> Returns
@@ -787,7 +847,7 @@ export default function ViewInvoicePage({
                   </span>
                 </div>
 
-                <Separator className="my-2 bg-slate-100" />
+                <Separator className="my-2" />
 
                 <div className="flex justify-between text-sm">
                   <span className="font-medium text-slate-700">

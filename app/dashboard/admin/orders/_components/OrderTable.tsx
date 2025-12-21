@@ -61,16 +61,15 @@ export function OrderTable({
   };
 
   const renderStatusBadge = (status: OrderStatus) => {
-    // Explicitly typed Record ensures we handle all OrderStatus cases
     const styles: Record<OrderStatus, string> = {
       Pending: "bg-yellow-100 text-yellow-700 border-yellow-200",
       Processing: "bg-blue-100 text-blue-700 border-blue-200",
       Checking: "bg-purple-100 text-purple-700 border-purple-200",
       Loading: "bg-indigo-100 text-indigo-700 border-indigo-200",
-      "In Transit": "bg-orange-100 text-orange-700 border-orange-200", // Added
+      "In Transit": "bg-orange-100 text-orange-700 border-orange-200",
       Delivered: "bg-green-100 text-green-700 border-green-200",
       Cancelled: "bg-red-100 text-red-700 border-red-200",
-      Completed: "bg-gray-100 text-gray-700 border-gray-200", // Added
+      Completed: "bg-gray-100 text-gray-700 border-gray-200",
     };
 
     return (
@@ -99,12 +98,13 @@ export function OrderTable({
                   Date {getSortIcon("date")}
                 </div>
               </TableHead>
+              {/* Changed from Order ID to Invoice No */}
               <TableHead
-                onClick={() => onSort("orderId")}
+                onClick={() => onSort("invoiceNo")}
                 className="cursor-pointer hover:bg-muted/50"
               >
                 <div className="flex items-center">
-                  Order ID {getSortIcon("orderId")}
+                  Invoice No {getSortIcon("invoiceNo")}
                 </div>
               </TableHead>
               <TableHead
@@ -151,8 +151,9 @@ export function OrderTable({
                   <TableCell className="whitespace-nowrap">
                     {new Date(order.date).toLocaleDateString()}
                   </TableCell>
+                  {/* Display Invoice No instead of Order ID */}
                   <TableCell className="font-medium font-mono text-xs">
-                    {order.orderId}
+                    {order.invoiceNo || "-"}
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col">
