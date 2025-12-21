@@ -1,4 +1,3 @@
-// app/dashboard/office/distribution/invoices/create/page.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -88,6 +87,7 @@ export default function CreateDistributionInvoicePage() {
 
   const [loading, setLoading] = useState(true);
   const [stockLoading, setStockLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   // Data State
   const [products, setProducts] = useState<Product[]>([]);
@@ -107,7 +107,9 @@ export default function CreateDistributionInvoicePage() {
 
   // Items State
   const [items, setItems] = useState<InvoiceItem[]>([]);
-  const [extraDiscount, setExtraDiscount] = useState<number>(0);
+
+  // ✅ Extra Discount (String for empty default)
+  const [extraDiscount, setExtraDiscount] = useState<string>("");
 
   // Popover States
   const [customerOpen, setCustomerOpen] = useState(false);
@@ -118,12 +120,13 @@ export default function CreateDistributionInvoicePage() {
   const [currentItem, setCurrentItem] = useState({
     productId: "",
     sku: "",
-    quantity: 1,
-    freeQuantity: 0,
+    // ✅ Empty defaults for inputs
+    quantity: "",
+    freeQuantity: "",
     unit: "",
     mrp: 0,
     unitPrice: 0,
-    discountPercent: 0,
+    discountPercent: "",
     stockAvailable: 0,
   });
 
@@ -175,8 +178,6 @@ export default function CreateDistributionInvoicePage() {
 
       setStockLoading(true);
       try {
-        // Use the new API endpoint to get stock for this specific user/rep
-        // Added businessId to ensure context
         const res = await fetch(
           `/api/rep/stock?userId=${salesRepId}&businessId=${distributionBusinessId}`
         );
@@ -184,15 +185,14 @@ export default function CreateDistributionInvoicePage() {
 
         const productsData = await res.json();
 
-        // Map the response to our Product interface
         setProducts(
           productsData.map((p: any) => ({
             id: p.id,
             sku: p.sku || "N/A",
             name: p.name,
-            selling_price: p.sellingPrice || p.selling_price || 0, // Handle casing
+            selling_price: p.sellingPrice || p.selling_price || 0,
             mrp: p.mrp || 0,
-            stock_quantity: p.stock || p.stock_quantity || 0, // Handle casing
+            stock_quantity: p.stock || p.stock_quantity || 0,
             unit_of_measure: p.unit || p.unit_of_measure || "unit",
           }))
         );
@@ -216,24 +216,34 @@ export default function CreateDistributionInvoicePage() {
     setCurrentItem({
       productId: product.id,
       sku: product.sku,
-      quantity: 1,
-      freeQuantity: 0,
+      quantity: "", // Reset to empty
+      freeQuantity: "", // Reset to empty
       unit: product.unit_of_measure,
       mrp: product.mrp,
       unitPrice: product.selling_price,
-      discountPercent: 0,
+      discountPercent: "", // Reset to empty
       stockAvailable: product.stock_quantity,
     });
   };
 
   // --- Add Item to Invoice ---
   const handleAddItem = () => {
+    // Parse inputs safely
+    const qty = parseFloat(currentItem.quantity);
+    const free = parseFloat(currentItem.freeQuantity) || 0;
+    const discPerc = parseFloat(currentItem.discountPercent) || 0;
+
     if (!currentItem.productId) {
       toast.error("Please select a product");
       return;
     }
 
-    const totalReqQty = currentItem.quantity + currentItem.freeQuantity;
+    if (!qty || qty <= 0) {
+      toast.error("Quantity must be greater than 0");
+      return;
+    }
+
+    const totalReqQty = qty + free;
     if (totalReqQty > currentItem.stockAvailable) {
       toast.error(
         `Insufficient stock! Available: ${currentItem.stockAvailable}`
@@ -244,8 +254,8 @@ export default function CreateDistributionInvoicePage() {
     const product = products.find((p) => p.id === currentItem.productId);
     if (!product) return;
 
-    const grossTotal = currentItem.unitPrice * currentItem.quantity;
-    const discountAmount = (grossTotal * currentItem.discountPercent) / 100;
+    const grossTotal = currentItem.unitPrice * qty;
+    const discountAmount = (grossTotal * discPerc) / 100;
     const netTotal = grossTotal - discountAmount;
 
     const newItem: InvoiceItem = {
@@ -254,26 +264,27 @@ export default function CreateDistributionInvoicePage() {
       sku: product.sku,
       productName: product.name,
       unit: product.unit_of_measure,
-      quantity: currentItem.quantity,
-      freeQuantity: currentItem.freeQuantity,
+      quantity: qty,
+      freeQuantity: free,
       mrp: currentItem.mrp,
       unitPrice: currentItem.unitPrice,
-      discountPercent: currentItem.discountPercent,
+      discountPercent: discPerc,
       discountAmount: discountAmount,
       total: netTotal,
     };
 
     setItems([...items, newItem]);
 
+    // Reset Form
     setCurrentItem({
       productId: "",
       sku: "",
-      quantity: 1,
-      freeQuantity: 0,
+      quantity: "",
+      freeQuantity: "",
       unit: "",
       mrp: 0,
       unitPrice: 0,
-      discountPercent: 0,
+      discountPercent: "",
       stockAvailable: 0,
     });
   };
@@ -282,7 +293,7 @@ export default function CreateDistributionInvoicePage() {
     setItems(items.filter((item) => item.id !== id));
   };
 
-  // --- Totals Calculation (Moved up for use in save) ---
+  // --- Totals Calculation ---
   const subtotal = items.reduce((sum, item) => sum + item.total, 0);
   const totalItemDiscount = items.reduce(
     (sum, item) => sum + item.discountAmount,
@@ -293,9 +304,12 @@ export default function CreateDistributionInvoicePage() {
     0
   );
 
-  const extraDiscountAmount = (subtotal * extraDiscount) / 100;
-  const grandTotal = subtotal - extraDiscountAmount;
+  // Parse Extra Discount Percent
+  const extraDiscPercVal = parseFloat(extraDiscount) || 0;
+  const extraDiscountAmount = (subtotal * extraDiscPercVal) / 100;
+  const grandTotal = Math.max(0, subtotal - extraDiscountAmount);
 
+  // --- Save Invoice ---
   const handleSaveInvoice = async () => {
     if (!customerId) {
       toast.error("Please select a customer.");
@@ -310,7 +324,7 @@ export default function CreateDistributionInvoicePage() {
       return;
     }
 
-    setLoading(true);
+    setSubmitting(true);
 
     const invoiceData = {
       businessId: distributionBusinessId, // Locked to Distribution
@@ -320,7 +334,7 @@ export default function CreateDistributionInvoicePage() {
       invoiceNumber,
       invoiceDate,
       subTotal: subtotal,
-      extraDiscountPercent: extraDiscount,
+      extraDiscountPercent: extraDiscPercVal,
       extraDiscountAmount: extraDiscountAmount,
       grandTotal: grandTotal,
       orderStatus,
@@ -348,7 +362,7 @@ export default function CreateDistributionInvoicePage() {
     } catch (error: any) {
       toast.error(error.message || "Failed to create invoice");
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
@@ -356,11 +370,14 @@ export default function CreateDistributionInvoicePage() {
     (p) => !items.some((i) => i.productId === p.id)
   );
 
+  // Calculate current item discount amount for display
+  const qtyNum = parseFloat(currentItem.quantity) || 0;
+  const discPercNum = parseFloat(currentItem.discountPercent) || 0;
+
   const currentDiscountAmt =
-    (currentItem.unitPrice *
-      currentItem.quantity *
-      currentItem.discountPercent) /
-    100;
+    (currentItem.unitPrice * qtyNum * discPercNum) / 100;
+
+  const currentTotal = currentItem.unitPrice * qtyNum - currentDiscountAmt;
 
   if (loading && customers.length === 0) {
     return (
@@ -372,7 +389,7 @@ export default function CreateDistributionInvoicePage() {
   }
 
   return (
-    <div className="space-y-4 mx-auto">
+    <div className="space-y-4 mx-auto pb-20">
       <div className="flex items-center gap-4">
         <Button
           variant="ghost"
@@ -391,10 +408,10 @@ export default function CreateDistributionInvoicePage() {
         </div>
         <Button
           onClick={handleSaveInvoice}
-          disabled={items.length === 0 || loading}
+          disabled={items.length === 0 || submitting}
           className="bg-blue-600 hover:bg-blue-700"
         >
-          {loading ? (
+          {submitting ? (
             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
           ) : (
             <Save className="w-4 h-4 mr-2" />
@@ -527,12 +544,12 @@ export default function CreateDistributionInvoicePage() {
                                     setCurrentItem({
                                       productId: "",
                                       sku: "",
-                                      quantity: 1,
-                                      freeQuantity: 0,
+                                      quantity: "",
+                                      freeQuantity: "",
                                       unit: "",
                                       mrp: 0,
                                       unitPrice: 0,
-                                      discountPercent: 0,
+                                      discountPercent: "",
                                       stockAvailable: 0,
                                     });
                                   } else if (items.length > 0) {
@@ -560,11 +577,11 @@ export default function CreateDistributionInvoicePage() {
                 </div>
               </div>
 
-              {/* Added Order Status Selection */}
+              {/* Order Status Selection */}
               <div className="space-y-2">
                 <Label>Order Status</Label>
                 <Select value={orderStatus} onValueChange={setOrderStatus}>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-1/2">
                     <SelectValue placeholder="Select Status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -674,11 +691,12 @@ export default function CreateDistributionInvoicePage() {
                   <Input
                     type="number"
                     min="1"
+                    placeholder="Qty" // ✅ Empty placeholder
                     value={currentItem.quantity}
                     onChange={(e) =>
                       setCurrentItem({
                         ...currentItem,
-                        quantity: Number(e.target.value),
+                        quantity: e.target.value, // Keep as string
                       })
                     }
                   />
@@ -688,11 +706,12 @@ export default function CreateDistributionInvoicePage() {
                   <Input
                     type="number"
                     min="0"
+                    placeholder="0" // ✅ Empty placeholder
                     value={currentItem.freeQuantity}
                     onChange={(e) =>
                       setCurrentItem({
                         ...currentItem,
-                        freeQuantity: Number(e.target.value),
+                        freeQuantity: e.target.value, // Keep as string
                       })
                     }
                   />
@@ -756,23 +775,20 @@ export default function CreateDistributionInvoicePage() {
                     type="number"
                     min="0"
                     max="100"
+                    placeholder="0%" // ✅ Empty placeholder
                     value={currentItem.discountPercent || ""}
                     onChange={(e) =>
                       setCurrentItem({
                         ...currentItem,
-                        discountPercent: Number(e.target.value),
+                        discountPercent: e.target.value, // Keep as string
                       })
                     }
-                    placeholder="0"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label>Total</Label>
                   <Input
-                    value={(
-                      currentItem.unitPrice * currentItem.quantity -
-                      currentDiscountAmt
-                    ).toFixed(2)}
+                    value={currentTotal.toFixed(2)}
                     disabled
                     className="font-bold bg-muted"
                   />
@@ -928,8 +944,9 @@ export default function CreateDistributionInvoicePage() {
                     type="number"
                     min="0"
                     max="100"
+                    placeholder="0%" // ✅ Empty placeholder
                     value={extraDiscount}
-                    onChange={(e) => setExtraDiscount(Number(e.target.value))}
+                    onChange={(e) => setExtraDiscount(e.target.value)} // Keep as string
                   />
                 </div>
                 <div className="flex justify-between text-sm">
