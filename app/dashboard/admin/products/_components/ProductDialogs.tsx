@@ -1,4 +1,3 @@
-// app/dashboard/admin/products/_components/ProductDialogs.tsx
 "use client";
 
 import { useState, useEffect, useRef } from "react";
@@ -508,8 +507,10 @@ export function ProductDialogs({
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* ✅ Updated Stock Label to specific 'Initial Stock (Main Warehouse)' */}
               <div className="space-y-2">
-                <Label>Current Stock</Label>
+                <Label>Initial Stock (Main Warehouse)</Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -522,6 +523,7 @@ export function ProductDialogs({
                   }
                 />
               </div>
+
               <div className="space-y-2">
                 <Label>Min Stock Alert</Label>
                 <Input

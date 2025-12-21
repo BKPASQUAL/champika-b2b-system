@@ -1,4 +1,5 @@
-// app/dashboard/office/distribution/purchases/_components/PurchaseTable.tsx
+"use client";
+
 import {
   Table,
   TableBody,
@@ -15,6 +16,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  Eye, // ✅ Added Eye Icon
 } from "lucide-react";
 import { Purchase, SortField, SortOrder, PaymentStatus } from "../types";
 
@@ -24,6 +26,7 @@ interface PurchaseTableProps {
   sortField: SortField;
   sortOrder: SortOrder;
   onSort: (field: SortField) => void;
+  onView: (purchase: Purchase) => void; // ✅ Added onView Prop
   onEdit: (purchase: Purchase) => void;
   onDelete: (purchase: Purchase) => void;
   currentPage: number;
@@ -34,6 +37,7 @@ interface PurchaseTableProps {
 export function PurchaseTable({
   purchases,
   loading,
+  onView, // ✅
   onEdit,
   onDelete,
   currentPage,
@@ -71,7 +75,6 @@ export function PurchaseTable({
             <TableRow>
               <TableHead>Date</TableHead>
               <TableHead>PO Number</TableHead>
-              {/* Removed Business Column for Distribution View */}
               <TableHead>Supplier</TableHead>
               <TableHead>Payment Status</TableHead>
               <TableHead className="text-right">Total Amount</TableHead>
@@ -121,17 +124,28 @@ export function PurchaseTable({
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
+                        {/* ✅ View Button */}
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => onView(purchase)}
+                          title="View Details"
+                        >
+                          <Eye className="w-4 h-4 text-muted-foreground" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon-sm"
                           onClick={() => onEdit(purchase)}
+                          title="Edit"
                         >
-                          <Edit className="w-4 h-4" />
+                          <Edit className="w-4 h-4 text-blue-600" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="icon-sm"
                           onClick={() => onDelete(purchase)}
+                          title="Delete"
                         >
                           <Trash2 className="w-4 h-4 text-destructive" />
                         </Button>

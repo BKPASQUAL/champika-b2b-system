@@ -8,12 +8,11 @@ import { toast } from "sonner";
 // Constants
 import { BUSINESS_IDS } from "@/app/config/business-constants";
 
-
-import { Purchase, SortField, SortOrder } from "./types";
 import { PurchaseHeader } from "./_components/PurchaseHeader";
 import { PurchaseStats } from "./_components/PurchaseStats";
 import { PurchaseFilters } from "./_components/PurchaseFilters";
 import { PurchaseTable } from "./_components/PurchaseTable";
+import { Purchase, SortField, SortOrder } from "./types";
 
 export default function DistributionPurchasesPage() {
   const router = useRouter();
@@ -40,7 +39,6 @@ export default function DistributionPurchasesPage() {
       if (!response.ok) throw new Error("Failed to fetch purchases");
       const data = await response.json();
 
-      // Map API response and Filter for Distribution
       const mappedData: Purchase[] = data
         .map((p: any) => ({
           id: p.id,
@@ -59,7 +57,7 @@ export default function DistributionPurchasesPage() {
           businessName: p.businessName || null,
           items: [],
         }))
-        // ✅ Filter: Only show Distribution purchases
+        // Filter for Distribution
         .filter((p: Purchase) => p.businessId === CURRENT_BUSINESS_ID);
 
       setPurchases(mappedData);
@@ -152,11 +150,13 @@ export default function DistributionPurchasesPage() {
             sortField={sortField}
             sortOrder={sortOrder}
             onSort={handleSort}
+            // ✅ Added View Logic
+            onView={(p) =>
+              router.push(`/dashboard/office/distribution/purchases/${p.id}`)
+            }
             onEdit={(p) => {
-              // Navigate to edit page
-              router.push(
-                `/dashboard/office/distribution/purchases/${p.id}/edit`
-              );
+              // Note: Create edit page if needed, for now logic is same as View
+              toast.info("Edit feature not available yet");
             }}
             onDelete={handleDelete}
             currentPage={currentPage}

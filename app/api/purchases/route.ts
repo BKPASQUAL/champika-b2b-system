@@ -1,5 +1,3 @@
-// app/api/purchases/route.ts
-
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
@@ -10,22 +8,24 @@ const itemSchema = z.object({
   productId: z.string(),
   quantity: z.number().min(1),
   freeQuantity: z.number().default(0),
-  unitPrice: z.number(), // This is the BILL Price (e.g., 1000)
+  unitPrice: z.number(), // This is the BILL Price
   mrp: z.number(),
   sellingPrice: z.number(),
   discountPercent: z.number(),
   discountAmount: z.number(),
   finalPrice: z.number(),
-  total: z.number(),
+  total: z.number(), // Line Total
 });
 
 const purchaseSchema = z.object({
   supplier_id: z.string().min(1, "Supplier is required"),
   business_id: z.string().min(1, "Business is required"),
-  invoice_number: z.string().optional().or(z.literal("")),
+  // ✅ UPDATE: Invoice Number is now REQUIRED
+  invoice_number: z.string().min(1, "Invoice Number is required"),
   purchase_date: z.string(),
   arrival_date: z.string().optional().or(z.literal("")),
   total_amount: z.number(),
+  extra_discount: z.number().optional().default(0),
   items: z.array(itemSchema).min(1, "At least one item is required"),
 });
 
@@ -66,6 +66,7 @@ export async function GET(request: NextRequest) {
       status: p.status,
       paymentStatus: p.payment_status,
       totalAmount: p.total_amount,
+      extraDiscount: p.extra_discount || 0,
       paidAmount: p.paid_amount,
       itemsCount: 0,
     }));
@@ -81,6 +82,21 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const val = purchaseSchema.parse(body);
+
+    // ✅ UPDATE: Check for Duplicate Invoice Number for this Supplier
+    const { data: existingInvoice } = await supabaseAdmin
+      .from("purchases")
+      .select("id")
+      .eq("supplier_id", val.supplier_id)
+      .eq("invoice_no", val.invoice_number)
+      .maybeSingle();
+
+    if (existingInvoice) {
+      return NextResponse.json(
+        { error: "This Invoice Number already exists for this supplier." },
+        { status: 409 } // 409 Conflict
+      );
+    }
 
     // 1. Find Global Main Warehouse
     let { data: location } = await supabaseAdmin
@@ -119,6 +135,7 @@ export async function POST(request: NextRequest) {
         purchase_date: val.purchase_date,
         arrival_date: val.arrival_date || null,
         total_amount: val.total_amount,
+        extra_discount: val.extra_discount,
         payment_status: "Unpaid",
         status: "Ordered",
       })
@@ -127,24 +144,36 @@ export async function POST(request: NextRequest) {
 
     if (purchaseError) throw purchaseError;
 
-    // 4. Prepare Items Data (Calculate Costs Here)
+    // --- Calculate Distribution of Extra Discount ---
+    const subtotal = val.items.reduce((sum, item) => sum + item.total, 0);
+    const extraDiscount = val.extra_discount || 0;
+
+    // 4. Prepare Items Data
     const itemsData = val.items.map((item) => {
       const totalQty = item.quantity + item.freeQuantity;
-      // Formula: Actual Cost = Total Amount / (Qty + Free)
-      const actualCost = item.total / totalQty;
+
+      // Calculate discount share for this item
+      const discountShare =
+        subtotal > 0 ? (item.total / subtotal) * extraDiscount : 0;
+
+      // Calculate Net Total for this item (Line Total - Share)
+      const netItemTotal = item.total - discountShare;
+
+      // Calculate Actual Unit Cost
+      const actualCost = netItemTotal / totalQty;
 
       return {
         purchase_id: purchase.id,
         product_id: item.productId,
         quantity: item.quantity,
         free_quantity: item.freeQuantity,
-        unit_cost: item.unitPrice, // Billed Price
-        actual_unit_cost: actualCost, // Actual Price (833.33)
+        unit_cost: item.unitPrice, // Original Billed Price
+        actual_unit_cost: actualCost, // ✅ Calculated Price (Reduced by Extra Discount)
         mrp: item.mrp,
         selling_price: item.sellingPrice,
         discount_percent: item.discountPercent,
         discount_amount: item.discountAmount,
-        total_cost: item.total,
+        total_cost: item.total, // Line total before extra discount
       };
     });
 
@@ -158,9 +187,11 @@ export async function POST(request: NextRequest) {
     }
 
     // 5. Update Stock & Costs in Product Table
-    for (const item of val.items) {
+    for (let i = 0; i < val.items.length; i++) {
+      const item = val.items[i];
+      const processedItem = itemsData[i];
+
       const totalQty = item.quantity + item.freeQuantity;
-      const actualCost = item.total / totalQty;
 
       const { data: currentProduct } = await supabaseAdmin
         .from("products")
@@ -172,13 +203,8 @@ export async function POST(request: NextRequest) {
         .from("products")
         .update({
           stock_quantity: (currentProduct?.stock_quantity || 0) + totalQty,
-
-          // ✅ CRITICAL UPDATE:
-          // cost_price = Bill Price (1000) for Catalog display
-          // actual_cost_price = Calculated Cost (833.33) for Profit Reports
           cost_price: item.unitPrice,
-          actual_cost_price: actualCost,
-
+          actual_cost_price: processedItem.actual_unit_cost,
           mrp: item.mrp,
           selling_price: item.sellingPrice,
         })
