@@ -2,15 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
 
+export const dynamic = "force-dynamic";
+
 const schema = z.object({
   name: z.string().min(1, "Name is required"),
   business_id: z.string().nullable().optional(), // Nullable for Main Warehouse
   is_main: z.boolean().optional(), // Flag from UI
 });
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const { data, error } = await supabaseAdmin
+    const url = new URL(request.url);
+    const businessId = url.searchParams.get("businessId");
+
+    let query = supabaseAdmin
       .from("locations")
       .select(
         `
@@ -19,6 +24,13 @@ export async function GET() {
       `
       )
       .order("created_at", { ascending: false });
+
+    // Filter: If businessId is provided, show that business's locations OR Main Warehouse (null)
+    if (businessId) {
+      query = query.or(`business_id.eq.${businessId},business_id.is.null`);
+    }
+
+    const { data, error } = await query;
 
     if (error) throw error;
 

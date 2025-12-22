@@ -40,6 +40,7 @@ import { toast } from "sonner";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
+import { BUSINESS_IDS } from "@/app/config/business-constants"; // Import Constants
 
 const ITEMS_PER_PAGE = 10;
 
@@ -55,7 +56,10 @@ export default function InventoryPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/inventory");
+      // Fetch with Business ID to include Main Warehouse + Distribution Locations
+      const res = await fetch(
+        `/api/inventory?businessId=${BUSINESS_IDS.CHAMPIKA_DISTRIBUTION}`
+      );
       if (!res.ok) throw new Error("Failed to load inventory");
       const jsonData = await res.json();
       setData(jsonData);
@@ -97,7 +101,7 @@ export default function InventoryPage() {
     const doc = new jsPDF();
     const date = new Date().toLocaleDateString();
     doc.setFontSize(16);
-    doc.text("Inventory Stock Report", 14, 15);
+    doc.text("Champika Distribution - Inventory Report", 14, 15);
     doc.setFontSize(10);
     doc.text(`Generated: ${date}`, 14, 22);
 
@@ -118,7 +122,7 @@ export default function InventoryPage() {
       styles: { fontSize: 8 },
       headStyles: { fillColor: [0, 0, 0] },
     });
-    doc.save(`Inventory_${date}.pdf`);
+    doc.save(`Distribution_Inventory_${date}.pdf`);
   };
 
   // --- Export to Excel ---
@@ -136,7 +140,10 @@ export default function InventoryPage() {
     const ws = XLSX.utils.json_to_sheet(excelData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Inventory");
-    XLSX.writeFile(wb, `Inventory_${new Date().toLocaleDateString()}.xlsx`);
+    XLSX.writeFile(
+      wb,
+      `Distribution_Inventory_${new Date().toLocaleDateString()}.xlsx`
+    );
   };
 
   if (loading) {
@@ -157,9 +164,12 @@ export default function InventoryPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Stock Control</h1>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Stock Control (Distribution)
+          </h1>
           <p className="text-muted-foreground mt-1">
-            Monitor inventory levels, returns, and damages.
+            Monitor inventory levels, returns, and damages for Champika
+            Distribution.
           </p>
         </div>
         <div className="flex gap-2">
@@ -173,13 +183,13 @@ export default function InventoryPage() {
             <RefreshCw className="w-4 h-4" />
           </Button>
           <Button
-            onClick={() => router.push("/dashboard/admin/inventory/transfer")}
+            onClick={() => router.push("/dashboard/office/distribution/inventory/transfer")}
           >
             <ArrowRightLeft className="w-4 h-4 mr-2" /> Stock Transfer
           </Button>
           <Button
             variant="destructive"
-            onClick={() => router.push("/dashboard/admin/inventory/damage")}
+            onClick={() => router.push("/dashboard/office/distribution/inventory/damage")}
           >
             <Trash2 className="w-4 h-4 mr-2" /> Report Damage
           </Button>
@@ -199,7 +209,9 @@ export default function InventoryPage() {
             <div className="text-2xl font-bold">
               LKR {(data.stats.totalValue / 1000000).toFixed(2)}M
             </div>
-            <p className="text-xs text-muted-foreground">Good Stock Value</p>
+            <p className="text-xs text-muted-foreground">
+              Distribution Stock Value
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -263,46 +275,57 @@ export default function InventoryPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.locations.map((loc: any) => (
-                  <TableRow
-                    key={loc.id}
-                    className="cursor-pointer hover:bg-muted/50"
-                    onClick={() =>
-                      router.push(`/dashboard/admin/inventory/${loc.id}`)
-                    }
-                  >
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
-                        <MapPin className="w-4 h-4 text-muted-foreground" />
-                        {loc.name}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Building2 className="w-3 h-3" />
-                        {loc.business}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge
-                        variant="outline"
-                        className={
-                          loc.status === "Active"
-                            ? "bg-green-50 text-green-700"
-                            : ""
-                        }
-                      >
-                        {loc.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right font-mono">
-                      {loc.totalItems}
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      LKR {loc.totalValue.toLocaleString()}
+                {data.locations.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={5}
+                      className="text-center py-4 text-muted-foreground"
+                    >
+                      No locations found for this business.
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  data.locations.map((loc: any) => (
+                    <TableRow
+                      key={loc.id}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() =>
+                        router.push(`/dashboard/office/distribution/inventory/${loc.id}`)
+                      }
+                    >
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          <MapPin className="w-4 h-4 text-muted-foreground" />
+                          {loc.name}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Building2 className="w-3 h-3" />
+                          {loc.business}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge
+                          variant="outline"
+                          className={
+                            loc.status === "Active"
+                              ? "bg-green-50 text-green-700"
+                              : ""
+                          }
+                        >
+                          {loc.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        {loc.totalItems}
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        LKR {loc.totalValue.toLocaleString()}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>
@@ -318,7 +341,7 @@ export default function InventoryPage() {
                 <Layers className="w-5 h-5" /> Master Inventory
               </CardTitle>
               <CardDescription>
-                Detailed stock levels including damaged items.
+                Detailed stock levels (Distribution Only).
               </CardDescription>
             </div>
             <div className="relative w-full md:w-72">

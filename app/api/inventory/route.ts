@@ -1,27 +1,50 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    // 1. Fetch all Locations
-    const { data: locations, error: locError } = await supabaseAdmin
+    const url = new URL(request.url);
+    const businessId = url.searchParams.get("businessId");
+
+    // 1. Fetch Locations
+    // Logic: If businessId is provided, fetch locations for that business OR locations with no business_id (Main Warehouse)
+    let locationQuery = supabaseAdmin
       .from("locations")
       .select("id, name, is_active, business_id, businesses(name)")
       .order("name");
 
+    if (businessId) {
+      locationQuery = locationQuery.or(
+        `business_id.eq.${businessId},business_id.is.null`
+      );
+    }
+
+    const { data: locations, error: locError } = await locationQuery;
     if (locError) throw locError;
 
-    // 2. Fetch all Product Stocks (Breakdown)
-    const { data: stocks, error: stockError } = await supabaseAdmin
-      .from("product_stocks")
-      .select("location_id, quantity, products(cost_price, selling_price)");
+    // Get list of relevant location IDs to filter stocks
+    const locationIds = locations.map((l) => l.id);
 
+    // 2. Fetch Product Stocks (Filter by the relevant locations)
+    let stocksQuery = supabaseAdmin
+      .from("product_stocks")
+      .select(
+        "location_id, quantity, product_id, products(cost_price, selling_price)"
+      );
+
+    if (locationIds.length > 0) {
+      stocksQuery = stocksQuery.in("location_id", locationIds);
+    } else {
+      // Fallback if no locations found (prevents fetching all stocks)
+      stocksQuery = stocksQuery.in("location_id", []);
+    }
+
+    const { data: stocks, error: stockError } = await stocksQuery;
     if (stockError) throw stockError;
 
     // 3. Fetch All Products (Master Catalog)
-    // FIX: Added 'damaged_quantity' to the select list
     const { data: products, error: prodError } = await supabaseAdmin
       .from("products")
       .select(
@@ -32,6 +55,16 @@ export async function GET() {
     if (prodError) throw prodError;
 
     // --- Process Data ---
+
+    // Map stocks to products for recalculation
+    // We sum up the stock from the filtered locations (Main + Business Specific)
+    const productStockMap = new Map<string, number>();
+    if (businessId) {
+      stocks.forEach((stock: any) => {
+        const current = productStockMap.get(stock.product_id) || 0;
+        productStockMap.set(stock.product_id, current + Number(stock.quantity));
+      });
+    }
 
     // A. Calculate Stats Per Location
     const locationStats = locations.map((loc: any) => {
@@ -50,6 +83,7 @@ export async function GET() {
       return {
         id: loc.id,
         name: loc.name,
+        // If business is null, it's the Main Warehouse
         business: loc.businesses?.name || "Main Warehouse",
         totalItems,
         totalValue,
@@ -57,26 +91,38 @@ export async function GET() {
       };
     });
 
-    // B. Calculate Global Stats
+    // B. Process Products (Overwrite global stock with filtered stock)
+    const processedProducts = products.map((p: any) => {
+      if (businessId) {
+        const businessStock = productStockMap.get(p.id) || 0;
+        return {
+          ...p,
+          stock_quantity: businessStock,
+        };
+      }
+      return p;
+    });
+
+    // C. Calculate Global Stats
     const totalInventoryValue = locationStats.reduce(
       (sum: number, l: any) => sum + l.totalValue,
       0
     );
-    const lowStockCount = products.filter(
+    const lowStockCount = processedProducts.filter(
       (p: any) => (p.stock_quantity || 0) <= (p.min_stock_level || 0)
     ).length;
-    const outOfStockCount = products.filter(
+    const outOfStockCount = processedProducts.filter(
       (p: any) => (p.stock_quantity || 0) === 0
     ).length;
 
     return NextResponse.json({
       locations: locationStats,
-      products: products,
+      products: processedProducts,
       stats: {
         totalValue: totalInventoryValue,
         lowStock: lowStockCount,
         outOfStock: outOfStockCount,
-        totalProducts: products.length,
+        totalProducts: processedProducts.length,
       },
     });
   } catch (error: any) {

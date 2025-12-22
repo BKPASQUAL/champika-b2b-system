@@ -37,11 +37,14 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 // --- Interfaces ---
+// FIX: Added 'isMain' to the interface to resolve TypeScript error
 interface Location {
   id: string;
   name: string;
+  isMain?: boolean;
 }
 
 interface Product {
@@ -111,7 +114,10 @@ export default function StockTransferPage() {
   // --- Fetch Data ---
   const fetchLocations = async () => {
     try {
-      const res = await fetch("/api/settings/locations");
+      // Pass businessId to filter: Main Warehouse + Distribution Locations
+      const res = await fetch(
+        `/api/settings/locations?businessId=${BUSINESS_IDS.CHAMPIKA_DISTRIBUTION}`
+      );
       if (!res.ok) throw new Error("Failed to load locations");
       const data = await res.json();
       setLocations(data);
@@ -294,7 +300,7 @@ export default function StockTransferPage() {
             </h1>
           </div>
           <p className="text-muted-foreground mt-1 ml-8">
-            Move inventory between warehouses and locations.
+            Move inventory between warehouses and locations (Distribution).
           </p>
         </div>
         <div className="flex gap-2">
@@ -342,7 +348,7 @@ export default function StockTransferPage() {
                     <SelectContent>
                       {locations.map((loc) => (
                         <SelectItem key={loc.id} value={loc.id}>
-                          {loc.name}
+                          {loc.name} {loc.isMain ? "(Main)" : ""}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -364,7 +370,7 @@ export default function StockTransferPage() {
                         .filter((l) => l.id !== sourceId)
                         .map((loc) => (
                           <SelectItem key={loc.id} value={loc.id}>
-                            {loc.name}
+                            {loc.name} {loc.isMain ? "(Main)" : ""}
                           </SelectItem>
                         ))}
                     </SelectContent>
@@ -563,7 +569,7 @@ export default function StockTransferPage() {
                       <TableRow className="bg-muted/50">
                         <TableHead className="pl-4">Item</TableHead>
                         <TableHead className="text-right">Qty</TableHead>
-                        <TableHead className="w-[40px]"></TableHead>
+                        <TableHead className="w-10"></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
