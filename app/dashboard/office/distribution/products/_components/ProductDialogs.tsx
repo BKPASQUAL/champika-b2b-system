@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch"; // Import Switch
 import {
   Select,
   SelectContent,
@@ -48,9 +49,6 @@ interface ProductDialogsProps {
   setFormData: (data: ProductFormData) => void;
   onSave: () => void;
   selectedProduct: Product | null;
-  isDeleteDialogOpen: boolean;
-  setIsDeleteDialogOpen: (open: boolean) => void;
-  onDeleteConfirm: () => void;
   suppliers: { id: string; name: string }[];
   categories: { id: string; name: string; parent_id?: string }[];
 }
@@ -62,9 +60,6 @@ export function ProductDialogs({
   setFormData,
   onSave,
   selectedProduct,
-  isDeleteDialogOpen,
-  setIsDeleteDialogOpen,
-  onDeleteConfirm,
   suppliers,
   categories,
 }: ProductDialogsProps) {
@@ -161,18 +156,32 @@ export function ProductDialogs({
   return (
     <>
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] ">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
-              {selectedProduct ? "Edit Product" : "Add New Product"}
-            </DialogTitle>
-            {/* <DialogDescription>
-              Fill in the details below to{" "}
-              {selectedProduct ? "update" : "create"} a product.
-            </DialogDescription> */}
+            <div className="flex justify-between items-center pr-8">
+              <div>
+                <DialogTitle>
+                  {selectedProduct ? "Edit Product" : "Add New Product"}
+                </DialogTitle>
+              </div>
+
+              {/* --- ACTIVE STATUS TOGGLE --- */}
+              <div className="flex items-center space-x-2 border p-2 rounded-lg bg-muted/50">
+                <Switch
+                  id="active-mode"
+                  checked={formData.isActive}
+                  onCheckedChange={(val) =>
+                    setFormData({ ...formData, isActive: val })
+                  }
+                />
+                <Label htmlFor="active-mode" className="cursor-pointer">
+                  {formData.isActive ? "Active Product" : "Inactive (Hidden)"}
+                </Label>
+              </div>
+            </div>
           </DialogHeader>
 
-          <div className="grid grid-cols-2 gap-4 py-2">
+          <div className="grid grid-cols-2 gap-4 py-4">
             {/* --- ITEM CODE (SKU) INPUT --- */}
             <div className="col-span-1 space-y-2">
               <Label>Item Code (SKU)</Label>
@@ -508,13 +517,14 @@ export function ProductDialogs({
                 </Select>
               </div>
 
-              {/* ✅ Updated Stock Label to specific 'Initial Stock (Main Warehouse)' */}
+              {/* ✅ Initial Stock: Disabled when editing (selectedProduct exists) */}
               <div className="space-y-2">
-                <Label>Initial Stock</Label>
+                <Label>Initial Stock </Label>
                 <Input
                   type="number"
                   step="0.01"
                   value={formData.stock}
+                  disabled={!!selectedProduct} // Disable if editing
                   onChange={(e) =>
                     setFormData({
                       ...formData,
@@ -611,27 +621,6 @@ export function ProductDialogs({
             </Button>
             <Button onClick={onSave} disabled={uploading}>
               {selectedProduct ? "Update Product" : "Save Product"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Dialog */}
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Product?</DialogTitle>
-            <DialogDescription>This action cannot be undone.</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsDeleteDialogOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={onDeleteConfirm}>
-              Delete
             </Button>
           </DialogFooter>
         </DialogContent>

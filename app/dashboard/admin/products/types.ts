@@ -25,6 +25,7 @@ export interface Product {
   unitOfMeasure: string;
   commissionType?: string;
   commissionValue?: number;
+  isActive: boolean; // Added isActive field
 }
 
 export type SortField =
@@ -37,12 +38,13 @@ export type SortField =
   | "sellingPrice"
   | "mrp"
   | "totalCost"
-  | "commissionValue";
+  | "commissionValue"
+  | "isActive";
 
 export type SortOrder = "asc" | "desc";
 
 export interface ProductFormData {
-  sku: string; // Added SKU field
+  sku: string;
   name: string;
   category: string;
   subCategory: string;
@@ -59,4 +61,5 @@ export interface ProductFormData {
   costPrice: number | string;
   images: string[];
   unitOfMeasure: string;
+  isActive: boolean; // Added isActive field
 }

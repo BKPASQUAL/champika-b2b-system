@@ -1,5 +1,3 @@
-// app/api/products/route.ts
-
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
@@ -22,14 +20,26 @@ const productSchema = z.object({
   costPrice: z.number().min(0),
   images: z.array(z.string()).optional(),
   unitOfMeasure: z.string().optional(),
+  isActive: z.boolean().optional(),
 });
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const { data, error } = await supabaseAdmin
+    // ✅ 1. Check for 'active' query parameter for API blocking
+    const { searchParams } = new URL(request.url);
+    const onlyActive = searchParams.get("active") === "true";
+
+    let query = supabaseAdmin
       .from("products")
       .select("*")
       .order("created_at", { ascending: false });
+
+    // ✅ 2. Apply Filter at Database Level
+    if (onlyActive) {
+      query = query.eq("is_active", true);
+    }
+
+    const { data, error } = await query;
 
     if (error) throw error;
 
@@ -46,7 +56,6 @@ export async function GET() {
       sizeSpec: p.size_spec,
       supplier: p.supplier_name,
 
-      // --- FIX: Mapped correctly to camelCase to match Frontend 'Product' type ---
       stock: p.stock_quantity || 0,
       minStock: p.min_stock_level || 0,
       mrp: p.mrp || 0,
@@ -57,6 +66,7 @@ export async function GET() {
       images: p.images || [],
       commissionType: p.commission_type || "percentage",
       commissionValue: p.commission_value || 0,
+      isActive: p.is_active ?? true,
 
       // Calculations
       discountPercent:
@@ -87,8 +97,6 @@ export async function POST(request: NextRequest) {
       sku = `SKU-${Date.now().toString().slice(-6)}`;
     }
 
-    // 1. COMMISSION LOGIC: Priority Lookup
-    // Fetch ALL rules for this supplier to determine priority
     const { data: rules } = await supabaseAdmin
       .from("commission_rules")
       .select("category, rate")
@@ -97,12 +105,8 @@ export async function POST(request: NextRequest) {
     let commissionRate = 0;
 
     if (rules && rules.length > 0) {
-      // Priority 1: Check for Specific Category Rule
       const specificRule = rules.find((r) => r.category === val.category);
-
-      // Priority 2: Check for "All Categories" Rule
       const generalRule = rules.find((r) => r.category === "ALL");
-
       if (specificRule) {
         commissionRate = specificRule.rate;
       } else if (generalRule) {
@@ -110,7 +114,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 2. Insert Product with determined commission
     const { data, error } = await supabaseAdmin
       .from("products")
       .insert({
@@ -131,9 +134,9 @@ export async function POST(request: NextRequest) {
         cost_price: val.costPrice,
         images: val.images || [],
         unit_of_measure: val.unitOfMeasure || "Pcs",
-        // Apply Commission
         commission_type: "percentage",
         commission_value: commissionRate,
+        is_active: val.isActive ?? true,
       })
       .select()
       .single();

@@ -40,7 +40,6 @@ export default function ProductsPage() {
 
   // Dialogs
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   // Form Data
@@ -62,6 +61,7 @@ export default function ProductsPage() {
     costPrice: "",
     images: [],
     unitOfMeasure: "Pcs",
+    isActive: true, // Default active
   });
 
   // --- Fetch Data ---
@@ -94,7 +94,7 @@ export default function ProductsPage() {
       product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       product.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
       product.supplier.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.sku.toLowerCase().includes(searchQuery.toLowerCase()); // Added SKU search
+      product.sku.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesCategory =
       categoryFilter === "all" || product.category === categoryFilter;
@@ -200,23 +200,6 @@ export default function ProductsPage() {
     }
   };
 
-  const handleDeleteConfirm = async () => {
-    if (!selectedProduct) return;
-    try {
-      const res = await fetch(`/api/products/${selectedProduct.id}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) throw new Error("Failed delete");
-
-      toast.success("Product deleted");
-      setIsDeleteDialogOpen(false);
-      setSelectedProduct(null);
-      fetchData();
-    } catch (error) {
-      toast.error("Delete failed");
-    }
-  };
-
   const resetForm = () => {
     setFormData({
       sku: "",
@@ -236,6 +219,7 @@ export default function ProductsPage() {
       costPrice: "",
       images: [],
       unitOfMeasure: "Pcs",
+      isActive: true, // Reset to active
     });
     setSelectedProduct(null);
   };
@@ -254,6 +238,7 @@ export default function ProductsPage() {
       Unit: p.unitOfMeasure,
       MRP: p.mrp,
       "Selling Price": p.sellingPrice,
+      Status: p.isActive ? "Active" : "Inactive",
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
@@ -269,7 +254,18 @@ export default function ProductsPage() {
     const doc = new jsPDF();
     doc.text("Product Catalog", 14, 15);
     autoTable(doc, {
-      head: [["SKU", "Name", "Category", "Supplier", "Stock", "Unit", "Price"]],
+      head: [
+        [
+          "SKU",
+          "Name",
+          "Category",
+          "Supplier",
+          "Stock",
+          "Unit",
+          "Price",
+          "Status",
+        ],
+      ],
       body: sortedProducts.map((p) => [
         p.sku,
         p.name,
@@ -278,6 +274,7 @@ export default function ProductsPage() {
         p.stock,
         p.unitOfMeasure,
         p.sellingPrice,
+        p.isActive ? "Active" : "Inactive",
       ]),
       startY: 20,
     });
@@ -326,7 +323,7 @@ export default function ProductsPage() {
             onSort={handleSort}
             onEdit={(p) => {
               setFormData({
-                sku: p.sku, // Load SKU on edit
+                sku: p.sku,
                 name: p.name,
                 category: p.category,
                 subCategory: p.subCategory || "",
@@ -343,13 +340,10 @@ export default function ProductsPage() {
                 costPrice: p.costPrice,
                 images: p.images || [],
                 unitOfMeasure: p.unitOfMeasure || "Pcs",
+                isActive: p.isActive ?? true, // Load active status
               });
               setSelectedProduct(p);
               setIsAddDialogOpen(true);
-            }}
-            onDelete={(p) => {
-              setSelectedProduct(p);
-              setIsDeleteDialogOpen(true);
             }}
             currentPage={currentPage}
             totalPages={totalPages}
@@ -365,9 +359,6 @@ export default function ProductsPage() {
         setFormData={setFormData}
         onSave={handleSaveProduct}
         selectedProduct={selectedProduct}
-        isDeleteDialogOpen={isDeleteDialogOpen}
-        setIsDeleteDialogOpen={setIsDeleteDialogOpen}
-        onDeleteConfirm={handleDeleteConfirm}
         categories={categories}
         suppliers={suppliers}
       />

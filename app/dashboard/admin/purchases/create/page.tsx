@@ -138,7 +138,7 @@ export default function CreatePurchasePage() {
       try {
         // ✅ Fetched Businesses
         const [prodRes, supRes, bizRes] = await Promise.all([
-          fetch("/api/products"),
+          fetch("/api/products?active=true"),
           fetch("/api/suppliers"),
           fetch("/api/settings/business"),
         ]);

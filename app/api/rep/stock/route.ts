@@ -1,3 +1,4 @@
+// app/api/rep/stock/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
@@ -41,7 +42,8 @@ export async function GET(request: NextRequest) {
           mrp,
           unit_of_measure,
           category,
-          brand
+          brand,
+          is_active
         )
       `
       )
@@ -57,6 +59,11 @@ export async function GET(request: NextRequest) {
     stocks?.forEach((item: any) => {
       const p = item.products;
       if (!p) return;
+
+      // --- FILTER: Hide Inactive Products ---
+      // If is_active is explicitly false, skip this item.
+      // (We treat null/undefined as true to be safe, or stricly check false)
+      if (p.is_active === false) return;
 
       if (productMap.has(p.id)) {
         const existing = productMap.get(p.id);

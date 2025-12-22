@@ -1,4 +1,3 @@
-// app/api/products/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
@@ -20,6 +19,7 @@ const updateSchema = z.object({
   costPrice: z.number().optional(),
   unitOfMeasure: z.string().optional(),
   images: z.array(z.string()).optional(),
+  isActive: z.boolean().optional(),
 });
 
 export async function PATCH(
@@ -45,6 +45,7 @@ export async function PATCH(
 
     if (val.sizeSpec !== undefined) dbUpdates.size_spec = val.sizeSpec || null;
     if (val.supplier) dbUpdates.supplier_name = val.supplier;
+
     if (val.stock !== undefined) dbUpdates.stock_quantity = val.stock;
     if (val.minStock !== undefined) dbUpdates.min_stock_level = val.minStock;
     if (val.mrp !== undefined) dbUpdates.mrp = val.mrp;
@@ -53,12 +54,9 @@ export async function PATCH(
     if (val.costPrice !== undefined) dbUpdates.cost_price = val.costPrice;
     if (val.unitOfMeasure) dbUpdates.unit_of_measure = val.unitOfMeasure;
     if (val.images) dbUpdates.images = val.images;
+    if (val.isActive !== undefined) dbUpdates.is_active = val.isActive;
 
-    // --- AUTOMATIC COMMISSION RE-CALCULATION ---
-    // If Supplier or Category is changing, we must re-check the commission rules.
     if (val.supplier || val.category) {
-      // 1. Fetch current product details to get the missing field
-      // (e.g., if only Category changed, we need the existing Supplier name)
       const { data: currentProduct } = await supabaseAdmin
         .from("products")
         .select("supplier_name, category")
@@ -69,7 +67,6 @@ export async function PATCH(
         const targetSupplier = val.supplier || currentProduct.supplier_name;
         const targetCategory = val.category || currentProduct.category;
 
-        // 2. Fetch all rules for this supplier
         const { data: rules } = await supabaseAdmin
           .from("commission_rules")
           .select("category, rate")
@@ -78,9 +75,7 @@ export async function PATCH(
         let newRate = 0;
 
         if (rules && rules.length > 0) {
-          // Priority 1: Specific Category Rule
           const specificRule = rules.find((r) => r.category === targetCategory);
-          // Priority 2: "All Categories" Rule
           const generalRule = rules.find((r) => r.category === "ALL");
 
           if (specificRule) {
@@ -90,12 +85,10 @@ export async function PATCH(
           }
         }
 
-        // 3. Apply the new rate to the update
         dbUpdates.commission_value = newRate;
         dbUpdates.commission_type = "percentage";
       }
     }
-    // -------------------------------------------
 
     dbUpdates.updated_at = new Date().toISOString();
 
@@ -128,6 +121,7 @@ export async function DELETE(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -163,6 +157,7 @@ export async function GET(
       images: data.images || [],
       commissionType: data.commission_type,
       commissionValue: data.commission_value,
+      isActive: data.is_active ?? true,
     };
 
     return NextResponse.json(product);

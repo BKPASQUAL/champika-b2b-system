@@ -150,8 +150,7 @@ export default function CreateOrangePurchasePage() {
     const loadData = async () => {
       try {
         const [prodRes, supRes] = await Promise.all([
-          fetch("/api/products"),
-          // ✅ Fetch suppliers only for this business (Orange Agency)
+          fetch("/api/products?active=true"), // ✅ Updated to block inactive
           fetch(`/api/suppliers?businessId=${currentBusinessId}`),
         ]);
 
@@ -160,7 +159,6 @@ export default function CreateOrangePurchasePage() {
           const supplierData = await supRes.json();
           setSuppliers(supplierData);
 
-          // ✅ Auto-select Orel Corporation if it's the only one
           if (supplierData.length === 1) {
             setSupplierId(supplierData[0].id);
           }
@@ -511,11 +509,13 @@ export default function CreateOrangePurchasePage() {
                       <Command>
                         <CommandInput placeholder="Search product..." />
                         <CommandList>
-                          <CommandEmpty>No product found.</CommandEmpty>
+                          <CommandEmpty>No active product found.</CommandEmpty>
                           <CommandGroup>
                             {availableProducts.length === 0 ? (
                               <div className="p-4 text-center text-sm text-muted-foreground">
-                                No items available.
+                                {supplierId
+                                  ? "No active items available."
+                                  : "Select supplier"}
                               </div>
                             ) : (
                               availableProducts.map((product) => (

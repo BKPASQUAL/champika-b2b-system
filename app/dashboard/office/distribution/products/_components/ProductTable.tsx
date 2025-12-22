@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import {
   Eye,
   Edit,
-  Trash2,
   AlertTriangle,
   Building2,
   Tag,
@@ -25,8 +24,9 @@ import {
   Loader2,
   Percent,
 } from "lucide-react";
-import { useRouter } from "next/navigation"; // Added for smooth navigation
+import { useRouter } from "next/navigation";
 import { Product, SortField, SortOrder } from "../types";
+import { Badge } from "@/components/ui/badge";
 
 interface ProductTableProps {
   products: Product[];
@@ -35,7 +35,6 @@ interface ProductTableProps {
   sortOrder: SortOrder;
   onSort: (field: SortField) => void;
   onEdit: (product: Product) => void;
-  onDelete: (product: Product) => void;
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
@@ -48,12 +47,11 @@ export function ProductTable({
   sortOrder,
   onSort,
   onEdit,
-  onDelete,
   currentPage,
   totalPages,
   onPageChange,
 }: ProductTableProps) {
-  const router = useRouter(); // Initialize router
+  const router = useRouter();
 
   const getSortIcon = (field: SortField) => {
     if (sortField !== field)
@@ -108,6 +106,9 @@ export function ProductTable({
               {/* Commission Column */}
               <TableHead className="text-right">Commission</TableHead>
 
+              {/* Status Column */}
+              <TableHead className="text-center">Status</TableHead>
+
               <TableHead
                 className="text-right cursor-pointer hover:bg-muted/50"
                 onClick={() => onSort("stock")}
@@ -140,7 +141,7 @@ export function ProductTable({
             {products.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={10}
+                  colSpan={11}
                   className="text-center py-8 text-muted-foreground"
                 >
                   No products found
@@ -148,7 +149,10 @@ export function ProductTable({
               </TableRow>
             ) : (
               products.map((product) => (
-                <TableRow key={product.id}>
+                <TableRow
+                  key={product.id}
+                  className={!product.isActive ? "opacity-60 bg-muted/20" : ""}
+                >
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-2">
                       {product.name}
@@ -183,6 +187,24 @@ export function ProductTable({
                     </span>
                   </TableCell>
 
+                  <TableCell className="text-center">
+                    {product.isActive ? (
+                      <Badge
+                        variant="outline"
+                        className="border-green-500 text-green-600 bg-green-50"
+                      >
+                        Active
+                      </Badge>
+                    ) : (
+                      <Badge
+                        variant="outline"
+                        className="border-gray-400 text-gray-500 bg-gray-100"
+                      >
+                        Inactive
+                      </Badge>
+                    )}
+                  </TableCell>
+
                   <TableCell className="text-right">
                     <span
                       className={
@@ -211,7 +233,6 @@ export function ProductTable({
                         variant="ghost"
                         size="icon-sm"
                         onClick={() =>
-                          // FIX: Use Correct Path with router.push
                           router.push(`/dashboard/admin/products/${product.id}`)
                         }
                       >
@@ -224,13 +245,7 @@ export function ProductTable({
                       >
                         <Edit className="w-4 h-4" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => onDelete(product)}
-                      >
-                        <Trash2 className="w-4 h-4 text-destructive" />
-                      </Button>
+                      {/* Delete button removed as requested */}
                     </div>
                   </TableCell>
                 </TableRow>

@@ -139,7 +139,7 @@ export default function DistributionCreatePurchasePage() {
     const loadData = async () => {
       try {
         const [prodRes, supRes] = await Promise.all([
-          fetch("/api/products"),
+          fetch("/api//products?active=true"),
           fetch("/api/suppliers"),
         ]);
 
