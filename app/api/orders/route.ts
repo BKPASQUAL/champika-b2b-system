@@ -5,6 +5,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
+    const businessId = searchParams.get("businessId"); // Get businessId from params
 
     let query = supabaseAdmin
       .from("orders")
@@ -32,6 +33,11 @@ export async function GET(request: NextRequest) {
     // Apply Status Filter if provided
     if (status) {
       query = query.eq("status", status);
+    }
+
+    // Apply Business Filter if provided
+    if (businessId) {
+      query = query.eq("business_id", businessId);
     }
 
     const { data, error } = await query;

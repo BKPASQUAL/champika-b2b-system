@@ -116,3 +116,64 @@ export async function GET(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+// app/api/suppliers/[id]/route.ts
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const body = await request.json();
+
+    // 1. Create a clean update object matching the DB Schema (snake_case)
+    const updates: any = {
+      updated_at: new Date().toISOString(),
+    };
+
+    // Map allowed fields from body to DB columns
+    if (body.name) updates.name = body.name;
+    if (body.email) updates.email = body.email;
+    if (body.phone) updates.phone = body.phone;
+    if (body.address) updates.address = body.address;
+    if (body.category) updates.category = body.category;
+    if (body.status) updates.status = body.status;
+
+    // Handle camelCase to snake_case conversions specifically
+    if (body.contactPerson || body.contact_person) {
+      updates.contact_person = body.contactPerson || body.contact_person;
+    }
+    if (body.businessId || body.business_id) {
+      updates.business_id = body.businessId || body.business_id;
+    }
+    // Only map due_payment if strictly necessary (usually calculated, not manually updated via this route)
+    // if (body.duePayment) updates.due_payment = body.duePayment;
+
+    // 2. Validate if there's actual data to update
+    if (Object.keys(updates).length <= 1) {
+      // <= 1 because updated_at is always there
+      return NextResponse.json(
+        { error: "No valid fields provided for update" },
+        { status: 400 }
+      );
+    }
+
+    // 3. Perform the Update/route.ts]
+    const { data, error } = await supabaseAdmin
+      .from("suppliers")
+      .update(updates)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return NextResponse.json(data);
+  } catch (error: any) {
+    console.error("Supplier Update API Error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
