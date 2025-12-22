@@ -16,6 +16,7 @@ import {
   Factory,
   FileText,
   Layers,
+  Undo2, // Added Icon for Returns
 } from "lucide-react";
 
 interface DistNavItem {
@@ -132,6 +133,11 @@ export const distributionNavItems: DistNavSection[] = [
         name: "Stock Control",
         href: "/dashboard/office/distribution/inventory",
         icon: Layers,
+      },
+      {
+        name: "Returns",
+        href: "/dashboard/office/distribution/inventory/returns",
+        icon: Undo2,
       },
     ],
   },

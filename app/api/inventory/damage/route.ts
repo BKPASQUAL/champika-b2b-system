@@ -3,10 +3,13 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
 
-// GET: Fetch Damage History (Internal Returns where customer_id is NULL)
+// GET: Fetch Damage History
 export async function GET(request: NextRequest) {
   try {
-    const { data, error } = await supabaseAdmin
+    const url = new URL(request.url);
+    const businessId = url.searchParams.get("businessId");
+
+    let query = supabaseAdmin
       .from("inventory_returns")
       .select(
         `
@@ -15,6 +18,7 @@ export async function GET(request: NextRequest) {
         quantity, 
         reason, 
         created_at, 
+        business_id,
         products (name, sku),
         locations (name),
         profiles (full_name)
@@ -23,6 +27,13 @@ export async function GET(request: NextRequest) {
       .is("customer_id", null) // Filter for internal damages only
       .eq("return_type", "Damage")
       .order("created_at", { ascending: false });
+
+    // Filter by Business ID if provided
+    if (businessId) {
+      query = query.eq("business_id", businessId);
+    }
+
+    const { data, error } = await query;
 
     if (error) throw error;
 
@@ -36,7 +47,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { locationId, items, reason } = body;
+    // Destructure businessId from body
+    const { locationId, items, reason, businessId: bodyBusinessId } = body;
 
     if (!locationId || !items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json(
@@ -49,25 +61,34 @@ export async function POST(request: NextRequest) {
       data: { user },
     } = await supabaseAdmin.auth.getUser();
 
-    // --- FIX: Fetch the Business ID from the Location ---
+    // Fetch the Business ID from the Location
     const { data: locationData, error: locError } = await supabaseAdmin
       .from("locations")
       .select("business_id")
       .eq("id", locationId)
       .single();
 
-    if (locError || !locationData || !locationData.business_id) {
+    if (locError) {
       return NextResponse.json(
-        {
-          error:
-            "Invalid Location: Could not determine Business ID associated with this location.",
-        },
+        { error: "Invalid Location ID." },
         { status: 400 }
       );
     }
 
-    const businessId = locationData.business_id;
-    // ----------------------------------------------------
+    // Determine Final Business ID
+    // 1. Prefer location's business_id if it exists.
+    // 2. If location is global (null business_id), use the passed bodyBusinessId.
+    const finalBusinessId = locationData.business_id || bodyBusinessId;
+
+    if (!finalBusinessId) {
+      return NextResponse.json(
+        {
+          error:
+            "Business Context Error: Cannot determine Business ID. Please ensure you are logged in correctly or selecting a business location.",
+        },
+        { status: 400 }
+      );
+    }
 
     const results = [];
     const errors = [];
@@ -106,15 +127,15 @@ export async function POST(request: NextRequest) {
         Math.random() * 1000
       )}`;
 
-      // 3. Insert into inventory_returns (The Damage Report Table)
+      // 3. Insert into inventory_returns
       const { error: insertError } = await supabaseAdmin
         .from("inventory_returns")
         .insert({
           return_number: returnNumber,
           product_id: productId,
           location_id: locationId,
-          business_id: businessId, // <--- Fixed: Using actual business_id from location
-          customer_id: null, // INTERNAL DAMAGE
+          business_id: finalBusinessId, // Use resolved Business ID
+          customer_id: null,
           quantity: quantity,
           return_type: "Damage",
           reason: `[${damageType}] ${reason || ""}`.trim(),
@@ -176,7 +197,7 @@ export async function POST(request: NextRequest) {
           }. ${reason || ""}`,
           amount: 0,
           transaction_date: new Date().toISOString(),
-          business_id: businessId, // Included here as well
+          business_id: finalBusinessId,
           metadata: {
             location_id: locationId,
             product_id: productId,

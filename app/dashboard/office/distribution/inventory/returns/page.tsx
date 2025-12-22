@@ -125,7 +125,7 @@ export default function ReturnsPage() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => router.push("/dashboard/admin/inventory")}
+              onClick={() => router.push("/dashboard/office/distribution/inventory")}
             >
               <ArrowLeft className="w-4 h-4" />
             </Button>
@@ -143,7 +143,7 @@ export default function ReturnsPage() {
           </Button>
           <Button
             onClick={() =>
-              router.push("/dashboard/admin/inventory/returns/create")
+              router.push("/dashboard/office/distribution/inventory/returns/create")
             }
           >
             <Undo2 className="w-4 h-4 mr-2" /> Process Return

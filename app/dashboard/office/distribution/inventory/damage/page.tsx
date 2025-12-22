@@ -86,7 +86,7 @@ export default function DamageHistoryPage() {
         </div>
         <Button
           onClick={() =>
-            router.push("/dashboard/admin/inventory/damage/create")
+            router.push("/dashboard/office/distribution/inventory/damage/create")
           }
         >
           <Plus className="w-4 h-4 mr-2" /> Report New Damage

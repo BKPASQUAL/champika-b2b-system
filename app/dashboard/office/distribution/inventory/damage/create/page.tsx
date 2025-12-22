@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { BUSINESS_IDS } from "@/app/config/business-constants"; // Import Constants
 
 interface Location {
   id: string;
@@ -99,7 +100,10 @@ export default function CreateDamageReportPage() {
   // --- Fetch Data ---
   const fetchLocations = async () => {
     try {
-      const res = await fetch("/api/settings/locations");
+      // Pass businessId to filter: Distribution locations + Main Warehouse
+      const res = await fetch(
+        `/api/settings/locations?businessId=${BUSINESS_IDS.CHAMPIKA_DISTRIBUTION}`
+      );
       if (!res.ok) throw new Error("Failed to load locations");
       const data = await res.json();
       setLocations(data);
@@ -192,6 +196,8 @@ export default function CreateDamageReportPage() {
     try {
       const payload = {
         locationId: selectedLocationId,
+        // Send the Business ID to handle 'Main Warehouse' cases
+        businessId: BUSINESS_IDS.CHAMPIKA_DISTRIBUTION,
         items: damageItems,
         reason: reason || "Internal Damage Report",
       };
@@ -207,7 +213,7 @@ export default function CreateDamageReportPage() {
         throw new Error(data.error || "Failed to submit damage report");
 
       toast.success("Damage report processed successfully");
-      router.push("/dashboard/admin/inventory/damage"); // Redirect to List
+      router.push("/dashboard/office/distribution/inventory/damage");
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -245,7 +251,7 @@ export default function CreateDamageReportPage() {
             </h1>
           </div>
           <p className="text-muted-foreground mt-1 ml-8">
-            Mark inventory as damaged to update system stock.
+            Mark inventory as damaged (Champika Distribution).
           </p>
         </div>
         <Button

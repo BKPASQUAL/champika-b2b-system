@@ -48,6 +48,7 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { BUSINESS_IDS } from "@/app/config/business-constants"; // Import Constants
 
 // --- Types ---
 interface Business {
@@ -103,13 +104,15 @@ export default function CreateReturnPage() {
   const [products, setProducts] = useState<Product[]>([]);
 
   // --- Form State ---
-  const [selectedBusinessId, setSelectedBusinessId] = useState<string>("");
+  // Default to Distribution Business
+  const [selectedBusinessId, setSelectedBusinessId] = useState<string>(
+    BUSINESS_IDS.CHAMPIKA_DISTRIBUTION
+  );
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
   const [selectedInvoiceNo, setSelectedInvoiceNo] = useState<string>("all");
   const [selectedLocationId, setSelectedLocationId] = useState<string>("");
 
   // Popover States
-  const [businessOpen, setBusinessOpen] = useState(false);
   const [customerOpen, setCustomerOpen] = useState(false);
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [productOpen, setProductOpen] = useState(false);
@@ -129,7 +132,7 @@ export default function CreateReturnPage() {
 
   const [returnItems, setReturnItems] = useState<ReturnItem[]>([]);
 
-  // --- 1. Fetch Businesses ---
+  // --- 1. Fetch Businesses (Optional if hardcoded, but kept for consistency) ---
   useEffect(() => {
     const fetchInitData = async () => {
       try {
@@ -159,6 +162,7 @@ export default function CreateReturnPage() {
         );
         setCustomers(await custRes.json());
 
+        // Locations: Fetch all and filter by Business + Main Warehouse (null)
         const locRes = await fetch("/api/settings/locations");
         const locData = await locRes.json();
         setLocations(
@@ -167,12 +171,6 @@ export default function CreateReturnPage() {
               l.business_id === selectedBusinessId || l.business_id === null
           )
         );
-
-        setSelectedCustomerId("");
-        setSelectedLocationId("");
-        setSelectedInvoiceNo("all");
-        setInvoices([]);
-        setProducts([]);
       } catch (error) {
         toast.error("Failed to load business data");
       } finally {
@@ -280,7 +278,7 @@ export default function CreateReturnPage() {
 
   const handleProcessReturn = async () => {
     if (!selectedBusinessId || !selectedCustomerId || !selectedLocationId) {
-      return toast.error("Please select Business, Customer, and Location");
+      return toast.error("Please select Customer and Location");
     }
     if (returnItems.length === 0) return toast.error("No items to return");
 
@@ -319,7 +317,7 @@ export default function CreateReturnPage() {
 
       await Promise.all(promises);
       toast.success(`Processed ${successCount} returns`);
-      router.push("/dashboard/admin/inventory/returns");
+      router.push("/dashboard/office/distribution/inventory/returns");
     } catch (error) {
       toast.error("Error processing returns");
     } finally {
@@ -346,7 +344,7 @@ export default function CreateReturnPage() {
             Create New Return
           </h1>
           <p className="text-muted-foreground mt-1">
-            Select customer and add items to return.
+            Select customer and add items to return (Champika Distribution).
           </p>
         </div>
         <Button
@@ -375,52 +373,12 @@ export default function CreateReturnPage() {
                   <Label>
                     Business Entity <span className="text-red-500">*</span>
                   </Label>
-                  <Popover open={businessOpen} onOpenChange={setBusinessOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        className="w-full justify-between"
-                      >
-                        {selectedBusinessId
-                          ? businesses.find((b) => b.id === selectedBusinessId)
-                              ?.name
-                          : "Select Business"}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[300px] p-0">
-                      <Command>
-                        <CommandInput placeholder="Search business..." />
-                        <CommandList>
-                          <CommandEmpty>No business found.</CommandEmpty>
-                          <CommandGroup>
-                            {businesses.map((b) => (
-                              <CommandItem
-                                key={b.id}
-                                value={b.name}
-                                onSelect={() => {
-                                  setSelectedBusinessId(b.id);
-                                  setSelectedCustomerId("");
-                                  setBusinessOpen(false);
-                                }}
-                              >
-                                <Check
-                                  className={cn(
-                                    "mr-2 h-4 w-4",
-                                    selectedBusinessId === b.id
-                                      ? "opacity-100"
-                                      : "opacity-0"
-                                  )}
-                                />
-                                {b.name}
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
+                  <Input
+                    value="Champika Hardware - Distribution"
+                    disabled
+                    className="bg-muted text-muted-foreground"
+                  />
+                  {/* Business Selection Logic Removed for Single Business Page */}
                 </div>
 
                 <div className="space-y-2">
@@ -565,7 +523,7 @@ export default function CreateReturnPage() {
                     onValueChange={setSelectedLocationId}
                     disabled={!selectedBusinessId}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="w-full">
                       <SelectValue placeholder="Select Warehouse" />
                     </SelectTrigger>
                     <SelectContent>
@@ -715,11 +673,12 @@ export default function CreateReturnPage() {
                     }
                   >
                     <SelectTrigger
-                      className={
+                      className={cn(
+                        "w-full",
                         currentItem.returnType === "Damage"
-                          ? "text-red-600 border-red-200"
-                          : "text-green-600 border-green-200"
-                      }
+                          ? "text-red-600 border-red-200 bg-red-50/50"
+                          : "text-green-600 border-green-200 bg-green-50/50"
+                      )}
                     >
                       <SelectValue />
                     </SelectTrigger>
@@ -844,10 +803,7 @@ export default function CreateReturnPage() {
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Business:</span>
-                  <span className="font-medium">
-                    {businesses.find((b) => b.id === selectedBusinessId)
-                      ?.name || "-"}
-                  </span>
+                  <span className="font-medium">Champika Distribution</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Customer:</span>
