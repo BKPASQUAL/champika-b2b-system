@@ -9,8 +9,10 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    const url = new URL(request.url);
+    const businessId = url.searchParams.get("businessId");
 
-    // 1. Get Supplier Details (Include business_id)
+    // 1. Get Supplier Details
     const { data: supplier, error: supError } = await supabaseAdmin
       .from("suppliers")
       .select("name, id, address, business_id")
@@ -25,19 +27,31 @@ export async function GET(
     }
 
     // 2. Find "Main Warehouse" Location ID
-    const { data: mainLocation } = await supabaseAdmin
+    // Logic: Look for Main Warehouse. It might have business_id = null (Global) or specific.
+    let locationQuery = supabaseAdmin
       .from("locations")
       .select("id")
-      .eq("business_id", supplier.business_id)
-      .eq("name", "Main Warehouse")
-      .maybeSingle();
+      .eq("name", "Main Warehouse");
 
-    // 3. Fetch "Warehouse" Items
+    // If we have a business context, we prefer Main Warehouse for that business OR global
+    if (businessId) {
+      locationQuery = locationQuery.or(
+        `business_id.eq.${businessId},business_id.is.null`
+      );
+    } else {
+      // Fallback to supplier's business if no context passed (Admin view behavior)
+      locationQuery = locationQuery.eq("business_id", supplier.business_id);
+    }
+
+    const { data: mainLocations } = await locationQuery;
+    const mainLocation = mainLocations?.[0]; // Take the first match
+
+    // 3. Fetch "Warehouse" Items (Damaged items pending return)
     let query = supabaseAdmin
       .from("inventory_returns")
       .select(
         `
-        id, return_number, quantity, reason, status, created_at, 
+        id, return_number, quantity, reason, status, created_at, business_id,
         products!inner (name, sku, supplier_name, cost_price),
         locations (name)
       `
@@ -46,15 +60,18 @@ export async function GET(
       .eq("products.supplier_name", supplier.name)
       .is("return_batch_id", null) // Only items NOT in a batch
       .neq("status", "Returned") // Exclude items already sent
-      .neq("status", "Business Loss"); // <--- ADDED: Exclude Business Losses
+      .neq("status", "Business Loss"); // Exclude Business Losses
 
-    // Apply Main Warehouse Filter if found
+    // Filter by Business Context if provided
+    if (businessId) {
+      query = query.eq("business_id", businessId);
+    }
+
+    // Filter by Location (Main Warehouse)
     if (mainLocation) {
       query = query.eq("location_id", mainLocation.id);
     } else {
-      console.warn(
-        "Main Warehouse location not found by ID, trying join filter"
-      );
+      // Fallback: Filter by name if ID lookup failed/ambiguous
       // @ts-ignore
       query = query.filter("locations.name", "eq", "Main Warehouse");
     }
@@ -67,7 +84,7 @@ export async function GET(
     if (itemError) throw itemError;
 
     // 4. Fetch Batches (Pending & History)
-    const { data: batches, error: batchError } = await supabaseAdmin
+    let batchesQuery = supabaseAdmin
       .from("supplier_return_batches")
       .select(
         `
@@ -78,8 +95,15 @@ export async function GET(
         )
       `
       )
-      .eq("supplier_id", id)
-      .order("created_at", { ascending: false });
+      .eq("supplier_id", id);
+
+    // Note: If supplier_return_batches had a business_id column, we would filter it here too.
+    // For now, assuming batches are tied to supplier + items which are filtered above.
+
+    const { data: batches, error: batchError } = await batchesQuery.order(
+      "created_at",
+      { ascending: false }
+    );
 
     if (batchError) throw batchError;
 
