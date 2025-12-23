@@ -1,269 +1,451 @@
 // app/dashboard/office/distribution/invoices/print-utils.ts
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import { toast } from "sonner";
 
-/**
- * Generates the Invoice PDF document
- * Returns the jsPDF document object and the invoice number
- */
-const generateInvoicePDF = async (invoiceId: string) => {
-  // 1. Fetch Full Invoice Details
-  const res = await fetch(`/api/invoices/${invoiceId}`);
-  if (!res.ok) throw new Error("Failed to load invoice details");
-  const invoice = await res.json();
+// Helper to calculate status if missing (logic kept but hidden in UI)
+const calculateStatus = (invoice: any) => {
+  if (invoice.status) return invoice.status;
 
-  // 2. Initialize PDF
-  const doc = new jsPDF();
-  const pageWidth = doc.internal.pageSize.width;
-  const pageHeight = doc.internal.pageSize.height;
+  const total = invoice.grandTotal || invoice.totalAmount || 0;
+  const paid =
+    invoice.payments?.reduce(
+      (acc: number, p: any) => acc + Number(p.amount),
+      0
+    ) ||
+    invoice.paidAmount ||
+    0;
 
-  // --- Header Section ---
-  // Company Name (All Black)
-  doc.setTextColor(0, 0, 0);
-  doc.setFontSize(20);
-  doc.setFont("helvetica", "bold");
-  doc.text("CHAMPIKA HARDWARE", pageWidth / 2, 20, { align: "center" });
+  if (paid >= total) return "Paid";
+  if (paid > 0) return "Partial";
+  return "Unpaid";
+};
 
-  // Company Details
-  doc.setTextColor(50, 50, 50);
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  doc.text("No 45, Main Street, Galle", pageWidth / 2, 26, {
-    align: "center",
-  });
-  doc.text("Tel: 077-1234567 | Email: sales@champika.lk", pageWidth / 2, 31, {
-    align: "center",
-  });
+const generateInvoiceHTML = (invoice: any) => {
+  // Format currency helper
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("en-LK", {
+      style: "currency",
+      currency: "LKR",
+      minimumFractionDigits: 2,
+    }).format(amount || 0);
+  };
 
-  // Separator Line
-  doc.setDrawColor(0, 0, 0);
-  doc.setLineWidth(0.5);
-  doc.line(14, 36, pageWidth - 14, 36);
+  const formatDate = (dateString: string) => {
+    if (!dateString) return "-";
+    return new Date(dateString).toLocaleDateString("en-GB", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  };
 
-  // Invoice Title
-  doc.setTextColor(0, 0, 0);
-  doc.setFontSize(14);
-  doc.setFont("helvetica", "bold");
-  doc.text("INVOICE", 14, 46);
+  // Safe Accessors
+  const customerName =
+    invoice.customer?.name || invoice.customerName || "Unknown Customer";
+  const shopName = invoice.customer?.shop || invoice.shopName || customerName;
+  const phone = invoice.customer?.phone || invoice.phone || "";
+  const address = invoice.customer?.address || invoice.address || "";
+  const items = invoice.items || [];
 
-  // --- Details Section ---
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-
-  // Left Side: Customer Info
-  const leftColX = 14;
-  let currentY = 54;
-
-  doc.setFont("helvetica", "bold");
-  doc.text("Bill To:", leftColX, currentY);
-  doc.setFont("helvetica", "normal");
-  currentY += 5;
-
-  doc.text(invoice.customer.shop || "", leftColX, currentY);
-  currentY += 5;
-  doc.text(invoice.customer.name || "", leftColX, currentY);
-  currentY += 5;
-  if (invoice.customer.address) {
-    doc.text(invoice.customer.address, leftColX, currentY);
-    currentY += 5;
-  }
-  if (invoice.customer.phone) {
-    doc.text(`Tel: ${invoice.customer.phone}`, leftColX, currentY);
-  }
-
-  // Right Side: Invoice Info
-  const rightColLabelX = 130;
-  const rightColValueX = 165;
-  currentY = 54;
-
-  doc.text("Invoice No:", rightColLabelX, currentY);
-  doc.text(invoice.invoiceNo, rightColValueX, currentY);
-  currentY += 6;
-
-  doc.text("Date:", rightColLabelX, currentY);
-  doc.text(
-    invoice.date ? new Date(invoice.date).toLocaleDateString() : "-",
-    rightColValueX,
-    currentY
-  );
-  currentY += 6;
-
-  doc.text("Sales Rep:", rightColLabelX, currentY);
-  doc.text(invoice.salesRep || "-", rightColValueX, currentY);
-
-  // --- Items Table ---
-  const tableColumn = [
-    "#",
-    "Description",
-    "Unit",
-    "Price",
-    "Qty",
-    "Free",
-    "Total",
-  ];
-
-  const tableRows = invoice.items.map((item: any, index: number) => [
-    index + 1,
-    item.productName || item.name,
-    item.unit,
-    item.unitPrice
-      ? item.unitPrice.toLocaleString("en-LK", { minimumFractionDigits: 2 })
-      : "0.00",
-    item.quantity,
-    item.freeQuantity > 0 ? item.freeQuantity : "-",
-    item.total.toLocaleString("en-LK", { minimumFractionDigits: 2 }),
-  ]);
-
-  autoTable(doc, {
-    head: [tableColumn],
-    body: tableRows,
-    startY: 85,
-    theme: "plain",
-    headStyles: {
-      fillColor: [0, 0, 0],
-      textColor: 255,
-      fontStyle: "bold",
-      halign: "center",
-    },
-    bodyStyles: {
-      textColor: 0,
-      fontSize: 9,
-    },
-    styles: {
-      lineColor: [200, 200, 200],
-      lineWidth: 0.1,
-      cellPadding: 3,
-    },
-    columnStyles: {
-      0: { cellWidth: 10, halign: "center" },
-      1: { cellWidth: "auto" },
-      3: { halign: "right" },
-      4: { halign: "center" },
-      5: { halign: "center" },
-      6: { halign: "right", fontStyle: "bold" },
-    },
-  });
-
-  // --- Calculations ---
-  const calculatedSubTotal = invoice.items.reduce(
+  const subTotal = items.reduce(
     (sum: number, item: any) => sum + (item.total || 0),
     0
   );
-  const grandTotal = invoice.grandTotal || invoice.totals?.grandTotal || 0;
-  const extraDiscount = Math.max(0, calculatedSubTotal - grandTotal);
+  const grandTotal = invoice.grandTotal || invoice.totalAmount || 0;
+  const extraDiscount = Math.max(0, subTotal - grandTotal);
+  const netTotal = grandTotal;
 
-  // --- Footer Totals ---
-  const finalY = (doc as any).lastAutoTable.finalY + 10;
-  const rightMargin = pageWidth - 14;
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Invoice #${invoice.invoiceNo}</title>
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        body {
+          font-family: 'Inter', sans-serif;
+          color: #000000;
+          line-height: 1.25;
+          margin: 0;
+          padding: 0;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+          background-color: white; /* Changed to white for iframe blending */
+        }
 
-  doc.setDrawColor(0, 0, 0);
-  doc.setLineWidth(0.1);
-  doc.line(120, finalY - 3, rightMargin, finalY - 3);
+        .invoice-container {
+          max-width: 800px;
+          margin: 0 auto; /* Removed auto margin for iframe view */
+          padding: 20px 30px;
+          background: white;
+        }
 
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
+        /* Header */
+        .header {
+          display: flex;
+          justify-content: space-between;
+          margin-bottom: 20px;
+          padding-bottom: 10px;
+          border-bottom: 2px solid #cbd5e1;
+        }
 
-  // Sub Total
-  let currentTotalY = finalY;
-  doc.text("Sub Total:", 130, currentTotalY);
-  doc.text(
-    `LKR ${calculatedSubTotal.toLocaleString("en-LK", {
-      minimumFractionDigits: 2,
-    })}`,
-    rightMargin,
-    currentTotalY,
-    { align: "right" }
-  );
-  currentTotalY += 6;
+        .company-logo h1 {
+          margin: 0;
+          font-size: 20px;
+          color: #000000;
+          text-transform: uppercase;
+          letter-spacing: -0.5px;
+        }
+        
+        .company-details {
+          margin-top: 4px;
+          font-size: 11px;
+          color: #000000;
+        }
 
-  // Extra Discount
-  if (extraDiscount > 0.01) {
-    doc.text("Extra Discount:", 130, currentTotalY);
-    doc.text(
-      `- LKR ${extraDiscount.toLocaleString("en-LK", {
-        minimumFractionDigits: 2,
-      })}`,
-      rightMargin,
-      currentTotalY,
-      { align: "right" }
-    );
-    currentTotalY += 6;
-  }
+        /* Top Right Details */
+        .invoice-details-top {
+          text-align: right;
+        }
+        
+        .invoice-no {
+          font-size: 18px;
+          font-weight: 700;
+          color: #000000;
+          margin-bottom: 4px;
+        }
+        
+        .invoice-meta {
+          font-size: 12px;
+          color: #000000;
+          line-height: 1.4;
+        }
 
-  // Grand Total
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(12);
-  if (extraDiscount > 0.01) {
-    doc.line(120, currentTotalY - 4, rightMargin, currentTotalY - 4);
-  }
+        /* Info Grid */
+        .info-grid {
+          margin-bottom: 20px;
+        }
 
-  doc.text("Grand Total:", 130, currentTotalY + 2);
-  doc.text(
-    `LKR ${grandTotal.toLocaleString("en-LK", { minimumFractionDigits: 2 })}`,
-    rightMargin,
-    currentTotalY + 2,
-    { align: "right" }
-  );
+        .info-group h3 {
+          font-size: 10px;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          color: #000000;
+          margin-bottom: 2px;
+          font-weight: 700;
+        }
 
-  // --- Signature Section ---
-  const signatureY = pageHeight - 35;
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  doc.setLineWidth(0.5);
-  doc.setDrawColor(0, 0, 0);
+        .info-group p {
+          margin: 0;
+          font-size: 15px;
+          font-weight: 600;
+          color: #000000;
+        }
 
-  doc.line(14, signatureY, 80, signatureY);
-  doc.text("Customer Signature & Stamp", 14, signatureY + 5);
+        .info-group .sub-text {
+          color: #000000;
+          font-weight: 400;
+          margin-top: 2px;
+          font-size: 12px;
+        }
 
-  doc.line(pageWidth - 60, signatureY, pageWidth - 14, signatureY);
-  doc.text("Date", pageWidth - 60, signatureY + 5);
+        /* Items Table */
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 15px;
+        }
 
-  doc.line(pageWidth / 2 - 20, signatureY, pageWidth / 2 + 20, signatureY);
-  doc.text("Authorized By", pageWidth / 2, signatureY + 5, { align: "center" });
+        th {
+          text-align: left;
+          padding: 8px 6px;
+          background: #f1f1f1;
+          font-size: 10px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          color: #000000;
+          font-weight: 700;
+          border-bottom: 1px solid #cbd5e1;
+        }
 
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "italic");
-  doc.setTextColor(100);
-  doc.text("Thank you for your business!", pageWidth / 2, pageHeight - 10, {
-    align: "center",
-  });
+        td {
+          padding: 8px 6px;
+          font-size: 12px;
+          border-bottom: 1px solid #e2e8f0;
+          vertical-align: top;
+          color: #000000;
+        }
 
-  return { doc, invoiceNo: invoice.invoiceNo };
+        tr:last-child td {
+          border-bottom: 1px solid #cbd5e1;
+        }
+
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .font-mono { font-family: 'Courier New', monospace; }
+
+        /* Totals Section */
+        .totals-section {
+          display: flex;
+          justify-content: flex-end;
+          margin-top: 10px;
+        }
+
+        .totals-box {
+          width: 250px;
+        }
+
+        .total-row {
+          display: flex;
+          justify-content: space-between;
+          padding: 3px 0;
+          font-size: 12px;
+          color: #000000;
+        }
+
+        .final-total {
+          display: flex;
+          justify-content: space-between;
+          margin-top: 8px;
+          padding-top: 8px;
+          border-top: 2px solid #cbd5e1;
+          font-size: 14px;
+          font-weight: 700;
+          color: #000000;
+        }
+
+        /* Signatures */
+        .signatures {
+            margin-top: 50px;
+            display: flex;
+            justify-content: flex-end;
+            font-size: 11px;
+            color: #000000;
+        }
+        
+        .sig-line {
+            border-top: 1px solid #cbd5e1;
+            padding-top: 4px;
+            width: 200px;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        /* Footer */
+        .footer {
+          margin-top: 30px;
+          padding-top: 10px;
+          border-top: 1px solid #cbd5e1;
+          text-align: center;
+          font-size: 10px;
+          color: #000000;
+        }
+
+        @media print {
+          body { 
+            -webkit-print-color-adjust: exact; 
+            background-color: white;
+            color: black;
+          }
+          .invoice-container { 
+            width: 100%; 
+            max-width: none; 
+            padding: 0; 
+            margin: 0;
+            box-shadow: none;
+          }
+          @page { margin: 10mm; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="invoice-container">
+        
+        <div class="header">
+          <div class="company-logo">
+            <h1 style="font-size: 30px; font-weight: 700;">CHAMPIKA HARDWARE</h1>
+            <div class="company-details">
+              Distribution Division<br>
+              45, Main Street, Galle<br>
+              Tel: 077-1234567
+            </div>
+          </div>
+          <div class="invoice-details-top">
+            <div class="invoice-no"> ${invoice.invoiceNo}</div>
+            <div class="invoice-meta">
+               ${formatDate(invoice.date || invoice.createdAt)}<br>
+               ${invoice.salesRep || invoice.salesRepName || "-"}
+            </div>
+          </div>
+        </div>
+
+        <div class="info-grid">
+          <div class="info-group">
+            <p>${shopName}</p>
+            <div class="sub-text">
+              ${customerName !== shopName ? customerName + "<br>" : ""}
+              ${address ? address + "<br>" : ""}
+              ${phone || "No Phone Provided"}
+            </div>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 5%">#</th>
+              <th style="width: 40%">Item Description</th>
+              <th class="text-right" style="width: 15%">Price</th>
+              <th class="text-center" style="width: 10%">Qty</th>
+              <th class="text-center" style="width: 10%">Unit</th>
+              <th class="text-center" style="width: 10%">Free</th>
+              <th class="text-center" style="width: 5%">Disc.</th>
+              <th class="text-right" style="width: 15%">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${items
+              .map(
+                (item: any, index: number) => `
+              <tr>
+                <td>${index + 1}</td>
+                <td>
+                  <span style="font-weight: 600;font-size: 12px ">${
+                    item.productName || item.name
+                  }</span>
+                </td>
+                <td class="text-right font-mono">${formatCurrency(
+                  item.unitPrice || item.price
+                )}</td>
+                <td class="text-center" style="font-weight: 600;">${
+                  item.quantity
+                }</td>
+                <td class="text-center" style="font-size: 11px;">${
+                  item.unit || "-"
+                }</td>
+                <td class="text-center">${
+                  item.freeQuantity > 0 ? item.freeQuantity : "-"
+                }</td>
+                <td class="text-center" style="font-size: 10px;">
+                    ${
+                      item.discountPercent > 0
+                        ? "-" + item.discountPercent + "%"
+                        : "-"
+                    }
+                </td>
+                <td class="text-right font-mono" style="font-weight: 700;">${formatCurrency(
+                  item.total
+                )}</td>
+              </tr>
+            `
+              )
+              .join("")}
+          </tbody>
+        </table>
+
+        <div class="totals-section">
+          <div class="totals-box">
+            <div class="total-row">
+              <span>Subtotal</span>
+              <span>${formatCurrency(subTotal)}</span>
+            </div>
+            
+            ${
+              extraDiscount > 1
+                ? `
+            <div class="total-row">
+              <span>Extra Discount</span>
+              <span>- ${formatCurrency(extraDiscount)}</span>
+            </div>
+            `
+                : ""
+            }
+
+            <div class="final-total">
+              <span>Net Total</span>
+              <span>${formatCurrency(netTotal)}</span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="signatures">
+            <div class="sig-line">Customer Signature & Stamp</div>
+        </div>
+
+        <div class="footer">
+         
+
+      </div>
+      <script>
+        // No auto-print on load because we handle it via iframe controller
+      </script>
+    </body>
+    </html>
+  `;
 };
 
 /**
- * Direct Print (Same Window)
- * Opens the print dialog immediately without downloading the file.
+ * Main print function
+ * Uses a hidden iframe to print on the same page.
  */
-export const printInvoice = async (invoiceId: string) => {
+export const printInvoice = async (invoiceOrId: string | any) => {
   try {
-    const { doc } = await generateInvoicePDF(invoiceId);
+    let invoiceData = invoiceOrId;
 
-    // AutoPrint sets the flag for the PDF to trigger print dialog on open
-    doc.autoPrint();
+    // If ID is passed, fetch the data first
+    if (typeof invoiceOrId === "string") {
+      const toastId = toast.loading("Loading invoice data...");
+      try {
+        const res = await fetch(`/api/invoices/${invoiceOrId}`);
+        if (!res.ok) throw new Error("Failed to load");
+        invoiceData = await res.json();
+        toast.dismiss(toastId);
+      } catch (err) {
+        toast.dismiss(toastId);
+        toast.error("Failed to load invoice for printing");
+        return;
+      }
+    }
 
-    // Generate Blob URL
-    const blob = doc.output("blob");
-    const blobUrl = URL.createObjectURL(blob);
+    if (!invoiceData) return;
 
-    // Create a hidden iframe to print
+    // Create a hidden iframe
     const iframe = document.createElement("iframe");
-    iframe.style.display = "none";
-    iframe.src = blobUrl;
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
 
+    // Append to body
     document.body.appendChild(iframe);
 
-    iframe.onload = () => {
+    // Get the iframe's document
+    const iframeDoc = iframe.contentWindow?.document;
+    if (!iframeDoc) return;
+
+    // Generate content
+    const htmlContent = generateInvoiceHTML(invoiceData);
+
+    // Write content
+    iframeDoc.open();
+    iframeDoc.write(htmlContent);
+    iframeDoc.close();
+
+    // Wait slightly for rendering then print
+    setTimeout(() => {
       if (iframe.contentWindow) {
+        iframe.contentWindow.focus();
         iframe.contentWindow.print();
       }
-    };
 
-    // Cleanup (optional: remove iframe after printing, though difficult to time perfectly with print dialog)
-    // setTimeout(() => { document.body.removeChild(iframe); URL.revokeObjectURL(blobUrl); }, 60000);
-
-    toast.success("Printing invoice...");
+      // Remove iframe after a delay to ensure print dialog has opened
+      // (Removing immediately can sometimes block the print dialog in some browsers)
+      setTimeout(() => {
+        document.body.removeChild(iframe);
+      }, 2000);
+    }, 500);
   } catch (error) {
     console.error(error);
     toast.error("Failed to print invoice");
@@ -271,15 +453,8 @@ export const printInvoice = async (invoiceId: string) => {
 };
 
 /**
- * Download Invoice PDF
+ * Download alias (Uses print view for now, as it allows 'Save as PDF')
  */
-export const downloadInvoice = async (invoiceId: string) => {
-  try {
-    const { doc, invoiceNo } = await generateInvoicePDF(invoiceId);
-    doc.save(`Invoice_${invoiceNo}.pdf`);
-    toast.success("Invoice downloaded successfully");
-  } catch (error) {
-    console.error(error);
-    toast.error("Failed to download invoice");
-  }
+export const downloadInvoice = async (invoiceOrId: string | any) => {
+  await printInvoice(invoiceOrId);
 };

@@ -51,7 +51,7 @@ import {
 } from "@/components/ui/sheet";
 
 // Import the updated print utils
-import { printInvoice, downloadInvoice } from "../print-utils";
+import { downloadInvoice, printInvoice,  } from "../print-utils";
 
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
