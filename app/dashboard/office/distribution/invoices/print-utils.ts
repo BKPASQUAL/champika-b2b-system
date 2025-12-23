@@ -294,7 +294,7 @@ const generateInvoiceHTML = (invoice: any) => {
           <thead>
             <tr>
               <th style="width: 5%">#</th>
-              <th style="width: 40%">Item Description</th>
+              <th style="width: 45%">Item Description</th>
               <th class="text-right" style="width: 15%">Price</th>
               <th class="text-center" style="width: 10%">Qty</th>
               <th class="text-center" style="width: 10%">Unit</th>
