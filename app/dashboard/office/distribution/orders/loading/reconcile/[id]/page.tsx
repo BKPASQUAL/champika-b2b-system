@@ -545,7 +545,7 @@ export default function OfficeReconcileLoadPage({
                                 updateOrderState(order.id, "status", val)
                               }
                             >
-                              <SelectTrigger className="w-[110px] h-8 text-xs">
+                              <SelectTrigger className="w-full h-8 text-xs">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>

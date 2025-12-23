@@ -47,6 +47,8 @@ export async function GET(
       // We can process 'previous_data' here if we want to show specific diffs
       previousTotal: h.previous_data?.total_amount || 0,
       previousStatus: h.previous_data?.status || "N/A",
+      // ✅ ADDED: Return previous items to calculate free quantity history
+      previousItems: h.previous_data?.items || [],
     }));
 
     return NextResponse.json(formattedHistory);
