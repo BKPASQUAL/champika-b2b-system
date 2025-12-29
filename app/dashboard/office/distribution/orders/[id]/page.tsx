@@ -196,7 +196,7 @@ export default function ViewOrderPage({
       if (!res.ok) throw new Error("Failed to approve order");
 
       toast.success("Order Approved! Moved to Processing.");
-      router.push("/dashboard/office/distribution/orders");
+      router.push("/dashboard/office/distribution/orders/pending");
     } catch (error: any) {
       toast.error(error.message || "Failed to update status");
     } finally {
