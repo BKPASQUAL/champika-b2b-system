@@ -1,4 +1,3 @@
-// app/dashboard/admin/products/page.tsx
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
@@ -62,6 +61,7 @@ export default function ProductsPage() {
     costPrice: "",
     images: [],
     unitOfMeasure: "Pcs",
+    isActive: true, // ✅ Added missing property
   });
 
   // --- Fetch Data ---
@@ -94,7 +94,7 @@ export default function ProductsPage() {
       product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       product.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
       product.supplier.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.sku.toLowerCase().includes(searchQuery.toLowerCase()); // Added SKU search
+      product.sku.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesCategory =
       categoryFilter === "all" || product.category === categoryFilter;
@@ -236,6 +236,7 @@ export default function ProductsPage() {
       costPrice: "",
       images: [],
       unitOfMeasure: "Pcs",
+      isActive: true, // ✅ Added missing property
     });
     setSelectedProduct(null);
   };
@@ -254,6 +255,7 @@ export default function ProductsPage() {
       Unit: p.unitOfMeasure,
       MRP: p.mrp,
       "Selling Price": p.sellingPrice,
+      Status: p.isActive ? "Active" : "Inactive",
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
@@ -326,7 +328,7 @@ export default function ProductsPage() {
             onSort={handleSort}
             onEdit={(p) => {
               setFormData({
-                sku: p.sku, // Load SKU on edit
+                sku: p.sku,
                 name: p.name,
                 category: p.category,
                 subCategory: p.subCategory || "",
@@ -343,6 +345,7 @@ export default function ProductsPage() {
                 costPrice: p.costPrice,
                 images: p.images || [],
                 unitOfMeasure: p.unitOfMeasure || "Pcs",
+                isActive: p.isActive, // ✅ Added missing property
               });
               setSelectedProduct(p);
               setIsAddDialogOpen(true);
