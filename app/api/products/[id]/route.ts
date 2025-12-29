@@ -153,6 +153,7 @@ export async function GET(
       mrp: data.mrp || 0,
       sellingPrice: data.selling_price || 0,
       costPrice: data.cost_price || 0,
+      actualCostPrice: data.actual_cost_price || 0, // Added actualCostPrice
       unitOfMeasure: data.unit_of_measure || "Pcs",
       images: data.images || [],
       commissionType: data.commission_type,
