@@ -15,6 +15,7 @@ import {
   Coins,
   LucideIcon,
   Truck,
+  Undo2, // Added Undo2 for Returns icon
 } from "lucide-react";
 
 interface OrangeNavItem {
@@ -75,7 +76,7 @@ export const orangeOfficeNavItems: OrangeNavSection[] = [
       },
       {
         name: "Purchases",
-        href: "/dashboard/office/orange/purchases", // Or /purchases
+        href: "/dashboard/office/orange/purchases",
         icon: FileText,
       },
       {
@@ -98,16 +99,16 @@ export const orangeOfficeNavItems: OrangeNavSection[] = [
         href: "/dashboard/office/orange/inventory",
         icon: Layers,
       },
+      {
+        name: "Returns",
+        href: "/dashboard/office/orange/inventory/returns",
+        icon: Undo2,
+      },
     ],
   },
   {
     title: "Analytics & Finance",
     items: [
-      {
-        name: "Profit & Reports",
-        href: "/dashboard/office/orange/reports",
-        icon: BarChart3,
-      },
       {
         name: "Expenses",
         href: "/dashboard/office/orange/expenses",
