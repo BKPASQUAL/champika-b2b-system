@@ -233,7 +233,7 @@ export default function DistributionViewInvoicePage({
   );
 
   return (
-    <div className="min-h-screen bg-muted/40  ">
+    <div className=" bg-muted/40  ">
       <div className="mx-auto space-y-8 ">
         {/* --- Top Header Section --- */}
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
