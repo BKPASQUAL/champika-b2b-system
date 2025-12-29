@@ -1,4 +1,3 @@
-// app/dashboard/office/distribution/orders/loading/history/[id]/page.tsx
 "use client";
 
 import React, { useState, useEffect, use } from "react";
@@ -23,17 +22,21 @@ import {
   XCircle,
   RefreshCw,
   Send,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   downloadLoadingSheet,
   printLoadingSheet,
 } from "@/app/dashboard/admin/orders/loading/history/print-loading-sheet";
+import { printBulkInvoices } from "@/app/dashboard/office/distribution/invoices/print-utils";
 
 interface OrderDetail {
   id: string;
   orderId: string;
   invoiceNo: string;
+  // ✅ Added invoiceId to interface (Backend must provide this)
+  invoiceId?: string;
   totalAmount: number;
   originalAmount?: number;
   status: string;
@@ -77,6 +80,7 @@ export default function DistributionLoadingSheetDetailPage({
   const [loading, setLoading] = useState(true);
   const [printing, setPrinting] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [printingInvoices, setPrintingInvoices] = useState(false);
 
   useEffect(() => {
     const fetchDetails = async () => {
@@ -108,6 +112,33 @@ export default function DistributionLoadingSheetDetailPage({
     setDownloading(true);
     await downloadLoadingSheet(loadingSheet.id);
     setDownloading(false);
+  };
+
+  // ✅ FIXED: Map to invoiceId instead of Order ID
+  const handlePrintAllInvoices = async () => {
+    if (!loadingSheet || !loadingSheet.orders.length) {
+      toast.error("No orders to print");
+      return;
+    }
+
+    setPrintingInvoices(true);
+
+    // Filter and map only valid Invoice IDs
+    // Note: Ensure your backend /api/orders/loading/history/[id] returns 'invoiceId' in the orders array
+    const ids = loadingSheet.orders
+      .map((o) => o.invoiceId)
+      .filter((id): id is string => !!id);
+
+    if (ids.length === 0) {
+      toast.error(
+        "No invoice IDs found. Ensure invoices are generated for these orders."
+      );
+      setPrintingInvoices(false);
+      return;
+    }
+
+    await printBulkInvoices(ids);
+    setPrintingInvoices(false);
   };
 
   const getStatusBadge = (status: string) => {
@@ -192,6 +223,20 @@ export default function DistributionLoadingSheetDetailPage({
 
         <div className="flex gap-2 flex-wrap">
           <Button
+            variant="secondary"
+            onClick={handlePrintAllInvoices}
+            disabled={printingInvoices}
+            className="bg-purple-100 text-purple-700 hover:bg-purple-200 border border-purple-200"
+          >
+            {printingInvoices ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <FileText className="w-4 h-4 mr-2" />
+            )}
+            Print Invoices
+          </Button>
+
+          <Button
             variant="outline"
             onClick={handleDownload}
             disabled={downloading}
@@ -201,7 +246,7 @@ export default function DistributionLoadingSheetDetailPage({
             ) : (
               <Download className="w-4 h-4 mr-2" />
             )}
-            Download
+            Download Sheet
           </Button>
           <Button variant="default" onClick={handlePrint} disabled={printing}>
             {printing ? (
@@ -209,7 +254,7 @@ export default function DistributionLoadingSheetDetailPage({
             ) : (
               <Printer className="w-4 h-4 mr-2" />
             )}
-            Print
+            Print Sheet
           </Button>
         </div>
       </div>
