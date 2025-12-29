@@ -29,23 +29,13 @@ import {
   Calendar,
   FileText,
   Eye,
-  Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 
-// --- Types ---
-interface Purchase {
-  id: string;
-  purchaseId: string;
-  supplierName: string;
-  invoiceNo: string;
-  purchaseDate: string;
-  status: string;
-  paymentStatus: "Paid" | "Unpaid" | "Partial";
-  totalAmount: number;
-  paidAmount: number;
-}
+// Import the shared type and the Stats Component
+import { Purchase, PurchaseStatus, PaymentStatus } from "./types";
+import { PurchaseStats } from "./_components/PurchaseStats";
 
 export default function OrelBillsPage() {
   const router = useRouter();
@@ -81,21 +71,22 @@ export default function OrelBillsPage() {
       // Filter and Map Data
       const orelBills: Purchase[] = data
         .filter((p: any) => {
-          // Strict Check: Either name includes "Orel" OR it belongs to this business (since Orel is the only supplier)
+          // Strict Check: Either name includes "Orel" OR it belongs to this business
           const name = p.supplierName?.toLowerCase() || "";
           return name.includes("orel") || p.businessId === currentBusinessId;
         })
         .map((p: any) => ({
           id: p.id,
           purchaseId: p.purchaseId,
-          // Force display name if missing, as Orange Agency only deals with Orel
+          supplierId: p.supplierId, // ✅ Added missing field
           supplierName: p.supplierName || "Orel Corporation Pvt Ltd",
           invoiceNo: p.invoiceNo || "-",
           purchaseDate: p.purchaseDate,
-          status: p.status,
-          paymentStatus: p.paymentStatus,
-          totalAmount: p.totalAmount,
-          paidAmount: p.paidAmount,
+          status: p.status as PurchaseStatus, // ✅ Type assertion
+          paymentStatus: p.paymentStatus as PaymentStatus, // ✅ Type assertion
+          totalAmount: Number(p.totalAmount),
+          paidAmount: Number(p.paidAmount),
+          items: p.items || [], // ✅ Added missing field (default to empty array)
         }));
 
       setPurchases(orelBills);
@@ -115,19 +106,14 @@ export default function OrelBillsPage() {
   const filteredPurchases = purchases.filter((p) => {
     const matchesSearch =
       p.purchaseId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.invoiceNo.toLowerCase().includes(searchQuery.toLowerCase());
+      (p.invoiceNo &&
+        p.invoiceNo.toLowerCase().includes(searchQuery.toLowerCase()));
 
     const matchesPayment =
       paymentFilter === "all" || p.paymentStatus === paymentFilter;
 
     return matchesSearch && matchesPayment;
   });
-
-  // Calculate Totals for Orel Corp
-  const totalDue = filteredPurchases.reduce(
-    (sum, p) => sum + (p.totalAmount - p.paidAmount),
-    0
-  );
 
   return (
     <div className="space-y-6">
@@ -161,24 +147,8 @@ export default function OrelBillsPage() {
         </div>
       </div>
 
-      {/* Summary Card for Orel */}
-      <Card className="bg-orange-50 border-orange-200">
-        <CardContent className="p-6 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center">
-              <Wallet className="h-6 w-6 text-orange-600" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-orange-800">
-                Total Payable to Orel Corp
-              </p>
-              <h2 className="text-2xl font-bold text-orange-950">
-                LKR {totalDue.toLocaleString()}
-              </h2>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Stats Component - Now using the correct Purchase type */}
+      <PurchaseStats purchases={purchases} />
 
       {/* Main Table */}
       <Card>
@@ -246,7 +216,7 @@ export default function OrelBillsPage() {
                         <TableCell>
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <Calendar className="w-3 h-3" />
-                            {bill.purchaseDate}
+                            {new Date(bill.purchaseDate).toLocaleDateString()}
                           </div>
                         </TableCell>
                         <TableCell className="font-medium">
