@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
 
 const updateSchema = z.object({
+  sku: z.string().optional(), // ✅ Added SKU to schema
   name: z.string().optional(),
   category: z.string().optional(),
   subCategory: z.string().optional(),
@@ -32,20 +33,37 @@ export async function PATCH(
     const val = updateSchema.parse(body);
 
     const dbUpdates: any = {};
+
+    // ✅ Handle SKU Update with Duplicate Check
+    if (val.sku) {
+      // Check if another product has this SKU
+      const { data: duplicate } = await supabaseAdmin
+        .from("products")
+        .select("id")
+        .eq("sku", val.sku)
+        .neq("id", id) // exclude self
+        .maybeSingle();
+
+      if (duplicate) {
+        return NextResponse.json(
+          { error: `SKU '${val.sku}' is already taken by another product.` },
+          { status: 409 }
+        );
+      }
+      dbUpdates.sku = val.sku;
+    }
+
     if (val.name) dbUpdates.name = val.name;
     if (val.category) dbUpdates.category = val.category;
     if (val.subCategory !== undefined)
       dbUpdates.sub_category = val.subCategory || null;
     if (val.brand !== undefined) dbUpdates.brand = val.brand || null;
     if (val.subBrand !== undefined) dbUpdates.sub_brand = val.subBrand || null;
-
     if (val.modelType !== undefined)
       dbUpdates.model_type = val.modelType || null;
     if (val.subModel !== undefined) dbUpdates.sub_model = val.subModel || null;
-
     if (val.sizeSpec !== undefined) dbUpdates.size_spec = val.sizeSpec || null;
     if (val.supplier) dbUpdates.supplier_name = val.supplier;
-
     if (val.stock !== undefined) dbUpdates.stock_quantity = val.stock;
     if (val.minStock !== undefined) dbUpdates.min_stock_level = val.minStock;
     if (val.mrp !== undefined) dbUpdates.mrp = val.mrp;
@@ -56,6 +74,7 @@ export async function PATCH(
     if (val.images) dbUpdates.images = val.images;
     if (val.isActive !== undefined) dbUpdates.is_active = val.isActive;
 
+    // Recalculate Commission if critical fields change
     if (val.supplier || val.category) {
       const { data: currentProduct } = await supabaseAdmin
         .from("products")
@@ -73,16 +92,11 @@ export async function PATCH(
           .eq("supplier_name", targetSupplier);
 
         let newRate = 0;
-
         if (rules && rules.length > 0) {
           const specificRule = rules.find((r) => r.category === targetCategory);
           const generalRule = rules.find((r) => r.category === "ALL");
-
-          if (specificRule) {
-            newRate = specificRule.rate;
-          } else if (generalRule) {
-            newRate = generalRule.rate;
-          }
+          if (specificRule) newRate = specificRule.rate;
+          else if (generalRule) newRate = generalRule.rate;
         }
 
         dbUpdates.commission_value = newRate;
@@ -153,7 +167,7 @@ export async function GET(
       mrp: data.mrp || 0,
       sellingPrice: data.selling_price || 0,
       costPrice: data.cost_price || 0,
-      actualCostPrice: data.actual_cost_price || 0, // Added actualCostPrice
+      actualCostPrice: data.actual_cost_price || 0,
       unitOfMeasure: data.unit_of_measure || "Pcs",
       images: data.images || [],
       commissionType: data.commission_type,

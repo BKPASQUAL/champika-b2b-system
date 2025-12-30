@@ -53,20 +53,16 @@ export async function GET(request: NextRequest) {
       subModel: p.sub_model,
       sizeSpec: p.size_spec,
       supplier: p.supplier_name,
-
       stock: p.stock_quantity || 0,
       minStock: p.min_stock_level || 0,
       mrp: p.mrp || 0,
       sellingPrice: p.selling_price || 0,
       costPrice: p.cost_price || 0,
       unitOfMeasure: p.unit_of_measure || "Pcs",
-
       images: p.images || [],
       commissionType: p.commission_type || "percentage",
       commissionValue: p.commission_value || 0,
       isActive: p.is_active ?? true,
-
-      // Calculations
       discountPercent:
         p.mrp > 0 ? ((p.mrp - (p.selling_price || 0)) / p.mrp) * 100 : 0,
       totalValue: (p.stock_quantity || 0) * (p.selling_price || 0),
@@ -90,31 +86,88 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const val = productSchema.parse(body);
 
-    // 1. Generate SKU if missing
     let sku = val.sku;
+
+    // ✅ 1. ROBUST SKU AUTO-GENERATION
     if (!sku) {
-      sku = `SKU-${Date.now().toString().slice(-6)}`;
+      const supplierName = val.supplier.trim();
+      const prefix = (
+        supplierName.length >= 2 ? supplierName.substring(0, 2) : supplierName
+      ).toUpperCase();
+
+      // Find the "highest" string SKU to guess the next number
+      const { data: lastProducts } = await supabaseAdmin
+        .from("products")
+        .select("sku")
+        .ilike("sku", `${prefix}-%`)
+        .order("sku", { ascending: false })
+        .limit(1);
+
+      let nextSequence = 1;
+
+      if (lastProducts && lastProducts.length > 0) {
+        const lastSku = lastProducts[0].sku;
+        const parts = lastSku.split("-");
+        if (parts.length === 2 && parts[0] === prefix) {
+          const numberPart = parseInt(parts[1], 10);
+          if (!isNaN(numberPart)) {
+            nextSequence = numberPart + 1;
+          }
+        }
+      }
+
+      // 🛡️ COLLISION CHECK LOOP
+      // If the calculated SKU exists (e.g. because OR-99 hid OR-100 in sort),
+      // keep incrementing until we find a free spot.
+      while (true) {
+        const candidateSku = `${prefix}-${nextSequence
+          .toString()
+          .padStart(4, "0")}`;
+
+        const { data: existing } = await supabaseAdmin
+          .from("products")
+          .select("id")
+          .eq("sku", candidateSku)
+          .maybeSingle();
+
+        if (!existing) {
+          sku = candidateSku; // Found a free one!
+          break;
+        }
+        // If exists, try next number
+        nextSequence++;
+      }
     }
 
-    // 2. Calculate Commission Rate
+    // ✅ 2. COMMISSION LOGIC
     const { data: rules } = await supabaseAdmin
       .from("commission_rules")
-      .select("category, rate")
+      .select("category, sub_category, rate")
       .eq("supplier_name", val.supplier);
 
     let commissionRate = 0;
 
     if (rules && rules.length > 0) {
-      const specificRule = rules.find((r) => r.category === val.category);
-      const generalRule = rules.find((r) => r.category === "ALL");
-      if (specificRule) {
-        commissionRate = specificRule.rate;
-      } else if (generalRule) {
-        commissionRate = generalRule.rate;
-      }
+      // Priority 1: Sub Category
+      const subCatRule = val.subCategory
+        ? rules.find(
+            (r) =>
+              r.category === val.category && r.sub_category === val.subCategory
+          )
+        : null;
+      // Priority 2: Main Category
+      const catRule = rules.find(
+        (r) => r.category === val.category && !r.sub_category
+      );
+      // Priority 3: Global "ALL"
+      const globalRule = rules.find((r) => r.category === "ALL");
+
+      if (subCatRule) commissionRate = subCatRule.rate;
+      else if (catRule) commissionRate = catRule.rate;
+      else if (globalRule) commissionRate = globalRule.rate;
     }
 
-    // 3. Insert Product
+    // ✅ 3. INSERT PRODUCT
     const { data: product, error: productError } = await supabaseAdmin
       .from("products")
       .insert({
@@ -128,7 +181,7 @@ export async function POST(request: NextRequest) {
         sub_model: val.subModel,
         size_spec: val.sizeSpec,
         supplier_name: val.supplier,
-        stock_quantity: val.stock, // Total stock (Main Warehouse only initially)
+        stock_quantity: val.stock,
         min_stock_level: val.minStock,
         mrp: val.mrp,
         selling_price: val.sellingPrice,
@@ -144,37 +197,20 @@ export async function POST(request: NextRequest) {
 
     if (productError) throw productError;
 
-    // ------------------------------------------------------------------
-    // ✅ NEW LOGIC: Add Initial Stock to Main Warehouse
-    // ------------------------------------------------------------------
-
-    // A. Find the Main Warehouse (where business_id is NULL)
+    // ✅ 4. INITIAL STOCK (MAIN WAREHOUSE)
     const { data: mainWarehouse } = await supabaseAdmin
       .from("locations")
       .select("id")
       .is("business_id", null)
       .maybeSingle();
 
-    // B. Insert into product_stocks table
     if (mainWarehouse) {
-      const { error: stockError } = await supabaseAdmin
-        .from("product_stocks")
-        .insert({
-          product_id: product.id,
-          location_id: mainWarehouse.id,
-          quantity: val.stock, // The initial stock entered in the form
-          damaged_quantity: 0,
-        });
-
-      if (stockError) {
-        console.error("Error creating initial stock:", stockError);
-        // Note: We don't throw here to avoid failing the whole product creation
-        // if stock fails, but you might want to handle this differently.
-      }
-    } else {
-      console.warn(
-        "Main Warehouse not found. Initial stock not assigned to location."
-      );
+      await supabaseAdmin.from("product_stocks").insert({
+        product_id: product.id,
+        location_id: mainWarehouse.id,
+        quantity: val.stock,
+        damaged_quantity: 0,
+      });
     }
 
     return NextResponse.json(
@@ -182,6 +218,13 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error: any) {
+    // 🛡️ Final fallback for duplicates
+    if (error.code === "23505") {
+      return NextResponse.json(
+        { error: "A product with this SKU already exists. Please try again." },
+        { status: 409 }
+      );
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
