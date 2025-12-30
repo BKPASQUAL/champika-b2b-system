@@ -233,7 +233,7 @@ export function ProductTable({
                         variant="ghost"
                         size="icon-sm"
                         onClick={() =>
-                          router.push(`/dashboard/admin/products/${product.id}`)
+                          router.push(`/dashboard/office/distribution/products/${product.id}`)
                         }
                       >
                         <Eye className="w-4 h-4" />

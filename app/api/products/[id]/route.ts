@@ -3,7 +3,6 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
 
 const updateSchema = z.object({
-  sku: z.string().optional(), // ✅ Added SKU to schema
   name: z.string().optional(),
   category: z.string().optional(),
   subCategory: z.string().optional(),
@@ -33,37 +32,20 @@ export async function PATCH(
     const val = updateSchema.parse(body);
 
     const dbUpdates: any = {};
-
-    // ✅ Handle SKU Update with Duplicate Check
-    if (val.sku) {
-      // Check if another product has this SKU
-      const { data: duplicate } = await supabaseAdmin
-        .from("products")
-        .select("id")
-        .eq("sku", val.sku)
-        .neq("id", id) // exclude self
-        .maybeSingle();
-
-      if (duplicate) {
-        return NextResponse.json(
-          { error: `SKU '${val.sku}' is already taken by another product.` },
-          { status: 409 }
-        );
-      }
-      dbUpdates.sku = val.sku;
-    }
-
     if (val.name) dbUpdates.name = val.name;
     if (val.category) dbUpdates.category = val.category;
     if (val.subCategory !== undefined)
       dbUpdates.sub_category = val.subCategory || null;
     if (val.brand !== undefined) dbUpdates.brand = val.brand || null;
     if (val.subBrand !== undefined) dbUpdates.sub_brand = val.subBrand || null;
+
     if (val.modelType !== undefined)
       dbUpdates.model_type = val.modelType || null;
     if (val.subModel !== undefined) dbUpdates.sub_model = val.subModel || null;
+
     if (val.sizeSpec !== undefined) dbUpdates.size_spec = val.sizeSpec || null;
     if (val.supplier) dbUpdates.supplier_name = val.supplier;
+
     if (val.stock !== undefined) dbUpdates.stock_quantity = val.stock;
     if (val.minStock !== undefined) dbUpdates.min_stock_level = val.minStock;
     if (val.mrp !== undefined) dbUpdates.mrp = val.mrp;
@@ -74,7 +56,6 @@ export async function PATCH(
     if (val.images) dbUpdates.images = val.images;
     if (val.isActive !== undefined) dbUpdates.is_active = val.isActive;
 
-    // Recalculate Commission if critical fields change
     if (val.supplier || val.category) {
       const { data: currentProduct } = await supabaseAdmin
         .from("products")
@@ -92,11 +73,16 @@ export async function PATCH(
           .eq("supplier_name", targetSupplier);
 
         let newRate = 0;
+
         if (rules && rules.length > 0) {
           const specificRule = rules.find((r) => r.category === targetCategory);
           const generalRule = rules.find((r) => r.category === "ALL");
-          if (specificRule) newRate = specificRule.rate;
-          else if (generalRule) newRate = generalRule.rate;
+
+          if (specificRule) {
+            newRate = specificRule.rate;
+          } else if (generalRule) {
+            newRate = generalRule.rate;
+          }
         }
 
         dbUpdates.commission_value = newRate;
@@ -142,37 +128,84 @@ export async function GET(
 ) {
   const { id } = await params;
   try {
-    const { data, error } = await supabaseAdmin
+    // 1. Fetch Product Basics
+    const { data: productData, error: productError } = await supabaseAdmin
       .from("products")
       .select("*")
       .eq("id", id)
       .single();
 
-    if (error) throw error;
+    if (productError) throw productError;
+
+    // 2. Fetch Stock Breakdown from Locations
+    // ✅ This enables showing stock per location (Store, Warehouse, etc.)
+    const { data: stocks, error: stockError } = await supabaseAdmin
+      .from("product_stocks")
+      .select(
+        `
+        id,
+        quantity,
+        damaged_quantity,
+        last_updated,
+        locations ( name, business_id )
+      `
+      )
+      .eq("product_id", id);
+
+    if (stockError) console.error("Error fetching stocks:", stockError);
+
+    // 3. Calculate Real-Time Totals
+    const safeStocks = stocks || [];
+    const totalGoodStock = safeStocks.reduce(
+      (sum, s) => sum + (Number(s.quantity) || 0),
+      0
+    );
+    const totalDamagedStock = safeStocks.reduce(
+      (sum, s) => sum + (Number(s.damaged_quantity) || 0),
+      0
+    );
+
+    const formattedStocks = safeStocks.map((s: any) => ({
+      locationName: s.locations?.name || "Unknown Location",
+      isMainWarehouse: s.locations?.business_id === null,
+      quantity: Number(s.quantity) || 0,
+      damaged: Number(s.damaged_quantity) || 0,
+      lastUpdated: s.last_updated,
+    }));
 
     const product = {
-      id: data.id,
-      sku: data.sku,
-      name: data.name,
-      category: data.category,
-      subCategory: data.sub_category,
-      brand: data.brand,
-      subBrand: data.sub_brand,
-      modelType: data.model_type,
-      subModel: data.sub_model,
-      sizeSpec: data.size_spec,
-      supplier: data.supplier_name,
-      stock: data.stock_quantity || 0,
-      minStock: data.min_stock_level || 0,
-      mrp: data.mrp || 0,
-      sellingPrice: data.selling_price || 0,
-      costPrice: data.cost_price || 0,
-      actualCostPrice: data.actual_cost_price || 0,
-      unitOfMeasure: data.unit_of_measure || "Pcs",
-      images: data.images || [],
-      commissionType: data.commission_type,
-      commissionValue: data.commission_value,
-      isActive: data.is_active ?? true,
+      id: productData.id,
+      sku: productData.sku,
+      name: productData.name,
+      category: productData.category,
+      subCategory: productData.sub_category,
+      brand: productData.brand,
+      subBrand: productData.sub_brand,
+      modelType: productData.model_type,
+      subModel: productData.sub_model,
+      sizeSpec: productData.size_spec,
+      supplier: productData.supplier_name,
+
+      // ✅ Use calculated total from locations if available, else fallback
+      stock:
+        safeStocks.length > 0
+          ? totalGoodStock
+          : productData.stock_quantity || 0,
+      damagedStock: totalDamagedStock,
+
+      minStock: productData.min_stock_level || 0,
+      mrp: productData.mrp || 0,
+      sellingPrice: productData.selling_price || 0,
+      costPrice: productData.cost_price || 0,
+      actualCostPrice: productData.actual_cost_price || 0,
+      unitOfMeasure: productData.unit_of_measure || "Pcs",
+      images: productData.images || [],
+      commissionType: productData.commission_type,
+      commissionValue: productData.commission_value,
+      isActive: productData.is_active ?? true,
+
+      // ✅ Return the breakdown
+      stocks: formattedStocks,
     };
 
     return NextResponse.json(product);

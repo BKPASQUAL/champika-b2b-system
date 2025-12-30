@@ -26,6 +26,7 @@ import {
   FileDown,
   FileSpreadsheet,
   FileWarning,
+  ClipboardList,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -49,7 +50,6 @@ export default function LocationInventoryPage() {
   useEffect(() => {
     const fetchData = async () => {
       if (!locationId) return;
-
       try {
         setLoading(true);
         const res = await fetch(`/api/inventory/${locationId}`);
@@ -61,12 +61,10 @@ export default function LocationInventoryPage() {
         setLoading(false);
       }
     };
-
     fetchData();
   }, [locationId]);
 
   // --- Export Functions ---
-
   const generatePDF = (items: any[], title: string, filename: string) => {
     if (!items.length) return toast.error("No data to export");
     const doc = new jsPDF();
@@ -81,9 +79,9 @@ export default function LocationInventoryPage() {
     const tableRows = items.map((stock: any) => [
       stock.sku,
       stock.name,
-      stock.quantity, // Good Qty
-      stock.damagedQuantity || 0, // Damaged Qty
-      stock.quantity + (stock.damagedQuantity || 0), // Total
+      stock.quantity,
+      stock.damagedQuantity || 0,
+      stock.quantity + (stock.damagedQuantity || 0),
       stock.unit_of_measure,
     ]);
 
@@ -95,7 +93,6 @@ export default function LocationInventoryPage() {
     });
 
     doc.save(`${filename}_${date.replace(/\//g, "-")}.pdf`);
-    toast.success("PDF generated");
   };
 
   const generateExcel = (items: any[], sheetName: string, filename: string) => {
@@ -113,26 +110,12 @@ export default function LocationInventoryPage() {
     const ws = XLSX.utils.json_to_sheet(excelData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
-
-    // Set column widths
-    ws["!cols"] = [
-      { wch: 15 },
-      { wch: 30 },
-      { wch: 12 },
-      { wch: 12 },
-      { wch: 12 },
-      { wch: 10 },
-      { wch: 15 },
-    ];
-
     XLSX.writeFile(
       wb,
       `${filename}_${new Date().toLocaleDateString().replace(/\//g, "-")}.xlsx`
     );
-    toast.success("Excel generated");
   };
 
-  // 1. Full Inventory Report
   const handleExportAll = (type: "pdf" | "excel") => {
     const items = data?.stocks || [];
     if (type === "pdf")
@@ -140,7 +123,6 @@ export default function LocationInventoryPage() {
     else generateExcel(items, "Inventory", "Inventory_Report");
   };
 
-  // 2. Damage Only Report
   const handleExportDamage = (type: "pdf" | "excel") => {
     const items =
       data?.stocks.filter((s: any) => (s.damagedQuantity || 0) > 0) || [];
@@ -199,6 +181,20 @@ export default function LocationInventoryPage() {
         </div>
 
         <div className="flex gap-2">
+          {/* ✅ Navigate to New Adjustment Page */}
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() =>
+              router.push(
+                `/dashboard/office/distribution/inventory/${locationId}/adjust`
+              )
+            }
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            <ClipboardList className="w-4 h-4 mr-2" /> Adjust Stock
+          </Button>
+
           {/* Export Group */}
           <div className="flex items-center gap-1 bg-muted/20 p-1 rounded-lg border">
             <Button
@@ -219,7 +215,6 @@ export default function LocationInventoryPage() {
             </Button>
           </div>
 
-          {/* Damage Report Group */}
           <div className="flex items-center gap-1 bg-red-50 p-1 rounded-lg border border-red-100">
             <Button
               variant="ghost"
