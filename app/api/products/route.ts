@@ -25,7 +25,6 @@ const productSchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
-    // ✅ 1. Check for 'active' query parameter for API blocking
     const { searchParams } = new URL(request.url);
     const onlyActive = searchParams.get("active") === "true";
 
@@ -34,7 +33,6 @@ export async function GET(request: NextRequest) {
       .select("*")
       .order("created_at", { ascending: false });
 
-    // ✅ 2. Apply Filter at Database Level
     if (onlyActive) {
       query = query.eq("is_active", true);
     }
@@ -92,11 +90,13 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const val = productSchema.parse(body);
 
+    // 1. Generate SKU if missing
     let sku = val.sku;
     if (!sku) {
       sku = `SKU-${Date.now().toString().slice(-6)}`;
     }
 
+    // 2. Calculate Commission Rate
     const { data: rules } = await supabaseAdmin
       .from("commission_rules")
       .select("category, rate")
@@ -114,7 +114,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const { data, error } = await supabaseAdmin
+    // 3. Insert Product
+    const { data: product, error: productError } = await supabaseAdmin
       .from("products")
       .insert({
         sku: sku,
@@ -127,7 +128,7 @@ export async function POST(request: NextRequest) {
         sub_model: val.subModel,
         size_spec: val.sizeSpec,
         supplier_name: val.supplier,
-        stock_quantity: val.stock,
+        stock_quantity: val.stock, // Total stock (Main Warehouse only initially)
         min_stock_level: val.minStock,
         mrp: val.mrp,
         selling_price: val.sellingPrice,
@@ -141,10 +142,43 @@ export async function POST(request: NextRequest) {
       .select()
       .single();
 
-    if (error) throw error;
+    if (productError) throw productError;
+
+    // ------------------------------------------------------------------
+    // ✅ NEW LOGIC: Add Initial Stock to Main Warehouse
+    // ------------------------------------------------------------------
+
+    // A. Find the Main Warehouse (where business_id is NULL)
+    const { data: mainWarehouse } = await supabaseAdmin
+      .from("locations")
+      .select("id")
+      .is("business_id", null)
+      .maybeSingle();
+
+    // B. Insert into product_stocks table
+    if (mainWarehouse) {
+      const { error: stockError } = await supabaseAdmin
+        .from("product_stocks")
+        .insert({
+          product_id: product.id,
+          location_id: mainWarehouse.id,
+          quantity: val.stock, // The initial stock entered in the form
+          damaged_quantity: 0,
+        });
+
+      if (stockError) {
+        console.error("Error creating initial stock:", stockError);
+        // Note: We don't throw here to avoid failing the whole product creation
+        // if stock fails, but you might want to handle this differently.
+      }
+    } else {
+      console.warn(
+        "Main Warehouse not found. Initial stock not assigned to location."
+      );
+    }
 
     return NextResponse.json(
-      { message: "Product created", data },
+      { message: "Product created", data: product },
       { status: 201 }
     );
   } catch (error: any) {

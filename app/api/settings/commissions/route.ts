@@ -3,15 +3,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
 
-// Validation Schema
+// Updated Schema with subCategory
 const ruleSchema = z.object({
   supplierId: z.string().min(1),
   supplierName: z.string().optional(),
-  category: z.string().min(1), // Can be "ALL" or a specific category name
+  category: z.string().min(1),
+  subCategory: z.string().nullable().optional(), // New field
   rate: z.number().min(0),
 });
 
-// GET: Fetch all commission rules
 export async function GET() {
   try {
     const { data, error } = await supabaseAdmin
@@ -29,6 +29,7 @@ export async function GET() {
       supplierId: d.supplier_id,
       supplierName: d.supplier_name || "Unknown",
       category: d.category,
+      subCategory: d.sub_category, // Return sub_category
       rate: d.rate,
     }));
 
@@ -38,39 +39,44 @@ export async function GET() {
   }
 }
 
-// POST: Add a new rule and update relevant products
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const val = ruleSchema.parse(body);
+    const subCategory = val.subCategory || null;
 
-    // 1. CHECK FOR DUPLICATES
-    const { data: existing } = await supabaseAdmin
+    // 1. CHECK FOR DUPLICATES (Specific Combination)
+    let dupQuery = supabaseAdmin
       .from("commission_rules")
       .select("id")
       .eq("supplier_id", val.supplierId)
-      .eq("category", val.category)
-      .maybeSingle();
+      .eq("category", val.category);
+
+    if (subCategory) {
+      dupQuery = dupQuery.eq("sub_category", subCategory);
+    } else {
+      dupQuery = dupQuery.is("sub_category", null);
+    }
+
+    const { data: existing } = await dupQuery.maybeSingle();
 
     if (existing) {
       return NextResponse.json(
         {
-          error:
-            val.category === "ALL"
-              ? `A default 'All Categories' rule for this supplier already exists.`
-              : `A rule for this Supplier and Category ('${val.category}') already exists.`,
+          error: `A rule for this specific category/sub-category already exists.`,
         },
         { status: 409 }
       );
     }
 
-    // 2. Insert new rule
+    // 2. INSERT NEW RULE
     const { data, error } = await supabaseAdmin
       .from("commission_rules")
       .insert({
         supplier_id: val.supplierId,
         supplier_name: val.supplierName,
         category: val.category,
+        sub_category: subCategory,
         rate: val.rate,
       })
       .select()
@@ -78,34 +84,73 @@ export async function POST(request: NextRequest) {
 
     if (error) throw error;
 
-    // 3. UPDATE EXISTING PRODUCTS
-    if (val.category !== "ALL") {
-      // --- Case A: Adding a Specific Category Rule ---
-      // Update only products in this specific category
-      await supabaseAdmin
-        .from("products")
-        .update({
-          commission_type: "percentage",
-          commission_value: val.rate,
-        })
-        .eq("supplier_name", val.supplierName)
-        .eq("category", val.category);
-    } else {
-      // --- Case B: Adding an "All Categories" (Global) Rule ---
-      // We must update all products for this supplier,
-      // EXCEPT those that belong to a category that has its own specific rule.
+    // 3. APPLY TO PRODUCTS (WITH PRIORITY LOGIC)
 
-      // 1. Find all other specific rules for this supplier to exclude them
+    if (val.category !== "ALL") {
+      if (subCategory) {
+        // --- PRIORITY 1: SUB-CATEGORY RULE ---
+        // Just update the specific sub-category items.
+        // This naturally overrides any broader category rule previously set.
+        await supabaseAdmin
+          .from("products")
+          .update({
+            commission_type: "percentage",
+            commission_value: val.rate,
+          })
+          .eq("supplier_name", val.supplierName)
+          .eq("category", val.category)
+          .eq("sub_category", subCategory);
+      } else {
+        // --- PRIORITY 2: CATEGORY RULE ---
+        // Update the category, BUT exclude items belonging to a sub-category
+        // that already has its own specific rule.
+
+        // A. Find which sub-categories have their own rules
+        const { data: existingSubRules } = await supabaseAdmin
+          .from("commission_rules")
+          .select("sub_category")
+          .eq("supplier_id", val.supplierId)
+          .eq("category", val.category)
+          .not("sub_category", "is", null);
+
+        const protectedSubCats =
+          existingSubRules?.map((r: any) => r.sub_category) || [];
+
+        // B. Update products, excluding protected sub-categories
+        let query = supabaseAdmin
+          .from("products")
+          .update({
+            commission_type: "percentage",
+            commission_value: val.rate,
+          })
+          .eq("supplier_name", val.supplierName)
+          .eq("category", val.category);
+
+        if (protectedSubCats.length > 0) {
+          // Syntax for "NOT IN ('A', 'B')"
+          const filterString = `(${protectedSubCats
+            .map((c: string) => `"${c}"`)
+            .join(",")})`;
+          query = query.filter("sub_category", "not.in", filterString);
+        }
+
+        await query;
+      }
+    } else {
+      // --- PRIORITY 3: GLOBAL "ALL" RULE ---
+      // Update everything for supplier, BUT exclude Categories that have rules.
+
       const { data: specificRules } = await supabaseAdmin
         .from("commission_rules")
         .select("category")
         .eq("supplier_id", val.supplierId)
-        .neq("category", "ALL"); // Don't include the rule we just made
+        .neq("category", "ALL");
 
-      const excludedCategories =
-        specificRules?.map((r: any) => r.category) || [];
+      // Unique list of categories to protect
+      const protectedCategories = Array.from(
+        new Set(specificRules?.map((r: any) => r.category) || [])
+      );
 
-      // 2. Prepare update query
       let query = supabaseAdmin
         .from("products")
         .update({
@@ -114,13 +159,11 @@ export async function POST(request: NextRequest) {
         })
         .eq("supplier_name", val.supplierName);
 
-      // 3. Apply exclusion filter if there are specific categories to protect
-      if (excludedCategories.length > 0) {
-        // Format for PostgREST: ("Cat1","Cat2")
-        const formattedList = `(${excludedCategories
+      if (protectedCategories.length > 0) {
+        const filterString = `(${protectedCategories
           .map((c: string) => `"${c}"`)
           .join(",")})`;
-        query = query.filter("category", "not.in", formattedList);
+        query = query.filter("category", "not.in", filterString);
       }
 
       await query;
@@ -135,15 +178,13 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// DELETE: Remove a rule and reset/recalculate product commissions
 export async function DELETE(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
-
   if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
 
   try {
-    // 1. Fetch the rule first so we know what to update
+    // 1. Get the rule to delete
     const { data: deletedRules, error: fetchError } = await supabaseAdmin
       .from("commission_rules")
       .delete()
@@ -151,61 +192,61 @@ export async function DELETE(request: NextRequest) {
       .select();
 
     if (fetchError) throw fetchError;
-    if (!deletedRules || deletedRules.length === 0) {
+    if (!deletedRules || deletedRules.length === 0)
       return NextResponse.json({ message: "Rule not found" });
-    }
 
-    const deletedRule = deletedRules[0];
-    const { supplier_name, category, supplier_id } = deletedRule;
+    const rule = deletedRules[0];
 
-    // 2. Logic to update products
-    if (category !== "ALL") {
-      // --- Case A: Deleting a Specific Category Rule ---
+    // 2. Calculate Fallback Rate
+    // If we delete a Sub-Category rule -> Fallback to Category Rule -> Fallback to Global Rule -> 0
+    let fallbackRate = 0;
 
-      // Check if there is a fallback "ALL" rule for this supplier
-      const { data: allRule } = await supabaseAdmin
+    if (rule.sub_category) {
+      // Look for Category Rule
+      const { data: catRule } = await supabaseAdmin
         .from("commission_rules")
         .select("rate")
-        .eq("supplier_id", supplier_id)
-        .eq("category", "ALL")
+        .eq("supplier_id", rule.supplier_id)
+        .eq("category", rule.category)
+        .is("sub_category", null)
         .maybeSingle();
 
-      const newRate = allRule ? allRule.rate : 0;
-
-      // Update products in this specific category to the fallback rate (or 0)
-      await supabaseAdmin
-        .from("products")
-        .update({ commission_value: newRate })
-        .eq("supplier_name", supplier_name)
-        .eq("category", category);
-    } else {
-      // --- Case B: Deleting the "ALL" (Default) Rule ---
-
-      // Reset all products for this supplier to 0,
-      // EXCEPT those that have a specific rule defined.
-
-      const { data: remainingRules } = await supabaseAdmin
-        .from("commission_rules")
-        .select("category")
-        .eq("supplier_id", supplier_id);
-
-      const protectedCategories =
-        remainingRules?.map((r: any) => r.category) || [];
-
-      let query = supabaseAdmin
-        .from("products")
-        .update({ commission_value: 0 })
-        .eq("supplier_name", supplier_name);
-
-      if (protectedCategories.length > 0) {
-        const formattedList = `(${protectedCategories
-          .map((c: string) => `"${c}"`)
-          .join(",")})`;
-        query = query.filter("category", "not.in", formattedList);
+      if (catRule) fallbackRate = catRule.rate;
+      else {
+        // Look for Global Rule
+        const { data: globalRule } = await supabaseAdmin
+          .from("commission_rules")
+          .select("rate")
+          .eq("supplier_id", rule.supplier_id)
+          .eq("category", "ALL")
+          .maybeSingle();
+        if (globalRule) fallbackRate = globalRule.rate;
       }
-
-      await query;
+    } else if (rule.category !== "ALL") {
+      // Look for Global Rule
+      const { data: globalRule } = await supabaseAdmin
+        .from("commission_rules")
+        .select("rate")
+        .eq("supplier_id", rule.supplier_id)
+        .eq("category", "ALL")
+        .maybeSingle();
+      if (globalRule) fallbackRate = globalRule.rate;
     }
+
+    // 3. Update Products to Fallback Rate
+    let query = supabaseAdmin
+      .from("products")
+      .update({ commission_value: fallbackRate })
+      .eq("supplier_name", rule.supplier_name);
+
+    if (rule.category !== "ALL") {
+      query = query.eq("category", rule.category);
+    }
+    if (rule.sub_category) {
+      query = query.eq("sub_category", rule.sub_category);
+    }
+
+    await query;
 
     return NextResponse.json({ message: "Rule deleted and products updated" });
   } catch (error: any) {

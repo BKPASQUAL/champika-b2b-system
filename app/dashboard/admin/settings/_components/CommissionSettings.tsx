@@ -9,7 +9,8 @@ import {
   AlertCircle,
   Briefcase,
   Tag,
-  Globe, // Icon for "All Categories"
+  Globe,
+  ArrowRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,6 +57,7 @@ interface CommissionRule {
   supplierId: string;
   supplierName: string;
   category: string;
+  subCategory?: string | null;
   rate: number;
 }
 
@@ -71,12 +73,28 @@ export function CommissionSettings() {
   // Form State
   const [selectedSupplier, setSelectedSupplier] = useState<string>("");
   const [selectedCategory, setSelectedCategory] = useState<string>("");
+  const [selectedSubCategory, setSelectedSubCategory] = useState<string>("ALL"); // Default to "ALL" (Apply to entire category)
   const [commissionRate, setCommissionRate] = useState<string>("");
+
+  // Derived State
+  const subCategoryOptions = React.useMemo(() => {
+    if (!selectedCategory || selectedCategory === "ALL") return [];
+
+    // 1. Find the ID of the selected main category
+    const parentCat = categories.find(
+      (c) => c.name === selectedCategory && !c.parent_id
+    );
+    if (!parentCat) return [];
+
+    // 2. Filter categories that have this parent_id
+    return categories.filter((c) => c.parent_id === parentCat.id);
+  }, [selectedCategory, categories]);
 
   // --- 1. Load Data ---
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
+      // Fetch all categories (remove filtered type to ensure we get sub-categories too)
       const [supRes, catRes, rulesRes] = await Promise.all([
         fetch("/api/suppliers"),
         fetch("/api/settings/categories?type=category"),
@@ -98,6 +116,11 @@ export function CommissionSettings() {
     fetchData();
   }, [fetchData]);
 
+  // Reset sub-category when main category changes
+  useEffect(() => {
+    setSelectedSubCategory("ALL");
+  }, [selectedCategory]);
+
   // --- 2. Handlers ---
   const handleAddRule = async () => {
     // Validate inputs
@@ -113,7 +136,9 @@ export function CommissionSettings() {
       const payload = {
         supplierId: selectedSupplier,
         supplierName: supplierObj?.name || "Unknown",
-        category: selectedCategory, // This will be "ALL" or a specific category
+        category: selectedCategory,
+        // Send null if "ALL" is selected for sub-category, otherwise send the sub-cat name
+        subCategory: selectedSubCategory === "ALL" ? null : selectedSubCategory,
         rate: parseFloat(commissionRate),
       };
 
@@ -126,7 +151,6 @@ export function CommissionSettings() {
       const data = await res.json();
 
       if (!res.ok) {
-        // Show the specific error message from the API (e.g. "Rule already exists")
         if (res.status === 409) {
           toast.error(data.error);
         } else {
@@ -139,7 +163,9 @@ export function CommissionSettings() {
 
       // Reset Form
       setCommissionRate("");
+      // Keep supplier selected for easier multiple entry
       setSelectedCategory("");
+      setSelectedSubCategory("ALL");
 
       // Refresh list
       fetchData();
@@ -181,7 +207,7 @@ export function CommissionSettings() {
         <CardHeader>
           <CardTitle>Add Commission Rule</CardTitle>
           <CardDescription>
-            Set default commission % for specific supplier categories.
+            Set commission % for specific categories or sub-categories.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -205,7 +231,7 @@ export function CommissionSettings() {
           </div>
 
           <div className="space-y-2">
-            <Label>Product Category</Label>
+            <Label>Category</Label>
             <Select
               value={selectedCategory}
               onValueChange={setSelectedCategory}
@@ -214,12 +240,9 @@ export function CommissionSettings() {
                 <SelectValue placeholder="Select Category" />
               </SelectTrigger>
               <SelectContent>
-                {/* DEFAULT OPTION FOR ALL CATEGORIES */}
                 <SelectItem value="ALL" className="text-blue-600 font-semibold">
-                  All Categories (Default)
+                  All Categories (Global)
                 </SelectItem>
-
-                {/* Main Categories Only */}
                 {categories
                   .filter((c) => !c.parent_id)
                   .map((c) => (
@@ -230,6 +253,36 @@ export function CommissionSettings() {
               </SelectContent>
             </Select>
           </div>
+
+          {/* Sub Category Dropdown - Only show if a main category is selected and has sub-categories */}
+          {selectedCategory &&
+            selectedCategory !== "ALL" &&
+            subCategoryOptions.length > 0 && (
+              <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                <Label>Sub Category (Optional)</Label>
+                <Select
+                  value={selectedSubCategory}
+                  onValueChange={setSelectedSubCategory}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Sub Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem
+                      value="ALL"
+                      className="text-muted-foreground italic"
+                    >
+                      Apply to entire "{selectedCategory}" category
+                    </SelectItem>
+                    {subCategoryOptions.map((c) => (
+                      <SelectItem key={c.id} value={c.name}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
           <div className="space-y-2">
             <Label>Commission Rate (%)</Label>
@@ -268,7 +321,8 @@ export function CommissionSettings() {
         <CardHeader>
           <CardTitle>Active Commission Rules</CardTitle>
           <CardDescription>
-            Specific category rules take priority over "All Categories" rules.
+            Rules are applied from most specific (Sub-Category) to least
+            specific (All).
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -283,7 +337,7 @@ export function CommissionSettings() {
                 <TableHeader>
                   <TableRow className="bg-muted/50">
                     <TableHead>Supplier</TableHead>
-                    <TableHead>Category</TableHead>
+                    <TableHead>Category / Sub-Category</TableHead>
                     <TableHead className="text-right">Commission</TableHead>
                     <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
@@ -304,10 +358,20 @@ export function CommissionSettings() {
                               <Globe className="w-4 h-4 mr-1" /> All Categories
                             </span>
                           ) : (
-                            <span className="inline-flex items-center">
-                              <Tag className="w-4 h-4 mr-1 text-muted-foreground" />{" "}
-                              {rule.category}
-                            </span>
+                            <div className="flex items-center gap-1">
+                              <span className="inline-flex items-center">
+                                <Tag className="w-4 h-4 mr-1 text-muted-foreground" />
+                                {rule.category}
+                              </span>
+                              {rule.subCategory && (
+                                <>
+                                  <ArrowRight className="w-3 h-3 text-muted-foreground" />
+                                  <span className="font-medium">
+                                    {rule.subCategory}
+                                  </span>
+                                </>
+                              )}
+                            </div>
                           )}
                         </div>
                       </TableCell>
