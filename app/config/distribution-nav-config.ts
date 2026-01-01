@@ -16,7 +16,8 @@ import {
   Factory,
   FileText,
   Layers,
-  Undo2, // Added Icon for Returns
+  Undo2,
+  Wallet, // ✅ Added for Expenses
 } from "lucide-react";
 
 interface DistNavItem {
@@ -138,6 +139,17 @@ export const distributionNavItems: DistNavSection[] = [
         name: "Returns",
         href: "/dashboard/office/distribution/inventory/returns",
         icon: Undo2,
+      },
+    ],
+  },
+  // ✅ NEW SECTION FOR EXPENSES
+  {
+    title: "Operations",
+    items: [
+      {
+        name: "Expenses",
+        href: "/dashboard/office/distribution/expenses",
+        icon: Wallet,
       },
     ],
   },
