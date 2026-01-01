@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch"; // Import Switch
 import {
   Select,
   SelectContent,
@@ -152,37 +153,39 @@ export function ProductDialogs({
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-orange-900">
-              {selectedProduct ? "Edit Orange Product" : "Add Orange Product"}
-            </DialogTitle>
-            <DialogDescription>
-              Details for Orange Agency exclusive product.
-            </DialogDescription>
+            <div className="flex justify-between items-center pr-8">
+              <div>
+                <DialogTitle className="text-orange-900">
+                  {selectedProduct
+                    ? "Edit Orange Product"
+                    : "Add Orange Product"}
+                </DialogTitle>
+                <DialogDescription>
+                  Details for Orange Agency exclusive product.
+                </DialogDescription>
+              </div>
+
+              {/* --- ACTIVE STATUS TOGGLE --- */}
+              <div className="flex items-center space-x-2 border p-2 rounded-lg bg-orange-50/50">
+                <Switch
+                  id="active-mode"
+                  checked={formData.isActive}
+                  onCheckedChange={(val) =>
+                    setFormData({ ...formData, isActive: val })
+                  }
+                  className="data-[state=checked]:bg-orange-600"
+                />
+                <Label htmlFor="active-mode" className="cursor-pointer text-xs">
+                  {formData.isActive ? "Active" : "Inactive"}
+                </Label>
+              </div>
+            </div>
           </DialogHeader>
 
           <div className="grid grid-cols-2 gap-4 py-4">
-            {/* Hidden Supplier Info */}
-            <div className="col-span-2 bg-orange-50 border border-orange-100 rounded-md p-2 flex items-center gap-2 text-xs text-orange-700">
-              <Info className="w-4 h-4" />
-              This product will be automatically assigned to{" "}
-              <strong>Orange Agency</strong>.
-            </div>
-
-            {/* SKU */}
-            <div className="col-span-1 space-y-2">
-              <Label>Item Code (SKU)</Label>
-              <Input
-                value={formData.sku}
-                onChange={(e) =>
-                  setFormData({ ...formData, sku: e.target.value })
-                }
-                placeholder="Auto-generated if blank"
-                className="font-mono"
-              />
-            </div>
-
-            {/* Name */}
-            <div className="col-span-1 space-y-2">
+        
+            {/* Product Name - Moved to Top & Full Width */}
+            <div className="col-span-2 space-y-2">
               <Label>Product Name *</Label>
               <Input
                 value={formData.name}
@@ -192,6 +195,21 @@ export function ProductDialogs({
                 placeholder="Product Name"
               />
             </div>
+
+            {/* --- ITEM CODE (SKU) INPUT --- */}
+            {/* Only show SKU when editing. Hidden for new products. 
+                If visible, it takes 1 column, allowing Category to sit next to it. */}
+            {selectedProduct && (
+              <div className="col-span-1 space-y-2">
+                <Label>Item Code (SKU)</Label>
+                <Input
+                  value={formData.sku}
+                  disabled
+                  placeholder="Auto-generated"
+                  className="font-mono bg-muted"
+                />
+              </div>
+            )}
 
             {/* Category Selection */}
             <div className="space-y-2">
@@ -209,7 +227,7 @@ export function ProductDialogs({
                   });
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select Category" />
                 </SelectTrigger>
                 <SelectContent>
@@ -234,7 +252,7 @@ export function ProductDialogs({
                 }
                 disabled={!formData.category}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select Sub Category" />
                 </SelectTrigger>
                 <SelectContent>
@@ -250,7 +268,7 @@ export function ProductDialogs({
               </Select>
             </div>
 
-            {/* Brand/Model/Spec Sections - Similar logic, standard inputs */}
+            {/* Brand/Model/Spec Sections - Standard inputs */}
             <div className="space-y-2">
               <Label>Brand</Label>
               <Select
@@ -263,7 +281,7 @@ export function ProductDialogs({
                   })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select Brand" />
                 </SelectTrigger>
                 <SelectContent>
@@ -289,7 +307,7 @@ export function ProductDialogs({
                 }
                 disabled={!formData.brand}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select Sub Brand" />
                 </SelectTrigger>
                 <SelectContent>
@@ -316,7 +334,7 @@ export function ProductDialogs({
                 }
                 disabled={!formData.category}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select Model" />
                 </SelectTrigger>
                 <SelectContent>
@@ -342,7 +360,7 @@ export function ProductDialogs({
                 }
                 disabled={!formData.modelType}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select Sub Model" />
                 </SelectTrigger>
                 <SelectContent>
@@ -356,7 +374,8 @@ export function ProductDialogs({
               </Select>
             </div>
 
-            <div className="col-span-2 space-y-2">
+            {/* Specification - Adjusted to col-span-1 to match others */}
+            <div className="col-span-1 space-y-2">
               <Label>Specification</Label>
               <Select
                 value={formData.sizeSpec}
@@ -368,7 +387,7 @@ export function ProductDialogs({
                 }
                 disabled={!formData.category}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select Spec" />
                 </SelectTrigger>
                 <SelectContent>
@@ -439,7 +458,7 @@ export function ProductDialogs({
                     setFormData({ ...formData, unitOfMeasure: val })
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -454,6 +473,7 @@ export function ProductDialogs({
                 <Input
                   type="number"
                   value={formData.stock}
+                  disabled={!!selectedProduct} // Disable if editing
                   onChange={(e) =>
                     setFormData({
                       ...formData,

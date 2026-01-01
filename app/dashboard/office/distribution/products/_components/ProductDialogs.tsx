@@ -183,19 +183,26 @@ export function ProductDialogs({
 
           <div className="grid grid-cols-2 gap-4 py-4">
             {/* --- ITEM CODE (SKU) INPUT --- */}
-            <div className="col-span-1 space-y-2">
-              <Label>Item Code (SKU)</Label>
-              <Input
-                value={formData.sku}
-                onChange={(e) =>
-                  setFormData({ ...formData, sku: e.target.value })
-                }
-                placeholder="Leave blank to auto-generate"
-              />
-            </div>
+            {/* Show first in Edit mode. Hidden in Add mode. */}
+            {selectedProduct && (
+              <div className="col-span-1 space-y-2">
+                <Label>Item Code (SKU)</Label>
+                <Input
+                  value={formData.sku}
+                  disabled
+                  placeholder="Auto-generated"
+                  className="font-mono bg-muted"
+                />
+              </div>
+            )}
 
             {/* Product Name */}
-            <div className="col-span-1 space-y-2">
+            {/* Full width in Add mode (col-span-2). Half width in Edit mode (col-span-1) to sit next to SKU. */}
+            <div
+              className={`${
+                selectedProduct ? "col-span-1" : "col-span-2"
+              } space-y-2`}
+            >
               <Label>Product Name *</Label>
               <Input
                 value={formData.name}

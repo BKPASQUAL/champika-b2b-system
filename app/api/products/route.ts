@@ -113,10 +113,37 @@ export async function POST(request: NextRequest) {
     const val = productSchema.parse(body);
 
     let sku = val.sku;
+
+    // ✅ Auto-Generate SKU if not provided
     if (!sku) {
-      // Auto-generate SKU logic (Simplified for brevity, assuming full logic from previous turn is desired,
-      // but keeping this consistent with the file provided in context)
-      sku = `SKU-${Date.now().toString().slice(-6)}`;
+      // 1. Get Prefix (First 2 letters of Supplier, Uppercase)
+      const prefix = (val.supplier || "XX").substring(0, 2).toUpperCase();
+
+      // 2. Fetch ALL existing SKUs that start with this prefix
+      // We do this to safely find the highest number even if SKUs are mixed (e.g., OR-1 vs OR-0001)
+      const { data: existingSkus } = await supabaseAdmin
+        .from("products")
+        .select("sku")
+        .ilike("sku", `${prefix}-%`);
+
+      let maxNum = 0;
+
+      if (existingSkus && existingSkus.length > 0) {
+        existingSkus.forEach((item) => {
+          if (item.sku) {
+            // Split by '-' and take the last part
+            const parts = item.sku.split("-");
+            // Only consider the last part if it is a number
+            const numPart = parseInt(parts[parts.length - 1], 10);
+            if (!isNaN(numPart) && numPart > maxNum) {
+              maxNum = numPart;
+            }
+          }
+        });
+      }
+
+      // 3. Increment and Pad (e.g., 5 -> "0006")
+      sku = `${prefix}-${(maxNum + 1).toString().padStart(4, "0")}`;
     }
 
     const { data: rules } = await supabaseAdmin
