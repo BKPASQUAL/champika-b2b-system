@@ -42,7 +42,7 @@ import {
   Trash2,
   AlertCircle,
   Loader2,
-  MapPin, // ✅ Added MapPin icon
+  MapPin,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -196,8 +196,8 @@ export default function StockAdjustmentPage() {
       if (!res.ok) throw new Error("Update failed");
 
       toast.success("Stock adjustments saved successfully!");
-      // Redirect back to Distribution Inventory Page
-      router.push(`/dashboard/office/distribution/inventory/${locationId}`);
+      // Redirect to Orange Inventory Page
+      router.push(`/dashboard/office/orange/inventory/${locationId}`);
     } catch (error) {
       toast.error("Failed to save adjustments");
     } finally {
@@ -208,7 +208,7 @@ export default function StockAdjustmentPage() {
   if (loading) {
     return (
       <div className="flex h-screen justify-center items-center">
-        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+        <Loader2 className="w-8 h-8 animate-spin text-orange-600" />
       </div>
     );
   }
@@ -224,11 +224,10 @@ export default function StockAdjustmentPage() {
           <h1 className="text-2xl font-bold flex items-center gap-2">
             Stock Adjustment
           </h1>
-          {/* ✅ Updated Description to show Location Name */}
           <p className="text-muted-foreground text-sm flex items-center gap-1">
             Update physical stock counts for{" "}
             {locationName ? (
-              <span className="font-semibold text-blue-600 flex items-center gap-1">
+              <span className="font-semibold text-orange-600 flex items-center gap-1">
                 <MapPin className="w-3 h-3" />
                 {locationName}
               </span>
@@ -332,7 +331,7 @@ export default function StockAdjustmentPage() {
 
             {/* 4. Add Button */}
             <Button
-              className="w-full bg-blue-600 hover:bg-blue-700"
+              className="w-full bg-orange-600 hover:bg-orange-700"
               onClick={handleAddToTable}
               disabled={!selectedProductId || adjustmentValue === ""}
             >
@@ -385,7 +384,7 @@ export default function StockAdjustmentPage() {
                         <TableCell className="text-right text-muted-foreground">
                           {item.currentStock}
                         </TableCell>
-                        <TableCell className="text-right font-bold text-blue-600">
+                        <TableCell className="text-right font-bold text-orange-600">
                           {item.newStock}
                         </TableCell>
                         <TableCell className="text-right">

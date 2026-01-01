@@ -113,6 +113,17 @@ export function ProductTable({
                   Stock {getSortIcon("stock")}
                 </div>
               </TableHead>
+
+              {/* ✅ ADDED MRP COLUMN */}
+              <TableHead
+                className="text-right cursor-pointer hover:bg-orange-100/50"
+                onClick={() => onSort("mrp")}
+              >
+                <div className="flex items-center justify-end text-orange-900">
+                  MRP {getSortIcon("mrp")}
+                </div>
+              </TableHead>
+
               <TableHead
                 className="text-right cursor-pointer hover:bg-orange-100/50"
                 onClick={() => onSort("sellingPrice")}
@@ -130,7 +141,7 @@ export function ProductTable({
             {products.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={7}
+                  colSpan={8} // Increased colSpan to account for new column
                   className="text-center py-8 text-muted-foreground"
                 >
                   No Orange products found matching your criteria.
@@ -192,6 +203,12 @@ export function ProductTable({
                       </span>
                     </span>
                   </TableCell>
+
+                  {/* ✅ ADDED MRP CELL */}
+                  <TableCell className="text-right font-medium text-sm text-muted-foreground">
+                    LKR {product.mrp.toLocaleString()}
+                  </TableCell>
+
                   <TableCell className="text-right font-medium text-sm">
                     LKR {product.sellingPrice.toLocaleString()}
                   </TableCell>
