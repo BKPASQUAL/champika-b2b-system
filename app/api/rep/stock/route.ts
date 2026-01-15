@@ -6,6 +6,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId");
+    const supplier = searchParams.get("supplier"); // ✅ Get supplier filter
 
     if (!userId) {
       return NextResponse.json({ error: "User ID required" }, { status: 400 });
@@ -26,15 +27,15 @@ export async function GET(request: NextRequest) {
 
     const locationIds = assignments.map((a) => a.location_id);
 
-    // 2. Fetch stocks for these locations
-    // We join with the products table to get product details
-    const { data: stocks, error: stockError } = await supabaseAdmin
+    // 2. Build the Query
+    // Use !inner on products to ensure we filter stocks based on product properties
+    let query = supabaseAdmin
       .from("product_stocks")
       .select(
         `
         quantity,
         location_id,
-        products (
+        products!inner (
           id,
           sku,
           name,
@@ -43,16 +44,24 @@ export async function GET(request: NextRequest) {
           unit_of_measure,
           category,
           brand,
-          is_active
+          is_active,
+          supplier_name
         )
       `
       )
       .in("location_id", locationIds)
       .gt("quantity", 0); // Only show items that are actually in stock
 
+    // ✅ 3. Apply Supplier Filter if provided
+    if (supplier) {
+      query = query.eq("products.supplier_name", supplier);
+    }
+
+    const { data: stocks, error: stockError } = await query;
+
     if (stockError) throw stockError;
 
-    // 3. Aggregate data
+    // 4. Aggregate data
     // (In case a user is assigned to multiple locations, we sum the stock)
     const productMap = new Map();
 
@@ -61,8 +70,6 @@ export async function GET(request: NextRequest) {
       if (!p) return;
 
       // --- FILTER: Hide Inactive Products ---
-      // If is_active is explicitly false, skip this item.
-      // (We treat null/undefined as true to be safe, or stricly check false)
       if (p.is_active === false) return;
 
       if (productMap.has(p.id)) {
@@ -78,6 +85,7 @@ export async function GET(request: NextRequest) {
           stock_quantity: item.quantity,
           unit_of_measure: p.unit_of_measure || "unit",
           category: p.category,
+          supplier: p.supplier_name, // Return supplier info
         });
       }
     });

@@ -119,12 +119,11 @@ export default function CreateWiremanInvoicePage() {
   const [productOpen, setProductOpen] = useState(false);
 
   // Current Item Being Added
-  // ✅ Changed quantity types to allow empty string ""
   const [currentItem, setCurrentItem] = useState<{
     productId: string;
     sku: string;
-    quantity: number | string; // Allow string for empty input
-    freeQuantity: number | string; // Allow string for empty input
+    quantity: number | string;
+    freeQuantity: number | string;
     unit: string;
     mrp: number;
     unitPrice: number;
@@ -133,8 +132,8 @@ export default function CreateWiremanInvoicePage() {
   }>({
     productId: "",
     sku: "",
-    quantity: "", // ✅ Default Empty
-    freeQuantity: "", // ✅ Default Empty
+    quantity: "",
+    freeQuantity: "",
     unit: "",
     mrp: 0,
     unitPrice: 0,
@@ -147,7 +146,6 @@ export default function CreateWiremanInvoicePage() {
     const fetchInitialData = async () => {
       setLoading(true);
       try {
-        // 1. Get Logged-in User
         const user = getUserBusinessContext();
         if (!user || !user.businessId) {
           toast.error("Session missing. Please log in again.");
@@ -158,7 +156,7 @@ export default function CreateWiremanInvoicePage() {
         setBusinessId(user.businessId);
         setCurrentUser({ id: user.id, name: user.name });
 
-        // 2. Fetch Customers (Filtered by Business)
+        // Fetch Customers
         const customersRes = await fetch(
           `/api/customers?businessId=${user.businessId}`
         );
@@ -180,15 +178,17 @@ export default function CreateWiremanInvoicePage() {
     fetchInitialData();
   }, [router]);
 
-  // --- 2. Fetch Products for Current User ---
+  // --- 2. Fetch Products (Filtered by Wireman Agency) ---
   useEffect(() => {
     const fetchUserStock = async () => {
       if (!salesRepId) return;
 
       setStockLoading(true);
       try {
-        // Fetch stock specifically for the logged-in user
-        const res = await fetch(`/api/rep/stock?userId=${salesRepId}`);
+        // ✅ ADDED: &supplier=Wireman Agency to filter specifically for Wireman products
+        const res = await fetch(
+          `/api/rep/stock?userId=${salesRepId}&supplier=Wireman Agency`
+        );
         if (!res.ok) throw new Error("Failed to load stock");
 
         const productsData = await res.json();
@@ -224,8 +224,8 @@ export default function CreateWiremanInvoicePage() {
     setCurrentItem({
       productId: product.id,
       sku: product.sku,
-      quantity: "", // ✅ Reset to empty on new product select
-      freeQuantity: "", // ✅ Reset to empty
+      quantity: "",
+      freeQuantity: "",
       unit: product.unit_of_measure,
       mrp: product.mrp,
       unitPrice: product.selling_price,
@@ -284,8 +284,8 @@ export default function CreateWiremanInvoicePage() {
     setCurrentItem({
       productId: "",
       sku: "",
-      quantity: "", // ✅ Reset to empty
-      freeQuantity: "", // ✅ Reset to empty
+      quantity: "",
+      freeQuantity: "",
       unit: "",
       mrp: 0,
       unitPrice: 0,
@@ -368,7 +368,6 @@ export default function CreateWiremanInvoicePage() {
     (p) => !items.some((i) => i.productId === p.id)
   );
 
-  // Helper for live calculation in form
   const currentLiveQty = parseNumber(currentItem.quantity);
   const currentLiveDiscountAmt =
     (currentItem.unitPrice * currentLiveQty * currentItem.discountPercent) /
@@ -597,9 +596,8 @@ export default function CreateWiremanInvoicePage() {
                   <Input
                     type="number"
                     min="1"
-                    placeholder="Qty" // ✅ Placeholder
+                    placeholder="Qty"
                     value={currentItem.quantity}
-                    // ✅ Allow Empty String
                     onChange={(e) => {
                       const val = e.target.value;
                       setCurrentItem({
@@ -614,9 +612,8 @@ export default function CreateWiremanInvoicePage() {
                   <Input
                     type="number"
                     min="0"
-                    placeholder="Free" // ✅ Placeholder
+                    placeholder="Free"
                     value={currentItem.freeQuantity}
-                    // ✅ Allow Empty String
                     onChange={(e) => {
                       const val = e.target.value;
                       setCurrentItem({
