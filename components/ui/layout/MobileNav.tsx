@@ -4,13 +4,14 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, Store, Package, Warehouse, Globe } from "lucide-react";
+import { Menu, Store, Package, Warehouse, Globe, Zap } from "lucide-react"; // ✅ Added Zap
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { roleNavItems, UserRole } from "@/app/config/nav-config";
 import { retailOfficeNavItems } from "@/app/config/retail-nav-config";
 import { distributionNavItems } from "@/app/config/distribution-nav-config";
 import { orangeOfficeNavItems } from "@/app/config/orange-nav-config";
+import { wiremanOfficeNavItems } from "@/app/config/wireman-nav-config"; // ✅ Imported
 import {
   Sheet,
   SheetContent,
@@ -24,6 +25,7 @@ interface MobileNavProps {
   isRetail?: boolean;
   isDistribution?: boolean;
   isOrange?: boolean;
+  isWireman?: boolean; // ✅ Added Prop
 }
 
 export function MobileNav({
@@ -31,13 +33,16 @@ export function MobileNav({
   isRetail = false,
   isDistribution = false,
   isOrange = false,
+  isWireman = false, // ✅ Added Default
 }: MobileNavProps) {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
 
   // Determine which navigation to show
   let navSections;
-  if (isOrange) {
+  if (isWireman) {
+    navSections = wiremanOfficeNavItems; // ✅ Added Logic
+  } else if (isOrange) {
     navSections = orangeOfficeNavItems;
   } else if (isRetail) {
     navSections = retailOfficeNavItems;
@@ -81,7 +86,13 @@ export function MobileNav({
 
         {/* Logo Header */}
         <div className="h-16 flex items-center border-b px-6">
-          {isOrange ? (
+          {isWireman ? (
+            <>
+              <Zap className="h-6 w-6 text-red-600 shrink-0" />{" "}
+              {/* ✅ Wireman Logo */}
+              <span className="ml-2 text-lg font-semibold">Wireman Portal</span>
+            </>
+          ) : isOrange ? (
             <>
               <Globe className="h-6 w-6 text-orange-600 shrink-0" />
               <span className="ml-2 text-lg font-semibold">Agency Portal</span>
@@ -111,11 +122,13 @@ export function MobileNav({
               variant="secondary"
               className={cn(
                 "w-full justify-center",
+                isWireman && "bg-red-100 text-red-700 border-red-200", // ✅ Red Theme
                 isOrange && "bg-orange-100 text-orange-700 border-orange-200",
                 isRetail && "bg-green-100 text-green-700 border-green-200",
                 isDistribution && "bg-blue-100 text-blue-700 border-blue-200"
               )}
             >
+              {isWireman && <Zap className="h-3 w-3 mr-1" />}
               {isOrange && <Globe className="h-3 w-3 mr-1" />}
               {isRetail && <Store className="h-3 w-3 mr-1" />}
               {isDistribution && <Warehouse className="h-3 w-3 mr-1" />}
@@ -152,7 +165,9 @@ export function MobileNav({
                           className={cn(
                             "w-full justify-start gap-3 h-10 px-3",
                             isActive
-                              ? isOrange
+                              ? isWireman
+                                ? "bg-red-100 text-red-700 hover:bg-red-200"
+                                : isOrange
                                 ? "bg-orange-100 text-orange-700 hover:bg-orange-200"
                                 : isRetail
                                 ? "bg-green-100 text-green-700 hover:bg-green-200"

@@ -6,9 +6,9 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Sprout, Loader2, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
+import { BUSINESS_IDS } from "@/app/config/business-constants"; // ✅ Imported Constants
 
 export default function LoginPage() {
   const router = useRouter();
@@ -66,15 +66,23 @@ export default function LoginPage() {
       if (data.role === "office" && data.business) {
         const businessName = data.business.name.toLowerCase();
 
-        // Check 1: Distribution Center (Prioritize this based on your request)
-        if (
+        // 1. ✅ Check for Wireman Agency (ID Based - Best Practice)
+        if (data.business.id === BUSINESS_IDS.WIREMAN_AGENCY) {
+          router.push("/dashboard/office/wireman");
+        }
+        // 2. Check for Orange Agency (ID Based)
+        else if (data.business.id === BUSINESS_IDS.ORANGE_AGENCY) {
+          router.push("/dashboard/office/orange");
+        }
+        // 3. Check Distribution Center
+        else if (
           businessName.includes("distribution") ||
           (businessName.includes("champika hardware") &&
             !businessName.includes("retail"))
         ) {
           router.push("/dashboard/office/distribution");
         }
-        // Check 2: Retail Branch
+        // 4. Check Retail Branch
         else if (businessName.includes("retail")) {
           router.push("/dashboard/office/retail");
         }

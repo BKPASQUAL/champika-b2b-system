@@ -5,11 +5,12 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { LogOut, Package, Store, Warehouse, Globe } from "lucide-react";
+import { LogOut, Package, Store, Warehouse, Globe, Zap } from "lucide-react"; // ✅ Added Zap icon
 import { roleNavItems, UserRole } from "@/app/config/nav-config";
 import { retailOfficeNavItems } from "@/app/config/retail-nav-config";
 import { distributionNavItems } from "@/app/config/distribution-nav-config";
 import { orangeOfficeNavItems } from "@/app/config/orange-nav-config";
+import { wiremanOfficeNavItems } from "@/app/config/wireman-nav-config"; // ✅ Imported
 import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 
@@ -18,6 +19,7 @@ interface AppSidebarProps {
   isRetail?: boolean;
   isDistribution?: boolean;
   isOrange?: boolean;
+  isWireman?: boolean; // ✅ Added Prop
 }
 
 export function AppSidebar({
@@ -25,13 +27,16 @@ export function AppSidebar({
   isRetail = false,
   isDistribution = false,
   isOrange = false,
+  isWireman = false, // ✅ Added Default
 }: AppSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
 
   // --- NAVIGATION SELECTION LOGIC ---
   let navSections;
-  if (isOrange) {
+  if (isWireman) {
+    navSections = wiremanOfficeNavItems; // ✅ Added Logic
+  } else if (isOrange) {
     navSections = orangeOfficeNavItems;
   } else if (isRetail) {
     navSections = retailOfficeNavItems;
@@ -83,7 +88,15 @@ export function AppSidebar({
     <div className="hidden lg:flex w-64 border-r bg-card h-screen sticky top-0 flex-col shadow-sm z-40">
       {/* Logo Header */}
       <div className="h-16 flex items-center border-b px-6 shrink-0">
-        {isOrange ? (
+        {isWireman ? (
+          <>
+            <Zap className="h-6 w-6 text-red-600 shrink-0" />{" "}
+            {/* ✅ Wireman Logo */}
+            <span className="ml-2 text-lg font-semibold truncate">
+              Wireman Portal
+            </span>
+          </>
+        ) : isOrange ? (
           <>
             <Globe className="h-6 w-6 text-orange-600 shrink-0" />
             <span className="ml-2 text-lg font-semibold truncate">
@@ -121,11 +134,13 @@ export function AppSidebar({
             variant="secondary"
             className={cn(
               "w-full justify-center",
+              isWireman && "bg-red-100 text-red-700 border-red-200", // ✅ Red Theme
               isOrange && "bg-orange-100 text-orange-700 border-orange-200",
               isRetail && "bg-green-100 text-green-700 border-green-200",
               isDistribution && "bg-blue-100 text-blue-700 border-blue-200"
             )}
           >
+            {isWireman && <Zap className="h-3 w-3 mr-1" />}
             {isOrange && <Globe className="h-3 w-3 mr-1" />}
             {isRetail && <Store className="h-3 w-3 mr-1" />}
             {isDistribution && <Warehouse className="h-3 w-3 mr-1" />}
@@ -157,7 +172,9 @@ export function AppSidebar({
                         className={cn(
                           "w-full justify-start gap-3 h-10 px-3",
                           isActive
-                            ? isOrange
+                            ? isWireman // ✅ Active State for Wireman
+                              ? "bg-red-100 text-red-700 hover:bg-red-200"
+                              : isOrange
                               ? "bg-orange-100 text-orange-700 hover:bg-orange-200"
                               : isRetail
                               ? "bg-green-100 text-green-700 hover:bg-green-200"
@@ -185,12 +202,14 @@ export function AppSidebar({
           <div
             className={cn(
               "h-9 w-9 rounded-full flex items-center justify-center font-bold text-xs",
+              isWireman && "bg-red-100 text-red-700", // ✅ User Initials Theme
               isOrange && "bg-orange-100 text-orange-700",
               isRetail && "bg-green-100 text-green-700",
               isDistribution && "bg-blue-100 text-blue-700",
               !isOrange &&
                 !isRetail &&
                 !isDistribution &&
+                !isWireman &&
                 "bg-primary/10 text-primary"
             )}
           >
@@ -211,6 +230,7 @@ export function AppSidebar({
           disabled={isLoggingOut}
           className={cn(
             "w-full justify-start gap-2",
+            isWireman && "hover:bg-red-50 hover:text-red-600", // ✅ Logout Hover Theme
             isOrange && "hover:bg-orange-50 hover:text-orange-600",
             isRetail && "hover:bg-green-50 hover:text-green-600",
             isDistribution && "hover:bg-blue-50 hover:text-blue-600"
