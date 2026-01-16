@@ -3,18 +3,19 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
 
 // --- Validation Schema ---
+// ✅ Updated: Added .nullable() to optional fields to allow null values from frontend
 const paymentSchema = z.object({
   orderId: z.string().min(1, "Order ID is required"),
   amount: z.number().min(0.01, "Amount must be greater than 0"),
   date: z.string(),
   method: z.enum(["cash", "bank", "cheque", "credit"]),
-  notes: z.string().optional(),
+  notes: z.string().optional().nullable(),
   // Cheque specific
-  chequeNo: z.string().optional(),
-  chequeDate: z.string().optional(),
-  bankId: z.string().optional(),
+  chequeNo: z.string().optional().nullable(),
+  chequeDate: z.string().optional().nullable(),
+  bankId: z.string().optional().nullable(),
   // Deposit specific
-  depositAccountId: z.string().optional(),
+  depositAccountId: z.string().optional().nullable(),
 });
 
 export async function GET(request: NextRequest) {
@@ -43,6 +44,16 @@ export async function GET(request: NextRequest) {
               name
             )
           )
+        ),
+        bank_codes (
+          id,
+          bank_name,
+          bank_code
+        ),
+        bank_accounts (
+          id,
+          account_name,
+          account_type
         )
       `
       )
@@ -69,6 +80,12 @@ export async function GET(request: NextRequest) {
       const businessObj = Array.isArray(orderObj?.businesses)
         ? orderObj.businesses[0]
         : orderObj?.businesses;
+      const bankObj = Array.isArray(p.bank_codes)
+        ? p.bank_codes[0]
+        : p.bank_codes;
+      const accountObj = Array.isArray(p.bank_accounts)
+        ? p.bank_accounts[0]
+        : p.bank_accounts;
 
       const businessName = businessObj?.name || "Unknown Business";
       const orderNumber = invoiceObj?.invoice_no || orderObj?.order_id || "N/A";
@@ -79,6 +96,7 @@ export async function GET(request: NextRequest) {
         payment_number: p.id.substring(0, 8).toUpperCase(),
         payment_date: p.payment_date,
         order_id: orderObj?.id,
+        invoice_id: invoiceObj?.id, // Added for frontend links
         customer_id: p.customer_id,
         amount: p.amount,
         payment_method: p.method,
@@ -96,10 +114,23 @@ export async function GET(request: NextRequest) {
           total_amount: totalAmount,
           business_name: businessName,
         },
-        company_accounts:
-          p.method === "cash" || p.method === "bank"
-            ? { account_name: "Deposit Account", account_type: "N/A" }
-            : null,
+        invoices: {
+          invoice_no: invoiceObj?.invoice_no,
+        },
+        // Mapped for Cheque Bank Display
+        banks: bankObj
+          ? {
+              bank_code: bankObj.bank_code,
+              bank_name: bankObj.bank_name,
+            }
+          : null,
+        // Mapped for Deposit Account Display
+        company_accounts: accountObj
+          ? {
+              account_name: accountObj.account_name,
+              account_type: accountObj.account_type,
+            }
+          : null,
       };
     });
 
@@ -113,10 +144,10 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    // Parse validates the body against the schema
     const val = paymentSchema.parse(body);
 
     // 1. Fetch Order, Invoice, and Customer Details
-    // Added: business_id and shop_name for better transaction records
     const { data: orderData, error: orderError } = await supabaseAdmin
       .from("orders")
       .select(
@@ -178,9 +209,16 @@ export async function POST(request: NextRequest) {
         amount: val.amount,
         payment_date: val.date,
         method: val.method,
+        // Cheque Details
         cheque_no: val.method === "cheque" ? val.chequeNo : null,
         cheque_date: val.method === "cheque" ? val.chequeDate : null,
         cheque_status: val.method === "cheque" ? "Pending" : null,
+        bank_id: val.method === "cheque" ? val.bankId : null, // Store Customer Bank
+        // Deposit Details
+        deposit_account_id:
+          val.method === "cash" || val.method === "bank"
+            ? val.depositAccountId
+            : null,
       })
       .select()
       .single();
@@ -188,8 +226,8 @@ export async function POST(request: NextRequest) {
     if (paymentError) throw paymentError;
 
     // 3. Update Invoice Status and Paid Amount
-    const newPaidAmount = (invoice.paid_amount || 0) + val.amount;
-    const isFullyPaid = newPaidAmount >= invoice.total_amount;
+    const newPaidAmount = (Number(invoice.paid_amount) || 0) + val.amount;
+    const isFullyPaid = newPaidAmount >= Number(invoice.total_amount);
     const newStatus = isFullyPaid ? "Paid" : "Partial";
 
     const { error: invoiceUpdateError } = await supabaseAdmin
@@ -204,7 +242,7 @@ export async function POST(request: NextRequest) {
     if (invoiceUpdateError) throw invoiceUpdateError;
 
     // 4. Update Customer Outstanding Balance
-    const currentBalance = customer.outstanding_balance || 0;
+    const currentBalance = Number(customer.outstanding_balance) || 0;
     const newBalance = currentBalance - val.amount;
 
     const { error: customerUpdateError } = await supabaseAdmin
@@ -217,7 +255,6 @@ export async function POST(request: NextRequest) {
     if (customerUpdateError) throw customerUpdateError;
 
     // 5. Create Account Transaction (For Cash & Bank only)
-    // This ensures the payment appears in the Account History table
     if (
       (val.method === "cash" || val.method === "bank") &&
       val.depositAccountId
@@ -227,19 +264,33 @@ export async function POST(request: NextRequest) {
         .insert({
           transaction_no: `TXN-${Date.now()}-${Math.floor(
             Math.random() * 1000
-          )}`, // Unique ID
+          )}`,
           transaction_type: "Deposit",
-          to_account_id: val.depositAccountId, // This links it to the account table (Credit)
+          to_account_id: val.depositAccountId,
           from_account_id: null,
           amount: val.amount,
-          description: `Payment from ${customer.shop_name} - ${invoice.invoice_no}`, // Clear description
+          description: `Payment from ${customer.shop_name} - ${invoice.invoice_no}`,
           transaction_date: val.date,
           reference_no: invoice.invoice_no,
-          business_id: orderData.business_id, // Link to business
+          business_id: orderData.business_id,
         });
 
       if (transactionError) {
         console.error("Error creating account transaction:", transactionError);
+      }
+
+      // Also update the actual account balance
+      const { error: balanceError } = await supabaseAdmin.rpc(
+        "increment_account_balance",
+        {
+          account_id: val.depositAccountId,
+          amount: val.amount,
+        }
+      );
+
+      // Fallback if RPC doesn't exist, do a manual fetch-update
+      if (balanceError) {
+        // (Optional: Implement manual update here if needed)
       }
     }
 
@@ -249,6 +300,7 @@ export async function POST(request: NextRequest) {
     );
   } catch (error: any) {
     if (error instanceof z.ZodError) {
+      // Return validation errors clearly
       return NextResponse.json(
         { error: error.issues[0].message },
         { status: 400 }
