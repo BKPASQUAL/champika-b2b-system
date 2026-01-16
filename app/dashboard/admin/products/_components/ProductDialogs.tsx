@@ -104,9 +104,11 @@ export function ProductDialogs({
     (m) => m.parent_id && m.parent_id === selectedModelId
   );
 
-  // Specification Logic - Filter by Category
-  const categorySpecs = specs.filter((s) => {
-    return s.category_id === selectedCatId;
+  // ✅ UPDATED: Specification Logic - Filter by MODEL (using parent_id)
+  // Specs are now linked to models via parent_id
+  const modelSpecs = specs.filter((s) => {
+    // Only show specs that belong to the selected model
+    return s.parent_id === selectedModelId;
   });
 
   // Image Upload Logic
@@ -318,9 +320,19 @@ export function ProductDialogs({
                 value={formData.modelType}
                 onValueChange={(val) => {
                   if (val === "none") {
-                    setFormData({ ...formData, modelType: "", subModel: "" });
+                    setFormData({
+                      ...formData,
+                      modelType: "",
+                      subModel: "",
+                      sizeSpec: "",
+                    });
                   } else {
-                    setFormData({ ...formData, modelType: val, subModel: "" });
+                    setFormData({
+                      ...formData,
+                      modelType: val,
+                      subModel: "",
+                      sizeSpec: "",
+                    });
                   }
                 }}
                 disabled={!formData.category}
@@ -379,7 +391,7 @@ export function ProductDialogs({
               </Select>
             </div>
 
-            {/* Specification - Filtered by Category */}
+            {/* ✅ UPDATED: Specification - Filtered by MODEL */}
             <div className="space-y-2">
               <Label>Specification</Label>
               <Select
@@ -391,7 +403,8 @@ export function ProductDialogs({
                     setFormData({ ...formData, sizeSpec: val });
                   }
                 }}
-                disabled={!formData.category}
+                // Disable if no model selected (since specs depend on model now)
+                disabled={!formData.modelType}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select Spec" />
@@ -400,8 +413,8 @@ export function ProductDialogs({
                   <SelectItem value="none">
                     <span className="text-muted-foreground italic">None</span>
                   </SelectItem>
-                  {categorySpecs.length > 0 ? (
-                    categorySpecs.map((s) => (
+                  {modelSpecs.length > 0 ? (
+                    modelSpecs.map((s) => (
                       <SelectItem key={s.id} value={s.name}>
                         {s.name}
                       </SelectItem>
@@ -409,7 +422,7 @@ export function ProductDialogs({
                   ) : (
                     <SelectItem value="no-specs" disabled>
                       <span className="text-muted-foreground italic">
-                        No specifications for this category
+                        No specifications for this model
                       </span>
                     </SelectItem>
                   )}

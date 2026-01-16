@@ -68,6 +68,11 @@ interface Category {
 export function CategorySettings() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [allCategories, setAllCategories] = useState<Category[]>([]);
+
+  // ✅ NEW: State for models dropdown in the Add Spec dialog
+  const [availableModels, setAvailableModels] = useState<Category[]>([]);
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [newName, setNewName] = useState("");
@@ -122,7 +127,7 @@ export function CategorySettings() {
       color: "text-orange-600",
       bgColor: "bg-orange-50 dark:bg-orange-950/30",
       borderColor: "border-orange-200 dark:border-orange-800",
-      description: "Manage product specifications by category",
+      description: "Manage product specifications by model",
     },
     {
       value: "route",
@@ -191,6 +196,24 @@ export function CategorySettings() {
     }
   }, [activeType]);
 
+  // ✅ NEW: Fetch Models when Category is selected (Only for Spec)
+  useEffect(() => {
+    if (activeType === "spec" && selectedCategoryId) {
+      fetch(
+        `/api/settings/categories?type=model&category_id=${selectedCategoryId}`
+      )
+        .then((res) => res.json())
+        .then((data) => {
+          // Only show Main Models (no sub-models) for linking specs
+          const mainModels = data.filter((m: Category) => !m.parent_id);
+          setAvailableModels(mainModels);
+        })
+        .catch((err) => console.error(err));
+    } else {
+      setAvailableModels([]);
+    }
+  }, [activeType, selectedCategoryId]);
+
   useEffect(() => {
     fetchAllCategories();
   }, [fetchAllCategories]);
@@ -199,6 +222,7 @@ export function CategorySettings() {
     fetchCategories();
     setSelectedParent(null);
     setSelectedCategoryId(null);
+    setSelectedModelId(null);
     setNewName("");
   }, [fetchCategories]);
 
@@ -208,6 +232,8 @@ export function CategorySettings() {
     if (parentId) {
       setSelectedCategoryId(null);
     }
+    // Reset model selection
+    setSelectedModelId(null);
     setAddDialogOpen(true);
   };
 
@@ -217,12 +243,15 @@ export function CategorySettings() {
       return;
     }
 
-    if (
-      (activeType === "model" || activeType === "spec") &&
-      !selectedParent &&
-      !selectedCategoryId
-    ) {
-      toast.error(`Please select a category for this ${activeType}`);
+    // Validation for Model/Spec
+    if (activeType === "model" && !selectedParent && !selectedCategoryId) {
+      toast.error("Please select a category for this model");
+      return;
+    }
+
+    // ✅ NEW: Validation for Spec (Must have Category AND Model)
+    if (activeType === "spec" && (!selectedCategoryId || !selectedModelId)) {
+      toast.error("Please select both a Category and a Main Model");
       return;
     }
 
@@ -233,12 +262,20 @@ export function CategorySettings() {
         parent_id: selectedParent,
       };
 
-      if (activeType === "model" || activeType === "spec") {
+      if (activeType === "model") {
         if (selectedParent) {
           payload.category_id = null;
         } else {
           payload.category_id = selectedCategoryId;
         }
+      }
+
+      // ✅ NEW: Spec Payload Logic
+      if (activeType === "spec") {
+        // Link to Category for grouping
+        payload.category_id = selectedCategoryId;
+        // Link to Model (via parent_id) for specific product filtering
+        payload.parent_id = selectedModelId;
       }
 
       const res = await fetch("/api/settings/categories", {
@@ -258,6 +295,7 @@ export function CategorySettings() {
       setNewName("");
       setSelectedParent(null);
       setSelectedCategoryId(null);
+      setSelectedModelId(null);
       setAddDialogOpen(false);
       fetchCategories();
     } catch (error) {
@@ -301,7 +339,8 @@ export function CategorySettings() {
           groupedByCategory[item.category_id] = [];
         }
         groupedByCategory[item.category_id].push(item);
-      } else if (!item.parent_id) {
+      } else if (!item.parent_id || activeType === "spec") {
+        // Note: Specs now have parent_id (Model), but we still group them by category_id
         withoutCategory.push(item);
       }
     });
@@ -403,7 +442,6 @@ export function CategorySettings() {
                           </div>
                           <span className="font-medium">{item.name}</span>
                         </div>
-                        {/* CHANGED: Removed opacity-0 group-hover:opacity-100 */}
                         <div className="flex items-center gap-2">
                           {activeType === "model" && (
                             <Button
@@ -427,6 +465,7 @@ export function CategorySettings() {
                         </div>
                       </div>
 
+                      {/* Sub-Models Render */}
                       {activeType === "model" && (
                         <div className="ml-12 space-y-1">
                           {categories
@@ -442,7 +481,6 @@ export function CategorySettings() {
                                     {sub.name}
                                   </span>
                                 </div>
-                                {/* CHANGED: Removed opacity-0 group-hover:opacity-100 */}
                                 <Button
                                   size="sm"
                                   variant="ghost"
@@ -465,6 +503,7 @@ export function CategorySettings() {
           );
         })}
 
+        {/* List of items with no Category */}
         {withoutCategory.length > 0 && (
           <Card className="border-2 border-amber-200 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-950/20 shadow-sm h-fit">
             <CardHeader className="pb-4">
@@ -499,7 +538,6 @@ export function CategorySettings() {
                     className="group flex items-center justify-between p-3 bg-background rounded-lg border hover:border-amber-300 dark:hover:border-amber-700 transition-colors"
                   >
                     <span className="font-medium">{item.name}</span>
-                    {/* CHANGED: Removed opacity-0 group-hover:opacity-100 */}
                     <Button
                       size="sm"
                       variant="ghost"
@@ -519,6 +557,7 @@ export function CategorySettings() {
   };
 
   const renderHierarchicalList = () => {
+    // ... (This function is unchanged, same as original for Category/Brand)
     if (categories.length === 0) {
       return (
         <Card
@@ -592,7 +631,6 @@ export function CategorySettings() {
 
                 <Separator />
 
-                {/* CHANGED: Removed opacity-0 group-hover:opacity-100 logic if it existed here (it didn't, but ensuring consistency) */}
                 <div className="flex items-center gap-2">
                   {(activeType === "category" ||
                     activeType === "brand" ||
@@ -630,7 +668,6 @@ export function CategorySettings() {
                             <ChevronRight className="h-3 w-3 text-muted-foreground" />
                             <span className="font-medium">{child.name}</span>
                           </div>
-                          {/* CHANGED: Removed opacity-0 group-hover:opacity-100 */}
                           <Button
                             size="sm"
                             variant="ghost"
@@ -698,6 +735,7 @@ export function CategorySettings() {
               </DialogHeader>
 
               <div className="space-y-6 py-4">
+                {/* 1. Category Selector (For Models and Specs) */}
                 {(activeType === "model" || activeType === "spec") &&
                   !selectedParent && (
                     <div className="space-y-3">
@@ -727,6 +765,39 @@ export function CategorySettings() {
                       </Select>
                     </div>
                   )}
+
+                {/* ✅ 2. Model Selector (ONLY for Specs) */}
+                {activeType === "spec" && selectedCategoryId && (
+                  <div className="space-y-3">
+                    <Label htmlFor="model" className="text-base font-semibold">
+                      Main Model <span className="text-destructive">*</span>
+                    </Label>
+                    <Select
+                      value={selectedModelId || ""}
+                      onValueChange={setSelectedModelId}
+                    >
+                      <SelectTrigger id="model" className="h-11">
+                        <SelectValue placeholder="Select a model..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableModels.length > 0 ? (
+                          availableModels.map((m) => (
+                            <SelectItem key={m.id} value={m.id}>
+                              <div className="flex items-center gap-2">
+                                <Layers className="h-4 w-4 text-muted-foreground" />
+                                {m.name}
+                              </div>
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="none" disabled>
+                            No models found
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
                 {selectedParent && (
                   <div
@@ -779,6 +850,7 @@ export function CategorySettings() {
                     setNewName("");
                     setSelectedParent(null);
                     setSelectedCategoryId(null);
+                    setSelectedModelId(null);
                   }}
                 >
                   Cancel
