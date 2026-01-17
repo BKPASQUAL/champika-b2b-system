@@ -1,14 +1,17 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import { Toaster } from "sonner"; // 1. Import Toaster
+// 1. Import standard Google Fonts instead of Geist
+import { Inter, Roboto_Mono } from "next/font/google";
+import { Toaster } from "sonner";
 import "./globals.css";
 
-const geistSans = Geist({
+// 2. Configure Inter as the sans-serif font, using the same variable name
+const geistSans = Inter({
   variable: "--font-geist-sans",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
+// 3. Configure Roboto Mono as the monospace font, using the same variable name
+const geistMono = Roboto_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
@@ -29,7 +32,6 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         {children}
-        {/* 2. Set position="top-right" here */}
         <Toaster richColors position="top-right" />
       </body>
     </html>
