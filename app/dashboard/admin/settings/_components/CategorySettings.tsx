@@ -79,8 +79,15 @@ export function CategorySettings() {
   >(null);
 
   // State for models dropdown in the Add Spec dialog
-  const [availableModels, setAvailableModels] = useState<Category[]>([]);
+  const [availableModels, setAvailableModels] = useState<Category[]>([]); // Main Models
+  const [allCategoryModels, setAllCategoryModels] = useState<Category[]>([]); // All models for filtering
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+
+  // State for Sub-Models in Add Spec dialog
+  const [availableSubModels, setAvailableSubModels] = useState<Category[]>([]);
+  const [selectedSpecSubModelId, setSelectedSpecSubModelId] = useState<
+    string | null
+  >(null);
 
   const [loading, setLoading] = useState(true);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -205,9 +212,8 @@ export function CategorySettings() {
     }
   }, [activeType]);
 
-  // Fetch Sub Categories when Category is selected (For Model AND Spec)
+  // Fetch Sub Categories when Category is selected
   useEffect(() => {
-    // ✅ UPDATED: Include activeType === "spec"
     if (
       (activeType === "model" || activeType === "spec") &&
       selectedCategoryId
@@ -224,20 +230,48 @@ export function CategorySettings() {
   // Fetch Models when Category is selected (Only for Spec)
   useEffect(() => {
     if (activeType === "spec" && selectedCategoryId) {
-      // ✅ UPDATED: Use Sub Category ID if selected, otherwise Main Category ID
       const targetId = selectedSubCategoryId || selectedCategoryId;
 
+      // Fetch ALL models for this category/subcategory
       fetch(`/api/settings/categories?type=model&category_id=${targetId}`)
         .then((res) => res.json())
         .then((data) => {
+          setAllCategoryModels(data); // Store EVERYTHING (Main + Subs)
+
+          // Filter to only show Main Models (those without a parent_id)
           const mainModels = data.filter((m: Category) => !m.parent_id);
           setAvailableModels(mainModels);
         })
         .catch((err) => console.error(err));
     } else {
       setAvailableModels([]);
+      setAllCategoryModels([]);
     }
   }, [activeType, selectedCategoryId, selectedSubCategoryId]);
+
+  // ✅ UPDATED: Fetch Sub-Models with STRICT FILTERING
+  useEffect(() => {
+    if (activeType === "spec" && selectedModelId) {
+      fetch(`/api/settings/categories?type=model&parent_id=${selectedModelId}`)
+        .then((res) => res.json())
+        .then((data) => {
+          // Double-check filter on client side:
+          // 1. Must be type 'model' (not 'spec' which might share the same parent_id)
+          // 2. Must specifically match this parent_id
+          const strictSubs = data.filter(
+            (item: Category) =>
+              item.type === "model" && item.parent_id === selectedModelId
+          );
+          setAvailableSubModels(strictSubs);
+        })
+        .catch((err) => {
+          console.error("Error fetching sub-models:", err);
+          setAvailableSubModels([]);
+        });
+    } else {
+      setAvailableSubModels([]);
+    }
+  }, [activeType, selectedModelId]);
 
   useEffect(() => {
     fetchAllCategories();
@@ -249,6 +283,7 @@ export function CategorySettings() {
     setSelectedCategoryId(null);
     setSelectedSubCategoryId(null);
     setSelectedModelId(null);
+    setSelectedSpecSubModelId(null);
     setNewName("");
   }, [fetchCategories]);
 
@@ -261,6 +296,7 @@ export function CategorySettings() {
     // Reset selections
     setSelectedSubCategoryId(null);
     setSelectedModelId(null);
+    setSelectedSpecSubModelId(null);
     setAddDialogOpen(true);
   };
 
@@ -270,14 +306,13 @@ export function CategorySettings() {
       return;
     }
 
-    // Validation for Model/Spec
     if (activeType === "model" && !selectedParent && !selectedCategoryId) {
       toast.error("Please select a category for this model");
       return;
     }
 
-    if (activeType === "spec" && (!selectedCategoryId || !selectedModelId)) {
-      toast.error("Please select both a Category and a Main Model");
+    if (activeType === "spec" && !selectedCategoryId) {
+      toast.error("Please select a Category");
       return;
     }
 
@@ -297,9 +332,14 @@ export function CategorySettings() {
       }
 
       if (activeType === "spec") {
-        // ✅ UPDATED: Save Sub Category ID if selected
         payload.category_id = selectedSubCategoryId || selectedCategoryId;
-        payload.parent_id = selectedModelId;
+
+        // Priority logic for Parent Link
+        payload.parent_id =
+          selectedSpecSubModelId ||
+          selectedModelId ||
+          selectedSubCategoryId ||
+          selectedCategoryId;
       }
 
       const res = await fetch("/api/settings/categories", {
@@ -321,6 +361,7 @@ export function CategorySettings() {
       setSelectedCategoryId(null);
       setSelectedSubCategoryId(null);
       setSelectedModelId(null);
+      setSelectedSpecSubModelId(null);
       setAddDialogOpen(false);
       fetchCategories();
     } catch (error) {
@@ -365,7 +406,21 @@ export function CategorySettings() {
         }
         groupedByCategory[item.category_id].push(item);
       } else if (!item.parent_id || activeType === "spec") {
-        withoutCategory.push(item);
+        if (activeType === "spec" && item.parent_id && !item.category_id) {
+          // Check if parent_id is actually a category
+          const parentIsCategory = fullCategoryList.some(
+            (c) => c.id === item.parent_id
+          );
+          if (parentIsCategory) {
+            if (!groupedByCategory[item.parent_id])
+              groupedByCategory[item.parent_id] = [];
+            groupedByCategory[item.parent_id].push(item);
+          } else {
+            withoutCategory.push(item);
+          }
+        } else {
+          withoutCategory.push(item);
+        }
       }
     });
 
@@ -468,7 +523,17 @@ export function CategorySettings() {
                               />
                             )}
                           </div>
-                          <span className="font-medium">{item.name}</span>
+                          <div className="flex flex-col">
+                            <span className="font-medium">{item.name}</span>
+                            {/* Show if it's a global spec (attached to category/subcat directly) */}
+                            {activeType === "spec" &&
+                              (item.parent_id === categoryId ||
+                                item.parent_id === selectedCategoryId) && (
+                                <span className="text-[10px] text-blue-600 font-semibold bg-blue-100 px-1 rounded w-fit">
+                                  ALL MODELS
+                                </span>
+                              )}
+                          </div>
                         </div>
                         <div className="flex items-center gap-2">
                           {activeType === "model" && (
@@ -776,6 +841,8 @@ export function CategorySettings() {
                         onValueChange={(val) => {
                           setSelectedCategoryId(val);
                           setSelectedSubCategoryId(null); // Reset Sub
+                          setSelectedModelId(null);
+                          setSelectedSpecSubModelId(null);
                         }}
                       >
                         <SelectTrigger id="category" className="h-11">
@@ -795,7 +862,7 @@ export function CategorySettings() {
                     </div>
                   )}
 
-                {/* ✅ 2. Sub Category Selector (For Model AND Spec) */}
+                {/* 2. Sub Category Selector (For Model AND Spec) */}
                 {(activeType === "model" || activeType === "spec") &&
                   selectedCategoryId &&
                   !selectedParent && (
@@ -811,9 +878,11 @@ export function CategorySettings() {
                       </Label>
                       <Select
                         value={selectedSubCategoryId || "none"}
-                        onValueChange={(val) =>
-                          setSelectedSubCategoryId(val === "none" ? null : val)
-                        }
+                        onValueChange={(val) => {
+                          setSelectedSubCategoryId(val === "none" ? null : val);
+                          setSelectedModelId(null);
+                          setSelectedSpecSubModelId(null);
+                        }}
                       >
                         <SelectTrigger id="subCategory" className="h-11">
                           <SelectValue placeholder="Select a sub-category..." />
@@ -838,21 +907,40 @@ export function CategorySettings() {
                     </div>
                   )}
 
-                {/* 3. Model Selector (ONLY for Specs) */}
+                {/* 3. Main Model Selector (ONLY for Specs) - NOW OPTIONAL */}
                 {activeType === "spec" && selectedCategoryId && (
                   <div className="space-y-3">
                     <Label htmlFor="model" className="text-base font-semibold">
-                      Main Model <span className="text-destructive">*</span>
+                      Main Model{" "}
+                      <span className="text-muted-foreground text-xs">
+                        (Optional - Leave empty to apply to{" "}
+                        {selectedSubCategoryId
+                          ? "Sub-Category"
+                          : "entire Category"}
+                        )
+                      </span>
                     </Label>
                     <Select
-                      value={selectedModelId || ""}
-                      onValueChange={setSelectedModelId}
+                      value={selectedModelId || "none"}
+                      onValueChange={(val) => {
+                        setSelectedModelId(val === "none" ? null : val);
+                        setSelectedSpecSubModelId(null);
+                      }}
                     >
                       <SelectTrigger id="model" className="h-11">
-                        <SelectValue placeholder="Select a model..." />
+                        <SelectValue placeholder="Select a model (Optional)..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {availableModels.length > 0 ? (
+                        <SelectItem value="none">
+                          <span className="text-muted-foreground italic">
+                            None (Apply to{" "}
+                            {selectedSubCategoryId
+                              ? "Sub-Category"
+                              : "Category"}
+                            )
+                          </span>
+                        </SelectItem>
+                        {availableModels.length > 0 &&
                           availableModels.map((m) => (
                             <SelectItem key={m.id} value={m.id}>
                               <div className="flex items-center gap-2">
@@ -860,15 +948,48 @@ export function CategorySettings() {
                                 {m.name}
                               </div>
                             </SelectItem>
-                          ))
-                        ) : (
-                          <SelectItem value="none" disabled>
-                            No models found{" "}
-                            {selectedSubCategoryId
-                              ? "for this sub-category"
-                              : ""}
-                          </SelectItem>
-                        )}
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {/* 4. Sub Model Selector (ONLY for Specs, if Main Model selected) */}
+                {activeType === "spec" && selectedModelId && (
+                  <div className="space-y-3">
+                    <Label
+                      htmlFor="subModel"
+                      className="text-base font-semibold"
+                    >
+                      Sub Model{" "}
+                      <span className="text-muted-foreground text-xs">
+                        (Optional - Prioritize this)
+                      </span>
+                    </Label>
+                    <Select
+                      value={selectedSpecSubModelId || "none"}
+                      onValueChange={(val) =>
+                        setSelectedSpecSubModelId(val === "none" ? null : val)
+                      }
+                    >
+                      <SelectTrigger id="subModel" className="h-11">
+                        <SelectValue placeholder="Select a sub-model (optional)..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">
+                          <span className="text-muted-foreground italic">
+                            None (Assign to Main Model)
+                          </span>
+                        </SelectItem>
+                        {availableSubModels.length > 0 &&
+                          availableSubModels.map((sm) => (
+                            <SelectItem key={sm.id} value={sm.id}>
+                              <div className="flex items-center gap-2">
+                                <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                                {sm.name}
+                              </div>
+                            </SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -927,6 +1048,7 @@ export function CategorySettings() {
                     setSelectedCategoryId(null);
                     setSelectedSubCategoryId(null);
                     setSelectedModelId(null);
+                    setSelectedSpecSubModelId(null);
                   }}
                 >
                   Cancel

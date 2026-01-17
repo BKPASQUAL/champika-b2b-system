@@ -20,14 +20,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Camera, Upload, X, Loader2 } from "lucide-react";
+import { Camera, Upload, X, Loader2, Plus, Save } from "lucide-react";
 import { Product, ProductFormData } from "../types";
 import { toast } from "sonner";
 
+// Updated hook to support refreshing data
 const useSettings = (type: string) => {
   const [data, setData] = useState<
     { id: string; name: string; parent_id?: string; category_id?: string }[]
   >([]);
+  const [version, setVersion] = useState(0);
 
   useEffect(() => {
     fetch(`/api/settings/categories?type=${type}`)
@@ -36,9 +38,11 @@ const useSettings = (type: string) => {
         if (Array.isArray(data)) setData(data);
       })
       .catch((err) => console.error(err));
-  }, [type]);
+  }, [type, version]);
 
-  return data;
+  const refresh = () => setVersion((prev) => prev + 1);
+
+  return { data, refresh };
 };
 
 interface ProductDialogsProps {
@@ -67,25 +71,27 @@ export function ProductDialogs({
   categories,
 }: ProductDialogsProps) {
   // Settings Data
-  const brands = useSettings("brand");
-  const models = useSettings("model");
-  const specs = useSettings("spec");
+  const { data: brands } = useSettings("brand");
+  const { data: models } = useSettings("model");
+  const { data: specs, refresh: refreshSpecs } = useSettings("spec");
 
   // --- Filtering Logic ---
 
   // 1. Categories & Sub Categories
   const mainCategories = categories.filter((c) => !c.parent_id);
-  const selectedCatId = mainCategories.find(
+  const selectedCatObj = mainCategories.find(
     (c) => c.name === formData.category
-  )?.id;
+  );
+  const selectedCatId = selectedCatObj?.id;
 
   const subCategories = categories.filter(
     (c) => c.parent_id && c.parent_id === selectedCatId
   );
 
-  const selectedSubCatId = subCategories.find(
+  const selectedSubCatObj = subCategories.find(
     (c) => c.name === formData.subCategory
-  )?.id;
+  );
+  const selectedSubCatId = selectedSubCatObj?.id;
 
   // 2. Brands & Sub Brands
   const mainBrands = brands.filter((b) => !b.parent_id);
@@ -124,11 +130,70 @@ export function ProductDialogs({
     return true;
   });
 
-  // ✅ 5. Specifications (Filtered by the Selected Model)
+  const selectedSubModelId = subModels.find(
+    (m) => m.name.trim() === formData.subModel?.trim()
+  )?.id;
+
+  // ✅ 5. Specifications Logic (Inheritance + Add New)
+
+  // Determine "Effective" Parent ID for creating NEW specs (Prioritize specific -> general)
+  const effectiveModelId =
+    selectedSubModelId || selectedModelId || selectedSubCatId || selectedCatId;
+
+  // Filter Specs: Show specs from Sub Model OR Main Model OR Sub Category OR Category
   const categorySpecs = specs.filter((s) => {
-    // Spec must belong to the selected Model (parent_id links to Model ID)
-    return selectedModelId && s.parent_id === selectedModelId;
+    // 1. Exact match on Sub Model (Highest Priority)
+    if (selectedSubModelId && s.parent_id === selectedSubModelId) return true;
+
+    // 2. Match on Main Model
+    if (selectedModelId && s.parent_id === selectedModelId) return true;
+
+    // 3. Match on Sub Category
+    if (selectedSubCatId && s.parent_id === selectedSubCatId) return true;
+
+    // 4. Match on Main Category
+    if (selectedCatId && s.parent_id === selectedCatId) return true;
+
+    return false;
   });
+
+  // --- Add New Spec Logic ---
+  const [isAddingSpec, setIsAddingSpec] = useState(false);
+  const [newSpecName, setNewSpecName] = useState("");
+  const [isSavingSpec, setIsSavingSpec] = useState(false);
+
+  const handleAddSpec = async () => {
+    if (!newSpecName.trim() || !effectiveModelId) return;
+
+    setIsSavingSpec(true);
+    try {
+      const res = await fetch("/api/settings/categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newSpecName.trim(),
+          type: "spec",
+          parent_id: effectiveModelId, // Links to highest specificity available
+          category_id: selectedSubCatId || selectedCatId, // Ensure it shows up in correct list in settings
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to create spec");
+
+      toast.success("Specification added successfully");
+      refreshSpecs(); // Refresh the specs list
+      setNewSpecName("");
+      setIsAddingSpec(false);
+
+      // Auto-select the new spec
+      setFormData({ ...formData, sizeSpec: newSpecName.trim() });
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to add specification");
+    } finally {
+      setIsSavingSpec(false);
+    }
+  };
 
   // Image Upload Logic
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -279,7 +344,7 @@ export function ProductDialogs({
                     // Reset model when sub category changes
                     modelType: "",
                     subModel: "",
-                    sizeSpec: "", // Reset spec as it depends on model
+                    sizeSpec: "", // Reset spec
                   })
                 }
                 disabled={!formData.category}
@@ -416,37 +481,86 @@ export function ProductDialogs({
               </Select>
             </div>
 
-            {/* Spec */}
+            {/* ✅ Specification: Updated Logic */}
             <div className="col-span-1 space-y-2">
-              <Label>Specification</Label>
-              <Select
-                value={formData.sizeSpec}
-                onValueChange={(val) =>
-                  setFormData({
-                    ...formData,
-                    sizeSpec: val === "none" ? "" : val,
-                  })
-                }
-                disabled={!formData.modelType} // Spec requires a model now
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select Spec" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  {categorySpecs.length > 0 ? (
-                    categorySpecs.map((s) => (
-                      <SelectItem key={s.id} value={s.name}>
-                        {s.name}
+              <div className="flex items-center justify-between">
+                <Label>Specification</Label>
+                {/* Add New Spec Toggle - Available as long as category is selected */}
+                {formData.category && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs text-blue-600 hover:text-blue-800"
+                    onClick={() => {
+                      setIsAddingSpec(!isAddingSpec);
+                      setNewSpecName("");
+                    }}
+                  >
+                    <Plus className="w-3 h-3 mr-1" />
+                    {isAddingSpec ? "Cancel" : "Add New"}
+                  </Button>
+                )}
+              </div>
+
+              {isAddingSpec ? (
+                <div className="flex gap-2">
+                  <Input
+                    value={newSpecName}
+                    onChange={(e) => setNewSpecName(e.target.value)}
+                    placeholder={`New spec for ${
+                      selectedSubModelId
+                        ? "Sub-Model"
+                        : selectedModelId
+                        ? "Model"
+                        : selectedSubCatId
+                        ? "Sub-Category"
+                        : "Category"
+                    }`}
+                    className="h-9"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handleAddSpec}
+                    disabled={!newSpecName.trim() || isSavingSpec}
+                  >
+                    {isSavingSpec ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              ) : (
+                <Select
+                  value={formData.sizeSpec}
+                  onValueChange={(val) =>
+                    setFormData({
+                      ...formData,
+                      sizeSpec: val === "none" ? "" : val,
+                    })
+                  }
+                  // Can select spec even if model not selected (e.g. if attached to category)
+                  disabled={!formData.category}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select Spec" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {categorySpecs.length > 0 ? (
+                      categorySpecs.map((s) => (
+                        <SelectItem key={s.id} value={s.name}>
+                          {s.name}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="no-specs" disabled>
+                        No specs found
                       </SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value="no-specs" disabled>
-                      No specs for this model
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
+                    )}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
 
             {/* Pricing Section */}
@@ -607,12 +721,16 @@ export function ProductDialogs({
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setIsAddDialogOpen(false)}
+              disabled={isSavingSpec}
+            >
               Cancel
             </Button>
             <Button
               onClick={onSave}
-              disabled={uploading}
+              disabled={uploading || isSavingSpec}
               className="bg-red-600 hover:bg-red-700"
             >
               {selectedProduct ? "Update Product" : "Save Product"}
