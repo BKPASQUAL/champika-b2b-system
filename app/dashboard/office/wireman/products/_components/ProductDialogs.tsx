@@ -1,4 +1,3 @@
-// app/dashboard/office/wireman/products/_components/ProductDialogs.tsx
 "use client";
 
 import { useState, useEffect, useRef } from "react";
@@ -72,34 +71,66 @@ export function ProductDialogs({
   const models = useSettings("model");
   const specs = useSettings("spec");
 
-  // Filtering Logic
+  // --- Filtering Logic ---
+
+  // 1. Categories & Sub Categories
   const mainCategories = categories.filter((c) => !c.parent_id);
   const selectedCatId = mainCategories.find(
     (c) => c.name === formData.category
   )?.id;
+
   const subCategories = categories.filter(
     (c) => c.parent_id && c.parent_id === selectedCatId
   );
 
+  const selectedSubCatId = subCategories.find(
+    (c) => c.name === formData.subCategory
+  )?.id;
+
+  // 2. Brands & Sub Brands
   const mainBrands = brands.filter((b) => !b.parent_id);
   const selectedBrandId = mainBrands.find((b) => b.name === formData.brand)?.id;
   const subBrands = brands.filter(
     (b) => b.parent_id && b.parent_id === selectedBrandId
   );
 
-  const categoryModels = models.filter(
-    (m) => !m.parent_id && m.category_id === selectedCatId
-  );
+  // 3. Models (Filtered by Sub Category or Main Category)
+  const categoryModels = models.filter((m) => {
+    if (m.parent_id) return false; // Only show main models in dropdown
+
+    // If a sub-category is selected, show models assigned to it
+    if (selectedSubCatId) {
+      return m.category_id === selectedSubCatId;
+    }
+
+    // If no sub-category selected (or 'None'), show models assigned to Main Category
+    return m.category_id === selectedCatId;
+  });
+
   const selectedModelId = categoryModels.find(
     (m) => m.name.trim() === formData.modelType?.trim()
   )?.id;
-  const subModels = models.filter(
-    (m) => m.parent_id && m.parent_id === selectedModelId
-  );
 
-  const categorySpecs = specs.filter((s) => s.category_id === selectedCatId);
+  // 4. Sub Models (Filtered by Model AND Sub Category if applicable)
+  const subModels = models.filter((m) => {
+    const isChild = m.parent_id && m.parent_id === selectedModelId;
+    if (!isChild) return false;
 
-  // Image Upload
+    // If sub-category is selected, check if this sub-model is linked to it
+    if (selectedSubCatId && m.category_id) {
+      return m.category_id === selectedSubCatId;
+    }
+
+    return true;
+  });
+
+  // ✅ 5. Specifications (Filtered by the Selected Model)
+  const categorySpecs = specs.filter((s) => {
+    // Spec must belong to the selected Model (parent_id links to Model ID)
+    return selectedModelId && s.parent_id === selectedModelId;
+  });
+
+  // Image Upload Logic
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
@@ -245,6 +276,10 @@ export function ProductDialogs({
                   setFormData({
                     ...formData,
                     subCategory: val === "none" ? "" : val,
+                    // Reset model when sub category changes
+                    modelType: "",
+                    subModel: "",
+                    sizeSpec: "", // Reset spec as it depends on model
                   })
                 }
                 disabled={!formData.category}
@@ -329,6 +364,7 @@ export function ProductDialogs({
                     ...formData,
                     modelType: val === "none" ? "" : val,
                     subModel: "",
+                    sizeSpec: "", // Reset spec when model changes
                   })
                 }
                 disabled={!formData.category}
@@ -338,11 +374,17 @@ export function ProductDialogs({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">None</SelectItem>
-                  {categoryModels.map((m) => (
-                    <SelectItem key={m.id} value={m.name}>
-                      {m.name}
+                  {categoryModels.length > 0 ? (
+                    categoryModels.map((m) => (
+                      <SelectItem key={m.id} value={m.name}>
+                        {m.name}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="no-models" disabled>
+                      No models for this selection
                     </SelectItem>
-                  ))}
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -385,18 +427,24 @@ export function ProductDialogs({
                     sizeSpec: val === "none" ? "" : val,
                   })
                 }
-                disabled={!formData.category}
+                disabled={!formData.modelType} // Spec requires a model now
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select Spec" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">None</SelectItem>
-                  {categorySpecs.map((s) => (
-                    <SelectItem key={s.id} value={s.name}>
-                      {s.name}
+                  {categorySpecs.length > 0 ? (
+                    categorySpecs.map((s) => (
+                      <SelectItem key={s.id} value={s.name}>
+                        {s.name}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="no-specs" disabled>
+                      No specs for this model
                     </SelectItem>
-                  ))}
+                  )}
                 </SelectContent>
               </Select>
             </div>
