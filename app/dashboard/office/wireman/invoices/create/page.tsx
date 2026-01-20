@@ -1,7 +1,7 @@
 // app/dashboard/office/wireman/invoices/create/page.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -10,8 +10,9 @@ import {
   Save,
   Package,
   Loader2,
-  Check,
   ChevronsUpDown,
+  Check,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,21 +32,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 
 // --- Types ---
@@ -75,6 +63,136 @@ interface InvoiceItem {
   total: number;
 }
 
+// --- Helper Components ---
+
+// Custom Searchable Dropdown Component
+interface SearchableDropdownProps {
+  options: { id: string; name: string; info?: string }[];
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  disabled?: boolean;
+  className?: string;
+}
+
+function SearchableDropdown({
+  options,
+  value,
+  onChange,
+  placeholder,
+  disabled,
+  className,
+}: SearchableDropdownProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Handle outside click to close
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Filter options
+  const filteredOptions = options.filter((option) =>
+    option.name.toLowerCase().includes(search.toLowerCase()),
+  );
+
+  // Find selected name for display when closed
+  const selectedOption = options.find((o) => o.id === value);
+
+  return (
+    <div className={cn("relative w-full", className)} ref={containerRef}>
+      <div className="relative">
+        <div
+          className={cn(
+            "flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+            disabled ? "opacity-50 pointer-events-none" : "cursor-text",
+          )}
+          onClick={() => {
+            if (!disabled) {
+              setIsOpen(true);
+              // Focus input if it's rendered, otherwise we wait for render
+              setTimeout(() => inputRef.current?.focus(), 0);
+            }
+          }}
+        >
+          {isOpen ? (
+            <input
+              ref={inputRef}
+              className="w-full bg-transparent outline-none placeholder:text-muted-foreground"
+              placeholder={placeholder}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          ) : (
+            <span
+              className={
+                selectedOption ? "text-foreground" : "text-muted-foreground"
+              }
+            >
+              {selectedOption ? selectedOption.name : placeholder}
+            </span>
+          )}
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </div>
+      </div>
+
+      {/* Dropdown List */}
+      {isOpen && (
+        <div className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border bg-popover text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95">
+          {filteredOptions.length === 0 ? (
+            <div className="py-6 text-center text-sm text-muted-foreground">
+              No results found.
+            </div>
+          ) : (
+            <div className="p-1">
+              {filteredOptions.map((option) => (
+                <div
+                  key={option.id}
+                  className={cn(
+                    "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
+                    value === option.id && "bg-accent text-accent-foreground",
+                  )}
+                  onClick={() => {
+                    onChange(option.id);
+                    setIsOpen(false);
+                    setSearch(""); // Reset search
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      value === option.id ? "opacity-100" : "opacity-0",
+                    )}
+                  />
+                  <div className="flex flex-col">
+                    <span>{option.name}</span>
+                    {option.info && (
+                      <span className="text-xs text-muted-foreground">
+                        {option.info}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Helper to safely parse input to number
 const parseNumber = (val: string | number) => {
   if (val === "" || val === undefined || val === null) return 0;
@@ -96,13 +214,13 @@ export default function CreateWiremanInvoicePage() {
   // Data State
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<{ id: string; name: string }[]>(
-    []
+    [],
   );
 
   // Form State
-  const [customerId, setCustomerId] = useState<string | null>(null);
+  const [customerId, setCustomerId] = useState<string>("");
   const [invoiceDate, setInvoiceDate] = useState(
-    new Date().toISOString().split("T")[0]
+    new Date().toISOString().split("T")[0],
   );
   const [invoiceNumber, setInvoiceNumber] = useState("INV-NEW");
 
@@ -113,10 +231,6 @@ export default function CreateWiremanInvoicePage() {
   // Items State
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [extraDiscount, setExtraDiscount] = useState<number | string>("");
-
-  // Popover States
-  const [customerOpen, setCustomerOpen] = useState(false);
-  const [productOpen, setProductOpen] = useState(false);
 
   // Current Item Being Added
   const [currentItem, setCurrentItem] = useState<{
@@ -158,14 +272,14 @@ export default function CreateWiremanInvoicePage() {
 
         // Fetch Customers
         const customersRes = await fetch(
-          `/api/customers?businessId=${user.businessId}`
+          `/api/customers?businessId=${user.businessId}`,
         );
         const customersData = await customersRes.json();
         setCustomers(
           customersData.map((c: any) => ({
             id: c.id,
             name: c.shopName,
-          }))
+          })),
         );
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -185,9 +299,8 @@ export default function CreateWiremanInvoicePage() {
 
       setStockLoading(true);
       try {
-        // ✅ ADDED: &supplier=Wireman Agency to filter specifically for Wireman products
         const res = await fetch(
-          `/api/rep/stock?userId=${salesRepId}&supplier=Wireman Agency`
+          `/api/rep/stock?userId=${salesRepId}&supplier=Wireman Agency`,
         );
         if (!res.ok) throw new Error("Failed to load stock");
 
@@ -202,7 +315,7 @@ export default function CreateWiremanInvoicePage() {
             mrp: p.mrp,
             stock_quantity: p.stock_quantity,
             unit_of_measure: p.unit_of_measure || "unit",
-          }))
+          })),
         );
       } catch (error) {
         console.error("Error fetching stock:", error);
@@ -216,9 +329,10 @@ export default function CreateWiremanInvoicePage() {
     fetchUserStock();
   }, [salesRepId]);
 
-  // --- Product Selection Handler ---
-  const handleProductSelect = (productId: string) => {
-    const product = products.find((p) => p.id === productId);
+  // --- Handlers ---
+
+  const handleProductSelect = (selectedId: string) => {
+    const product = products.find((p) => p.id === selectedId);
     if (!product) return;
 
     setCurrentItem({
@@ -234,10 +348,9 @@ export default function CreateWiremanInvoicePage() {
     });
   };
 
-  // --- Add Item to Invoice ---
   const handleAddItem = () => {
     if (!currentItem.productId) {
-      toast.error("Please select a product");
+      toast.error("Please select a valid product");
       return;
     }
 
@@ -252,7 +365,7 @@ export default function CreateWiremanInvoicePage() {
     const totalReqQty = qty + freeQty;
     if (totalReqQty > currentItem.stockAvailable) {
       toast.error(
-        `Insufficient stock! Available: ${currentItem.stockAvailable}`
+        `Insufficient stock! Available: ${currentItem.stockAvailable}`,
       );
       return;
     }
@@ -281,6 +394,7 @@ export default function CreateWiremanInvoicePage() {
 
     setItems([...items, newItem]);
 
+    // Reset Item Form
     setCurrentItem({
       productId: "",
       sku: "",
@@ -354,18 +468,19 @@ export default function CreateWiremanInvoicePage() {
   const subtotal = items.reduce((sum, item) => sum + item.total, 0);
   const totalItemDiscount = items.reduce(
     (sum, item) => sum + item.discountAmount,
-    0
+    0,
   );
   const grossTotal = items.reduce(
     (sum, item) => sum + item.unitPrice * item.quantity,
-    0
+    0,
   );
 
   const extraDiscountAmount = (subtotal * parseNumber(extraDiscount)) / 100;
   const grandTotal = subtotal - extraDiscountAmount;
 
+  // Filter products already in the cart so they don't show up in search again
   const availableProducts = products.filter(
-    (p) => !items.some((i) => i.productId === p.id)
+    (p) => !items.some((i) => i.productId === p.id),
   );
 
   const currentLiveQty = parseNumber(currentItem.quantity);
@@ -426,54 +541,12 @@ export default function CreateWiremanInvoicePage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Customer</Label>
-                  <Popover open={customerOpen} onOpenChange={setCustomerOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={customerOpen}
-                        className="w-full justify-between"
-                      >
-                        {customerId
-                          ? customers.find((c) => c.id === customerId)?.name
-                          : "Select Customer"}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent
-                      className="w-[var(--radix-popover-trigger-width)] p-0"
-                      align="start"
-                    >
-                      <Command>
-                        <CommandInput placeholder="Search customer..." />
-                        <CommandList>
-                          <CommandEmpty>No customer found.</CommandEmpty>
-                          <CommandGroup>
-                            {customers.map((customer) => (
-                              <CommandItem
-                                key={customer.id}
-                                value={customer.name}
-                                onSelect={() => {
-                                  setCustomerId(customer.id);
-                                  setCustomerOpen(false);
-                                }}
-                              >
-                                <Check
-                                  className={cn(
-                                    "mr-2 h-4 w-4",
-                                    customerId === customer.id
-                                      ? "opacity-100"
-                                      : "opacity-0"
-                                  )}
-                                />
-                                {customer.name}
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
+                  <SearchableDropdown
+                    options={customers.map((c) => ({ id: c.id, name: c.name }))}
+                    value={customerId}
+                    onChange={setCustomerId}
+                    placeholder="Search Customer..."
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Date</Label>
@@ -523,69 +596,17 @@ export default function CreateWiremanInvoicePage() {
                       <Loader2 className="inline h-3 w-3 animate-spin ml-2 text-red-600" />
                     )}
                   </Label>
-                  <Popover open={productOpen} onOpenChange={setProductOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={productOpen}
-                        className="w-full justify-between"
-                        disabled={stockLoading}
-                      >
-                        {currentItem.productId
-                          ? products.find((p) => p.id === currentItem.productId)
-                              ?.name
-                          : stockLoading
-                          ? "Loading stock..."
-                          : "Select Product"}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent
-                      className="w-[var(--radix-popover-trigger-width)] p-0"
-                      align="start"
-                    >
-                      <Command>
-                        <CommandInput placeholder="Search product..." />
-                        <CommandList>
-                          <CommandEmpty>
-                            No products found in stock.
-                          </CommandEmpty>
-                          <CommandGroup>
-                            {availableProducts.map((product) => (
-                              <CommandItem
-                                key={product.id}
-                                value={product.name}
-                                onSelect={() => {
-                                  handleProductSelect(product.id);
-                                  setProductOpen(false);
-                                }}
-                              >
-                                <Check
-                                  className={cn(
-                                    "mr-2 h-4 w-4",
-                                    currentItem.productId === product.id
-                                      ? "opacity-100"
-                                      : "opacity-0"
-                                  )}
-                                />
-                                <div className="flex-1">
-                                  <div className="font-medium">
-                                    {product.name}
-                                  </div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {product.sku} • Stock:{" "}
-                                    {product.stock_quantity} • LKR{" "}
-                                    {product.selling_price}
-                                  </div>
-                                </div>
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
+                  <SearchableDropdown
+                    options={availableProducts.map((p) => ({
+                      id: p.id,
+                      name: p.name,
+                      info: `${p.sku} • Stock: ${p.stock_quantity}`,
+                    }))}
+                    value={currentItem.productId}
+                    onChange={handleProductSelect}
+                    placeholder="Search Product..."
+                    disabled={stockLoading}
+                  />
                 </div>
               </div>
 
@@ -811,7 +832,8 @@ export default function CreateWiremanInvoicePage() {
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Customer:</span>
                   <span className="font-medium">
-                    {customers.find((c) => c.id === customerId)?.name || "-"}
+                    {customers.find((c) => c.id === customerId)?.name ||
+                      "Not Selected"}
                   </span>
                 </div>
                 <div className="flex justify-between">
