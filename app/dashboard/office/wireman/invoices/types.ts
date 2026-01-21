@@ -1,4 +1,5 @@
 // app/dashboard/office/wireman/invoices/types.ts
+
 export type PaymentStatus = "Paid" | "Unpaid" | "Partial" | "Overdue";
 
 export type OrderStatus =
@@ -14,6 +15,8 @@ export type OrderStatus =
 export interface Invoice {
   id: string;
   invoiceNo: string;
+  // ✅ ENSURE THIS EXACT FIELD IS HERE
+  manualInvoiceNo?: string | null;
   date: string;
   customerId: string;
   customerName: string;
@@ -23,7 +26,8 @@ export interface Invoice {
   dueAmount: number;
   status: PaymentStatus;
   orderStatus: OrderStatus;
-  itemsCount: number;
+  itemsCount?: number;
+  businessId?: string;
 }
 
 export type SortField =

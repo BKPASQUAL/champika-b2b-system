@@ -26,6 +26,8 @@ const invoiceSchema = z.object({
   businessId: z.string().optional(),
   invoiceDate: z.string().optional(),
   dueDate: z.string().optional(),
+  // ✅ NEW: Manual Invoice Number Field
+  manual_invoice_no: z.string().optional(),
   items: z.array(invoiceItemSchema).min(1, "At least one item is required"),
   subTotal: z.number(),
   // ✅ Extra Discount Fields
@@ -60,6 +62,7 @@ export async function GET(request: NextRequest) {
     const businessId = searchParams.get("businessId");
 
     // Start building the query
+    // ✅ Added manual_invoice_no to selection
     let query = supabaseAdmin
       .from("invoices")
       .select(
@@ -76,7 +79,7 @@ export async function GET(request: NextRequest) {
             full_name
           )
         )
-      `
+      `,
       )
       .order("created_at", { ascending: false });
 
@@ -98,6 +101,7 @@ export async function GET(request: NextRequest) {
       return {
         id: inv.id,
         invoiceNo: inv.invoice_no,
+        manualInvoiceNo: inv.manual_invoice_no, // ✅ Return manual number to frontend
         orderId: inv.order_id,
         customerId: inv.customer_id,
         customerName: inv.customers?.shop_name || "Unknown Customer",
@@ -126,7 +130,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const val = invoiceSchema.parse(body);
 
-    // 1. Generate Invoice Number
+    // 1. Generate Invoice Number (Auto System Number)
     const { count } = await supabaseAdmin
       .from("invoices")
       .select("*", { count: "exact", head: true });
@@ -182,7 +186,7 @@ export async function POST(request: NextRequest) {
     const { data: products } = await supabaseAdmin
       .from("products")
       .select(
-        "id, commission_type, commission_value, cost_price, actual_cost_price"
+        "id, commission_type, commission_value, cost_price, actual_cost_price",
       )
       .in("id", productIds);
 
@@ -272,14 +276,15 @@ export async function POST(request: NextRequest) {
     const { data: invoiceData, error: invoiceError } = await supabaseAdmin
       .from("invoices")
       .insert({
-        invoice_no: invoiceNo,
+        invoice_no: invoiceNo, // Auto Generated
+        manual_invoice_no: val.manual_invoice_no || null, // ✅ SAVING MANUAL NUMBER
         order_id: orderData.id,
         customer_id: val.customerId,
         total_amount: val.grandTotal,
         paid_amount: val.paidAmount,
-        // ❌ REMOVED: due_amount (Calculated by Database)
         status: val.paymentStatus,
         due_date: dueDate,
+        created_at: new Date(),
       })
       .select()
       .single();
@@ -389,7 +394,7 @@ export async function POST(request: NextRequest) {
           .update({
             stock_quantity: Math.max(
               0,
-              (product.stock_quantity || 0) - totalQty
+              (product.stock_quantity || 0) - totalQty,
             ),
           })
           .eq("id", item.productId);
@@ -434,16 +439,17 @@ export async function POST(request: NextRequest) {
       {
         message: "Order created successfully",
         invoiceNo: invoiceNo,
+        manualInvoiceNo: val.manual_invoice_no, // Return for confirmation
         orderId: orderId,
         data: invoiceData,
       },
-      { status: 201 }
+      { status: 201 },
     );
   } catch (error: any) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: error.issues[0].message },
-        { status: 400 }
+        { status: 400 },
       );
     }
     return NextResponse.json({ error: error.message }, { status: 500 });

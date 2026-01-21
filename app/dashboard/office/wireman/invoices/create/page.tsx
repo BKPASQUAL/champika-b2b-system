@@ -1,4 +1,3 @@
-// app/dashboard/office/wireman/invoices/create/page.tsx
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
@@ -12,7 +11,6 @@ import {
   Loader2,
   ChevronsUpDown,
   Check,
-  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,7 +63,6 @@ interface InvoiceItem {
 
 // --- Helper Components ---
 
-// Custom Searchable Dropdown Component
 interface SearchableDropdownProps {
   options: { id: string; name: string; info?: string }[];
   value: string;
@@ -88,7 +85,6 @@ function SearchableDropdown({
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Handle outside click to close
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -102,12 +98,10 @@ function SearchableDropdown({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Filter options
   const filteredOptions = options.filter((option) =>
     option.name.toLowerCase().includes(search.toLowerCase()),
   );
 
-  // Find selected name for display when closed
   const selectedOption = options.find((o) => o.id === value);
 
   return (
@@ -121,7 +115,6 @@ function SearchableDropdown({
           onClick={() => {
             if (!disabled) {
               setIsOpen(true);
-              // Focus input if it's rendered, otherwise we wait for render
               setTimeout(() => inputRef.current?.focus(), 0);
             }
           }}
@@ -147,7 +140,6 @@ function SearchableDropdown({
         </div>
       </div>
 
-      {/* Dropdown List */}
       {isOpen && (
         <div className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border bg-popover text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95">
           {filteredOptions.length === 0 ? (
@@ -166,7 +158,7 @@ function SearchableDropdown({
                   onClick={() => {
                     onChange(option.id);
                     setIsOpen(false);
-                    setSearch(""); // Reset search
+                    setSearch("");
                   }}
                 >
                   <Check
@@ -193,7 +185,6 @@ function SearchableDropdown({
   );
 }
 
-// Helper to safely parse input to number
 const parseNumber = (val: string | number) => {
   if (val === "" || val === undefined || val === null) return 0;
   return Number(val);
@@ -222,17 +213,16 @@ export default function CreateWiremanInvoicePage() {
   const [invoiceDate, setInvoiceDate] = useState(
     new Date().toISOString().split("T")[0],
   );
-  const [invoiceNumber, setInvoiceNumber] = useState("INV-NEW");
+  // Manual Field
+  const [manualInvoiceNo, setManualInvoiceNo] = useState("");
 
-  // Hardcoded / Auto-assigned States
   const salesRepId = currentUser?.id || "";
-  const orderStatus = "Delivered"; // Always Delivered
+  const orderStatus = "Delivered";
 
   // Items State
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [extraDiscount, setExtraDiscount] = useState<number | string>("");
 
-  // Current Item Being Added
   const [currentItem, setCurrentItem] = useState<{
     productId: string;
     sku: string;
@@ -255,7 +245,7 @@ export default function CreateWiremanInvoicePage() {
     stockAvailable: 0,
   });
 
-  // --- 1. Fetch Initial Data (User & Customers) ---
+  // 1. Fetch Initial Data
   useEffect(() => {
     const fetchInitialData = async () => {
       setLoading(true);
@@ -270,7 +260,6 @@ export default function CreateWiremanInvoicePage() {
         setBusinessId(user.businessId);
         setCurrentUser({ id: user.id, name: user.name });
 
-        // Fetch Customers
         const customersRes = await fetch(
           `/api/customers?businessId=${user.businessId}`,
         );
@@ -292,7 +281,7 @@ export default function CreateWiremanInvoicePage() {
     fetchInitialData();
   }, [router]);
 
-  // --- 2. Fetch Products (Filtered by Wireman Agency) ---
+  // 2. Fetch Products
   useEffect(() => {
     const fetchUserStock = async () => {
       if (!salesRepId) return;
@@ -329,8 +318,7 @@ export default function CreateWiremanInvoicePage() {
     fetchUserStock();
   }, [salesRepId]);
 
-  // --- Handlers ---
-
+  // Handlers
   const handleProductSelect = (selectedId: string) => {
     const product = products.find((p) => p.id === selectedId);
     if (!product) return;
@@ -394,7 +382,6 @@ export default function CreateWiremanInvoicePage() {
 
     setItems([...items, newItem]);
 
-    // Reset Item Form
     setCurrentItem({
       productId: "",
       sku: "",
@@ -432,7 +419,7 @@ export default function CreateWiremanInvoicePage() {
       customerId,
       salesRepId,
       items,
-      invoiceNumber,
+      manual_invoice_no: manualInvoiceNo, // ✅ Sending manual invoice number
       invoiceDate,
       subTotal: subtotal,
       extraDiscountPercent: parseNumber(extraDiscount),
@@ -464,7 +451,7 @@ export default function CreateWiremanInvoicePage() {
     }
   };
 
-  // --- Totals Calculation ---
+  // Calculations
   const subtotal = items.reduce((sum, item) => sum + item.total, 0);
   const totalItemDiscount = items.reduce(
     (sum, item) => sum + item.discountAmount,
@@ -478,7 +465,6 @@ export default function CreateWiremanInvoicePage() {
   const extraDiscountAmount = (subtotal * parseNumber(extraDiscount)) / 100;
   const grandTotal = subtotal - extraDiscountAmount;
 
-  // Filter products already in the cart so they don't show up in search again
   const availableProducts = products.filter(
     (p) => !items.some((i) => i.productId === p.id),
   );
@@ -557,7 +543,17 @@ export default function CreateWiremanInvoicePage() {
                   />
                 </div>
               </div>
+
+              {/* NEW INPUTS: Manual Invoice No */}
               <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Manual Book/Invoice No</Label>
+                  <Input
+                    value={manualInvoiceNo}
+                    onChange={(e) => setManualInvoiceNo(e.target.value)}
+                    placeholder="Enter manual book number"
+                  />
+                </div>
                 <div className="space-y-2">
                   <Label>Sales Rep (Current User)</Label>
                   <Input
@@ -566,6 +562,9 @@ export default function CreateWiremanInvoicePage() {
                     className="bg-muted"
                   />
                 </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Order Status</Label>
                   <Input
@@ -587,7 +586,6 @@ export default function CreateWiremanInvoicePage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Product Selection */}
               <div className="grid grid-cols-4 gap-4">
                 <div className="col-span-4 space-y-2">
                   <Label>
@@ -610,7 +608,6 @@ export default function CreateWiremanInvoicePage() {
                 </div>
               </div>
 
-              {/* Quantity and Free Quantity Row */}
               <div className="grid grid-cols-4 gap-4">
                 <div className="space-y-2">
                   <Label>Quantity</Label>
@@ -667,7 +664,6 @@ export default function CreateWiremanInvoicePage() {
                 </div>
               </div>
 
-              {/* Price Row */}
               <div className="grid grid-cols-4 gap-4">
                 <div className="space-y-2">
                   <Label>MRP</Label>
@@ -726,7 +722,6 @@ export default function CreateWiremanInvoicePage() {
                 </div>
               </div>
 
-              {/* Add Button */}
               <Button
                 onClick={handleAddItem}
                 className="w-full bg-red-600 hover:bg-red-700"
