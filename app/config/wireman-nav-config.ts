@@ -1,4 +1,3 @@
-// app/config/wireman-nav-config.ts
 import {
   LayoutDashboard,
   Users,
@@ -12,6 +11,7 @@ import {
   Coins,
   LucideIcon,
   Undo2,
+  Gift, // Import Gift icon for Free Issues
 } from "lucide-react";
 
 interface WiremanNavItem {
@@ -69,6 +69,12 @@ export const wiremanOfficeNavItems: WiremanNavSection[] = [
         name: "Supplier List",
         href: "/dashboard/office/wireman/suppliers",
         icon: Factory,
+      },
+      // NEW LINK ADDED HERE
+      {
+        name: "Free Issue Claims",
+        href: "/dashboard/office/wireman/claims",
+        icon: Gift,
       },
       {
         name: "Purchases",
