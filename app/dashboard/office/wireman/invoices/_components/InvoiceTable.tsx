@@ -173,7 +173,7 @@ export function InvoiceTable({
 
               {/* 3. MANUAL REF (SEPARATE COLUMN) */}
               <TableHead className="w-[120px]">
-                <div className="flex items-center text-blue-600 font-semibold">
+                <div className="flex items-center  font-semibold">
                   Manual Ref
                 </div>
               </TableHead>

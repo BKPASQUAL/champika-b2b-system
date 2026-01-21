@@ -77,6 +77,7 @@ export default function WiremanInvoicesPage() {
       const mappedInvoices: Invoice[] = data.map((inv: any) => ({
         id: inv.id,
         invoiceNo: inv.invoiceNo,
+        manualInvoiceNo: inv.manualInvoiceNo,
         date: inv.createdAt
           ? inv.createdAt.split("T")[0]
           : new Date().toISOString().split("T")[0],
