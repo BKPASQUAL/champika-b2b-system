@@ -107,35 +107,45 @@ function CreateFreeBillContent() {
       setLoadingData(true);
       try {
         // Fetch ALL pending free issues from the API
-        const res = await fetch("/api/wireman/claims/free-issues");
-        if (!res.ok) throw new Error("Failed to load claims");
-        const allClaims = await res.json();
+        // AND Fetch ALL Products to allow selecting items without pending claims
+        const [claimsRes, productsRes] = await Promise.all([
+          fetch("/api/wireman/claims/free-issues"),
+          fetch("/api/products"),
+        ]);
 
-        // 1. Group by Product to create the "Claimable Products" list for the dropdown
-        const productMap = new Map<string, ClaimableProduct>();
+        if (!claimsRes.ok || !productsRes.ok)
+          throw new Error("Failed to load data");
 
+        const allClaims = await claimsRes.json();
+        const allProducts = await productsRes.json();
+
+        // 1. Calculate Pending Qty Map
+        const pendingQtyMap = new Map<string, number>();
         allClaims.forEach((claim: any) => {
           const pid = claim.product_id;
           const qty = Number(claim.free_quantity);
-
-          if (productMap.has(pid)) {
-            const existing = productMap.get(pid)!;
-            existing.totalPendingQty += qty;
-          } else {
-            productMap.set(pid, {
-              id: pid,
-              sku: claim.products.sku,
-              name: claim.products.name,
-              totalPendingQty: qty,
-              unit: "Unit", // Default unit
-            });
-          }
+          pendingQtyMap.set(pid, (pendingQtyMap.get(pid) || 0) + qty);
         });
 
-        const groupedProducts = Array.from(productMap.values());
-        setClaimableProducts(groupedProducts);
+        // 2. Filter Wireman Products and Build Dropdown List
+        // We filter by supplier name containing "Wireman" or check against ID if available in product data
+        const wiremanProducts: ClaimableProduct[] = allProducts
+          .filter(
+            (p: any) =>
+              p.supplier?.toLowerCase().includes("wireman") ||
+              p.supplierId === WIREMAN_SUPPLIER_ID,
+          )
+          .map((p: any) => ({
+            id: p.id,
+            sku: p.sku,
+            name: p.name,
+            totalPendingQty: pendingQtyMap.get(p.id) || 0,
+            unit: p.unitOfMeasure || "Unit",
+          }));
 
-        // 2. If IDs passed in URL, pre-fill the bill table
+        setClaimableProducts(wiremanProducts);
+
+        // 3. If IDs passed in URL, pre-fill the bill table
         if (idsParam) {
           const ids = idsParam.split(",");
           setPreSelectedIds(ids);
@@ -170,7 +180,7 @@ function CreateFreeBillContent() {
         }
       } catch (error) {
         console.error(error);
-        toast.error("Failed to load claims");
+        toast.error("Failed to load data");
       } finally {
         setLoadingData(false);
       }
@@ -217,7 +227,7 @@ function CreateFreeBillContent() {
     }
 
     // Optional: Warn if exceeding pending claims (but allow it if they want to force stock)
-    if (qty > currentItem.maxQty) {
+    if (qty > currentItem.maxQty && currentItem.maxQty > 0) {
       toast.warning(
         `Note: You are adding ${qty}, but only ${currentItem.maxQty} are pending claim.`,
       );
@@ -325,7 +335,8 @@ function CreateFreeBillContent() {
             Create Free Issue Bill
           </h1>
           <p className="text-muted-foreground mt-1">
-            Convert pending claims into stock. Cost is locked to 0.
+            Add any free items to stock. Pending claims are matched
+            automatically.
           </p>
         </div>
         <Badge
@@ -399,13 +410,13 @@ function CreateFreeBillContent() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Add Claimed Items</CardTitle>
+              <CardTitle>Add Items</CardTitle>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => window.location.reload()}
               >
-                <RefreshCcw className="w-3 h-3 mr-1" /> Refresh Claims
+                <RefreshCcw className="w-3 h-3 mr-1" /> Refresh
               </Button>
             </CardHeader>
             <CardContent>
@@ -413,12 +424,12 @@ function CreateFreeBillContent() {
                 {/* Custom Search Dropdown */}
                 <div className="w-full relative" ref={dropdownRef}>
                   <Label className="mb-2 block">
-                    Find Pending Claims ({filteredProducts.length})
+                    Find Product (All Wireman Items)
                   </Label>
                   <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
-                      placeholder="Type product name to claim..."
+                      placeholder="Type product name or SKU..."
                       className="pl-8"
                       value={searchTerm}
                       onChange={(e) => {
@@ -447,7 +458,7 @@ function CreateFreeBillContent() {
                     <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
                       {filteredProducts.length === 0 ? (
                         <div className="p-3 text-sm text-center text-gray-500">
-                          No pending claims found for this search.
+                          No products found.
                         </div>
                       ) : (
                         filteredProducts.map((product) => (
@@ -458,12 +469,14 @@ function CreateFreeBillContent() {
                           >
                             <div className="font-medium text-sm flex justify-between">
                               <span>{product.name}</span>
-                              <Badge
-                                variant="secondary"
-                                className="bg-orange-100 text-orange-700"
-                              >
-                                {product.totalPendingQty} Pending
-                              </Badge>
+                              {product.totalPendingQty > 0 && (
+                                <Badge
+                                  variant="secondary"
+                                  className="bg-orange-100 text-orange-700"
+                                >
+                                  {product.totalPendingQty} Pending
+                                </Badge>
+                              )}
                             </div>
                             <div className="text-xs text-gray-500">
                               {product.sku}
@@ -495,7 +508,7 @@ function CreateFreeBillContent() {
                   <div className="col-span-1">
                     <Label className="mb-2 block text-xs font-semibold text-green-600">
                       Claim Qty{" "}
-                      {currentItem.maxQty > 0 && `(Max: ${currentItem.maxQty})`}
+                      {currentItem.maxQty > 0 && `(Pending: ${currentItem.maxQty})`}
                     </Label>
                     <Input
                       type="number"

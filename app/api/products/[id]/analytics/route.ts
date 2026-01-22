@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
 
@@ -58,7 +58,7 @@ export async function GET(
           )
         ),
         product:products (cost_price)
-      `
+      `,
       )
       .eq("product_id", id)
       .neq("order.status", "Cancelled")
@@ -73,10 +73,10 @@ export async function GET(
         `
         id, quantity, unit_cost, total_cost, created_at,
         purchase:purchases (
-          purchase_id, status, purchase_date,
+          purchase_id, invoice_no, status, purchase_date,
           supplier:suppliers (name)
         )
-      `
+      `,
       )
       .eq("product_id", id)
       .order("created_at", { ascending: false });
@@ -91,7 +91,7 @@ export async function GET(
         id, quantity, return_type, reason, created_at,
         customer:customers (shop_name),
         location:locations (name)
-      `
+      `,
       )
       .eq("product_id", id)
       .order("created_at", { ascending: false });
@@ -123,7 +123,7 @@ export async function GET(
 
       const date = new Date(item.created_at);
       const monthKey = `${date.getFullYear()}-${String(
-        date.getMonth() + 1
+        date.getMonth() + 1,
       ).padStart(2, "0")}`;
       const businessName = item.order.customer?.business?.name || "Unassigned";
       const repName = item.order.rep?.full_name || "Direct Sales";
@@ -148,8 +148,10 @@ export async function GET(
         type: "SALE",
         quantity: -qty,
         customer: item.order.customer?.shop_name || "Unknown",
+        reference: item.order.order_id, // Add Order ID reference
         location: locationName,
         status: item.order.status,
+        notes: "-", // Default note for sales
       });
 
       // Stats Aggregation...
@@ -189,16 +191,36 @@ export async function GET(
     });
 
     // B. Purchases
-    const purchaseHistory = (purchaseItems || []).map((item: any) => ({
-      id: item.id,
-      date: item.purchase?.purchase_date || item.created_at.split("T")[0],
-      timestamp: new Date(item.created_at).getTime(),
-      type: "PURCHASE",
-      quantity: Number(item.quantity),
-      customer: item.purchase?.supplier?.name || "Unknown",
-      location: "Main Warehouse", // Default
-      status: item.purchase?.status || "Completed",
-    }));
+    const purchaseHistory = (purchaseItems || []).map((item: any) => {
+      // 1. Detect Free Issue (Cost is 0)
+      const unitCost = Number(item.unit_cost) || 0;
+      const isFree = unitCost === 0;
+
+      // 2. Get Bill ID (Invoice No has priority, fallback to Purchase ID)
+      const billId =
+        item.purchase?.invoice_no || item.purchase?.purchase_id || "-";
+
+      return {
+        id: item.id,
+        date: item.purchase?.purchase_date || item.created_at.split("T")[0],
+        timestamp: new Date(item.created_at).getTime(),
+
+        // Change Type to "FREE ISSUE" if cost is 0
+        type: isFree ? "FREE ISSUE" : "PURCHASE",
+
+        quantity: Number(item.quantity),
+
+        // Show Bill ID in Customer column for visibility
+        customer: `${item.purchase?.supplier?.name || "Unknown"} (${billId})`,
+
+        reference: billId, // Dedicated reference field
+        location: "Main Warehouse", // Default
+        status: item.purchase?.status || "Completed",
+
+        // Add Notes
+        notes: isFree ? "Free Issue" : "-",
+      };
+    });
 
     // C. Returns
     const returnHistory = (returnItems || []).map((item: any) => ({
@@ -211,7 +233,9 @@ export async function GET(
           ? -Number(item.quantity)
           : Number(item.quantity),
       customer: item.customer?.shop_name || "N/A",
+      reference: item.reason || "-",
       location: item.location?.name || "Unknown",
+      notes: item.reason || "-",
     }));
 
     // D. Adjustments
@@ -233,7 +257,9 @@ export async function GET(
           type: "ADJUSTMENT",
           quantity: diff,
           customer: "System",
+          reference: "Audit",
           location: locName,
+          notes: "System Adjustment",
         };
       })
       .filter(Boolean);
@@ -247,9 +273,6 @@ export async function GET(
     ].sort((a, b) => b.timestamp - a.timestamp); // Sort Newest -> Oldest
 
     // Calculate Running Balance per Location
-    // Since we sort Descending (Newest First), we start with Current Stock and subtract/add inversely to go back in time.
-
-    // Create a temporary tracker for calculation
     const tempLocationStock: Record<string, number> = { ...stockMap };
 
     const processedTransactions = allTransactions.map((tx) => {
@@ -265,7 +288,7 @@ export async function GET(
       if (stockKey !== "MAIN_WAREHOUSE_KEY" && !tempLocationStock[stockKey]) {
         // Try to find if location name exists in map
         const foundKey = Object.keys(tempLocationStock).find(
-          (k) => k === tx.location
+          (k) => k === tx.location,
         );
         if (foundKey) stockKey = foundKey;
       }
@@ -274,25 +297,23 @@ export async function GET(
       const balanceAfter = tempLocationStock[stockKey] ?? 0;
 
       // Update tracker for the *next* iteration (which is the previous transaction in time)
-      // If Tx was +5 (Purchase), then *Before* it was Balance - 5.
-      // If Tx was -5 (Sale), then *Before* it was Balance + 5.
       if (tempLocationStock[stockKey] !== undefined) {
         tempLocationStock[stockKey] = balanceAfter - tx.quantity;
       }
 
       return {
         ...tx,
-        stockAfter: balanceAfter, // Add this field
+        stockAfter: balanceAfter,
       };
     });
 
     return NextResponse.json({
       allTransactions: processedTransactions,
       monthly: Object.values(monthlyStats).sort((a: any, b: any) =>
-        a.dateStr.localeCompare(b.dateStr)
+        a.dateStr.localeCompare(b.dateStr),
       ),
       business: Object.values(businessStats).sort(
-        (a: any, b: any) => b.value - a.value
+        (a: any, b: any) => b.value - a.value,
       ),
       reps: Object.values(repStats).sort((a: any, b: any) => b.value - a.value),
       summary: {
