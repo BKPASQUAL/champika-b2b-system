@@ -63,6 +63,7 @@ export async function GET(request: NextRequest) {
 
     // Start building the query
     // ✅ Added manual_invoice_no to selection
+    // ✅ Added order_items to selection for PROFIT CALCULATION
     let query = supabaseAdmin
       .from("invoices")
       .select(
@@ -77,6 +78,12 @@ export async function GET(request: NextRequest) {
           business_id, 
           profiles!orders_sales_rep_id_fkey (
             full_name
+          ),
+          order_items (
+            quantity,
+            free_quantity,
+            actual_unit_cost,
+            total_price
           )
         )
       `,
@@ -98,6 +105,21 @@ export async function GET(request: NextRequest) {
       const orderStatus = inv.orders?.status || "Pending";
       const bId = inv.orders?.business_id;
 
+      // --- 💰 PROFIT CALCULATION (Wireman Logic) ---
+      // Revenue = item.total_price (Line Total)
+      // Cost = item.quantity * item.actual_unit_cost
+      // NOTE: We DO NOT include free_quantity in cost because it is claimable.
+
+      let totalProfit = 0;
+      const items = inv.orders?.order_items || [];
+
+      items.forEach((item: any) => {
+        const revenue = item.total_price || 0;
+        // Cost only applies to billed quantity
+        const cost = (item.quantity || 0) * (item.actual_unit_cost || 0);
+        totalProfit += revenue - cost;
+      });
+
       return {
         id: inv.id,
         invoiceNo: inv.invoice_no,
@@ -114,6 +136,7 @@ export async function GET(request: NextRequest) {
         dueDate: inv.due_date,
         createdAt: inv.created_at,
         businessId: bId,
+        profit: totalProfit, // ✅ Return Profit
       };
     });
 

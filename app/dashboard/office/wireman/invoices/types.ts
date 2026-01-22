@@ -15,7 +15,6 @@ export type OrderStatus =
 export interface Invoice {
   id: string;
   invoiceNo: string;
-  // ✅ ENSURE THIS EXACT FIELD IS HERE
   manualInvoiceNo?: string | null;
   date: string;
   customerId: string;
@@ -28,6 +27,8 @@ export interface Invoice {
   orderStatus: OrderStatus;
   itemsCount?: number;
   businessId?: string;
+  // ✅ NEW FIELD
+  profit: number;
 }
 
 export type SortField =

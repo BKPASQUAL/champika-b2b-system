@@ -1,4 +1,3 @@
-// app/dashboard/office/wireman/invoices/page.tsx
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
@@ -40,7 +39,7 @@ export default function WiremanInvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(
-    null
+    null,
   );
 
   // Filters
@@ -77,7 +76,7 @@ export default function WiremanInvoicesPage() {
       const mappedInvoices: Invoice[] = data.map((inv: any) => ({
         id: inv.id,
         invoiceNo: inv.invoiceNo,
-        manualInvoiceNo: inv.manualInvoiceNo,
+        manualInvoiceNo: inv.manualInvoiceNo, // ✅ Explicitly Mapped
         date: inv.createdAt
           ? inv.createdAt.split("T")[0]
           : new Date().toISOString().split("T")[0],
@@ -90,6 +89,7 @@ export default function WiremanInvoicesPage() {
         status: inv.status,
         orderStatus: inv.orderStatus || "Pending",
         itemsCount: 0,
+        profit: inv.profit || 0, // ✅ Map Profit
       }));
 
       setInvoices(mappedInvoices);
@@ -163,7 +163,7 @@ export default function WiremanInvoicesPage() {
   const totalPages = Math.ceil(sortedInvoices.length / itemsPerPage);
   const paginatedInvoices = sortedInvoices.slice(
     (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
+    currentPage * itemsPerPage,
   );
 
   const handleSort = (field: SortField) => {
