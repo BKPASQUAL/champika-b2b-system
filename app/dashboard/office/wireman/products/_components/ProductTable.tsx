@@ -1,4 +1,3 @@
-// app/dashboard/office/wireman/products/_components/ProductTable.tsx
 "use client";
 
 import {
@@ -21,6 +20,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  AlertTriangle,
+  XCircle,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Product, SortField, SortOrder } from "../types";
@@ -78,13 +79,19 @@ export function ProductTable({
           <TableHeader className="bg-red-50/50">
             <TableRow>
               <TableHead
-                className="cursor-pointer hover:bg-red-100/50 pl-4"
+                className="cursor-pointer hover:bg-red-100/50 pl-4 w-[300px]"
                 onClick={() => onSort("name")}
               >
                 <div className="flex items-center text-red-900">
                   Product Details {getSortIcon("name")}
                 </div>
               </TableHead>
+
+              {/* Company Code Column */}
+              <TableHead className="text-red-900 w-[120px]">
+                Company Code
+              </TableHead>
+
               <TableHead
                 className="cursor-pointer hover:bg-red-100/50"
                 onClick={() => onSort("category")}
@@ -133,7 +140,7 @@ export function ProductTable({
             {products.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={8}
+                  colSpan={9}
                   className="text-center py-8 text-muted-foreground"
                 >
                   No Wireman products found matching your criteria.
@@ -145,48 +152,71 @@ export function ProductTable({
                   key={product.id}
                   className="hover:bg-red-50/10 transition-colors"
                 >
+                  {/* Product Details Column */}
                   <TableCell className="font-medium pl-4">
-                    <div className="flex flex-col">
-                      <span className="text-sm text-foreground">
-                        {product.name}
-                      </span>
-                      <span className="text-xs text-muted-foreground font-mono">
-                        {product.sku}
-                      </span>
-                      <div className="mt-1">
+                    <div className="flex flex-col gap-1">
+                      {/* ✅ Name Row: Name First, Then Alert Badge */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {/* Product Name */}
+                        <span className="text-sm text-foreground">
+                          {product.name}
+                        </span>
+
+                        {/* Stock Alert Badge (After Name) */}
                         {product.stock === 0 ? (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 whitespace-nowrap">
+                            <XCircle className="w-3 h-3 mr-1" />
                             Out of Stock
                           </span>
                         ) : product.stock < product.minStock ? (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 whitespace-nowrap">
+                            <AlertTriangle className="w-3 h-3 mr-1" />
                             Low Stock
                           </span>
                         ) : null}
                       </div>
+
+                      {/* SKU (Below Name) */}
+                      <span className="text-[10px] text-muted-foreground font-mono pl-0.5">
+                        SKU: {product.sku}
+                      </span>
                     </div>
                   </TableCell>
+
+                  {/* Company Code Column */}
+                  <TableCell>
+                    {product.companyCode ? (
+                      <span className="font-mono text-xs text-slate-700 bg-slate-50 px-2 py-1 rounded border">
+                        {product.companyCode}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">-</span>
+                    )}
+                  </TableCell>
+
+                  {/* Category Column */}
                   <TableCell>
                     <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-700 border">
                       <Tag className="w-3 h-3 mr-1" /> {product.category}
                     </span>
                   </TableCell>
 
-                  {/* Commission Value */}
+                  {/* Commission Column */}
                   <TableCell className="text-right">
                     <span className="font-mono text-sm text-muted-foreground">
                       {product.commissionValue ?? 0}%
                     </span>
                   </TableCell>
 
+                  {/* Stock Column */}
                   <TableCell className="text-right">
                     <span
                       className={`font-medium text-sm ${
                         product.stock === 0
                           ? "text-red-600"
                           : product.stock < product.minStock
-                          ? "text-amber-600"
-                          : "text-foreground"
+                            ? "text-amber-600"
+                            : "text-foreground"
                       }`}
                     >
                       {product.stock}{" "}
@@ -196,14 +226,17 @@ export function ProductTable({
                     </span>
                   </TableCell>
 
-                  {/* MRP CELL */}
+                  {/* MRP Column */}
                   <TableCell className="text-right font-medium text-sm text-muted-foreground">
                     LKR {product.mrp.toLocaleString()}
                   </TableCell>
 
+                  {/* Price Column */}
                   <TableCell className="text-right font-medium text-sm">
                     LKR {product.sellingPrice.toLocaleString()}
                   </TableCell>
+
+                  {/* Actions Column */}
                   <TableCell className="text-right pr-4">
                     <div className="flex items-center justify-end gap-1">
                       <Button
@@ -212,7 +245,7 @@ export function ProductTable({
                         className="h-8 w-8 text-slate-500 hover:text-red-600 hover:bg-red-50"
                         onClick={() =>
                           router.push(
-                            `/dashboard/office/wireman/products/${product.id}`
+                            `/dashboard/office/wireman/products/${product.id}`,
                           )
                         }
                       >
