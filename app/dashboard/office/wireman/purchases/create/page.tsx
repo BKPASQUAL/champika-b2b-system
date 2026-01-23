@@ -158,7 +158,11 @@ export default function CreateWiremanPurchasePage() {
 
       if (prodRes.ok) {
         const allProducts: Product[] = await prodRes.json();
-        setProducts(allProducts);
+        // FILTER: Keep only Wireman products
+        const wiremanProducts = allProducts.filter((p) =>
+          p.supplier?.toLowerCase().includes("wireman"),
+        );
+        setProducts(wiremanProducts);
       } else {
         toast.error("Failed to load products");
       }
@@ -166,7 +170,15 @@ export default function CreateWiremanPurchasePage() {
       if (supRes.ok) {
         const supplierData = await supRes.json();
         setSuppliers(supplierData);
-        if (supplierData.length === 1) setSupplierId(supplierData[0].id);
+        // Auto-select Wireman supplier if found
+        const wiremanSupplier = supplierData.find((s: Supplier) =>
+          s.name.toLowerCase().includes("wireman"),
+        );
+        if (wiremanSupplier) {
+          setSupplierId(wiremanSupplier.id);
+        } else if (supplierData.length === 1) {
+          setSupplierId(supplierData[0].id);
+        }
       }
     } catch (error) {
       toast.error("Failed to load data");
@@ -463,7 +475,7 @@ export default function CreateWiremanPurchasePage() {
                 {/* --- CUSTOM NORMAL SEARCHABLE DROPDOWN --- */}
                 <div className="w-full relative" ref={dropdownRef}>
                   <Label className="mb-2 block">
-                    Product Search ({products.length} products loaded)
+                    Product Search ({products.length} Wireman products loaded)
                   </Label>
                   <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
