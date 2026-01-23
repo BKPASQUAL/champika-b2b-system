@@ -79,7 +79,7 @@ export function ProductTable({
           <TableHeader className="bg-red-50/50">
             <TableRow>
               <TableHead
-                className="cursor-pointer hover:bg-red-100/50 pl-4 w-[300px]"
+                className="cursor-pointer hover:bg-red-100/50 pl-4 w-[450px]"
                 onClick={() => onSort("name")}
               >
                 <div className="flex items-center text-red-900">
@@ -88,12 +88,12 @@ export function ProductTable({
               </TableHead>
 
               {/* Company Code Column */}
-              <TableHead className="text-red-900 w-[120px]">
+              <TableHead className="text-red-900 ">
                 Company Code
               </TableHead>
 
               <TableHead
-                className="cursor-pointer hover:bg-red-100/50"
+                className="cursor-pointer hover:bg-red-100/50 "
                 onClick={() => onSort("category")}
               >
                 <div className="flex items-center text-red-900">
