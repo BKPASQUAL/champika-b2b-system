@@ -24,7 +24,7 @@ export async function GET(request: Request) {
         `
         id, load_id, lorry_number, loading_date, status,
         driver:profiles!loading_sheets_driver_id_fkey(full_name)
-      `
+      `,
       )
       .gte("loading_date", fromDate)
       .lte("loading_date", toDate);
@@ -44,11 +44,11 @@ export async function GET(request: Request) {
           id, quantity, free_quantity, unit_price, total_price, actual_unit_cost,
           product:products (id, name, cost_price, category)
         )
-      `
+      `,
       )
       .gte("created_at", fromDate)
       .lte("created_at", toDate)
-      .in("status", ["Delivered", "Completed"]);
+      .in("status", ["Delivered"]); // ✅ FIXED: Removed "Completed" to prevent DB error
 
     if (ordersError) throw ordersError;
 
@@ -69,7 +69,7 @@ export async function GET(request: Request) {
         id, return_number, quantity, created_at, status, reason,
         product:products (id, name, cost_price, category),
         customer:customers (id, shop_name, assigned_rep_id)
-      `
+      `,
       )
       .eq("status", "Business Loss")
       .gte("created_at", fromDate)
@@ -97,7 +97,7 @@ export async function GET(request: Request) {
 
     const initMonth = (dateObj: Date) => {
       const key = `${dateObj.getFullYear()}-${String(
-        dateObj.getMonth() + 1
+        dateObj.getMonth() + 1,
       ).padStart(2, "0")}`;
       if (!monthlyMap[key]) {
         monthlyMap[key] = {
@@ -376,7 +376,7 @@ export async function GET(request: Request) {
       })
       .sort(
         (a: any, b: any) =>
-          new Date(b.date).getTime() - new Date(a.date).getTime()
+          new Date(b.date).getTime() - new Date(a.date).getTime(),
       );
 
     Object.values(monthlyMap).forEach((m: any) => {
@@ -385,7 +385,7 @@ export async function GET(request: Request) {
     });
 
     const monthlyArray = Object.values(monthlyMap).sort((a: any, b: any) =>
-      a.key.localeCompare(b.key)
+      a.key.localeCompare(b.key),
     );
     const expenseCategoryArray = Object.entries(expenseCategoryMap)
       .map(([name, value]) => ({ name, value }))
@@ -413,18 +413,18 @@ export async function GET(request: Request) {
       monthly: monthlyArray,
       expensesByCategory: expenseCategoryArray,
       products: Object.values(productsMap).sort(
-        (a: any, b: any) => b.revenue - a.revenue
+        (a: any, b: any) => b.revenue - a.revenue,
       ),
       customers: Object.values(customersMap).sort(
-        (a: any, b: any) => b.revenue - a.revenue
+        (a: any, b: any) => b.revenue - a.revenue,
       ),
       reps: repsArray,
       orders: transactionsList.sort(
         (a: any, b: any) =>
-          new Date(b.date).getTime() - new Date(a.date).getTime()
+          new Date(b.date).getTime() - new Date(a.date).getTime(),
       ),
       business: Object.values(businessMap).sort(
-        (a: any, b: any) => b.revenue - a.revenue
+        (a: any, b: any) => b.revenue - a.revenue,
       ),
       deliveries: deliveriesArray,
     });
