@@ -33,6 +33,7 @@ import { format } from "date-fns";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 // Note: Ensure this component exists or create it for Wireman if needed
 // import { LocationSettingsSheet } from "./_components/LocationSettingsSheet";
@@ -52,7 +53,10 @@ export default function WiremanLocationInventoryPage() {
       if (!locationId) return;
       try {
         setLoading(true);
-        const res = await fetch(`/api/inventory/${locationId}`);
+        // ✅ Passed BUSINESS_IDS.WIREMAN_AGENCY to filter results on the server
+        const res = await fetch(
+          `/api/inventory/${locationId}?businessId=${BUSINESS_IDS.WIREMAN_AGENCY}`,
+        );
         if (!res.ok) throw new Error("Failed to load location data");
         setData(await res.json());
       } catch (error) {
@@ -89,7 +93,7 @@ export default function WiremanLocationInventoryPage() {
       head: [["SKU", "Product Name", "Good Qty", "Damaged", "Total", "Unit"]],
       body: tableRows,
       startY: 35,
-      headStyles: { fillColor: [0, 0, 0] },
+      headStyles: { fillColor: [220, 38, 38] }, // Red header for Wireman
     });
 
     doc.save(`${filename}_${date.replace(/\//g, "-")}.pdf`);
@@ -119,7 +123,11 @@ export default function WiremanLocationInventoryPage() {
   const handleExportAll = (type: "pdf" | "excel") => {
     const items = data?.stocks || [];
     if (type === "pdf")
-      generatePDF(items, "Location Inventory Report", "Inventory_Report");
+      generatePDF(
+        items,
+        "Location Inventory Report (Wireman)",
+        "Inventory_Report",
+      );
     else generateExcel(items, "Inventory", "Inventory_Report");
   };
 
@@ -127,14 +135,14 @@ export default function WiremanLocationInventoryPage() {
     const items =
       data?.stocks.filter((s: any) => (s.damagedQuantity || 0) > 0) || [];
     if (type === "pdf")
-      generatePDF(items, "Damage Stock Report", "Damage_Report");
+      generatePDF(items, "Damage Stock Report (Wireman)", "Damage_Report");
     else generateExcel(items, "Damaged Items", "Damage_Report");
   };
 
   if (loading) {
     return (
       <div className="flex justify-center items-center h-96">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <Loader2 className="h-8 w-8 animate-spin text-red-600" />
       </div>
     );
   }
@@ -158,7 +166,7 @@ export default function WiremanLocationInventoryPage() {
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
+            <h1 className="text-2xl font-bold flex items-center gap-2 text-red-950">
               <MapPin className="w-6 h-6 text-red-600" />
               {data.location.name}
             </h1>
@@ -180,7 +188,7 @@ export default function WiremanLocationInventoryPage() {
           </div>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {/* Navigate to Wireman Adjust Page */}
           <Button
             variant="default"
@@ -190,7 +198,7 @@ export default function WiremanLocationInventoryPage() {
                 `/dashboard/office/wireman/inventory/${locationId}/adjust`,
               )
             }
-            className="bg-red-600 hover:bg-red-700"
+            className="bg-red-600 hover:bg-red-700 text-white"
           >
             <ClipboardList className="w-4 h-4 mr-2" /> Adjust Stock
           </Button>
@@ -225,43 +233,44 @@ export default function WiremanLocationInventoryPage() {
               <FileWarning className="w-4 h-4 mr-2" /> Damage PDF
             </Button>
           </div>
-
-          {/* Uncomment this if you copy the LocationSettingsSheet component to Wireman folder
-            <LocationSettingsSheet
-              locationId={locationId as string}
-              locationName={data.location.name}
-            /> 
-          */}
         </div>
       </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
+        <Card className="border-l-4 border-l-green-500 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Value</CardTitle>
-            <DollarSign className="w-4 h-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Total Value
+            </CardTitle>
+            <DollarSign className="w-4 h-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              LKR {data.stats.totalValue.toLocaleString()}
+            <div className="text-2xl font-bold text-green-700">
+              LKR {(data.stats.totalValue / 1000000).toFixed(2)}M
             </div>
-            <p className="text-xs text-muted-foreground">Current stock worth</p>
+            <p className="text-xs text-muted-foreground">Wireman stock worth</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-l-4 border-l-blue-500 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Good Stock</CardTitle>
-            <Package className="w-4 h-4 text-green-600" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Good Stock
+            </CardTitle>
+            <Package className="w-4 h-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{data.stats.totalItems}</div>
+            <div className="text-2xl font-bold text-blue-700">
+              {data.stats.totalItems}
+            </div>
             <p className="text-xs text-muted-foreground">Usable units</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-l-4 border-l-red-500 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Damaged Stock</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Damaged Stock
+            </CardTitle>
             <AlertTriangle className="w-4 h-4 text-red-600" />
           </CardHeader>
           <CardContent>
@@ -271,15 +280,17 @@ export default function WiremanLocationInventoryPage() {
             <p className="text-xs text-muted-foreground">Unusable units</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-l-4 border-l-amber-500 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
               Unique Products
             </CardTitle>
-            <Package className="w-4 h-4 text-muted-foreground" />
+            <Package className="w-4 h-4 text-amber-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{data.stocks.length}</div>
+            <div className="text-2xl font-bold text-amber-700">
+              {data.stocks.length}
+            </div>
             <p className="text-xs text-muted-foreground">SKUs available</p>
           </CardContent>
         </Card>
@@ -289,7 +300,10 @@ export default function WiremanLocationInventoryPage() {
       <Card>
         <CardHeader>
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            <CardTitle>Current Inventory</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="w-5 h-5 text-red-600" /> Current Inventory
+              (Wireman Only)
+            </CardTitle>
             <div className="relative w-full md:w-72">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -305,7 +319,7 @@ export default function WiremanLocationInventoryPage() {
           <div className="border rounded-md">
             <Table>
               <TableHeader>
-                <TableRow>
+                <TableRow className="bg-red-50/50">
                   <TableHead>SKU</TableHead>
                   <TableHead>Product</TableHead>
                   <TableHead>Category</TableHead>
@@ -324,13 +338,13 @@ export default function WiremanLocationInventoryPage() {
                       colSpan={7}
                       className="text-center py-8 text-muted-foreground"
                     >
-                      No stock found at this location.
+                      No Wireman stock found at this location.
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredStocks.map((stock: any) => (
-                    <TableRow key={stock.id}>
-                      <TableCell className="font-mono text-xs">
+                    <TableRow key={stock.id} className="hover:bg-red-50/10">
+                      <TableCell className="font-mono text-xs text-muted-foreground">
                         {stock.sku}
                       </TableCell>
                       <TableCell className="font-medium">
@@ -341,7 +355,7 @@ export default function WiremanLocationInventoryPage() {
                           {stock.category}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right font-bold">
+                      <TableCell className="text-right font-bold text-green-700">
                         {stock.quantity}{" "}
                         <span className="text-xs font-normal text-muted-foreground">
                           {stock.unit_of_measure}
@@ -352,7 +366,7 @@ export default function WiremanLocationInventoryPage() {
                           ? stock.damagedQuantity
                           : "-"}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className="text-right tabular-nums font-medium">
                         {stock.value.toLocaleString()}
                       </TableCell>
                       <TableCell className="text-right text-xs text-muted-foreground">

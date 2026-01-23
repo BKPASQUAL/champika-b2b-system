@@ -1,5 +1,8 @@
+// app/api/inventory/route.ts
+
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +20,7 @@ export async function GET(request: NextRequest) {
 
     if (businessId) {
       locationQuery = locationQuery.or(
-        `business_id.eq.${businessId},business_id.is.null`
+        `business_id.eq.${businessId},business_id.is.null`,
       );
     }
 
@@ -28,36 +31,50 @@ export async function GET(request: NextRequest) {
     const locationIds = locations.map((l) => l.id);
 
     // 2. Fetch Product Stocks (Filter by the relevant locations)
+    // ✅ Updated: Use inner join on products to allow filtering by supplier_name
     let stocksQuery = supabaseAdmin
       .from("product_stocks")
       .select(
-        "location_id, quantity, product_id, products(cost_price, selling_price)"
+        "location_id, quantity, product_id, products!inner(cost_price, selling_price, supplier_name)",
       );
 
     if (locationIds.length > 0) {
       stocksQuery = stocksQuery.in("location_id", locationIds);
     } else {
-      // Fallback if no locations found (prevents fetching all stocks)
+      // Fallback if no locations found
       stocksQuery = stocksQuery.in("location_id", []);
+    }
+
+    // ✅ Apply Wireman Filter to Stocks
+    // This ensures calculated stats (Total Value, etc.) only count Wireman items
+    if (businessId === BUSINESS_IDS.WIREMAN_AGENCY) {
+      stocksQuery = stocksQuery.ilike("products.supplier_name", "%Wireman%");
     }
 
     const { data: stocks, error: stockError } = await stocksQuery;
     if (stockError) throw stockError;
 
     // 3. Fetch All Products (Master Catalog)
-    const { data: products, error: prodError } = await supabaseAdmin
+    let productsQuery = supabaseAdmin
       .from("products")
       .select(
-        "id, name, sku, category, stock_quantity, damaged_quantity, min_stock_level, unit_of_measure"
+        "id, name, sku, category, stock_quantity, damaged_quantity, min_stock_level, unit_of_measure, supplier_name",
       )
       .order("name");
+
+    // ✅ Apply Wireman Filter to Master Product List
+    // This ensures the main inventory table only shows Wireman items
+    if (businessId === BUSINESS_IDS.WIREMAN_AGENCY) {
+      productsQuery = productsQuery.ilike("supplier_name", "%Wireman%");
+    }
+
+    const { data: products, error: prodError } = await productsQuery;
 
     if (prodError) throw prodError;
 
     // --- Process Data ---
 
     // Map stocks to products for recalculation
-    // We sum up the stock from the filtered locations (Main + Business Specific)
     const productStockMap = new Map<string, number>();
     if (businessId) {
       stocks.forEach((stock: any) => {
@@ -72,12 +89,12 @@ export async function GET(request: NextRequest) {
 
       const totalItems = locStocks.reduce(
         (sum: number, s: any) => sum + Number(s.quantity),
-        0
+        0,
       );
       const totalValue = locStocks.reduce(
         (sum: number, s: any) =>
           sum + Number(s.quantity) * (s.products?.selling_price || 0),
-        0
+        0,
       );
 
       return {
@@ -106,13 +123,13 @@ export async function GET(request: NextRequest) {
     // C. Calculate Global Stats
     const totalInventoryValue = locationStats.reduce(
       (sum: number, l: any) => sum + l.totalValue,
-      0
+      0,
     );
     const lowStockCount = processedProducts.filter(
-      (p: any) => (p.stock_quantity || 0) <= (p.min_stock_level || 0)
+      (p: any) => (p.stock_quantity || 0) <= (p.min_stock_level || 0),
     ).length;
     const outOfStockCount = processedProducts.filter(
-      (p: any) => (p.stock_quantity || 0) === 0
+      (p: any) => (p.stock_quantity || 0) === 0,
     ).length;
 
     return NextResponse.json({

@@ -46,6 +46,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 // Types
 interface Product {
@@ -92,29 +93,34 @@ export default function WiremanStockAdjustmentPage() {
     const initData = async () => {
       try {
         setLoading(true);
-        // Fetch all active products
-        const productsRes = await fetch("/api/products?active=true");
+
+        // Fetch Master Product List (Filtered for Wireman)
+        const productsRes = await fetch(
+          `/api/inventory?businessId=${BUSINESS_IDS.WIREMAN_AGENCY}`,
+        );
         const productsData = await productsRes.json();
 
-        // Fetch current location stock & details
-        const stockRes = await fetch(`/api/inventory/${locationId}`);
+        // Fetch Current Location Stock (Filtered for Wireman)
+        const stockRes = await fetch(
+          `/api/inventory/${locationId}?businessId=${BUSINESS_IDS.WIREMAN_AGENCY}`,
+        );
         const stockData = await stockRes.json();
 
-        // ✅ Set Location Name
         if (stockData.location) {
           setLocationName(stockData.location.name);
         }
 
-        // Map stock for easy lookup: { productId: quantity }
         const stockMap: Record<string, number> = {};
         if (stockData.stocks) {
           stockData.stocks.forEach((s: any) => {
-            // Note: In the inventory API, s.id is actually the product ID because of mapping
             stockMap[s.id] = s.quantity;
           });
         }
 
-        setAllProducts(productsData);
+        if (productsData.products) {
+          setAllProducts(productsData.products);
+        }
+
         setLocationStocks(stockMap);
       } catch (error) {
         console.error(error);
@@ -141,7 +147,6 @@ export default function WiremanStockAdjustmentPage() {
     if (isNaN(newQty) || newQty < 0)
       return toast.error("Quantity must be a valid positive number");
 
-    // Check if already in pending list
     if (pendingAdjustments.some((p) => p.productId === selectedProductId)) {
       toast.error("This product is already in the adjustment list");
       return;
@@ -159,8 +164,6 @@ export default function WiremanStockAdjustmentPage() {
     };
 
     setPendingAdjustments([...pendingAdjustments, newItem]);
-
-    // Reset inputs
     setAdjustmentValue("");
     setSelectedProductId("");
     setOpenCombobox(false);
@@ -179,27 +182,32 @@ export default function WiremanStockAdjustmentPage() {
 
     setSubmitting(true);
     try {
-      const payload = pendingAdjustments.map((item) => ({
+      // ✅ FIX: Map items to the format expected by the API
+      const itemsPayload = pendingAdjustments.map((item) => ({
         productId: item.productId,
         newQuantity: item.newStock,
       }));
 
+      // ✅ FIX: Send a single BATCH request
       const res = await fetch("/api/inventory/adjust", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           locationId,
-          items: payload,
+          items: itemsPayload, // The API expects this array
+          reason: "Manual Stock Adjustment (Wireman Portal)",
+          businessId: BUSINESS_IDS.WIREMAN_AGENCY,
         }),
       });
 
-      if (!res.ok) throw new Error("Update failed");
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Update failed");
 
       toast.success("Stock adjustments saved successfully!");
-      // Redirect to Wireman Inventory Page
       router.push(`/dashboard/office/wireman/inventory/${locationId}`);
-    } catch (error) {
-      toast.error("Failed to save adjustments");
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error.message || "Failed to save adjustments");
     } finally {
       setSubmitting(false);
     }
@@ -214,42 +222,35 @@ export default function WiremanStockAdjustmentPage() {
   }
 
   return (
-    <div className="mx-auto space-y-6 ">
-      {/* Header */}
+    <div className="mx-auto space-y-6">
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
+          <h1 className="text-2xl font-bold flex items-center gap-2 text-red-950">
             Stock Adjustment
           </h1>
           <p className="text-muted-foreground text-sm flex items-center gap-1">
             Update physical stock counts for{" "}
-            {locationName ? (
-              <span className="font-semibold text-red-600 flex items-center gap-1">
-                <MapPin className="w-3 h-3" />
-                {locationName}
-              </span>
-            ) : (
-              "location"
-            )}
-            .
+            <span className="font-semibold text-red-600 flex items-center gap-1">
+              <MapPin className="w-3 h-3" />
+              {locationName || "Location"}
+            </span>
           </p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Left Panel: Selection & Input */}
-        <Card className="md:col-span-1 h-fit">
+        {/* Left Panel */}
+        <Card className="md:col-span-1 h-fit border-red-100">
           <CardHeader>
             <CardTitle className="text-lg">Add Adjustment</CardTitle>
             <CardDescription>
-              Select product and enter real count.
+              Select product (Wireman Only) and enter count.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* 1. Searchable Dropdown */}
             <div className="space-y-2">
               <label className="text-sm font-medium">Select Product</label>
               <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
@@ -275,7 +276,7 @@ export default function WiremanStockAdjustmentPage() {
                         {allProducts.map((product) => (
                           <CommandItem
                             key={product.id}
-                            value={`${product.name} ${product.sku}`} // Search by both
+                            value={`${product.name} ${product.sku}`}
                             onSelect={() => {
                               setSelectedProductId(product.id);
                               setOpenCombobox(false);
@@ -306,17 +307,15 @@ export default function WiremanStockAdjustmentPage() {
               </Popover>
             </div>
 
-            {/* 2. Stock Display */}
-            <div className="p-3 bg-muted/30 rounded-lg border text-center space-y-1">
-              <span className="text-xs text-muted-foreground uppercase tracking-wide">
+            <div className="p-3 bg-red-50/50 rounded-lg border border-red-100 text-center space-y-1">
+              <span className="text-xs text-red-600/70 uppercase tracking-wide">
                 Current System Stock
               </span>
-              <div className="text-3xl font-bold text-slate-800">
+              <div className="text-3xl font-bold text-red-900">
                 {selectedProductId ? currentStock : "-"}
               </div>
             </div>
 
-            {/* 3. New Stock Input */}
             <div className="space-y-2">
               <label className="text-sm font-medium">New Physical Stock</label>
               <Input
@@ -329,9 +328,8 @@ export default function WiremanStockAdjustmentPage() {
               />
             </div>
 
-            {/* 4. Add Button */}
             <Button
-              className="w-full bg-red-600 hover:bg-red-700"
+              className="w-full bg-red-600 hover:bg-red-700 text-white"
               onClick={handleAddToTable}
               disabled={!selectedProductId || adjustmentValue === ""}
             >
@@ -340,7 +338,7 @@ export default function WiremanStockAdjustmentPage() {
           </CardContent>
         </Card>
 
-        {/* Right Panel: Pending Table */}
+        {/* Right Panel */}
         <Card className="md:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <div>
@@ -348,7 +346,7 @@ export default function WiremanStockAdjustmentPage() {
               <CardDescription>Review changes before saving.</CardDescription>
             </div>
             {pendingAdjustments.length > 0 && (
-              <Badge variant="secondary">
+              <Badge variant="secondary" className="bg-red-100 text-red-800">
                 {pendingAdjustments.length} Items
               </Badge>
             )}
@@ -358,7 +356,6 @@ export default function WiremanStockAdjustmentPage() {
               <div className="flex flex-col items-center justify-center py-10 text-muted-foreground border-2 border-dashed rounded-lg bg-muted/10">
                 <AlertCircle className="w-10 h-10 mb-2 opacity-20" />
                 <p>No items added yet.</p>
-                <p className="text-xs">Search and add items from the left.</p>
               </div>
             ) : (
               <div className="border rounded-md overflow-hidden">
