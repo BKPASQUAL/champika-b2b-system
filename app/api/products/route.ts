@@ -4,6 +4,7 @@ import { z } from "zod";
 
 const productSchema = z.object({
   sku: z.string().optional(),
+  companyCode: z.string().optional(), // New field
   name: z.string().min(2, "Name required"),
   category: z.string().min(1, "Category required"),
   subCategory: z.string().optional(),
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
           quantity,
           damaged_quantity
         )
-      `
+      `,
       )
       .order("created_at", { ascending: false });
 
@@ -52,18 +53,18 @@ export async function GET(request: NextRequest) {
 
     const mapped = data.map((p) => {
       // ✅ 2. Calculate Real-Time Total Stock from product_stocks table
-      // If no stock records exist, fallback to the product's 'stock_quantity' field
       const realStock =
         p.product_stocks && p.product_stocks.length > 0
           ? p.product_stocks.reduce(
               (sum: number, s: any) => sum + (Number(s.quantity) || 0),
-              0
+              0,
             )
           : p.stock_quantity || 0;
 
       return {
         id: p.id,
         sku: p.sku,
+        companyCode: p.company_code || "", // Map from DB
         name: p.name,
         category: p.category,
         subCategory: p.sub_category,
@@ -120,7 +121,6 @@ export async function POST(request: NextRequest) {
       const prefix = (val.supplier || "XX").substring(0, 2).toUpperCase();
 
       // 2. Fetch ALL existing SKUs that start with this prefix
-      // We do this to safely find the highest number even if SKUs are mixed (e.g., OR-1 vs OR-0001)
       const { data: existingSkus } = await supabaseAdmin
         .from("products")
         .select("sku")
@@ -131,9 +131,7 @@ export async function POST(request: NextRequest) {
       if (existingSkus && existingSkus.length > 0) {
         existingSkus.forEach((item) => {
           if (item.sku) {
-            // Split by '-' and take the last part
             const parts = item.sku.split("-");
-            // Only consider the last part if it is a number
             const numPart = parseInt(parts[parts.length - 1], 10);
             if (!isNaN(numPart) && numPart > maxNum) {
               maxNum = numPart;
@@ -167,6 +165,7 @@ export async function POST(request: NextRequest) {
       .from("products")
       .insert({
         sku: sku,
+        company_code: val.companyCode || null, // Insert into DB
         name: val.name,
         category: val.category,
         sub_category: val.subCategory,
@@ -210,7 +209,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(
       { message: "Product created", data: product },
-      { status: 201 }
+      { status: 201 },
     );
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

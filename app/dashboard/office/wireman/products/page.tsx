@@ -1,4 +1,3 @@
-// app/dashboard/office/wireman/products/page.tsx
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
@@ -42,9 +41,10 @@ export default function WiremanProductsPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
-  // Form Data - Force Supplier to Wireman Agency
+  // Form Data
   const [formData, setFormData] = useState<ProductFormData>({
     sku: "",
+    companyCode: "", // ✅ Initialize New Field
     name: "",
     category: "",
     subCategory: "",
@@ -53,7 +53,7 @@ export default function WiremanProductsPage() {
     modelType: "",
     subModel: "",
     sizeSpec: "",
-    supplier: "Wireman Agency", // ✅ Locked to Wireman
+    supplier: "Wireman Agency",
     stock: "",
     minStock: "",
     mrp: "",
@@ -76,7 +76,7 @@ export default function WiremanProductsPage() {
         const allProducts: Product[] = await prodRes.json();
         // ✅ Strict Filter: Only Wireman products
         const wiremanOnly = allProducts.filter((p) =>
-          p.supplier?.toLowerCase().includes("wireman")
+          p.supplier?.toLowerCase().includes("wireman"),
         );
         setProducts(wiremanOnly);
       }
@@ -96,7 +96,9 @@ export default function WiremanProductsPage() {
     const matchesSearch =
       product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       product.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.sku.toLowerCase().includes(searchQuery.toLowerCase());
+      product.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (product.companyCode &&
+        product.companyCode.toLowerCase().includes(searchQuery.toLowerCase())); // Search company code too
 
     const matchesCategory =
       categoryFilter === "all" || product.category === categoryFilter;
@@ -126,12 +128,12 @@ export default function WiremanProductsPage() {
   const totalPages = Math.ceil(sortedProducts.length / itemsPerPage);
   const paginatedProducts = sortedProducts.slice(
     (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
+    currentPage * itemsPerPage,
   );
 
   useEffect(
     () => setCurrentPage(1),
-    [searchQuery, categoryFilter, stockFilter]
+    [searchQuery, categoryFilter, stockFilter],
   );
 
   const handleSort = (field: SortField) => {
@@ -150,7 +152,7 @@ export default function WiremanProductsPage() {
 
     const payload = {
       ...formData,
-      supplier: "Wireman Agency", // ✅ Ensure it's always Wireman
+      supplier: "Wireman Agency",
       stock: Number(formData.stock) || 0,
       minStock: Number(formData.minStock) || 0,
       mrp: Number(formData.mrp) || 0,
@@ -203,6 +205,7 @@ export default function WiremanProductsPage() {
   const resetForm = () => {
     setFormData({
       sku: "",
+      companyCode: "", // ✅ Reset New Field
       name: "",
       category: "",
       subCategory: "",
@@ -230,7 +233,8 @@ export default function WiremanProductsPage() {
       return;
     }
     const data = sortedProducts.map((p) => ({
-      SKU: p.sku,
+      Code: p.sku,
+      "Company Code": p.companyCode || "-", // Export New Field
       Name: p.name,
       Category: p.category,
       Stock: p.stock,
@@ -250,9 +254,10 @@ export default function WiremanProductsPage() {
     const doc = new jsPDF();
     doc.text("Wireman Agency Inventory", 14, 15);
     autoTable(doc, {
-      head: [["SKU", "Name", "Category", "Stock", "Price"]],
+      head: [["Code", "Company Code", "Name", "Category", "Stock", "Price"]],
       body: sortedProducts.map((p) => [
         p.sku,
+        p.companyCode || "-",
         p.name,
         p.category,
         p.stock,
@@ -301,6 +306,7 @@ export default function WiremanProductsPage() {
             onEdit={(p) => {
               setFormData({
                 sku: p.sku,
+                companyCode: p.companyCode || "", // ✅ Load existing value
                 name: p.name,
                 category: p.category,
                 subCategory: p.subCategory || "",

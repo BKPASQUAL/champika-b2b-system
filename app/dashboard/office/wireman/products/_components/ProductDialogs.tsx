@@ -76,84 +76,60 @@ export function ProductDialogs({
   const { data: specs, refresh: refreshSpecs } = useSettings("spec");
 
   // --- Filtering Logic ---
-
-  // 1. Categories & Sub Categories
   const mainCategories = categories.filter((c) => !c.parent_id);
   const selectedCatObj = mainCategories.find(
-    (c) => c.name === formData.category
+    (c) => c.name === formData.category,
   );
   const selectedCatId = selectedCatObj?.id;
 
   const subCategories = categories.filter(
-    (c) => c.parent_id && c.parent_id === selectedCatId
+    (c) => c.parent_id && c.parent_id === selectedCatId,
   );
 
   const selectedSubCatObj = subCategories.find(
-    (c) => c.name === formData.subCategory
+    (c) => c.name === formData.subCategory,
   );
   const selectedSubCatId = selectedSubCatObj?.id;
 
-  // 2. Brands & Sub Brands
   const mainBrands = brands.filter((b) => !b.parent_id);
   const selectedBrandId = mainBrands.find((b) => b.name === formData.brand)?.id;
   const subBrands = brands.filter(
-    (b) => b.parent_id && b.parent_id === selectedBrandId
+    (b) => b.parent_id && b.parent_id === selectedBrandId,
   );
 
-  // 3. Models (Filtered by Sub Category or Main Category)
   const categoryModels = models.filter((m) => {
-    if (m.parent_id) return false; // Only show main models in dropdown
-
-    // If a sub-category is selected, show models assigned to it
+    if (m.parent_id) return false;
     if (selectedSubCatId) {
       return m.category_id === selectedSubCatId;
     }
-
-    // If no sub-category selected (or 'None'), show models assigned to Main Category
     return m.category_id === selectedCatId;
   });
 
   const selectedModelId = categoryModels.find(
-    (m) => m.name.trim() === formData.modelType?.trim()
+    (m) => m.name.trim() === formData.modelType?.trim(),
   )?.id;
 
-  // 4. Sub Models (Filtered by Model AND Sub Category if applicable)
   const subModels = models.filter((m) => {
     const isChild = m.parent_id && m.parent_id === selectedModelId;
     if (!isChild) return false;
-
-    // If sub-category is selected, check if this sub-model is linked to it
     if (selectedSubCatId && m.category_id) {
       return m.category_id === selectedSubCatId;
     }
-
     return true;
   });
 
   const selectedSubModelId = subModels.find(
-    (m) => m.name.trim() === formData.subModel?.trim()
+    (m) => m.name.trim() === formData.subModel?.trim(),
   )?.id;
 
-  // ✅ 5. Specifications Logic (Inheritance + Add New)
-
-  // Determine "Effective" Parent ID for creating NEW specs (Prioritize specific -> general)
   const effectiveModelId =
     selectedSubModelId || selectedModelId || selectedSubCatId || selectedCatId;
 
-  // Filter Specs: Show specs from Sub Model OR Main Model OR Sub Category OR Category
   const categorySpecs = specs.filter((s) => {
-    // 1. Exact match on Sub Model (Highest Priority)
     if (selectedSubModelId && s.parent_id === selectedSubModelId) return true;
-
-    // 2. Match on Main Model
     if (selectedModelId && s.parent_id === selectedModelId) return true;
-
-    // 3. Match on Sub Category
     if (selectedSubCatId && s.parent_id === selectedSubCatId) return true;
-
-    // 4. Match on Main Category
     if (selectedCatId && s.parent_id === selectedCatId) return true;
-
     return false;
   });
 
@@ -173,19 +149,17 @@ export function ProductDialogs({
         body: JSON.stringify({
           name: newSpecName.trim(),
           type: "spec",
-          parent_id: effectiveModelId, // Links to highest specificity available
-          category_id: selectedSubCatId || selectedCatId, // Ensure it shows up in correct list in settings
+          parent_id: effectiveModelId,
+          category_id: selectedSubCatId || selectedCatId,
         }),
       });
 
       if (!res.ok) throw new Error("Failed to create spec");
 
       toast.success("Specification added successfully");
-      refreshSpecs(); // Refresh the specs list
+      refreshSpecs();
       setNewSpecName("");
       setIsAddingSpec(false);
-
-      // Auto-select the new spec
       setFormData({ ...formData, sizeSpec: newSpecName.trim() });
     } catch (error) {
       console.error(error);
@@ -247,21 +221,26 @@ export function ProductDialogs({
   return (
     <>
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl  overflow-y-auto">
           <DialogHeader>
             <div className="flex justify-between items-center pr-8">
               <div>
-                <DialogTitle className="text-red-900">
+                <DialogTitle className="text-red-900 flex items-center gap-3">
                   {selectedProduct
                     ? "Edit Wireman Product"
                     : "Add Wireman Product"}
+                  {/* ✅ SKU is displayed here as a badge in Edit mode, removed from input grid */}
+                  {selectedProduct && formData.sku && (
+                    <span className="text-sm font-mono bg-slate-100 text-slate-600 px-2 py-0.5 rounded border">
+                      {formData.sku}
+                    </span>
+                  )}
                 </DialogTitle>
                 <DialogDescription>
                   Details for Wireman Agency exclusive product.
                 </DialogDescription>
               </div>
 
-              {/* --- ACTIVE STATUS TOGGLE --- */}
               <div className="flex items-center space-x-2 border p-2 rounded-lg bg-red-50/50">
                 <Switch
                   id="active-mode"
@@ -279,8 +258,8 @@ export function ProductDialogs({
           </DialogHeader>
 
           <div className="grid grid-cols-2 gap-4 py-4">
-            {/* Product Name */}
-            <div className="col-span-2 space-y-2">
+            {/* ✅ Product Name & Company Code on SAME LINE */}
+            <div className="col-span-1 space-y-2">
               <Label>Product Name *</Label>
               <Input
                 value={formData.name}
@@ -291,18 +270,17 @@ export function ProductDialogs({
               />
             </div>
 
-            {/* SKU (Only on Edit) */}
-            {selectedProduct && (
-              <div className="col-span-1 space-y-2">
-                <Label>Item Code (SKU)</Label>
-                <Input
-                  value={formData.sku}
-                  disabled
-                  placeholder="Auto-generated"
-                  className="font-mono bg-muted"
-                />
-              </div>
-            )}
+            <div className="col-span-1 space-y-2">
+              <Label>Company Code (Optional)</Label>
+              <Input
+                value={formData.companyCode}
+                onChange={(e) =>
+                  setFormData({ ...formData, companyCode: e.target.value })
+                }
+                placeholder="e.g. CMP-001"
+                className="font-mono"
+              />
+            </div>
 
             {/* Category Selection */}
             <div className="space-y-2">
@@ -341,10 +319,9 @@ export function ProductDialogs({
                   setFormData({
                     ...formData,
                     subCategory: val === "none" ? "" : val,
-                    // Reset model when sub category changes
                     modelType: "",
                     subModel: "",
-                    sizeSpec: "", // Reset spec
+                    sizeSpec: "",
                   })
                 }
                 disabled={!formData.category}
@@ -429,7 +406,7 @@ export function ProductDialogs({
                     ...formData,
                     modelType: val === "none" ? "" : val,
                     subModel: "",
-                    sizeSpec: "", // Reset spec when model changes
+                    sizeSpec: "",
                   })
                 }
                 disabled={!formData.category}
@@ -481,11 +458,10 @@ export function ProductDialogs({
               </Select>
             </div>
 
-            {/* ✅ Specification: Updated Logic */}
+            {/* Specification */}
             <div className="col-span-1 space-y-2">
               <div className="flex items-center justify-between">
                 <Label>Specification</Label>
-                {/* Add New Spec Toggle - Available as long as category is selected */}
                 {formData.category && (
                   <Button
                     variant="ghost"
@@ -507,15 +483,7 @@ export function ProductDialogs({
                   <Input
                     value={newSpecName}
                     onChange={(e) => setNewSpecName(e.target.value)}
-                    placeholder={`New spec for ${
-                      selectedSubModelId
-                        ? "Sub-Model"
-                        : selectedModelId
-                        ? "Model"
-                        : selectedSubCatId
-                        ? "Sub-Category"
-                        : "Category"
-                    }`}
+                    placeholder={`New spec`}
                     className="h-9"
                   />
                   <Button
@@ -539,7 +507,6 @@ export function ProductDialogs({
                       sizeSpec: val === "none" ? "" : val,
                     })
                   }
-                  // Can select spec even if model not selected (e.g. if attached to category)
                   disabled={!formData.category}
                 >
                   <SelectTrigger className="w-full">

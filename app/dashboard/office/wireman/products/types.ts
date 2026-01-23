@@ -2,7 +2,8 @@
 
 export interface Product {
   id: string;
-  sku: string;
+  sku: string; // This is the Auto-Generated Item Code
+  companyCode?: string; // This is the new manual Company Code
   name: string;
   category: string;
   subCategory?: string;
@@ -46,6 +47,7 @@ export type SortOrder = "asc" | "desc";
 
 export interface ProductFormData {
   sku: string;
+  companyCode: string; // New field
   name: string;
   category: string;
   subCategory: string;
