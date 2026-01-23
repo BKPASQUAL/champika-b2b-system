@@ -8,12 +8,23 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  const url = new URL(request.url);
+  const businessId = url.searchParams.get("businessId"); // ✅ Get Filter
 
   try {
     // --- 0. PRE-FETCH: Locations & Current Stocks ---
-    const { data: locationsData } = await supabaseAdmin
+    let locQuery = supabaseAdmin
       .from("locations")
       .select("id, name, business_id");
+
+    // If filtering by business, only get relevant locations + Main Warehouse (null)
+    if (businessId) {
+      locQuery = locQuery.or(
+        `business_id.eq.${businessId},business_id.is.null`,
+      );
+    }
+
+    const { data: locationsData } = await locQuery;
 
     const { data: currentStocks } = await supabaseAdmin
       .from("product_stocks")
@@ -26,36 +37,29 @@ export async function GET(
 
     locationsData?.forEach((loc) => {
       locationIdToName[loc.id] = loc.name;
-      if (!loc.business_id) mainWarehouseIds.push(loc.id); // Identify main warehouse(s)
+      if (!loc.business_id) mainWarehouseIds.push(loc.id);
     });
 
-    // Map: Location Name -> Current Stock Quantity
-    // We key by Name because some transactions (like Sales) construct the name dynamically
     const stockMap: Record<string, number> = {};
-
     currentStocks?.forEach((stock) => {
       const name = locationIdToName[stock.location_id];
       if (name) stockMap[name] = Number(stock.quantity);
-
-      // Also map "Main Warehouse" ID specifically for fallback
       if (mainWarehouseIds.includes(stock.location_id)) {
         stockMap["MAIN_WAREHOUSE_KEY"] = Number(stock.quantity);
       }
     });
 
     // --- 1. Fetch SALES (Orders) ---
-    const { data: orderItems, error: orderError } = await supabaseAdmin
+    let orderQuery = supabaseAdmin
       .from("order_items")
       .select(
         `
         id, quantity, unit_price, total_price, created_at, commission_earned,
-        order:orders (
-          order_id, status, created_at,
-          customer:customers (shop_name, business:businesses(name)),
+        order:orders!inner (
+          order_id, status, created_at, business_id,
+          customer:customers (shop_name),
           rep:profiles!orders_sales_rep_id_fkey (full_name),
-          load:loading_sheets (
-            lorry_number
-          )
+          load:loading_sheets (lorry_number)
         ),
         product:products (cost_price)
       `,
@@ -64,16 +68,22 @@ export async function GET(
       .neq("order.status", "Cancelled")
       .order("created_at", { ascending: false });
 
+    // ✅ Filter Sales by Business
+    if (businessId) {
+      orderQuery = orderQuery.eq("order.business_id", businessId);
+    }
+
+    const { data: orderItems, error: orderError } = await orderQuery;
     if (orderError) throw orderError;
 
     // --- 2. Fetch PURCHASES ---
-    const { data: purchaseItems, error: purchaseError } = await supabaseAdmin
+    let purchaseQuery = supabaseAdmin
       .from("purchase_items")
       .select(
         `
         id, quantity, unit_cost, total_cost, created_at,
-        purchase:purchases (
-          purchase_id, invoice_no, status, purchase_date,
+        purchase:purchases!inner (
+          purchase_id, invoice_no, status, purchase_date, business_id,
           supplier:suppliers (name)
         )
       `,
@@ -81,14 +91,20 @@ export async function GET(
       .eq("product_id", id)
       .order("created_at", { ascending: false });
 
+    // ✅ Filter Purchases by Business
+    if (businessId) {
+      purchaseQuery = purchaseQuery.eq("purchase.business_id", businessId);
+    }
+
+    const { data: purchaseItems, error: purchaseError } = await purchaseQuery;
     if (purchaseError) throw purchaseError;
 
     // --- 3. Fetch RETURNS & DAMAGES ---
-    const { data: returnItems, error: returnError } = await supabaseAdmin
+    let returnQuery = supabaseAdmin
       .from("inventory_returns")
       .select(
         `
-        id, quantity, return_type, reason, created_at,
+        id, quantity, return_type, reason, created_at, business_id,
         customer:customers (shop_name),
         location:locations (name)
       `,
@@ -96,17 +112,32 @@ export async function GET(
       .eq("product_id", id)
       .order("created_at", { ascending: false });
 
+    // ✅ Filter Returns by Business
+    if (businessId) {
+      returnQuery = returnQuery.eq("business_id", businessId);
+    }
+
+    const { data: returnItems, error: returnError } = await returnQuery;
     if (returnError) throw returnError;
 
     // --- 4. Fetch AUDIT LOGS (Stock Adjustments) ---
+    // ✅ Updated: Search by record_id = id (Product ID) to find adjustments
     const { data: auditLogs, error: auditError } = await supabaseAdmin
       .from("audit_logs")
       .select("*")
       .eq("table_name", "product_stocks")
-      .contains("new_data", { product_id: id })
-      .order("changed_at", { ascending: false });
+      .eq("record_id", id) // Matches the Product ID used in the Adjust Page
+      .order("changed_at", { ascending: false })
+      .limit(50);
 
-    const safeAuditLogs = auditError ? [] : auditLogs || [];
+    let safeAuditLogs = auditError ? [] : auditLogs || [];
+
+    // ✅ Filter Adjustments by Business (check new_data metadata)
+    if (businessId) {
+      safeAuditLogs = safeAuditLogs.filter(
+        (log: any) => log.new_data?.businessId === businessId,
+      );
+    }
 
     // --- 5. Process Transactions ---
     const history: any[] = [];
@@ -119,21 +150,15 @@ export async function GET(
 
     // A. Sales
     orderItems.forEach((item: any) => {
-      if (!item.order) return;
-
       const date = new Date(item.created_at);
       const monthKey = `${date.getFullYear()}-${String(
         date.getMonth() + 1,
       ).padStart(2, "0")}`;
-      const businessName = item.order.customer?.business?.name || "Unassigned";
-      const repName = item.order.rep?.full_name || "Direct Sales";
 
-      // Determine Location Name
-      // Use Lorry Number if exists, otherwise fallback to Main Warehouse logic
-      let locationName = "Direct / Main";
-      if (item.order.load?.lorry_number) {
-        locationName = item.order.load.lorry_number; // Assuming Lorry Name matches Location Name
-      }
+      // Since we filtered by businessId, usually this is just "Wireman"
+      const businessName = "Wireman Agency";
+      const repName = item.order.rep?.full_name || "Direct Sales";
+      let locationName = item.order.load?.lorry_number || "Direct / Main";
 
       const revenue = Number(item.total_price) || 0;
       const cost =
@@ -148,13 +173,13 @@ export async function GET(
         type: "SALE",
         quantity: -qty,
         customer: item.order.customer?.shop_name || "Unknown",
-        reference: item.order.order_id, // Add Order ID reference
+        reference: item.order.order_id,
         location: locationName,
         status: item.order.status,
-        notes: "-", // Default note for sales
+        notes: "-",
       });
 
-      // Stats Aggregation...
+      // Stats
       if (!monthlyStats[monthKey]) {
         monthlyStats[monthKey] = {
           name: date.toLocaleString("default", {
@@ -192,11 +217,8 @@ export async function GET(
 
     // B. Purchases
     const purchaseHistory = (purchaseItems || []).map((item: any) => {
-      // 1. Detect Free Issue (Cost is 0)
       const unitCost = Number(item.unit_cost) || 0;
       const isFree = unitCost === 0;
-
-      // 2. Get Bill ID (Invoice No has priority, fallback to Purchase ID)
       const billId =
         item.purchase?.invoice_no || item.purchase?.purchase_id || "-";
 
@@ -204,20 +226,12 @@ export async function GET(
         id: item.id,
         date: item.purchase?.purchase_date || item.created_at.split("T")[0],
         timestamp: new Date(item.created_at).getTime(),
-
-        // Change Type to "FREE ISSUE" if cost is 0
         type: isFree ? "FREE ISSUE" : "PURCHASE",
-
         quantity: Number(item.quantity),
-
-        // Show Bill ID in Customer column for visibility
-        customer: `${item.purchase?.supplier?.name || "Unknown"} (${billId})`,
-
-        reference: billId, // Dedicated reference field
-        location: "Main Warehouse", // Default
+        customer: `${item.purchase?.supplier?.name || "Unknown"}`,
+        reference: billId,
+        location: "Main Warehouse",
         status: item.purchase?.status || "Completed",
-
-        // Add Notes
         notes: isFree ? "Free Issue" : "-",
       };
     });
@@ -238,16 +252,18 @@ export async function GET(
       notes: item.reason || "-",
     }));
 
-    // D. Adjustments
+    // D. Adjustments (Logic to parse Audit Logs)
     const adjustmentHistory = safeAuditLogs
       .map((log: any) => {
         const oldQty = Number(log.old_data?.quantity) || 0;
         const newQty = Number(log.new_data?.quantity) || 0;
         const diff = newQty - oldQty;
 
-        const locId = log.new_data?.location_id || log.old_data?.location_id;
+        // Find location name (Supports both key styles)
+        const locId = log.new_data?.locationId || log.new_data?.location_id;
         const locName = locationIdToName[locId] || "Unknown Location";
 
+        // Skip if no net change
         if (diff === 0) return null;
 
         return {
@@ -256,65 +272,28 @@ export async function GET(
           timestamp: new Date(log.changed_at).getTime(),
           type: "ADJUSTMENT",
           quantity: diff,
-          customer: "System",
-          reference: "Audit",
+          customer: "Stock Update",
+          reference: "Manual",
           location: locName,
-          notes: "System Adjustment",
+          notes: log.new_data?.reason || "Stock Correction",
         };
       })
       .filter(Boolean);
 
-    // --- 6. Unified Sort & Balance Calculation ---
+    // --- 6. Unified Sort & Response ---
     const allTransactions = [
       ...history,
       ...purchaseHistory,
       ...returnHistory,
       ...adjustmentHistory,
-    ].sort((a, b) => b.timestamp - a.timestamp); // Sort Newest -> Oldest
-
-    // Calculate Running Balance per Location
-    const tempLocationStock: Record<string, number> = { ...stockMap };
-
-    const processedTransactions = allTransactions.map((tx) => {
-      // Normalize Location Key for matching
-      let stockKey = tx.location;
-
-      // Handle "Direct / Main" mapping to Main Warehouse
-      if (tx.location === "Direct / Main" || tx.location === "Main Warehouse") {
-        stockKey = "MAIN_WAREHOUSE_KEY";
-      }
-
-      // Fallback: If we can't find exact stock, try to find by name match
-      if (stockKey !== "MAIN_WAREHOUSE_KEY" && !tempLocationStock[stockKey]) {
-        // Try to find if location name exists in map
-        const foundKey = Object.keys(tempLocationStock).find(
-          (k) => k === tx.location,
-        );
-        if (foundKey) stockKey = foundKey;
-      }
-
-      // Get Stock *After* this transaction (which is the current tracker value)
-      const balanceAfter = tempLocationStock[stockKey] ?? 0;
-
-      // Update tracker for the *next* iteration (which is the previous transaction in time)
-      if (tempLocationStock[stockKey] !== undefined) {
-        tempLocationStock[stockKey] = balanceAfter - tx.quantity;
-      }
-
-      return {
-        ...tx,
-        stockAfter: balanceAfter,
-      };
-    });
+    ].sort((a, b) => b.timestamp - a.timestamp);
 
     return NextResponse.json({
-      allTransactions: processedTransactions,
+      allTransactions,
       monthly: Object.values(monthlyStats).sort((a: any, b: any) =>
         a.dateStr.localeCompare(b.dateStr),
       ),
-      business: Object.values(businessStats).sort(
-        (a: any, b: any) => b.value - a.value,
-      ),
+      business: Object.values(businessStats),
       reps: Object.values(repStats).sort((a: any, b: any) => b.value - a.value),
       summary: {
         totalRevenue,
