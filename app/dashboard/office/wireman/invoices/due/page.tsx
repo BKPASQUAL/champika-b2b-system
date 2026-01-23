@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -23,13 +23,18 @@ import {
 } from "@/components/ui/select";
 import {
   Search,
+  Filter,
   AlertTriangle,
+  Clock,
   Phone,
   Eye,
+  AlertOctagon,
   CalendarDays,
+  ArrowUpRight,
   CreditCard,
   RefreshCw,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { toast } from "sonner";
 import { RecordPaymentDialog } from "../_components/RecordPaymentDialog";
@@ -43,23 +48,23 @@ interface OverdueInvoice {
   shopName: string;
   phone: string;
   dueDate: string;
-  dueAmount: number; // ✅ Renamed from 'amount' to 'dueAmount'
+  dueAmount: number;
   daysOverdue: number;
   status: string;
 }
 
-export default function WiremanDueInvoicesPage() {
+export default function WiremanDueAlertsPage() {
   const router = useRouter();
   const [invoices, setInvoices] = useState<OverdueInvoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(
-    null
+    null,
   );
 
   // Dialog State
   const [isPayDialogOpen, setIsPayDialogOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<OverdueInvoice | null>(
-    null
+    null,
   );
 
   // Filters
@@ -86,7 +91,7 @@ export default function WiremanDueInvoicesPage() {
 
       const mappedInvoices: OverdueInvoice[] = data
         .map((inv: any) => {
-          // Determine Due Date
+          // Determine Due Date (Fallback to 30 days)
           const createdDate = new Date(inv.createdAt);
           const dueDate = inv.dueDate
             ? new Date(inv.dueDate)
@@ -104,19 +109,19 @@ export default function WiremanDueInvoicesPage() {
             shopName: inv.customer?.shopName || inv.shopName || "",
             phone: inv.customer?.phone || inv.phone || "",
             dueDate: dueDate.toISOString().split("T")[0],
-            dueAmount: inv.dueAmount || 0, // ✅ Map to dueAmount
+            dueAmount: inv.dueAmount || 0,
             daysOverdue: daysOverdue,
             status: inv.status,
           };
         })
         .filter(
-          (inv: OverdueInvoice) => inv.dueAmount > 0 && inv.status !== "Paid"
-        ); // ✅ Use dueAmount in filter
+          (inv: OverdueInvoice) => inv.daysOverdue > 0 && inv.dueAmount > 0,
+        );
 
       setInvoices(mappedInvoices);
     } catch (error) {
       console.error("Error fetching overdue invoices:", error);
-      toast.error("Failed to load invoices");
+      toast.error("Failed to load overdue alerts");
     } finally {
       setLoading(false);
     }
@@ -126,7 +131,7 @@ export default function WiremanDueInvoicesPage() {
     fetchOverdueInvoices();
   }, [fetchOverdueInvoices]);
 
-  // Filter Logic
+  // --- Filter Logic ---
   const filteredInvoices = invoices.filter((inv) => {
     const matchesSearch =
       inv.invoiceNo.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -143,21 +148,44 @@ export default function WiremanDueInvoicesPage() {
 
   // Sort by aging (most overdue first)
   const sortedInvoices = [...filteredInvoices].sort(
-    (a, b) => b.daysOverdue - a.daysOverdue
+    (a, b) => b.daysOverdue - a.daysOverdue,
   );
 
-  // Badge Logic
+  // --- Stats Calculations ---
+  const totalOverdue = invoices.reduce((sum, inv) => sum + inv.dueAmount, 0);
+  const overdue30 = invoices
+    .filter((inv) => inv.daysOverdue >= 30 && inv.daysOverdue < 60)
+    .reduce((sum, inv) => sum + inv.dueAmount, 0);
+  const overdue60 = invoices
+    .filter((inv) => inv.daysOverdue >= 60 && inv.daysOverdue < 90)
+    .reduce((sum, inv) => sum + inv.dueAmount, 0);
+  const overdue90 = invoices
+    .filter((inv) => inv.daysOverdue >= 90)
+    .reduce((sum, inv) => sum + inv.dueAmount, 0);
+
+  // --- Badge Logic ---
   const getAgingBadge = (days: number) => {
-    if (days <= 0)
+    if (days >= 90) {
       return (
-        <Badge variant="outline" className="bg-green-50 text-green-700">
-          Current
+        <Badge className="bg-red-600 hover:bg-red-700 text-white border-none animate-pulse">
+          90+ Days
         </Badge>
       );
-    if (days >= 90)
-      return <Badge className="bg-red-600 animate-pulse">90+ Days</Badge>;
-    if (days >= 60) return <Badge className="bg-orange-500">60+ Days</Badge>;
-    if (days >= 30) return <Badge className="bg-yellow-500">30+ Days</Badge>;
+    }
+    if (days >= 60) {
+      return (
+        <Badge className="bg-orange-500 hover:bg-orange-600 text-white border-none">
+          60+ Days
+        </Badge>
+      );
+    }
+    if (days >= 30) {
+      return (
+        <Badge className="bg-yellow-500 hover:bg-yellow-600 text-white border-none">
+          30+ Days
+        </Badge>
+      );
+    }
     return (
       <Badge variant="outline" className="text-amber-600 border-amber-200">
         {days} Days
@@ -175,22 +203,97 @@ export default function WiremanDueInvoicesPage() {
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2 text-red-900">
-            Due Invoices
+            Due Alerts <AlertTriangle className="text-red-600 h-6 w-6" />
           </h1>
           <p className="text-muted-foreground mt-1">
-            Review outstanding balances and record payments.
+            Track and manage overdue customer payments.
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={fetchOverdueInvoices}
-          disabled={loading}
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={fetchOverdueInvoices}
+            disabled={loading}
+            title="Refresh Data"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+        </div>
       </div>
 
+      {/* Stats Grid */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card className="border-l-4 border-l-blue-500 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Total Overdue
+            </CardTitle>
+            <ArrowUpRight className="w-4 h-4 text-blue-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-700">
+              LKR {(totalOverdue / 1000).toFixed(1)}k
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              All outstanding bills
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-l-4 border-l-yellow-500 bg-yellow-50/20 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              30+ Days
+            </CardTitle>
+            <Clock className="w-4 h-4 text-yellow-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-yellow-700">
+              LKR {(overdue30 / 1000).toFixed(1)}k
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Action required
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-l-4 border-l-orange-500 bg-orange-50/20 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              60+ Days
+            </CardTitle>
+            <AlertOctagon className="w-4 h-4 text-orange-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-orange-700">
+              LKR {(overdue60 / 1000).toFixed(1)}k
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Serious concern
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-l-4 border-l-red-600 bg-red-50/30 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              90+ Days
+            </CardTitle>
+            <AlertTriangle className="w-4 h-4 text-red-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-700">
+              LKR {(overdue90 / 1000).toFixed(1)}k
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Critical status
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Main Table Card */}
       <Card>
         <CardHeader>
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -203,58 +306,78 @@ export default function WiremanDueInvoicesPage() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <Select value={ageFilter} onValueChange={setAgeFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filter by Age" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Invoices</SelectItem>
-                <SelectItem value="30+">30+ Days Overdue</SelectItem>
-                <SelectItem value="60+">60+ Days Overdue</SelectItem>
-                <SelectItem value="90+">90+ Days Overdue</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-2">
+              <Select value={ageFilter} onValueChange={setAgeFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Filter by Age" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Overdue</SelectItem>
+                  <SelectItem value="30+">30+ Days</SelectItem>
+                  <SelectItem value="60+">60+ Days</SelectItem>
+                  <SelectItem value="90+">90+ Days</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button variant="outline" size="icon">
+                <Filter className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
           <div className="rounded-md border">
             <Table>
               <TableHeader>
-                <TableRow className="bg-muted/50">
+                <TableRow className="bg-red-50/50">
                   <TableHead>Invoice No</TableHead>
-                  <TableHead>Customer</TableHead>
+                  <TableHead>Customer / Shop</TableHead>
                   <TableHead>Due Date</TableHead>
                   <TableHead className="text-center">Aging</TableHead>
                   <TableHead className="text-right">Due Amount</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedInvoices.length === 0 && !loading ? (
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-12">
+                      <div className="flex justify-center items-center">
+                        <RefreshCw className="h-6 w-6 animate-spin text-red-600" />
+                        <span className="ml-2 text-muted-foreground">
+                          Checking overdue invoices...
+                        </span>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : sortedInvoices.length === 0 ? (
                   <TableRow>
                     <TableCell
                       colSpan={6}
                       className="text-center py-12 text-muted-foreground"
                     >
-                      No due invoices found.
+                      <div className="flex flex-col items-center justify-center">
+                        <CheckCircle2 className="h-12 w-12 text-green-500/20 mb-4" />
+                        <p>No overdue invoices found matching your filters.</p>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ) : (
                   sortedInvoices.map((invoice) => (
                     <TableRow
                       key={invoice.id}
-                      className="hover:bg-red-50/10"
+                      className="hover:bg-red-50/10 transition-colors"
                     >
-                      <TableCell className="font-mono">
+                      <TableCell className="font-medium font-mono text-xs text-muted-foreground">
                         {invoice.invoiceNo}
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col">
                           <span className="font-medium text-sm">
-                            {invoice.shopName}
+                            {invoice.shopName || invoice.customerName}
                           </span>
                           <span className="text-xs text-muted-foreground">
-                            {invoice.customerName}
+                            {invoice.shopName ? invoice.customerName : ""}
+                            {invoice.phone ? ` • ${invoice.phone}` : ""}
                           </span>
                         </div>
                       </TableCell>
@@ -268,30 +391,43 @@ export default function WiremanDueInvoicesPage() {
                         {getAgingBadge(invoice.daysOverdue)}
                       </TableCell>
                       <TableCell className="text-right">
-                        {/* ✅ Corrected to use dueAmount */}
                         <span className="font-bold text-red-600">
                           LKR {invoice.dueAmount.toLocaleString()}
                         </span>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
+                          {invoice.phone && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-blue-600 border-blue-200 hover:bg-blue-50 h-8"
+                              onClick={() =>
+                                (window.location.href = `tel:${invoice.phone}`)
+                              }
+                              title="Call Customer"
+                            >
+                              <Phone className="w-3 h-3 mr-1" /> Call
+                            </Button>
+                          )}
                           <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
                             onClick={() =>
                               router.push(
-                                `/dashboard/office/wireman/invoices/${invoice.id}`
+                                `/dashboard/office/wireman/invoices/${invoice.id}`,
                               )
                             }
+                            title="View Invoice"
                           >
-                            <Eye className="w-3 h-3 mr-1" /> View
+                            <Eye className="w-4 h-4 text-muted-foreground" />
                           </Button>
 
-                          {/* PAY BUTTON */}
+                          {/* PAY BUTTON (Wireman Specific) */}
                           <Button
                             size="sm"
-                            className="bg-green-600 hover:bg-green-700 text-white"
+                            className="bg-green-600 hover:bg-green-700 text-white h-8"
                             onClick={() => handlePayClick(invoice)}
                           >
                             <CreditCard className="w-3 h-3 mr-1" /> Pay
@@ -314,5 +450,24 @@ export default function WiremanDueInvoicesPage() {
         onPaymentSuccess={fetchOverdueInvoices}
       />
     </div>
+  );
+}
+
+// Helper Component for Empty State
+function CheckCircle2({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={cn("lucide lucide-check-circle-2", className)}
+    >
+      <circle cx="12" cy="12" r="10" />
+      <path d="m9 12 2 2 4-4" />
+    </svg>
   );
 }
