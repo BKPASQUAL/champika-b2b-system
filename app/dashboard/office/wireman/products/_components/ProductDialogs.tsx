@@ -221,7 +221,7 @@ export function ProductDialogs({
   return (
     <>
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="max-w-3xl  overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <div className="flex justify-between items-center pr-8">
               <div>
@@ -229,7 +229,7 @@ export function ProductDialogs({
                   {selectedProduct
                     ? "Edit Wireman Product"
                     : "Add Wireman Product"}
-                  {/* ✅ SKU is displayed here as a badge in Edit mode, removed from input grid */}
+                  {/* SKU Badge */}
                   {selectedProduct && formData.sku && (
                     <span className="text-sm font-mono bg-slate-100 text-slate-600 px-2 py-0.5 rounded border">
                       {formData.sku}
@@ -258,28 +258,32 @@ export function ProductDialogs({
           </DialogHeader>
 
           <div className="grid grid-cols-2 gap-4 py-4">
-            {/* ✅ Product Name & Company Code on SAME LINE */}
-            <div className="col-span-1 space-y-2">
-              <Label>Product Name *</Label>
-              <Input
-                value={formData.name}
-                onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
-                }
-                placeholder="e.g. Wireman PVC Pipe 20mm"
-              />
-            </div>
+            {/* ✅ NAME & COMPANY CODE ROW (Nested Grid) */}
+            <div className="col-span-2 grid grid-cols-3 gap-4">
+              {/* Product Name - Takes 2/3 Width */}
+              <div className="col-span-2 space-y-2">
+                <Label>Product Name *</Label>
+                <Input
+                  value={formData.name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
+                  placeholder="e.g. Wireman PVC Pipe 20mm"
+                />
+              </div>
 
-            <div className="col-span-1 space-y-2">
-              <Label>Company Code (Optional)</Label>
-              <Input
-                value={formData.companyCode}
-                onChange={(e) =>
-                  setFormData({ ...formData, companyCode: e.target.value })
-                }
-                placeholder="e.g. CMP-001"
-                className="font-mono"
-              />
+              {/* Company Code - Takes 1/3 Width */}
+              <div className="col-span-1 space-y-2">
+                <Label>Company Code</Label>
+                <Input
+                  value={formData.companyCode}
+                  onChange={(e) =>
+                    setFormData({ ...formData, companyCode: e.target.value })
+                  }
+                  placeholder="e.g. CMP-001"
+                  className="font-mono"
+                />
+              </div>
             </div>
 
             {/* Category Selection */}
