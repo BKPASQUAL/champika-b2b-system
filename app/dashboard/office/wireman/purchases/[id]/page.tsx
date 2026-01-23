@@ -1,7 +1,28 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import React, { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
+import {
+  ArrowLeft,
+  Printer,
+  FileText,
+  Calendar,
+  User,
+  History,
+  Edit,
+  Loader2,
+  Phone,
+  CheckCircle2,
+  Clock,
+  Package,
+  CreditCard,
+  Building2,
+  Banknote,
+  AlertCircle,
+  Truck,
+  Download,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -9,9 +30,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -19,74 +37,60 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TableFooter,
 } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
-  ArrowLeft,
-  Package,
-  DollarSign,
-  TrendingUp,
-  BarChart3,
-  AlertTriangle,
-  Loader2,
-  ChevronLeft,
-  ChevronRight,
-  TrendingDown,
-  User,
-  RotateCcw,
-  Gift, // --- 1. Added Gift Icon ---
-} from "lucide-react";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Line,
-} from "recharts";
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
-const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8"];
-const ITEMS_PER_PAGE = 10;
-
-// --- Interfaces ---
-
-interface Product {
+// --- Types ---
+interface PurchaseItem {
   id: string;
-  name: string;
+  productName: string;
   sku: string;
-  category: string;
-  subCategory?: string;
-  brand?: string;
-  modelType?: string;
-  description?: string;
-  stock: number;
-  minStock: number;
-  unitOfMeasure: string;
-  costPrice: number;
-  sellingPrice: number;
-  mrp: number;
-  commissionValue: number;
-  supplier: string;
-}
-
-interface Transaction {
-  id: string;
-  date: string;
-  // --- 2. Added FREE ISSUE to type ---
-  type: "SALE" | "PURCHASE" | "RETURN" | "DAMAGE" | "FREE ISSUE";
   quantity: number;
-  customer?: string;
-  reference: string;
-  notes: string;
+  unit: string;
+  unitCost: number; // Cost Price
+  discount: number; // Discount Amount
+  totalCost: number; // Final Line Total
+  freeQuantity?: number;
 }
 
-export default function ProductDetailsPage({
+interface PurchaseDetail {
+  id: string;
+  purchaseId: string;
+  invoiceNo?: string;
+  purchaseDate: string;
+  arrivalDate?: string;
+  status: "Ordered" | "Received" | "Cancelled";
+  paymentStatus: "Paid" | "Unpaid" | "Partial";
+  totalAmount: number;
+  paidAmount: number;
+  notes?: string;
+  supplier: {
+    name: string;
+    contactPerson?: string;
+    phone?: string;
+    email?: string;
+    address?: string;
+  };
+  business?: {
+    name: string;
+  };
+  items: PurchaseItem[];
+  payments?: any[];
+}
+
+export default function WiremanViewBillPage({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -94,493 +98,586 @@ export default function ProductDetailsPage({
   const { id } = use(params);
   const router = useRouter();
 
-  const [product, setProduct] = useState<Product | null>(null);
-  const [analytics, setAnalytics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [transactionPage, setTransactionPage] = useState(1);
+  const [bill, setBill] = useState<PurchaseDetail | null>(null);
+
+  // History State
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchBill = async () => {
       try {
-        setLoading(true);
-        // 1. Fetch Product Basic Info
-        const prodRes = await fetch(`/api/products/${id}`);
-        if (!prodRes.ok) throw new Error("Failed to fetch product");
-        const prodData = await prodRes.json();
-        setProduct(prodData);
+        const res = await fetch(`/api/purchases/${id}`);
+        if (!res.ok) throw new Error("Failed to load bill");
+        const data = await res.json();
 
-        // 2. Fetch Analytics (Unified)
-        const analyticsRes = await fetch(`/api/products/${id}/analytics`);
-        if (!analyticsRes.ok) throw new Error("Failed to fetch analytics");
-        const analyticsData = await analyticsRes.json();
-        setAnalytics(analyticsData);
+        setBill({
+          ...data,
+          supplier: data.supplier || { name: data.supplierName },
+          items: data.items || [],
+        });
       } catch (error) {
-        toast.error("Error loading data");
-        console.error(error);
+        toast.error("Error loading bill details");
+        router.push("/dashboard/office/wireman/purchases");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchData();
-  }, [id]);
+    fetchBill();
+  }, [id, router]);
+
+  const fetchHistory = async () => {
+    setHistoryLoading(true);
+    // Simulation for now, can be connected to real audit logs later
+    setTimeout(() => {
+      setHistoryLoading(false);
+    }, 500);
+  };
+
+  const getInitials = (name: string) => {
+    return name
+      ?.split(" ")
+      .map((n) => n[0])
+      .join("")
+      .substring(0, 2)
+      .toUpperCase();
+  };
+
+  const renderStatusBadge = (status: string) => {
+    const styles: Record<string, string> = {
+      Ordered: "bg-blue-50 text-blue-700 border-blue-200",
+      Received: "bg-green-50 text-green-700 border-green-200",
+      Cancelled: "bg-red-50 text-red-700 border-red-200",
+    };
+
+    const icons: Record<string, any> = {
+      Ordered: Clock,
+      Received: CheckCircle2,
+      Cancelled: AlertCircle,
+    };
+
+    const Icon = icons[status] || FileText;
+
+    return (
+      <Badge
+        variant="outline"
+        className={`px-3 py-1 gap-1.5 ${styles[status] || "bg-gray-50"}`}
+      >
+        <Icon className="w-3.5 h-3.5" />
+        {status}
+      </Badge>
+    );
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="flex justify-center items-center h-[80vh]">
+        <Loader2 className="h-8 w-8 animate-spin text-red-600" />
       </div>
     );
   }
 
-  if (!product || !analytics) return <div>Product not found</div>;
+  if (!bill) return null;
 
-  const allTransactions: Transaction[] = analytics.allTransactions || [];
-
-  // Pagination
-  const totalTransactionPages = Math.ceil(
-    allTransactions.length / ITEMS_PER_PAGE,
+  // --- Calculations ---
+  const balanceDue = bill.totalAmount - bill.paidAmount;
+  const totalItemsQty = bill.items.reduce(
+    (acc, item) => acc + item.quantity,
+    0,
   );
-  const startTransactionIndex = (transactionPage - 1) * ITEMS_PER_PAGE;
-  const paginatedTransactions = allTransactions.slice(
-    startTransactionIndex,
-    startTransactionIndex + ITEMS_PER_PAGE,
+  const totalFreeQty = bill.items.reduce(
+    (acc, item) => acc + (item.freeQuantity || 0),
+    0,
   );
+  const paymentsList = bill.payments || [];
 
   return (
-    <div className="space-y-6 ">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="outline" size="icon" onClick={() => router.back()}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">{product.name}</h2>
-          <div className="flex items-center gap-2 text-muted-foreground mt-1">
-            <Badge variant="outline">{product.category}</Badge>
-            <span>•</span>
-            <span className="text-sm">SKU: {product.sku}</span>
-            <span>•</span>
-            <span className="text-sm">{product.supplier}</span>
+    <div className="bg-muted/40 min-h-screen pb-10">
+      <div className="mx-auto space-y-8">
+        {/* --- Top Header Section --- */}
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
+          <div className="space-y-1">
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 rounded-full bg-background hover:bg-slate-100"
+                onClick={() =>
+                  router.push("/dashboard/office/wireman/purchases")
+                }
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </Button>
+              <h1 className="text-2xl font-bold tracking-tight text-red-950">
+                Bill {bill.purchaseId}
+              </h1>
+              {renderStatusBadge(bill.status)}
+            </div>
+            <div className="flex flex-col ml-11 gap-1">
+              <p className="text-sm text-muted-foreground">
+                Issued on{" "}
+                {new Date(bill.purchaseDate).toLocaleDateString(undefined, {
+                  weekday: "long",
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })}
+              </p>
+              {bill.invoiceNo && (
+                <span className="text-xs font-mono bg-red-50 text-red-800 px-2 py-0.5 rounded w-fit border border-red-100">
+                  Vendor Ref: {bill.invoiceNo}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 ml-11 md:ml-0 print:hidden">
+            {/* History Sheet */}
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={fetchHistory}
+                  className="bg-background hover:bg-slate-50"
+                >
+                  <History className="w-4 h-4 mr-2 text-muted-foreground" />{" "}
+                  History
+                </Button>
+              </SheetTrigger>
+              <SheetContent className="sm:max-w-md">
+                <SheetHeader>
+                  <SheetTitle>Audit History</SheetTitle>
+                </SheetHeader>
+                <div className="mt-6 text-center text-muted-foreground text-sm border-2 border-dashed rounded-lg py-8">
+                  Audit logs for purchases coming soon.
+                </div>
+              </SheetContent>
+            </Sheet>
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="bg-background hover:bg-slate-50"
+              onClick={handlePrint}
+            >
+              <Printer className="w-4 h-4 mr-2 text-muted-foreground" /> Print
+            </Button>
+
+            {/* Optional Edit Button (if status permits) */}
+            {/* {bill.status === "Ordered" && (
+              <Button
+                size="sm"
+                className="bg-red-600 hover:bg-red-700 text-white"
+                onClick={() =>
+                  router.push(`/dashboard/office/wireman/purchases/${id}/edit`)
+                }
+              >
+                <Edit className="w-4 h-4 mr-2" /> Edit Bill
+              </Button>
+            )} */}
+          </div>
+        </div>
+
+        {/* --- Main Content Grid --- */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* LEFT COLUMN */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Stakeholders Card */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Supplier Card */}
+              <Card className="shadow-sm border-l-4 border-l-blue-500">
+                <CardHeader className="pb-2">
+                  <CardDescription className="text-xs font-semibold uppercase tracking-wider text-blue-600">
+                    Vendor / Supplier
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex items-start gap-4">
+                  <Avatar className="h-10 w-10 border bg-blue-50 text-blue-600">
+                    <AvatarFallback>
+                      {getInitials(bill.supplier.name)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="space-y-1">
+                    <h3 className="font-semibold text-base leading-none">
+                      {bill.supplier.name}
+                    </h3>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <User className="w-3 h-3" />
+                      <span>
+                        {bill.supplier.contactPerson || "No Contact Info"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1">
+                      <Phone className="w-3 h-3" />
+                      <span>{bill.supplier.phone || "N/A"}</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Receiver (Wireman) Card */}
+              <Card className="shadow-sm border-l-4 border-l-red-500">
+                <CardHeader className="pb-2">
+                  <CardDescription className="text-xs font-semibold uppercase tracking-wider text-red-600">
+                    Bill To
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex items-start gap-4">
+                  <Avatar className="h-10 w-10 border bg-red-50 text-red-600">
+                    <AvatarFallback>
+                      <Building2 className="w-5 h-5" />
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="space-y-1">
+                    <h3 className="font-semibold text-base leading-none">
+                      {bill.business?.name || "Wireman Agency"}
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      Authorized Purchase
+                    </p>
+                    {bill.arrivalDate && (
+                      <div className="flex items-center gap-1 text-xs text-green-600 mt-1">
+                        <Truck className="w-3 h-3" />
+                        <span>
+                          Expected:{" "}
+                          {new Date(bill.arrivalDate).toLocaleDateString()}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Line Items Table */}
+            <Card className="shadow-sm overflow-hidden">
+              <CardHeader className="bg-slate-50/50 border-b py-4">
+                <div className="flex justify-between items-center">
+                  <CardTitle className="text-lg font-semibold">
+                    Purchase Items
+                  </CardTitle>
+                  <Badge variant="outline" className="font-normal">
+                    {bill.items.length} Items
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-slate-50/50 hover:bg-slate-50/50">
+                      <TableHead className="w-[35%] pl-6">
+                        Product Details
+                      </TableHead>
+                      <TableHead className="text-center w-[10%]">Qty</TableHead>
+                      <TableHead className="text-center w-[10%]">
+                        Free
+                      </TableHead>
+                      <TableHead className="text-right w-[15%]">
+                        Unit Cost
+                      </TableHead>
+                      <TableHead className="text-center w-[10%]">
+                        Disc.
+                      </TableHead>
+                      <TableHead className="text-right w-[20%] pr-6">
+                        Total
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {bill.items.map((item) => (
+                      <TableRow key={item.id} className="hover:bg-muted/30">
+                        <TableCell className="pl-6 py-4">
+                          <div className="flex items-start gap-3">
+                            <div className="h-8 w-8 rounded bg-slate-100 flex items-center justify-center text-slate-400 shrink-0">
+                              <Package className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-sm text-foreground">
+                                {item.productName}
+                              </p>
+                              <p className="text-xs font-mono text-muted-foreground mt-0.5">
+                                {item.sku}
+                              </p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <span className="font-medium">{item.quantity}</span>
+                          <span className="text-xs text-muted-foreground ml-1">
+                            {item.unit}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {item.freeQuantity && item.freeQuantity > 0 ? (
+                            <Badge
+                              variant="secondary"
+                              className="px-1.5 h-5 text-[10px]"
+                            >
+                              {item.freeQuantity}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">
+                              -
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-sm">
+                          {item.unitCost.toLocaleString("en-LK", {
+                            minimumFractionDigits: 2,
+                          })}
+                        </TableCell>
+                        <TableCell className="text-center text-sm text-red-500">
+                          {item.discount > 0
+                            ? `-${item.discount.toLocaleString()}`
+                            : "-"}
+                        </TableCell>
+                        <TableCell className="text-right pr-6 font-mono font-medium text-sm">
+                          {item.totalCost.toLocaleString("en-LK", {
+                            minimumFractionDigits: 2,
+                          })}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                  <TableFooter className="bg-slate-50/50">
+                    <TableRow>
+                      <TableCell className="pl-6 font-semibold">
+                        Total Qty
+                      </TableCell>
+                      <TableCell className="text-center font-semibold">
+                        {totalItemsQty}
+                      </TableCell>
+                      <TableCell className="text-center font-semibold">
+                        {totalFreeQty > 0 ? totalFreeQty : "-"}
+                      </TableCell>
+                      <TableCell colSpan={3} className="text-right pr-6">
+                        <span className="text-xs text-muted-foreground uppercase mr-2">
+                          Total Cost:
+                        </span>
+                        <span className="font-bold font-mono text-base">
+                          LKR{" "}
+                          {bill.totalAmount.toLocaleString("en-LK", {
+                            minimumFractionDigits: 2,
+                          })}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  </TableFooter>
+                </Table>
+              </CardContent>
+            </Card>
+
+            {/* Payment History Section */}
+            <Card className="shadow-sm border-l-4 border-l-emerald-500 overflow-hidden">
+              <CardHeader className="bg-emerald-50/50 border-b py-4">
+                <div className="flex justify-between items-center">
+                  <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                    <Banknote className="h-5 w-5 text-emerald-600" />
+                    Payment History
+                  </CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                {paymentsList.length === 0 ? (
+                  // If no detailed list, show summary based on paidAmount
+                  bill.paidAmount > 0 ? (
+                    <div className="p-6">
+                      <div className="flex justify-between items-center bg-emerald-50 p-4 rounded-md border border-emerald-100">
+                        <div>
+                          <p className="font-semibold text-emerald-800">
+                            Total Paid Amount
+                          </p>
+                          <p className="text-xs text-emerald-600">
+                            Detailed records not available
+                          </p>
+                        </div>
+                        <div className="text-xl font-bold font-mono text-emerald-700">
+                          LKR{" "}
+                          {bill.paidAmount.toLocaleString("en-LK", {
+                            minimumFractionDigits: 2,
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center text-muted-foreground text-sm">
+                      No payments recorded for this bill yet.
+                    </div>
+                  )
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-emerald-50/30 hover:bg-emerald-50/30">
+                        <TableHead className="pl-6">Date</TableHead>
+                        <TableHead>Method</TableHead>
+                        <TableHead>Reference</TableHead>
+                        <TableHead className="text-right pr-6">
+                          Amount
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paymentsList.map((pay: any, idx: number) => (
+                        <TableRow key={idx} className="hover:bg-emerald-50/10">
+                          <TableCell className="pl-6 text-sm">
+                            {new Date(
+                              pay.payment_date || pay.created_at,
+                            ).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            <Badge
+                              variant="secondary"
+                              className="font-normal text-xs"
+                            >
+                              {pay.payment_method || "Unknown"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {pay.reference || pay.notes || "-"}
+                          </TableCell>
+                          <TableCell className="text-right pr-6 font-mono font-medium">
+                            LKR{" "}
+                            {Number(pay.amount).toLocaleString("en-LK", {
+                              minimumFractionDigits: 2,
+                            })}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* RIGHT COLUMN */}
+          <div className="space-y-6">
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                  Bill Metadata
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Bill / PO No</span>
+                  <span className="text-sm font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-700">
+                    {bill.purchaseId}
+                  </span>
+                </div>
+
+                {/* Explicit Supplier Invoice Display */}
+                {bill.invoiceNo && (
+                  <>
+                    <Separator />
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium">
+                        Supplier Invoice
+                      </span>
+                      <span className="text-sm font-mono bg-red-50 text-red-700 px-2 py-0.5 rounded border border-red-100">
+                        {bill.invoiceNo}
+                      </span>
+                    </div>
+                  </>
+                )}
+
+                <Separator />
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Date Issued</span>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Calendar className="w-3.5 h-3.5" />
+                    {new Date(bill.purchaseDate).toLocaleDateString()}
+                  </div>
+                </div>
+                <Separator />
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Payment Status</span>
+                  <Badge
+                    variant={
+                      balanceDue <= 0
+                        ? "default" // Paid
+                        : bill.paidAmount > 0
+                          ? "secondary" // Partial
+                          : "destructive" // Unpaid
+                    }
+                    className="rounded-full px-3"
+                  >
+                    {bill.paymentStatus}
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-sm border-t-4 border-t-red-600 sticky top-6">
+              <CardHeader className="bg-muted/20 pb-4">
+                <CardTitle className="flex items-center gap-2 text-red-950">
+                  <CreditCard className="w-5 h-5 text-red-600" />
+                  Payment Details
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4 pt-6">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Bill Total</span>
+                  <span className="font-medium font-mono">
+                    LKR{" "}
+                    {bill.totalAmount.toLocaleString("en-LK", {
+                      minimumFractionDigits: 2,
+                    })}
+                  </span>
+                </div>
+
+                {bill.paidAmount > 0 && (
+                  <div className="flex justify-between text-sm text-emerald-600 mt-2">
+                    <span className="flex items-center gap-1">
+                      <Banknote className="w-3 h-3" /> Paid
+                    </span>
+                    <span className="font-medium font-mono">
+                      - LKR{" "}
+                      {bill.paidAmount.toLocaleString("en-LK", {
+                        minimumFractionDigits: 2,
+                      })}
+                    </span>
+                  </div>
+                )}
+
+                <Separator className="my-2" />
+
+                <div className="flex justify-between items-end pb-2">
+                  <span className="font-bold text-lg">Balance Due</span>
+                  <div className="text-right">
+                    <span
+                      className={cn(
+                        "block font-bold text-2xl font-mono tracking-tight",
+                        balanceDue > 0 ? "text-red-600" : "text-emerald-600",
+                      )}
+                    >
+                      LKR{" "}
+                      {Math.max(0, balanceDue).toLocaleString("en-LK", {
+                        minimumFractionDigits: 2,
+                      })}
+                    </span>
+                  </div>
+                </div>
+
+                {bill.notes && (
+                  <div className="bg-amber-50 border border-amber-100 rounded-md p-3 text-sm text-amber-800">
+                    <p className="font-semibold text-xs uppercase tracking-wider mb-1 flex items-center gap-1">
+                      <FileText className="w-3 h-3" /> Notes
+                    </p>
+                    {bill.notes}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
-
-      {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Current Stock</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {product.stock} {product.unitOfMeasure}
-            </div>
-            {product.stock <= product.minStock && (
-              <p className="text-xs text-red-500 font-medium flex items-center mt-1">
-                <AlertTriangle className="w-3 h-3 mr-1" /> Low Stock Warning
-              </p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Sold</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {analytics.summary.totalUnitsSold}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Lifetime units</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              LKR {analytics.summary.totalRevenue.toLocaleString()}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Lifetime sales</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Profit Margin</CardTitle>
-            <BarChart3 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {analytics.summary.margin.toFixed(1)}%
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              LKR {analytics.summary.totalProfit.toLocaleString()} Profit
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Tabs defaultValue="history" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="history">Transaction History</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
-          <TabsTrigger value="details">Product Details</TabsTrigger>
-        </TabsList>
-
-        {/* --- UNIFIED TRANSACTION HISTORY TAB --- */}
-        <TabsContent value="history" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Transaction History</CardTitle>
-              <CardDescription>
-                All transactions (Sales, Purchases, Returns)
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table className="w-full">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[12%] min-w-[100px]">
-                      Date
-                    </TableHead>
-                    <TableHead className="w-[13%] min-w-[120px]">
-                      Type
-                    </TableHead>
-                    <TableHead className="w-[10%] min-w-20">Quantity</TableHead>
-                    <TableHead className="w-[20%] min-w-[150px]">
-                      Party
-                    </TableHead>
-                    <TableHead className="w-[15%] min-w-[120px]">
-                      Reference
-                    </TableHead>
-                    <TableHead className="w-[30%]">Notes</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedTransactions.length === 0 ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={6}
-                        className="text-center h-24 text-muted-foreground"
-                      >
-                        No transactions found.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    paginatedTransactions.map((transaction) => (
-                      <TableRow key={transaction.id}>
-                        <TableCell className="text-muted-foreground whitespace-nowrap">
-                          {transaction.date}
-                        </TableCell>
-                        <TableCell>
-                          {transaction.type === "SALE" && (
-                            <Badge className="bg-black text-white hover:bg-black/90 gap-1 whitespace-nowrap">
-                              <TrendingDown className="h-3 w-3" />
-                              SALE
-                            </Badge>
-                          )}
-                          {transaction.type === "PURCHASE" && (
-                            <Badge
-                              variant="outline"
-                              className="gap-1 border-green-600 text-green-600 whitespace-nowrap"
-                            >
-                              <TrendingUp className="h-3 w-3" />
-                              PURCHASE
-                            </Badge>
-                          )}
-                          {/* --- 3. Added Logic for Free Issue Rendering --- */}
-                          {transaction.type === "FREE ISSUE" && (
-                            <Badge
-                              variant="outline"
-                              className="gap-1 border-orange-500 text-orange-600 bg-orange-50 whitespace-nowrap"
-                            >
-                              <Gift className="h-3 w-3" />
-                              FREE ISSUE
-                            </Badge>
-                          )}
-                          {transaction.type === "RETURN" && (
-                            <Badge className="bg-blue-500 text-white hover:bg-blue-600 gap-1 whitespace-nowrap">
-                              <RotateCcw className="h-3 w-3" />
-                              RETURN (GOOD)
-                            </Badge>
-                          )}
-                          {transaction.type === "DAMAGE" && (
-                            <Badge className="bg-red-500 text-white hover:bg-red-600 gap-1 whitespace-nowrap">
-                              <AlertTriangle className="h-3 w-3" />
-                              DAMAGE
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell
-                          className={cn(
-                            "font-semibold",
-                            transaction.quantity < 0
-                              ? "text-red-500"
-                              : "text-green-600",
-                          )}
-                        >
-                          {transaction.quantity > 0 ? "+" : ""}
-                          {transaction.quantity}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <User className="h-3 w-3 text-muted-foreground" />
-                            <span
-                              className="truncate max-w-[180px]"
-                              title={transaction.customer}
-                            >
-                              {transaction.customer || "-"}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {transaction.reference}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {transaction.notes}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-
-              {/* Pagination */}
-              {allTransactions.length > 0 && (
-                <div className="flex items-center justify-between py-4 border-t mt-4">
-                  <div className="text-sm text-muted-foreground">
-                    Page {transactionPage} of {totalTransactionPages}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setTransactionPage((p) => Math.max(1, p - 1))
-                      }
-                      disabled={transactionPage === 1}
-                    >
-                      <ChevronLeft className="h-4 w-4 mr-1" /> Previous
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setTransactionPage((p) =>
-                          Math.min(totalTransactionPages, p + 1),
-                        )
-                      }
-                      disabled={transactionPage === totalTransactionPages}
-                    >
-                      Next <ChevronRight className="h-4 w-4 ml-1" />
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* --- ANALYTICS TAB --- */}
-        <TabsContent value="analytics" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card className="col-span-2">
-              <CardHeader>
-                <CardTitle>Monthly Sales & Profit</CardTitle>
-                <CardDescription>
-                  Performance over the last 12 months
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={analytics.monthly}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis yAxisId="left" />
-                    <YAxis yAxisId="right" orientation="right" />
-                    <Tooltip />
-                    <Legend />
-                    <Bar
-                      yAxisId="left"
-                      dataKey="revenue"
-                      name="Revenue"
-                      fill="#0088FE"
-                    />
-                    <Line
-                      yAxisId="right"
-                      type="monotone"
-                      dataKey="profit"
-                      name="Profit"
-                      stroke="#00C49F"
-                      strokeWidth={2}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Sales by Business</CardTitle>
-              </CardHeader>
-              <CardContent className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={analytics.business}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={80}
-                      label={({
-                        name,
-                        percent,
-                      }: {
-                        name?: string;
-                        percent?: number;
-                      }) =>
-                        `${name ?? ""} ${((percent || 0) * 100).toFixed(0)}%`
-                      }
-                    >
-                      {analytics.business.map((_: any, index: number) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={COLORS[index % COLORS.length]}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(value: any) =>
-                        `LKR ${(Number(value) || 0).toLocaleString()}`
-                      }
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Top Selling Representatives</CardTitle>
-              </CardHeader>
-              <CardContent className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={analytics.reps} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" hide />
-                    <YAxis dataKey="name" type="category" width={100} />
-                    <Tooltip
-                      formatter={(value: any) =>
-                        `LKR ${(Number(value) || 0).toLocaleString()}`
-                      }
-                    />
-                    <Bar dataKey="value" fill="#8884d8" name="Revenue">
-                      {analytics.reps.map((_: any, index: number) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={COLORS[index % COLORS.length]}
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        {/* --- DETAILS TAB --- */}
-        <TabsContent value="details">
-          <Card>
-            <CardHeader>
-              <CardTitle>Product Information</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-6 md:grid-cols-2">
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">
-                    Description
-                  </label>
-                  <div className="mt-1">{product.name}</div>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">
-                    Categories
-                  </label>
-                  <div className="mt-1 flex gap-2">
-                    <Badge>{product.category}</Badge>
-                    {product.subCategory && (
-                      <Badge variant="outline">{product.subCategory}</Badge>
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">
-                    Brand & Model
-                  </label>
-                  <div className="mt-1">
-                    {product.brand || "N/A"}
-                    {product.modelType ? ` - ${product.modelType}` : ""}
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">
-                    Pricing
-                  </label>
-                  <div className="grid grid-cols-2 gap-4 mt-1 p-4 border rounded-lg bg-muted/20">
-                    <div>
-                      <span className="text-xs text-muted-foreground">
-                        Cost Price
-                      </span>
-                      <div className="font-medium">
-                        LKR {product.costPrice.toLocaleString()}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-xs text-muted-foreground">
-                        Selling Price
-                      </span>
-                      <div className="font-medium text-green-600">
-                        LKR {product.sellingPrice.toLocaleString()}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-xs text-muted-foreground">MRP</span>
-                      <div className="font-medium">
-                        LKR {product.mrp.toLocaleString()}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-xs text-muted-foreground">
-                        Commission
-                      </span>
-                      <div className="font-medium text-orange-600">
-                        {product.commissionValue}%
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
     </div>
   );
-}
-
-// Helper function for classnames
-function cn(...classes: (string | undefined | null | false)[]) {
-  return classes.filter(Boolean).join(" ");
 }
