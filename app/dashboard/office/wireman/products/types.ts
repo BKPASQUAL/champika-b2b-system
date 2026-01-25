@@ -28,6 +28,13 @@ export interface Product {
   commissionType?: string;
   commissionValue?: number;
   isActive: boolean;
+  // ✅ Added Price History to fix the error
+  priceHistory?: {
+    date: string;
+    costPrice: number;
+    sellingPrice: number;
+    mrp: number;
+  }[];
 }
 
 export type SortField =

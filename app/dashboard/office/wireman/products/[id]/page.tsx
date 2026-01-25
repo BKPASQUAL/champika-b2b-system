@@ -33,8 +33,8 @@ import {
   TrendingDown,
   User,
   RotateCcw,
-  ClipboardList, // Added for Adjustment Icon
-  Gift, // Added for Free Issue Icon
+  Clock, // ✅ Added for Price History
+  Archive, // ✅ Added for Stock Icon
 } from "lucide-react";
 import {
   BarChart,
@@ -57,16 +57,19 @@ import { BUSINESS_IDS } from "@/app/config/business-constants";
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8"];
 const ITEMS_PER_PAGE = 10;
 
-// ✅ Updated Transaction Interface to support new types
+// ✅ Updated Transaction Interface (Matches Admin)
 interface Transaction {
   id: string;
   date: string;
   type: "SALE" | "PURCHASE" | "RETURN" | "DAMAGE" | "ADJUSTMENT" | "FREE ISSUE";
   quantity: number;
+  freeQuantity?: number;
+  currentStock?: number; // ✅ Added Stock Balance
   customer?: string;
   reference: string;
   notes: string;
-  location?: string; // Added location field
+  buyingPrice: number;
+  sellingPrice: number;
 }
 
 export default function WiremanProductDetailsPage({
@@ -102,6 +105,7 @@ export default function WiremanProductDetailsPage({
         setProduct(prodData);
 
         // 2. Fetch Analytics (Filtered by Business ID)
+        // This relies on the API update we made earlier to calculate stock globally first, then filter
         const analyticsRes = await fetch(
           `/api/products/${id}/analytics?businessId=${BUSINESS_IDS.WIREMAN_AGENCY}`,
         );
@@ -141,6 +145,13 @@ export default function WiremanProductDetailsPage({
     startTransactionIndex,
     startTransactionIndex + ITEMS_PER_PAGE,
   );
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("en-LK", {
+      style: "currency",
+      currency: "LKR",
+    }).format(amount);
+  };
 
   return (
     <div className="space-y-6">
@@ -229,6 +240,8 @@ export default function WiremanProductDetailsPage({
       <Tabs defaultValue="history" className="space-y-4">
         <TabsList>
           <TabsTrigger value="history">Transaction History</TabsTrigger>
+          <TabsTrigger value="prices">Price History</TabsTrigger>{" "}
+          {/* ✅ New Tab */}
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
           <TabsTrigger value="details">Product Details</TabsTrigger>
         </TabsList>
@@ -239,37 +252,47 @@ export default function WiremanProductDetailsPage({
             <CardHeader>
               <CardTitle>Transaction History</CardTitle>
               <CardDescription>
-                All transactions (Sales, Purchases, Returns, Adjustments) for
-                Wireman
+                All transactions (Sales, Purchases, Returns) for Wireman
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Table className="w-full">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[12%] min-w-[100px]">
+                    {/* Centered Headers & Adjusted Widths */}
+                    <TableHead className="w-[100px] text-center">
                       Date
                     </TableHead>
-                    <TableHead className="w-[15%] min-w-[140px]">
+                    <TableHead className="w-[120px] text-center">
                       Type
                     </TableHead>
-                    <TableHead className="w-[10%] min-w-[80px]">
+                    <TableHead className="w-[80px] text-center">
                       Quantity
                     </TableHead>
-                    <TableHead className="w-[20%] min-w-[150px]">
+                    {/* ✅ Stock Column */}
+                    <TableHead className="w-[80px] text-center font-bold text-black">
+                      Stock
+                    </TableHead>
+                    <TableHead className="w-[150px] text-center">
                       Party
                     </TableHead>
-                    <TableHead className="w-[15%] min-w-[120px]">
+                    <TableHead className="w-[100px] text-center">
+                      Buy Price
+                    </TableHead>
+                    <TableHead className="w-[100px] text-center">
+                      Sell Price
+                    </TableHead>
+                    <TableHead className="w-[120px] text-center">
                       Reference
                     </TableHead>
-                    <TableHead className="w-[28%]">Notes</TableHead>
+                    <TableHead className="w-[150px]">Notes</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {paginatedTransactions.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={6}
+                        colSpan={9}
                         className="text-center h-24 text-muted-foreground"
                       >
                         No transactions found.
@@ -278,84 +301,115 @@ export default function WiremanProductDetailsPage({
                   ) : (
                     paginatedTransactions.map((transaction) => (
                       <TableRow key={transaction.id}>
-                        <TableCell className="text-muted-foreground whitespace-nowrap">
+                        {/* Centered Cells */}
+                        <TableCell className="text-muted-foreground whitespace-nowrap text-center">
                           {transaction.date}
                         </TableCell>
-                        <TableCell>
-                          {/* SALE */}
-                          {transaction.type === "SALE" && (
-                            <Badge className="bg-black text-white hover:bg-black/90 gap-1 whitespace-nowrap">
-                              <TrendingDown className="h-3 w-3" /> SALE
-                            </Badge>
-                          )}
-
-                          {/* PURCHASE */}
-                          {transaction.type === "PURCHASE" && (
-                            <Badge
-                              variant="outline"
-                              className="gap-1 border-green-600 text-green-600 whitespace-nowrap"
-                            >
-                              <TrendingUp className="h-3 w-3" /> PURCHASE
-                            </Badge>
-                          )}
-
-                          {/* FREE ISSUE */}
-                          {transaction.type === "FREE ISSUE" && (
-                            <Badge className="bg-green-600 text-white hover:bg-green-700 gap-1 whitespace-nowrap">
-                              <Gift className="h-3 w-3" /> FREE ISSUE
-                            </Badge>
-                          )}
-
-                          {/* RETURN */}
-                          {transaction.type === "RETURN" && (
-                            <Badge className="bg-blue-500 text-white hover:bg-blue-600 gap-1 whitespace-nowrap">
-                              <RotateCcw className="h-3 w-3" /> RETURN
-                            </Badge>
-                          )}
-
-                          {/* DAMAGE */}
-                          {transaction.type === "DAMAGE" && (
-                            <Badge className="bg-red-500 text-white hover:bg-red-600 gap-1 whitespace-nowrap">
-                              <AlertTriangle className="h-3 w-3" /> DAMAGE
-                            </Badge>
-                          )}
-
-                          {/* ADJUSTMENT (Added) */}
-                          {transaction.type === "ADJUSTMENT" && (
-                            <Badge
-                              variant="secondary"
-                              className="bg-gray-200 text-gray-800 gap-1 whitespace-nowrap border-gray-300 border"
-                            >
-                              <ClipboardList className="h-3 w-3" /> ADJUSTMENT
-                            </Badge>
-                          )}
+                        <TableCell className="text-center">
+                          <div className="flex justify-center">
+                            {transaction.type === "SALE" && (
+                              <Badge className="bg-black text-white hover:bg-black/90 gap-1 whitespace-nowrap">
+                                <TrendingDown className="h-3 w-3" />
+                                SALE
+                              </Badge>
+                            )}
+                            {transaction.type === "PURCHASE" && (
+                              <Badge
+                                variant="outline"
+                                className="gap-1 border-green-600 text-green-600 whitespace-nowrap"
+                              >
+                                <TrendingUp className="h-3 w-3" />
+                                PURCHASE
+                              </Badge>
+                            )}
+                            {transaction.type === "FREE ISSUE" && (
+                              <Badge
+                                variant="outline"
+                                className="gap-1 border-green-600 text-green-600 whitespace-nowrap"
+                              >
+                                <TrendingUp className="h-3 w-3" />
+                                FREE ISSUE
+                              </Badge>
+                            )}
+                            {transaction.type === "RETURN" && (
+                              <Badge className="bg-blue-500 text-white hover:bg-blue-600 gap-1 whitespace-nowrap">
+                                <RotateCcw className="h-3 w-3" />
+                                RETURN
+                              </Badge>
+                            )}
+                            {transaction.type === "DAMAGE" && (
+                              <Badge className="bg-red-500 text-white hover:bg-red-600 gap-1 whitespace-nowrap">
+                                <AlertTriangle className="h-3 w-3" />
+                                DAMAGE
+                              </Badge>
+                            )}
+                            {transaction.type === "ADJUSTMENT" && (
+                              <Badge
+                                variant="secondary"
+                                className="gap-1 whitespace-nowrap"
+                              >
+                                <AlertTriangle className="h-3 w-3" />
+                                ADJUST
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
-                        <TableCell
-                          className={`font-semibold ${transaction.quantity < 0 ? "text-red-500" : "text-green-600"}`}
-                        >
-                          {transaction.quantity > 0 ? "+" : ""}
-                          {transaction.quantity}
+                        <TableCell className="text-center">
+                          <div className="flex flex-col items-center">
+                            <span
+                              className={`font-semibold ${
+                                transaction.quantity < 0
+                                  ? "text-red-500"
+                                  : "text-green-600"
+                              }`}
+                            >
+                              {transaction.quantity > 0 ? "+" : ""}
+                              {transaction.quantity}
+                            </span>
+                            {transaction.freeQuantity &&
+                            transaction.freeQuantity > 0 ? (
+                              <span className="text-[10px] text-muted-foreground font-medium">
+                                (+{transaction.freeQuantity} Free)
+                              </span>
+                            ) : null}
+                          </div>
                         </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
+
+                        {/* ✅ Calculated Stock - Centered */}
+                        <TableCell className="text-center font-mono font-bold">
+                          {transaction.currentStock}
+                        </TableCell>
+
+                        <TableCell className="text-center">
+                          <div className="flex items-center justify-center gap-2">
                             <User className="h-3 w-3 text-muted-foreground" />
                             <span
-                              className="truncate max-w-[180px]"
+                              className="truncate max-w-[140px]"
                               title={transaction.customer}
                             >
                               {transaction.customer || "-"}
                             </span>
                           </div>
                         </TableCell>
-                        <TableCell className="text-muted-foreground font-mono text-xs">
+
+                        {/* ✅ Buying Price */}
+                        <TableCell className="text-center font-mono text-xs">
+                          {transaction.buyingPrice > 0
+                            ? formatCurrency(transaction.buyingPrice)
+                            : "-"}
+                        </TableCell>
+
+                        {/* ✅ Selling Price */}
+                        <TableCell className="text-center font-mono text-xs">
+                          {transaction.sellingPrice > 0
+                            ? formatCurrency(transaction.sellingPrice)
+                            : "-"}
+                        </TableCell>
+
+                        <TableCell className="text-muted-foreground text-center">
                           {transaction.reference}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {transaction.location && (
-                            <span className="block text-xs font-medium text-gray-500 mb-1">
-                              Loc: {transaction.location}
-                            </span>
-                          )}
                           {transaction.notes}
                         </TableCell>
                       </TableRow>
@@ -400,6 +454,57 @@ export default function WiremanProductDetailsPage({
           </Card>
         </TabsContent>
 
+        {/* --- PRICE HISTORY TAB (Added for Hybrid Functionality) --- */}
+        <TabsContent value="prices" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Price Change Log</CardTitle>
+              <CardDescription>
+                Historical record of cost and selling price changes.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date Changed</TableHead>
+                    <TableHead>Old Cost</TableHead>
+                    <TableHead>Old Selling</TableHead>
+                    <TableHead>Old MRP</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {product.priceHistory && product.priceHistory.length > 0 ? (
+                    product.priceHistory.map((h: any, i: number) => (
+                      <TableRow key={i}>
+                        <TableCell className="flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-muted-foreground" />
+                          {new Date(h.date).toLocaleDateString()}
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(h.date).toLocaleTimeString()}
+                          </span>
+                        </TableCell>
+                        <TableCell>{formatCurrency(h.costPrice)}</TableCell>
+                        <TableCell>{formatCurrency(h.sellingPrice)}</TableCell>
+                        <TableCell>{formatCurrency(h.mrp)}</TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell
+                        colSpan={4}
+                        className="text-center text-muted-foreground h-24"
+                      >
+                        No price changes recorded yet.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         {/* --- ANALYTICS TAB --- */}
         <TabsContent value="analytics" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
@@ -407,7 +512,7 @@ export default function WiremanProductDetailsPage({
               <CardHeader>
                 <CardTitle>Monthly Sales & Profit</CardTitle>
                 <CardDescription>
-                  Performance over the last 12 months (Wireman)
+                  Performance over the last 12 months
                 </CardDescription>
               </CardHeader>
               <CardContent className="h-[300px]">
