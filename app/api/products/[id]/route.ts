@@ -24,14 +24,50 @@ const updateSchema = z.object({
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
   try {
     const body = await request.json();
     const val = updateSchema.parse(body);
 
+    // 1. Fetch current data to check for price changes and commission rules
+    const { data: currentProduct, error: fetchError } = await supabaseAdmin
+      .from("products")
+      .select(
+        "price_history, cost_price, selling_price, mrp, supplier_name, category",
+      )
+      .eq("id", id)
+      .single();
+
+    if (fetchError) throw fetchError;
+
     const dbUpdates: any = {};
+
+    // --- PRICE HISTORY LOGIC ---
+    const isPriceChanged =
+      (val.costPrice !== undefined &&
+        val.costPrice !== currentProduct.cost_price) ||
+      (val.sellingPrice !== undefined &&
+        val.sellingPrice !== currentProduct.selling_price) ||
+      (val.mrp !== undefined && val.mrp !== currentProduct.mrp);
+
+    if (isPriceChanged) {
+      const historyEntry = {
+        date: new Date().toISOString(),
+        costPrice: currentProduct.cost_price,
+        sellingPrice: currentProduct.selling_price,
+        mrp: currentProduct.mrp,
+      };
+
+      const currentHistory = Array.isArray(currentProduct.price_history)
+        ? currentProduct.price_history
+        : [];
+
+      dbUpdates.price_history = [historyEntry, ...currentHistory];
+    }
+    // ---------------------------
+
     if (val.name) dbUpdates.name = val.name;
     if (val.category) dbUpdates.category = val.category;
     if (val.subCategory !== undefined)
@@ -56,38 +92,31 @@ export async function PATCH(
     if (val.images) dbUpdates.images = val.images;
     if (val.isActive !== undefined) dbUpdates.is_active = val.isActive;
 
+    // Commission Recalculation
     if (val.supplier || val.category) {
-      const { data: currentProduct } = await supabaseAdmin
-        .from("products")
-        .select("supplier_name, category")
-        .eq("id", id)
-        .single();
+      const targetSupplier = val.supplier || currentProduct.supplier_name;
+      const targetCategory = val.category || currentProduct.category;
 
-      if (currentProduct) {
-        const targetSupplier = val.supplier || currentProduct.supplier_name;
-        const targetCategory = val.category || currentProduct.category;
+      const { data: rules } = await supabaseAdmin
+        .from("commission_rules")
+        .select("category, rate")
+        .eq("supplier_name", targetSupplier);
 
-        const { data: rules } = await supabaseAdmin
-          .from("commission_rules")
-          .select("category, rate")
-          .eq("supplier_name", targetSupplier);
+      let newRate = 0;
 
-        let newRate = 0;
+      if (rules && rules.length > 0) {
+        const specificRule = rules.find((r) => r.category === targetCategory);
+        const generalRule = rules.find((r) => r.category === "ALL");
 
-        if (rules && rules.length > 0) {
-          const specificRule = rules.find((r) => r.category === targetCategory);
-          const generalRule = rules.find((r) => r.category === "ALL");
-
-          if (specificRule) {
-            newRate = specificRule.rate;
-          } else if (generalRule) {
-            newRate = generalRule.rate;
-          }
+        if (specificRule) {
+          newRate = specificRule.rate;
+        } else if (generalRule) {
+          newRate = generalRule.rate;
         }
-
-        dbUpdates.commission_value = newRate;
-        dbUpdates.commission_type = "percentage";
       }
+
+      dbUpdates.commission_value = newRate;
+      dbUpdates.commission_type = "percentage";
     }
 
     dbUpdates.updated_at = new Date().toISOString();
@@ -107,7 +136,7 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
   try {
@@ -124,7 +153,7 @@ export async function DELETE(
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
   try {
@@ -138,7 +167,6 @@ export async function GET(
     if (productError) throw productError;
 
     // 2. Fetch Stock Breakdown from Locations
-    // ✅ This enables showing stock per location (Store, Warehouse, etc.)
     const { data: stocks, error: stockError } = await supabaseAdmin
       .from("product_stocks")
       .select(
@@ -148,7 +176,7 @@ export async function GET(
         damaged_quantity,
         last_updated,
         locations ( name, business_id )
-      `
+      `,
       )
       .eq("product_id", id);
 
@@ -158,11 +186,11 @@ export async function GET(
     const safeStocks = stocks || [];
     const totalGoodStock = safeStocks.reduce(
       (sum, s) => sum + (Number(s.quantity) || 0),
-      0
+      0,
     );
     const totalDamagedStock = safeStocks.reduce(
       (sum, s) => sum + (Number(s.damaged_quantity) || 0),
-      0
+      0,
     );
 
     const formattedStocks = safeStocks.map((s: any) => ({
@@ -186,7 +214,6 @@ export async function GET(
       sizeSpec: productData.size_spec,
       supplier: productData.supplier_name,
 
-      // ✅ Use calculated total from locations if available, else fallback
       stock:
         safeStocks.length > 0
           ? totalGoodStock
@@ -204,7 +231,8 @@ export async function GET(
       commissionValue: productData.commission_value,
       isActive: productData.is_active ?? true,
 
-      // ✅ Return the breakdown
+      // ✅ Include price history in response
+      priceHistory: productData.price_history || [],
       stocks: formattedStocks,
     };
 

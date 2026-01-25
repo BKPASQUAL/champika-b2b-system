@@ -25,7 +25,14 @@ export interface Product {
   unitOfMeasure: string;
   commissionType?: string;
   commissionValue?: number;
-  isActive: boolean; // Added isActive field
+  isActive: boolean;
+  // ✅ Added Price History
+  priceHistory?: {
+    date: string;
+    costPrice: number;
+    sellingPrice: number;
+    mrp: number;
+  }[];
 }
 
 export type SortField =
@@ -61,5 +68,5 @@ export interface ProductFormData {
   costPrice: number | string;
   images: string[];
   unitOfMeasure: string;
-  isActive: boolean; // Added isActive field
+  isActive: boolean;
 }

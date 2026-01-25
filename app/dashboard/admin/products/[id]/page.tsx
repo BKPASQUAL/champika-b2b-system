@@ -33,6 +33,8 @@ import {
   TrendingDown,
   User,
   RotateCcw,
+  Clock,
+  Archive,
 } from "lucide-react";
 import {
   BarChart,
@@ -58,11 +60,15 @@ const ITEMS_PER_PAGE = 10;
 interface Transaction {
   id: string;
   date: string;
-  type: "SALE" | "PURCHASE" | "RETURN" | "DAMAGE";
+  type: "SALE" | "PURCHASE" | "RETURN" | "DAMAGE" | "ADJUSTMENT" | "FREE ISSUE";
   quantity: number;
+  freeQuantity?: number;
+  currentStock?: number;
   customer?: string;
   reference: string;
   notes: string;
+  buyingPrice: number;
+  sellingPrice: number;
 }
 
 export default function ProductDetailsPage({
@@ -118,13 +124,20 @@ export default function ProductDetailsPage({
 
   // Pagination
   const totalTransactionPages = Math.ceil(
-    allTransactions.length / ITEMS_PER_PAGE
+    allTransactions.length / ITEMS_PER_PAGE,
   );
   const startTransactionIndex = (transactionPage - 1) * ITEMS_PER_PAGE;
   const paginatedTransactions = allTransactions.slice(
     startTransactionIndex,
-    startTransactionIndex + ITEMS_PER_PAGE
+    startTransactionIndex + ITEMS_PER_PAGE,
   );
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("en-LK", {
+      style: "currency",
+      currency: "LKR",
+    }).format(amount);
+  };
 
   return (
     <div className="space-y-6 ">
@@ -209,6 +222,7 @@ export default function ProductDetailsPage({
       <Tabs defaultValue="history" className="space-y-4">
         <TabsList>
           <TabsTrigger value="history">Transaction History</TabsTrigger>
+          <TabsTrigger value="prices">Price History</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
           <TabsTrigger value="details">Product Details</TabsTrigger>
         </TabsList>
@@ -226,30 +240,40 @@ export default function ProductDetailsPage({
               <Table className="w-full">
                 <TableHeader>
                   <TableRow>
-                    {/* UPDATED: Percentage Widths to manage columns and use full space */}
-                    <TableHead className="w-[12%] min-w-[100px]">
+                    {/* Centered Headers */}
+                    <TableHead className="w-[100px] text-center">
                       Date
                     </TableHead>
-                    <TableHead className="w-[13%] min-w-[120px]">
+                    <TableHead className="w-[120px] text-center">
                       Type
                     </TableHead>
-                    <TableHead className="w-[10%] min-w-[80px]">
+                    <TableHead className="w-[80px] text-center">
                       Quantity
                     </TableHead>
-                    <TableHead className="w-[20%] min-w-[150px]">
+                    {/* ✅ Stock Column */}
+                    <TableHead className="w-[80px] text-center font-bold text-black">
+                      Stock
+                    </TableHead>
+                    <TableHead className="w-[150px] text-center">
                       Party
                     </TableHead>
-                    <TableHead className="w-[15%] min-w-[120px]">
+                    <TableHead className="w-[100px] text-center">
+                      Buy Price
+                    </TableHead>
+                    <TableHead className="w-[100px] text-center">
+                      Sell Price
+                    </TableHead>
+                    <TableHead className="w-[120px] text-center">
                       Reference
                     </TableHead>
-                    <TableHead className="w-[30%]">Notes</TableHead>
+                    <TableHead className="w-[100px]">Notes</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {paginatedTransactions.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={6}
+                        colSpan={9}
                         className="text-center h-24 text-muted-foreground"
                       >
                         No transactions found.
@@ -258,60 +282,109 @@ export default function ProductDetailsPage({
                   ) : (
                     paginatedTransactions.map((transaction) => (
                       <TableRow key={transaction.id}>
-                        <TableCell className="text-muted-foreground whitespace-nowrap">
+                        {/* Centered Cells */}
+                        <TableCell className="text-muted-foreground whitespace-nowrap text-center">
                           {transaction.date}
                         </TableCell>
-                        <TableCell>
-                          {transaction.type === "SALE" && (
-                            <Badge className="bg-black text-white hover:bg-black/90 gap-1 whitespace-nowrap">
-                              <TrendingDown className="h-3 w-3" />
-                              SALE
-                            </Badge>
-                          )}
-                          {transaction.type === "PURCHASE" && (
-                            <Badge
-                              variant="outline"
-                              className="gap-1 border-green-600 text-green-600 whitespace-nowrap"
+                        <TableCell className="text-center">
+                          <div className="flex justify-center">
+                            {transaction.type === "SALE" && (
+                              <Badge className="bg-black text-white hover:bg-black/90 gap-1 whitespace-nowrap">
+                                <TrendingDown className="h-3 w-3" />
+                                SALE
+                              </Badge>
+                            )}
+                            {transaction.type === "PURCHASE" && (
+                              <Badge
+                                variant="outline"
+                                className="gap-1 border-green-600 text-green-600 whitespace-nowrap"
+                              >
+                                <TrendingUp className="h-3 w-3" />
+                                PURCHASE
+                              </Badge>
+                            )}
+                            {transaction.type === "FREE ISSUE" && (
+                              <Badge
+                                variant="outline"
+                                className="gap-1 border-green-600 text-green-600 whitespace-nowrap"
+                              >
+                                <TrendingUp className="h-3 w-3" />
+                                FREE ISSUE
+                              </Badge>
+                            )}
+                            {transaction.type === "RETURN" && (
+                              <Badge className="bg-blue-500 text-white hover:bg-blue-600 gap-1 whitespace-nowrap">
+                                <RotateCcw className="h-3 w-3" />
+                                RETURN
+                              </Badge>
+                            )}
+                            {transaction.type === "DAMAGE" && (
+                              <Badge className="bg-red-500 text-white hover:bg-red-600 gap-1 whitespace-nowrap">
+                                <AlertTriangle className="h-3 w-3" />
+                                DAMAGE
+                              </Badge>
+                            )}
+                            {transaction.type === "ADJUSTMENT" && (
+                              <Badge
+                                variant="secondary"
+                                className="gap-1 whitespace-nowrap"
+                              >
+                                <AlertTriangle className="h-3 w-3" />
+                                ADJUST
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex flex-col items-center">
+                            <span
+                              className={`font-semibold ${
+                                transaction.quantity < 0
+                                  ? "text-red-500"
+                                  : "text-green-600"
+                              }`}
                             >
-                              <TrendingUp className="h-3 w-3" />
-                              PURCHASE
-                            </Badge>
-                          )}
-                          {transaction.type === "RETURN" && (
-                            <Badge className="bg-blue-500 text-white hover:bg-blue-600 gap-1 whitespace-nowrap">
-                              <RotateCcw className="h-3 w-3" />
-                              RETURN (GOOD)
-                            </Badge>
-                          )}
-                          {transaction.type === "DAMAGE" && (
-                            <Badge className="bg-red-500 text-white hover:bg-red-600 gap-1 whitespace-nowrap">
-                              <AlertTriangle className="h-3 w-3" />
-                              DAMAGE
-                            </Badge>
-                          )}
+                              {transaction.quantity > 0 ? "+" : ""}
+                              {transaction.quantity}
+                            </span>
+                            {transaction.freeQuantity &&
+                            transaction.freeQuantity > 0 ? (
+                              <span className="text-[10px] text-muted-foreground font-medium">
+                                (+{transaction.freeQuantity} Free)
+                              </span>
+                            ) : null}
+                          </div>
                         </TableCell>
-                        <TableCell
-                          className={`font-semibold ${
-                            transaction.quantity < 0
-                              ? "text-red-500"
-                              : "text-green-600"
-                          }`}
-                        >
-                          {transaction.quantity > 0 ? "+" : ""}
-                          {transaction.quantity}
+
+                        {/* ✅ Calculated Stock - Centered */}
+                        <TableCell className="text-center font-mono font-bold">
+                          {transaction.currentStock}
                         </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
+
+                        <TableCell className="text-center">
+                          <div className="flex items-center justify-center gap-2">
                             <User className="h-3 w-3 text-muted-foreground" />
                             <span
-                              className="truncate max-w-[180px]"
+                              className="truncate max-w-[140px]"
                               title={transaction.customer}
                             >
                               {transaction.customer || "-"}
                             </span>
                           </div>
                         </TableCell>
-                        <TableCell className="text-muted-foreground">
+
+                        <TableCell className="text-center font-mono text-xs">
+                          {transaction.buyingPrice > 0
+                            ? formatCurrency(transaction.buyingPrice)
+                            : "-"}
+                        </TableCell>
+                        <TableCell className="text-center font-mono text-xs">
+                          {transaction.sellingPrice > 0
+                            ? formatCurrency(transaction.sellingPrice)
+                            : "-"}
+                        </TableCell>
+
+                        <TableCell className="text-muted-foreground text-center">
                           {transaction.reference}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
@@ -345,7 +418,7 @@ export default function ProductDetailsPage({
                       size="sm"
                       onClick={() =>
                         setTransactionPage((p) =>
-                          Math.min(totalTransactionPages, p + 1)
+                          Math.min(totalTransactionPages, p + 1),
                         )
                       }
                       disabled={transactionPage === totalTransactionPages}
@@ -355,6 +428,57 @@ export default function ProductDetailsPage({
                   </div>
                 </div>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* --- PRICE HISTORY TAB --- */}
+        <TabsContent value="prices" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Price Change Log</CardTitle>
+              <CardDescription>
+                Historical record of cost and selling price changes.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date Changed</TableHead>
+                    <TableHead>Old Cost</TableHead>
+                    <TableHead>Old Selling</TableHead>
+                    <TableHead>Old MRP</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {product.priceHistory && product.priceHistory.length > 0 ? (
+                    product.priceHistory.map((h: any, i: number) => (
+                      <TableRow key={i}>
+                        <TableCell className="flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-muted-foreground" />
+                          {new Date(h.date).toLocaleDateString()}
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(h.date).toLocaleTimeString()}
+                          </span>
+                        </TableCell>
+                        <TableCell>{formatCurrency(h.costPrice)}</TableCell>
+                        <TableCell>{formatCurrency(h.sellingPrice)}</TableCell>
+                        <TableCell>{formatCurrency(h.mrp)}</TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell
+                        colSpan={4}
+                        className="text-center text-muted-foreground h-24"
+                      >
+                        No price changes recorded yet.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         </TabsContent>
