@@ -65,11 +65,11 @@ export const wiremanOfficeNavItems: WiremanNavSection[] = [
   {
     title: "Suppliers",
     items: [
-      // {
-      //   name: "Supplier List",
-      //   href: "/dashboard/office/wireman/suppliers",
-      //   icon: Factory,
-      // },
+      {
+        name: "Supplier List",
+        href: "/dashboard/office/wireman/suppliers",
+        icon: Factory,
+      },
       // NEW LINK ADDED HERE
       {
         name: "Free Issue Claims",
