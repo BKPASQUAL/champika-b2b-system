@@ -221,7 +221,7 @@ export function ProductDialogs({
   return (
     <>
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl  overflow-y-auto">
           <DialogHeader>
             <div className="flex justify-between items-center pr-8">
               <div>
