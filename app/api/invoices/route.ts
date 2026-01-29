@@ -61,9 +61,6 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const businessId = searchParams.get("businessId");
 
-    // Start building the query
-    // ✅ Added manual_invoice_no to selection
-    // ✅ Added order_items to selection for PROFIT CALCULATION
     let query = supabaseAdmin
       .from("invoices")
       .select(
@@ -105,17 +102,12 @@ export async function GET(request: NextRequest) {
       const orderStatus = inv.orders?.status || "Pending";
       const bId = inv.orders?.business_id;
 
-      // --- 💰 PROFIT CALCULATION (Wireman Logic) ---
-      // Revenue = item.total_price (Line Total)
-      // Cost = item.quantity * item.actual_unit_cost
-      // NOTE: We DO NOT include free_quantity in cost because it is claimable.
-
+      // --- 💰 PROFIT CALCULATION ---
       let totalProfit = 0;
       const items = inv.orders?.order_items || [];
 
       items.forEach((item: any) => {
         const revenue = item.total_price || 0;
-        // Cost only applies to billed quantity
         const cost = (item.quantity || 0) * (item.actual_unit_cost || 0);
         totalProfit += revenue - cost;
       });
@@ -123,7 +115,7 @@ export async function GET(request: NextRequest) {
       return {
         id: inv.id,
         invoiceNo: inv.invoice_no,
-        manualInvoiceNo: inv.manual_invoice_no, // ✅ Return manual number to frontend
+        manualInvoiceNo: inv.manual_invoice_no,
         orderId: inv.order_id,
         customerId: inv.customer_id,
         customerName: inv.customers?.shop_name || "Unknown Customer",
@@ -136,7 +128,7 @@ export async function GET(request: NextRequest) {
         dueDate: inv.due_date,
         createdAt: inv.created_at,
         businessId: bId,
-        profit: totalProfit, // ✅ Return Profit
+        profit: totalProfit,
       };
     });
 
@@ -153,13 +145,34 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const val = invoiceSchema.parse(body);
 
-    // 1. Generate Invoice Number (Auto System Number)
-    const { count } = await supabaseAdmin
+    // -------------------------------------------------------------
+    // 1. Generate Invoice Number (FIXED LOGIC)
+    // -------------------------------------------------------------
+    // Find the last invoice created to determine the next sequence number.
+    // We sort by created_at DESC to find the most recent one.
+    const { data: lastInvoice } = await supabaseAdmin
       .from("invoices")
-      .select("*", { count: "exact", head: true });
+      .select("invoice_no")
+      .ilike("invoice_no", "INV-%") // Only check auto-generated ones
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    const nextId = (count || 0) + 1001;
+    let nextId = 1001; // Default start
+
+    if (lastInvoice && lastInvoice.invoice_no) {
+      // Expect format "INV-XXXX"
+      const parts = lastInvoice.invoice_no.split("-");
+      if (parts.length === 2) {
+        const lastNum = parseInt(parts[1], 10);
+        if (!isNaN(lastNum)) {
+          nextId = lastNum + 1;
+        }
+      }
+    }
+
     const invoiceNo = `INV-${nextId}`;
+    // -------------------------------------------------------------
 
     // 2. Calculate Dates
     const invoiceDate =
@@ -173,12 +186,8 @@ export async function POST(request: NextRequest) {
       })();
 
     // 3. Create Order Record
-    const { count: orderCount } = await supabaseAdmin
-      .from("orders")
-      .select("*", { count: "exact", head: true });
-
-    const nextOrderId = (orderCount || 0) + 1001;
-    const orderId = `ORD-${nextOrderId}`;
+    // Use TIMESTAMP for unique Order ID to avoid collisions
+    const orderId = `ORD-${Date.now()}`;
 
     const { data: orderData, error: orderError } = await supabaseAdmin
       .from("orders")
@@ -192,7 +201,6 @@ export async function POST(request: NextRequest) {
         notes: val.notes || null,
         created_by: val.salesRepId,
         business_id: val.businessId,
-        // ✅ SAVE EXTRA DISCOUNT (Bill-wise)
         extra_discount_percent: val.extraDiscountPercent,
         extra_discount_amount: val.extraDiscountAmount,
       })
@@ -203,7 +211,6 @@ export async function POST(request: NextRequest) {
 
     // --- 4. Prepare Order Items & Calculate Commissions ---
 
-    // 4a. Fetch Product Info (Including Actual Cost Price)
     const productIds = val.items.map((i) => i.productId);
 
     const { data: products } = await supabaseAdmin
@@ -214,18 +221,14 @@ export async function POST(request: NextRequest) {
       .in("id", productIds);
 
     let totalCommissionForOrder = 0;
-
-    // ✅ Calculate Gross Subtotal (Sum of all line totals) to distribute discount
     const grossSubtotal = val.items.reduce((sum, item) => sum + item.total, 0);
     const globalDiscountAmount = val.extraDiscountAmount || 0;
 
-    // 4b. Map items with calculated commission & ACTUAL PRICE
     const orderItems = val.items.map((item) => {
       const product = products?.find((p) => p.id === item.productId);
 
       let commissionEarned = 0;
 
-      // Calculate Commission Item-Wise
       if (product) {
         if (product.commission_type === "percentage") {
           const itemTotal = item.unitPrice * item.quantity;
@@ -238,24 +241,14 @@ export async function POST(request: NextRequest) {
 
       totalCommissionForOrder += commissionEarned;
 
-      // --- CALCULATIONS: Actual Selling Price ---
+      // Actual Selling Price Calculation
       const totalQty = item.quantity + item.freeQuantity;
-
-      // 1. Calculate discount share for this item
-      // Share = (Line Total / Gross Subtotal) * Global Discount
       const discountShare =
         grossSubtotal > 0
           ? (item.total / grossSubtotal) * globalDiscountAmount
           : 0;
-
-      // 2. Calculate Net Line Total (Line Total - Share)
       const netLineTotal = item.total - discountShare;
-
-      // 3. Calculate Actual Unit Price (Selling Price after all discounts)
       const actualUnitPrice = netLineTotal / totalQty;
-
-      // 4. Snapshot of Cost Price (Historical Cost)
-      // Logic: Use 'actual_cost_price' if available, otherwise 'cost_price'
       const historicalCost =
         product?.actual_cost_price || product?.cost_price || 0;
 
@@ -264,15 +257,11 @@ export async function POST(request: NextRequest) {
         product_id: item.productId,
         quantity: item.quantity,
         free_quantity: item.freeQuantity,
-
-        unit_price: item.unitPrice, // Bill Price (Display)
-        actual_unit_price: actualUnitPrice, // ✅ Updated: Real Net Selling Price (After Extra Disc)
-        actual_unit_cost: historicalCost, // ✅ Saved: Real Cost (Snapshot)
-
-        total_price: item.total, // Line Total (before extra disc)
+        unit_price: item.unitPrice,
+        actual_unit_price: actualUnitPrice,
+        actual_unit_cost: historicalCost,
+        total_price: item.total,
         commission_earned: commissionEarned,
-
-        // ✅ SAVE ITEM DISCOUNT
         discount_percent: item.discountPercent,
         discount_amount: item.discountAmount,
       };
@@ -299,8 +288,8 @@ export async function POST(request: NextRequest) {
     const { data: invoiceData, error: invoiceError } = await supabaseAdmin
       .from("invoices")
       .insert({
-        invoice_no: invoiceNo, // Auto Generated
-        manual_invoice_no: val.manual_invoice_no || null, // ✅ SAVING MANUAL NUMBER
+        invoice_no: invoiceNo,
+        manual_invoice_no: val.manual_invoice_no || null,
         order_id: orderData.id,
         customer_id: val.customerId,
         total_amount: val.grandTotal,
@@ -314,7 +303,7 @@ export async function POST(request: NextRequest) {
 
     if (invoiceError) throw invoiceError;
 
-    // 7. Record Payment (If Paid)
+    // 7. Record Payment
     if (val.paidAmount > 0) {
       await supabaseAdmin.from("payments").insert({
         invoice_id: invoiceData.id,
@@ -326,23 +315,18 @@ export async function POST(request: NextRequest) {
         cheque_status: val.paymentType === "Cheque" ? "Pending" : "Cleared",
       });
 
-      // -------------------------------------------------------------
-      // ✅ AUTO-DEPOSIT to "Retail Cash" for Retail Sales
-      // -------------------------------------------------------------
+      // Auto-Deposit to Retail Cash if applicable
       if (
         val.paymentType === "Cash" &&
         val.businessId === BUSINESS_IDS.CHAMPIKA_RETAIL
       ) {
-        // 1. Find the "Retail Cash" Account AND Fetch Current Balance
         const { data: retailCashAccount } = await supabaseAdmin
           .from("bank_accounts")
           .select("id, current_balance")
           .eq("account_name", "Retail Cash")
           .single();
 
-        // 2. Insert Deposit Transaction AND Manually Update Balance
         if (retailCashAccount) {
-          // A. Insert Transaction
           await supabaseAdmin.from("account_transactions").insert({
             transaction_no: `TXN-${Date.now()}`,
             transaction_type: "Sales",
@@ -353,7 +337,6 @@ export async function POST(request: NextRequest) {
             transaction_date: invoiceDate,
           });
 
-          // B. Update Account Balance Manually
           const newBalance =
             (retailCashAccount.current_balance || 0) + val.paidAmount;
 
@@ -363,7 +346,6 @@ export async function POST(request: NextRequest) {
             .eq("id", retailCashAccount.id);
         }
       }
-      // -------------------------------------------------------------
     }
 
     // 8. Update Customer Balance
@@ -375,7 +357,6 @@ export async function POST(request: NextRequest) {
 
     if (customer) {
       const pendingAmount = val.grandTotal - val.paidAmount;
-
       if (pendingAmount !== 0) {
         await supabaseAdmin
           .from("customers")
@@ -387,11 +368,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ------------------------------------------------------------------
-    // 9. Deduct Stock (Global & Location Specific)
-    // ------------------------------------------------------------------
-
-    // A. Get ALL assigned locations for the user
+    // 9. Deduct Stock
     const { data: assignments } = await supabaseAdmin
       .from("location_assignments")
       .select("location_id")
@@ -404,7 +381,7 @@ export async function POST(request: NextRequest) {
     for (const item of val.items) {
       const totalQty = item.quantity + item.freeQuantity;
 
-      // B. Deduct Global Stock (products table)
+      // Global Stock
       const { data: product } = await supabaseAdmin
         .from("products")
         .select("stock_quantity")
@@ -423,33 +400,26 @@ export async function POST(request: NextRequest) {
           .eq("id", item.productId);
       }
 
-      // C. Deduct Location Stock (product_stocks table)
-      // Logic: Iterate through assigned locations and deduct from available stock
+      // Location Stock
       if (assignedLocationIds.length > 0) {
         let remainingToDeduct = totalQty;
-
-        // Fetch stock records for this product in user's locations
         const { data: locationStocks } = await supabaseAdmin
           .from("product_stocks")
           .select("id, location_id, quantity")
           .eq("product_id", item.productId)
           .in("location_id", assignedLocationIds)
-          .gt("quantity", 0) // Only fetch positive stock
-          .order("quantity", { ascending: false }); // Deduct from largest pile first
+          .gt("quantity", 0)
+          .order("quantity", { ascending: false });
 
         if (locationStocks) {
           for (const stockRec of locationStocks) {
             if (remainingToDeduct <= 0) break;
-
             const available = stockRec.quantity;
             const deduct = Math.min(available, remainingToDeduct);
 
-            // Update this specific stock record
             await supabaseAdmin
               .from("product_stocks")
-              .update({
-                quantity: available - deduct,
-              })
+              .update({ quantity: available - deduct })
               .eq("id", stockRec.id);
 
             remainingToDeduct -= deduct;
@@ -462,7 +432,7 @@ export async function POST(request: NextRequest) {
       {
         message: "Order created successfully",
         invoiceNo: invoiceNo,
-        manualInvoiceNo: val.manual_invoice_no, // Return for confirmation
+        manualInvoiceNo: val.manual_invoice_no,
         orderId: orderId,
         data: invoiceData,
       },

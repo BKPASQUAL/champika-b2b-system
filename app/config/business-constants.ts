@@ -1,4 +1,3 @@
-// app/config/business-constants.ts
 /**
  * Business Constants
  * Centralized business identifiers for consistent reference across the application
@@ -8,21 +7,27 @@ export const BUSINESS_IDS = {
   ORANGE_AGENCY: "50a514e1-ee70-4e6d-a698-1630d8ed04e2",
   CHAMPIKA_RETAIL: "a3ca43f3-06d4-4871-852c-3a40cfdbf023",
   CHAMPIKA_DISTRIBUTION: "e770d62c-d4bd-4bbc-ba9e-ccb07d7aa9bb",
-  WIREMAN_AGENCY: "094b649e-be59-4e2b-b709-7e36ad1ef280", // ✅ ADDED
+  WIREMAN_AGENCY: "094b649e-be59-4e2b-b709-7e36ad1ef280",
 } as const;
 
 export const BUSINESS_NAMES = {
   [BUSINESS_IDS.ORANGE_AGENCY]: "Orange Agency",
   [BUSINESS_IDS.CHAMPIKA_RETAIL]: "Champika Hardware - Retail",
   [BUSINESS_IDS.CHAMPIKA_DISTRIBUTION]: "Champika Hardware - Distribution",
-  [BUSINESS_IDS.WIREMAN_AGENCY]: "Wireman Agency", // ✅ ADDED
+  [BUSINESS_IDS.WIREMAN_AGENCY]: "Wireman Agency",
 } as const;
+
+// ✅ ADDED: Internal Customer Names for Pinning
+export const INTERNAL_CUSTOMERS = [
+  "Champika Hardware - Retail",
+  "Champika Hardware - Distribution",
+];
 
 export const BUSINESS_ROUTES = {
   [BUSINESS_IDS.ORANGE_AGENCY]: "/dashboard/office/orange",
   [BUSINESS_IDS.CHAMPIKA_RETAIL]: "/dashboard/office/retail",
   [BUSINESS_IDS.CHAMPIKA_DISTRIBUTION]: "/dashboard/office/distribution",
-  [BUSINESS_IDS.WIREMAN_AGENCY]: "/dashboard/office/wireman", // ✅ ADDED
+  [BUSINESS_IDS.WIREMAN_AGENCY]: "/dashboard/office/wireman",
 } as const;
 
 export const BUSINESS_THEMES = {
@@ -44,7 +49,6 @@ export const BUSINESS_THEMES = {
     textClass: "text-blue-600",
     borderClass: "border-blue-600",
   },
-  // ✅ ADDED: Red theme for Wireman to distinguish it
   [BUSINESS_IDS.WIREMAN_AGENCY]: {
     primary: "red",
     bgClass: "bg-red-100",

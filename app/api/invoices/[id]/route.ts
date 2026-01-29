@@ -12,7 +12,7 @@ const invoiceItemSchema = z.object({
   unit: z.string().optional(),
   mrp: z.number(),
   unitPrice: z.number(),
-  // ✅ Added Discount Fields
+  // ✅ Discount Fields
   discountPercent: z.number().default(0),
   discountAmount: z.number().default(0),
   total: z.number(),
@@ -25,7 +25,7 @@ const updateInvoiceSchema = z.object({
   orderStatus: z.string(),
   items: z.array(invoiceItemSchema).min(1),
   grandTotal: z.number(),
-  // ✅ Added Extra Discount Fields
+  // ✅ Extra Discount Fields
   extraDiscountPercent: z.number().default(0),
   extraDiscountAmount: z.number().default(0),
   notes: z.string().optional(),
@@ -36,11 +36,12 @@ const updateInvoiceSchema = z.object({
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
 
   try {
+    // 1. Fetch Invoice & Customer Details
     const { data: invoice, error: invError } = await supabaseAdmin
       .from("invoices")
       .select(
@@ -64,14 +65,14 @@ export async function GET(
             full_name
           )
         )
-      `
+      `,
       )
       .eq("id", id)
       .single();
 
     if (invError || !invoice) throw new Error("Invoice not found");
 
-    // Fetch Order Items
+    // 2. Fetch Order Items with FULL Product Details
     const { data: items, error: itemsError } = await supabaseAdmin
       .from("order_items")
       .select(
@@ -84,15 +85,20 @@ export async function GET(
           mrp,
           selling_price,
           stock_quantity,
-          unit_of_measure
+          unit_of_measure,
+          description,
+          category,
+          brand,
+          model_type,
+          size_spec
         )
-      `
+      `,
       )
       .eq("order_id", invoice.order_id);
 
     if (itemsError) throw itemsError;
 
-    // Fetch Payments
+    // 3. Fetch Payments
     const { data: payments, error: paymentsError } = await supabaseAdmin
       .from("payments")
       .select("*")
@@ -101,6 +107,7 @@ export async function GET(
 
     if (paymentsError) throw paymentsError;
 
+    // 4. Construct Response
     const fullInvoice = {
       id: invoice.id,
       invoiceNo: invoice.invoice_no,
@@ -112,11 +119,11 @@ export async function GET(
       grandTotal: invoice.total_amount,
       paidAmount: invoice.paid_amount,
 
-      // ✅ Map Extra Discount
+      // Extra Discount
       extraDiscountPercent: invoice.orders?.extra_discount_percent || 0,
       extraDiscountAmount: invoice.orders?.extra_discount_amount || 0,
 
-      // For Print Utils
+      // Customer Info
       customer: {
         shop: invoice.customers?.shop_name || "",
         name: invoice.customers?.owner_name || "",
@@ -126,32 +133,42 @@ export async function GET(
       salesRep: invoice.orders?.profiles?.full_name || "Unknown",
       totals: { grandTotal: invoice.total_amount },
 
-      // Items
+      // ✅ ITEMS MAPPING (Including Full Product Details)
       items: items.map((item: any) => ({
         id: item.id,
         productId: item.product_id,
-        sku: item.products?.sku,
-        productName: item.products?.name,
-        // Map name/price for Print Utils
-        name: item.products?.name,
-        price: item.unit_price,
-        free: item.free_quantity,
+        sku: item.products?.sku || "N/A",
 
-        unit: item.products?.unit_of_measure,
+        // Product Identity
+        productName: item.products?.name || "Unknown Product",
+        name: item.products?.name, // Alias for some UIs
+        description: item.products?.description || "",
+        category: item.products?.category || "",
+        brand: item.products?.brand || "",
+        model: item.products?.model_type || "",
+        size: item.products?.size_spec || "",
+
+        // Pricing & Qty
+        price: item.unit_price,
+        unit: item.products?.unit_of_measure || "Unit",
         quantity: item.quantity,
+        free: item.free_quantity, // Alias
         freeQuantity: item.free_quantity,
-        mrp: item.products?.mrp,
+
+        mrp: item.products?.mrp || 0,
         unitPrice: item.unit_price,
 
-        // ✅ Map Item Discount
+        // Item Discount
         discountPercent: item.discount_percent || 0,
         discountAmount: item.discount_amount || 0,
 
         total: item.total_price,
+
+        // Stock Context (Current)
         stockAvailable:
           (item.products?.stock_quantity || 0) +
-          item.quantity +
-          item.free_quantity,
+          (item.quantity || 0) +
+          (item.free_quantity || 0),
       })),
 
       // Payments
@@ -166,7 +183,7 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
 
@@ -181,7 +198,7 @@ export async function PATCH(
         `
         *,
         orders (*)
-      `
+      `,
       )
       .eq("id", id)
       .single();
@@ -190,7 +207,7 @@ export async function PATCH(
       console.error("Invoice fetch error:", invError);
       return NextResponse.json(
         { error: "Invoice not found or DB error" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -236,7 +253,7 @@ export async function PATCH(
         .eq("id", currentInvoice.customer_id);
     }
 
-    // B. Revert Stock (Global Only - Simplification as we can't track exact location return without complex logs)
+    // B. Revert Stock (Global Only)
     if (currentItems) {
       for (const item of currentItems) {
         const { data: prod } = await supabaseAdmin
@@ -310,7 +327,7 @@ export async function PATCH(
     if (insertError) throw insertError;
 
     // ------------------------------------------------------------------
-    // Deduct New Stock (Global & Location Specific - Matching POST Logic)
+    // Deduct New Stock (Global & Location Specific)
     // ------------------------------------------------------------------
 
     // 1. Get ALL assigned locations for the user
@@ -342,11 +359,10 @@ export async function PATCH(
           .eq("id", item.productId);
       }
 
-      // 3. Deduct Location Stock (Smart Logic)
+      // 3. Deduct Location Stock
       if (assignedLocationIds.length > 0) {
         let remainingToDeduct = totalQty;
 
-        // Fetch stock records for this product in user's locations
         const { data: locationStocks } = await supabaseAdmin
           .from("product_stocks")
           .select("id, location_id, quantity")
@@ -362,7 +378,6 @@ export async function PATCH(
             const available = stockRec.quantity;
             const deduct = Math.min(available, remainingToDeduct);
 
-            // Update this specific stock record
             await supabaseAdmin
               .from("product_stocks")
               .update({

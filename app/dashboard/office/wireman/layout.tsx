@@ -1,7 +1,6 @@
-// app/dashboard/office/wireman/layout.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { AppSidebar } from "@/components/ui/layout/AppSidebar";
 import { MobileNav } from "@/components/ui/layout/MobileNav";
@@ -10,7 +9,11 @@ import {
   getUserBusinessContext,
   verifyBusinessRouteAccess,
 } from "@/app/middleware/businessAuth";
-import { BUSINESS_IDS, getBusinessName } from "@/app/config/business-constants";
+import {
+  BUSINESS_IDS,
+  getBusinessName,
+  INTERNAL_CUSTOMERS,
+} from "@/app/config/business-constants";
 
 export default function WiremanAgencyLayout({
   children,
@@ -21,20 +24,20 @@ export default function WiremanAgencyLayout({
   const [businessName, setBusinessName] = useState<string>("");
   const [isAuthorized, setIsAuthorized] = useState<boolean>(false);
 
+  // ✅ FIX: Ref to track if we already ran billing this session
+  const hasRunBilling = useRef(false);
+
   useEffect(() => {
-    // 1. Get User Context
     const user = getUserBusinessContext();
 
-    // 2. If no user, redirect to login
     if (!user) {
       router.push("/login");
       return;
     }
 
-    // 3. Verify access to Wireman Agency
     const { canAccess, redirectTo } = verifyBusinessRouteAccess(
       user,
-      BUSINESS_IDS.WIREMAN_AGENCY
+      BUSINESS_IDS.WIREMAN_AGENCY,
     );
 
     if (!canAccess && redirectTo) {
@@ -42,14 +45,48 @@ export default function WiremanAgencyLayout({
       return;
     }
 
-    // 4. Success - User has access
     setBusinessName(
-      user.businessName || getBusinessName(BUSINESS_IDS.WIREMAN_AGENCY)
+      user.businessName || getBusinessName(BUSINESS_IDS.WIREMAN_AGENCY),
     );
     setIsAuthorized(true);
+
+    // --- ✅ AUTO-GENERATE BILLS (Run Once) ---
+    const runAutoBilling = async () => {
+      // Prevent running if already ran
+      if (hasRunBilling.current) return;
+      hasRunBilling.current = true;
+
+      try {
+        const res = await fetch("/api/customers");
+        if (res.ok) {
+          const allCustomers = await res.json();
+          const internalBranches = allCustomers.filter((c: any) =>
+            INTERNAL_CUSTOMERS.includes(c.shopName),
+          );
+
+          for (const branch of internalBranches) {
+            await fetch("/api/wireman/inter-branch/bill", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                customerId: branch.id,
+                customerName: branch.shopName,
+              }),
+            });
+          }
+          console.log("Auto-billing check completed.");
+        }
+      } catch (error) {
+        console.error("Auto-billing failed:", error);
+      }
+    };
+
+    if (canAccess) {
+      runAutoBilling();
+    }
+    // -----------------------------------------------------
   }, [router]);
 
-  // Loading Screen
   if (!isAuthorized) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
@@ -61,21 +98,15 @@ export default function WiremanAgencyLayout({
     );
   }
 
-  // Main Layout
   return (
     <div className="flex min-h-screen bg-gray-50">
-      {/* Desktop Sidebar with Wireman Navigation */}
       <AppSidebar role="office" isWireman={true} />
-
-      {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Mobile Header */}
         <header className="lg:hidden h-14 bg-white border-b flex items-center px-4 sticky top-0 z-30">
           <MobileNav role="office" isWireman={true} />
           <span className="ml-4 font-bold text-gray-700">Wireman Portal</span>
         </header>
 
-        {/* Desktop Header */}
         <header className="hidden lg:flex h-14 bg-white border-b items-center justify-between px-8 sticky top-0 z-10">
           <div className="flex items-center gap-3">
             <div className="h-8 w-8 bg-red-100 rounded-lg flex items-center justify-center">
@@ -95,7 +126,6 @@ export default function WiremanAgencyLayout({
           </div>
         </header>
 
-        {/* Page Content */}
         <div className="flex-1 p-4 md:p-8 overflow-y-auto">{children}</div>
       </main>
     </div>

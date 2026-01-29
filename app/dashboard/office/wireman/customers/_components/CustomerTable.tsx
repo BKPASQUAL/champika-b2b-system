@@ -1,4 +1,3 @@
-// app/dashboard/office/wireman/customers/_components/CustomerTable.tsx
 "use client";
 
 import {
@@ -25,8 +24,10 @@ import {
   CheckCircle2,
   XCircle,
   AlertOctagon,
+  Pin,
 } from "lucide-react";
 import { Customer, SortField, SortOrder, CustomerStatus } from "../types";
+import { INTERNAL_CUSTOMERS } from "@/app/config/business-constants";
 
 interface CustomerTableProps {
   customers: Customer[];
@@ -53,6 +54,16 @@ export function CustomerTable({
   totalPages,
   onPageChange,
 }: CustomerTableProps) {
+  // --- PINNING LOGIC ---
+  const pinnedCustomers = customers.filter((c) =>
+    INTERNAL_CUSTOMERS.includes(c.shopName),
+  );
+  const otherCustomers = customers.filter(
+    (c) => !INTERNAL_CUSTOMERS.includes(c.shopName),
+  );
+
+  const displayCustomers = [...pinnedCustomers, ...otherCustomers];
+
   const getSortIcon = (field: SortField) => {
     if (sortField !== field)
       return <ArrowUpDown className="w-4 h-4 ml-1 opacity-40" />;
@@ -139,7 +150,7 @@ export function CustomerTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {customers.length === 0 ? (
+            {displayCustomers.length === 0 ? (
               <TableRow>
                 <TableCell
                   colSpan={5}
@@ -149,82 +160,90 @@ export function CustomerTable({
                 </TableCell>
               </TableRow>
             ) : (
-              customers.map((customer) => (
-                <TableRow key={customer.id}>
-                  {/* Customer Name & Phone */}
-                  <TableCell className="font-medium">
-                    <div className="flex items-center gap-3">
-                      {/* Red Theme Avatar */}
-                      <Avatar className="h-9 w-9 bg-red-100 text-red-700">
-                        <AvatarFallback>
-                          {customer.shopName.substring(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex flex-col">
-                        <span className="font-medium text-sm">
-                          {customer.shopName}
-                        </span>
-                        <div className="text-xs text-muted-foreground flex flex-col">
-                          <span className="flex items-center gap-1">
-                            <Phone className="w-3 h-3" /> {customer.phone}
+              displayCustomers.map((customer) => {
+                const isPinned = INTERNAL_CUSTOMERS.includes(customer.shopName);
+                return (
+                  <TableRow
+                    key={customer.id}
+                    className={isPinned ? "bg-red-50/50" : ""}
+                  >
+                    {/* Customer Name & Phone */}
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-9 w-9 bg-red-100 text-red-700">
+                          <AvatarFallback>
+                            {customer.shopName.substring(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex flex-col">
+                          <span className="font-medium text-sm flex items-center gap-2">
+                            {customer.shopName}
+                            {isPinned && (
+                              <Pin className="w-3 h-3 text-red-500 fill-red-500 rotate-45" />
+                            )}
                           </span>
-                          {customer.ownerName && (
-                            <span>{customer.ownerName}</span>
-                          )}
+                          <div className="text-xs text-muted-foreground flex flex-col">
+                            <span className="flex items-center gap-1">
+                              <Phone className="w-3 h-3" /> {customer.phone}
+                            </span>
+                            {customer.ownerName && (
+                              <span>{customer.ownerName}</span>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </TableCell>
+                    </TableCell>
 
-                  {/* Route */}
-                  <TableCell>
-                    <div className="flex items-center text-sm text-muted-foreground">
-                      <MapPin className="w-3 h-3 mr-1" /> {customer.route}
-                    </div>
-                  </TableCell>
+                    {/* Route */}
+                    <TableCell>
+                      <div className="flex items-center text-sm text-muted-foreground">
+                        <MapPin className="w-3 h-3 mr-1" /> {customer.route}
+                      </div>
+                    </TableCell>
 
-                  {/* Status */}
-                  <TableCell>{renderStatusBadge(customer.status)}</TableCell>
+                    {/* Status */}
+                    <TableCell>{renderStatusBadge(customer.status)}</TableCell>
 
-                  {/* Balance */}
-                  <TableCell className="text-right">
-                    <div className="flex flex-col items-end">
-                      <span
-                        className={
-                          customer.outstandingBalance > 0
-                            ? "text-red-600 font-semibold"
-                            : "text-muted-foreground"
-                        }
-                      >
-                        {customer.outstandingBalance.toLocaleString()}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">
-                        Limit: {customer.creditLimit.toLocaleString()}
-                      </span>
-                    </div>
-                  </TableCell>
+                    {/* Balance */}
+                    <TableCell className="text-right">
+                      <div className="flex flex-col items-end">
+                        <span
+                          className={
+                            customer.outstandingBalance > 0
+                              ? "text-red-600 font-semibold"
+                              : "text-muted-foreground"
+                          }
+                        >
+                          {customer.outstandingBalance.toLocaleString()}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">
+                          Limit: {customer.creditLimit.toLocaleString()}
+                        </span>
+                      </div>
+                    </TableCell>
 
-                  {/* Actions */}
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => onEdit(customer)}
-                      >
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => onDelete(customer)}
-                      >
-                        <Trash2 className="w-4 h-4 text-destructive" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
+                    {/* Actions */}
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => onEdit(customer)}
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => onDelete(customer)}
+                        >
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>
