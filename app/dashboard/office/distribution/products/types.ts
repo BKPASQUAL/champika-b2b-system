@@ -1,4 +1,4 @@
-// app/dashboard/admin/products/types.ts
+// app/dashboard/office/distribution/products/types.ts
 
 export interface Product {
   id: string;
@@ -25,7 +25,8 @@ export interface Product {
   unitOfMeasure: string;
   commissionType?: string;
   commissionValue?: number;
-  isActive: boolean; // Added isActive field
+  isActive: boolean;
+  companyCode?: string; // Added companyCode
 }
 
 export type SortField =
@@ -39,13 +40,15 @@ export type SortField =
   | "mrp"
   | "totalCost"
   | "commissionValue"
-  | "isActive";
+  | "isActive"
+  | "companyCode"; // Added to sort fields
 
 export type SortOrder = "asc" | "desc";
 
 export interface ProductFormData {
   sku: string;
   name: string;
+  companyCode: string; // Added companyCode
   category: string;
   subCategory: string;
   brand: string;
@@ -61,5 +64,5 @@ export interface ProductFormData {
   costPrice: number | string;
   images: string[];
   unitOfMeasure: string;
-  isActive: boolean; // Added isActive field
+  isActive: boolean;
 }

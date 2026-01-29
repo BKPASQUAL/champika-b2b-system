@@ -41,10 +41,13 @@ export default function WiremanProductsPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
+  // Constant for the fixed supplier
+  const WIREMAN_SUPPLIER_NAME = "Wireman ( Orel Corporation)";
+
   // Form Data
   const [formData, setFormData] = useState<ProductFormData>({
     sku: "",
-    companyCode: "", // ✅ Initialize New Field
+    companyCode: "",
     name: "",
     category: "",
     subCategory: "",
@@ -53,7 +56,7 @@ export default function WiremanProductsPage() {
     modelType: "",
     subModel: "",
     sizeSpec: "",
-    supplier: "Wireman Agency",
+    supplier: WIREMAN_SUPPLIER_NAME, // ✅ Auto-set to correct supplier
     stock: "",
     minStock: "",
     mrp: "",
@@ -74,7 +77,7 @@ export default function WiremanProductsPage() {
 
       if (prodRes.ok) {
         const allProducts: Product[] = await prodRes.json();
-        // ✅ Strict Filter: Only Wireman products
+        // Strict Filter: Only Wireman products (checking for "Wireman" handles both old "Wireman Agency" and new name)
         const wiremanOnly = allProducts.filter((p) =>
           p.supplier?.toLowerCase().includes("wireman"),
         );
@@ -98,7 +101,7 @@ export default function WiremanProductsPage() {
       product.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
       product.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (product.companyCode &&
-        product.companyCode.toLowerCase().includes(searchQuery.toLowerCase())); // Search company code too
+        product.companyCode.toLowerCase().includes(searchQuery.toLowerCase()));
 
     const matchesCategory =
       categoryFilter === "all" || product.category === categoryFilter;
@@ -152,7 +155,7 @@ export default function WiremanProductsPage() {
 
     const payload = {
       ...formData,
-      supplier: "Wireman Agency",
+      supplier: WIREMAN_SUPPLIER_NAME, // ✅ Force specific supplier name on save
       stock: Number(formData.stock) || 0,
       minStock: Number(formData.minStock) || 0,
       mrp: Number(formData.mrp) || 0,
@@ -205,7 +208,7 @@ export default function WiremanProductsPage() {
   const resetForm = () => {
     setFormData({
       sku: "",
-      companyCode: "", // ✅ Reset New Field
+      companyCode: "",
       name: "",
       category: "",
       subCategory: "",
@@ -214,7 +217,7 @@ export default function WiremanProductsPage() {
       modelType: "",
       subModel: "",
       sizeSpec: "",
-      supplier: "Wireman Agency",
+      supplier: WIREMAN_SUPPLIER_NAME, // ✅ Reset to correct supplier
       stock: "",
       minStock: "",
       mrp: "",
@@ -234,7 +237,7 @@ export default function WiremanProductsPage() {
     }
     const data = sortedProducts.map((p) => ({
       Code: p.sku,
-      "Company Code": p.companyCode || "-", // Export New Field
+      "Company Code": p.companyCode || "-",
       Name: p.name,
       Category: p.category,
       Stock: p.stock,
@@ -306,7 +309,7 @@ export default function WiremanProductsPage() {
             onEdit={(p) => {
               setFormData({
                 sku: p.sku,
-                companyCode: p.companyCode || "", // ✅ Load existing value
+                companyCode: p.companyCode || "",
                 name: p.name,
                 category: p.category,
                 subCategory: p.subCategory || "",
@@ -315,7 +318,7 @@ export default function WiremanProductsPage() {
                 modelType: p.modelType || "",
                 subModel: p.subModel || "",
                 sizeSpec: p.sizeSpec || "",
-                supplier: "Wireman Agency",
+                supplier: WIREMAN_SUPPLIER_NAME, // ✅ Use correct supplier on edit
                 stock: p.stock,
                 minStock: p.minStock,
                 mrp: p.mrp,

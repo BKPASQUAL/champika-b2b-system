@@ -1,4 +1,3 @@
-// app/dashboard/admin/products/page.tsx
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
@@ -22,7 +21,7 @@ export default function ProductsPage() {
     { id: string; name: string; parent_id?: string }[]
   >([]);
   const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>(
-    []
+    [],
   );
   const [loading, setLoading] = useState(true);
 
@@ -45,6 +44,7 @@ export default function ProductsPage() {
   // Form Data
   const [formData, setFormData] = useState<ProductFormData>({
     sku: "",
+    companyCode: "",
     name: "",
     category: "",
     subCategory: "",
@@ -61,7 +61,7 @@ export default function ProductsPage() {
     costPrice: "",
     images: [],
     unitOfMeasure: "Pcs",
-    isActive: true, // Default active
+    isActive: true,
   });
 
   // --- Fetch Data ---
@@ -90,11 +90,14 @@ export default function ProductsPage() {
 
   // --- Filter Logic ---
   const filteredProducts = products.filter((product) => {
+    const searchLower = searchQuery.toLowerCase();
+
     const matchesSearch =
-      product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.supplier.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.sku.toLowerCase().includes(searchQuery.toLowerCase());
+      (product.name || "").toLowerCase().includes(searchLower) ||
+      (product.category || "").toLowerCase().includes(searchLower) ||
+      (product.supplier || "").toLowerCase().includes(searchLower) ||
+      (product.sku || "").toLowerCase().includes(searchLower) ||
+      (product.companyCode || "").toLowerCase().includes(searchLower);
 
     const matchesCategory =
       categoryFilter === "all" || product.category === categoryFilter;
@@ -111,13 +114,23 @@ export default function ProductsPage() {
     return matchesSearch && matchesCategory && matchesSupplier && matchesStock;
   });
 
+  // --- FIXED SORTING LOGIC ---
   const sortedProducts = [...filteredProducts].sort((a, b) => {
     let aValue: any = a[sortField];
     let bValue: any = b[sortField];
+
+    // Safe handling for nulls/undefined to prevent crashes
+    if (aValue === null || aValue === undefined) aValue = "";
+    if (bValue === null || bValue === undefined) bValue = "";
+
+    // Convert strings to lowercase for case-insensitive comparison
     if (typeof aValue === "string") {
       aValue = aValue.toLowerCase();
+    }
+    if (typeof bValue === "string") {
       bValue = bValue.toLowerCase();
     }
+
     if (aValue < bValue) return sortOrder === "asc" ? -1 : 1;
     if (aValue > bValue) return sortOrder === "asc" ? 1 : -1;
     return 0;
@@ -126,12 +139,12 @@ export default function ProductsPage() {
   const totalPages = Math.ceil(sortedProducts.length / itemsPerPage);
   const paginatedProducts = sortedProducts.slice(
     (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
+    currentPage * itemsPerPage,
   );
 
   useEffect(
     () => setCurrentPage(1),
-    [searchQuery, categoryFilter, supplierFilter, stockFilter]
+    [searchQuery, categoryFilter, supplierFilter, stockFilter],
   );
 
   // --- Actions ---
@@ -149,7 +162,6 @@ export default function ProductsPage() {
       return;
     }
 
-    // Convert empty strings to 0 or appropriate numbers for the API
     const payload = {
       ...formData,
       stock: Number(formData.stock) || 0,
@@ -194,7 +206,7 @@ export default function ProductsPage() {
 
       setIsAddDialogOpen(false);
       resetForm();
-      fetchData(); // Refresh data
+      fetchData();
     } catch (error: any) {
       toast.error(error.message || "Operation failed");
     }
@@ -203,6 +215,7 @@ export default function ProductsPage() {
   const resetForm = () => {
     setFormData({
       sku: "",
+      companyCode: "",
       name: "",
       category: "",
       subCategory: "",
@@ -219,7 +232,7 @@ export default function ProductsPage() {
       costPrice: "",
       images: [],
       unitOfMeasure: "Pcs",
-      isActive: true, // Reset to active
+      isActive: true,
     });
     setSelectedProduct(null);
   };
@@ -231,6 +244,7 @@ export default function ProductsPage() {
     }
     const data = sortedProducts.map((p) => ({
       SKU: p.sku,
+      "Company Code": p.companyCode || "-",
       Name: p.name,
       Category: p.category,
       Supplier: p.supplier,
@@ -257,22 +271,22 @@ export default function ProductsPage() {
       head: [
         [
           "SKU",
+          "Company Code",
           "Name",
           "Category",
           "Supplier",
           "Stock",
-          "Unit",
           "Price",
           "Status",
         ],
       ],
       body: sortedProducts.map((p) => [
         p.sku,
+        p.companyCode || "-",
         p.name,
         p.category,
         p.supplier,
         p.stock,
-        p.unitOfMeasure,
         p.sellingPrice,
         p.isActive ? "Active" : "Inactive",
       ]),
@@ -324,6 +338,7 @@ export default function ProductsPage() {
             onEdit={(p) => {
               setFormData({
                 sku: p.sku,
+                companyCode: p.companyCode || "",
                 name: p.name,
                 category: p.category,
                 subCategory: p.subCategory || "",
@@ -340,7 +355,7 @@ export default function ProductsPage() {
                 costPrice: p.costPrice,
                 images: p.images || [],
                 unitOfMeasure: p.unitOfMeasure || "Pcs",
-                isActive: p.isActive ?? true, // Load active status
+                isActive: p.isActive ?? true,
               });
               setSelectedProduct(p);
               setIsAddDialogOpen(true);
