@@ -16,7 +16,6 @@ import { ProductDialogs } from "./_components/ProductDialogs";
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
-
   const [categories, setCategories] = useState<
     { id: string; name: string; parent_id?: string }[]
   >([]);
@@ -64,7 +63,6 @@ export default function ProductsPage() {
     isActive: true,
   });
 
-  // --- Fetch Data ---
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
@@ -88,10 +86,9 @@ export default function ProductsPage() {
     fetchData();
   }, [fetchData]);
 
-  // --- Filter Logic ---
+  // Filter Logic
   const filteredProducts = products.filter((product) => {
     const searchLower = searchQuery.toLowerCase();
-
     const matchesSearch =
       (product.name || "").toLowerCase().includes(searchLower) ||
       (product.category || "").toLowerCase().includes(searchLower) ||
@@ -114,22 +111,16 @@ export default function ProductsPage() {
     return matchesSearch && matchesCategory && matchesSupplier && matchesStock;
   });
 
-  // --- FIXED SORTING LOGIC ---
+  // Sort Logic
   const sortedProducts = [...filteredProducts].sort((a, b) => {
     let aValue: any = a[sortField];
     let bValue: any = b[sortField];
 
-    // Safe handling for nulls/undefined to prevent crashes
     if (aValue === null || aValue === undefined) aValue = "";
     if (bValue === null || bValue === undefined) bValue = "";
 
-    // Convert strings to lowercase for case-insensitive comparison
-    if (typeof aValue === "string") {
-      aValue = aValue.toLowerCase();
-    }
-    if (typeof bValue === "string") {
-      bValue = bValue.toLowerCase();
-    }
+    if (typeof aValue === "string") aValue = aValue.toLowerCase();
+    if (typeof bValue === "string") bValue = bValue.toLowerCase();
 
     if (aValue < bValue) return sortOrder === "asc" ? -1 : 1;
     if (aValue > bValue) return sortOrder === "asc" ? 1 : -1;
@@ -147,7 +138,6 @@ export default function ProductsPage() {
     [searchQuery, categoryFilter, supplierFilter, stockFilter],
   );
 
-  // --- Actions ---
   const handleSort = (field: SortField) => {
     if (sortField === field) setSortOrder(sortOrder === "asc" ? "desc" : "asc");
     else {
@@ -172,43 +162,41 @@ export default function ProductsPage() {
     };
 
     try {
+      let res;
       if (selectedProduct) {
         // UPDATE
-        const res = await fetch(`/api/products/${selectedProduct.id}`, {
+        res = await fetch(`/api/products/${selectedProduct.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(data.error || "Failed update");
-        }
-
-        toast.success("Product updated successfully");
       } else {
         // CREATE
-        const res = await fetch("/api/products", {
+        res = await fetch("/api/products", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(data.error || "Failed create");
-        }
-
-        toast.success("Product created successfully");
       }
 
+      // ✅ Parse response to capture specific errors (e.g. Duplicate Name)
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Operation failed");
+      }
+
+      toast.success(
+        selectedProduct
+          ? "Product updated successfully"
+          : "Product created successfully",
+      );
       setIsAddDialogOpen(false);
       resetForm();
       fetchData();
     } catch (error: any) {
-      toast.error(error.message || "Operation failed");
+      // ✅ Display the specific error message from API
+      toast.error(error.message);
     }
   };
 

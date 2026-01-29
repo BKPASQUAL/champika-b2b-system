@@ -7,10 +7,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { toast } from "sonner";
 
-// Import Types
 import { Product, SortField, SortOrder, ProductFormData } from "./types";
-
-// Import LOCAL Wireman Components
 import { ProductStats } from "./_components/ProductStats";
 import { ProductHeader } from "./_components/ProductHeader";
 import { ProductFilters } from "./_components/ProductFilters";
@@ -22,7 +19,6 @@ export default function WiremanProductsPage() {
   const [categories, setCategories] = useState<
     { id: string; name: string; parent_id?: string }[]
   >([]);
-
   const [loading, setLoading] = useState(true);
 
   // Filters
@@ -41,7 +37,6 @@ export default function WiremanProductsPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
-  // Constant for the fixed supplier
   const WIREMAN_SUPPLIER_NAME = "Wireman ( Orel Corporation)";
 
   // Form Data
@@ -56,7 +51,7 @@ export default function WiremanProductsPage() {
     modelType: "",
     subModel: "",
     sizeSpec: "",
-    supplier: WIREMAN_SUPPLIER_NAME, // ✅ Auto-set to correct supplier
+    supplier: WIREMAN_SUPPLIER_NAME,
     stock: "",
     minStock: "",
     mrp: "",
@@ -77,9 +72,8 @@ export default function WiremanProductsPage() {
 
       if (prodRes.ok) {
         const allProducts: Product[] = await prodRes.json();
-        // Strict Filter: Only Wireman products (checking for "Wireman" handles both old "Wireman Agency" and new name)
         const wiremanOnly = allProducts.filter((p) =>
-          p.supplier?.toLowerCase().includes("wireman"),
+          (p.supplier || "").toLowerCase().includes("wireman"),
         );
         setProducts(wiremanOnly);
       }
@@ -95,13 +89,14 @@ export default function WiremanProductsPage() {
     fetchData();
   }, [fetchData]);
 
+  // Filters Logic
   const filteredProducts = products.filter((product) => {
+    const searchLower = searchQuery.toLowerCase();
     const matchesSearch =
-      product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (product.companyCode &&
-        product.companyCode.toLowerCase().includes(searchQuery.toLowerCase()));
+      (product.name || "").toLowerCase().includes(searchLower) ||
+      (product.category || "").toLowerCase().includes(searchLower) ||
+      (product.sku || "").toLowerCase().includes(searchLower) ||
+      (product.companyCode || "").toLowerCase().includes(searchLower);
 
     const matchesCategory =
       categoryFilter === "all" || product.category === categoryFilter;
@@ -116,13 +111,17 @@ export default function WiremanProductsPage() {
     return matchesSearch && matchesCategory && matchesStock;
   });
 
+  // Sorting Logic
   const sortedProducts = [...filteredProducts].sort((a, b) => {
     let aValue: any = a[sortField];
     let bValue: any = b[sortField];
-    if (typeof aValue === "string") {
-      aValue = aValue.toLowerCase();
-      bValue = bValue.toLowerCase();
-    }
+
+    if (aValue === null || aValue === undefined) aValue = "";
+    if (bValue === null || bValue === undefined) bValue = "";
+
+    if (typeof aValue === "string") aValue = aValue.toLowerCase();
+    if (typeof bValue === "string") bValue = bValue.toLowerCase();
+
     if (aValue < bValue) return sortOrder === "asc" ? -1 : 1;
     if (aValue > bValue) return sortOrder === "asc" ? 1 : -1;
     return 0;
@@ -155,7 +154,7 @@ export default function WiremanProductsPage() {
 
     const payload = {
       ...formData,
-      supplier: WIREMAN_SUPPLIER_NAME, // ✅ Force specific supplier name on save
+      supplier: WIREMAN_SUPPLIER_NAME,
       stock: Number(formData.stock) || 0,
       minStock: Number(formData.minStock) || 0,
       mrp: Number(formData.mrp) || 0,
@@ -164,28 +163,37 @@ export default function WiremanProductsPage() {
     };
 
     try {
+      let res;
       if (selectedProduct) {
-        const res = await fetch(`/api/products/${selectedProduct.id}`, {
+        // UPDATE
+        res = await fetch(`/api/products/${selectedProduct.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
-        if (!res.ok) throw new Error("Failed update");
-        toast.success("Product updated");
       } else {
-        const res = await fetch("/api/products", {
+        // CREATE
+        res = await fetch("/api/products", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
-        if (!res.ok) throw new Error("Failed create");
-        toast.success("Product created");
       }
+
+      // ✅ Parse response for specific errors
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Operation failed");
+      }
+
+      toast.success(selectedProduct ? "Product updated" : "Product created");
       setIsAddDialogOpen(false);
       resetForm();
       fetchData();
     } catch (error: any) {
-      toast.error(error.message || "Operation failed");
+      // ✅ Display specific error from API
+      toast.error(error.message);
     }
   };
 
@@ -217,7 +225,7 @@ export default function WiremanProductsPage() {
       modelType: "",
       subModel: "",
       sizeSpec: "",
-      supplier: WIREMAN_SUPPLIER_NAME, // ✅ Reset to correct supplier
+      supplier: WIREMAN_SUPPLIER_NAME,
       stock: "",
       minStock: "",
       mrp: "",
@@ -281,7 +289,6 @@ export default function WiremanProductsPage() {
         onExportExcel={generateExcel}
         onExportPDF={generatePDF}
       />
-
       <ProductStats products={products} />
 
       <Card className="border-red-100">
@@ -318,7 +325,7 @@ export default function WiremanProductsPage() {
                 modelType: p.modelType || "",
                 subModel: p.subModel || "",
                 sizeSpec: p.sizeSpec || "",
-                supplier: WIREMAN_SUPPLIER_NAME, // ✅ Use correct supplier on edit
+                supplier: WIREMAN_SUPPLIER_NAME,
                 stock: p.stock,
                 minStock: p.minStock,
                 mrp: p.mrp,
