@@ -1,4 +1,3 @@
-// app/dashboard/office/retail/invoices/page.tsx
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
@@ -45,7 +44,8 @@ type OrderStatus = "Pending" | "Processing" | "Delivered" | "Cancelled";
 interface Invoice {
   id: string;
   invoiceNo: string;
-  date: string;
+  invoiceDate: string; // From API
+  createdAt: string; // Fallback
   customerName: string;
   totalAmount: number;
   paidAmount: number;
@@ -53,6 +53,7 @@ interface Invoice {
   status: PaymentStatus;
   orderStatus: OrderStatus;
   businessId?: string;
+  manualInvoiceNo?: string;
 }
 
 export default function RetailInvoicesPage() {
@@ -62,14 +63,12 @@ export default function RetailInvoicesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
-  // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Business Context State
   const [businessName, setBusinessName] = useState("");
   const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(
-    null
+    null,
   );
 
   const fetchInvoices = useCallback(async () => {
@@ -88,44 +87,37 @@ export default function RetailInvoicesPage() {
   }, []);
 
   useEffect(() => {
-    // Get business context
     const user = getUserBusinessContext();
     if (user) {
       setBusinessName(user.businessName || "");
       setCurrentBusinessId(user.businessId);
     }
-
     fetchInvoices();
   }, [fetchInvoices]);
 
-  // Filter invoices based on Search, Status, AND Business ID
   useEffect(() => {
     let filtered = invoices;
 
-    // 1. Business Filter
     if (currentBusinessId) {
       filtered = filtered.filter((inv) => inv.businessId === currentBusinessId);
     }
 
-    // 2. Search filter
     if (searchQuery) {
       filtered = filtered.filter(
         (inv) =>
           inv.invoiceNo.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          inv.customerName.toLowerCase().includes(searchQuery.toLowerCase())
+          inv.customerName.toLowerCase().includes(searchQuery.toLowerCase()),
       );
     }
 
-    // 3. Status filter
     if (statusFilter !== "all") {
       filtered = filtered.filter((inv) => inv.status === statusFilter);
     }
 
     setFilteredInvoices(filtered);
-    setCurrentPage(1); // Reset to first page when filters change
+    setCurrentPage(1);
   }, [searchQuery, statusFilter, invoices, currentBusinessId]);
 
-  // Pagination Logic
   const totalPages = Math.ceil(filteredInvoices.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
@@ -193,15 +185,25 @@ export default function RetailInvoicesPage() {
     }).format(amount);
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
+  // ✅ ROBUST DATE FORMATTER
+  const formatDate = (
+    dateString: string | null | undefined,
+    fallbackString?: string,
+  ) => {
+    const validDate = dateString || fallbackString;
+    if (!validDate) return "N/A";
+
+    try {
+      return new Date(validDate).toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
+    } catch (e) {
+      return "Invalid Date";
+    }
   };
 
-  // Calculate stats based on FILTERED invoices
   const stats = {
     total: filteredInvoices.length,
     paid: filteredInvoices.filter((i) => i.status === "Paid").length,
@@ -211,7 +213,6 @@ export default function RetailInvoicesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Retail Invoices</h1>
@@ -225,7 +226,6 @@ export default function RetailInvoicesPage() {
         </Link>
       </div>
 
-      {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
@@ -275,13 +275,11 @@ export default function RetailInvoicesPage() {
         </Card>
       </div>
 
-      {/* Filters and Search */}
       <Card>
         <CardHeader>
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <CardTitle>Invoice List</CardTitle>
             <div className="flex flex-col sm:flex-row gap-3">
-              {/* Search */}
               <div className="relative flex-1 sm:w-64">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
@@ -292,7 +290,6 @@ export default function RetailInvoicesPage() {
                 />
               </div>
 
-              {/* Status Filter */}
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="w-full sm:w-40">
                   <Filter className="h-4 w-4 mr-2" />
@@ -318,21 +315,13 @@ export default function RetailInvoicesPage() {
             <div className="text-center py-12">
               <FileText className="h-12 w-12 mx-auto text-gray-300 mb-3" />
               <h3 className="text-lg font-medium text-gray-900 mb-1">
-                No invoices found for {businessName}
+                No invoices found
               </h3>
               <p className="text-gray-500">
                 {searchQuery || statusFilter !== "all"
                   ? "Try adjusting your filters"
                   : "Get started by creating your first invoice"}
               </p>
-              {!searchQuery && statusFilter === "all" && (
-                <Link href="/dashboard/office/retail/invoices/create">
-                  <Button className="mt-4">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create First Invoice
-                  </Button>
-                </Link>
-              )}
             </div>
           ) : (
             <div className="space-y-4">
@@ -343,6 +332,7 @@ export default function RetailInvoicesPage() {
                       <TableHead className="font-semibold">
                         Invoice No
                       </TableHead>
+                      {/* ❌ Manual Ref REMOVED */}
                       <TableHead className="font-semibold">Date</TableHead>
                       <TableHead className="font-semibold">Customer</TableHead>
                       <TableHead className="text-right font-semibold">
@@ -371,7 +361,14 @@ export default function RetailInvoicesPage() {
                         <TableCell className="font-medium">
                           {invoice.invoiceNo}
                         </TableCell>
-                        <TableCell>{formatDate(invoice.date)}</TableCell>
+
+                        {/* ❌ Manual Ref REMOVED */}
+
+                        {/* ✅ Fixed Date (Falls back to createdAt if invoiceDate is missing) */}
+                        <TableCell>
+                          {formatDate(invoice.invoiceDate, invoice.createdAt)}
+                        </TableCell>
+
                         <TableCell>{invoice.customerName}</TableCell>
                         <TableCell className="text-right font-medium">
                           {formatCurrency(invoice.totalAmount)}
@@ -411,7 +408,7 @@ export default function RetailInvoicesPage() {
                 </Table>
               </div>
 
-              {/* Pagination Controls */}
+              {/* Pagination controls... */}
               <div className="flex items-center justify-between px-2">
                 <div className="text-sm text-muted-foreground">
                   Showing {startIndex + 1} to{" "}
