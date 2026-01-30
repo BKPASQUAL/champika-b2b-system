@@ -33,6 +33,9 @@ import {
   TrendingDown,
   User,
   RotateCcw,
+  Clock,
+  Archive,
+  Store, // ✅ Added for Branch Icon
 } from "lucide-react";
 import {
   BarChart,
@@ -48,14 +51,9 @@ import {
   Cell,
   Line,
 } from "recharts";
+import { Product } from "../types";
 import { toast } from "sonner";
-// Import the base type and alias it
-import { Product as BaseProduct } from "@/app/dashboard/admin/products/types";
-
-// --- FIX: Extend the Product interface locally to include actualCostPrice ---
-interface Product extends BaseProduct {
-  actualCostPrice?: number;
-}
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8"];
 const ITEMS_PER_PAGE = 10;
@@ -63,14 +61,19 @@ const ITEMS_PER_PAGE = 10;
 interface Transaction {
   id: string;
   date: string;
-  type: "SALE" | "PURCHASE" | "RETURN" | "DAMAGE";
+  type: "SALE" | "PURCHASE" | "RETURN" | "DAMAGE" | "ADJUSTMENT" | "FREE ISSUE";
   quantity: number;
+  freeQuantity?: number;
+  currentStock?: number;
   customer?: string;
   reference: string;
   notes: string;
+  buyingPrice: number;
+  sellingPrice: number;
+  businessId?: string; // ✅ Added Business ID
 }
 
-export default function OrangeProductDetailsPage({
+export default function WiremanProductDetailsPage({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -82,32 +85,28 @@ export default function OrangeProductDetailsPage({
   const [analytics, setAnalytics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [transactionPage, setTransactionPage] = useState(1);
-  const [accessDenied, setAccessDenied] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        // 1. Fetch Product
-        const prodRes = await fetch(`/api/products/${id}`);
-        if (!prodRes.ok) throw new Error("Failed to fetch product");
-        const prodData: Product = await prodRes.json();
+        const prodRes = await fetch(
+          `/api/products/${id}?businessId=${BUSINESS_IDS.WIREMAN_AGENCY}`,
+        );
 
-        // --- SECURITY CHECK: Verify Supplier is Orange ---
-        // Ensure strictly Orange Agency products are viewed here
-        if (
-          !prodData.supplier ||
-          (!prodData.supplier.toLowerCase().includes("orange") &&
-            !prodData.supplier.toLowerCase().includes("orange agency"))
-        ) {
-          setAccessDenied(true);
+        if (prodRes.status === 404) {
+          toast.error("Product not found");
+          router.push("/dashboard/office/wireman/products");
           return;
         }
 
+        if (!prodRes.ok) throw new Error("Failed to fetch product");
+        const prodData = await prodRes.json();
         setProduct(prodData);
 
-        // 2. Fetch Analytics
+        // Fetch ALL transactions (No filter)
         const analyticsRes = await fetch(`/api/products/${id}/analytics`);
+
         if (!analyticsRes.ok) throw new Error("Failed to fetch analytics");
         const analyticsData = await analyticsRes.json();
         setAnalytics(analyticsData);
@@ -120,29 +119,30 @@ export default function OrangeProductDetailsPage({
     };
 
     fetchData();
-  }, [id]);
+  }, [id, router]);
+
+  const getBranchName = (bId?: string) => {
+    if (bId === BUSINESS_IDS.WIREMAN_AGENCY) return "Wireman Agency";
+    if (bId === BUSINESS_IDS.CHAMPIKA_RETAIL) return "Retail";
+    if (bId === BUSINESS_IDS.CHAMPIKA_DISTRIBUTION) return "Distribution";
+    if (bId === BUSINESS_IDS.ORANGE_AGENCY) return "Orange Agency";
+    return "Main Warehouse";
+  };
+
+  const getBranchBadgeColor = (bId?: string) => {
+    if (bId === BUSINESS_IDS.WIREMAN_AGENCY)
+      return "bg-red-100 text-red-700 border-red-200";
+    if (bId === BUSINESS_IDS.CHAMPIKA_RETAIL)
+      return "bg-green-100 text-green-700 border-green-200";
+    if (bId === BUSINESS_IDS.CHAMPIKA_DISTRIBUTION)
+      return "bg-blue-100 text-blue-700 border-blue-200";
+    return "bg-gray-100 text-gray-700 border-gray-200";
+  };
 
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-orange-600" />
-      </div>
-    );
-  }
-
-  if (accessDenied) {
-    return (
-      <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
-        <AlertTriangle className="h-12 w-12 text-red-500" />
-        <h2 className="text-xl font-bold">Access Denied</h2>
-        <p className="text-muted-foreground">
-          This product does not belong to Orange Agency.
-        </p>
-        <Button
-          onClick={() => router.push("/dashboard/office/orange/products")}
-        >
-          Return to Products
-        </Button>
+        <Loader2 className="h-8 w-8 animate-spin text-red-600" />
       </div>
     );
   }
@@ -151,25 +151,30 @@ export default function OrangeProductDetailsPage({
 
   const allTransactions: Transaction[] = analytics.allTransactions || [];
 
-  // Pagination Logic
   const totalTransactionPages = Math.ceil(
-    allTransactions.length / ITEMS_PER_PAGE
+    allTransactions.length / ITEMS_PER_PAGE,
   );
   const startTransactionIndex = (transactionPage - 1) * ITEMS_PER_PAGE;
   const paginatedTransactions = allTransactions.slice(
     startTransactionIndex,
-    startTransactionIndex + ITEMS_PER_PAGE
+    startTransactionIndex + ITEMS_PER_PAGE,
   );
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("en-LK", {
+      style: "currency",
+      currency: "LKR",
+    }).format(amount);
+  };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="outline" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div>
-          <h2 className="text-3xl font-bold tracking-tight text-orange-900">
+          <h2 className="text-3xl font-bold tracking-tight text-red-950">
             {product.name}
           </h2>
           <div className="flex items-center gap-2 text-muted-foreground mt-1">
@@ -177,14 +182,15 @@ export default function OrangeProductDetailsPage({
             <span>•</span>
             <span className="text-sm">SKU: {product.sku}</span>
             <span>•</span>
-            <span className="text-sm">{product.supplier}</span>
+            <span className="text-sm font-medium text-red-700">
+              {product.supplier}
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
+        <Card className="border-t-4 border-t-red-600 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Current Stock</CardTitle>
             <Package className="h-4 w-4 text-muted-foreground" />
@@ -220,7 +226,7 @@ export default function OrangeProductDetailsPage({
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-2xl font-bold text-red-700">
               LKR {analytics.summary.totalRevenue.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground mt-1">Lifetime sales</p>
@@ -243,153 +249,64 @@ export default function OrangeProductDetailsPage({
         </Card>
       </div>
 
-      <Tabs defaultValue="details" className="space-y-4">
+      <Tabs defaultValue="history" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="details">Product Details</TabsTrigger>
           <TabsTrigger value="history">Transaction History</TabsTrigger>
+          <TabsTrigger value="prices">Price History</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          <TabsTrigger value="details">Product Details</TabsTrigger>
         </TabsList>
 
-        {/* --- DETAILS TAB --- */}
-        <TabsContent value="details">
-          <Card>
-            <CardHeader>
-              <CardTitle>Product Information</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-6 md:grid-cols-2">
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">
-                    Description
-                  </label>
-                  <div className="mt-1">{product.name}</div>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">
-                    Categories
-                  </label>
-                  <div className="mt-1 flex gap-2">
-                    <Badge>{product.category}</Badge>
-                    {product.subCategory && (
-                      <Badge variant="outline">{product.subCategory}</Badge>
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">
-                    Brand & Model
-                  </label>
-                  <div className="mt-1">
-                    {product.brand || "N/A"}
-                    {product.modelType ? ` - ${product.modelType}` : ""}
-                  </div>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">
-                    Specs
-                  </label>
-                  <div className="mt-1">{product.sizeSpec || "N/A"}</div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">
-                    Pricing & Commission
-                  </label>
-                  {/* Updated Pricing Grid */}
-                  <div className="grid grid-cols-2 gap-4 mt-1 p-4 border rounded-lg bg-muted/20">
-                    <div>
-                      <span className="text-xs text-muted-foreground">
-                        Cost Price (Standard)
-                      </span>
-                      <div className="font-medium">
-                        LKR {product.costPrice.toLocaleString()}
-                      </div>
-                    </div>
-
-                    {/* Added Actual Cost Price */}
-                    <div>
-                      <span className="text-xs text-muted-foreground">
-                        Actual Cost Price
-                      </span>
-                      <div className="font-medium text-blue-600">
-                        LKR{" "}
-                        {product.actualCostPrice?.toLocaleString() ?? "0.00"}
-                      </div>
-                    </div>
-
-                    <div>
-                      <span className="text-xs text-muted-foreground">
-                        Selling Price
-                      </span>
-                      <div className="font-medium text-green-600">
-                        LKR {product.sellingPrice.toLocaleString()}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-xs text-muted-foreground">MRP</span>
-                      <div className="font-medium">
-                        LKR {product.mrp.toLocaleString()}
-                      </div>
-                    </div>
-
-                    <div className="col-span-2 pt-2 border-t mt-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-muted-foreground">
-                          Commission
-                        </span>
-                        <Badge
-                          variant="secondary"
-                          className="text-orange-600 bg-orange-50"
-                        >
-                          {product.commissionValue}%
-                        </Badge>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* --- TRANSACTION HISTORY TAB --- */}
         <TabsContent value="history" className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle>Transaction History</CardTitle>
               <CardDescription>
-                All transactions (Sales, Purchases, Returns)
+                Detailed movement across all branches (Wireman, Retail,
+                Distribution).
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Table className="w-full">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[12%] min-w-[100px]">
+                    <TableHead className="w-[100px] text-center">
                       Date
                     </TableHead>
-                    <TableHead className="w-[13%] min-w-[120px]">
+                    {/* ✅ Added Branch Column */}
+                    <TableHead className="w-[120px] text-center">
+                      Branch
+                    </TableHead>
+                    <TableHead className="w-[120px] text-center">
                       Type
                     </TableHead>
-                    <TableHead className="w-[10%] min-w-[80px]">
+                    <TableHead className="w-[80px] text-center">
                       Quantity
                     </TableHead>
-                    <TableHead className="w-[20%] min-w-[150px]">
-                      Party
+                    <TableHead className="w-[80px] text-center font-bold text-black">
+                      Stock
                     </TableHead>
-                    <TableHead className="w-[15%] min-w-[120px]">
+                    {/* ✅ Renamed Party to Customer */}
+                    <TableHead className="w-[150px] text-center">
+                      Customer
+                    </TableHead>
+                    <TableHead className="w-[100px] text-center">
+                      Buy Price
+                    </TableHead>
+                    <TableHead className="w-[100px] text-center">
+                      Sell Price
+                    </TableHead>
+                    <TableHead className="w-[120px] text-center">
                       Reference
                     </TableHead>
-                    <TableHead className="w-[30%]">Notes</TableHead>
+                    <TableHead className="w-[150px]">Notes</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {paginatedTransactions.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={6}
+                        colSpan={10}
                         className="text-center h-24 text-muted-foreground"
                       >
                         No transactions found.
@@ -398,60 +315,121 @@ export default function OrangeProductDetailsPage({
                   ) : (
                     paginatedTransactions.map((transaction) => (
                       <TableRow key={transaction.id}>
-                        <TableCell className="text-muted-foreground whitespace-nowrap">
+                        <TableCell className="text-muted-foreground whitespace-nowrap text-center">
                           {transaction.date}
                         </TableCell>
-                        <TableCell>
-                          {transaction.type === "SALE" && (
-                            <Badge className="bg-black text-white hover:bg-black/90 gap-1 whitespace-nowrap">
-                              <TrendingDown className="h-3 w-3" />
-                              SALE
-                            </Badge>
-                          )}
-                          {transaction.type === "PURCHASE" && (
-                            <Badge
-                              variant="outline"
-                              className="gap-1 border-green-600 text-green-600 whitespace-nowrap"
+
+                        {/* ✅ Branch Column Display */}
+                        <TableCell className="text-center">
+                          <Badge
+                            variant="outline"
+                            className={`whitespace-nowrap ${getBranchBadgeColor(transaction.businessId)}`}
+                          >
+                            <Store className="w-3 h-3 mr-1" />
+                            {getBranchName(transaction.businessId)}
+                          </Badge>
+                        </TableCell>
+
+                        <TableCell className="text-center">
+                          <div className="flex justify-center">
+                            {transaction.type === "SALE" && (
+                              <Badge className="bg-black text-white hover:bg-black/90 gap-1 whitespace-nowrap">
+                                <TrendingDown className="h-3 w-3" />
+                                SALE
+                              </Badge>
+                            )}
+                            {transaction.type === "PURCHASE" && (
+                              <Badge
+                                variant="outline"
+                                className="gap-1 border-green-600 text-green-600 whitespace-nowrap"
+                              >
+                                <TrendingUp className="h-3 w-3" />
+                                PURCHASE
+                              </Badge>
+                            )}
+                            {transaction.type === "FREE ISSUE" && (
+                              <Badge
+                                variant="outline"
+                                className="gap-1 border-green-600 text-green-600 whitespace-nowrap"
+                              >
+                                <TrendingUp className="h-3 w-3" />
+                                FREE ISSUE
+                              </Badge>
+                            )}
+                            {transaction.type === "RETURN" && (
+                              <Badge className="bg-blue-500 text-white hover:bg-blue-600 gap-1 whitespace-nowrap">
+                                <RotateCcw className="h-3 w-3" />
+                                RETURN
+                              </Badge>
+                            )}
+                            {transaction.type === "DAMAGE" && (
+                              <Badge className="bg-red-500 text-white hover:bg-red-600 gap-1 whitespace-nowrap">
+                                <AlertTriangle className="h-3 w-3" />
+                                DAMAGE
+                              </Badge>
+                            )}
+                            {transaction.type === "ADJUSTMENT" && (
+                              <Badge
+                                variant="secondary"
+                                className="gap-1 whitespace-nowrap"
+                              >
+                                <AlertTriangle className="h-3 w-3" />
+                                ADJUST
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex flex-col items-center">
+                            <span
+                              className={`font-semibold ${
+                                transaction.quantity < 0
+                                  ? "text-red-500"
+                                  : "text-green-600"
+                              }`}
                             >
-                              <TrendingUp className="h-3 w-3" />
-                              PURCHASE
-                            </Badge>
-                          )}
-                          {transaction.type === "RETURN" && (
-                            <Badge className="bg-blue-500 text-white hover:bg-blue-600 gap-1 whitespace-nowrap">
-                              <RotateCcw className="h-3 w-3" />
-                              RETURN (GOOD)
-                            </Badge>
-                          )}
-                          {transaction.type === "DAMAGE" && (
-                            <Badge className="bg-red-500 text-white hover:bg-red-600 gap-1 whitespace-nowrap">
-                              <AlertTriangle className="h-3 w-3" />
-                              DAMAGE
-                            </Badge>
-                          )}
+                              {transaction.quantity > 0 ? "+" : ""}
+                              {transaction.quantity}
+                            </span>
+                            {transaction.freeQuantity &&
+                            transaction.freeQuantity > 0 ? (
+                              <span className="text-[10px] text-muted-foreground font-medium">
+                                (+{transaction.freeQuantity} Free)
+                              </span>
+                            ) : null}
+                          </div>
                         </TableCell>
-                        <TableCell
-                          className={`font-semibold ${
-                            transaction.quantity < 0
-                              ? "text-red-500"
-                              : "text-green-600"
-                          }`}
-                        >
-                          {transaction.quantity > 0 ? "+" : ""}
-                          {transaction.quantity}
+
+                        <TableCell className="text-center font-mono font-bold">
+                          {transaction.currentStock}
                         </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
+
+                        {/* Customer / Party */}
+                        <TableCell className="text-center">
+                          <div className="flex items-center justify-center gap-2">
                             <User className="h-3 w-3 text-muted-foreground" />
                             <span
-                              className="truncate max-w-[180px]"
+                              className="truncate max-w-[140px]"
                               title={transaction.customer}
                             >
                               {transaction.customer || "-"}
                             </span>
                           </div>
                         </TableCell>
-                        <TableCell className="text-muted-foreground">
+
+                        <TableCell className="text-center font-mono text-xs">
+                          {transaction.buyingPrice > 0
+                            ? formatCurrency(transaction.buyingPrice)
+                            : "-"}
+                        </TableCell>
+
+                        <TableCell className="text-center font-mono text-xs">
+                          {transaction.sellingPrice > 0
+                            ? formatCurrency(transaction.sellingPrice)
+                            : "-"}
+                        </TableCell>
+
+                        <TableCell className="text-muted-foreground text-center">
                           {transaction.reference}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
@@ -463,7 +441,6 @@ export default function OrangeProductDetailsPage({
                 </TableBody>
               </Table>
 
-              {/* Pagination */}
               {allTransactions.length > 0 && (
                 <div className="flex items-center justify-between py-4 border-t mt-4">
                   <div className="text-sm text-muted-foreground">
@@ -485,7 +462,7 @@ export default function OrangeProductDetailsPage({
                       size="sm"
                       onClick={() =>
                         setTransactionPage((p) =>
-                          Math.min(totalTransactionPages, p + 1)
+                          Math.min(totalTransactionPages, p + 1),
                         )
                       }
                       disabled={transactionPage === totalTransactionPages}
@@ -495,6 +472,56 @@ export default function OrangeProductDetailsPage({
                   </div>
                 </div>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="prices" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Price Change Log</CardTitle>
+              <CardDescription>
+                Historical record of cost and selling price changes.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date Changed</TableHead>
+                    <TableHead>Old Cost</TableHead>
+                    <TableHead>Old Selling</TableHead>
+                    <TableHead>Old MRP</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {product.priceHistory && product.priceHistory.length > 0 ? (
+                    product.priceHistory.map((h: any, i: number) => (
+                      <TableRow key={i}>
+                        <TableCell className="flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-muted-foreground" />
+                          {new Date(h.date).toLocaleDateString()}
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(h.date).toLocaleTimeString()}
+                          </span>
+                        </TableCell>
+                        <TableCell>{formatCurrency(h.costPrice)}</TableCell>
+                        <TableCell>{formatCurrency(h.sellingPrice)}</TableCell>
+                        <TableCell>{formatCurrency(h.mrp)}</TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell
+                        colSpan={4}
+                        className="text-center text-muted-foreground h-24"
+                      >
+                        No price changes recorded yet.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         </TabsContent>
@@ -521,14 +548,14 @@ export default function OrangeProductDetailsPage({
                       yAxisId="left"
                       dataKey="revenue"
                       name="Revenue"
-                      fill="#ea580c"
+                      fill="#DC2626"
                     />
                     <Line
                       yAxisId="right"
                       type="monotone"
                       dataKey="profit"
                       name="Profit"
-                      stroke="#16a34a"
+                      stroke="#059669"
                       strokeWidth={2}
                     />
                   </BarChart>
@@ -538,7 +565,7 @@ export default function OrangeProductDetailsPage({
 
             <Card>
               <CardHeader>
-                <CardTitle>Sales by Business</CardTitle>
+                <CardTitle>Sales by Business Context</CardTitle>
               </CardHeader>
               <CardContent className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
@@ -550,7 +577,7 @@ export default function OrangeProductDetailsPage({
                       cx="50%"
                       cy="50%"
                       outerRadius={80}
-                      label={({ name, percent }: any) =>
+                      label={({ name, percent }) =>
                         `${name ?? ""} ${((percent || 0) * 100).toFixed(0)}%`
                       }
                     >
@@ -599,6 +626,84 @@ export default function OrangeProductDetailsPage({
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="details">
+          <Card>
+            <CardHeader>
+              <CardTitle>Product Information</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-6 md:grid-cols-2">
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">
+                    Description
+                  </label>
+                  <div className="mt-1">{product.name}</div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">
+                    Categories
+                  </label>
+                  <div className="mt-1 flex gap-2">
+                    <Badge>{product.category}</Badge>
+                    {product.subCategory && (
+                      <Badge variant="outline">{product.subCategory}</Badge>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">
+                    Brand & Model
+                  </label>
+                  <div className="mt-1">
+                    {product.brand || "N/A"}
+                    {product.modelType ? ` - ${product.modelType}` : ""}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">
+                    Pricing
+                  </label>
+                  <div className="grid grid-cols-2 gap-4 mt-1 p-4 border rounded-lg bg-muted/20">
+                    <div>
+                      <span className="text-xs text-muted-foreground">
+                        Cost Price
+                      </span>
+                      <div className="font-medium">
+                        LKR {product.costPrice.toLocaleString()}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted-foreground">
+                        Selling Price
+                      </span>
+                      <div className="font-medium text-green-600">
+                        LKR {product.sellingPrice.toLocaleString()}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted-foreground">MRP</span>
+                      <div className="font-medium">
+                        LKR {product.mrp.toLocaleString()}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted-foreground">
+                        Commission
+                      </span>
+                      <div className="font-medium text-orange-600">
+                        {product.commissionValue}%
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

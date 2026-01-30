@@ -1,7 +1,6 @@
-// app/dashboard/office/orange/layout.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { AppSidebar } from "@/components/ui/layout/AppSidebar";
 import { MobileNav } from "@/components/ui/layout/MobileNav";
@@ -10,7 +9,11 @@ import {
   getUserBusinessContext,
   verifyBusinessRouteAccess,
 } from "@/app/middleware/businessAuth";
-import { BUSINESS_IDS, getBusinessName } from "@/app/config/business-constants";
+import {
+  BUSINESS_IDS,
+  getBusinessName,
+  INTERNAL_CUSTOMERS,
+} from "@/app/config/business-constants";
 
 export default function OrangeAgencyLayout({
   children,
@@ -20,6 +23,7 @@ export default function OrangeAgencyLayout({
   const router = useRouter();
   const [businessName, setBusinessName] = useState<string>("");
   const [isAuthorized, setIsAuthorized] = useState<boolean>(false);
+  const hasRunBilling = useRef(false);
 
   useEffect(() => {
     // 1. Get User Context
@@ -34,7 +38,7 @@ export default function OrangeAgencyLayout({
     // 3. Verify access to Orange Agency
     const { canAccess, redirectTo } = verifyBusinessRouteAccess(
       user,
-      BUSINESS_IDS.ORANGE_AGENCY
+      BUSINESS_IDS.ORANGE_AGENCY,
     );
 
     if (!canAccess && redirectTo) {
@@ -44,9 +48,45 @@ export default function OrangeAgencyLayout({
 
     // 4. Success - User has access
     setBusinessName(
-      user.businessName || getBusinessName(BUSINESS_IDS.ORANGE_AGENCY)
+      user.businessName || getBusinessName(BUSINESS_IDS.ORANGE_AGENCY),
     );
     setIsAuthorized(true);
+
+    // --- ✅ AUTO-GENERATE BILLS (Run Once) ---
+    const runAutoBilling = async () => {
+      if (hasRunBilling.current) return;
+      hasRunBilling.current = true;
+
+      try {
+        const res = await fetch("/api/customers");
+        if (res.ok) {
+          const allCustomers = await res.json();
+          // Filter to find Retail & Distribution
+          const internalBranches = allCustomers.filter((c: any) =>
+            INTERNAL_CUSTOMERS.includes(c.shopName),
+          );
+
+          for (const branch of internalBranches) {
+            // Call Orange specific billing endpoint
+            await fetch("/api/orange/inter-branch/bill", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                customerId: branch.id,
+                customerName: branch.shopName,
+              }),
+            });
+          }
+          console.log("Orange Agency auto-billing check completed.");
+        }
+      } catch (error) {
+        console.error("Orange auto-billing failed:", error);
+      }
+    };
+
+    if (canAccess) {
+      runAutoBilling();
+    }
   }, [router]);
 
   // Loading Screen

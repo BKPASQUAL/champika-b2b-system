@@ -1,8 +1,9 @@
-// app/dashboard/admin/products/types.ts
+// app/dashboard/office/orange/products/types.ts
 
 export interface Product {
   id: string;
   sku: string;
+  companyCode?: string; // ✅ Added to match Wireman features
   name: string;
   category: string;
   subCategory?: string;
@@ -17,7 +18,7 @@ export interface Product {
   mrp: number;
   sellingPrice: number;
   costPrice: number;
-  actualCostPrice?: number; // <--- ADD THIS FIELD
+  actualCostPrice?: number;
   discountPercent: number;
   totalValue: number;
   totalCost: number;
@@ -27,6 +28,13 @@ export interface Product {
   commissionType?: string;
   commissionValue?: number;
   isActive: boolean;
+  // ✅ Added Price History to fix the error
+  priceHistory?: {
+    date: string;
+    costPrice: number;
+    sellingPrice: number;
+    mrp: number;
+  }[];
 }
 
 export type SortField =
@@ -46,6 +54,7 @@ export type SortOrder = "asc" | "desc";
 
 export interface ProductFormData {
   sku: string;
+  companyCode: string; // ✅ Added
   name: string;
   category: string;
   subCategory: string;
