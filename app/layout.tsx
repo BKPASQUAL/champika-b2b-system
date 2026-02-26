@@ -19,6 +19,17 @@ const geistMono = Roboto_Mono({
 export const metadata: Metadata = {
   title: "Finora Farm",
   description: "Finora Farm B2B Management System",
+  manifest: "/manifest.json",
+  themeColor: "#2563eb",
+  viewport: "minimum-scale=1, initial-scale=1, width=device-width, shrink-to-fit=no, viewport-fit=cover",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Finora Farm",
+  },
+  formatDetection: {
+    telephone: false,
+  },
 };
 
 export default function RootLayout({
