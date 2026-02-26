@@ -236,7 +236,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-sm text-[#a8a29e]">
-          © 2025 Champika B2B System. All rights reserved.
+          © 2025 Finora Farm B2B System. All rights reserved.
         </p>
       </div>
     </div>
