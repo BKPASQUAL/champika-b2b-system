@@ -109,8 +109,8 @@ export function MobileNav({
             </>
           ) : (
             <>
-              <Package className="h-6 w-6 text-primary shrink-0" />
-              <span className="ml-2 text-lg font-semibold">Champika HW</span>
+              <img src="/logo.svg" alt="Finora Farm Logo" className="h-8 w-8 shrink-0 rounded-md" />
+              <span className="ml-2 text-lg font-bold text-blue-800 tracking-tight">Finora Farm</span>
             </>
           )}
         </div>

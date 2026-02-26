@@ -119,9 +119,9 @@ export function AppSidebar({
           </>
         ) : (
           <>
-            <Package className="h-6 w-6 text-primary shrink-0" />
-            <span className="ml-2 text-lg font-semibold truncate">
-              Champika HW
+            <img src="/logo.svg" alt="Finora Farm Logo" className="h-8 w-8 shrink-0 rounded-md" />
+            <span className="ml-2 text-lg font-bold text-blue-800 tracking-tight truncate">
+              Finora Farm
             </span>
           </>
         )}

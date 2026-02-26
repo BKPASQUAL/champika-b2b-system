@@ -122,8 +122,8 @@ export default function LoginPage() {
       <div className="w-full max-w-[440px] space-y-8">
         {/* Header */}
         <div className="flex flex-col items-center text-center space-y-4">
-          <div className="h-14 w-14 bg-black rounded-2xl flex items-center justify-center shadow-xl shadow-black/5">
-            <Sprout className="h-7 w-7 text-white stroke-[1.5]" />
+          <div className="h-20 w-20 flex items-center justify-center rounded-2xl shadow-xl shadow-blue-900/10 overflow-hidden bg-white">
+            <img src="/logo.svg" alt="Finora Farm Logo" className="h-full w-full object-cover" />
           </div>
           <div className="space-y-1">
             <h1 className="text-3xl font-bold tracking-tight text-black">
