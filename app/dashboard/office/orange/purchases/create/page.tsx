@@ -341,10 +341,9 @@ export default function CreateOrangePurchasePage() {
   const selectedSupplier = suppliers.find((s) => s.id === supplierId);
 
   const availableProducts = products.filter((product) => {
-    const notInItems = !items.some((item) => item.productId === product.id);
     const matchesSupplier =
       !selectedSupplier || product.supplier === selectedSupplier.name;
-    return notInItems && matchesSupplier;
+    return matchesSupplier;
   });
 
   const getSelectedProductName = () => {

@@ -123,6 +123,10 @@ export function ProductTable({
                 </div>
               </TableHead>
 
+              <TableHead className="text-right text-red-900">
+                Discount %
+              </TableHead>
+
               <TableHead
                 className="text-right cursor-pointer hover:bg-red-100/50"
                 onClick={() => onSort("sellingPrice")}
@@ -140,7 +144,7 @@ export function ProductTable({
             {products.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={9}
+                  colSpan={10}
                   className="text-center py-8 text-muted-foreground"
                 >
                   No Wireman products found matching your criteria.
@@ -229,6 +233,11 @@ export function ProductTable({
                   {/* MRP Column */}
                   <TableCell className="text-right font-medium text-sm text-muted-foreground">
                     LKR {product.mrp.toLocaleString()}
+                  </TableCell>
+
+                  {/* Discount Percentage Column */}
+                  <TableCell className="text-right font-medium text-sm text-orange-600">
+                    {product.discountPercent ? product.discountPercent.toFixed(2) : "0.00"}%
                   </TableCell>
 
                   {/* Price Column */}

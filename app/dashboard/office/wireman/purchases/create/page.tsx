@@ -40,6 +40,7 @@ import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 interface Product {
   id: string;
   sku: string;
+  companyCode?: string;
   name: string;
   sellingPrice: number;
   costPrice: number;
@@ -334,18 +335,16 @@ export default function CreateWiremanPurchasePage() {
     }
   };
 
-  // Filter products for dropdown
   const filteredProducts = products.filter((p) => {
     const searchLower = searchTerm.toLowerCase();
-    const inList = items.some((i) => i.productId === p.id);
-    if (inList) return false; // Hide if already added
 
-    // Show all if search is empty and focused, or filter by name/sku/supplier
+    // Show all if search is empty and focused, or filter by name/sku/companyCode/supplier
     if (searchTerm === "") return true;
 
     return (
       p.name.toLowerCase().includes(searchLower) ||
       p.sku.toLowerCase().includes(searchLower) ||
+      (p.companyCode && p.companyCode.toLowerCase().includes(searchLower)) ||
       (p.supplier && p.supplier.toLowerCase().includes(searchLower))
     );
   });
@@ -518,12 +517,22 @@ export default function CreateWiremanPurchasePage() {
                             className="p-2 hover:bg-red-50 cursor-pointer border-b border-gray-50 last:border-0"
                             onClick={() => handleProductSelect(product)}
                           >
-                            <div className="font-medium text-sm">
+                            <div className="font-medium text-sm text-gray-900 border-b border-gray-100 pb-1 mb-1">
                               {product.name}
                             </div>
-                            <div className="text-xs text-gray-500 flex justify-between">
-                              <span>{product.sku}</span>
-                              <span>{product.supplier || "No Supplier"}</span>
+                            <div className="text-xs text-gray-600 grid grid-cols-2 gap-1 font-medium">
+                              <div>
+                                <span className="text-gray-400 font-normal">Item Code:</span> {product.sku}
+                              </div>
+                              {product.companyCode && (
+                                <div>
+                                  <span className="text-gray-400 font-normal">Company Code:</span>{" "}
+                                  <span className="text-blue-600">{product.companyCode}</span>
+                                </div>
+                              )}
+                              <div className="col-span-2">
+                                <span className="text-gray-400 font-normal">Supplier:</span> {product.supplier || "No Supplier"}
+                              </div>
                             </div>
                           </div>
                         ))
