@@ -5,16 +5,21 @@ import { z } from "zod";
 
 // Validation Schema
 const loginSchema = z.object({
-  email: z.string().email("Invalid email address"),
+  identifier: z.string().min(1, "Username or email is required"),
   password: z.string().min(1, "Password is required"),
 });
+
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // 1. Validate Input
-    const { email, password } = loginSchema.parse(body);
+    // 1. Validate Input - Accept any identifier
+    const { identifier, password } = loginSchema.parse({
+      identifier: body.email,
+      password: body.password
+    });
 
     const cookieStore = await cookies();
 
@@ -36,17 +41,37 @@ export async function POST(request: NextRequest) {
       }
     );
 
-    // 3. Authenticate
+    // 3. Determine actual email if username was provided
+    let loginEmail = identifier;
+    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier);
+
+    if (!isEmail) {
+      const { data: profileData, error: profileLookupError } = await supabaseAdmin
+        .from("profiles")
+        .select("email")
+        .eq("username", identifier)
+        .single();
+        
+      if (profileLookupError || !profileData?.email) {
+         return NextResponse.json(
+          { error: "Invalid username or password" },
+          { status: 401 }
+        );
+      }
+      loginEmail = profileData.email;
+    }
+
+    // 4. Authenticate
     // This will now automatically set the session cookies on the response
     const { data: authData, error: authError } =
       await supabase.auth.signInWithPassword({
-        email,
+        email: loginEmail,
         password,
       });
 
     if (authError) {
       return NextResponse.json(
-        { error: "Invalid email or password" },
+        { error: "Invalid credentials" },
         { status: 401 }
       );
     }

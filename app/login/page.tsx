@@ -145,12 +145,12 @@ export default function LoginPage() {
           <form onSubmit={handleLogin} className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="email" className="text-sm font-medium text-black">
-                Email Address
+                Username or Email
               </Label>
               <Input
                 id="email"
-                type="email"
-                placeholder="user@champikahardware.com"
+                type="text"
+                placeholder="Enter your username or email"
                 className="h-11 bg-white border-[#e7e5e4] focus-visible:ring-black focus-visible:border-black rounded-lg px-4"
                 required
                 value={formData.email}

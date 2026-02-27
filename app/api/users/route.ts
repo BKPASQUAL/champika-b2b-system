@@ -91,7 +91,16 @@ export async function POST(request: NextRequest) {
       });
 
     if (profileError) {
+      // Rollback Auth User
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+      
+      if (profileError.code === "23505" && profileError.message?.includes("profiles_username_key")) {
+        return NextResponse.json(
+          { error: "Username is already taken" },
+          { status: 400 }
+        );
+      }
+      
       return NextResponse.json(
         { error: profileError.message },
         { status: 500 }

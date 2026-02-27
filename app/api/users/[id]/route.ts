@@ -32,7 +32,15 @@ export async function PATCH(
       .update(profileUpdates)
       .eq("id", id);
 
-    if (profileError) throw profileError;
+    if (profileError) {
+      if (profileError.code === "23505" && profileError.message?.includes("profiles_username_key")) {
+        return NextResponse.json(
+          { error: "Username is already taken" },
+          { status: 400 }
+        );
+      }
+      throw profileError;
+    }
 
     // Update Auth Data (Email/Password)
     const authUpdates: any = {};
