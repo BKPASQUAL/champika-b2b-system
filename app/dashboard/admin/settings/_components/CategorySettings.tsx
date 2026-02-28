@@ -350,12 +350,36 @@ export function CategorySettings() {
 
       if (!res.ok) throw new Error("Failed to add");
 
+      const newItem: Category = await res.json();
+
       toast.success(
         <div className="flex items-center gap-2">
           <Check className="h-4 w-4" />
           <span>Added successfully</span>
         </div>
       );
+
+      // Update local state immediately without re-fetching (no loading flash)
+      if (activeType === "model" || activeType === "spec") {
+        // These types are displayed via renderCategoryBasedList — just append
+        setCategories((prev) => [...prev, newItem]);
+      } else {
+        // Hierarchical types: category, brand, route, lorry, supplier
+        if (newItem.parent_id) {
+          // It's a child — attach it to its parent
+          setCategories((prev) =>
+            prev.map((cat) =>
+              cat.id === newItem.parent_id
+                ? { ...cat, children: [...(cat.children ?? []), newItem] }
+                : cat
+            )
+          );
+        } else {
+          // It's a root item — add it with empty children
+          setCategories((prev) => [...prev, { ...newItem, children: [] }]);
+        }
+      }
+
       setNewName("");
       setSelectedParent(null);
       setSelectedCategoryId(null);
@@ -363,7 +387,6 @@ export function CategorySettings() {
       setSelectedModelId(null);
       setSelectedSpecSubModelId(null);
       setAddDialogOpen(false);
-      fetchCategories();
     } catch (error) {
       toast.error("Failed to add item");
     }
@@ -375,9 +398,10 @@ export function CategorySettings() {
 
   const handleDelete = async () => {
     if (!deleteDialog.id) return;
+    const deletedId = deleteDialog.id;
 
     try {
-      const res = await fetch(`/api/settings/categories/${deleteDialog.id}`, {
+      const res = await fetch(`/api/settings/categories/${deletedId}`, {
         method: "DELETE",
       });
       if (!res.ok) throw new Error("Failed to delete");
@@ -389,7 +413,20 @@ export function CategorySettings() {
         </div>
       );
       setDeleteDialog({ open: false, id: null, name: "" });
-      fetchCategories();
+
+      // Remove from local state immediately without re-fetching
+      if (activeType === "model" || activeType === "spec") {
+        setCategories((prev) => prev.filter((c) => c.id !== deletedId));
+      } else {
+        setCategories((prev) =>
+          prev
+            .filter((c) => c.id !== deletedId)
+            .map((c) => ({
+              ...c,
+              children: (c.children ?? []).filter((ch) => ch.id !== deletedId),
+            }))
+        );
+      }
     } catch (error) {
       toast.error("Failed to delete");
     }
