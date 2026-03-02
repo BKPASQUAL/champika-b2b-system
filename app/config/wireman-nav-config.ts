@@ -11,7 +11,8 @@ import {
   Coins,
   LucideIcon,
   Undo2,
-  Gift, // Import Gift icon for Free Issues
+  Gift,
+  ClipboardCheck,
 } from "lucide-react";
 
 interface WiremanNavItem {
@@ -54,6 +55,12 @@ export const wiremanOfficeNavItems: WiremanNavSection[] = [
         name: "Payments Recv",
         href: "/dashboard/office/wireman/payments",
         icon: Banknote,
+      },
+      {
+        name: "Payment Entry",
+        href: "/dashboard/office/wireman/payments/entry",
+        icon: ClipboardCheck,
+        description: "Record & settle customer invoices",
       },
       {
         name: "Due Alerts",
