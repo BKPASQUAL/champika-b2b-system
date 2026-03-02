@@ -101,6 +101,11 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           icon: Banknote,
         },
         {
+          name: "Payment Entry",
+          href: "/dashboard/admin/payments/entry",
+          icon: ClipboardCheck,
+        },
+        {
           name: "Due Alerts",
           href: "/dashboard/admin/invoices/due",
           icon: AlertCircle,
