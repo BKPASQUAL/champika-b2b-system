@@ -127,27 +127,7 @@ export function AppSidebar({
         )}
       </div>
 
-      {/* Business Badge */}
-      {user.businessName && (
-        <div className="px-4 pt-4 pb-2">
-          <Badge
-            variant="secondary"
-            className={cn(
-              "w-full justify-center",
-              isWireman && "bg-red-100 text-red-700 border-red-200", // ✅ Red Theme
-              isOrange && "bg-orange-100 text-orange-700 border-orange-200",
-              isRetail && "bg-green-100 text-green-700 border-green-200",
-              isDistribution && "bg-blue-100 text-blue-700 border-blue-200"
-            )}
-          >
-            {isWireman && <Zap className="h-3 w-3 mr-1" />}
-            {isOrange && <Globe className="h-3 w-3 mr-1" />}
-            {isRetail && <Store className="h-3 w-3 mr-1" />}
-            {isDistribution && <Warehouse className="h-3 w-3 mr-1" />}
-            {user.businessName}
-          </Badge>
-        </div>
-      )}
+
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-4 py-4">
