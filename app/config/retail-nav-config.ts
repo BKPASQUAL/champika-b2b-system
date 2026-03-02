@@ -18,6 +18,8 @@ import {
   DollarSign,
   ClipboardList,
   PackageCheck,
+  ClipboardCheck,
+  Banknote,
 } from "lucide-react";
 
 interface RetailNavItem {
@@ -77,7 +79,13 @@ export const retailOfficeNavItems: RetailNavSection[] = [
         href: "/dashboard/office/retail/customers",
         icon: Users,
         description: "Retail customer management",
-      }
+      },
+      {
+        name: "Payment Entry",
+        href: "/dashboard/office/retail/payments/entry",
+        icon: ClipboardCheck,
+        description: "Record & settle customer invoices",
+      },
     ],
   },
   {

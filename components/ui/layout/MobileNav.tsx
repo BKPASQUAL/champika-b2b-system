@@ -4,14 +4,15 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu, Store, Package, Warehouse, Globe, Zap, LogOut } from "lucide-react"; // ✅ Added Zap, LogOut
+import { Menu, Store, Package, Warehouse, Globe, Zap, Mountain, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { roleNavItems, UserRole } from "@/app/config/nav-config";
 import { retailOfficeNavItems } from "@/app/config/retail-nav-config";
 import { distributionNavItems } from "@/app/config/distribution-nav-config";
 import { orangeOfficeNavItems } from "@/app/config/orange-nav-config";
-import { wiremanOfficeNavItems } from "@/app/config/wireman-nav-config"; // ✅ Imported
+import { wiremanOfficeNavItems } from "@/app/config/wireman-nav-config";
+import { sierraOfficeNavItems } from "@/app/config/sierra-nav-config";
 import {
   Sheet,
   SheetContent,
@@ -25,7 +26,8 @@ interface MobileNavProps {
   isRetail?: boolean;
   isDistribution?: boolean;
   isOrange?: boolean;
-  isWireman?: boolean; // ✅ Added Prop
+  isWireman?: boolean;
+  isSierra?: boolean;
 }
 
 export function MobileNav({
@@ -33,7 +35,8 @@ export function MobileNav({
   isRetail = false,
   isDistribution = false,
   isOrange = false,
-  isWireman = false, // ✅ Added Default
+  isWireman = false,
+  isSierra = false,
 }: MobileNavProps) {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
@@ -42,7 +45,9 @@ export function MobileNav({
   // Determine which navigation to show
   let navSections;
   if (isWireman) {
-    navSections = wiremanOfficeNavItems; // ✅ Added Logic
+    navSections = wiremanOfficeNavItems;
+  } else if (isSierra) {
+    navSections = sierraOfficeNavItems;
   } else if (isOrange) {
     navSections = orangeOfficeNavItems;
   } else if (isRetail) {
@@ -111,9 +116,13 @@ export function MobileNav({
         <div className="h-16 flex items-center border-b px-6 shrink-0">
           {isWireman ? (
             <>
-              <Zap className="h-6 w-6 text-red-600 shrink-0" />{" "}
-              {/* ✅ Wireman Logo */}
+              <Zap className="h-6 w-6 text-red-600 shrink-0" />
               <span className="ml-2 text-lg font-semibold truncate">Wireman Portal</span>
+            </>
+          ) : isSierra ? (
+            <>
+              <Mountain className="h-6 w-6 text-purple-600 shrink-0" />
+              <span className="ml-2 text-lg font-semibold truncate">Sierra Agency</span>
             </>
           ) : isOrange ? (
             <>
@@ -170,6 +179,8 @@ export function MobileNav({
                             isActive
                               ? isWireman
                                 ? "bg-red-100 text-red-700 hover:bg-red-200"
+                                : isSierra
+                                ? "bg-purple-100 text-purple-700 hover:bg-purple-200"
                                 : isOrange
                                 ? "bg-orange-100 text-orange-700 hover:bg-orange-200"
                                 : isRetail
@@ -198,15 +209,12 @@ export function MobileNav({
             <div
               className={cn(
                 "h-9 w-9 rounded-full flex items-center justify-center font-bold text-xs",
-                isWireman && "bg-red-100 text-red-700", // ✅ User Initials Theme
+                isWireman && "bg-red-100 text-red-700",
+                isSierra && "bg-purple-100 text-purple-700",
                 isOrange && "bg-orange-100 text-orange-700",
                 isRetail && "bg-green-100 text-green-700",
                 isDistribution && "bg-blue-100 text-blue-700",
-                !isOrange &&
-                  !isRetail &&
-                  !isDistribution &&
-                  !isWireman &&
-                  "bg-primary/10 text-primary"
+                !isOrange && !isRetail && !isDistribution && !isWireman && !isSierra && "bg-primary/10 text-primary"
               )}
             >
               {user.initials}
@@ -226,7 +234,8 @@ export function MobileNav({
             disabled={isLoggingOut}
             className={cn(
               "w-full justify-start gap-2",
-              isWireman && "hover:bg-red-50 hover:text-red-600", // ✅ Logout Hover Theme
+              isWireman && "hover:bg-red-50 hover:text-red-600",
+              isSierra && "hover:bg-purple-50 hover:text-purple-600",
               isOrange && "hover:bg-orange-50 hover:text-orange-600",
               isRetail && "hover:bg-green-50 hover:text-green-600",
               isDistribution && "hover:bg-blue-50 hover:text-blue-600"

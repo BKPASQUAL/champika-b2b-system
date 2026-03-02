@@ -8,6 +8,7 @@ export const BUSINESS_IDS = {
   CHAMPIKA_RETAIL: "a3ca43f3-06d4-4871-852c-3a40cfdbf023",
   CHAMPIKA_DISTRIBUTION: "e770d62c-d4bd-4bbc-ba9e-ccb07d7aa9bb",
   WIREMAN_AGENCY: "094b649e-be59-4e2b-b709-7e36ad1ef280",
+  SIERRA_AGENCY: "41b55e39-2edb-43ac-9877-dabd23902335",
 } as const;
 
 export const BUSINESS_NAMES = {
@@ -15,6 +16,7 @@ export const BUSINESS_NAMES = {
   [BUSINESS_IDS.CHAMPIKA_RETAIL]: "Champika Hardware - Retail",
   [BUSINESS_IDS.CHAMPIKA_DISTRIBUTION]: "Champika Hardware - Distribution",
   [BUSINESS_IDS.WIREMAN_AGENCY]: "Wireman Agency",
+  [BUSINESS_IDS.SIERRA_AGENCY]: "Sierra Agency",
 } as const;
 
 // ✅ ADDED: Internal Customer Names for Pinning
@@ -28,6 +30,7 @@ export const BUSINESS_ROUTES = {
   [BUSINESS_IDS.CHAMPIKA_RETAIL]: "/dashboard/office/retail",
   [BUSINESS_IDS.CHAMPIKA_DISTRIBUTION]: "/dashboard/office/distribution",
   [BUSINESS_IDS.WIREMAN_AGENCY]: "/dashboard/office/wireman",
+  [BUSINESS_IDS.SIERRA_AGENCY]: "/dashboard/office/sierra",
 } as const;
 
 export const BUSINESS_THEMES = {
@@ -54,6 +57,12 @@ export const BUSINESS_THEMES = {
     bgClass: "bg-red-100",
     textClass: "text-red-600",
     borderClass: "border-red-600",
+  },
+  [BUSINESS_IDS.SIERRA_AGENCY]: {
+    primary: "purple",
+    bgClass: "bg-purple-100",
+    textClass: "text-purple-600",
+    borderClass: "border-purple-600",
   },
 } as const;
 

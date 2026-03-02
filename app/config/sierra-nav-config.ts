@@ -1,44 +1,40 @@
-// app/config/orange-nav-config.ts
+// app/config/sierra-nav-config.ts
 import {
   LayoutDashboard,
   Users,
-  Briefcase,
   FileText,
   Receipt,
   Banknote,
   AlertCircle,
   Factory,
-  ShoppingCart,
   Package,
   Layers,
-  BarChart3,
-  Coins,
   LucideIcon,
-  Truck,
   Undo2,
   ClipboardCheck,
+  Coins,
 } from "lucide-react";
 
-interface OrangeNavItem {
+interface SierraNavItem {
   name: string;
   href: string;
   icon: LucideIcon;
   description?: string;
 }
 
-interface OrangeNavSection {
+interface SierraNavSection {
   title?: string;
-  items: OrangeNavItem[];
+  items: SierraNavItem[];
 }
 
-export const orangeOfficeNavItems: OrangeNavSection[] = [
+export const sierraOfficeNavItems: SierraNavSection[] = [
   {
     items: [
       {
-        name: "Agency Dashboard",
-        href: "/dashboard/office/orange",
+        name: "Sierra Dashboard",
+        href: "/dashboard/office/sierra",
         icon: LayoutDashboard,
-        description: "Distribution overview",
+        description: "Sierra Agency overview",
       },
     ],
   },
@@ -47,28 +43,28 @@ export const orangeOfficeNavItems: OrangeNavSection[] = [
     items: [
       {
         name: "Customers",
-        href: "/dashboard/office/orange/customers",
+        href: "/dashboard/office/sierra/customers",
         icon: Users,
       },
       {
         name: "Bills / Invoice",
-        href: "/dashboard/office/orange/invoices",
+        href: "/dashboard/office/sierra/invoices",
         icon: Receipt,
       },
       {
         name: "Payments Recv",
-        href: "/dashboard/office/orange/payments",
+        href: "/dashboard/office/sierra/payments",
         icon: Banknote,
       },
       {
         name: "Payment Entry",
-        href: "/dashboard/office/orange/payments/entry",
+        href: "/dashboard/office/sierra/payments/entry",
         icon: ClipboardCheck,
         description: "Record & settle customer invoices",
       },
       {
         name: "Due Alerts",
-        href: "/dashboard/office/orange/invoices/due",
+        href: "/dashboard/office/sierra/invoices/due",
         icon: AlertCircle,
       },
     ],
@@ -78,17 +74,17 @@ export const orangeOfficeNavItems: OrangeNavSection[] = [
     items: [
       {
         name: "Supplier List",
-        href: "/dashboard/office/orange/suppliers",
+        href: "/dashboard/office/sierra/suppliers",
         icon: Factory,
       },
       {
         name: "Purchases",
-        href: "/dashboard/office/orange/purchases",
+        href: "/dashboard/office/sierra/purchases",
         icon: FileText,
       },
       {
         name: "Payments Out",
-        href: "/dashboard/office/orange/suppliers/payments",
+        href: "/dashboard/office/sierra/suppliers/payments",
         icon: Banknote,
       },
     ],
@@ -98,27 +94,27 @@ export const orangeOfficeNavItems: OrangeNavSection[] = [
     items: [
       {
         name: "Product Catalog",
-        href: "/dashboard/office/orange/products",
+        href: "/dashboard/office/sierra/products",
         icon: Package,
       },
       {
         name: "Stock Control",
-        href: "/dashboard/office/orange/inventory",
+        href: "/dashboard/office/sierra/inventory",
         icon: Layers,
       },
       {
         name: "Returns",
-        href: "/dashboard/office/orange/inventory/returns",
+        href: "/dashboard/office/sierra/inventory/returns",
         icon: Undo2,
       },
     ],
   },
   {
-    title: "Analytics & Finance",
+    title: "Operations",
     items: [
       {
         name: "Expenses",
-        href: "/dashboard/office/orange/expenses",
+        href: "/dashboard/office/sierra/expenses",
         icon: Coins,
       },
     ],

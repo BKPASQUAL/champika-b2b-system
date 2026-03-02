@@ -1,19 +1,18 @@
-// app/dashboard/office/distribution/layout.tsx
+// app/dashboard/office/sierra/layout.tsx
 "use client";
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppSidebar } from "@/components/ui/layout/AppSidebar";
 import { MobileNav } from "@/components/ui/layout/MobileNav";
-import { Breadcrumbs } from "@/components/ui/Breadcrumbs"; // Added Breadcrumbs
-import { Loader2 } from "lucide-react"; // Added modern loader
+import { Loader2, Mountain } from "lucide-react";
 import {
   getUserBusinessContext,
   verifyBusinessRouteAccess,
 } from "@/app/middleware/businessAuth";
 import { BUSINESS_IDS, getBusinessName } from "@/app/config/business-constants";
 
-export default function DistributionOfficeLayout({
+export default function SierraOfficeLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -32,19 +31,18 @@ export default function DistributionOfficeLayout({
         return;
       }
 
-      const { canAccess, redirectTo } = verifyBusinessRouteAccess(
-        user,
-        BUSINESS_IDS.CHAMPIKA_DISTRIBUTION
-      );
+      // Allow admin or Sierra Agency users
+      const isAdmin = user.role === "admin";
+      const isSierraUser =
+        user.role === "office" && user.businessId === BUSINESS_IDS.SIERRA_AGENCY;
 
-      if (!canAccess && redirectTo) {
-        router.replace(redirectTo);
+      if (!isAdmin && !isSierraUser) {
+        const { redirectTo } = verifyBusinessRouteAccess(user, BUSINESS_IDS.SIERRA_AGENCY);
+        router.replace(redirectTo || "/dashboard/office");
         return;
       }
 
-      setBusinessName(
-        user.businessName || getBusinessName(BUSINESS_IDS.CHAMPIKA_DISTRIBUTION)
-      );
+      setBusinessName(user.businessName || "Sierra Agency");
       setIsAuthorized(true);
       setIsLoading(false);
     };
@@ -52,54 +50,51 @@ export default function DistributionOfficeLayout({
     checkAccess();
   }, [router]);
 
-  // Loading Screen (Matches Admin Design)
   if (isLoading) {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-gray-50">
-        <Loader2 className="h-10 w-10 animate-spin text-primary mb-2" />
+        <Loader2 className="h-10 w-10 animate-spin text-purple-600 mb-2" />
         <p className="text-sm text-muted-foreground font-medium">
-          Verifying Distribution Access...
+          Verifying Sierra Access...
         </p>
       </div>
     );
   }
 
-  // If check finished but not authorized (should have redirected), render nothing
-  if (!isAuthorized) {
-    return null;
-  }
+  if (!isAuthorized) return null;
 
-  // Main Layout
   return (
     <div className="flex h-screen w-full bg-gray-50 overflow-hidden">
       {/* Desktop Sidebar */}
-      <AppSidebar role="office" isDistribution={true} />
+      <AppSidebar role="office" isSierra={true} />
 
-      {/* Main Content Wrapper */}
+      {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
-        {/* Mobile Header - Only visible on Mobile */}
+        {/* Mobile Header */}
         <header className="lg:hidden h-16 bg-white border-b flex items-center px-4 flex-shrink-0 z-30">
-          <MobileNav role="office" isDistribution={true} />
-          <span className="ml-4 font-bold text-gray-700">Distribution</span>
+          <MobileNav role="office" isSierra={true} />
+          <span className="ml-4 font-bold text-gray-700">Sierra Agency</span>
         </header>
 
-        {/* Desktop Header - Fixed at top */}
+        {/* Desktop Header */}
         <header className="hidden lg:flex h-16 bg-white border-b items-center justify-between px-8 flex-shrink-0 z-10">
-          {/* Dynamic Breadcrumbs */}
-          <Breadcrumbs />
-
+          <div className="flex items-center gap-3">
+            <div className="h-8 w-8 bg-purple-100 rounded-lg flex items-center justify-center">
+              <Mountain className="h-4 w-4 text-purple-600" />
+            </div>
+            <div>
+              <h1 className="text-sm font-semibold text-gray-900">{businessName}</h1>
+              <p className="text-xs text-gray-500">Office Portal — Sierra Agency</p>
+            </div>
+          </div>
           <div className="flex items-center gap-4">
-            {/* Initials / Profile Badge */}
-            <div
-              className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold text-xs"
-              title={businessName}
-            >
-              DS
+            <div className="h-8 w-8 bg-purple-100 rounded-full flex items-center justify-center text-purple-600 font-bold text-xs">
+              SA
             </div>
           </div>
         </header>
 
-        {/* Page Content - Scrollable Area */}
+        {/* Page Content */}
         <div className="flex-1 p-4 md:p-8 overflow-y-auto">{children}</div>
       </main>
     </div>

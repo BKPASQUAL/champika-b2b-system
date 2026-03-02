@@ -64,30 +64,21 @@ export default function LoginPage() {
 
       // --- REDIRECT LOGIC ---
       if (data.role === "office" && data.business) {
-        const businessName = data.business.name.toLowerCase();
+        const bid = data.business.id;
 
-        // 1. ✅ Check for Wireman Agency (ID Based - Best Practice)
-        if (data.business.id === BUSINESS_IDS.WIREMAN_AGENCY) {
+        // Always use ID-based matching — reliable regardless of business name spelling
+        if (bid === BUSINESS_IDS.WIREMAN_AGENCY) {
           router.push("/dashboard/office/wireman");
-        }
-        // 2. Check for Orange Agency (ID Based)
-        else if (data.business.id === BUSINESS_IDS.ORANGE_AGENCY) {
+        } else if (bid === BUSINESS_IDS.ORANGE_AGENCY) {
           router.push("/dashboard/office/orange");
-        }
-        // 3. Check Distribution Center
-        else if (
-          businessName.includes("distribution") ||
-          (businessName.includes("champika hardware") &&
-            !businessName.includes("retail"))
-        ) {
+        } else if (bid === BUSINESS_IDS.CHAMPIKA_DISTRIBUTION) {
           router.push("/dashboard/office/distribution");
-        }
-        // 4. Check Retail Branch
-        else if (businessName.includes("retail")) {
+        } else if (bid === BUSINESS_IDS.SIERRA_AGENCY) {
+          router.push("/dashboard/office/sierra");
+        } else if (bid === BUSINESS_IDS.CHAMPIKA_RETAIL) {
           router.push("/dashboard/office/retail");
-        }
-        // Fallback: Standard Office
-        else {
+        } else {
+          // Unknown office business — land on generic office hub
           router.push("/dashboard/office");
         }
       } else {

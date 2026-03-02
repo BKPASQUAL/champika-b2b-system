@@ -96,6 +96,12 @@ export const distributionNavItems: DistNavSection[] = [
         icon: Banknote,
       },
       {
+        name: "Payment Entry",
+        href: "/dashboard/office/distribution/payments/entry",
+        icon: ClipboardCheck,
+        description: "Record & settle customer invoices",
+      },
+      {
         name: "Due Alerts",
         href: "/dashboard/office/distribution/invoices/due",
         icon: AlertCircle,
