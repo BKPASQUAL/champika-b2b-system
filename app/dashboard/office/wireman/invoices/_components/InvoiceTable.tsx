@@ -147,14 +147,15 @@ export function InvoiceTable({
 
   return (
     <>
-      <div className="overflow-x-auto rounded-md border">
+      {/* --- DESKTOP TABLE VIEW --- */}
+      <div className="hidden md:block overflow-x-auto rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
               {/* 1. DATE */}
               <TableHead
                 onClick={() => onSort("date")}
-                className="cursor-pointer hover:bg-muted/50 w-[110px]"
+                className="cursor-pointer hover:bg-muted/50 w-[110px] hidden sm:table-cell"
               >
                 <div className="flex items-center">
                   Date {getSortIcon("date")}
@@ -172,7 +173,7 @@ export function InvoiceTable({
               </TableHead>
 
               {/* 3. MANUAL REF (SEPARATE COLUMN) */}
-              <TableHead className="w-[120px]">
+              <TableHead className="w-[120px] hidden md:table-cell">
                 <div className="flex items-center  font-semibold">
                   Manual Ref
                 </div>
@@ -191,7 +192,7 @@ export function InvoiceTable({
               {/* 5. ORDER STATUS */}
               <TableHead
                 onClick={() => onSort("orderStatus")}
-                className="text-center cursor-pointer hover:bg-muted/50"
+                className="text-center cursor-pointer hover:bg-muted/50 hidden md:table-cell"
               >
                 <div className="flex items-center justify-center">
                   <Truck className="w-3 h-3 mr-1" /> Status{" "}
@@ -202,7 +203,7 @@ export function InvoiceTable({
               {/* 6. PAYMENT */}
               <TableHead
                 onClick={() => onSort("status")}
-                className="text-center cursor-pointer hover:bg-muted/50"
+                className="text-center cursor-pointer hover:bg-muted/50 hidden md:table-cell"
               >
                 <div className="flex items-center justify-center">
                   Payment {getSortIcon("status")}
@@ -222,7 +223,7 @@ export function InvoiceTable({
               {/* 8. DUE */}
               <TableHead
                 onClick={() => onSort("dueAmount")}
-                className="text-right cursor-pointer hover:bg-muted/50"
+                className="text-right cursor-pointer hover:bg-muted/50 hidden md:table-cell"
               >
                 <div className="flex items-center justify-end">
                   Due {getSortIcon("dueAmount")}
@@ -251,19 +252,19 @@ export function InvoiceTable({
                 return (
                   <TableRow key={invoice.id}>
                     {/* 1. Date */}
-                    <TableCell className="whitespace-nowrap font-medium text-muted-foreground">
+                    <TableCell className="whitespace-nowrap font-medium text-muted-foreground hidden sm:table-cell">
                       {new Date(invoice.date).toLocaleDateString()}
                     </TableCell>
 
                     {/* 2. Auto Invoice Number */}
                     <TableCell>
-                      <span className="font-mono text-xs font-bold text-foreground bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">
+                      <span className="font-mono text-[10px] md:text-xs font-bold text-foreground bg-slate-100 dark:bg-slate-800 px-1 md:px-2 py-1 rounded">
                         {invoice.invoiceNo}
                       </span>
                     </TableCell>
 
                     {/* 3. Manual Ref (The Separate Column) */}
-                    <TableCell>
+                    <TableCell className="hidden md:table-cell">
                       {invoice.manualInvoiceNo &&
                       invoice.manualInvoiceNo.trim() !== "" ? (
                         <div className="flex items-center text-blue-700 bg-blue-50 px-2 py-1 rounded w-fit">
@@ -281,31 +282,31 @@ export function InvoiceTable({
 
                     {/* 4. Customer */}
                     <TableCell>
-                      <div className="font-medium text-sm">
+                      <div className="font-medium text-xs md:text-sm truncate max-w-[100px] md:max-w-[200px]">
                         {invoice.customerName}
                       </div>
-                      <div className="text-xs text-muted-foreground hidden md:flex items-center gap-1">
+                      <div className="text-[10px] md:text-xs text-muted-foreground hidden sm:flex items-center gap-1">
                         <User className="w-3 h-3" /> {invoice.salesRepName}
                       </div>
                     </TableCell>
 
                     {/* 5. Order Status */}
-                    <TableCell className="text-center">
+                    <TableCell className="text-center hidden md:table-cell">
                       {renderOrderStatusBadge(invoice.orderStatus)}
                     </TableCell>
 
                     {/* 6. Payment */}
-                    <TableCell className="text-center">
+                    <TableCell className="text-center hidden md:table-cell">
                       {renderPaymentBadge(invoice.status)}
                     </TableCell>
 
                     {/* 7. Total */}
-                    <TableCell className="text-right font-medium">
+                    <TableCell className="text-right font-medium text-xs md:text-sm">
                       LKR {invoice.totalAmount.toLocaleString()}
                     </TableCell>
 
                     {/* 8. Due */}
-                    <TableCell className="text-right">
+                    <TableCell className="text-right hidden md:table-cell">
                       <span
                         className={
                           invoice.dueAmount > 0
@@ -318,11 +319,12 @@ export function InvoiceTable({
                     </TableCell>
 
                     {/* 9. Action */}
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
+                    <TableCell className="text-right p-1 md:p-4">
+                      <div className="flex items-center justify-end gap-0 md:gap-1">
                         <Button
                           variant="ghost"
                           size="icon-sm"
+                          className="h-7 w-7 md:h-8 md:w-8"
                           onClick={() => onView(invoice.id)}
                           title="View Details"
                         >
@@ -332,11 +334,12 @@ export function InvoiceTable({
                         <Button
                           variant="ghost"
                           size="icon-sm"
+                          className="h-7 w-7 md:h-8 md:w-8 hidden sm:inline-flex"
                           onClick={() => onEdit(invoice.id)}
                           disabled={isLocked(invoice.orderStatus)}
                         >
                           <Edit
-                            className={`w-4 h-4 ${
+                            className={`w-3 h-3 md:w-4 md:h-4 ${
                               isLocked(invoice.orderStatus)
                                 ? "opacity-30"
                                 : "text-muted-foreground"
@@ -347,13 +350,14 @@ export function InvoiceTable({
                         <Button
                           variant="ghost"
                           size="icon-sm"
+                          className="h-7 w-7 md:h-8 md:w-8"
                           onClick={() => handleDownload(invoice.id)}
                           disabled={downloadingId === invoice.id}
                         >
                           {downloadingId === invoice.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <Loader2 className="w-3 h-3 md:w-4 md:h-4 animate-spin" />
                           ) : (
-                            <Printer className="w-4 h-4 text-muted-foreground" />
+                            <Printer className="w-3 h-3 md:w-4 md:h-4 text-muted-foreground" />
                           )}
                         </Button>
                       </div>
@@ -364,6 +368,113 @@ export function InvoiceTable({
             )}
           </TableBody>
         </Table>
+      </div>
+
+      {/* --- MOBILE CARD VIEW --- */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:hidden">
+        {invoices.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground col-span-full border rounded-md">
+            No invoices found
+          </div>
+        ) : (
+          invoices.map((invoice) => (
+            <div
+              key={invoice.id}
+              className="bg-card border rounded-lg shadow-sm p-4 flex flex-col gap-3 relative"
+            >
+              {/* Top Row: Invoice # and Date */}
+              <div className="flex justify-between items-start">
+                <div className="flex flex-col gap-1">
+                  <span className="font-mono text-sm font-bold text-foreground bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded w-fit">
+                    {invoice.invoiceNo}
+                  </span>
+                  {invoice.manualInvoiceNo && invoice.manualInvoiceNo.trim() !== "" && (
+                    <div className="flex items-center text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded w-fit mt-0.5">
+                      <FileText className="w-3 h-3 mr-1" />
+                      <span className="text-xs font-bold font-mono">
+                        {invoice.manualInvoiceNo}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="text-xs text-muted-foreground whitespace-nowrap">
+                  {new Date(invoice.date).toLocaleDateString()}
+                </div>
+              </div>
+
+              {/* Customer Info */}
+              <div>
+                <div className="font-medium text-sm leading-tight">
+                  {invoice.customerName}
+                </div>
+                <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                  <User className="w-3 h-3" /> {invoice.salesRepName}
+                </div>
+              </div>
+
+              {/* Status Badges */}
+              <div className="flex flex-wrap items-center gap-2">
+                {renderOrderStatusBadge(invoice.orderStatus)}
+                {renderPaymentBadge(invoice.status)}
+              </div>
+
+              <div className="border-t pt-3 mt-1 flex justify-between items-end">
+                {/* Financials */}
+                <div className="flex flex-col gap-0.5">
+                  <div className="text-xs text-muted-foreground">Total: <span className="font-medium text-foreground">LKR {invoice.totalAmount.toLocaleString()}</span></div>
+                  {invoice.dueAmount > 0 ? (
+                    <div className="text-xs text-red-600 font-semibold">Due: LKR {invoice.dueAmount.toLocaleString()}</div>
+                  ) : (
+                    <div className="text-xs text-muted-foreground">Due: LKR 0</div>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-1 bg-muted/30 rounded-full p-1 border">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="h-8 w-8 rounded-full"
+                    onClick={() => onView(invoice.id)}
+                    title="View Details"
+                  >
+                    <Eye className="w-4 h-4 text-blue-600" />
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="h-8 w-8 rounded-full"
+                    onClick={() => onEdit(invoice.id)}
+                    disabled={isLocked(invoice.orderStatus)}
+                  >
+                    <Edit
+                      className={`w-4 h-4 ${
+                        isLocked(invoice.orderStatus)
+                          ? "opacity-30"
+                          : "text-muted-foreground"
+                      }`}
+                    />
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="h-8 w-8 rounded-full relative"
+                    onClick={() => handleDownload(invoice.id)}
+                    disabled={downloadingId === invoice.id}
+                  >
+                    {downloadingId === invoice.id ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                    ) : (
+                      <Printer className="w-4 h-4 text-muted-foreground" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
       </div>
       {!loading && invoices.length > 0 && (
         <div className="flex items-center justify-between px-2 py-4">
