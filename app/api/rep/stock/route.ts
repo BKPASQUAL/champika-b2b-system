@@ -46,7 +46,8 @@ export async function GET(request: NextRequest) {
           category,
           brand,
           is_active,
-          supplier_name
+          supplier_name,
+          company_code
         )
       `
       )
@@ -90,6 +91,7 @@ export async function GET(request: NextRequest) {
           unit_of_measure: p.unit_of_measure || "unit",
           category: p.category,
           supplier: p.supplier_name, // Return supplier info
+          company_code: p.company_code,
         });
       }
     });

@@ -44,6 +44,7 @@ interface Product {
   mrp: number;
   stock_quantity: number;
   unit_of_measure: string;
+  company_code?: string;
 }
 
 interface InvoiceItem {
@@ -99,7 +100,8 @@ function SearchableDropdown({
   }, []);
 
   const filteredOptions = options.filter((option) =>
-    option.name.toLowerCase().includes(search.toLowerCase()),
+    option.name.toLowerCase().includes(search.toLowerCase()) ||
+    (option.info && option.info.toLowerCase().includes(search.toLowerCase())),
   );
 
   const selectedOption = options.find((o) => o.id === value);
@@ -304,6 +306,7 @@ export default function CreateWiremanInvoicePage() {
             mrp: p.mrp,
             stock_quantity: p.stock_quantity,
             unit_of_measure: p.unit_of_measure || "unit",
+            company_code: p.company_code,
           })),
         );
       } catch (error) {
@@ -596,7 +599,7 @@ export default function CreateWiremanInvoicePage() {
                     options={availableProducts.map((p) => ({
                       id: p.id,
                       name: p.name,
-                      info: `${p.sku} • Stock: ${p.stock_quantity}`,
+                      info: `${p.company_code ? p.company_code + " • " : ""}${p.sku} • Stock: ${p.stock_quantity}`,
                     }))}
                     value={currentItem.productId}
                     onChange={handleProductSelect}
