@@ -257,7 +257,7 @@ export default function WiremanViewInvoicePage({
               {renderOrderStatusBadge(invoice.orderStatus || "Pending")}
             </div>
             <p className="text-sm text-muted-foreground ml-11">
-              Created on{" "}
+              Invoice Date:{" "}
               {new Date(invoice.date).toLocaleDateString(undefined, {
                 weekday: "long",
                 year: "numeric",

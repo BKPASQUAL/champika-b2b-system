@@ -68,9 +68,9 @@ export default function DistributionInvoicesPage() {
       const mappedInvoices: Invoice[] = data.map((inv: any) => ({
         id: inv.id,
         invoiceNo: inv.invoiceNo,
-        date: inv.createdAt
+        date: inv.date || (inv.createdAt
           ? inv.createdAt.split("T")[0]
-          : new Date().toISOString().split("T")[0],
+          : new Date().toISOString().split("T")[0]),
         customerId: inv.customerId,
         customerName: inv.customerName || "Unknown Customer",
         salesRepName: inv.salesRepName || "Unknown",

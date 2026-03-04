@@ -72,6 +72,7 @@ export async function GET(request: NextRequest) {
         ),
         orders!inner (
           status,
+          order_date,
           business_id, 
           profiles!orders_sales_rep_id_fkey (
             full_name
@@ -115,8 +116,13 @@ export async function GET(request: NextRequest) {
       return {
         id: inv.id,
         invoiceNo: inv.invoice_no,
-        manualInvoiceNo: inv.manual_invoice_no,
+        manualInvoiceNo: inv.manual_invoice_no, // ✅ Explicitly Mapped
         orderId: inv.order_id,
+        date: inv.orders?.order_date
+          ? new Date(inv.orders.order_date).toISOString().split("T")[0]
+          : inv.created_at
+            ? new Date(inv.created_at).toISOString().split("T")[0]
+            : new Date().toISOString().split("T")[0],
         customerId: inv.customer_id,
         customerName: inv.customers?.shop_name || "Unknown Customer",
         salesRepName: repName,

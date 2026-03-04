@@ -146,7 +146,7 @@ export default function RetailPaymentEntryPage() {
         const data = await res.json();
         const filtered: PendingInvoice[] = data
           .filter((inv: any) => inv.customerId === customerId && inv.status !== "Paid" && (inv.dueAmount ?? 0) > 0)
-          .map((inv: any) => ({ id: inv.orderId || inv.id, invoiceNo: inv.invoiceNo, date: inv.createdAt?.split("T")[0] ?? "", totalAmount: inv.totalAmount ?? 0, paidAmount: inv.paidAmount ?? 0, balance: inv.dueAmount ?? 0 }));
+          .map((inv: any) => ({ id: inv.orderId || inv.id, invoiceNo: inv.invoiceNo, date: inv.date || (inv.createdAt?.split("T")[0] ?? ""), totalAmount: inv.totalAmount ?? 0, paidAmount: inv.paidAmount ?? 0, balance: inv.dueAmount ?? 0 }));
         setPendingInvoices(filtered);
         const map: Record<string, InvoiceSettlement> = {};
         filtered.forEach((inv) => { map[inv.id] = { invoiceId: inv.id, selected: false, settleAmount: 0 }; });

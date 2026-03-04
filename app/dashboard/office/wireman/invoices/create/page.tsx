@@ -289,7 +289,7 @@ export default function CreateWiremanInvoicePage() {
       setStockLoading(true);
       try {
         const res = await fetch(
-          `/api/rep/stock?userId=${salesRepId}&supplier=Wireman Agency`,
+          `/api/rep/stock?userId=${salesRepId}&supplierLike=Wireman`,
         );
         if (!res.ok) throw new Error("Failed to load stock");
 
@@ -465,9 +465,7 @@ export default function CreateWiremanInvoicePage() {
   const extraDiscountAmount = (subtotal * parseNumber(extraDiscount)) / 100;
   const grandTotal = subtotal - extraDiscountAmount;
 
-  const availableProducts = products.filter(
-    (p) => !items.some((i) => i.productId === p.id),
-  );
+  const availableProducts = products;
 
   const currentLiveQty = parseNumber(currentItem.quantity);
   const currentLiveDiscountAmt =

@@ -7,6 +7,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId");
     const supplier = searchParams.get("supplier"); // ✅ Get supplier filter
+    const supplierLike = searchParams.get("supplierLike");
 
     if (!userId) {
       return NextResponse.json({ error: "User ID required" }, { status: 400 });
@@ -55,6 +56,9 @@ export async function GET(request: NextRequest) {
     // ✅ 3. Apply Supplier Filter if provided
     if (supplier) {
       query = query.eq("products.supplier_name", supplier);
+    }
+    if (supplierLike) {
+      query = query.ilike("products.supplier_name", `%${supplierLike}%`);
     }
 
     const { data: stocks, error: stockError } = await query;

@@ -258,9 +258,9 @@ export default function WiremanPaymentEntryPage() {
             .map((inv: any) => ({
               id: inv.orderId || inv.id,
               invoiceNo: inv.invoiceNo,
-              date: inv.createdAt
+              date: inv.date || (inv.createdAt
                 ? inv.createdAt.split("T")[0]
-                : new Date().toISOString().split("T")[0],
+                : new Date().toISOString().split("T")[0]),
               totalAmount: inv.totalAmount ?? 0,
               paidAmount: inv.paidAmount ?? 0,
               balance: inv.dueAmount ?? 0,

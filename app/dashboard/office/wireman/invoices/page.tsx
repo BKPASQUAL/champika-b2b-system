@@ -77,9 +77,9 @@ export default function WiremanInvoicesPage() {
         id: inv.id,
         invoiceNo: inv.invoiceNo,
         manualInvoiceNo: inv.manualInvoiceNo, // ✅ Explicitly Mapped
-        date: inv.createdAt
+        date: inv.date || (inv.createdAt
           ? inv.createdAt.split("T")[0]
-          : new Date().toISOString().split("T")[0],
+          : new Date().toISOString().split("T")[0]),
         customerId: inv.customerId,
         customerName: inv.customerName || "Unknown Customer",
         salesRepName: inv.salesRepName || "Unknown",

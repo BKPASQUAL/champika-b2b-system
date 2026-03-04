@@ -78,13 +78,13 @@ export default function DistributionDueAlertsPage() {
           const mappedInvoices = data
             .filter((inv: any) => {
               // Calculate Due Date (Assuming 30 days credit for example, or use actual dueDate field)
-              const invDate = new Date(inv.createdAt);
+              const invDate = new Date(inv.date || inv.createdAt);
               const dueDate = new Date(invDate);
               dueDate.setDate(dueDate.getDate() + 30); // Example credit period
               return dueDate < now && inv.dueAmount > 0;
             })
             .map((inv: any) => {
-              const invDate = new Date(inv.createdAt);
+              const invDate = new Date(inv.date || inv.createdAt);
               const dueDate = new Date(invDate);
               dueDate.setDate(dueDate.getDate() + 30);
 

@@ -92,7 +92,7 @@ export default function WiremanDueAlertsPage() {
       const mappedInvoices: OverdueInvoice[] = data
         .map((inv: any) => {
           // Determine Due Date (Fallback to 30 days)
-          const createdDate = new Date(inv.createdAt);
+          const createdDate = new Date(inv.date || inv.createdAt);
           const dueDate = inv.dueDate
             ? new Date(inv.dueDate)
             : new Date(createdDate.setDate(createdDate.getDate() + 30));

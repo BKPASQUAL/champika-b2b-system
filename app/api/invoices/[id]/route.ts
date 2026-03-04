@@ -58,6 +58,7 @@ export async function GET(
           id,
           sales_rep_id,
           status,
+          order_date,
           notes,
           extra_discount_percent,
           extra_discount_amount,
@@ -111,7 +112,9 @@ export async function GET(
     const fullInvoice = {
       id: invoice.id,
       invoiceNo: invoice.invoice_no,
-      date: invoice.created_at.split("T")[0],
+      date: invoice.orders?.order_date
+        ? new Date(invoice.orders.order_date).toISOString().split("T")[0]
+        : invoice.created_at.split("T")[0],
       customerId: invoice.customer_id,
       salesRepId: invoice.orders?.sales_rep_id,
       orderStatus: invoice.orders?.status,
