@@ -92,6 +92,7 @@ export default function SierraPaymentEntryPage() {
   const [chequeNumber, setChequeNumber] = useState("");
   const [chequeDate, setChequeDate] = useState("");
   const [selectedBankId, setSelectedBankId] = useState("");
+  const [branchCode, setBranchCode] = useState("");
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const [settlements, setSettlements] = useState<Record<string, InvoiceSettlement>>({});
 
@@ -176,7 +177,7 @@ export default function SierraPaymentEntryPage() {
 
   const resetForm = () => {
     setSelectedCustomerId(""); setPaymentMethod("cash"); setPaymentDate(new Date().toISOString().split("T")[0]);
-    setTotalAmount(0); setNotes(""); setChequeNumber(""); setChequeDate(""); setSelectedBankId(""); setSelectedAccountId("");
+    setTotalAmount(0); setNotes(""); setChequeNumber(""); setChequeDate(""); setSelectedBankId(""); setBranchCode(""); setSelectedAccountId("");
     setPendingInvoices([]); setSettlements({});
   };
 
@@ -203,7 +204,7 @@ export default function SierraPaymentEntryPage() {
         const res = await fetch("/api/payments", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ orderId: s.invoiceId, amount: s.settleAmount, date: paymentDate, method: paymentMethod, notes: notes || undefined, depositAccountId: paymentMethod !== "cheque" ? selectedAccountId : null, chequeNo: paymentMethod === "cheque" ? chequeNumber : null, chequeDate: paymentMethod === "cheque" ? chequeDate : null, bankId: paymentMethod === "cheque" ? selectedBankId : null }),
+          body: JSON.stringify({ orderId: s.invoiceId, amount: s.settleAmount, date: paymentDate, method: paymentMethod, notes: notes || undefined, depositAccountId: paymentMethod !== "cheque" ? selectedAccountId : null, chequeNo: paymentMethod === "cheque" ? chequeNumber : null, chequeDate: paymentMethod === "cheque" ? chequeDate : null, bankId: paymentMethod === "cheque" ? selectedBankId : null, branchCode: paymentMethod === "cheque" ? branchCode : null }),
         });
         if (res.ok) successCount++; else failCount++;
       }
@@ -314,6 +315,10 @@ export default function SierraPaymentEntryPage() {
                       </CommandList></Command>
                     </PopoverContent>
                   </Popover>
+                </div>
+                <div className="space-y-2">
+                  <Label>Branch Code</Label>
+                  <Input placeholder="e.g. 056" value={branchCode} onChange={(e) => setBranchCode(e.target.value)} />
                 </div>
               </>
             )}

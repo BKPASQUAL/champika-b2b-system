@@ -148,8 +148,7 @@ export default function WiremanPaymentEntryPage() {
   const [chequeNumber, setChequeNumber] = useState("");
   const [chequeDate, setChequeDate] = useState("");
   const [selectedBankId, setSelectedBankId] = useState("");
-
-  // Cash / Bank-only field
+  const [branchCode, setBranchCode] = useState("");
   const [selectedAccountId, setSelectedAccountId] = useState("");
 
   // Invoice settlement map
@@ -354,12 +353,7 @@ export default function WiremanPaymentEntryPage() {
     setSelectedCustomerId("");
     setPaymentMethod("cash");
     setPaymentDate(new Date().toISOString().split("T")[0]);
-    setTotalAmount(0);
-    setNotes("");
-    setChequeNumber("");
-    setChequeDate("");
-    setSelectedBankId("");
-    setSelectedAccountId("");
+    setTotalAmount(0); setNotes(""); setChequeNumber(""); setChequeDate(""); setSelectedBankId(""); setBranchCode(""); setSelectedAccountId("");
     setPendingInvoices([]);
     setSettlements({});
   };
@@ -433,13 +427,7 @@ export default function WiremanPaymentEntryPage() {
           date: paymentDate,
           method: paymentMethod,
           notes: notes || undefined,
-          depositAccountId:
-            paymentMethod === "cash" || paymentMethod === "bank"
-              ? selectedAccountId
-              : null,
-          chequeNo: paymentMethod === "cheque" ? chequeNumber : null,
-          chequeDate: paymentMethod === "cheque" ? chequeDate : null,
-          bankId: paymentMethod === "cheque" ? selectedBankId : null,
+          body: JSON.stringify({ orderId: s.invoiceId, amount: s.settleAmount, date: paymentDate, method: paymentMethod, notes: notes || undefined, depositAccountId: paymentMethod !== "cheque" ? selectedAccountId : null, chequeNo: paymentMethod === "cheque" ? chequeNumber : null, chequeDate: paymentMethod === "cheque" ? chequeDate : null, bankId: paymentMethod === "cheque" ? selectedBankId : null, branchCode: paymentMethod === "cheque" ? branchCode : null }),
         };
 
         const res = await fetch("/api/payments", {
@@ -731,6 +719,10 @@ export default function WiremanPaymentEntryPage() {
                       </Command>
                     </PopoverContent>
                   </Popover>
+                </div>
+                <div className="space-y-2">
+                  <Label>Branch Code</Label>
+                  <Input placeholder="e.g. 056" value={branchCode} onChange={(e) => setBranchCode(e.target.value)} />
                 </div>
               </>
             )}

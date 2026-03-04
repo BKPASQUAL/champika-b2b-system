@@ -14,6 +14,7 @@ const paymentSchema = z.object({
   chequeNo: z.string().optional().nullable(),
   chequeDate: z.string().optional().nullable(),
   bankId: z.string().optional().nullable(),
+  branchCode: z.string().optional().nullable(), // Added branch string
   // Deposit specific
   depositAccountId: z.string().optional().nullable(),
 });
@@ -210,7 +211,7 @@ export async function POST(request: NextRequest) {
         payment_date: val.date,
         method: val.method,
         // Cheque Details
-        cheque_no: val.method === "cheque" ? val.chequeNo : null,
+        cheque_no: val.method === "cheque" ? (val.branchCode ? `${val.chequeNo} (Branch: ${val.branchCode})` : val.chequeNo) : null,
         cheque_date: val.method === "cheque" ? val.chequeDate : null,
         cheque_status: val.method === "cheque" ? "Pending" : null,
         bank_id: val.method === "cheque" ? val.bankId : null, // Store Customer Bank
