@@ -162,6 +162,11 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           href: "/dashboard/admin/reports",
           icon: BarChart3,
         },
+        {
+          name: "Wireman Agency",
+          href: "/dashboard/admin/reports/wireman",
+          icon: Factory,
+        },
       ],
     },
     {
