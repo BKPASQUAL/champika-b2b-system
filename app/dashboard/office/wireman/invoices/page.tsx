@@ -29,6 +29,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 import { Invoice, SortField, SortOrder } from "./types";
 import { InvoiceTable } from "./_components/InvoiceTable";
@@ -183,6 +185,168 @@ export default function WiremanInvoicesPage() {
     router.push(`/dashboard/office/wireman/invoices/${id}`);
   };
 
+  const handleExportOutstandingPdf = () => {
+    try {
+      const outstandingInvoices = invoices.filter(
+        (inv) =>
+          inv.status !== "Paid" &&
+          inv.dueAmount > 0
+      );
+
+      if (outstandingInvoices.length === 0) {
+        toast.error("No outstanding invoices found");
+        return;
+      }
+
+      const doc = new jsPDF();
+
+      // Title
+      doc.setFontSize(18);
+      doc.text("Wireman Distribution", 14, 20);
+
+      doc.setFontSize(14);
+      doc.setTextColor(220, 38, 38);
+      doc.text("Outstanding Bills (Grouped by Customer)", 14, 28);
+
+      // Group Invoices by Customer
+      const groupedInvoices: { [key: string]: Invoice[] } = {};
+      let originalTotalDue = 0;
+      outstandingInvoices.forEach((inv) => {
+        const customerKey = inv.customerName; // Using customerName as shopName is not reliably available in this Invoice type
+        if (!groupedInvoices[customerKey]) {
+          groupedInvoices[customerKey] = [];
+        }
+        groupedInvoices[customerKey].push(inv);
+        originalTotalDue += inv.dueAmount;
+      });
+
+      doc.setFontSize(10);
+      doc.setTextColor(100);
+      doc.text(
+        `Generated: ${new Date().toLocaleDateString()}, ${new Date().toLocaleTimeString()}`,
+        14,
+        34,
+      );
+      doc.text(`Total Outstanding Bills: ${outstandingInvoices.length}`, 14, 40);
+      doc.text(
+        `Total Outstanding Amount: LKR ${originalTotalDue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        14,
+        46,
+      );
+
+      // Sort Customer Keys Alphabetically
+      const sortedCustomerKeys = Object.keys(groupedInvoices).sort((a, b) =>
+        a.localeCompare(b),
+      );
+
+      // Build Table Data with Group Headers
+      const tableData: any[] = [];
+      let grandTotalDue = 0;
+
+      sortedCustomerKeys.forEach((customerKey) => {
+        const customerInvoices = groupedInvoices[customerKey].sort((a, b) => {
+          return new Date(a.date).getTime() - new Date(b.date).getTime();
+        });
+        
+        const customerTotalDue = customerInvoices.reduce(
+          (sum, inv) => sum + inv.dueAmount,
+          0,
+        );
+        grandTotalDue += customerTotalDue;
+
+        // Add Customer Header Row
+        tableData.push([
+          {
+            content: `${customerKey} (Total Due: LKR ${customerTotalDue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`,
+            colSpan: 7,
+            styles: {
+              fillColor: [240, 240, 240], // Light Gray Background
+              textColor: [50, 50, 50],
+              fontStyle: "bold",
+              halign: "left",
+            },
+          },
+        ]);
+
+        const today = new Date();
+
+        // Add Invoice Rows
+        customerInvoices.forEach((inv) => {
+          const invoiceDate = new Date(inv.date);
+          const diffTime = today.getTime() - invoiceDate.getTime();
+          const daysOverdue = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+          tableData.push([
+            invoiceDate.toLocaleDateString(),
+            inv.invoiceNo,
+            `${daysOverdue} days`,
+            inv.totalAmount.toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            }),
+            inv.paidAmount.toLocaleString(undefined, {
+               minimumFractionDigits: 2,
+               maximumFractionDigits: 2,
+            }),
+            inv.dueAmount.toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            }),
+            inv.status.toUpperCase(),
+          ]);
+        });
+      });
+
+      autoTable(doc, {
+        startY: 52,
+        head: [
+          [
+            "Date",
+            "Invoice No",
+            "Days Overdue",
+            "Total (LKR)",
+            "Paid (LKR)",
+            "Due (LKR)",
+            "Status",
+          ],
+        ],
+        body: tableData,
+        theme: "plain",
+        headStyles: {
+          fillColor: [220, 38, 38], // Red theme
+          textColor: [255, 255, 255],
+          fontStyle: "bold",
+        },
+        styles: {
+          fontSize: 9,
+          cellPadding: 3,
+          lineColor: [220, 220, 220],
+          lineWidth: 0.1,
+        },
+        columnStyles: {
+          3: { halign: "right" },
+          4: { halign: "right" },
+          5: { halign: "right" },
+          6: { halign: "center" },
+        },
+        didParseCell: function (data) {
+          const rawRow = data.row.raw as any[];
+          if (rawRow && rawRow[0] && rawRow[0].colSpan === 7) {
+            data.cell.styles.fillColor = [240, 240, 240];
+            data.cell.styles.textColor = [50, 50, 50];
+            data.cell.styles.fontStyle = "bold";
+          }
+        },
+      });
+
+      doc.save("Outstanding_Customer_Bills_Report.pdf");
+      toast.success("PDF report generated successfully");
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      toast.error("Failed to generate PDF report");
+    }
+  };
+
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, statusFilter, repFilter]);
@@ -210,26 +374,26 @@ export default function WiremanInvoicesPage() {
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline">
-                <Download className="w-4 h-4 mr-2" /> Export
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                onClick={() => toast.info("Export Excel coming soon")}
-              >
-                <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" />{" "}
-                Export Excel
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => toast.info("Export PDF coming soon")}
-              >
-                <FileText className="w-4 h-4 mr-2 text-red-600" /> Export PDF
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <Download className="w-4 h-4 mr-2" /> Export
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() => toast.info("Export Excel coming soon")}
+                >
+                  <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" />{" "}
+                  Export Excel
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handleExportOutstandingPdf}
+                >
+                  <FileText className="w-4 h-4 mr-2 text-red-600" /> Outstanding Bills (PDF)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
           {/* Red Theme Button */}
           <Button
