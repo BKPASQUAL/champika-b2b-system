@@ -33,11 +33,13 @@ import {
   ArrowUpRight,
   CreditCard,
   RefreshCw,
+  Printer,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { toast } from "sonner";
-import { RecordPaymentDialog } from "../_components/RecordPaymentDialog";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 // --- Types ---
 interface OverdueInvoice {
@@ -47,7 +49,7 @@ interface OverdueInvoice {
   customerName: string;
   shopName: string;
   phone: string;
-  dueDate: string;
+  invoiceDate: string;
   dueAmount: number;
   daysOverdue: number;
   status: string;
@@ -58,12 +60,6 @@ export default function WiremanDueAlertsPage() {
   const [invoices, setInvoices] = useState<OverdueInvoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(
-    null,
-  );
-
-  // Dialog State
-  const [isPayDialogOpen, setIsPayDialogOpen] = useState(false);
-  const [selectedInvoice, setSelectedInvoice] = useState<OverdueInvoice | null>(
     null,
   );
 
@@ -91,15 +87,12 @@ export default function WiremanDueAlertsPage() {
 
       const mappedInvoices: OverdueInvoice[] = data
         .map((inv: any) => {
-          // Determine Due Date (Fallback to 30 days)
+          // Determine Bill Date (Invoice Date)
           const createdDate = new Date(inv.date || inv.createdAt);
-          const dueDate = inv.dueDate
-            ? new Date(inv.dueDate)
-            : new Date(createdDate.setDate(createdDate.getDate() + 30));
-
-          // Calculate Days Overdue
-          const diffTime = today.getTime() - dueDate.getTime();
-          const daysOverdue = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          
+          // Calculate Days Overdue relative to Bill Date
+          const diffTime = today.getTime() - createdDate.getTime();
+          const daysOverdue = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
           return {
             id: inv.id,
@@ -108,7 +101,7 @@ export default function WiremanDueAlertsPage() {
             customerName: inv.customerName || "Unknown",
             shopName: inv.customer?.shopName || inv.shopName || "",
             phone: inv.customer?.phone || inv.phone || "",
-            dueDate: dueDate.toISOString().split("T")[0],
+            invoiceDate: createdDate.toISOString().split("T")[0],
             dueAmount: inv.dueAmount || 0,
             daysOverdue: daysOverdue,
             status: inv.status,
@@ -167,35 +160,165 @@ export default function WiremanDueAlertsPage() {
   const getAgingBadge = (days: number) => {
     if (days >= 90) {
       return (
-        <Badge className="bg-red-600 hover:bg-red-700 text-white border-none animate-pulse">
-          90+ Days
+        <Badge className="bg-red-100 hover:bg-red-200 text-red-700 border-none justify-center px-2 py-1">
+          <AlertTriangle className="w-3 h-3 mr-1" />
+          {days} days
         </Badge>
       );
     }
     if (days >= 60) {
       return (
-        <Badge className="bg-orange-500 hover:bg-orange-600 text-white border-none">
-          60+ Days
+        <Badge className="bg-orange-100 hover:bg-orange-200 text-orange-700 border-none justify-center px-2 py-1">
+          <AlertTriangle className="w-3 h-3 mr-1" />
+          {days} days
         </Badge>
       );
     }
     if (days >= 30) {
       return (
-        <Badge className="bg-yellow-500 hover:bg-yellow-600 text-white border-none">
-          30+ Days
+        <Badge className="bg-yellow-100 hover:bg-yellow-200 text-yellow-700 border-none justify-center px-2 py-1">
+          <AlertTriangle className="w-3 h-3 mr-1" />
+          {days} days
         </Badge>
       );
     }
     return (
-      <Badge variant="outline" className="text-amber-600 border-amber-200">
-        {days} Days
+      <Badge className="bg-amber-100 hover:bg-amber-200 text-amber-700 border-none justify-center px-2 py-1">
+        <AlertTriangle className="w-3 h-3 mr-1" />
+        {days} days
       </Badge>
     );
   };
 
-  const handlePayClick = (invoice: OverdueInvoice) => {
-    setSelectedInvoice(invoice);
-    setIsPayDialogOpen(true);
+  const handlePrintReport = () => {
+    try {
+      const doc = new jsPDF();
+
+      // Title
+      doc.setFontSize(18);
+      doc.text("Wireman Distribution", 14, 20);
+
+      doc.setFontSize(14);
+      doc.setTextColor(220, 38, 38);
+      doc.text("Outstanding Bills (Grouped by Customer)", 14, 28);
+
+      doc.setFontSize(10);
+      doc.setTextColor(100);
+      doc.text(
+        `Generated: ${new Date().toLocaleDateString()}, ${new Date().toLocaleTimeString()}`,
+        14,
+        34,
+      );
+      doc.text(`Total Outstanding Bills: ${sortedInvoices.length}`, 14, 40);
+
+      // Group Invoices by Customer
+      const groupedInvoices: { [key: string]: OverdueInvoice[] } = {};
+      sortedInvoices.forEach((inv) => {
+        const customerKey = inv.shopName
+          ? `${inv.shopName} - ${inv.customerName}`
+          : inv.customerName;
+        if (!groupedInvoices[customerKey]) {
+          groupedInvoices[customerKey] = [];
+        }
+        groupedInvoices[customerKey].push(inv);
+      });
+
+      // Sort Customer Keys Alphabetically
+      const sortedCustomerKeys = Object.keys(groupedInvoices).sort((a, b) =>
+        a.localeCompare(b),
+      );
+
+      // Build Table Data with Group Headers
+      const tableData: any[] = [];
+
+      sortedCustomerKeys.forEach((customerKey) => {
+        const customerInvoices = groupedInvoices[customerKey];
+        const customerTotalDue = customerInvoices.reduce(
+          (sum, inv) => sum + inv.dueAmount,
+          0,
+        );
+
+        // Add Customer Header Row
+        tableData.push([
+          {
+            content: `${customerKey} (Total Due: LKR ${customerTotalDue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`,
+            colSpan: 5,
+            styles: {
+              fillColor: [240, 240, 240], // Light Gray Background
+              textColor: [50, 50, 50],
+              fontStyle: "bold",
+              halign: "left",
+            },
+          },
+        ]);
+
+        // Add Invoice Rows
+        customerInvoices.forEach((inv) => {
+          tableData.push([
+            new Date(inv.invoiceDate).toLocaleDateString(),
+            inv.invoiceNo,
+            inv.dueAmount.toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            }), // This is the "Total" in the screenshot
+            "0", // Paid Amount is 0 for these overdue invoices
+            inv.dueAmount.toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            }), // Due Amount
+            "UNPAID", // Status
+          ]);
+        });
+      });
+
+      autoTable(doc, {
+        startY: 45,
+        head: [
+          [
+            "Date",
+            "Invoice No",
+            "Total (LKR)",
+            "Paid (LKR)",
+            "Due (LKR)",
+            "Status",
+          ],
+        ],
+        body: tableData,
+        theme: "plain",
+        headStyles: {
+          fillColor: [220, 38, 38], // Red theme
+          textColor: [255, 255, 255],
+          fontStyle: "bold",
+        },
+        styles: {
+          fontSize: 9,
+          cellPadding: 3,
+          lineColor: [220, 220, 220],
+          lineWidth: 0.1,
+        },
+        columnStyles: {
+          2: { halign: "right" },
+          3: { halign: "right" },
+          4: { halign: "right" },
+          5: { halign: "center" },
+        },
+        didParseCell: function (data) {
+          // If it's a customer header row, align it correctly
+          const rawRow = data.row.raw as any[];
+          if (rawRow && rawRow[0] && rawRow[0].colSpan === 5) {
+            data.cell.styles.fillColor = [240, 240, 240];
+            data.cell.styles.textColor = [50, 50, 50];
+            data.cell.styles.fontStyle = "bold";
+          }
+        },
+      });
+
+      doc.save("Due_Invoices_Report.pdf");
+      toast.success("PDF report generated successfully");
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      toast.error("Failed to generate PDF report");
+    }
   };
 
   return (
@@ -218,6 +341,14 @@ export default function WiremanDueAlertsPage() {
             title="Refresh Data"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+          <Button
+            variant="outline"
+            className="hidden md:flex bg-white"
+            onClick={handlePrintReport}
+          >
+            <Printer className="w-4 h-4 mr-2" />
+            Print Report
           </Button>
         </div>
       </div>
@@ -331,8 +462,8 @@ export default function WiremanDueAlertsPage() {
                 <TableRow className="bg-red-50/50">
                   <TableHead>Invoice No</TableHead>
                   <TableHead>Customer / Shop</TableHead>
-                  <TableHead>Due Date</TableHead>
-                  <TableHead className="text-center">Aging</TableHead>
+                  <TableHead>Bill Date</TableHead>
+                  <TableHead className="text-center">Days Overdue</TableHead>
                   <TableHead className="text-right">Due Amount</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -384,7 +515,7 @@ export default function WiremanDueAlertsPage() {
                       <TableCell>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <CalendarDays className="w-3 h-3" />
-                          {new Date(invoice.dueDate).toLocaleDateString()}
+                          {new Date(invoice.invoiceDate).toLocaleDateString()}
                         </div>
                       </TableCell>
                       <TableCell className="text-center">
@@ -423,15 +554,6 @@ export default function WiremanDueAlertsPage() {
                           >
                             <Eye className="w-4 h-4 text-muted-foreground" />
                           </Button>
-
-                          {/* PAY BUTTON (Wireman Specific) */}
-                          <Button
-                            size="sm"
-                            className="bg-green-600 hover:bg-green-700 text-white h-8"
-                            onClick={() => handlePayClick(invoice)}
-                          >
-                            <CreditCard className="w-3 h-3 mr-1" /> Pay
-                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -443,12 +565,6 @@ export default function WiremanDueAlertsPage() {
         </CardContent>
       </Card>
 
-      <RecordPaymentDialog
-        isOpen={isPayDialogOpen}
-        setIsOpen={setIsPayDialogOpen}
-        invoice={selectedInvoice}
-        onPaymentSuccess={fetchOverdueInvoices}
-      />
     </div>
   );
 }
