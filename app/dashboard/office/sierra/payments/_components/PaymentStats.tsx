@@ -1,4 +1,4 @@
-// app/dashboard/office/wireman/payments/_components/PaymentStats.tsx
+// app/dashboard/office/sierra/payments/_components/PaymentStats.tsx
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Banknote, CreditCard, AlertCircle, TrendingDown } from "lucide-react";
 import { Payment } from "../types";
@@ -96,7 +96,7 @@ export function PaymentStats({ payments, totalDue }: PaymentStatsProps) {
           <CardTitle className="text-sm font-medium text-muted-foreground">
             Cash Receipts
           </CardTitle>
-          <CreditCard className="w-4 h-4 text-red-600" />
+          <CreditCard className="w-4 h-4 text-purple-600" />
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold text-gray-800">

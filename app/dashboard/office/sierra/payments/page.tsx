@@ -23,7 +23,7 @@ import { PaymentTable } from "./_components/PaymentTable";
 import { PaymentDialogs } from "./_components/PaymentDialogs";
 import { CreatePaymentDialog } from "./_components/CreatePaymentDialog";
 
-export default function WiremanPaymentsPage() {
+export default function SierraPaymentsPage() {
   const router = useRouter();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,24 +68,20 @@ export default function WiremanPaymentsPage() {
       if (!paymentsRes.ok) throw new Error("Failed to fetch payments");
       const data = await paymentsRes.json();
 
-      // ✅ FIX: Correctly map API fields to Frontend Types
+      // Correctly map API fields to Frontend Types
       const mapped: Payment[] = data.map((p: any) => ({
         id: p.id,
         invoiceId: p.invoice_id,
-        // Optional chaining in case relation is null
         invoiceNo: p.invoices?.invoice_no || "N/A",
         customerId: p.customer_id,
-        // API returns customers: { name: "..." }
         customerName: p.customers?.name || "Unknown Customer",
         amount: Number(p.amount),
         date: p.payment_date,
-        // API returns payment_method
         method: p.payment_method || "Cash",
-        // API returns cheque_number
         chequeNo: p.cheque_number,
         chequeDate: p.cheque_date,
         chequeStatus: p.cheque_status,
-        collectedBy: "Office", // Default or fetch from profile if available
+        collectedBy: "Office",
       }));
       setPayments(mapped);
 
@@ -159,7 +155,7 @@ export default function WiremanPaymentsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-red-900">
+          <h1 className="text-3xl font-bold tracking-tight text-purple-900">
             Payments Received
           </h1>
           <p className="text-muted-foreground mt-1">
@@ -178,7 +174,7 @@ export default function WiremanPaymentsPage() {
 
           <Button
             onClick={() => setIsAddDialogOpen(true)}
-            className="bg-red-600 hover:bg-red-700"
+            className="bg-purple-600 hover:bg-purple-700"
           >
             <Plus className="w-4 h-4 mr-2" /> Record Payment
           </Button>
@@ -187,7 +183,7 @@ export default function WiremanPaymentsPage() {
 
       <PaymentStats payments={payments} totalDue={totalDue} />
 
-      <Card className="border-red-100">
+      <Card className="border-purple-100">
         <CardHeader>
           <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
             <div className="relative w-full md:flex-1">
@@ -209,8 +205,7 @@ export default function WiremanPaymentsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Methods</SelectItem>
-                  <SelectItem value="cash">Cash</SelectItem>{" "}
-                  {/* Lowercase to match API usually */}
+                  <SelectItem value="cash">Cash</SelectItem>
                   <SelectItem value="cheque">Cheque</SelectItem>
                   <SelectItem value="bank">Transfer</SelectItem>
                 </SelectContent>
