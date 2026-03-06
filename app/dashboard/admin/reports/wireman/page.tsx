@@ -224,7 +224,10 @@ export default function WiremanReportPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-primary">LKR {overview.standardProfit?.toLocaleString()}</div>
-            <p className="text-xs text-primary/80">Revenue - Cost</p>
+            <div className="flex items-center justify-between mt-1">
+               <p className="text-xs text-primary/80">Revenue - Cost</p>
+               <p className="text-sm font-bold text-green-600">Margin: {overview.margin?.toFixed(2)}%</p>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -273,6 +276,7 @@ export default function WiremanReportPage() {
                     <TableHead className="text-right">Revenue</TableHead>
                     <TableHead className="text-right">Cost</TableHead>
                     <TableHead className="text-right">Profit</TableHead>
+                    <TableHead className="text-right">Margin (%)</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -284,11 +288,12 @@ export default function WiremanReportPage() {
                       <TableCell className="text-right font-bold">LKR {p.revenue.toLocaleString()}</TableCell>
                       <TableCell className="text-right text-muted-foreground">LKR {p.standardCost.toLocaleString()}</TableCell>
                       <TableCell className="text-right text-green-600 font-bold">LKR {p.standardProfit.toLocaleString()}</TableCell>
+                      <TableCell className="text-right font-medium">{p.margin?.toFixed(2)}%</TableCell>
                     </TableRow>
                   ))}
                   {productData.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                         No product data found for this period
                       </TableCell>
                     </TableRow>
@@ -318,6 +323,7 @@ export default function WiremanReportPage() {
                     <TableHead className="text-right">Revenue</TableHead>
                     <TableHead className="text-right">Cost</TableHead>
                     <TableHead className="text-right">Profit</TableHead>
+                    <TableHead className="text-right">Margin (%)</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -331,11 +337,12 @@ export default function WiremanReportPage() {
                       <TableCell className="text-right font-bold">LKR {c.revenue.toLocaleString()}</TableCell>
                       <TableCell className="text-right text-muted-foreground">LKR {c.standardCost.toLocaleString()}</TableCell>
                       <TableCell className="text-right text-green-600 font-bold">LKR {c.standardProfit.toLocaleString()}</TableCell>
+                      <TableCell className="text-right font-medium">{c.margin?.toFixed(2)}%</TableCell>
                     </TableRow>
                   ))}
                   {customerData.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                         No customer data found for this period
                       </TableCell>
                     </TableRow>
@@ -368,6 +375,7 @@ export default function WiremanReportPage() {
                     <TableHead className="text-right">Revenue</TableHead>
                     <TableHead className="text-right">Cost</TableHead>
                     <TableHead className="text-right">Profit</TableHead>
+                    <TableHead className="text-right">Margin (%)</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -387,11 +395,12 @@ export default function WiremanReportPage() {
                       <TableCell className="text-right font-bold">LKR {o.revenue.toLocaleString()}</TableCell>
                       <TableCell className="text-right text-muted-foreground">LKR {o.standardCost.toLocaleString()}</TableCell>
                       <TableCell className="text-right text-green-600 font-bold">LKR {o.standardProfit.toLocaleString()}</TableCell>
+                      <TableCell className="text-right font-medium">{o.margin?.toFixed(2)}%</TableCell>
                     </TableRow>
                   ))}
                   {orderData.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                         No order data found for this period
                       </TableCell>
                     </TableRow>

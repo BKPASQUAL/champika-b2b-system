@@ -56,7 +56,10 @@ export async function GET(request: NextRequest) {
     (orderItems || []).forEach((item: any) => {
       const qty = Number(item.quantity) || 0;
       const unitPrice = Number(item.unit_price) || 0;
-      const standardUnitCost = Number(item.product.cost_price) || 0; // Base cost
+      
+      // Prioritize `actual_unit_cost` from `order_items` which tracks moving average cost 
+      // incorporating any post-purchase discounts. Fallback to base product cost.
+      const standardUnitCost = Number(item.actual_unit_cost) || Number(item.product.cost_price) || 0;
 
       const revenue = qty * unitPrice;
       const standardCost = qty * standardUnitCost;
@@ -136,6 +139,16 @@ export async function GET(request: NextRequest) {
     });
 
     overview.margin = overview.revenue > 0 ? (overview.standardProfit / overview.revenue) * 100 : 0;
+
+    // Calculate margins for all grouped datasets
+    const calculateMargin = (obj: any) => {
+      obj.margin = obj.revenue > 0 ? (obj.standardProfit / obj.revenue) * 100 : 0;
+    };
+
+    Object.values(monthlyStats).forEach(calculateMargin);
+    Object.values(productStats).forEach(calculateMargin);
+    Object.values(customerStats).forEach(calculateMargin);
+    Object.values(orderStats).forEach(calculateMargin);
 
     return NextResponse.json({
       overview,
