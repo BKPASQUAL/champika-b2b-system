@@ -97,7 +97,7 @@ export function CustomerDialogs({
 
             {/* Owner Name */}
             <div className="space-y-2">
-              <Label>Owner / Contact Person</Label>
+              <Label>Owner / Contact Person (Optional)</Label>
               <Input
                 value={formData.ownerName}
                 onChange={(e) =>
