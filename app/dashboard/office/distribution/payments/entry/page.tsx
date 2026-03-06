@@ -133,8 +133,11 @@ export default function DistributionPaymentEntryPage() {
   }, [businessId]);
 
   const availableAccounts = companyAccounts.filter((acc) => {
-    if (paymentMethod === "cash") return acc.account_type === "Cash on Hand";
-    if (paymentMethod === "bank") return acc.account_type === "Savings" || acc.account_type === "Current";
+    const t = (acc.account_type || "").toLowerCase();
+    if (paymentMethod === "cash")
+      return t === "cash" || t === "cash on hand" || t === "wallet";
+    if (paymentMethod === "bank")
+      return t === "bank" || t === "savings" || t === "current";
     return false;
   });
 

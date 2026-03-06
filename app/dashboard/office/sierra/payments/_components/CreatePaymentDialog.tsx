@@ -132,14 +132,15 @@ export function CreatePaymentDialog({
 
   const getAvailableAccounts = () => {
     if (formData.method === "cash") {
-      return companyAccounts.filter(
-        (acc) => acc.account_type === "Cash on Hand"
-      );
-    } else if (formData.method === "bank" || formData.method === "cheque") {
-      return companyAccounts.filter(
-        (acc) =>
-          acc.account_type === "Savings" || acc.account_type === "Current"
-      );
+      return companyAccounts.filter((acc) => {
+        const t = (acc.account_type || "").toLowerCase();
+        return t === "cash" || t === "cash on hand" || t === "wallet";
+      });
+    } else if (formData.method === "bank") {
+      return companyAccounts.filter((acc) => {
+        const t = (acc.account_type || "").toLowerCase();
+        return t === "bank" || t === "savings" || t === "current";
+      });
     }
     return [];
   };

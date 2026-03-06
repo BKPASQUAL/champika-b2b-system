@@ -82,7 +82,7 @@ interface Bank {
 interface CompanyAccount {
   id: string;
   account_name: string;
-  account_type: "savings" | "saving" | "current" | "cash";
+  account_type: string;
   account_number: string | null;
   current_balance: number;
   banks?: {
@@ -226,13 +226,11 @@ export default function PaymentsPage() {
         }));
       setUnpaidOrders(mappedOrders);
 
-      // Map Accounts
+      // Map Accounts — lowercase the type for consistent comparison
       const mappedAccounts = accountsData.map((acc: any) => ({
         id: acc.id,
         account_name: acc.account_name,
-        account_type: acc.account_type.toLowerCase().includes("cash")
-          ? "cash"
-          : acc.account_type.toLowerCase(),
+        account_type: (acc.account_type || "").toLowerCase(),
         account_number: acc.account_number,
         current_balance: acc.current_balance,
         banks: acc.bank_codes,
@@ -315,10 +313,18 @@ export default function PaymentsPage() {
   // Get available accounts based on payment method
   const getAvailableAccounts = () => {
     if (formData.method === "cash") {
-      return companyAccounts.filter((acc) => acc.account_type === "cash");
-    } else if (formData.method === "bank" || formData.method === "cheque") {
+      // Cash payments → Cash or Cash on Hand accounts
       return companyAccounts.filter(
         (acc) =>
+          acc.account_type === "cash" ||
+          acc.account_type === "cash on hand" ||
+          acc.account_type === "wallet"
+      );
+    } else if (formData.method === "bank") {
+      // Bank transfers → Bank, Savings, or Current accounts
+      return companyAccounts.filter(
+        (acc) =>
+          acc.account_type === "bank" ||
           acc.account_type === "savings" ||
           acc.account_type === "saving" ||
           acc.account_type === "current"
@@ -878,7 +884,7 @@ export default function PaymentsPage() {
               <div className="space-y-2">
                 <Label>
                   {formData.method === "cash"
-                    ? "Cash Account *"
+                    ? "Select Cash / Wallet Account *"
                     : "Deposit to Bank Account *"}
                 </Label>
                 <Popover

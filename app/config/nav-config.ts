@@ -26,7 +26,8 @@ import {
   Store,
   Send,
   BarChart3,
-  Undo2, // Added Undo2 icon
+  Undo2,
+  ArrowRightLeft,
 } from "lucide-react";
 
 export type UserRole = "admin" | "office" | "rep" | "delivery";
@@ -176,6 +177,11 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           name: "Bank Accounts",
           href: "/dashboard/admin/finance/accounts",
           icon: Landmark,
+        },
+        {
+          name: "Transactions",
+          href: "/dashboard/admin/finance/transactions",
+          icon: ArrowRightLeft,
         },
         {
           name: "Cheque Registry",

@@ -230,9 +230,11 @@ export default function WiremanPaymentEntryPage() {
 
   // Filter accounts by payment method
   const availableAccounts = companyAccounts.filter((acc) => {
-    if (paymentMethod === "cash") return acc.account_type === "Cash on Hand";
+    const t = (acc.account_type || "").toLowerCase();
+    if (paymentMethod === "cash")
+      return t === "cash" || t === "cash on hand" || t === "wallet";
     if (paymentMethod === "bank")
-      return acc.account_type === "Savings" || acc.account_type === "Current";
+      return t === "bank" || t === "savings" || t === "current";
     return false;
   });
 
@@ -426,8 +428,15 @@ export default function WiremanPaymentEntryPage() {
           amount: s.settleAmount,
           date: paymentDate,
           method: paymentMethod,
-          notes: notes || undefined,
-          body: JSON.stringify({ orderId: s.invoiceId, amount: s.settleAmount, date: paymentDate, method: paymentMethod, notes: notes || undefined, depositAccountId: paymentMethod !== "cheque" ? selectedAccountId : null, chequeNo: paymentMethod === "cheque" ? chequeNumber : null, chequeDate: paymentMethod === "cheque" ? chequeDate : null, bankId: paymentMethod === "cheque" ? selectedBankId : null, branchCode: paymentMethod === "cheque" ? branchCode : null }),
+          notes: notes || null,
+          // Cash / Bank: pass the selected account
+          depositAccountId:
+            paymentMethod !== "cheque" ? selectedAccountId : null,
+          // Cheque fields
+          chequeNo: paymentMethod === "cheque" ? chequeNumber : null,
+          chequeDate: paymentMethod === "cheque" ? chequeDate : null,
+          bankId: paymentMethod === "cheque" ? selectedBankId : null,
+          branchCode: paymentMethod === "cheque" ? branchCode : null,
         };
 
         const res = await fetch("/api/payments", {

@@ -255,11 +255,12 @@ export async function POST(request: NextRequest) {
 
     if (customerUpdateError) throw customerUpdateError;
 
-    // 5. Create Account Transaction (For Cash & Bank only)
+    // 5. Create Account Transaction + Update Balance (For Cash & Bank only)
     if (
       (val.method === "cash" || val.method === "bank") &&
       val.depositAccountId
     ) {
+      // 5a. Insert the account transaction record
       const { error: transactionError } = await supabaseAdmin
         .from("account_transactions")
         .insert({
@@ -273,25 +274,37 @@ export async function POST(request: NextRequest) {
           description: `Payment from ${customer.shop_name} - ${invoice.invoice_no}`,
           transaction_date: val.date,
           reference_no: invoice.invoice_no,
-          business_id: orderData.business_id,
         });
 
       if (transactionError) {
         console.error("Error creating account transaction:", transactionError);
       }
 
-      // Also update the actual account balance
-      const { error: balanceError } = await supabaseAdmin.rpc(
-        "increment_account_balance",
-        {
-          account_id: val.depositAccountId,
-          amount: val.amount,
-        }
-      );
+      // 5b. Fetch current account balance
+      const { data: accountData, error: fetchError } = await supabaseAdmin
+        .from("bank_accounts")
+        .select("current_balance")
+        .eq("id", val.depositAccountId)
+        .single();
 
-      // Fallback if RPC doesn't exist, do a manual fetch-update
-      if (balanceError) {
-        // (Optional: Implement manual update here if needed)
+      if (fetchError || !accountData) {
+        console.error("Error fetching account balance:", fetchError);
+      } else {
+        // 5c. Add payment amount to current balance
+        const updatedBalance =
+          Number(accountData.current_balance || 0) + val.amount;
+
+        const { error: balanceError } = await supabaseAdmin
+          .from("bank_accounts")
+          .update({
+            current_balance: updatedBalance,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", val.depositAccountId);
+
+        if (balanceError) {
+          console.error("Error updating account balance:", balanceError);
+        }
       }
     }
 

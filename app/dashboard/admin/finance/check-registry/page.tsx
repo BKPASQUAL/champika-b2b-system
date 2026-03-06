@@ -115,15 +115,16 @@ export default function CheckRegistryPage() {
     }
   }, [activeTab]);
 
-  // Fetch Accounts for Deposit
+  // Fetch Accounts for Deposit — show all bank-type accounts
   useEffect(() => {
     fetch("/api/finance/accounts")
       .then((res) => res.json())
       .then((data: Account[]) => {
-        const currentAccounts = data.filter(
-          (a) => a.account_type === "Current" || a.account_type === "current"
-        );
-        setAccounts(currentAccounts);
+        const bankAccounts = data.filter((a) => {
+          const t = (a.account_type || "").toLowerCase();
+          return t === "bank" || t === "savings" || t === "current";
+        });
+        setAccounts(bankAccounts);
       })
       .catch((err) => console.error("Error fetching accounts", err));
   }, []);
