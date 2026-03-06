@@ -339,6 +339,13 @@ export default function CreateWiremanInvoicePage() {
     });
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleAddItem();
+    }
+  };
+
   const handleAddItem = () => {
     if (!currentItem.productId) {
       toast.error("Please select a valid product");
@@ -621,6 +628,7 @@ export default function CreateWiremanInvoicePage() {
                         unitPrice: Number(e.target.value),
                       })
                     }
+                    onKeyDown={handleKeyDown}
                     placeholder="0.00"
                   />
                 </div>
@@ -638,6 +646,7 @@ export default function CreateWiremanInvoicePage() {
                         quantity: val === "" ? "" : Number(val),
                       });
                     }}
+                    onKeyDown={handleKeyDown}
                   />
                 </div>
                 <div className="space-y-2">
@@ -654,6 +663,7 @@ export default function CreateWiremanInvoicePage() {
                         freeQuantity: val === "" ? "" : Number(val),
                       });
                     }}
+                    onKeyDown={handleKeyDown}
                   />
                 </div>
                 <div className="space-y-2">
@@ -678,6 +688,7 @@ export default function CreateWiremanInvoicePage() {
                         mrp: Number(e.target.value),
                       })
                     }
+                    onKeyDown={handleKeyDown}
                     placeholder="0.00"
                   />
                 </div>
@@ -707,6 +718,7 @@ export default function CreateWiremanInvoicePage() {
                         discountPercent: Number(e.target.value),
                       })
                     }
+                    onKeyDown={handleKeyDown}
                     placeholder="0"
                   />
                 </div>

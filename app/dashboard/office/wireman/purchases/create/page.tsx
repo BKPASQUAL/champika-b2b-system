@@ -227,6 +227,13 @@ export default function CreateWiremanPurchasePage() {
     setIsDropdownOpen(false); // Close dropdown
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleAddItem();
+    }
+  };
+
   const handleAddItem = () => {
     const qty = parseNumber(currentItem.quantity);
     const unitPrice = parseNumber(currentItem.unitPrice);
@@ -576,6 +583,7 @@ export default function CreateWiremanPurchasePage() {
                               : parseInt(e.target.value),
                         })
                       }
+                      onKeyDown={handleKeyDown}
                       className="h-9 text-xs"
                     />
                   </div>
@@ -596,6 +604,7 @@ export default function CreateWiremanPurchasePage() {
                               : parseInt(e.target.value),
                         })
                       }
+                      onKeyDown={handleKeyDown}
                       className="h-9 border-green-200 text-xs"
                     />
                   </div>
@@ -617,6 +626,7 @@ export default function CreateWiremanPurchasePage() {
                               : parseFloat(e.target.value),
                         })
                       }
+                      onKeyDown={handleKeyDown}
                       className="h-9 border-blue-200 text-xs"
                     />
                   </div>
@@ -637,6 +647,7 @@ export default function CreateWiremanPurchasePage() {
                               : parseFloat(e.target.value),
                         })
                       }
+                      onKeyDown={handleKeyDown}
                       className="h-9 text-xs"
                     />
                   </div>
