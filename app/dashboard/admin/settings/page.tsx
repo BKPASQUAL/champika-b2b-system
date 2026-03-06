@@ -369,6 +369,26 @@ function SecuritySettings() {
 export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState<SectionId>("general");
 
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get("tab") as SectionId | null;
+      if (tab && navItems.some((n) => n.id === tab)) {
+        setActiveSection(tab);
+      }
+    }
+  }, []);
+
+  const handleSectionChange = (section: SectionId) => {
+    setActiveSection(section);
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      params.set("tab", section);
+      const newUrl = `${window.location.pathname}?${params.toString()}`;
+      window.history.replaceState({ path: newUrl }, "", newUrl);
+    }
+  };
+
   const activeItem = navItems.find((n) => n.id === activeSection)!;
 
   const renderContent = () => {
@@ -421,7 +441,7 @@ export default function SettingsPage() {
               return (
                 <li key={item.id}>
                   <button
-                    onClick={() => setActiveSection(item.id)}
+                    onClick={() => handleSectionChange(item.id)}
                     className={cn(
                       "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all duration-150 group",
                       isActive

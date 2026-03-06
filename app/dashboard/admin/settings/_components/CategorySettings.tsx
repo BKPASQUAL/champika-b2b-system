@@ -53,6 +53,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -101,6 +107,28 @@ export function CategorySettings() {
   const [activeType, setActiveType] = useState<
     "category" | "brand" | "model" | "spec" | "supplier" | "route" | "lorry"
   >("category");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const subtab = params.get("subtab") as any;
+      if (
+        ["category", "brand", "model", "spec", "supplier", "route", "lorry"].includes(subtab)
+      ) {
+        setActiveType(subtab);
+      }
+    }
+  }, []);
+
+  const handleTypeChange = (value: any) => {
+    setActiveType(value);
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      params.set("subtab", value);
+      const newUrl = `${window.location.pathname}?${params.toString()}`;
+      window.history.replaceState({ path: newUrl }, "", newUrl);
+    }
+  };
 
   const [selectedParent, setSelectedParent] = useState<string | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
@@ -188,9 +216,9 @@ export function CategorySettings() {
     }
   }, []);
 
-  const fetchCategories = useCallback(async () => {
+  const fetchCategories = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const res = await fetch(`/api/settings/categories?type=${activeType}`);
       if (!res.ok) throw new Error("Failed to load");
       const data = await res.json();
@@ -208,7 +236,7 @@ export function CategorySettings() {
     } catch (error) {
       toast.error("Could not load data");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [activeType]);
 
@@ -359,26 +387,9 @@ export function CategorySettings() {
         </div>
       );
 
-      // Update local state immediately without re-fetching (no loading flash)
-      if (activeType === "model" || activeType === "spec") {
-        // These types are displayed via renderCategoryBasedList — just append
-        setCategories((prev) => [...prev, newItem]);
-      } else {
-        // Hierarchical types: category, brand, route, lorry, supplier
-        if (newItem.parent_id) {
-          // It's a child — attach it to its parent
-          setCategories((prev) =>
-            prev.map((cat) =>
-              cat.id === newItem.parent_id
-                ? { ...cat, children: [...(cat.children ?? []), newItem] }
-                : cat
-            )
-          );
-        } else {
-          // It's a root item — add it with empty children
-          setCategories((prev) => [...prev, { ...newItem, children: [] }]);
-        }
-      }
+      // Refetch table silently
+      fetchCategories(true);
+      fetchAllCategories();
 
       setNewName("");
       setSelectedParent(null);
@@ -414,19 +425,9 @@ export function CategorySettings() {
       );
       setDeleteDialog({ open: false, id: null, name: "" });
 
-      // Remove from local state immediately without re-fetching
-      if (activeType === "model" || activeType === "spec") {
-        setCategories((prev) => prev.filter((c) => c.id !== deletedId));
-      } else {
-        setCategories((prev) =>
-          prev
-            .filter((c) => c.id !== deletedId)
-            .map((c) => ({
-              ...c,
-              children: (c.children ?? []).filter((ch) => ch.id !== deletedId),
-            }))
-        );
-      }
+      // Refetch table silently
+      fetchCategories(true);
+      fetchAllCategories();
     } catch (error) {
       toast.error("Failed to delete");
     }
@@ -515,35 +516,37 @@ export function CategorySettings() {
               key={categoryId}
               className="overflow-hidden shadow-sm hover:shadow-md transition-shadow h-fit"
             >
-              <CardHeader className={cn("pb-4", activeTab?.bgColor)}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={cn(
-                        "h-10 w-10 rounded-lg flex items-center justify-center",
-                        "bg-background shadow-sm"
-                      )}
-                    >
-                      <Package className={cn("h-5 w-5", activeTab?.color)} />
+              <Accordion type="single" collapsible className="w-full">
+                <AccordionItem value={categoryId} className="border-b-0">
+                  <AccordionTrigger className={cn("px-4 hover:no-underline", activeTab?.bgColor, "rounded-t-lg data-[state=closed]:rounded-b-lg")}>
+                    <div className="flex items-center justify-between w-full pr-4">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={cn(
+                            "h-10 w-10 rounded-lg flex items-center justify-center",
+                            "bg-background shadow-sm"
+                          )}
+                        >
+                          <Package className={cn("h-5 w-5", activeTab?.color)} />
+                        </div>
+                        <div className="text-left">
+                          <CardTitle className="text-lg font-semibold">
+                            {categoryName}
+                          </CardTitle>
+                          <CardDescription className="text-xs">
+                            {items.length} {activeType}
+                            {items.length !== 1 ? "s" : ""}
+                          </CardDescription>
+                        </div>
+                      </div>
+                      <Badge variant="secondary" className="text-sm px-3 py-1">
+                        {items.length}
+                      </Badge>
                     </div>
-                    <div>
-                      <CardTitle className="text-lg font-semibold">
-                        {categoryName}
-                      </CardTitle>
-                      <CardDescription className="text-xs">
-                        {items.length} {activeType}
-                        {items.length !== 1 ? "s" : ""}
-                      </CardDescription>
-                    </div>
-                  </div>
-                  <Badge variant="secondary" className="text-sm px-3 py-1">
-                    {items.length}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <Separator />
-              <CardContent className="p-4">
-                <div className="space-y-2">
+                  </AccordionTrigger>
+                  <AccordionContent className="pt-0">
+                    <Separator />
+                    <div className="p-4 space-y-2">
                   {items.map((item) => (
                     <div key={item.id} className="space-y-2">
                       <div className="group flex items-center justify-between p-4 bg-muted/50 rounded-lg hover:bg-muted transition-all">
@@ -627,40 +630,44 @@ export function CategorySettings() {
                       )}
                     </div>
                   ))}
-                </div>
-              </CardContent>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
             </Card>
           );
         })}
 
         {withoutCategory.length > 0 && (
           <Card className="border-2 border-amber-200 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-950/20 shadow-sm h-fit">
-            <CardHeader className="pb-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-                    <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-500" />
+            <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="without-category" className="border-b-0">
+                <AccordionTrigger className="px-4 hover:no-underline hover:bg-amber-100/50 dark:hover:bg-amber-900/10 rounded-t-lg data-[state=closed]:rounded-b-lg">
+                  <div className="flex items-center justify-between w-full pr-4">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                        <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-500" />
+                      </div>
+                      <div className="text-left">
+                        <CardTitle className="text-lg text-amber-900 dark:text-amber-500">
+                          Not Assigned to Category
+                        </CardTitle>
+                        <CardDescription className="text-xs text-amber-700 dark:text-amber-400">
+                          These items need to be assigned
+                        </CardDescription>
+                      </div>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className="border-amber-300 dark:border-amber-700"
+                    >
+                      {withoutCategory.length}
+                    </Badge>
                   </div>
-                  <div>
-                    <CardTitle className="text-lg text-amber-900 dark:text-amber-500">
-                      Not Assigned to Category
-                    </CardTitle>
-                    <CardDescription className="text-xs text-amber-700 dark:text-amber-400">
-                      These items need to be assigned
-                    </CardDescription>
-                  </div>
-                </div>
-                <Badge
-                  variant="outline"
-                  className="border-amber-300 dark:border-amber-700"
-                >
-                  {withoutCategory.length}
-                </Badge>
-              </div>
-            </CardHeader>
-            <Separator className="bg-amber-200 dark:bg-amber-900" />
-            <CardContent className="p-4">
-              <div className="space-y-2">
+                </AccordionTrigger>
+                <AccordionContent className="pt-0">
+                  <Separator className="bg-amber-200 dark:bg-amber-900" />
+                  <div className="p-4 space-y-2">
                 {withoutCategory.map((item) => (
                   <div
                     key={item.id}
@@ -677,8 +684,10 @@ export function CategorySettings() {
                     </Button>
                   </div>
                 ))}
-              </div>
-            </CardContent>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
           </Card>
         )}
       </div>
@@ -1106,7 +1115,7 @@ export function CategorySettings() {
           {tabs.map((tab) => (
             <button
               key={tab.value}
-              onClick={() => setActiveType(tab.value as any)}
+              onClick={() => handleTypeChange(tab.value)}
               className={cn(
                 "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all",
                 "hover:shadow-md",
