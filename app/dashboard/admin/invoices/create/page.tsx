@@ -1,7 +1,7 @@
 // app/dashboard/admin/invoices/create/page.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -111,7 +111,6 @@ export default function CreateInvoicePage() {
   const [salesRepOpen, setSalesRepOpen] = useState(false);
   const [productOpen, setProductOpen] = useState(false);
 
-  // Current Item Being Added
   const [currentItem, setCurrentItem] = useState({
     productId: "",
     sku: "",
@@ -123,6 +122,29 @@ export default function CreateInvoicePage() {
     discountPercent: 0,
     stockAvailable: 0,
   });
+
+  const qtyInputRef = useRef<HTMLInputElement>(null);
+
+  // --- Global Keyboard Shortcuts ---
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Shift + F to focus product search in the dropdown
+      if (e.shiftKey && (e.key === "f" || e.key === "F")) {
+        e.preventDefault();
+        // The first combobox is the customer search.
+        // If there's a rep combobox and a product combobox, product is the third one.
+        // Let's find the one matching 'Product'
+        const triggers = document.querySelectorAll('button[role="combobox"]');
+        if(triggers && triggers.length > 2) { 
+            (triggers[2] as HTMLElement).click();
+        } else if (triggers && triggers.length > 1) {
+            (triggers[1] as HTMLElement).click();
+        }
+      }
+    };
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, []);
 
   // --- 1. Fetch Initial Data (Customers & Reps Only) ---
   useEffect(() => {
@@ -216,6 +238,17 @@ export default function CreateInvoicePage() {
       discountPercent: 0,
       stockAvailable: product.stock_quantity,
     });
+
+    setTimeout(() => {
+      qtyInputRef.current?.focus();
+    }, 100);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleAddItem();
+    }
   };
 
   // --- Add Item to Invoice ---
@@ -661,6 +694,7 @@ export default function CreateInvoicePage() {
                 <div className="space-y-2">
                   <Label>Quantity</Label>
                   <Input
+                    ref={qtyInputRef}
                     type="number"
                     min="1"
                     value={currentItem.quantity}
@@ -670,6 +704,7 @@ export default function CreateInvoicePage() {
                         quantity: Number(e.target.value),
                       })
                     }
+                    onKeyDown={handleKeyDown}
                   />
                 </div>
                 <div className="space-y-2">
@@ -684,6 +719,7 @@ export default function CreateInvoicePage() {
                         freeQuantity: Number(e.target.value),
                       })
                     }
+                    onKeyDown={handleKeyDown}
                   />
                 </div>
                 <div className="space-y-2">
@@ -722,6 +758,7 @@ export default function CreateInvoicePage() {
                         mrp: Number(e.target.value),
                       })
                     }
+                    onKeyDown={handleKeyDown}
                     placeholder="0.00"
                   />
                 </div>
@@ -736,6 +773,7 @@ export default function CreateInvoicePage() {
                         unitPrice: Number(e.target.value),
                       })
                     }
+                    onKeyDown={handleKeyDown}
                     placeholder="0.00"
                   />
                 </div>
@@ -752,6 +790,7 @@ export default function CreateInvoicePage() {
                         discountPercent: Number(e.target.value),
                       })
                     }
+                    onKeyDown={handleKeyDown}
                     placeholder="0"
                   />
                 </div>

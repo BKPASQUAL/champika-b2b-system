@@ -1,7 +1,7 @@
 // app/dashboard/office/retail/invoices/create/page.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -151,6 +151,28 @@ export default function CreateRetailInvoicePage() {
     stockAvailable: 0,
   });
 
+  const qtyInputRef = useRef<HTMLInputElement>(null);
+
+  // --- Global Keyboard Shortcuts ---
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Shift + F to focus product search in the dropdown
+      if (e.shiftKey && (e.key === "f" || e.key === "F")) {
+        e.preventDefault();
+        // The first combobox is the customer search.
+        // Product is the second one in the Retail portal since there's no Sales Rep dropdown.
+        const triggers = document.querySelectorAll('button[role="combobox"]');
+        if(triggers && triggers.length > 1) { 
+            (triggers[1] as HTMLElement).click();
+        } else if (triggers && triggers.length > 0) {
+            (triggers[0] as HTMLElement).click();
+        }
+      }
+    };
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, []);
+
   // --- 1. Get Business Context and Fetch Initial Data ---
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -281,6 +303,17 @@ export default function CreateRetailInvoicePage() {
       discountPercent: "", // Start empty
       stockAvailable: product.stock_quantity,
     });
+
+    setTimeout(() => {
+      qtyInputRef.current?.focus();
+    }, 100);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleAddItem();
+    }
   };
 
   // --- Add Item to Invoice ---
@@ -771,6 +804,7 @@ export default function CreateRetailInvoicePage() {
                 <div className="space-y-2">
                   <Label>Quantity</Label>
                   <Input
+                    ref={qtyInputRef}
                     type="number"
                     min="1"
                     value={currentItem.quantity}
@@ -781,6 +815,7 @@ export default function CreateRetailInvoicePage() {
                           e.target.value === "" ? "" : Number(e.target.value),
                       })
                     }
+                    onKeyDown={handleKeyDown}
                   />
                 </div>
                 <div className="space-y-2">
@@ -796,6 +831,7 @@ export default function CreateRetailInvoicePage() {
                           e.target.value === "" ? "" : Number(e.target.value),
                       })
                     }
+                    onKeyDown={handleKeyDown}
                   />
                 </div>
                 <div className="space-y-2">
@@ -835,6 +871,7 @@ export default function CreateRetailInvoicePage() {
                           e.target.value === "" ? "" : Number(e.target.value),
                       })
                     }
+                    onKeyDown={handleKeyDown}
                     placeholder="0.00"
                   />
                 </div>
@@ -850,6 +887,7 @@ export default function CreateRetailInvoicePage() {
                           e.target.value === "" ? "" : Number(e.target.value),
                       })
                     }
+                    onKeyDown={handleKeyDown}
                     placeholder="0.00"
                   />
                 </div>
@@ -867,6 +905,7 @@ export default function CreateRetailInvoicePage() {
                           e.target.value === "" ? "" : Number(e.target.value),
                       })
                     }
+                    onKeyDown={handleKeyDown}
                     placeholder="0"
                   />
                 </div>

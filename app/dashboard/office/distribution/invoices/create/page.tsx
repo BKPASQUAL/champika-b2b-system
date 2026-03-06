@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -130,6 +130,28 @@ export default function CreateDistributionInvoicePage() {
     stockAvailable: 0,
   });
 
+  const qtyInputRef = useRef<HTMLInputElement>(null);
+
+  // --- Global Keyboard Shortcuts ---
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Shift + F to focus product search in the dropdown
+      if (e.shiftKey && (e.key === "f" || e.key === "F")) {
+        e.preventDefault();
+        // The first combobox is the customer search.
+        // Product is the third one since there's Customer, SalesRep, and Product.
+        const triggers = document.querySelectorAll('button[role="combobox"]');
+        if(triggers && triggers.length > 2) { 
+            (triggers[2] as HTMLElement).click();
+        } else if (triggers && triggers.length > 1) {
+            (triggers[1] as HTMLElement).click();
+        }
+      }
+    };
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, []);
+
   // --- 1. Fetch Initial Data (Customers & Reps Only) ---
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -224,6 +246,17 @@ export default function CreateDistributionInvoicePage() {
       discountPercent: "", // Reset to empty
       stockAvailable: product.stock_quantity,
     });
+
+    setTimeout(() => {
+      qtyInputRef.current?.focus();
+    }, 100);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleAddItem();
+    }
   };
 
   // --- Add Item to Invoice ---
@@ -689,6 +722,7 @@ export default function CreateDistributionInvoicePage() {
                 <div className="space-y-2">
                   <Label>Quantity</Label>
                   <Input
+                    ref={qtyInputRef}
                     type="number"
                     min="1"
                     placeholder="Qty" // ✅ Empty placeholder
@@ -699,6 +733,7 @@ export default function CreateDistributionInvoicePage() {
                         quantity: e.target.value, // Keep as string
                       })
                     }
+                    onKeyDown={handleKeyDown}
                   />
                 </div>
                 <div className="space-y-2">
@@ -714,6 +749,7 @@ export default function CreateDistributionInvoicePage() {
                         freeQuantity: e.target.value, // Keep as string
                       })
                     }
+                    onKeyDown={handleKeyDown}
                   />
                 </div>
                 <div className="space-y-2">
@@ -752,6 +788,7 @@ export default function CreateDistributionInvoicePage() {
                         mrp: Number(e.target.value),
                       })
                     }
+                    onKeyDown={handleKeyDown}
                     placeholder="0.00"
                   />
                 </div>
@@ -766,6 +803,7 @@ export default function CreateDistributionInvoicePage() {
                         unitPrice: Number(e.target.value),
                       })
                     }
+                    onKeyDown={handleKeyDown}
                     placeholder="0.00"
                   />
                 </div>
@@ -775,7 +813,7 @@ export default function CreateDistributionInvoicePage() {
                     type="number"
                     min="0"
                     max="100"
-                    placeholder="0%" // ✅ Empty placeholder
+                    placeholder="0"
                     value={currentItem.discountPercent || ""}
                     onChange={(e) =>
                       setCurrentItem({
@@ -783,6 +821,7 @@ export default function CreateDistributionInvoicePage() {
                         discountPercent: e.target.value, // Keep as string
                       })
                     }
+                    onKeyDown={handleKeyDown}
                   />
                 </div>
                 <div className="space-y-2">

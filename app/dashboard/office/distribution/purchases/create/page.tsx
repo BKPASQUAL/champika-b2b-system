@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -120,6 +120,7 @@ export default function DistributionCreatePurchasePage() {
 
   // UI States
   const [productSearchOpen, setProductSearchOpen] = useState(false);
+  const qtyInputRef = useRef<HTMLInputElement>(null);
 
   // Current Item Edit State
   const [currentItem, setCurrentItem] = useState({
@@ -160,6 +161,23 @@ export default function DistributionCreatePurchasePage() {
 
     loadData();
   }, [CURRENT_BUSINESS_ID]);
+
+  // --- Global Keyboard Shortcuts ---
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Shift + F to focus search
+      if (e.shiftKey && (e.key === "f" || e.key === "F")) {
+        e.preventDefault();
+        // Look for the product search box button and click it
+        const triggers = document.querySelectorAll('button[role="combobox"]');
+        if (triggers && triggers.length > 0) {
+            (triggers[0] as HTMLElement).click();
+        }
+      }
+    };
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, []);
 
   // --- Handlers ---
 
@@ -205,6 +223,18 @@ export default function DistributionCreatePurchasePage() {
         unit: product.unitOfMeasure || "Pcs",
       });
       setProductSearchOpen(false);
+
+      // Auto-focus quantity input after selection
+      setTimeout(() => {
+        qtyInputRef.current?.focus();
+      }, 100);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleAddItem();
     }
   };
 
@@ -613,14 +643,16 @@ export default function DistributionCreatePurchasePage() {
                       onChange={(e) =>
                         handleUnitPriceChange(parseFloat(e.target.value) || 0)
                       }
-                      placeholder="Cost Price"
-                      className="h-9 border-blue-200"
+                      onKeyDown={handleKeyDown}
+                      placeholder="Cost"
+                      className="h-9 border-blue-200 text-xs"
                     />
                   </div>
 
                   <div className="col-span-1">
                     <Label className="mb-2 block text-xs">Quantity</Label>
                     <Input
+                      ref={qtyInputRef}
                       type="number"
                       min="1"
                       value={currentItem.quantity}
@@ -630,7 +662,8 @@ export default function DistributionCreatePurchasePage() {
                           quantity: e.target.value,
                         })
                       }
-                      className="h-9"
+                      onKeyDown={handleKeyDown}
+                      className="h-9 text-xs"
                       placeholder="Qty"
                     />
                   </div>
@@ -653,8 +686,9 @@ export default function DistributionCreatePurchasePage() {
                           freeQuantity: parseInt(e.target.value) || 0,
                         })
                       }
+                      onKeyDown={handleKeyDown}
                       placeholder="0"
-                      className="h-9 border-green-200"
+                      className="h-9 border-green-200 text-xs"
                     />
                   </div>
 
@@ -669,8 +703,9 @@ export default function DistributionCreatePurchasePage() {
                       onChange={(e) =>
                         handleDiscountChange(parseFloat(e.target.value) || 0)
                       }
+                      onKeyDown={handleKeyDown}
                       placeholder="0%"
-                      className="h-9"
+                      className="h-9 text-xs"
                     />
                   </div>
 
