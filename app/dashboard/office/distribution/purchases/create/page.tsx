@@ -636,6 +636,29 @@ export default function DistributionCreatePurchasePage() {
                   </div>
 
                   <div className="col-span-1">
+                    <Label className="mb-2 block text-xs text-green-600">
+                      Free Qty
+                    </Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={
+                        currentItem.freeQuantity > 0
+                          ? currentItem.freeQuantity
+                          : ""
+                      }
+                      onChange={(e) =>
+                        setCurrentItem({
+                          ...currentItem,
+                          freeQuantity: parseInt(e.target.value) || 0,
+                        })
+                      }
+                      placeholder="0"
+                      className="h-9 border-green-200"
+                    />
+                  </div>
+
+                  <div className="col-span-1">
                     <Label className="mb-2 block text-xs">Discount (%)</Label>
                     <Input
                       type="number"
@@ -662,29 +685,6 @@ export default function DistributionCreatePurchasePage() {
                       disabled
                       className="h-9 bg-muted"
                       placeholder="0.00"
-                    />
-                  </div>
-
-                  <div className="col-span-1">
-                    <Label className="mb-2 block text-xs text-green-600">
-                      Free Item Qty
-                    </Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      value={
-                        currentItem.freeQuantity > 0
-                          ? currentItem.freeQuantity
-                          : ""
-                      }
-                      onChange={(e) =>
-                        setCurrentItem({
-                          ...currentItem,
-                          freeQuantity: parseInt(e.target.value) || 0,
-                        })
-                      }
-                      placeholder="0"
-                      className="h-9 border-green-200"
                     />
                   </div>
 
@@ -742,11 +742,11 @@ export default function DistributionCreatePurchasePage() {
                         <TableHead className="text-center">Unit</TableHead>
                         <TableHead className="text-right">Cost Price</TableHead>
                         <TableHead className="text-right">Qty</TableHead>
-                        <TableHead className="text-right">Disc(%)</TableHead>
-                        <TableHead className="text-right">D. Amount</TableHead>
                         <TableHead className="text-right text-green-600">
                           Free
                         </TableHead>
+                        <TableHead className="text-right">Disc(%)</TableHead>
+                        <TableHead className="text-right">D. Amount</TableHead>
                         <TableHead className="text-right">Total</TableHead>
                         <TableHead className="w-[50px]"></TableHead>
                       </TableRow>
@@ -772,6 +772,9 @@ export default function DistributionCreatePurchasePage() {
                           <TableCell className="text-right">
                             {item.quantity}
                           </TableCell>
+                          <TableCell className="text-right text-green-600 font-medium">
+                            {item.freeQuantity > 0 ? item.freeQuantity : "-"}
+                          </TableCell>
                           <TableCell className="text-right">
                             {item.discountPercent > 0
                               ? item.discountPercent.toFixed(1) + "%"
@@ -781,9 +784,6 @@ export default function DistributionCreatePurchasePage() {
                             {item.discountAmount > 0
                               ? item.discountAmount.toFixed(2)
                               : "-"}
-                          </TableCell>
-                          <TableCell className="text-right text-green-600 font-medium">
-                            {item.freeQuantity > 0 ? item.freeQuantity : "-"}
                           </TableCell>
                           <TableCell className="text-right font-bold">
                             {item.total.toLocaleString()}

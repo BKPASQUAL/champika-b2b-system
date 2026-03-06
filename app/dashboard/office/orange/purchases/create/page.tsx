@@ -633,6 +633,30 @@ export default function CreateOrangePurchasePage() {
                     />
                   </div>
 
+                  {/* Free Qty */}
+                  <div className="col-span-1">
+                    <Label className="mb-2 block text-xs text-green-600">
+                      Free Qty
+                    </Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={
+                        currentItem.freeQuantity > 0
+                          ? currentItem.freeQuantity
+                          : ""
+                      }
+                      onChange={(e) =>
+                        setCurrentItem({
+                          ...currentItem,
+                          freeQuantity: parseInt(e.target.value) || 0,
+                        })
+                      }
+                      placeholder="0"
+                      className="h-9 border-green-200 text-xs"
+                    />
+                  </div>
+
                   {/* Discount % */}
                   <div className="col-span-1">
                     <Label className="mb-2 block text-xs">Disc %</Label>
@@ -667,30 +691,6 @@ export default function CreateOrangePurchasePage() {
                       disabled
                       className="h-9 bg-muted text-xs"
                       placeholder="0.00"
-                    />
-                  </div>
-
-                  {/* Free Qty */}
-                  <div className="col-span-1">
-                    <Label className="mb-2 block text-xs text-green-600">
-                      Free Qty
-                    </Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      value={
-                        currentItem.freeQuantity > 0
-                          ? currentItem.freeQuantity
-                          : ""
-                      }
-                      onChange={(e) =>
-                        setCurrentItem({
-                          ...currentItem,
-                          freeQuantity: parseInt(e.target.value) || 0,
-                        })
-                      }
-                      placeholder="0"
-                      className="h-9 border-green-200 text-xs"
                     />
                   </div>
 
@@ -755,14 +755,14 @@ export default function CreateOrangePurchasePage() {
                         <TableHead className="text-right text-xs">
                           Qty
                         </TableHead>
+                        <TableHead className="text-right text-xs text-green-600">
+                          Free
+                        </TableHead>
                         <TableHead className="text-right text-xs">
                           Disc %
                         </TableHead>
                         <TableHead className="text-right text-xs">
                           Disc Amt
-                        </TableHead>
-                        <TableHead className="text-right text-xs text-green-600">
-                          Free
                         </TableHead>
                         <TableHead className="text-right text-xs font-bold">
                           Total
@@ -792,6 +792,9 @@ export default function CreateOrangePurchasePage() {
                           <TableCell className="text-right text-xs">
                             {item.quantity}
                           </TableCell>
+                          <TableCell className="text-right text-xs text-green-600 font-medium">
+                            {item.freeQuantity > 0 ? item.freeQuantity : "-"}
+                          </TableCell>
                           <TableCell className="text-right text-xs">
                             {item.discountPercent > 0
                               ? item.discountPercent + "%"
@@ -801,9 +804,6 @@ export default function CreateOrangePurchasePage() {
                             {item.discountAmount > 0
                               ? item.discountAmount.toFixed(2)
                               : "-"}
-                          </TableCell>
-                          <TableCell className="text-right text-xs text-green-600 font-medium">
-                            {item.freeQuantity > 0 ? item.freeQuantity : "-"}
                           </TableCell>
                           <TableCell className="text-right text-xs font-bold">
                             {item.total.toLocaleString()}
