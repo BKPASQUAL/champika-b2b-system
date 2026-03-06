@@ -562,27 +562,6 @@ export default function CreateWiremanPurchasePage() {
                     />
                   </div>
                   <div className="col-span-1">
-                    <Label className="mb-2 block text-xs font-semibold text-blue-600">
-                      Cost Price
-                    </Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={currentItem.unitPrice}
-                      onChange={(e) =>
-                        setCurrentItem({
-                          ...currentItem,
-                          unitPrice:
-                            e.target.value === ""
-                              ? ""
-                              : parseFloat(e.target.value),
-                        })
-                      }
-                      className="h-9 border-blue-200 text-xs"
-                    />
-                  </div>
-                  <div className="col-span-1">
                     <Label className="mb-2 block text-xs">Quantity</Label>
                     <Input
                       type="number"
@@ -618,6 +597,27 @@ export default function CreateWiremanPurchasePage() {
                         })
                       }
                       className="h-9 border-green-200 text-xs"
+                    />
+                  </div>
+                  <div className="col-span-1">
+                    <Label className="mb-2 block text-xs font-semibold text-blue-600">
+                      Cost Price
+                    </Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={currentItem.unitPrice}
+                      onChange={(e) =>
+                        setCurrentItem({
+                          ...currentItem,
+                          unitPrice:
+                            e.target.value === ""
+                              ? ""
+                              : parseFloat(e.target.value),
+                        })
+                      }
+                      className="h-9 border-blue-200 text-xs"
                     />
                   </div>
                   <div className="col-span-1">

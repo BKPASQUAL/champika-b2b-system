@@ -611,6 +611,20 @@ export default function CreateWiremanInvoicePage() {
 
               <div className="grid grid-cols-4 gap-4">
                 <div className="space-y-2">
+                  <Label>Unit Price</Label>
+                  <Input
+                    type="number"
+                    value={currentItem.unitPrice || ""}
+                    onChange={(e) =>
+                      setCurrentItem({
+                        ...currentItem,
+                        unitPrice: Number(e.target.value),
+                      })
+                    }
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="space-y-2">
                   <Label>Quantity</Label>
                   <Input
                     type="number"
@@ -650,19 +664,6 @@ export default function CreateWiremanInvoicePage() {
                     className="bg-muted"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Stock</Label>
-                  <Input
-                    value={currentItem.stockAvailable || "-"}
-                    disabled
-                    className={
-                      currentItem.stockAvailable > 0 &&
-                      currentItem.stockAvailable < 10
-                        ? "text-destructive font-bold bg-muted"
-                        : "bg-muted"
-                    }
-                  />
-                </div>
               </div>
 
               <div className="grid grid-cols-4 gap-4">
@@ -681,17 +682,16 @@ export default function CreateWiremanInvoicePage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Unit Price</Label>
+                  <Label>Stock</Label>
                   <Input
-                    type="number"
-                    value={currentItem.unitPrice || ""}
-                    onChange={(e) =>
-                      setCurrentItem({
-                        ...currentItem,
-                        unitPrice: Number(e.target.value),
-                      })
+                    value={currentItem.stockAvailable || "-"}
+                    disabled
+                    className={
+                      currentItem.stockAvailable > 0 &&
+                      currentItem.stockAvailable < 10
+                        ? "text-destructive font-bold bg-muted"
+                        : "bg-muted"
                     }
-                    placeholder="0.00"
                   />
                 </div>
                 <div className="space-y-2">
