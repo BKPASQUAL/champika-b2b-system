@@ -107,10 +107,16 @@ export default function CreateWiremanPurchasePage() {
   // Items State
   const [items, setItems] = useState<PurchaseItem[]>([]);
 
-  // --- Custom Dropdown State ---
+  // --- Dropdown States ---
   const [searchTerm, setSearchTerm] = useState("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+
+  // Input Refs for Fast Data Entry
+  const qtyInputRef = useRef<HTMLInputElement>(null);
 
   // Current Item Edit State
   const [currentItem, setCurrentItem] = useState<{
@@ -206,6 +212,19 @@ export default function CreateWiremanPurchasePage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // --- Global Keyboard Shortcuts ---
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Shift + F to focus search
+      if (e.shiftKey && (e.key === "f" || e.key === "F")) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, []);
+
   // --- Handlers ---
   const handleSupplierChange = (newSupplierId: string) =>
     setSupplierId(newSupplierId);
@@ -225,6 +244,54 @@ export default function CreateWiremanPurchasePage() {
     });
     setSearchTerm(product.name); // Set input text to selected product
     setIsDropdownOpen(false); // Close dropdown
+    setHighlightedIndex(-1); // Reset highlight
+
+    // Auto-focus quantity input for fast data entry
+    setTimeout(() => {
+      qtyInputRef.current?.focus();
+    }, 100);
+  };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!isDropdownOpen) {
+      if (e.key === "ArrowDown" || e.key === "Enter") {
+        setIsDropdownOpen(true);
+      }
+      return;
+    }
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightedIndex((prevIndex) => {
+        const nextIndex =
+          prevIndex < filteredProducts.length - 1 ? prevIndex + 1 : prevIndex;
+        itemRefs.current[nextIndex]?.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+        });
+        return nextIndex;
+      });
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightedIndex((prevIndex) => {
+        const nextIndex = prevIndex > 0 ? prevIndex - 1 : prevIndex;
+        itemRefs.current[nextIndex]?.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+        });
+        return nextIndex;
+      });
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (
+        highlightedIndex >= 0 &&
+        highlightedIndex < filteredProducts.length
+      ) {
+        handleProductSelect(filteredProducts[highlightedIndex]);
+      }
+    } else if (e.key === "Escape") {
+      setIsDropdownOpen(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -486,14 +553,17 @@ export default function CreateWiremanPurchasePage() {
                   <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
+                      ref={searchInputRef}
                       placeholder="Type product name or SKU..."
                       className="pl-8"
                       value={searchTerm}
                       onChange={(e) => {
                         setSearchTerm(e.target.value);
                         setIsDropdownOpen(true);
+                        setHighlightedIndex(-1); // Reset highlight when typing
                       }}
                       onFocus={() => setIsDropdownOpen(true)}
+                      onKeyDown={handleSearchKeyDown}
                     />
                     {searchTerm && (
                       <button
@@ -503,6 +573,7 @@ export default function CreateWiremanPurchasePage() {
                             ...prev,
                             productId: "",
                           }));
+                          setHighlightedIndex(-1);
                         }}
                         className="absolute right-2 top-2.5 text-muted-foreground hover:text-black"
                       >
@@ -518,10 +589,18 @@ export default function CreateWiremanPurchasePage() {
                           No products found
                         </div>
                       ) : (
-                        filteredProducts.map((product) => (
+                        filteredProducts.map((product, index) => (
                           <div
                             key={product.id}
-                            className="p-2 hover:bg-red-50 cursor-pointer border-b border-gray-50 last:border-0"
+                            ref={(el) => {
+                              itemRefs.current[index] = el;
+                            }}
+                            className={`p-2 cursor-pointer border-b border-gray-50 last:border-0 ${
+                              highlightedIndex === index
+                                ? "bg-red-100" // Highlighted color
+                                : "hover:bg-red-50"
+                            }`}
+                            onMouseEnter={() => setHighlightedIndex(index)}
                             onClick={() => handleProductSelect(product)}
                           >
                             <div className="font-medium text-sm text-gray-900 border-b border-gray-100 pb-1 mb-1">
@@ -571,6 +650,7 @@ export default function CreateWiremanPurchasePage() {
                   <div className="col-span-1">
                     <Label className="mb-2 block text-xs">Quantity</Label>
                     <Input
+                      ref={qtyInputRef}
                       type="number"
                       min="1"
                       value={currentItem.quantity}

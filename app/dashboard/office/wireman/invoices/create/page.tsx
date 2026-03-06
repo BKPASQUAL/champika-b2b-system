@@ -71,6 +71,8 @@ interface SearchableDropdownProps {
   placeholder: string;
   disabled?: boolean;
   className?: string;
+  searchInputRef?: React.RefObject<HTMLInputElement | null>;
+  onSelectCallback?: () => void;
 }
 
 function SearchableDropdown({
@@ -80,11 +82,16 @@ function SearchableDropdown({
   placeholder,
   disabled,
   className,
+  searchInputRef,
+  onSelectCallback,
 }: SearchableDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const internalInputRef = useRef<HTMLInputElement>(null);
+  const inputRefToUse = searchInputRef || internalInputRef;
+  const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -106,6 +113,52 @@ function SearchableDropdown({
 
   const selectedOption = options.find((o) => o.id === value);
 
+  useEffect(() => {
+    // Reset highlight when search changes
+    setHighlightedIndex(-1);
+  }, [search]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!isOpen) {
+      if (e.key === "ArrowDown" || e.key === "Enter") {
+        setIsOpen(true);
+      }
+      return;
+    }
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightedIndex((prev) => {
+        const next = prev < filteredOptions.length - 1 ? prev + 1 : prev;
+        itemRefs.current[next]?.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+        });
+        return next;
+      });
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightedIndex((prev) => {
+        const next = prev > 0 ? prev - 1 : prev;
+        itemRefs.current[next]?.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+        });
+        return next;
+      });
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (highlightedIndex >= 0 && highlightedIndex < filteredOptions.length) {
+        onChange(filteredOptions[highlightedIndex].id);
+        setIsOpen(false);
+        setSearch("");
+        if (onSelectCallback) onSelectCallback();
+      }
+    } else if (e.key === "Escape") {
+      setIsOpen(false);
+    }
+  };
+
   return (
     <div className={cn("relative w-full", className)} ref={containerRef}>
       <div className="relative">
@@ -117,17 +170,22 @@ function SearchableDropdown({
           onClick={() => {
             if (!disabled) {
               setIsOpen(true);
-              setTimeout(() => inputRef.current?.focus(), 0);
+              setTimeout(() => {
+                if (inputRefToUse.current) {
+                  inputRefToUse.current.focus();
+                }
+              }, 0);
             }
           }}
         >
           {isOpen ? (
             <input
-              ref={inputRef}
+              ref={inputRefToUse as React.RefObject<HTMLInputElement>}
               className="w-full bg-transparent outline-none placeholder:text-muted-foreground"
               placeholder={placeholder}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={handleKeyDown}
             />
           ) : (
             <span
@@ -150,17 +208,25 @@ function SearchableDropdown({
             </div>
           ) : (
             <div className="p-1">
-              {filteredOptions.map((option) => (
+              {filteredOptions.map((option, index) => (
                 <div
                   key={option.id}
+                  ref={(el) => {
+                    itemRefs.current[index] = el;
+                  }}
                   className={cn(
-                    "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
+                    "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none",
                     value === option.id && "bg-accent text-accent-foreground",
+                    highlightedIndex === index
+                      ? "bg-red-100 text-red-900" // Highlight color
+                      : "hover:bg-accent hover:text-accent-foreground"
                   )}
+                  onMouseEnter={() => setHighlightedIndex(index)}
                   onClick={() => {
                     onChange(option.id);
                     setIsOpen(false);
                     setSearch("");
+                    if (onSelectCallback) onSelectCallback();
                   }}
                 >
                   <Check
@@ -196,6 +262,10 @@ export default function CreateWiremanInvoicePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [stockLoading, setStockLoading] = useState(false);
+
+  // Input Refs for Fast Data Entry
+  const productSearchInputRef = useRef<HTMLInputElement>(null);
+  const qtyInputRef = useRef<HTMLInputElement>(null);
 
   // Business Context
   const [businessId, setBusinessId] = useState<string | null>(null);
@@ -338,6 +408,36 @@ export default function CreateWiremanInvoicePage() {
       stockAvailable: product.stock_quantity,
     });
   };
+
+  const onProductDropdownSelect = () => {
+    // Auto-focus quantity input after selection
+    setTimeout(() => {
+      qtyInputRef.current?.focus();
+    }, 100);
+  };
+
+  // --- Global Keyboard Shortcuts ---
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Shift + F to focus product search in the dropdown
+      if (e.shiftKey && (e.key === "f" || e.key === "F")) {
+        e.preventDefault();
+        // Look for the input element inside the searchable dropdown that has the placeholder text for products
+        const searchInput = document.querySelector('input[placeholder="Search Product..."]') as HTMLInputElement;
+        if (searchInput) {
+          searchInput.focus();
+        } else {
+            // click the dropdown trigger to open it
+            const triggers = document.querySelectorAll('.ring-offset-background');
+            if(triggers && triggers.length > 1) { // 2nd trigger is product search
+                (triggers[1] as HTMLElement).click();
+            }
+        }
+      }
+    };
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
@@ -612,6 +712,8 @@ export default function CreateWiremanInvoicePage() {
                     onChange={handleProductSelect}
                     placeholder="Search Product..."
                     disabled={stockLoading}
+                    searchInputRef={productSearchInputRef}
+                    onSelectCallback={onProductDropdownSelect}
                   />
                 </div>
               </div>
@@ -635,6 +737,7 @@ export default function CreateWiremanInvoicePage() {
                 <div className="space-y-2">
                   <Label>Quantity</Label>
                   <Input
+                    ref={qtyInputRef}
                     type="number"
                     min="1"
                     placeholder="Qty"
