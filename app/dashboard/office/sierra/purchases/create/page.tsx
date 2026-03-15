@@ -34,8 +34,11 @@ import {
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
-import { ProductDialogs } from "../../../wireman/products/_components/ProductDialogs";
-import { ProductFormData } from "../../../wireman/products/types";
+import { ProductDialogs } from "../../products/_components/ProductDialogs";
+import { ProductFormData } from "../../products/types";
+import { SupplierDialogs } from "../../suppliers/_components/SupplierDialogs";
+import { SupplierFormData } from "../../suppliers/types";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 // --- Types ---
 
@@ -110,6 +113,21 @@ export default function CreateSierraPurchasePage() {
     unitOfMeasure: "Pcs",
     isActive: true,
   });
+
+  // --- Inline Supplier Creation State ---
+  const [isAddSupplierDialogOpen, setIsAddSupplierDialogOpen] = useState(false);
+  const [supplierFormData, setSupplierFormData] = useState<SupplierFormData>({
+    name: "",
+    contactPerson: "",
+    email: "",
+    phone: "",
+    address: "",
+    category: "",
+    status: "Active",
+    duePayment: 0,
+    businessId: BUSINESS_IDS.SIERRA_AGENCY,
+  });
+  const [submittingSupplier, setSubmittingSupplier] = useState(false);
 
   // Context State
   const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(
@@ -504,6 +522,52 @@ export default function CreateSierraPurchasePage() {
     }
   };
 
+  const handleCreateSupplier = async () => {
+    if (!supplierFormData.name || !supplierFormData.contactPerson || !supplierFormData.phone) {
+      toast.error("Please fill in required fields (Name, Contact, Phone)");
+      return;
+    }
+
+    setSubmittingSupplier(true);
+    const payload = {
+      ...supplierFormData,
+      businessId: BUSINESS_IDS.SIERRA_AGENCY,
+    };
+
+    try {
+      const res = await fetch("/api/suppliers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to create supplier");
+      }
+
+      toast.success("Supplier created successfully!");
+      setIsAddSupplierDialogOpen(false);
+      setSupplierFormData({
+        name: "",
+        contactPerson: "",
+        email: "",
+        phone: "",
+        address: "",
+        category: "",
+        status: "Active",
+        duePayment: 0,
+        businessId: BUSINESS_IDS.SIERRA_AGENCY,
+      });
+      // Refresh the setup and auto-select
+      await loadData(); 
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setSubmittingSupplier(false);
+    }
+  };
+
   const filteredProducts = products.filter((p) => {
     const searchLower = searchTerm.toLowerCase();
 
@@ -577,7 +641,18 @@ export default function CreateSierraPurchasePage() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Supplier</Label>
+                  <div className="flex items-center justify-between">
+                    <Label>Supplier</Label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto p-0 text-xs text-red-600 hover:text-red-700 hover:bg-transparent"
+                      type="button"
+                      onClick={() => setIsAddSupplierDialogOpen(true)}
+                    >
+                      <Plus className="w-3 h-3 mr-1" /> New
+                    </Button>
+                  </div>
                   <Select
                     value={supplierId || ""}
                     onValueChange={handleSupplierChange}
@@ -1054,13 +1129,19 @@ export default function CreateSierraPurchasePage() {
         isDeleteDialogOpen={false}
         setIsDeleteDialogOpen={() => {}}
         onDeleteConfirm={async () => {}}
-        categories={[
-          { id: "all", name: "all" },
-          ...Array.from(new Set(categories.map((c) => c.name))).map((name) => ({
-            id: name,
-            name: name,
-          })),
-        ]}
+        categories={categories}
+      />
+      <SupplierDialogs
+        isAddDialogOpen={isAddSupplierDialogOpen}
+        setIsAddDialogOpen={setIsAddSupplierDialogOpen}
+        formData={supplierFormData}
+        setFormData={setSupplierFormData}
+        onSave={handleCreateSupplier}
+        selectedSupplier={null}
+        categoryOptions={categories} 
+        isDeleteDialogOpen={false}
+        setIsDeleteDialogOpen={() => {}}
+        onDeleteConfirm={() => {}}
       />
     </div>
   );
