@@ -34,6 +34,8 @@ import {
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { ProductDialogs } from "../../../wireman/products/_components/ProductDialogs";
+import { ProductFormData } from "../../../wireman/products/types";
 
 // --- Types ---
 
@@ -81,6 +83,33 @@ export default function CreateSierraPurchasePage() {
   const router = useRouter();
   const [loadingData, setLoadingData] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  // --- Inline Product Creation State ---
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [categories, setCategories] = useState<{ id: string; name: string; parent_id?: string }[]>([]);
+  const [submittingProduct, setSubmittingProduct] = useState(false);
+  
+  const [formData, setFormData] = useState<ProductFormData>({
+    sku: "",
+    companyCode: "",
+    name: "",
+    category: "",
+    subCategory: "",
+    brand: "",
+    subBrand: "",
+    modelType: "",
+    subModel: "",
+    sizeSpec: "",
+    supplier: "Sierra", // Default to Sierra
+    stock: "0",
+    minStock: "0",
+    mrp: "",
+    sellingPrice: "",
+    costPrice: "",
+    images: [],
+    unitOfMeasure: "Pcs",
+    isActive: true,
+  });
 
   // Context State
   const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(
@@ -158,10 +187,15 @@ export default function CreateSierraPurchasePage() {
     if (!currentBusinessId) return;
     setLoadingData(true);
     try {
-      const [prodRes, supRes] = await Promise.all([
+      const [prodRes, supRes, catRes] = await Promise.all([
         fetch("/api/products?active=true"),
         fetch(`/api/suppliers?businessId=${currentBusinessId}`),
+        fetch("/api/settings/categories?type=category")
       ]);
+
+      if (catRes.ok) {
+        setCategories(await catRes.json());
+      }
 
       if (prodRes.ok) {
         const allProducts: Product[] = await prodRes.json();
@@ -409,6 +443,67 @@ export default function CreateSierraPurchasePage() {
     }
   };
 
+  const handleCreateProduct = async () => {
+    if (!formData.name || !formData.category) {
+      toast.error("Please fill required fields (Name, Category)");
+      return;
+    }
+
+    setSubmittingProduct(true);
+    const payload = {
+      ...formData,
+      supplier: suppliers.find(s => s.id === supplierId)?.name || "Sierra", 
+      stock: Number(formData.stock) || 0,
+      minStock: Number(formData.minStock) || 0,
+      mrp: Number(formData.mrp) || 0,
+      sellingPrice: Number(formData.sellingPrice) || 0,
+      costPrice: Number(formData.costPrice) || 0,
+    };
+
+    try {
+      const res = await fetch("/api/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Operation failed");
+      }
+
+      toast.success("Product created successfully!");
+      setIsAddDialogOpen(false);
+      setFormData({
+        sku: "",
+        companyCode: "",
+        name: "",
+        category: "",
+        subCategory: "",
+        brand: "",
+        subBrand: "",
+        modelType: "",
+        subModel: "",
+        sizeSpec: "",
+        supplier: "Sierra",
+        stock: "0",
+        minStock: "0",
+        mrp: "",
+        sellingPrice: "",
+        costPrice: "",
+        images: [],
+        unitOfMeasure: "Pcs",
+        isActive: true,
+      });
+      // Refresh the product catalog so the new item is available immediately!
+      await loadData(); 
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setSubmittingProduct(false);
+    }
+  };
+
   const filteredProducts = products.filter((p) => {
     const searchLower = searchTerm.toLowerCase();
 
@@ -534,14 +629,26 @@ export default function CreateSierraPurchasePage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Add Items</CardTitle>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={loadData}
-                className="text-xs"
-              >
-                <RefreshCcw className="w-3 h-3 mr-1" /> Refresh
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsAddDialogOpen(true)}
+                  className="text-xs border-dashed border-red-300 text-red-600 hover:text-red-700 hover:bg-red-50"
+                  type="button"
+                >
+                  <Plus className="w-3 h-3 mr-1" /> New Item
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={loadData}
+                  className="text-xs"
+                  type="button"
+                >
+                  <RefreshCcw className="w-3 h-3 mr-1" /> Refresh
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -937,6 +1044,24 @@ export default function CreateSierraPurchasePage() {
           </Card>
         </div>
       </div>
+      <ProductDialogs
+        isAddDialogOpen={isAddDialogOpen}
+        setIsAddDialogOpen={setIsAddDialogOpen}
+        formData={formData}
+        setFormData={setFormData}
+        onSave={handleCreateProduct}
+        selectedProduct={null}
+        isDeleteDialogOpen={false}
+        setIsDeleteDialogOpen={() => {}}
+        onDeleteConfirm={async () => {}}
+        categories={[
+          { id: "all", name: "all" },
+          ...Array.from(new Set(categories.map((c) => c.name))).map((name) => ({
+            id: name,
+            name: name,
+          })),
+        ]}
+      />
     </div>
   );
 }
