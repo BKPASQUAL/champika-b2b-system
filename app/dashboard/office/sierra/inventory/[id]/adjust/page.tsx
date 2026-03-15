@@ -51,7 +51,7 @@ interface PendingAdjustment {
   difference: number;
 }
 
-export default function WiremanStockAdjustmentPage() {
+export default function SierraStockAdjustmentPage() {
   const params = useParams();
   const router = useRouter();
   const rawId = params?.id;
@@ -80,15 +80,15 @@ export default function WiremanStockAdjustmentPage() {
       try {
         setLoading(true);
 
-        // Fetch Master Product List (Filtered for Wireman)
+        // Fetch Master Product List (Filtered for Sierra)
         const productsRes = await fetch(
-          `/api/inventory?businessId=${BUSINESS_IDS.WIREMAN_AGENCY}`,
+          `/api/inventory?businessId=${BUSINESS_IDS.SIERRA_AGENCY}`,
         );
         const productsData = await productsRes.json();
 
-        // Fetch Current Location Stock (Filtered for Wireman)
+        // Fetch Current Location Stock (Filtered for Sierra)
         const stockRes = await fetch(
-          `/api/inventory/${locationId}?businessId=${BUSINESS_IDS.WIREMAN_AGENCY}`,
+          `/api/inventory/${locationId}?businessId=${BUSINESS_IDS.SIERRA_AGENCY}`,
         );
         const stockData = await stockRes.json();
 
@@ -181,8 +181,8 @@ export default function WiremanStockAdjustmentPage() {
         body: JSON.stringify({
           locationId,
           items: itemsPayload, // The API expects this array
-          reason: "Manual Stock Adjustment (Wireman Portal)",
-          businessId: BUSINESS_IDS.WIREMAN_AGENCY,
+          reason: "Manual Stock Adjustment (Sierra Portal)",
+          businessId: BUSINESS_IDS.SIERRA_AGENCY,
         }),
       });
 
@@ -190,7 +190,7 @@ export default function WiremanStockAdjustmentPage() {
       if (!res.ok) throw new Error(result.error || "Update failed");
 
       toast.success("Stock adjustments saved successfully!");
-      router.push(`/dashboard/office/wireman/inventory/${locationId}`);
+      router.push(`/dashboard/office/sierra/inventory/${locationId}`);
     } catch (error: any) {
       console.error(error);
       toast.error(error.message || "Failed to save adjustments");
@@ -233,7 +233,7 @@ export default function WiremanStockAdjustmentPage() {
           <CardHeader>
             <CardTitle className="text-lg">Add Adjustment</CardTitle>
             <CardDescription>
-              Select product (Wireman Only) and enter count.
+              Select product (Sierra Only) and enter count.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">

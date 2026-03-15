@@ -20,23 +20,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import {
   ArrowLeft,
-  Check,
-  ChevronsUpDown,
   Plus,
   Save,
   Trash2,
@@ -79,7 +65,7 @@ export default function StockAdjustmentPage() {
   const [locationName, setLocationName] = useState(""); // ✅ Added Location Name State
 
   // Form State
-  const [openCombobox, setOpenCombobox] = useState(false);
+
   const [selectedProductId, setSelectedProductId] = useState("");
   const [adjustmentValue, setAdjustmentValue] = useState("");
   const [pendingAdjustments, setPendingAdjustments] = useState<
@@ -163,7 +149,7 @@ export default function StockAdjustmentPage() {
     // Reset inputs
     setAdjustmentValue("");
     setSelectedProductId("");
-    setOpenCombobox(false);
+
   };
 
   const handleRemoveItem = (id: string) => {
@@ -252,58 +238,16 @@ export default function StockAdjustmentPage() {
             {/* 1. Searchable Dropdown */}
             <div className="space-y-2">
               <label className="text-sm font-medium">Select Product</label>
-              <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={openCombobox}
-                    className="w-full justify-between"
-                  >
-                    {selectedProduct
-                      ? `${selectedProduct.sku} - ${selectedProduct.name}`
-                      : "Search product..."}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[300px] p-0">
-                  <Command>
-                    <CommandInput placeholder="Search SKU or Name..." />
-                    <CommandList>
-                      <CommandEmpty>No product found.</CommandEmpty>
-                      <CommandGroup>
-                        {allProducts.map((product) => (
-                          <CommandItem
-                            key={product.id}
-                            value={`${product.name} ${product.sku}`} // Search by both
-                            onSelect={() => {
-                              setSelectedProductId(product.id);
-                              setOpenCombobox(false);
-                            }}
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                selectedProductId === product.id
-                                  ? "opacity-100"
-                                  : "opacity-0"
-                              )}
-                            />
-                            <div className="flex flex-col">
-                              <span className="font-medium">
-                                {product.name}
-                              </span>
-                              <span className="text-xs text-muted-foreground">
-                                {product.sku}
-                              </span>
-                            </div>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+              <SearchableDropdown
+                options={allProducts.map((p) => ({
+                  id: p.id,
+                  name: p.name,
+                  info: p.sku,
+                }))}
+                value={selectedProductId}
+                onChange={setSelectedProductId}
+                placeholder="Search product..."
+              />
             </div>
 
             {/* 2. Stock Display */}

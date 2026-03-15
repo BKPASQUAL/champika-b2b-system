@@ -49,6 +49,8 @@ export async function GET(request: NextRequest) {
     // This ensures calculated stats (Total Value, etc.) only count Wireman items
     if (businessId === BUSINESS_IDS.WIREMAN_AGENCY) {
       stocksQuery = stocksQuery.ilike("products.supplier_name", "%Wireman%");
+    } else if (businessId === BUSINESS_IDS.SIERRA_AGENCY) {
+      stocksQuery = stocksQuery.ilike("products.supplier_name", "%Sierra%");
     }
 
     const { data: stocks, error: stockError } = await stocksQuery;
@@ -66,6 +68,8 @@ export async function GET(request: NextRequest) {
     // This ensures the main inventory table only shows Wireman items
     if (businessId === BUSINESS_IDS.WIREMAN_AGENCY) {
       productsQuery = productsQuery.ilike("supplier_name", "%Wireman%");
+    } else if (businessId === BUSINESS_IDS.SIERRA_AGENCY) {
+      productsQuery = productsQuery.ilike("supplier_name", "%Sierra%");
     }
 
     const { data: products, error: prodError } = await productsQuery;
