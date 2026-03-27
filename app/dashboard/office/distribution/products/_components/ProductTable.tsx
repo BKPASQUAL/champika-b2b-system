@@ -1,5 +1,6 @@
-// app/dashboard/admin/products/_components/ProductTable.tsx
 "use client";
+
+import { useState, useEffect } from "react";
 
 import {
   Table,
@@ -52,6 +53,22 @@ export function ProductTable({
   onPageChange,
 }: ProductTableProps) {
   const router = useRouter();
+
+  const [packSizes, setPackSizes] = useState<{ id: string; name: string; description?: string }[]>([]);
+
+  useEffect(() => {
+    fetch("/api/settings/categories?type=pack_size")
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) setPackSizes(data);
+      })
+      .catch((err) => console.error(err));
+  }, []);
+
+  const getPackQuantity = (unit: string) => {
+    const pack = packSizes.find((p) => p.name === unit);
+    return pack && pack.description ? parseFloat(pack.description) : 1;
+  };
 
   const getSortIcon = (field: SortField) => {
     if (sortField !== field)
@@ -148,26 +165,35 @@ export function ProductTable({
                 </TableCell>
               </TableRow>
             ) : (
-              products.map((product) => (
-                <TableRow
-                  key={product.id}
-                  className={!product.isActive ? "opacity-60 bg-muted/20" : ""}
-                >
-                  <TableCell className="font-medium">
-                    <div className="flex items-center gap-2">
-                      {product.name}
-                      {product.stock === 0 ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
-                          <AlertTriangle className="w-3 h-3 mr-1" /> Out of
-                          Stock
-                        </span>
-                      ) : product.stock < product.minStock ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-destructive/10 text-destructive">
-                          <AlertTriangle className="w-3 h-3 mr-1" /> Low Stock
-                        </span>
-                      ) : null}
-                    </div>
-                  </TableCell>
+              products.map((product) => {
+                const packQty = getPackQuantity(product.unitOfMeasure);
+                const isMultiPack = packQty > 1;
+
+                return (
+                  <TableRow
+                    key={product.id}
+                    className={!product.isActive ? "opacity-60 bg-muted/20" : ""}
+                  >
+                    <TableCell className="font-medium align-top">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          {product.name}
+                          {product.stock === 0 ? (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-red-100 text-red-700">
+                              <AlertTriangle className="w-3 h-3 mr-1" /> Out
+                            </span>
+                          ) : product.stock < product.minStock ? (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-destructive/10 text-destructive">
+                              <AlertTriangle className="w-3 h-3 mr-1" /> Low
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="flex gap-2 text-[10px] text-muted-foreground font-mono">
+                          <span>SKU: {product.sku}</span>
+                          {product.companyCode && <span>CC: {product.companyCode}</span>}
+                        </div>
+                      </div>
+                    </TableCell>
                   <TableCell>
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
                       <Tag className="w-3 h-3 mr-1" /> {product.category}
@@ -218,14 +244,23 @@ export function ProductTable({
                       {product.stock} {product.unitOfMeasure}
                     </span>
                   </TableCell>
-                  <TableCell className="text-right text-blue-600">
-                    LKR {product.costPrice.toLocaleString()}
-                  </TableCell>
-                  <TableCell className="text-right text-green-600 font-medium">
-                    LKR {product.sellingPrice.toLocaleString()}
+                  <TableCell className="text-right">
+                    <div className="text-blue-600">LKR {product.costPrice.toLocaleString()}</div>
+                    {isMultiPack && product.costPrice > 0 && (
+                      <div className="text-[10px] text-muted-foreground">Pcs: {(product.costPrice / packQty).toFixed(2)}</div>
+                    )}
                   </TableCell>
                   <TableCell className="text-right">
-                    LKR {product.mrp.toLocaleString()}
+                    <div className="text-green-600 font-medium">LKR {product.sellingPrice.toLocaleString()}</div>
+                    {isMultiPack && product.sellingPrice > 0 && (
+                      <div className="text-[10px] text-muted-foreground">Pcs: {(product.sellingPrice / packQty).toFixed(2)}</div>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div>LKR {product.mrp.toLocaleString()}</div>
+                    {isMultiPack && product.mrp > 0 && (
+                      <div className="text-[10px] text-muted-foreground">Pcs: {(product.mrp / packQty).toFixed(2)}</div>
+                    )}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
@@ -249,7 +284,8 @@ export function ProductTable({
                     </div>
                   </TableCell>
                 </TableRow>
-              ))
+              );
+            })
             )}
           </TableBody>
         </Table>

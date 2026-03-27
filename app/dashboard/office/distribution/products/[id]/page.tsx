@@ -89,6 +89,7 @@ export default function ProductDetailsPage({
 
   const [product, setProduct] = useState<ExtendedProduct | null>(null);
   const [analytics, setAnalytics] = useState<any>(null);
+  const [packSizes, setPackSizes] = useState<{ id: string; name: string; description?: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [transactionPage, setTransactionPage] = useState(1);
 
@@ -105,6 +106,12 @@ export default function ProductDetailsPage({
         if (!analyticsRes.ok) throw new Error("Failed to fetch analytics");
         const analyticsData = await analyticsRes.json();
         setAnalytics(analyticsData);
+
+        const packRes = await fetch(`/api/settings/categories?type=pack_size`);
+        if (packRes.ok) {
+          const packData = await packRes.json();
+          if (Array.isArray(packData)) setPackSizes(packData);
+        }
       } catch (error) {
         toast.error("Error loading data");
         console.error(error);
@@ -125,6 +132,14 @@ export default function ProductDetailsPage({
   }
 
   if (!product || !analytics) return <div>Product not found</div>;
+
+  const getPackQuantity = (unit: string) => {
+    const pack = packSizes.find((p) => p.name === unit);
+    return pack && pack.description ? parseFloat(pack.description) : 1;
+  };
+
+  const packQty = getPackQuantity(product.unitOfMeasure);
+  const isMultiPack = packQty > 1;
 
   const allTransactions: Transaction[] = analytics.allTransactions || [];
 
@@ -521,28 +536,43 @@ export default function ProductDetailsPage({
                       </label>
                       <div className="grid grid-cols-2 gap-4 mt-1 p-4 border rounded-lg bg-muted/20">
                         <div>
-                          <span className="text-xs text-muted-foreground">
-                            Cost Price
+                          <span className="text-xs text-muted-foreground flex items-center justify-between">
+                            Cost Price {isMultiPack && <Badge variant="secondary" className="px-1 py-0 h-4 text-[10px]">Per {product.unitOfMeasure}</Badge>}
                           </span>
-                          <div className="font-medium">
+                          <div className="font-medium text-blue-600">
                             LKR {product.costPrice.toLocaleString()}
                           </div>
+                          {isMultiPack && (
+                            <div className="text-[10px] text-muted-foreground font-medium mt-1">
+                              LKR {(product.costPrice / packQty).toFixed(2)} per pc
+                            </div>
+                          )}
                         </div>
                         <div>
-                          <span className="text-xs text-muted-foreground">
-                            Selling Price
+                          <span className="text-xs text-muted-foreground flex items-center justify-between">
+                            Selling Price {isMultiPack && <Badge variant="secondary" className="px-1 py-0 h-4 text-[10px]">Per {product.unitOfMeasure}</Badge>}
                           </span>
                           <div className="font-medium text-green-600">
                             LKR {product.sellingPrice.toLocaleString()}
                           </div>
+                          {isMultiPack && (
+                            <div className="text-[10px] text-muted-foreground font-medium mt-1">
+                              LKR {(product.sellingPrice / packQty).toFixed(2)} per pc
+                            </div>
+                          )}
                         </div>
                         <div>
-                          <span className="text-xs text-muted-foreground">
-                            MRP
+                          <span className="text-xs text-muted-foreground flex items-center justify-between">
+                            MRP {isMultiPack && <Badge variant="secondary" className="px-1 py-0 h-4 text-[10px]">Per {product.unitOfMeasure}</Badge>}
                           </span>
-                          <div className="font-medium">
+                          <div className="font-medium text-slate-700">
                             LKR {product.mrp.toLocaleString()}
                           </div>
+                          {isMultiPack && (
+                            <div className="text-[10px] text-muted-foreground font-medium mt-1">
+                              LKR {(product.mrp / packQty).toFixed(2)} per pc
+                            </div>
+                          )}
                         </div>
                         <div>
                           <span className="text-xs text-muted-foreground">
