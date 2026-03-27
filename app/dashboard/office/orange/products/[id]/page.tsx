@@ -507,7 +507,7 @@ export default function WiremanProductDetailsPage({
                         </TableCell>
                         <TableCell>{formatCurrency(h.costPrice)}</TableCell>
                         <TableCell>{formatCurrency(h.sellingPrice)}</TableCell>
-                        <TableCell>{formatCurrency(h.mrp)}</TableCell>
+                        <TableCell>{h.mrp && h.mrp > 0 ? formatCurrency(h.mrp) : "-"}</TableCell>
                       </TableRow>
                     ))
                   ) : (
@@ -688,7 +688,7 @@ export default function WiremanProductDetailsPage({
                     <div>
                       <span className="text-xs text-muted-foreground">MRP</span>
                       <div className="font-medium">
-                        LKR {product.mrp.toLocaleString()}
+                        {product.mrp && product.mrp > 0 ? `LKR ${product.mrp.toLocaleString()}` : "-"}
                       </div>
                     </div>
                     <div>

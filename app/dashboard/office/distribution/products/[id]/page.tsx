@@ -566,7 +566,7 @@ export default function ProductDetailsPage({
                             MRP {isMultiPack && <Badge variant="secondary" className="px-1 py-0 h-4 text-[10px]">Per {product.unitOfMeasure}</Badge>}
                           </span>
                           <div className="font-medium text-slate-700">
-                            LKR {product.mrp.toLocaleString()}
+                            {product.mrp && product.mrp > 0 ? `LKR ${product.mrp.toLocaleString()}` : "-"}
                           </div>
                           {isMultiPack && (
                             <div className="text-[10px] text-muted-foreground font-medium mt-1">

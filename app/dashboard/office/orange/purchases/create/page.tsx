@@ -816,7 +816,7 @@ export default function CreateOrangePurchasePage() {
                           </TableCell>
                           <TableCell className="text-xs">{item.unit}</TableCell>
                           <TableCell className="text-right text-xs">
-                            {item.mrp}
+                            {item.mrp && item.mrp > 0 ? item.mrp.toLocaleString() : "-"}
                           </TableCell>
                           <TableCell className="text-right text-xs">
                             {item.sellingPrice}

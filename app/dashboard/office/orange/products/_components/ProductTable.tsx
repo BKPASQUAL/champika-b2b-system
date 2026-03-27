@@ -206,7 +206,7 @@ export function ProductTable({
 
                   {/* ✅ ADDED MRP CELL */}
                   <TableCell className="text-right font-medium text-sm text-muted-foreground">
-                    LKR {product.mrp.toLocaleString()}
+                    {product.mrp && product.mrp > 0 ? `LKR ${product.mrp.toLocaleString()}` : "-"}
                   </TableCell>
 
                   <TableCell className="text-right font-medium text-sm">

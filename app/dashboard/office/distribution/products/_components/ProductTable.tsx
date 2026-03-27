@@ -257,7 +257,7 @@ export function ProductTable({
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    <div>LKR {product.mrp.toLocaleString()}</div>
+                    <div>{product.mrp && product.mrp > 0 ? `LKR ${product.mrp.toLocaleString()}` : "-"}</div>
                     {isMultiPack && product.mrp > 0 && (
                       <div className="text-[10px] text-muted-foreground">Pcs: {(product.mrp / packQty).toFixed(2)}</div>
                     )}

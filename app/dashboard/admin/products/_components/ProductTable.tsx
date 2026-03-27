@@ -203,7 +203,7 @@ export function ProductTable({
                     LKR {product.sellingPrice.toLocaleString()}
                   </TableCell>
                   <TableCell className="text-right">
-                    LKR {product.mrp.toLocaleString()}
+                    {product.mrp && product.mrp > 0 ? `LKR ${product.mrp.toLocaleString()}` : "-"}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">

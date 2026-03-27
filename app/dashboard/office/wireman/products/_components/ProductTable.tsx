@@ -232,7 +232,7 @@ export function ProductTable({
 
                   {/* MRP Column */}
                   <TableCell className="text-right font-medium text-sm text-muted-foreground">
-                    LKR {product.mrp.toLocaleString()}
+                    {product.mrp && product.mrp > 0 ? `LKR ${product.mrp.toLocaleString()}` : "-"}
                   </TableCell>
 
                   {/* Discount Percentage Column */}
