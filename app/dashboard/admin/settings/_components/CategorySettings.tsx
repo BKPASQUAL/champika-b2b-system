@@ -14,6 +14,7 @@ import {
   Building2,
   AlertCircle,
   Check,
+  Calculator,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -68,6 +69,7 @@ interface Category {
   type: string;
   parent_id?: string | null;
   category_id?: string | null;
+  description?: string | null;
   children?: Category[];
 }
 
@@ -98,6 +100,7 @@ export function CategorySettings() {
   const [loading, setLoading] = useState(true);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [newName, setNewName] = useState("");
+  const [newDescription, setNewDescription] = useState("");
   const [deleteDialog, setDeleteDialog] = useState<{
     open: boolean;
     id: string | null;
@@ -105,7 +108,7 @@ export function CategorySettings() {
   }>({ open: false, id: null, name: "" });
 
   const [activeType, setActiveType] = useState<
-    "category" | "brand" | "model" | "spec" | "supplier" | "route" | "lorry"
+    "category" | "brand" | "model" | "spec" | "supplier" | "route" | "lorry" | "pack_size"
   >("category");
 
   useEffect(() => {
@@ -113,7 +116,7 @@ export function CategorySettings() {
       const params = new URLSearchParams(window.location.search);
       const subtab = params.get("subtab") as any;
       if (
-        ["category", "brand", "model", "spec", "supplier", "route", "lorry"].includes(subtab)
+        ["category", "brand", "model", "spec", "supplier", "route", "lorry", "pack_size"].includes(subtab)
       ) {
         setActiveType(subtab);
       }
@@ -198,6 +201,15 @@ export function CategorySettings() {
       bgColor: "bg-teal-50 dark:bg-teal-950/30",
       borderColor: "border-teal-200 dark:border-teal-800",
       description: "Manage supplier categories",
+    },
+    {
+      value: "pack_size",
+      label: "Pack Sizes",
+      icon: Calculator,
+      color: "text-cyan-600",
+      bgColor: "bg-cyan-50 dark:bg-cyan-950/30",
+      borderColor: "border-cyan-200 dark:border-cyan-800",
+      description: "Manage packing sizes and base quantity rules",
     },
   ];
 
@@ -313,11 +325,13 @@ export function CategorySettings() {
     setSelectedModelId(null);
     setSelectedSpecSubModelId(null);
     setNewName("");
+    setNewDescription("");
   }, [fetchCategories]);
 
   const openAddDialog = (parentId: string | null = null) => {
     setSelectedParent(parentId);
     setNewName("");
+    setNewDescription("");
     if (parentId) {
       setSelectedCategoryId(null);
     }
@@ -349,6 +363,7 @@ export function CategorySettings() {
         name: newName.trim(),
         type: activeType,
         parent_id: selectedParent,
+        description: activeType === "pack_size" ? newDescription : undefined,
       };
 
       if (activeType === "model") {
@@ -392,6 +407,7 @@ export function CategorySettings() {
       fetchAllCategories();
 
       setNewName("");
+      setNewDescription("");
       setSelectedParent(null);
       setSelectedCategoryId(null);
       setSelectedSubCategoryId(null);
@@ -753,8 +769,13 @@ export function CategorySettings() {
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <h4 className="font-semibold text-base truncate">
+                      <h4 className="font-semibold text-base truncate flex items-center gap-2">
                         {item.name}
+                        {activeType === "pack_size" && item.description && (
+                          <Badge variant="secondary" className="text-xs">
+                            Qty: {item.description}
+                          </Badge>
+                        )}
                       </h4>
                       {item.children && item.children.length > 0 && (
                         <p className="text-xs text-muted-foreground mt-1">
@@ -1081,6 +1102,22 @@ export function CategorySettings() {
                     autoFocus
                   />
                 </div>
+
+                {activeType === "pack_size" && (
+                  <div className="space-y-3">
+                    <Label htmlFor="description" className="text-base font-semibold">
+                      Pieces per Pack <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="description"
+                      type="number"
+                      placeholder="e.g. 12"
+                      value={newDescription}
+                      onChange={(e) => setNewDescription(e.target.value)}
+                      className="h-11"
+                    />
+                  </div>
+                )}
               </div>
 
               <DialogFooter>

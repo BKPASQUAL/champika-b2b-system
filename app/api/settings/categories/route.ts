@@ -13,9 +13,11 @@ const schema = z.object({
     "supplier",
     "route",
     "lorry",
+    "pack_size",
   ]),
   parent_id: z.string().nullable().optional(),
   category_id: z.string().nullable().optional(), // ✅ NEW: For linking models/specs to categories
+  description: z.string().nullable().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -59,6 +61,7 @@ export async function POST(request: NextRequest) {
 
     if (val.parent_id) insertData.parent_id = val.parent_id;
     if (val.category_id) insertData.category_id = val.category_id;
+    if (val.description !== undefined) insertData.description = val.description;
 
     const { data, error } = await supabaseAdmin
       .from("categories")
