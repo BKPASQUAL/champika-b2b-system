@@ -18,14 +18,40 @@ export async function POST(request: NextRequest) {
     const filePath = `product-images/${fileName}`;
 
     // Upload to Supabase Storage (Bucket: 'products')
-    const { error: uploadError } = await supabaseAdmin.storage
-      .from("products")
+    const bucketName = "products";
+    let { error: uploadError } = await supabaseAdmin.storage
+      .from(bucketName)
       .upload(filePath, file, {
         contentType: file.type,
         upsert: false,
       });
 
-    if (uploadError) {
+    if (uploadError && ((uploadError as any).statusCode === "404" || uploadError.message === "Bucket not found" || (uploadError as any).status === 400)) {
+      console.log(`Bucket '${bucketName}' not found. Attempting to create it...`);
+      // Try to create the bucket
+      const { error: createError } = await supabaseAdmin.storage.createBucket(bucketName, {
+        public: true, 
+      });
+      
+      if (createError) {
+         console.error("Failed to create bucket:", createError);
+         throw createError;
+      }
+      
+      console.log(`Bucket '${bucketName}' created successfully. Retrying upload...`);
+      // Retry upload
+      const { error: retryError } = await supabaseAdmin.storage
+        .from(bucketName)
+        .upload(filePath, file, {
+          contentType: file.type,
+          upsert: false,
+        });
+        
+      if (retryError) {
+        throw retryError;
+      }
+      uploadError = null; // Clear error since retry succeeded
+    } else if (uploadError) {
       throw uploadError;
     }
 
