@@ -177,11 +177,11 @@ export function ProductDialogs({
           <div className="grid grid-cols-2 gap-4 py-4">
             {/* --- ITEM CODE (SKU) INPUT --- */}
             <div className="col-span-1 space-y-2">
-              <Label>Item Code (SKU)</Label>
+              <Label>Supplier Item Code (Company Code)</Label>
               <Input
-                value={formData.sku}
+                value={formData.companyCode || ""}
                 onChange={(e) =>
-                  setFormData({ ...formData, sku: e.target.value })
+                  setFormData({ ...formData, companyCode: e.target.value })
                 }
                 placeholder="Leave blank to auto-generate"
               />

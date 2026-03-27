@@ -26,6 +26,7 @@ export interface Product {
   commissionType?: string;
   commissionValue?: number;
   isActive: boolean;
+  companyCode?: string;
   // ✅ Added Price History
   priceHistory?: {
     date: string;
@@ -69,4 +70,5 @@ export interface ProductFormData {
   images: string[];
   unitOfMeasure: string;
   isActive: boolean;
+  companyCode?: string;
 }

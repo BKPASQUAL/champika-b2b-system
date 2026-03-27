@@ -66,15 +66,27 @@ export default function ProductsPage() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [prodRes, catRes, supRes] = await Promise.all([
+      const [prodRes, catRes, supRes, setSupRes] = await Promise.all([
         fetch("/api/products"),
         fetch("/api/settings/categories?type=category"),
         fetch("/api/suppliers"),
+        fetch("/api/settings/categories?type=supplier"),
       ]);
 
       if (prodRes.ok) setProducts(await prodRes.json());
       if (catRes.ok) setCategories(await catRes.json());
-      if (supRes.ok) setSuppliers(await supRes.json());
+      
+      let allSuppliers: any[] = [];
+      if (supRes.ok) {
+        allSuppliers = [...allSuppliers, ...(await supRes.json())];
+      }
+      if (setSupRes.ok) {
+        allSuppliers = [...allSuppliers, ...(await setSupRes.json())];
+      }
+      
+      // Deduplicate by name
+      const uniqueSuppliers = allSuppliers.filter((v, i, a) => a.findIndex(t => (t.name === v.name)) === i);
+      setSuppliers(uniqueSuppliers);
     } catch (error) {
       toast.error("Failed to load product data");
     } finally {
