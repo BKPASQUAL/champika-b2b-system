@@ -100,12 +100,29 @@ export function CommissionSettings() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [supRes, catRes, rulesRes] = await Promise.all([
+      const [supRes, catSupRes, catRes, rulesRes] = await Promise.all([
         fetch("/api/suppliers"),
+        fetch("/api/settings/categories?type=supplier"),
         fetch("/api/settings/categories?type=category"),
         fetch("/api/settings/commissions"),
       ]);
-      if (supRes.ok) setSuppliers(await supRes.json());
+      
+      let allSuppliers: Supplier[] = [];
+      if (supRes.ok) {
+        const mainSups = await supRes.json();
+        allSuppliers = [...mainSups];
+      }
+      if (catSupRes.ok) {
+        const catSups = await catSupRes.json();
+        // Add category suppliers if not already in list
+        catSups.forEach((cs: any) => {
+          if (!allSuppliers.find(s => s.name === cs.name)) {
+            allSuppliers.push({ id: cs.id, name: cs.name });
+          }
+        });
+      }
+      setSuppliers(allSuppliers);
+      
       if (catRes.ok) setCategories(await catRes.json());
       if (rulesRes.ok) setRules(await rulesRes.json());
     } catch {
