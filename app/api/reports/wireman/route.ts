@@ -1,164 +1,296 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 export const dynamic = "force-dynamic";
 
+const WIREMAN_ID = BUSINESS_IDS.WIREMAN_AGENCY;
+
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
-  const from = url.searchParams.get("from");
-  const to = url.searchParams.get("to");
+  const from = url.searchParams.get("from") || new Date(new Date().getFullYear(), 0, 1).toISOString();
+  const to = url.searchParams.get("to") || new Date(new Date().getFullYear(), 11, 31).toISOString();
+
+  const fromDate = from.split("T")[0];
+  const toDate = to.split("T")[0];
 
   try {
-    let query = supabaseAdmin
+    // ── 1. Invoices (Sales) ───────────────────────────────────────────────────
+    // Note: invoices table has no 'date' or 'final_amount' columns.
+    // Date comes from created_at; amount from total_amount; status from 'status'.
+    const { data: invoices, error: invErr } = await supabaseAdmin
+      .from("invoices")
+      .select(
+        `id, total_amount, due_amount, status, invoice_no, created_at,
+         customers (shop_name),
+         orders!inner (order_date, business_id)`
+      )
+      .eq("orders.business_id", WIREMAN_ID)
+      .gte("created_at", fromDate)
+      .lte("created_at", toDate + "T23:59:59")
+      .order("created_at", { ascending: false });
+
+    if (invErr) throw new Error(`Invoices query failed: ${invErr.message}`);
+
+    // ── 2. Purchases ─────────────────────────────────────────────────────────
+    const { data: purchases, error: purErr } = await supabaseAdmin
+      .from("purchases")
+      .select("id, total_amount, paid_amount, purchase_date, purchase_id")
+      .eq("business_id", WIREMAN_ID)
+      .gte("purchase_date", fromDate)
+      .lte("purchase_date", toDate);
+
+    if (purErr) throw new Error(`Purchases query failed: ${purErr.message}`);
+
+    // ── 3. Expenses ───────────────────────────────────────────────────────────
+    const { data: expenses, error: expErr } = await supabaseAdmin
+      .from("expenses")
+      .select("id, amount, category, expense_date, description, payment_method")
+      .eq("business_id", WIREMAN_ID)
+      .gte("expense_date", fromDate)
+      .lte("expense_date", toDate)
+      .order("expense_date", { ascending: false });
+
+    if (expErr) throw new Error(`Expenses query failed: ${expErr.message}`);
+
+    // ── 4. Order Items for Profit (Wireman products by supplier_name) ─────────
+    const { data: orderItems, error: itemErr } = await supabaseAdmin
       .from("order_items")
       .select(
-        `
-        id, quantity, free_quantity, unit_price, actual_unit_cost, created_at,
-        order:orders!inner (
-          order_id, status, created_at, order_date, invoice_no,
-          customer:customers (shop_name),
-          invoices (invoice_no)
-        ),
-        product:products!inner (
-          id, name, sku, supplier_name, cost_price
-        )
-      `
+        `id, quantity, free_quantity, unit_price, actual_unit_cost, created_at,
+         order:orders!inner (
+           order_id, status, created_at, order_date, invoice_no,
+           customer:customers (shop_name),
+           invoices (invoice_no)
+         ),
+         product:products!inner (id, name, sku, supplier_name, cost_price)`
       )
       .neq("order.status", "Cancelled")
-      .ilike("product.supplier_name", "%Wireman%");
+      .ilike("product.supplier_name", "%Wireman%")
+      .gte("order.order_date", fromDate)
+      .lte("order.order_date", toDate);
 
-    if (from) {
-      // Assuming 'order_date' is typically formatted as YYYY-MM-DD
-      // We also check against created_at as a fallback or in tandem, though postgrest 
-      // makes 'or' slightly tricky with inner joins. Instead, filter by order.order_date
-      query = query.gte("order.order_date", from.split("T")[0]);
-    }
-    if (to) {
-      query = query.lte("order.order_date", to.split("T")[0]);
-    }
+    if (itemErr) throw new Error(`Order items query failed: ${itemErr.message}`);
 
-    const { data: orderItems, error } = await query;
+    // ── Process: Overview KPIs ────────────────────────────────────────────────
+    const totalSales = (invoices || []).reduce(
+      (s, inv: any) => s + (Number(inv.total_amount) || 0),
+      0
+    );
+    const orderCount = (invoices || []).length;
+    const totalExpenses = (expenses || []).reduce((s, e: any) => s + Number(e.amount || 0), 0);
+    const expenseCount = (expenses || []).length;
 
-    if (error) throw error;
-
-    let overview = {
-      revenue: 0,
-      standardCost: 0,
-      standardProfit: 0,
-      margin: 0
-    };
-
-    const monthlyStats: Record<string, any> = {};
-    const productStats: Record<string, any> = {};
-    const customerStats: Record<string, any> = {};
-    const orderStats: Record<string, any> = {};
-
+    let totalRevenue = 0;
+    let totalCost = 0;
     (orderItems || []).forEach((item: any) => {
       const qty = Number(item.quantity) || 0;
       const unitPrice = Number(item.unit_price) || 0;
-      
-      // Prioritize `actual_unit_cost` from `order_items` which tracks moving average cost 
-      // incorporating any post-purchase discounts. Fallback to base product cost.
-      const standardUnitCost = Number(item.actual_unit_cost) || Number(item.product.cost_price) || 0;
+      const unitCost = Number(item.actual_unit_cost) || Number(item.product.cost_price) || 0;
+      totalRevenue += qty * unitPrice;
+      totalCost += qty * unitCost;
+    });
+    const totalProfit = totalRevenue - totalCost;
+    const profitMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
 
-      const revenue = qty * unitPrice;
-      const standardCost = qty * standardUnitCost;
-      const standardProfit = revenue - standardCost;
+    // ── Process: Monthly Distribution ─────────────────────────────────────────
+    const monthMap: Record<string, { month: string; monthKey: string; billCount: number; totalSales: number; totalPurchases: number }> = {};
 
-      // 1. Overview
-      overview.revenue += revenue;
-      overview.standardCost += standardCost;
-      overview.standardProfit += standardProfit;
-
-      // 2. Monthly
-      const actualDate = item.order.order_date || item.order.created_at.split("T")[0];
-      const date = new Date(actualDate);
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-      
-      if (!monthlyStats[monthKey]) {
-        monthlyStats[monthKey] = {
-          name: date.toLocaleString("default", { month: "short", year: "2-digit" }),
-          dateStr: monthKey,
-          revenue: 0,
-          standardProfit: 0,
+    (invoices || []).forEach((inv: any) => {
+      const rawDate = inv.orders?.order_date || inv.created_at;
+      if (!rawDate) return;
+      const d = new Date(rawDate);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      if (!monthMap[key]) {
+        monthMap[key] = {
+          month: d.toLocaleString("default", { month: "long", year: "numeric" }),
+          monthKey: key,
+          billCount: 0,
+          totalSales: 0,
+          totalPurchases: 0,
         };
       }
-      monthlyStats[monthKey].revenue += revenue;
-      monthlyStats[monthKey].standardProfit += standardProfit;
-
-      // 3. Products
-      const productId = item.product.id;
-      if (!productStats[productId]) {
-        productStats[productId] = {
-          id: productId,
-          sku: item.product.sku,
-          name: item.product.name,
-          qtySold: 0,
-          revenue: 0,
-          standardCost: 0,
-          standardProfit: 0,
-        };
-      }
-      productStats[productId].qtySold += qty;
-      productStats[productId].revenue += revenue;
-      productStats[productId].standardCost += standardCost;
-      productStats[productId].standardProfit += standardProfit;
-
-      // 4. Customers
-      const customerName = item.order.customer?.shop_name || "Unknown";
-      if (!customerStats[customerName]) {
-        customerStats[customerName] = {
-          name: customerName,
-          revenue: 0,
-          standardCost: 0,
-          standardProfit: 0,
-        };
-      }
-      customerStats[customerName].revenue += revenue;
-      customerStats[customerName].standardCost += standardCost;
-      customerStats[customerName].standardProfit += standardProfit;
-
-      // 5. Orders
-      const orderId = item.order.order_id;
-      const invoiceNo = item.order.invoices?.[0]?.invoice_no || item.order.invoice_no || "N/A";
-      
-      if (!orderStats[orderId]) {
-        orderStats[orderId] = {
-          orderId: orderId,
-          invoiceNo: invoiceNo,
-          customer: customerName,
-          date: item.order.order_date || item.order.created_at.split("T")[0],
-          revenue: 0,
-          standardCost: 0,
-          standardProfit: 0,
-        };
-      }
-      orderStats[orderId].revenue += revenue;
-      orderStats[orderId].standardCost += standardCost;
-      orderStats[orderId].standardProfit += standardProfit;
+      monthMap[key].billCount += 1;
+      monthMap[key].totalSales += Number(inv.total_amount) || 0;
     });
 
-    overview.margin = overview.revenue > 0 ? (overview.standardProfit / overview.revenue) * 100 : 0;
+    (purchases || []).forEach((p: any) => {
+      const rawDate = p.purchase_date;
+      if (!rawDate) return;
+      const d = new Date(rawDate);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      if (!monthMap[key]) {
+        monthMap[key] = {
+          month: d.toLocaleString("default", { month: "long", year: "numeric" }),
+          monthKey: key,
+          billCount: 0,
+          totalSales: 0,
+          totalPurchases: 0,
+        };
+      }
+      monthMap[key].totalPurchases += Number(p.total_amount) || 0;
+    });
 
-    // Calculate margins for all grouped datasets
-    const calculateMargin = (obj: any) => {
-      obj.margin = obj.revenue > 0 ? (obj.standardProfit / obj.revenue) * 100 : 0;
-    };
+    const monthly = Object.values(monthMap)
+      .map((m) => ({ ...m, netValue: m.totalSales - m.totalPurchases }))
+      .sort((a, b) => b.monthKey.localeCompare(a.monthKey));
 
-    Object.values(monthlyStats).forEach(calculateMargin);
-    Object.values(productStats).forEach(calculateMargin);
-    Object.values(customerStats).forEach(calculateMargin);
-    Object.values(orderStats).forEach(calculateMargin);
+    // ── Process: Profit Monthly Chart ─────────────────────────────────────────
+    const profitMonthMap: Record<string, any> = {};
+    (orderItems || []).forEach((item: any) => {
+      const qty = Number(item.quantity) || 0;
+      const unitPrice = Number(item.unit_price) || 0;
+      const unitCost = Number(item.actual_unit_cost) || Number(item.product.cost_price) || 0;
+      const revenue = qty * unitPrice;
+      const profit = revenue - qty * unitCost;
+      const rawDate = item.order.order_date || item.order.created_at.split("T")[0];
+      const d = new Date(rawDate);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      if (!profitMonthMap[key]) {
+        profitMonthMap[key] = {
+          name: d.toLocaleString("default", { month: "short", year: "2-digit" }),
+          dateStr: key,
+          revenue: 0,
+          profit: 0,
+        };
+      }
+      profitMonthMap[key].revenue += revenue;
+      profitMonthMap[key].profit += profit;
+    });
+    const profitMonthly = Object.values(profitMonthMap).sort((a, b) =>
+      a.dateStr.localeCompare(b.dateStr)
+    );
+
+    // ── Process: Products ─────────────────────────────────────────────────────
+    const productMap: Record<string, any> = {};
+    (orderItems || []).forEach((item: any) => {
+      const qty = Number(item.quantity) || 0;
+      const unitPrice = Number(item.unit_price) || 0;
+      const unitCost = Number(item.actual_unit_cost) || Number(item.product.cost_price) || 0;
+      const revenue = qty * unitPrice;
+      const cost = qty * unitCost;
+      const pid = item.product.id;
+      if (!productMap[pid]) {
+        productMap[pid] = { id: pid, sku: item.product.sku, name: item.product.name, qtySold: 0, revenue: 0, cost: 0, profit: 0 };
+      }
+      productMap[pid].qtySold += qty;
+      productMap[pid].revenue += revenue;
+      productMap[pid].cost += cost;
+      productMap[pid].profit += revenue - cost;
+    });
+    const products = Object.values(productMap)
+      .map((p) => ({ ...p, margin: p.revenue > 0 ? (p.profit / p.revenue) * 100 : 0 }))
+      .sort((a, b) => b.revenue - a.revenue);
+
+    // ── Process: Customers ────────────────────────────────────────────────────
+    const customerMap: Record<string, any> = {};
+    (invoices || []).forEach((inv: any) => {
+      const name = inv.customers?.shop_name || "Unknown";
+      const amount = Number(inv.total_amount) || 0;
+      if (!customerMap[name]) {
+        customerMap[name] = { name, billCount: 0, totalSales: 0, dueAmount: 0 };
+      }
+      customerMap[name].billCount += 1;
+      customerMap[name].totalSales += amount;
+      customerMap[name].dueAmount += Number(inv.due_amount) || 0;
+    });
+    const customers = Object.values(customerMap).sort((a, b) => b.totalSales - a.totalSales);
+
+    // ── Process: Customer Profits (from order_items) ──────────────────────────
+    const customerProfitMap: Record<string, any> = {};
+    (orderItems || []).forEach((item: any) => {
+      const qty = Number(item.quantity) || 0;
+      const unitPrice = Number(item.unit_price) || 0;
+      const unitCost = Number(item.actual_unit_cost) || Number(item.product.cost_price) || 0;
+      const revenue = qty * unitPrice;
+      const profit = revenue - qty * unitCost;
+      const name = item.order.customer?.shop_name || "Unknown";
+      if (!customerProfitMap[name]) {
+        customerProfitMap[name] = { name, revenue: 0, profit: 0 };
+      }
+      customerProfitMap[name].revenue += revenue;
+      customerProfitMap[name].profit += profit;
+    });
+    const customerProfits = Object.values(customerProfitMap)
+      .filter((c: any) => c.profit > 0)
+      .sort((a: any, b: any) => b.profit - a.profit)
+      .slice(0, 12)
+      .map((c: any) => ({
+        name: c.name.length > 12 ? c.name.slice(0, 12) + "…" : c.name,
+        fullName: c.name,
+        value: Math.round(c.profit),
+      }));
+
+    // ── Process: Margin Distribution (per order) ──────────────────────────────
+    const orderMarginMap: Record<string, { revenue: number; cost: number }> = {};
+    (orderItems || []).forEach((item: any) => {
+      const qty = Number(item.quantity) || 0;
+      const unitPrice = Number(item.unit_price) || 0;
+      const unitCost = Number(item.actual_unit_cost) || Number(item.product.cost_price) || 0;
+      const oid = item.order.order_id;
+      if (!orderMarginMap[oid]) orderMarginMap[oid] = { revenue: 0, cost: 0 };
+      orderMarginMap[oid].revenue += qty * unitPrice;
+      orderMarginMap[oid].cost += qty * unitCost;
+    });
+    const marginDistribution = { excellent: 0, good: 0, fair: 0, low: 0 };
+    Object.values(orderMarginMap).forEach((o) => {
+      const m = o.revenue > 0 ? ((o.revenue - o.cost) / o.revenue) * 100 : 0;
+      if (m >= 30) marginDistribution.excellent++;
+      else if (m >= 20) marginDistribution.good++;
+      else if (m >= 10) marginDistribution.fair++;
+      else marginDistribution.low++;
+    });
+
+    // ── Process: Orders list ──────────────────────────────────────────────────
+    const orders = (invoices || []).map((inv: any) => ({
+      id: inv.id,
+      invoiceNo: inv.invoice_no,
+      date: inv.orders?.order_date
+        ? new Date(inv.orders.order_date).toISOString().split("T")[0]
+        : inv.created_at?.split("T")[0] || null,
+      customer: inv.customers?.shop_name || "Unknown",
+      amount: Number(inv.total_amount) || 0,
+      dueAmount: Number(inv.due_amount) || 0,
+      paymentStatus: inv.status || "Unpaid",
+    }));
+
+    // ── Process: Due Invoices ─────────────────────────────────────────────────
+    const dueInvoices = orders
+      .filter((o) => o.paymentStatus !== "Paid" && o.dueAmount > 0)
+      .sort((a, b) => b.dueAmount - a.dueAmount);
+
+    // ── Process: Expenses list ────────────────────────────────────────────────
+    const expenseList = (expenses || []).map((e: any) => ({
+      id: e.id,
+      description: e.description || "-",
+      amount: Number(e.amount) || 0,
+      category: e.category || "General",
+      date: e.expense_date,
+      paymentMethod: e.payment_method || "-",
+    }));
 
     return NextResponse.json({
-      overview,
-      monthly: Object.values(monthlyStats).sort((a: any, b: any) => a.dateStr.localeCompare(b.dateStr)),
-      products: Object.values(productStats).sort((a: any, b: any) => b.revenue - a.revenue),
-      customers: Object.values(customerStats).sort((a: any, b: any) => b.revenue - a.revenue),
-      orders: Object.values(orderStats).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+      overview: {
+        totalSales,
+        orderCount,
+        totalProfit,
+        totalCost,
+        profitMargin,
+        totalExpenses,
+        expenseCount,
+      },
+      monthly,
+      profitMonthly,
+      products,
+      customers,
+      customerProfits,
+      marginDistribution,
+      orders,
+      dueInvoices,
+      expenses: expenseList,
     });
-
   } catch (error: any) {
+    console.error("Wireman report error:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

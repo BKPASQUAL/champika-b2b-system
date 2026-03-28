@@ -16,31 +16,31 @@ export async function GET(request: NextRequest) {
 
   try {
     // ── 1. Invoices (Sales) ───────────────────────────────────────────────────
+    // Note: invoices table has no 'date' or 'final_amount' columns.
+    // Date comes from created_at; amount from total_amount; status from 'status'.
     const { data: invoices, error: invErr } = await supabaseAdmin
       .from("invoices")
       .select(
-        `id, total_amount, final_amount, due_amount, payment_status, date, invoice_no,
+        `id, total_amount, due_amount, status, invoice_no, created_at,
          customers (shop_name),
-         orders!inner (order_date, business_id,
-           order_items (quantity, unit_price, actual_unit_cost, free_quantity, total_price)
-         )`
+         orders!inner (order_date, business_id)`
       )
       .eq("orders.business_id", SIERRA_ID)
-      .gte("date", fromDate)
-      .lte("date", toDate)
-      .order("date", { ascending: false });
+      .gte("created_at", fromDate)
+      .lte("created_at", toDate + "T23:59:59")
+      .order("created_at", { ascending: false });
 
-    if (invErr) throw invErr;
+    if (invErr) throw new Error(`Invoices query failed: ${invErr.message}`);
 
     // ── 2. Purchases ─────────────────────────────────────────────────────────
     const { data: purchases, error: purErr } = await supabaseAdmin
       .from("purchases")
-      .select("id, total_amount, paid_amount, purchase_date, purchase_id, suppliers(name)")
+      .select("id, total_amount, paid_amount, purchase_date, purchase_id")
       .eq("business_id", SIERRA_ID)
       .gte("purchase_date", fromDate)
       .lte("purchase_date", toDate);
 
-    if (purErr) throw purErr;
+    if (purErr) throw new Error(`Purchases query failed: ${purErr.message}`);
 
     // ── 3. Expenses ───────────────────────────────────────────────────────────
     const { data: expenses, error: expErr } = await supabaseAdmin
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
       .lte("expense_date", toDate)
       .order("expense_date", { ascending: false });
 
-    if (expErr) throw expErr;
+    if (expErr) throw new Error(`Expenses query failed: ${expErr.message}`);
 
     // ── 4. Order Items for Profit (Sierra products by supplier_name) ──────────
     const { data: orderItems, error: itemErr } = await supabaseAdmin
@@ -70,11 +70,11 @@ export async function GET(request: NextRequest) {
       .gte("order.order_date", fromDate)
       .lte("order.order_date", toDate);
 
-    if (itemErr) throw itemErr;
+    if (itemErr) throw new Error(`Order items query failed: ${itemErr.message}`);
 
     // ── Process: Overview KPIs ────────────────────────────────────────────────
     const totalSales = (invoices || []).reduce(
-      (s, inv: any) => s + (Number(inv.final_amount) || Number(inv.total_amount) || 0),
+      (s, inv: any) => s + (Number(inv.total_amount) || 0),
       0
     );
     const orderCount = (invoices || []).length;
@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
     const monthMap: Record<string, { month: string; monthKey: string; billCount: number; totalSales: number; totalPurchases: number }> = {};
 
     (invoices || []).forEach((inv: any) => {
-      const rawDate = inv.date || inv.orders?.order_date;
+      const rawDate = inv.orders?.order_date || inv.created_at;
       if (!rawDate) return;
       const d = new Date(rawDate);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -111,7 +111,7 @@ export async function GET(request: NextRequest) {
         };
       }
       monthMap[key].billCount += 1;
-      monthMap[key].totalSales += Number(inv.final_amount) || Number(inv.total_amount) || 0;
+      monthMap[key].totalSales += Number(inv.total_amount) || 0;
     });
 
     (purchases || []).forEach((p: any) => {
@@ -186,7 +186,7 @@ export async function GET(request: NextRequest) {
     const customerMap: Record<string, any> = {};
     (invoices || []).forEach((inv: any) => {
       const name = inv.customers?.shop_name || "Unknown";
-      const amount = Number(inv.final_amount) || Number(inv.total_amount) || 0;
+      const amount = Number(inv.total_amount) || 0;
       if (!customerMap[name]) {
         customerMap[name] = { name, billCount: 0, totalSales: 0, dueAmount: 0 };
       }
@@ -245,11 +245,13 @@ export async function GET(request: NextRequest) {
     const orders = (invoices || []).map((inv: any) => ({
       id: inv.id,
       invoiceNo: inv.invoice_no,
-      date: inv.date,
+      date: inv.orders?.order_date
+        ? new Date(inv.orders.order_date).toISOString().split("T")[0]
+        : inv.created_at?.split("T")[0] || null,
       customer: inv.customers?.shop_name || "Unknown",
-      amount: Number(inv.final_amount) || Number(inv.total_amount) || 0,
+      amount: Number(inv.total_amount) || 0,
       dueAmount: Number(inv.due_amount) || 0,
-      paymentStatus: inv.payment_status,
+      paymentStatus: inv.status || "Unpaid",
     }));
 
     // ── Process: Due Invoices ─────────────────────────────────────────────────
@@ -288,7 +290,7 @@ export async function GET(request: NextRequest) {
       expenses: expenseList,
     });
   } catch (error: any) {
-    console.error("Sierra report error:", error);
+    console.error("Sierra report error:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
