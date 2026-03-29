@@ -108,7 +108,7 @@ export default function RepProductsPage() {
     const searchTerms = getSearchTerms(searchQuery);
     const haystack = [
       product.name, product.sku, product.category,
-      product.brand ?? "", product.modelType ?? "", product.sizeSpec ?? "",
+      product.brand ?? "",
     ].join(" ").toLowerCase();
     const matchesSearch =
       searchQuery.trim() === "" ||
