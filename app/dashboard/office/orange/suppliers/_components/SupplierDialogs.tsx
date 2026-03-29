@@ -14,24 +14,14 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Supplier, SupplierFormData } from "../types";
 
-interface BusinessOption {
-  id: string;
-  name: string;
-}
-
 interface SupplierDialogsProps {
-  // Add/Edit Dialog
   isAddDialogOpen: boolean;
   setIsAddDialogOpen: (open: boolean) => void;
   formData: SupplierFormData;
   setFormData: (data: SupplierFormData) => void;
   onSave: () => void;
   selectedSupplier: Supplier | null;
-
   categoryOptions?: { id: string; name: string }[];
-  businessOptions: BusinessOption[];
-
-  // Delete Dialog
   isDeleteDialogOpen: boolean;
   setIsDeleteDialogOpen: (open: boolean) => void;
   onDeleteConfirm: () => void;
@@ -44,14 +34,12 @@ export function SupplierDialogs({
   setFormData,
   onSave,
   selectedSupplier,
-  businessOptions,
   isDeleteDialogOpen,
   setIsDeleteDialogOpen,
   onDeleteConfirm,
 }: SupplierDialogsProps) {
   return (
     <>
-      {/* Add/Edit Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -59,31 +47,12 @@ export function SupplierDialogs({
               {selectedSupplier ? "Edit Supplier" : "Add New Supplier"}
             </DialogTitle>
             <DialogDescription>
-              {selectedSupplier ? "Update info" : "Enter details"}
+              {selectedSupplier
+                ? "Update info"
+                : "Enter details for Orange Agency"}
             </DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-4">
-            {/* Business Selector — only shown when options are provided */}
-            {businessOptions.length > 0 && (
-              <div className="col-span-2 space-y-2">
-                <Label>Assigned Business *</Label>
-                <select
-                  value={formData.businessId || ""}
-                  onChange={(e) =>
-                    setFormData({ ...formData, businessId: e.target.value })
-                  }
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <option value="" disabled>Select Business Entity</option>
-                  {businessOptions.map((biz) => (
-                    <option key={biz.id} value={biz.id}>
-                      {biz.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
             <div className="col-span-2 space-y-2">
               <Label>Company Name *</Label>
               <Input
@@ -129,7 +98,6 @@ export function SupplierDialogs({
                 }
               />
             </div>
-
             <div className="col-span-2 flex items-center justify-between rounded-lg border p-3">
               <Label className="cursor-pointer">Active</Label>
               <Switch
@@ -144,14 +112,16 @@ export function SupplierDialogs({
             <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={onSave}>
+            <Button
+              onClick={onSave}
+              className="bg-orange-600 hover:bg-orange-700"
+            >
               {selectedSupplier ? "Update" : "Add"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>

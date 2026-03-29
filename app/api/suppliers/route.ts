@@ -4,10 +4,10 @@ import { z } from "zod";
 
 // Validation Schema
 const supplierSchema = z.object({
-  name: z.string().min(2, "Company name is required"),
-  contactPerson: z.string().min(2, "Contact person is required"),
+  name: z.string().min(1, "Company name is required"),
+  contactPerson: z.string().optional().or(z.literal("")),
   email: z.string().email().optional().or(z.literal("")),
-  phone: z.string().min(9, "Valid phone number is required"),
+  phone: z.string().optional().or(z.literal("")),
   address: z.string().optional(),
   category: z.string().optional(),
   status: z.enum(["Active", "Inactive", "Pending"]).default("Active"),
@@ -70,13 +70,20 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const val = supplierSchema.parse(body);
 
-    const { count, error: countError } = await supabaseAdmin
+    const { data: lastSupplier, error: countError } = await supabaseAdmin
       .from("suppliers")
-      .select("*", { count: "exact", head: true });
+      .select("supplier_id")
+      .order("supplier_id", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
     if (countError) throw countError;
 
-    const nextId = (count || 0) + 1001;
+    let nextId = 1001;
+    if (lastSupplier?.supplier_id) {
+      const lastNum = parseInt(lastSupplier.supplier_id.replace("S-", ""), 10);
+      if (!isNaN(lastNum)) nextId = lastNum + 1;
+    }
     const supplierId = `S-${nextId}`;
 
     const { data, error } = await supabaseAdmin

@@ -90,6 +90,7 @@ export default function CreateSierraPurchasePage() {
   // --- Inline Product Creation State ---
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [categories, setCategories] = useState<{ id: string; name: string; parent_id?: string }[]>([]);
+  const [supplierCategories, setSupplierCategories] = useState<{ id: string; name: string }[]>([]);
   const [submittingProduct, setSubmittingProduct] = useState(false);
   
   const [formData, setFormData] = useState<ProductFormData>({
@@ -205,15 +206,15 @@ export default function CreateSierraPurchasePage() {
     if (!currentBusinessId) return;
     setLoadingData(true);
     try {
-      const [prodRes, supRes, catRes] = await Promise.all([
+      const [prodRes, supRes, catRes, supCatRes] = await Promise.all([
         fetch("/api/products?active=true"),
         fetch(`/api/suppliers?businessId=${currentBusinessId}`),
-        fetch("/api/settings/categories?type=category")
+        fetch("/api/settings/categories?type=category"),
+        fetch("/api/settings/categories?type=supplier"),
       ]);
 
-      if (catRes.ok) {
-        setCategories(await catRes.json());
-      }
+      if (catRes.ok) setCategories(await catRes.json());
+      if (supCatRes.ok) setSupplierCategories(await supCatRes.json());
 
       if (prodRes.ok) {
         const allProducts: Product[] = await prodRes.json();
@@ -1138,7 +1139,7 @@ export default function CreateSierraPurchasePage() {
         setFormData={setSupplierFormData}
         onSave={handleCreateSupplier}
         selectedSupplier={null}
-        categoryOptions={categories} 
+        categoryOptions={supplierCategories}
         isDeleteDialogOpen={false}
         setIsDeleteDialogOpen={() => {}}
         onDeleteConfirm={() => {}}

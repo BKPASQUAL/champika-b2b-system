@@ -34,6 +34,11 @@ import {
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { ProductDialogs } from "../../products/_components/ProductDialogs";
+import { ProductFormData } from "../../products/types";
+import { SupplierDialogs } from "../../suppliers/_components/SupplierDialogs";
+import { SupplierFormData } from "../../suppliers/types";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 // --- Types ---
 
@@ -82,10 +87,51 @@ export default function CreateWiremanPurchasePage() {
   const [loadingData, setLoadingData] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
+  // --- Inline Product Creation State ---
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [categories, setCategories] = useState<{ id: string; name: string; parent_id?: string }[]>([]);
+  const [supplierCategories, setSupplierCategories] = useState<{ id: string; name: string }[]>([]);
+  const [submittingProduct, setSubmittingProduct] = useState(false);
+
+  const [formData, setFormData] = useState<ProductFormData>({
+    sku: "",
+    companyCode: "",
+    name: "Wireman ",
+    category: "",
+    subCategory: "",
+    brand: "",
+    subBrand: "",
+    modelType: "",
+    subModel: "",
+    sizeSpec: "",
+    supplier: "Wireman Agency",
+    stock: "0",
+    minStock: "0",
+    mrp: "",
+    sellingPrice: "",
+    costPrice: "",
+    images: [],
+    unitOfMeasure: "Pcs",
+    isActive: true,
+  });
+
+  // --- Inline Supplier Creation State ---
+  const [isAddSupplierDialogOpen, setIsAddSupplierDialogOpen] = useState(false);
+  const [supplierFormData, setSupplierFormData] = useState<SupplierFormData>({
+    name: "",
+    contactPerson: "",
+    email: "",
+    phone: "",
+    address: "",
+    category: "",
+    status: "Active",
+    duePayment: 0,
+    businessId: BUSINESS_IDS.WIREMAN_AGENCY,
+  });
+  const [submittingSupplier, setSubmittingSupplier] = useState(false);
+
   // Context State
-  const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(
-    null,
-  );
+  const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(null);
   const [currentBusinessName, setCurrentBusinessName] = useState<string>("");
 
   // Data States
@@ -95,14 +141,12 @@ export default function CreateWiremanPurchasePage() {
   // Form States
   const [supplierId, setSupplierId] = useState<string | null>(null);
   const [purchaseDate, setPurchaseDate] = useState(
-    new Date().toISOString().split("T")[0],
+    new Date().toISOString().split("T")[0]
   );
   const [arrivalDate, setArrivalDate] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
 
-  const [extraDiscountPercent, setExtraDiscountPercent] = useState<
-    number | string
-  >("");
+  const [extraDiscountPercent, setExtraDiscountPercent] = useState<number | string>("");
 
   // Items State
   const [items, setItems] = useState<PurchaseItem[]>([]);
@@ -158,16 +202,20 @@ export default function CreateWiremanPurchasePage() {
     if (!currentBusinessId) return;
     setLoadingData(true);
     try {
-      const [prodRes, supRes] = await Promise.all([
+      const [prodRes, supRes, catRes, supCatRes] = await Promise.all([
         fetch("/api/products?active=true"),
         fetch(`/api/suppliers?businessId=${currentBusinessId}`),
+        fetch("/api/settings/categories?type=category"),
+        fetch("/api/settings/categories?type=supplier"),
       ]);
+
+      if (catRes.ok) setCategories(await catRes.json());
+      if (supCatRes.ok) setSupplierCategories(await supCatRes.json());
 
       if (prodRes.ok) {
         const allProducts: Product[] = await prodRes.json();
-        // FILTER: Keep only Wireman products
         const wiremanProducts = allProducts.filter((p) =>
-          p.supplier?.toLowerCase().includes("wireman"),
+          p.supplier?.toLowerCase().includes("wireman")
         );
         setProducts(wiremanProducts);
       } else {
@@ -177,9 +225,8 @@ export default function CreateWiremanPurchasePage() {
       if (supRes.ok) {
         const supplierData = await supRes.json();
         setSuppliers(supplierData);
-        // Auto-select Wireman supplier if found
         const wiremanSupplier = supplierData.find((s: Supplier) =>
-          s.name.toLowerCase().includes("wireman"),
+          s.name.toLowerCase().includes("wireman")
         );
         if (wiremanSupplier) {
           setSupplierId(wiremanSupplier.id);
@@ -201,10 +248,7 @@ export default function CreateWiremanPurchasePage() {
   // --- Close Dropdown on Click Outside ---
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsDropdownOpen(false);
       }
     }
@@ -212,10 +256,9 @@ export default function CreateWiremanPurchasePage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // --- Global Keyboard Shortcuts ---
+  // --- Global Keyboard Shortcuts (Shift+F to focus search) ---
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // Shift + F to focus search
       if (e.shiftKey && (e.key === "f" || e.key === "F")) {
         e.preventDefault();
         searchInputRef.current?.focus();
@@ -242,11 +285,9 @@ export default function CreateWiremanPurchasePage() {
       quantity: "",
       unit: product.unitOfMeasure || "Pcs",
     });
-    setSearchTerm(product.name); // Set input text to selected product
-    setIsDropdownOpen(false); // Close dropdown
-    setHighlightedIndex(-1); // Reset highlight
-
-    // Auto-focus quantity input for fast data entry
+    setSearchTerm(product.name);
+    setIsDropdownOpen(false);
+    setHighlightedIndex(-1);
     setTimeout(() => {
       qtyInputRef.current?.focus();
     }, 100);
@@ -262,31 +303,21 @@ export default function CreateWiremanPurchasePage() {
 
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setHighlightedIndex((prevIndex) => {
-        const nextIndex =
-          prevIndex < filteredProducts.length - 1 ? prevIndex + 1 : prevIndex;
-        itemRefs.current[nextIndex]?.scrollIntoView({
-          behavior: "smooth",
-          block: "nearest",
-        });
-        return nextIndex;
+      setHighlightedIndex((prev) => {
+        const next = prev < filteredProducts.length - 1 ? prev + 1 : prev;
+        itemRefs.current[next]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        return next;
       });
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setHighlightedIndex((prevIndex) => {
-        const nextIndex = prevIndex > 0 ? prevIndex - 1 : prevIndex;
-        itemRefs.current[nextIndex]?.scrollIntoView({
-          behavior: "smooth",
-          block: "nearest",
-        });
-        return nextIndex;
+      setHighlightedIndex((prev) => {
+        const next = prev > 0 ? prev - 1 : prev;
+        itemRefs.current[next]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        return next;
       });
     } else if (e.key === "Enter") {
       e.preventDefault();
-      if (
-        highlightedIndex >= 0 &&
-        highlightedIndex < filteredProducts.length
-      ) {
+      if (highlightedIndex >= 0 && highlightedIndex < filteredProducts.length) {
         handleProductSelect(filteredProducts[highlightedIndex]);
       }
     } else if (e.key === "Escape") {
@@ -343,7 +374,6 @@ export default function CreateWiremanPurchasePage() {
 
     setItems([...items, newItem]);
 
-    // Reset Form
     setCurrentItem({
       productId: "",
       sku: "",
@@ -355,25 +385,20 @@ export default function CreateWiremanPurchasePage() {
       discountPercent: "",
       unit: "",
     });
-    setSearchTerm(""); // Reset Search
+    setSearchTerm("");
   };
 
   const handleRemoveItem = (id: string) =>
     setItems(items.filter((item) => item.id !== id));
 
-  const totalGross = items.reduce(
-    (sum, item) => sum + item.unitPrice * item.quantity,
-    0,
-  );
-  const totalLineDiscount = items.reduce(
-    (sum, item) => sum + item.discountAmount,
-    0,
-  );
+  // --- Bill Calculations ---
+  const totalGross = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+  const totalLineDiscount = items.reduce((sum, item) => sum + item.discountAmount, 0);
   const subtotal = totalGross - totalLineDiscount;
-  const extraDiscountAmount =
-    (subtotal * parseNumber(extraDiscountPercent)) / 100;
+  const extraDiscountAmount = (subtotal * parseNumber(extraDiscountPercent)) / 100;
   const finalTotal = subtotal - extraDiscountAmount;
 
+  // --- Save Purchase ---
   const handleSavePurchase = async () => {
     if (items.length === 0) return toast.error("Add at least one item");
     if (!supplierId) return toast.error("Select a supplier");
@@ -409,24 +434,120 @@ export default function CreateWiremanPurchasePage() {
     }
   };
 
+  // --- Create Product inline ---
+  const handleCreateProduct = async () => {
+    if (!formData.name || !formData.category) {
+      toast.error("Please fill required fields (Name, Category)");
+      return;
+    }
+
+    setSubmittingProduct(true);
+    const payload = {
+      ...formData,
+      supplier: suppliers.find((s) => s.id === supplierId)?.name || "Wireman Agency",
+      stock: Number(formData.stock) || 0,
+      minStock: Number(formData.minStock) || 0,
+      mrp: Number(formData.mrp) || 0,
+      sellingPrice: Number(formData.sellingPrice) || 0,
+      costPrice: Number(formData.costPrice) || 0,
+    };
+
+    try {
+      const res = await fetch("/api/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Operation failed");
+
+      toast.success("Product created successfully!");
+      setIsAddDialogOpen(false);
+      setFormData({
+        sku: "",
+        companyCode: "",
+        name: "Wireman ",
+        category: "",
+        subCategory: "",
+        brand: "",
+        subBrand: "",
+        modelType: "",
+        subModel: "",
+        sizeSpec: "",
+        supplier: "Wireman Agency",
+        stock: "0",
+        minStock: "0",
+        mrp: "",
+        sellingPrice: "",
+        costPrice: "",
+        images: [],
+        unitOfMeasure: "Pcs",
+        isActive: true,
+      });
+      await loadData();
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setSubmittingProduct(false);
+    }
+  };
+
+  // --- Create Supplier inline ---
+  const handleCreateSupplier = async () => {
+    if (!supplierFormData.name || !supplierFormData.contactPerson || !supplierFormData.phone) {
+      toast.error("Please fill in required fields (Name, Contact, Phone)");
+      return;
+    }
+
+    setSubmittingSupplier(true);
+    const payload = {
+      ...supplierFormData,
+      businessId: BUSINESS_IDS.WIREMAN_AGENCY,
+    };
+
+    try {
+      const res = await fetch("/api/suppliers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to create supplier");
+
+      toast.success("Supplier created successfully!");
+      setIsAddSupplierDialogOpen(false);
+      setSupplierFormData({
+        name: "",
+        contactPerson: "",
+        email: "",
+        phone: "",
+        address: "",
+        category: "",
+        status: "Active",
+        duePayment: 0,
+        businessId: BUSINESS_IDS.WIREMAN_AGENCY,
+      });
+      await loadData();
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setSubmittingSupplier(false);
+    }
+  };
+
   const filteredProducts = products.filter((p) => {
-    const searchLower = searchTerm.toLowerCase();
-
-    // Show all if search is empty and focused, or filter by name/sku/companyCode/supplier
     if (searchTerm === "") return true;
-
+    const s = searchTerm.toLowerCase();
     return (
-      p.name.toLowerCase().includes(searchLower) ||
-      p.sku.toLowerCase().includes(searchLower) ||
-      (p.companyCode && p.companyCode.toLowerCase().includes(searchLower)) ||
-      (p.supplier && p.supplier.toLowerCase().includes(searchLower))
+      p.name.toLowerCase().includes(s) ||
+      p.sku.toLowerCase().includes(s) ||
+      (p.companyCode && p.companyCode.toLowerCase().includes(s)) ||
+      (p.supplier && p.supplier.toLowerCase().includes(s))
     );
   });
 
   const currentLineDiscountAmount =
-    ((parseNumber(currentItem.unitPrice) *
-      parseNumber(currentItem.discountPercent)) /
-      100) *
+    ((parseNumber(currentItem.unitPrice) * parseNumber(currentItem.discountPercent)) / 100) *
     parseNumber(currentItem.quantity);
 
   if (loadingData) {
@@ -473,6 +594,7 @@ export default function CreateWiremanPurchasePage() {
       <div className="grid gap-4 lg:grid-cols-3">
         {/* LEFT COLUMN */}
         <div className="lg:col-span-2 space-y-3">
+          {/* Bill Details */}
           <Card className="border-red-200">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -482,7 +604,18 @@ export default function CreateWiremanPurchasePage() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Supplier</Label>
+                  <div className="flex items-center justify-between">
+                    <Label>Supplier</Label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto p-0 text-xs text-red-600 hover:text-red-700 hover:bg-transparent"
+                      type="button"
+                      onClick={() => setIsAddSupplierDialogOpen(true)}
+                    >
+                      <Plus className="w-3 h-3 mr-1" /> New
+                    </Button>
+                  </div>
                   <Select
                     value={supplierId || ""}
                     onValueChange={handleSupplierChange}
@@ -524,31 +657,44 @@ export default function CreateWiremanPurchasePage() {
                     type="date"
                     value={arrivalDate}
                     onChange={(e) => setArrivalDate(e.target.value)}
-                    placeholder="Select date"
                   />
                 </div>
               </div>
             </CardContent>
           </Card>
 
+          {/* Add Items */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Add Items</CardTitle>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={loadData}
-                className="text-xs"
-              >
-                <RefreshCcw className="w-3 h-3 mr-1" /> Refresh
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsAddDialogOpen(true)}
+                  className="text-xs border-dashed border-red-300 text-red-600 hover:text-red-700 hover:bg-red-50"
+                  type="button"
+                >
+                  <Plus className="w-3 h-3 mr-1" /> New Item
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={loadData}
+                  className="text-xs"
+                  type="button"
+                >
+                  <RefreshCcw className="w-3 h-3 mr-1" /> Refresh
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {/* --- CUSTOM NORMAL SEARCHABLE DROPDOWN --- */}
+                {/* Custom Searchable Dropdown */}
                 <div className="w-full relative" ref={dropdownRef}>
                   <Label className="mb-2 block">
-                    Product Search ({products.length} Wireman products loaded)
+                    Product Search ({products.length} Wireman products loaded) —{" "}
+                    <span className="text-xs text-muted-foreground">Shift+F to focus</span>
                   </Label>
                   <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -560,7 +706,7 @@ export default function CreateWiremanPurchasePage() {
                       onChange={(e) => {
                         setSearchTerm(e.target.value);
                         setIsDropdownOpen(true);
-                        setHighlightedIndex(-1); // Reset highlight when typing
+                        setHighlightedIndex(-1);
                       }}
                       onFocus={() => setIsDropdownOpen(true)}
                       onKeyDown={handleSearchKeyDown}
@@ -569,10 +715,7 @@ export default function CreateWiremanPurchasePage() {
                       <button
                         onClick={() => {
                           setSearchTerm("");
-                          setCurrentItem((prev) => ({
-                            ...prev,
-                            productId: "",
-                          }));
+                          setCurrentItem((prev) => ({ ...prev, productId: "" }));
                           setHighlightedIndex(-1);
                         }}
                         className="absolute right-2 top-2.5 text-muted-foreground hover:text-black"
@@ -592,12 +735,10 @@ export default function CreateWiremanPurchasePage() {
                         filteredProducts.map((product, index) => (
                           <div
                             key={product.id}
-                            ref={(el) => {
-                              itemRefs.current[index] = el;
-                            }}
+                            ref={(el) => { itemRefs.current[index] = el; }}
                             className={`p-2 cursor-pointer border-b border-gray-50 last:border-0 ${
                               highlightedIndex === index
-                                ? "bg-red-100" // Highlighted color
+                                ? "bg-red-100"
                                 : "hover:bg-red-50"
                             }`}
                             onMouseEnter={() => setHighlightedIndex(index)}
@@ -617,7 +758,8 @@ export default function CreateWiremanPurchasePage() {
                                 </div>
                               )}
                               <div className="col-span-2">
-                                <span className="text-gray-400 font-normal">Supplier:</span> {product.supplier || "No Supplier"}
+                                <span className="text-gray-400 font-normal">Supplier:</span>{" "}
+                                {product.supplier || "No Supplier"}
                               </div>
                             </div>
                           </div>
@@ -626,8 +768,8 @@ export default function CreateWiremanPurchasePage() {
                     </div>
                   )}
                 </div>
-                {/* ----------------------- */}
 
+                {/* Item Detail Fields */}
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 items-end">
                   <div className="col-span-1">
                     <Label className="mb-2 block text-xs">Item Code</Label>
@@ -657,10 +799,7 @@ export default function CreateWiremanPurchasePage() {
                       onChange={(e) =>
                         setCurrentItem({
                           ...currentItem,
-                          quantity:
-                            e.target.value === ""
-                              ? ""
-                              : parseInt(e.target.value),
+                          quantity: e.target.value === "" ? "" : parseInt(e.target.value),
                         })
                       }
                       onKeyDown={handleKeyDown}
@@ -668,9 +807,7 @@ export default function CreateWiremanPurchasePage() {
                     />
                   </div>
                   <div className="col-span-1">
-                    <Label className="mb-2 block text-xs text-green-600">
-                      Free Qty
-                    </Label>
+                    <Label className="mb-2 block text-xs text-green-600">Free Qty</Label>
                     <Input
                       type="number"
                       min="0"
@@ -678,10 +815,7 @@ export default function CreateWiremanPurchasePage() {
                       onChange={(e) =>
                         setCurrentItem({
                           ...currentItem,
-                          freeQuantity:
-                            e.target.value === ""
-                              ? ""
-                              : parseInt(e.target.value),
+                          freeQuantity: e.target.value === "" ? "" : parseInt(e.target.value),
                         })
                       }
                       onKeyDown={handleKeyDown}
@@ -689,9 +823,7 @@ export default function CreateWiremanPurchasePage() {
                     />
                   </div>
                   <div className="col-span-1">
-                    <Label className="mb-2 block text-xs font-semibold text-blue-600">
-                      Cost Price
-                    </Label>
+                    <Label className="mb-2 block text-xs font-semibold text-blue-600">Cost Price</Label>
                     <Input
                       type="number"
                       min="0"
@@ -700,10 +832,7 @@ export default function CreateWiremanPurchasePage() {
                       onChange={(e) =>
                         setCurrentItem({
                           ...currentItem,
-                          unitPrice:
-                            e.target.value === ""
-                              ? ""
-                              : parseFloat(e.target.value),
+                          unitPrice: e.target.value === "" ? "" : parseFloat(e.target.value),
                         })
                       }
                       onKeyDown={handleKeyDown}
@@ -721,10 +850,7 @@ export default function CreateWiremanPurchasePage() {
                       onChange={(e) =>
                         setCurrentItem({
                           ...currentItem,
-                          discountPercent:
-                            e.target.value === ""
-                              ? ""
-                              : parseFloat(e.target.value),
+                          discountPercent: e.target.value === "" ? "" : parseFloat(e.target.value),
                         })
                       }
                       onKeyDown={handleKeyDown}
@@ -732,15 +858,9 @@ export default function CreateWiremanPurchasePage() {
                     />
                   </div>
                   <div className="col-span-1">
-                    <Label className="mb-2 block text-xs text-muted-foreground">
-                      Disc Amt
-                    </Label>
+                    <Label className="mb-2 block text-xs text-muted-foreground">Disc Amt</Label>
                     <Input
-                      value={
-                        currentLineDiscountAmount > 0
-                          ? currentLineDiscountAmount.toFixed(2)
-                          : ""
-                      }
+                      value={currentLineDiscountAmount > 0 ? currentLineDiscountAmount.toFixed(2) : ""}
                       disabled
                       className="h-9 bg-muted text-xs"
                       placeholder="0.00"
@@ -776,7 +896,7 @@ export default function CreateWiremanPurchasePage() {
             </CardContent>
           </Card>
 
-          {/* Table */}
+          {/* Items Table */}
           <Card>
             <CardContent className="p-0">
               <Table>
@@ -794,10 +914,7 @@ export default function CreateWiremanPurchasePage() {
                 <TableBody>
                   {items.length === 0 ? (
                     <TableRow>
-                      <TableCell
-                        colSpan={7}
-                        className="text-center py-8 text-muted-foreground"
-                      >
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                         No items added
                       </TableCell>
                     </TableRow>
@@ -806,23 +923,15 @@ export default function CreateWiremanPurchasePage() {
                       <TableRow key={item.id}>
                         <TableCell>
                           <div className="font-medium">{item.productName}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {item.sku}
-                          </div>
+                          <div className="text-xs text-muted-foreground">{item.sku}</div>
                         </TableCell>
-                        <TableCell className="text-right">
-                          {item.unitPrice}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {item.quantity}
-                        </TableCell>
+                        <TableCell className="text-right">{item.unitPrice}</TableCell>
+                        <TableCell className="text-right">{item.quantity}</TableCell>
                         <TableCell className="text-right text-green-600">
                           {item.freeQuantity || "-"}
                         </TableCell>
                         <TableCell className="text-right text-red-500">
-                          {item.discountAmount > 0
-                            ? item.discountAmount.toFixed(2)
-                            : "-"}
+                          {item.discountAmount > 0 ? item.discountAmount.toFixed(2) : "-"}
                         </TableCell>
                         <TableCell className="text-right font-bold">
                           {item.total.toLocaleString()}
@@ -877,9 +986,7 @@ export default function CreateWiremanPurchasePage() {
                 </div>
                 <div className="space-y-2 bg-red-50 p-3 rounded-md border border-red-100">
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs text-red-800">
-                      Extra Discount (%)
-                    </Label>
+                    <Label className="text-xs text-red-800">Extra Discount (%)</Label>
                     <Input
                       type="number"
                       min="0"
@@ -887,9 +994,7 @@ export default function CreateWiremanPurchasePage() {
                       value={extraDiscountPercent}
                       onChange={(e) =>
                         setExtraDiscountPercent(
-                          e.target.value === ""
-                            ? ""
-                            : parseFloat(e.target.value),
+                          e.target.value === "" ? "" : parseFloat(e.target.value)
                         )
                       }
                       placeholder="0%"
@@ -937,6 +1042,31 @@ export default function CreateWiremanPurchasePage() {
           </Card>
         </div>
       </div>
+
+      <ProductDialogs
+        isAddDialogOpen={isAddDialogOpen}
+        setIsAddDialogOpen={setIsAddDialogOpen}
+        formData={formData}
+        setFormData={setFormData}
+        onSave={handleCreateProduct}
+        selectedProduct={null}
+        isDeleteDialogOpen={false}
+        setIsDeleteDialogOpen={() => {}}
+        onDeleteConfirm={async () => {}}
+        categories={categories}
+      />
+      <SupplierDialogs
+        isAddDialogOpen={isAddSupplierDialogOpen}
+        setIsAddDialogOpen={setIsAddSupplierDialogOpen}
+        formData={supplierFormData}
+        setFormData={setSupplierFormData}
+        onSave={handleCreateSupplier}
+        selectedSupplier={null}
+        categoryOptions={supplierCategories}
+        isDeleteDialogOpen={false}
+        setIsDeleteDialogOpen={() => {}}
+        onDeleteConfirm={() => {}}
+      />
     </div>
   );
 }

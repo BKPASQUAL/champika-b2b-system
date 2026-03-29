@@ -11,14 +11,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Supplier, SupplierFormData, SupplierStatus } from "../types";
+import { Switch } from "@/components/ui/switch";
+import { Supplier, SupplierFormData } from "../types";
 
 interface BusinessOption {
   id: string;
@@ -34,8 +28,8 @@ interface SupplierDialogsProps {
   onSave: () => void;
   selectedSupplier: Supplier | null;
 
-  categoryOptions: { id: string; name: string }[];
-  businessOptions: BusinessOption[]; // Kept in interface for compatibility, but unused in UI
+  categoryOptions?: { id: string; name: string }[];
+  businessOptions?: BusinessOption[];
 
   // Delete Dialog
   isDeleteDialogOpen: boolean;
@@ -50,7 +44,6 @@ export function SupplierDialogs({
   setFormData,
   onSave,
   selectedSupplier,
-  categoryOptions,
   isDeleteDialogOpen,
   setIsDeleteDialogOpen,
   onDeleteConfirm,
@@ -72,11 +65,6 @@ export function SupplierDialogs({
           </DialogHeader>
 
           <div className="grid grid-cols-2 gap-4 py-4">
-            {/* HIDDEN: Business Selector 
-               The businessId is auto-set in the parent page state.
-               We do not show this field to the user in Distribution Office.
-            */}
-
             <div className="col-span-2 space-y-2">
               <Label>Company Name *</Label>
               <Input
@@ -89,7 +77,7 @@ export function SupplierDialogs({
             </div>
 
             <div className="space-y-2">
-              <Label>Contact Person *</Label>
+              <Label>Contact Person</Label>
               <Input
                 value={formData.contactPerson}
                 onChange={(e) =>
@@ -100,7 +88,7 @@ export function SupplierDialogs({
             </div>
 
             <div className="space-y-2">
-              <Label>Phone *</Label>
+              <Label>Phone</Label>
               <Input
                 value={formData.phone}
                 onChange={(e) =>
@@ -132,66 +120,14 @@ export function SupplierDialogs({
               />
             </div>
 
-            {/* Category Dropdown */}
-            <div className="space-y-2">
-              <Label>Category</Label>
-              <Select
-                value={formData.category}
-                onValueChange={(val) =>
-                  setFormData({ ...formData, category: val })
-                }
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select Category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categoryOptions.length === 0 ? (
-                    <SelectItem value="General" disabled>
-                      No categories found
-                    </SelectItem>
-                  ) : (
-                    categoryOptions.map((cat) => (
-                      <SelectItem key={cat.id} value={cat.name}>
-                        {cat.name}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Due Payment (LKR)</Label>
-              <Input
-                type="number"
-                value={formData.duePayment}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    duePayment: parseFloat(e.target.value) || 0,
-                  })
+            <div className="col-span-2 flex items-center justify-between rounded-lg border p-3">
+              <Label className="cursor-pointer">Active</Label>
+              <Switch
+                checked={formData.status === "Active"}
+                onCheckedChange={(checked) =>
+                  setFormData({ ...formData, status: checked ? "Active" : "Inactive" })
                 }
               />
-            </div>
-
-            {/* Status Dropdown */}
-            <div className="space-y-2">
-              <Label>Status</Label>
-              <Select
-                value={formData.status}
-                onValueChange={(v) =>
-                  setFormData({ ...formData, status: v as SupplierStatus })
-                }
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Active">Active</SelectItem>
-                  <SelectItem value="Inactive">Inactive</SelectItem>
-                  <SelectItem value="Pending">Pending</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
           </div>
           <DialogFooter>

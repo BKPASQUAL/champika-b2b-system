@@ -7,21 +7,15 @@ import {
   Plus,
   Trash2,
   Save,
-  Package,
   Loader2,
-  Check,
-  ChevronsUpDown,
   Factory,
+  RefreshCcw,
+  X,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -38,26 +32,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { ProductDialogs } from "../../products/_components/ProductDialogs";
+import { ProductFormData } from "../../products/types";
+import { SupplierDialogs } from "../../suppliers/_components/SupplierDialogs";
+import { SupplierFormData } from "../../suppliers/types";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
+
+// --- Types ---
 
 interface Product {
   id: string;
   sku: string;
+  companyCode?: string;
   name: string;
   sellingPrice: number;
   costPrice: number;
@@ -82,22 +70,68 @@ interface PurchaseItem {
   unit: string;
   mrp: number;
   sellingPrice: number;
-  unitPrice: number; // Cost Price
+  unitPrice: number;
   discountPercent: number;
-  discountAmount: number; // Total Discount Amount for this line
-  finalPrice: number; // Net Unit Cost
-  total: number; // Line Total
+  discountAmount: number;
+  finalPrice: number;
+  total: number;
 }
+
+const parseNumber = (val: string | number) => {
+  if (val === "" || val === undefined || val === null) return 0;
+  return Number(val);
+};
 
 export default function CreateOrangePurchasePage() {
   const router = useRouter();
   const [loadingData, setLoadingData] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
+  // --- Inline Product Creation State ---
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [categories, setCategories] = useState<{ id: string; name: string; parent_id?: string }[]>([]);
+  const [supplierCategories, setSupplierCategories] = useState<{ id: string; name: string }[]>([]);
+  const [submittingProduct, setSubmittingProduct] = useState(false);
+
+  const [formData, setFormData] = useState<ProductFormData>({
+    sku: "",
+    companyCode: "",
+    name: "Orange ",
+    category: "",
+    subCategory: "",
+    brand: "",
+    subBrand: "",
+    modelType: "",
+    subModel: "",
+    sizeSpec: "",
+    supplier: "Orange Agency",
+    stock: "0",
+    minStock: "0",
+    mrp: "",
+    sellingPrice: "",
+    costPrice: "",
+    images: [],
+    unitOfMeasure: "Pcs",
+    isActive: true,
+  });
+
+  // --- Inline Supplier Creation State ---
+  const [isAddSupplierDialogOpen, setIsAddSupplierDialogOpen] = useState(false);
+  const [supplierFormData, setSupplierFormData] = useState<SupplierFormData>({
+    name: "",
+    contactPerson: "",
+    email: "",
+    phone: "",
+    address: "",
+    category: "",
+    status: "Active",
+    duePayment: 0,
+    businessId: BUSINESS_IDS.ORANGE_AGENCY,
+  });
+  const [submittingSupplier, setSubmittingSupplier] = useState(false);
+
   // Context State
-  const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(
-    null
-  );
+  const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(null);
   const [currentBusinessName, setCurrentBusinessName] = useState<string>("");
 
   // Data States
@@ -112,30 +146,46 @@ export default function CreateOrangePurchasePage() {
   const [arrivalDate, setArrivalDate] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
 
-  // Extra Discount State (Percentage)
-  const [extraDiscountPercent, setExtraDiscountPercent] = useState<number>(0);
+  const [extraDiscountPercent, setExtraDiscountPercent] = useState<number | string>("");
 
   // Items State
   const [items, setItems] = useState<PurchaseItem[]>([]);
 
-  // UI States
-  const [productSearchOpen, setProductSearchOpen] = useState(false);
+  // --- Dropdown States ---
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+
+  // Input Refs for Fast Data Entry
   const qtyInputRef = useRef<HTMLInputElement>(null);
 
   // Current Item Edit State
-  const [currentItem, setCurrentItem] = useState({
+  const [currentItem, setCurrentItem] = useState<{
+    productId: string;
+    sku: string;
+    quantity: number | string;
+    freeQuantity: number | string;
+    mrp: number;
+    sellingPrice: number;
+    unitPrice: number | string;
+    discountPercent: number | string;
+    unit: string;
+  }>({
     productId: "",
     sku: "",
-    quantity: 1,
-    freeQuantity: 0,
+    quantity: "",
+    freeQuantity: "",
     mrp: 0,
     sellingPrice: 0,
-    unitPrice: 0, // Cost Price
-    discountPercent: 0,
+    unitPrice: "",
+    discountPercent: "",
     unit: "",
   });
 
-  // --- 1. Get User Context (Orange Agency) ---
+  // --- 1. Get User Context ---
   useEffect(() => {
     const user = getUserBusinessContext();
     if (user && user.businessId) {
@@ -147,87 +197,131 @@ export default function CreateOrangePurchasePage() {
     }
   }, [router]);
 
-  // --- Global Keyboard Shortcuts ---
+  // --- 2. Fetch Data Function ---
+  const loadData = async () => {
+    if (!currentBusinessId) return;
+    setLoadingData(true);
+    try {
+      const [prodRes, supRes, catRes, supCatRes] = await Promise.all([
+        fetch("/api/products?active=true"),
+        fetch(`/api/suppliers?businessId=${currentBusinessId}`),
+        fetch("/api/settings/categories?type=category"),
+        fetch("/api/settings/categories?type=supplier"),
+      ]);
+
+      if (catRes.ok) setCategories(await catRes.json());
+      if (supCatRes.ok) setSupplierCategories(await supCatRes.json());
+
+      if (prodRes.ok) {
+        const allProducts: Product[] = await prodRes.json();
+        const orangeProducts = allProducts.filter((p) =>
+          p.supplier?.toLowerCase().includes("orange")
+        );
+        setProducts(orangeProducts);
+      } else {
+        toast.error("Failed to load products");
+      }
+
+      if (supRes.ok) {
+        const supplierData = await supRes.json();
+        setSuppliers(supplierData);
+        const orangeSupplier = supplierData.find((s: Supplier) =>
+          s.name.toLowerCase().includes("orange")
+        );
+        if (orangeSupplier) {
+          setSupplierId(orangeSupplier.id);
+        } else if (supplierData.length === 1) {
+          setSupplierId(supplierData[0].id);
+        }
+      }
+    } catch (error) {
+      toast.error("Failed to load data");
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [currentBusinessId]);
+
+  // --- Close Dropdown on Click Outside ---
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // --- Global Keyboard Shortcuts (Shift+F to focus search) ---
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // Shift + F to focus search
       if (e.shiftKey && (e.key === "f" || e.key === "F")) {
         e.preventDefault();
-        // Look for the product search box button and click it
-        const triggers = document.querySelectorAll('button[role="combobox"]');
-        if (triggers && triggers.length > 0) {
-            (triggers[0] as HTMLElement).click();
-        }
+        searchInputRef.current?.focus();
       }
     };
     window.addEventListener("keydown", handleGlobalKeyDown);
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   }, []);
 
-  // --- 2. Fetch Data ---
-  useEffect(() => {
-    if (!currentBusinessId) return;
-
-    const loadData = async () => {
-      try {
-        const [prodRes, supRes] = await Promise.all([
-          fetch("/api/products?active=true"),
-          fetch(`/api/suppliers?businessId=${currentBusinessId}`),
-        ]);
-
-        if (prodRes.ok) setProducts(await prodRes.json());
-        if (supRes.ok) {
-          const supplierData = await supRes.json();
-          setSuppliers(supplierData);
-
-          if (supplierData.length === 1) {
-            setSupplierId(supplierData[0].id);
-          }
-        }
-      } catch (error) {
-        toast.error("Failed to load initial data");
-      } finally {
-        setLoadingData(false);
-      }
-    };
-
-    loadData();
-  }, [currentBusinessId]);
-
   // --- Handlers ---
-
-  const handleSupplierChange = (newSupplierId: string) => {
-    if (items.length > 0) {
-      const confirmChange = window.confirm(
-        "Changing supplier will clear the current items. Continue?"
-      );
-      if (!confirmChange) return;
-      setItems([]);
-    }
+  const handleSupplierChange = (newSupplierId: string) =>
     setSupplierId(newSupplierId);
+
+  const handleProductSelect = (product: Product) => {
+    setCurrentItem({
+      ...currentItem,
+      productId: product.id,
+      sku: product.sku,
+      mrp: product.mrp || 0,
+      sellingPrice: product.sellingPrice || 0,
+      unitPrice: product.costPrice > 0 ? product.costPrice : "",
+      discountPercent: "",
+      freeQuantity: "",
+      quantity: "",
+      unit: product.unitOfMeasure || "Pcs",
+    });
+    setSearchTerm(product.name);
+    setIsDropdownOpen(false);
+    setHighlightedIndex(-1);
+    setTimeout(() => {
+      qtyInputRef.current?.focus();
+    }, 100);
   };
 
-  const handleProductSelect = (productId: string) => {
-    const product = products.find((p) => p.id === productId);
-    if (product) {
-      setCurrentItem({
-        ...currentItem,
-        productId: productId,
-        sku: product.sku,
-        mrp: product.mrp || 0,
-        sellingPrice: product.sellingPrice || 0,
-        unitPrice: product.costPrice || 0,
-        discountPercent: 0,
-        freeQuantity: 0,
-        quantity: 1,
-        unit: product.unitOfMeasure || "Pcs",
-      });
-      setProductSearchOpen(false);
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!isDropdownOpen) {
+      if (e.key === "ArrowDown" || e.key === "Enter") {
+        setIsDropdownOpen(true);
+      }
+      return;
+    }
 
-      // Auto-focus quantity input after selection
-      setTimeout(() => {
-        qtyInputRef.current?.focus();
-      }, 100);
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightedIndex((prev) => {
+        const next = prev < filteredProducts.length - 1 ? prev + 1 : prev;
+        itemRefs.current[next]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        return next;
+      });
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightedIndex((prev) => {
+        const next = prev > 0 ? prev - 1 : prev;
+        itemRefs.current[next]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        return next;
+      });
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (highlightedIndex >= 0 && highlightedIndex < filteredProducts.length) {
+        handleProductSelect(filteredProducts[highlightedIndex]);
+      }
+    } else if (e.key === "Escape") {
+      setIsDropdownOpen(false);
     }
   };
 
@@ -239,39 +333,40 @@ export default function CreateOrangePurchasePage() {
   };
 
   const handleAddItem = () => {
-    if (
-      !currentItem.productId ||
-      currentItem.quantity <= 0 ||
-      currentItem.unitPrice < 0
-    ) {
-      toast.error("Please fill all fields correctly");
+    const qty = parseNumber(currentItem.quantity);
+    const unitPrice = parseNumber(currentItem.unitPrice);
+
+    if (!currentItem.productId || qty <= 0) {
+      toast.error("Please enter a valid quantity");
+      return;
+    }
+    if (unitPrice < 0) {
+      toast.error("Invalid Cost Price");
       return;
     }
 
     const product = products.find((p) => p.id === currentItem.productId);
     if (!product) return;
 
-    // Calculations
-    const unitDiscountAmount =
-      (currentItem.unitPrice * currentItem.discountPercent) / 100;
-    const netUnitPrice = currentItem.unitPrice - unitDiscountAmount;
-
-    // Total for this line (Net Unit Price * Qty)
-    const total = netUnitPrice * currentItem.quantity;
-    const totalDiscountAmount = unitDiscountAmount * currentItem.quantity;
+    const discountPct = parseNumber(currentItem.discountPercent);
+    const freeQty = parseNumber(currentItem.freeQuantity);
+    const unitDiscountAmount = (unitPrice * discountPct) / 100;
+    const netUnitPrice = unitPrice - unitDiscountAmount;
+    const total = netUnitPrice * qty;
+    const totalDiscountAmount = unitDiscountAmount * qty;
 
     const newItem: PurchaseItem = {
       id: Date.now().toString(),
       productId: currentItem.productId,
       sku: product.sku,
       productName: product.name,
-      quantity: currentItem.quantity,
-      freeQuantity: currentItem.freeQuantity,
+      quantity: qty,
+      freeQuantity: freeQty,
       unit: currentItem.unit,
       mrp: currentItem.mrp,
       sellingPrice: currentItem.sellingPrice,
-      unitPrice: currentItem.unitPrice,
-      discountPercent: currentItem.discountPercent,
+      unitPrice: unitPrice,
+      discountPercent: discountPct,
       discountAmount: totalDiscountAmount,
       finalPrice: netUnitPrice,
       total: total,
@@ -279,63 +374,38 @@ export default function CreateOrangePurchasePage() {
 
     setItems([...items, newItem]);
 
-    // Reset Item Form
+    // Reset Form
     setCurrentItem({
       productId: "",
       sku: "",
-      quantity: 1,
-      freeQuantity: 0,
+      quantity: "",
+      freeQuantity: "",
       mrp: 0,
       sellingPrice: 0,
-      unitPrice: 0,
-      discountPercent: 0,
+      unitPrice: "",
+      discountPercent: "",
       unit: "",
     });
+    setSearchTerm("");
   };
 
-  const handleRemoveItem = (id: string) => {
+  const handleRemoveItem = (id: string) =>
     setItems(items.filter((item) => item.id !== id));
-  };
 
   // --- Bill Calculations ---
-  // 1. Gross Total (Cost * Qty before discount)
-  const totalGross = items.reduce(
-    (sum, item) => sum + item.unitPrice * item.quantity,
-    0
-  );
-
-  // 2. Line Level Discounts
-  const totalLineDiscount = items.reduce(
-    (sum, item) => sum + item.discountAmount,
-    0
-  );
-
-  // 3. Subtotal (After line discounts, before extra discount)
+  const totalGross = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+  const totalLineDiscount = items.reduce((sum, item) => sum + item.discountAmount, 0);
   const subtotal = totalGross - totalLineDiscount;
-
-  // 4. Extra Discount Amount (Calculated from Percentage)
-  const extraDiscountAmount = (subtotal * extraDiscountPercent) / 100;
-
-  // 5. Final Total (Subtotal - Extra Discount Amount)
+  const extraDiscountAmount = (subtotal * parseNumber(extraDiscountPercent)) / 100;
   const finalTotal = subtotal - extraDiscountAmount;
 
   // --- Save Purchase ---
   const handleSavePurchase = async () => {
-    if (items.length === 0) {
-      toast.error("Add at least one item");
-      return;
-    }
-    if (!supplierId) {
-      toast.error("Select a supplier");
-      return;
-    }
-    if (!currentBusinessId) {
-      toast.error("Business context missing");
-      return;
-    }
+    if (items.length === 0) return toast.error("Add at least one item");
+    if (!supplierId) return toast.error("Select a supplier");
+    if (!currentBusinessId) return toast.error("Business context missing");
 
     setSubmitting(true);
-
     const purchasePayload = {
       supplier_id: supplierId,
       business_id: currentBusinessId,
@@ -343,8 +413,8 @@ export default function CreateOrangePurchasePage() {
       arrival_date: arrivalDate || "",
       invoice_number: invoiceNumber || "",
       total_amount: finalTotal,
-      extra_discount: extraDiscountAmount, // Saving the calculated amount
-      extra_discount_percent: extraDiscountPercent, // Optionally save percent if backend supports
+      extra_discount: extraDiscountAmount,
+      extra_discount_percent: parseNumber(extraDiscountPercent),
       items: items,
     };
 
@@ -354,11 +424,8 @@ export default function CreateOrangePurchasePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(purchasePayload),
       });
-
       const data = await res.json();
-
       if (!res.ok) throw new Error(data.error || "Failed to create purchase");
-
       toast.success("Bill Created Successfully!");
       router.push("/dashboard/office/orange/purchases");
     } catch (error: any) {
@@ -368,27 +435,126 @@ export default function CreateOrangePurchasePage() {
     }
   };
 
-  const selectedSupplier = suppliers.find((s) => s.id === supplierId);
+  // --- Create Product inline ---
+  const handleCreateProduct = async () => {
+    if (!formData.name || !formData.category) {
+      toast.error("Please fill required fields (Name, Category)");
+      return;
+    }
 
-  const availableProducts = products.filter((product) => {
-    const matchesSupplier =
-      !selectedSupplier || product.supplier === selectedSupplier.name;
-    return matchesSupplier;
-  });
+    setSubmittingProduct(true);
+    const payload = {
+      ...formData,
+      supplier: suppliers.find((s) => s.id === supplierId)?.name || "Orange Agency",
+      stock: Number(formData.stock) || 0,
+      minStock: Number(formData.minStock) || 0,
+      mrp: Number(formData.mrp) || 0,
+      sellingPrice: Number(formData.sellingPrice) || 0,
+      costPrice: Number(formData.costPrice) || 0,
+    };
 
-  const getSelectedProductName = () => {
-    const product = products.find((p) => p.id === currentItem.productId);
-    return product ? `${product.name}` : "Select product";
+    try {
+      const res = await fetch("/api/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Operation failed");
+
+      toast.success("Product created successfully!");
+      setIsAddDialogOpen(false);
+      setFormData({
+        sku: "",
+        companyCode: "",
+        name: "Orange ",
+        category: "",
+        subCategory: "",
+        brand: "",
+        subBrand: "",
+        modelType: "",
+        subModel: "",
+        sizeSpec: "",
+        supplier: "Orange Agency",
+        stock: "0",
+        minStock: "0",
+        mrp: "",
+        sellingPrice: "",
+        costPrice: "",
+        images: [],
+        unitOfMeasure: "Pcs",
+        isActive: true,
+      });
+      await loadData();
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setSubmittingProduct(false);
+    }
   };
 
+  // --- Create Supplier inline ---
+  const handleCreateSupplier = async () => {
+    if (!supplierFormData.name || !supplierFormData.contactPerson || !supplierFormData.phone) {
+      toast.error("Please fill in required fields (Name, Contact, Phone)");
+      return;
+    }
+
+    setSubmittingSupplier(true);
+    const payload = {
+      ...supplierFormData,
+      businessId: BUSINESS_IDS.ORANGE_AGENCY,
+    };
+
+    try {
+      const res = await fetch("/api/suppliers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to create supplier");
+
+      toast.success("Supplier created successfully!");
+      setIsAddSupplierDialogOpen(false);
+      setSupplierFormData({
+        name: "",
+        contactPerson: "",
+        email: "",
+        phone: "",
+        address: "",
+        category: "",
+        status: "Active",
+        duePayment: 0,
+        businessId: BUSINESS_IDS.ORANGE_AGENCY,
+      });
+      await loadData();
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setSubmittingSupplier(false);
+    }
+  };
+
+  const filteredProducts = products.filter((p) => {
+    if (searchTerm === "") return true;
+    const s = searchTerm.toLowerCase();
+    return (
+      p.name.toLowerCase().includes(s) ||
+      p.sku.toLowerCase().includes(s) ||
+      (p.companyCode && p.companyCode.toLowerCase().includes(s)) ||
+      (p.supplier && p.supplier.toLowerCase().includes(s))
+    );
+  });
+
   const currentLineDiscountAmount =
-    ((currentItem.unitPrice * currentItem.discountPercent) / 100) *
-    currentItem.quantity;
+    ((parseNumber(currentItem.unitPrice) * parseNumber(currentItem.discountPercent)) / 100) *
+    parseNumber(currentItem.quantity);
 
   if (loadingData) {
     return (
       <div className="flex justify-center items-center h-full min-h-64">
-        <Loader2 className="h-6 w-6 animate-spin mr-2" />
+        <Loader2 className="h-6 w-6 animate-spin mr-2 text-orange-600" />
         <p className="text-lg text-muted-foreground">Loading catalogs...</p>
       </div>
     );
@@ -427,23 +593,30 @@ export default function CreateOrangePurchasePage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        {/* LEFT COLUMN - Forms */}
+        {/* LEFT COLUMN */}
         <div className="lg:col-span-2 space-y-3">
-          {/* 1. Bill Details Card */}
+          {/* Bill Details */}
           <Card className="border-orange-200">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Factory className="w-4 h-4 text-orange-600" />
-                Bill Details
+                <Factory className="w-4 h-4 text-orange-600" /> Bill Details
               </CardTitle>
-              <CardDescription>
-                Supplier and invoice information
-              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Supplier</Label>
+                  <div className="flex items-center justify-between">
+                    <Label>Supplier</Label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto p-0 text-xs text-orange-600 hover:text-orange-700 hover:bg-transparent"
+                      type="button"
+                      onClick={() => setIsAddSupplierDialogOpen(true)}
+                    >
+                      <Plus className="w-3 h-3 mr-1" /> New
+                    </Button>
+                  </div>
                   <Select
                     value={supplierId || ""}
                     onValueChange={handleSupplierChange}
@@ -460,7 +633,6 @@ export default function CreateOrangePurchasePage() {
                     </SelectContent>
                   </Select>
                 </div>
-
                 <div className="space-y-2">
                   <Label htmlFor="date">Bill Date</Label>
                   <Input
@@ -470,7 +642,6 @@ export default function CreateOrangePurchasePage() {
                     onChange={(e) => setPurchaseDate(e.target.value)}
                   />
                 </div>
-
                 <div className="space-y-2">
                   <Label htmlFor="invoice">Invoice Number</Label>
                   <Input
@@ -480,7 +651,6 @@ export default function CreateOrangePurchasePage() {
                     onChange={(e) => setInvoiceNumber(e.target.value)}
                   />
                 </div>
-
                 <div className="space-y-2">
                   <Label htmlFor="arrivalDate">Arrival Date</Label>
                   <Input
@@ -488,105 +658,120 @@ export default function CreateOrangePurchasePage() {
                     type="date"
                     value={arrivalDate}
                     onChange={(e) => setArrivalDate(e.target.value)}
-                    placeholder="Select date"
                   />
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* 2. Add Items Card - UPDATED DESIGN */}
+          {/* Add Items */}
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Add Items</CardTitle>
-              <CardDescription>
-                {supplierId
-                  ? `Adding items for ${
-                      suppliers.find((s) => s.id === supplierId)?.name
-                    }`
-                  : "Select a supplier to start"}
-              </CardDescription>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsAddDialogOpen(true)}
+                  className="text-xs border-dashed border-orange-300 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                  type="button"
+                >
+                  <Plus className="w-3 h-3 mr-1" /> New Item
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={loadData}
+                  className="text-xs"
+                  type="button"
+                >
+                  <RefreshCcw className="w-3 h-3 mr-1" /> Refresh
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {/* Row 1: Product Search */}
-                <div className="w-full">
-                  <Label htmlFor="product" className="mb-2 block">
-                    Product Name / Search
+                {/* Custom Searchable Dropdown */}
+                <div className="w-full relative" ref={dropdownRef}>
+                  <Label className="mb-2 block">
+                    Product Search ({products.length} Orange products loaded) —{" "}
+                    <span className="text-xs text-muted-foreground">Shift+F to focus</span>
                   </Label>
-                  <Popover
-                    open={productSearchOpen}
-                    onOpenChange={setProductSearchOpen}
-                  >
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={productSearchOpen}
-                        className="w-full h-10 justify-between"
-                        disabled={!supplierId}
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      ref={searchInputRef}
+                      placeholder="Type product name or SKU..."
+                      className="pl-8"
+                      value={searchTerm}
+                      onChange={(e) => {
+                        setSearchTerm(e.target.value);
+                        setIsDropdownOpen(true);
+                        setHighlightedIndex(-1);
+                      }}
+                      onFocus={() => setIsDropdownOpen(true)}
+                      onKeyDown={handleSearchKeyDown}
+                    />
+                    {searchTerm && (
+                      <button
+                        onClick={() => {
+                          setSearchTerm("");
+                          setCurrentItem((prev) => ({ ...prev, productId: "" }));
+                          setHighlightedIndex(-1);
+                        }}
+                        className="absolute right-2 top-2.5 text-muted-foreground hover:text-black"
                       >
-                        <span className="truncate">
-                          {currentItem.productId
-                            ? getSelectedProductName()
-                            : supplierId
-                            ? "Select product by Name or SKU"
-                            : "Select a supplier first"}
-                        </span>
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[600px] p-0" align="start">
-                      <Command>
-                        <CommandInput placeholder="Search product by name or SKU..." />
-                        <CommandList>
-                          <CommandEmpty>No active product found.</CommandEmpty>
-                          <CommandGroup>
-                            {availableProducts.length === 0 ? (
-                              <div className="p-4 text-center text-sm text-muted-foreground">
-                                {supplierId
-                                  ? "No items available for this supplier"
-                                  : "Select supplier first"}
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+
+                  {isDropdownOpen && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                      {filteredProducts.length === 0 ? (
+                        <div className="p-3 text-sm text-center text-gray-500">
+                          No products found
+                        </div>
+                      ) : (
+                        filteredProducts.map((product, index) => (
+                          <div
+                            key={product.id}
+                            ref={(el) => { itemRefs.current[index] = el; }}
+                            className={`p-2 cursor-pointer border-b border-gray-50 last:border-0 ${
+                              highlightedIndex === index
+                                ? "bg-orange-100"
+                                : "hover:bg-orange-50"
+                            }`}
+                            onMouseEnter={() => setHighlightedIndex(index)}
+                            onClick={() => handleProductSelect(product)}
+                          >
+                            <div className="font-medium text-sm text-gray-900 border-b border-gray-100 pb-1 mb-1">
+                              {product.name}
+                            </div>
+                            <div className="text-xs text-gray-600 grid grid-cols-2 gap-1 font-medium">
+                              <div>
+                                <span className="text-gray-400 font-normal">Item Code:</span> {product.sku}
                               </div>
-                            ) : (
-                              availableProducts.map((product) => (
-                                <CommandItem
-                                  key={product.id}
-                                  value={`${product.name} ${product.sku} ${product.id}`}
-                                  onSelect={() =>
-                                    handleProductSelect(product.id)
-                                  }
-                                >
-                                  <Check
-                                    className={cn(
-                                      "mr-2 h-4 w-4",
-                                      currentItem.productId === product.id
-                                        ? "opacity-100"
-                                        : "opacity-0"
-                                    )}
-                                  />
-                                  <div className="flex flex-col">
-                                    <span className="font-medium">
-                                      {product.name}
-                                    </span>
-                                    <span className="text-xs text-muted-foreground">
-                                      Code: {product.sku} | Cost:{" "}
-                                      {product.costPrice}
-                                    </span>
-                                  </div>
-                                </CommandItem>
-                              ))
-                            )}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
+                              {product.companyCode && (
+                                <div>
+                                  <span className="text-gray-400 font-normal">Company Code:</span>{" "}
+                                  <span className="text-blue-600">{product.companyCode}</span>
+                                </div>
+                              )}
+                              <div className="col-span-2">
+                                <span className="text-gray-400 font-normal">Supplier:</span>{" "}
+                                {product.supplier || "No Supplier"}
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                {/* Row 2: Item Details - 5 Column Grid */}
+                {/* Item Detail Fields */}
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 items-end">
-                  {/* Item Code */}
                   <div className="col-span-1">
                     <Label className="mb-2 block text-xs">Item Code</Label>
                     <Input
@@ -596,8 +781,6 @@ export default function CreateOrangePurchasePage() {
                       placeholder="Auto"
                     />
                   </div>
-
-                  {/* Unit */}
                   <div className="col-span-1">
                     <Label className="mb-2 block text-xs">Unit</Label>
                     <Input
@@ -607,47 +790,6 @@ export default function CreateOrangePurchasePage() {
                       placeholder="Unit"
                     />
                   </div>
-
-                  {/* MRP */}
-                  <div className="col-span-1">
-                    <Label className="mb-2 block text-xs">MRP</Label>
-                    <Input
-                      type="number"
-                      value={currentItem.mrp || ""}
-                      onChange={(e) =>
-                        setCurrentItem({
-                          ...currentItem,
-                          mrp: parseFloat(e.target.value) || 0,
-                        })
-                      }
-                      className="h-9 text-xs"
-                      placeholder="0.00"
-                    />
-                  </div>
-
-                  {/* Cost Price */}
-                  <div className="col-span-1">
-                    <Label className="mb-2 block text-xs font-semibold text-blue-600">
-                      Cost Price
-                    </Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={currentItem.unitPrice || ""}
-                      onChange={(e) =>
-                        setCurrentItem({
-                          ...currentItem,
-                          unitPrice: parseFloat(e.target.value) || 0,
-                        })
-                      }
-                      onKeyDown={handleKeyDown}
-                      placeholder="Cost"
-                      className="h-9 border-blue-200 text-xs"
-                    />
-                  </div>
-
-                  {/* Quantity */}
                   <div className="col-span-1">
                     <Label className="mb-2 block text-xs">Quantity</Label>
                     <Input
@@ -658,40 +800,46 @@ export default function CreateOrangePurchasePage() {
                       onChange={(e) =>
                         setCurrentItem({
                           ...currentItem,
-                          quantity: parseInt(e.target.value) || 1,
+                          quantity: e.target.value === "" ? "" : parseInt(e.target.value),
                         })
                       }
                       onKeyDown={handleKeyDown}
                       className="h-9 text-xs"
                     />
                   </div>
-
-                  {/* Free Qty */}
                   <div className="col-span-1">
-                    <Label className="mb-2 block text-xs text-green-600">
-                      Free Qty
-                    </Label>
+                    <Label className="mb-2 block text-xs text-green-600">Free Qty</Label>
                     <Input
                       type="number"
                       min="0"
-                      value={
-                        currentItem.freeQuantity > 0
-                          ? currentItem.freeQuantity
-                          : ""
-                      }
+                      value={currentItem.freeQuantity}
                       onChange={(e) =>
                         setCurrentItem({
                           ...currentItem,
-                          freeQuantity: parseInt(e.target.value) || 0,
+                          freeQuantity: e.target.value === "" ? "" : parseInt(e.target.value),
                         })
                       }
                       onKeyDown={handleKeyDown}
-                      placeholder="0"
                       className="h-9 border-green-200 text-xs"
                     />
                   </div>
-
-                  {/* Discount % */}
+                  <div className="col-span-1">
+                    <Label className="mb-2 block text-xs font-semibold text-blue-600">Cost Price</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={currentItem.unitPrice}
+                      onChange={(e) =>
+                        setCurrentItem({
+                          ...currentItem,
+                          unitPrice: e.target.value === "" ? "" : parseFloat(e.target.value),
+                        })
+                      }
+                      onKeyDown={handleKeyDown}
+                      className="h-9 border-blue-200 text-xs"
+                    />
+                  </div>
                   <div className="col-span-1">
                     <Label className="mb-2 block text-xs">Disc %</Label>
                     <Input
@@ -699,37 +847,26 @@ export default function CreateOrangePurchasePage() {
                       min="0"
                       max="100"
                       step="0.01"
-                      value={currentItem.discountPercent || ""}
+                      value={currentItem.discountPercent}
                       onChange={(e) =>
                         setCurrentItem({
                           ...currentItem,
-                          discountPercent: parseFloat(e.target.value) || 0,
+                          discountPercent: e.target.value === "" ? "" : parseFloat(e.target.value),
                         })
                       }
                       onKeyDown={handleKeyDown}
-                      placeholder="0%"
                       className="h-9 text-xs"
                     />
                   </div>
-
-                  {/* Discount Amount (Display Only) */}
                   <div className="col-span-1">
-                    <Label className="mb-2 block text-xs text-muted-foreground">
-                      Disc Amt
-                    </Label>
+                    <Label className="mb-2 block text-xs text-muted-foreground">Disc Amt</Label>
                     <Input
-                      value={
-                        currentLineDiscountAmount > 0
-                          ? currentLineDiscountAmount.toFixed(2)
-                          : ""
-                      }
+                      value={currentLineDiscountAmount > 0 ? currentLineDiscountAmount.toFixed(2) : ""}
                       disabled
                       className="h-9 bg-muted text-xs"
                       placeholder="0.00"
                     />
                   </div>
-
-                  {/* Selling Price */}
                   <div className="col-span-1">
                     <Label className="mb-2 block text-xs">Selling Price</Label>
                     <Input
@@ -746,8 +883,6 @@ export default function CreateOrangePurchasePage() {
                       className="h-9 text-xs"
                     />
                   </div>
-
-                  {/* Add Button */}
                   <div className="col-span-1">
                     <Button
                       onClick={handleAddItem}
@@ -762,103 +897,60 @@ export default function CreateOrangePurchasePage() {
             </CardContent>
           </Card>
 
-          {/* 3. Items List Table */}
+          {/* Items Table */}
           <Card>
             <CardContent className="p-0">
-              {items.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Package className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                  <p>No items added yet</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-orange-50/50">
-                        <TableHead className="text-xs">Code</TableHead>
-                        <TableHead className="text-xs">Item Name</TableHead>
-                        <TableHead className="text-xs">Unit</TableHead>
-                        <TableHead className="text-right text-xs">
-                          MRP
-                        </TableHead>
-                        <TableHead className="text-right text-xs">
-                          Selling
-                        </TableHead>
-                        <TableHead className="text-right text-xs text-blue-600">
-                          Cost
-                        </TableHead>
-                        <TableHead className="text-right text-xs">
-                          Qty
-                        </TableHead>
-                        <TableHead className="text-right text-xs text-green-600">
-                          Free
-                        </TableHead>
-                        <TableHead className="text-right text-xs">
-                          Disc %
-                        </TableHead>
-                        <TableHead className="text-right text-xs">
-                          Disc Amt
-                        </TableHead>
-                        <TableHead className="text-right text-xs font-bold">
-                          Total
-                        </TableHead>
-                        <TableHead className="w-[40px]"></TableHead>
+              <Table>
+                <TableHeader className="bg-orange-50/50">
+                  <TableRow>
+                    <TableHead>Product</TableHead>
+                    <TableHead className="text-right">Cost</TableHead>
+                    <TableHead className="text-right">Qty</TableHead>
+                    <TableHead className="text-right">Free</TableHead>
+                    <TableHead className="text-right">Disc</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead className="w-[50px]"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {items.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                        No items added
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    items.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell>
+                          <div className="font-medium">{item.productName}</div>
+                          <div className="text-xs text-muted-foreground">{item.sku}</div>
+                        </TableCell>
+                        <TableCell className="text-right">{item.unitPrice}</TableCell>
+                        <TableCell className="text-right">{item.quantity}</TableCell>
+                        <TableCell className="text-right text-green-600">
+                          {item.freeQuantity || "-"}
+                        </TableCell>
+                        <TableCell className="text-right text-red-500">
+                          {item.discountAmount > 0 ? item.discountAmount.toFixed(2) : "-"}
+                        </TableCell>
+                        <TableCell className="text-right font-bold">
+                          {item.total.toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => handleRemoveItem(item.id)}
+                          >
+                            <Trash2 className="w-4 h-4 text-orange-500" />
+                          </Button>
+                        </TableCell>
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {items.map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell className="font-mono text-xs">
-                            {item.sku}
-                          </TableCell>
-                          <TableCell className="font-medium text-xs max-w-[120px] truncate">
-                            {item.productName}
-                          </TableCell>
-                          <TableCell className="text-xs">{item.unit}</TableCell>
-                          <TableCell className="text-right text-xs">
-                            {item.mrp && item.mrp > 0 ? item.mrp.toLocaleString() : "-"}
-                          </TableCell>
-                          <TableCell className="text-right text-xs">
-                            {item.sellingPrice}
-                          </TableCell>
-                          <TableCell className="text-right text-xs text-blue-600 font-medium">
-                            {item.unitPrice.toLocaleString()}
-                          </TableCell>
-                          <TableCell className="text-right text-xs">
-                            {item.quantity}
-                          </TableCell>
-                          <TableCell className="text-right text-xs text-green-600 font-medium">
-                            {item.freeQuantity > 0 ? item.freeQuantity : "-"}
-                          </TableCell>
-                          <TableCell className="text-right text-xs">
-                            {item.discountPercent > 0
-                              ? item.discountPercent + "%"
-                              : "-"}
-                          </TableCell>
-                          <TableCell className="text-right text-xs text-red-500">
-                            {item.discountAmount > 0
-                              ? item.discountAmount.toFixed(2)
-                              : "-"}
-                          </TableCell>
-                          <TableCell className="text-right text-xs font-bold">
-                            {item.total.toLocaleString()}
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              className="h-6 w-6"
-                              onClick={() => handleRemoveItem(item.id)}
-                            >
-                              <Trash2 className="w-3 h-3 text-destructive" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
+                    ))
+                  )}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         </div>
@@ -888,44 +980,23 @@ export default function CreateOrangePurchasePage() {
                   <span className="font-medium">{invoiceNumber || "-"}</span>
                 </div>
               </div>
-
               <div className="border-t pt-4 space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Gross Cost:</span>
-                  <span>LKR {totalGross.toLocaleString()}</span>
-                </div>
-
-                {totalLineDiscount > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">
-                      Line Discounts:
-                    </span>
-                    <span className="text-red-500">
-                      - LKR {totalLineDiscount.toLocaleString()}
-                    </span>
-                  </div>
-                )}
-
                 <div className="flex justify-between text-sm font-medium border-t border-dashed pt-2">
                   <span>Subtotal:</span>
                   <span>LKR {subtotal.toLocaleString()}</span>
                 </div>
-
-                {/* Extra Discount Logic */}
                 <div className="space-y-2 bg-orange-50 p-3 rounded-md border border-orange-100">
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs text-orange-800">
-                      Extra Discount (%)
-                    </Label>
+                    <Label className="text-xs text-orange-800">Extra Discount (%)</Label>
                     <Input
                       type="number"
                       min="0"
                       max="100"
-                      value={
-                        extraDiscountPercent > 0 ? extraDiscountPercent : ""
-                      }
+                      value={extraDiscountPercent}
                       onChange={(e) =>
-                        setExtraDiscountPercent(parseFloat(e.target.value) || 0)
+                        setExtraDiscountPercent(
+                          e.target.value === "" ? "" : parseFloat(e.target.value)
+                        )
                       }
                       placeholder="0%"
                       className="h-7 w-20 text-right text-xs bg-white"
@@ -944,7 +1015,6 @@ export default function CreateOrangePurchasePage() {
                     </div>
                   )}
                 </div>
-
                 <div className="flex justify-between items-center pt-4 border-t-2 border-orange-100 mt-2">
                   <span className="font-bold text-lg">Net Payable:</span>
                   <span className="text-2xl font-bold text-orange-600">
@@ -955,7 +1025,6 @@ export default function CreateOrangePurchasePage() {
                   </span>
                 </div>
               </div>
-
               <Button
                 onClick={handleSavePurchase}
                 className="w-full bg-orange-600 hover:bg-orange-700 mt-4"
@@ -966,8 +1035,7 @@ export default function CreateOrangePurchasePage() {
                   "Processing..."
                 ) : (
                   <>
-                    <Save className="w-4 h-4 mr-2" />
-                    Confirm Bill
+                    <Save className="w-4 h-4 mr-2" /> Confirm Bill
                   </>
                 )}
               </Button>
@@ -975,6 +1043,31 @@ export default function CreateOrangePurchasePage() {
           </Card>
         </div>
       </div>
+
+      <ProductDialogs
+        isAddDialogOpen={isAddDialogOpen}
+        setIsAddDialogOpen={setIsAddDialogOpen}
+        formData={formData}
+        setFormData={setFormData}
+        onSave={handleCreateProduct}
+        selectedProduct={null}
+        isDeleteDialogOpen={false}
+        setIsDeleteDialogOpen={() => {}}
+        onDeleteConfirm={async () => {}}
+        categories={categories}
+      />
+      <SupplierDialogs
+        isAddDialogOpen={isAddSupplierDialogOpen}
+        setIsAddDialogOpen={setIsAddSupplierDialogOpen}
+        formData={supplierFormData}
+        setFormData={setSupplierFormData}
+        onSave={handleCreateSupplier}
+        selectedSupplier={null}
+        categoryOptions={supplierCategories}
+        isDeleteDialogOpen={false}
+        setIsDeleteDialogOpen={() => {}}
+        onDeleteConfirm={() => {}}
+      />
     </div>
   );
 }

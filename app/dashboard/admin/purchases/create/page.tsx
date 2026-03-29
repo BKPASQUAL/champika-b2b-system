@@ -7,21 +7,15 @@ import {
   Plus,
   Trash2,
   Save,
-  Package,
   Loader2,
-  Check,
-  ChevronsUpDown,
-  Building2, // Added Icon
+  Building2,
+  RefreshCcw,
+  X,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -38,25 +32,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { SupplierDialogs } from "@/app/dashboard/admin/suppliers/_components/SupplierDialogs";
+import { SupplierFormData } from "@/app/dashboard/admin/suppliers/types";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
+
+// --- Types ---
 
 interface Product {
   id: string;
   sku: string;
+  companyCode?: string;
   name: string;
   sellingPrice: number;
   costPrice: number;
@@ -71,7 +57,6 @@ interface Supplier {
   name: string;
 }
 
-// ✅ Added Business Interface
 interface Business {
   id: string;
   name: string;
@@ -94,6 +79,11 @@ interface PurchaseItem {
   total: number;
 }
 
+const parseNumber = (val: string | number) => {
+  if (val === "" || val === undefined || val === null) return 0;
+  return Number(val);
+};
+
 export default function CreatePurchasePage() {
   const router = useRouter();
   const [loadingData, setLoadingData] = useState(true);
@@ -102,72 +92,112 @@ export default function CreatePurchasePage() {
   // Data States
   const [products, setProducts] = useState<Product[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [businesses, setBusinesses] = useState<Business[]>([]); // ✅ Added business state
+  const [businesses, setBusinesses] = useState<Business[]>([]);
+
+  // Inline Supplier Creation State
+  const [isAddSupplierDialogOpen, setIsAddSupplierDialogOpen] = useState(false);
+  const [supplierFormData, setSupplierFormData] = useState<SupplierFormData>({
+    name: "",
+    contactPerson: "",
+    email: "",
+    phone: "",
+    address: "",
+    category: "",
+    status: "Active",
+    duePayment: 0,
+    businessId: "",
+  });
+  const [submittingSupplier, setSubmittingSupplier] = useState(false);
 
   // Form States
   const [supplierId, setSupplierId] = useState<string | null>(null);
-  const [businessId, setBusinessId] = useState<string | null>(null); // ✅ Added businessId state
+  const [businessId, setBusinessId] = useState<string | null>(null);
   const [purchaseDate, setPurchaseDate] = useState(
     new Date().toISOString().split("T")[0]
   );
   const [arrivalDate, setArrivalDate] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
 
+  const [extraDiscountPercent, setExtraDiscountPercent] = useState<number | string>("");
+
   // Items State
   const [items, setItems] = useState<PurchaseItem[]>([]);
 
-  // UI States
-  const [productSearchOpen, setProductSearchOpen] = useState(false);
+  // --- Dropdown States ---
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+
+  // Input Refs for Fast Data Entry
   const qtyInputRef = useRef<HTMLInputElement>(null);
 
   // Current Item Edit State
-  const [currentItem, setCurrentItem] = useState({
+  const [currentItem, setCurrentItem] = useState<{
+    productId: string;
+    sku: string;
+    quantity: number | string;
+    freeQuantity: number | string;
+    mrp: number;
+    sellingPrice: number;
+    unitPrice: number | string;
+    discountPercent: number | string;
+    unit: string;
+  }>({
     productId: "",
     sku: "",
-    quantity: 1,
-    freeQuantity: 0,
+    quantity: "",
+    freeQuantity: "",
     mrp: 0,
     sellingPrice: 0,
-    unitPrice: 0,
-    discountPercent: 0,
+    unitPrice: "",
+    discountPercent: "",
     unit: "",
   });
 
   // --- Fetch Data on Mount ---
+  const loadData = async () => {
+    setLoadingData(true);
+    try {
+      const [prodRes, supRes, bizRes] = await Promise.all([
+        fetch("/api/products?active=true"),
+        fetch("/api/suppliers"),
+        fetch("/api/settings/business"),
+      ]);
+
+      if (prodRes.ok) setProducts(await prodRes.json());
+      if (supRes.ok) setSuppliers(await supRes.json());
+      if (bizRes.ok) setBusinesses(await bizRes.json());
+    } catch (error) {
+      toast.error("Failed to load initial data");
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        // ✅ Fetched Businesses
-        const [prodRes, supRes, bizRes] = await Promise.all([
-          fetch("/api/products?active=true"),
-          fetch("/api/suppliers"),
-          fetch("/api/settings/business"),
-        ]);
-
-        if (prodRes.ok) setProducts(await prodRes.json());
-        if (supRes.ok) setSuppliers(await supRes.json());
-        if (bizRes.ok) setBusinesses(await bizRes.json());
-      } catch (error) {
-        toast.error("Failed to load initial data");
-      } finally {
-        setLoadingData(false);
-      }
-    };
-
     loadData();
   }, []);
 
-  // --- Global Keyboard Shortcuts ---
+  // --- Close Dropdown on Click Outside ---
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // --- Global Keyboard Shortcuts (Shift+F to focus search) ---
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // Shift + F to focus search
       if (e.shiftKey && (e.key === "f" || e.key === "F")) {
         e.preventDefault();
-        // Look for the product search box button and click it
-        const triggers = document.querySelectorAll('button[role="combobox"]');
-        if (triggers && triggers.length > 0) {
-            (triggers[0] as HTMLElement).click();
-        }
+        searchInputRef.current?.focus();
       }
     };
     window.addEventListener("keydown", handleGlobalKeyDown);
@@ -175,54 +205,74 @@ export default function CreatePurchasePage() {
   }, []);
 
   // --- Handlers ---
-
   const handleSupplierChange = (newSupplierId: string) => {
-    if (items.length > 0) {
-      const confirmChange = window.confirm(
-        "Changing supplier will clear the current items. Continue?"
-      );
-      if (!confirmChange) return;
-      setItems([]);
-    }
     setSupplierId(newSupplierId);
-
+    setSearchTerm("");
     setCurrentItem({
       productId: "",
       sku: "",
-      quantity: 1,
-      freeQuantity: 0,
+      quantity: "",
+      freeQuantity: "",
       mrp: 0,
       sellingPrice: 0,
-      unitPrice: 0,
-      discountPercent: 0,
+      unitPrice: "",
+      discountPercent: "",
       unit: "",
     });
   };
 
-  const handleProductSelect = (productId: string) => {
-    const product = products.find((p) => p.id === productId);
-    if (product) {
-      const selling = product.sellingPrice || 0;
-      const cost = product.costPrice || 0;
+  const selectedSupplier = suppliers.find((s) => s.id === supplierId);
 
-      setCurrentItem({
-        ...currentItem,
-        productId: productId,
-        sku: product.sku,
-        mrp: product.mrp,
-        sellingPrice: selling,
-        unitPrice: cost,
-        discountPercent: 0,
-        freeQuantity: 0,
-        quantity: 1,
-        unit: product.unitOfMeasure || "Pcs",
+  const handleProductSelect = (product: Product) => {
+    setCurrentItem({
+      ...currentItem,
+      productId: product.id,
+      sku: product.sku,
+      mrp: product.mrp || 0,
+      sellingPrice: product.sellingPrice || 0,
+      unitPrice: product.costPrice > 0 ? product.costPrice : "",
+      discountPercent: "",
+      freeQuantity: "",
+      quantity: "",
+      unit: product.unitOfMeasure || "Pcs",
+    });
+    setSearchTerm(product.name);
+    setIsDropdownOpen(false);
+    setHighlightedIndex(-1);
+    setTimeout(() => {
+      qtyInputRef.current?.focus();
+    }, 100);
+  };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!isDropdownOpen) {
+      if (e.key === "ArrowDown" || e.key === "Enter") {
+        setIsDropdownOpen(true);
+      }
+      return;
+    }
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightedIndex((prev) => {
+        const next = prev < filteredProducts.length - 1 ? prev + 1 : prev;
+        itemRefs.current[next]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        return next;
       });
-      setProductSearchOpen(false);
-
-      // Auto-focus quantity input after selection
-      setTimeout(() => {
-        qtyInputRef.current?.focus();
-      }, 100);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightedIndex((prev) => {
+        const next = prev > 0 ? prev - 1 : prev;
+        itemRefs.current[next]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        return next;
+      });
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (highlightedIndex >= 0 && highlightedIndex < filteredProducts.length) {
+        handleProductSelect(filteredProducts[highlightedIndex]);
+      }
+    } else if (e.key === "Escape") {
+      setIsDropdownOpen(false);
     }
   };
 
@@ -233,49 +283,41 @@ export default function CreatePurchasePage() {
     }
   };
 
-  const handleUnitPriceChange = (newPrice: number) => {
-    setCurrentItem({ ...currentItem, unitPrice: newPrice });
-  };
-
-  const handleDiscountChange = (newDiscount: number) => {
-    setCurrentItem({
-      ...currentItem,
-      discountPercent: Math.max(0, Math.min(100, newDiscount)),
-    });
-  };
-
   const handleAddItem = () => {
-    if (
-      !currentItem.productId ||
-      currentItem.quantity <= 0 ||
-      currentItem.unitPrice < 0
-    ) {
-      toast.error("Please fill all fields correctly");
+    const qty = parseNumber(currentItem.quantity);
+    const unitPrice = parseNumber(currentItem.unitPrice);
+
+    if (!currentItem.productId || qty <= 0) {
+      toast.error("Please enter a valid quantity");
+      return;
+    }
+    if (unitPrice < 0) {
+      toast.error("Invalid Cost Price");
       return;
     }
 
     const product = products.find((p) => p.id === currentItem.productId);
     if (!product) return;
 
-    const unitDiscountAmount =
-      (currentItem.unitPrice * currentItem.discountPercent) / 100;
-    const netUnitPrice = currentItem.unitPrice - unitDiscountAmount;
-
-    const total = netUnitPrice * currentItem.quantity;
-    const totalDiscountAmount = unitDiscountAmount * currentItem.quantity;
+    const discountPct = parseNumber(currentItem.discountPercent);
+    const freeQty = parseNumber(currentItem.freeQuantity);
+    const unitDiscountAmount = (unitPrice * discountPct) / 100;
+    const netUnitPrice = unitPrice - unitDiscountAmount;
+    const total = netUnitPrice * qty;
+    const totalDiscountAmount = unitDiscountAmount * qty;
 
     const newItem: PurchaseItem = {
       id: Date.now().toString(),
       productId: currentItem.productId,
       sku: product.sku,
       productName: product.name,
-      quantity: currentItem.quantity,
-      freeQuantity: currentItem.freeQuantity,
+      quantity: qty,
+      freeQuantity: freeQty,
       unit: currentItem.unit,
       mrp: currentItem.mrp,
       sellingPrice: currentItem.sellingPrice,
-      unitPrice: currentItem.unitPrice,
-      discountPercent: currentItem.discountPercent,
+      unitPrice: unitPrice,
+      discountPercent: discountPct,
       discountAmount: totalDiscountAmount,
       finalPrice: netUnitPrice,
       total: total,
@@ -286,55 +328,43 @@ export default function CreatePurchasePage() {
     setCurrentItem({
       productId: "",
       sku: "",
-      quantity: 1,
-      freeQuantity: 0,
+      quantity: "",
+      freeQuantity: "",
       mrp: 0,
       sellingPrice: 0,
-      unitPrice: 0,
-      discountPercent: 0,
+      unitPrice: "",
+      discountPercent: "",
       unit: "",
     });
+    setSearchTerm("");
   };
 
-  const handleRemoveItem = (id: string) => {
+  const handleRemoveItem = (id: string) =>
     setItems(items.filter((item) => item.id !== id));
-  };
 
-  const subtotal = items.reduce((sum, item) => sum + item.total, 0);
-  const totalDiscount = items.reduce(
-    (sum, item) => sum + item.discountAmount,
-    0
-  );
-  const totalGross = items.reduce(
-    (sum, item) => sum + item.unitPrice * item.quantity,
-    0
-  );
+  // --- Bill Calculations ---
+  const totalGross = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+  const totalLineDiscount = items.reduce((sum, item) => sum + item.discountAmount, 0);
+  const subtotal = totalGross - totalLineDiscount;
+  const extraDiscountAmount = (subtotal * parseNumber(extraDiscountPercent)) / 100;
+  const finalTotal = subtotal - extraDiscountAmount;
 
   // --- Save Purchase ---
   const handleSavePurchase = async () => {
-    if (items.length === 0) {
-      toast.error("Add at least one item");
-      return;
-    }
-    if (!supplierId) {
-      toast.error("Select a supplier");
-      return;
-    }
-    // ✅ Optional: Check if business is selected (you can make this optional if desired)
-    if (!businessId) {
-      toast.error("Please select a business");
-      return;
-    }
+    if (items.length === 0) return toast.error("Add at least one item");
+    if (!supplierId) return toast.error("Select a supplier");
+    if (!businessId) return toast.error("Please select a business");
 
     setSubmitting(true);
-
     const purchasePayload = {
       supplier_id: supplierId,
-      business_id: businessId, // ✅ Send business_id
+      business_id: businessId,
       purchase_date: purchaseDate,
       arrival_date: arrivalDate || "",
       invoice_number: invoiceNumber || "",
-      total_amount: subtotal,
+      total_amount: finalTotal,
+      extra_discount: extraDiscountAmount,
+      extra_discount_percent: parseNumber(extraDiscountPercent),
       items: items,
     };
 
@@ -344,11 +374,8 @@ export default function CreatePurchasePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(purchasePayload),
       });
-
       const data = await res.json();
-
       if (!res.ok) throw new Error(data.error || "Failed to create purchase");
-
       toast.success("Purchase Order Created Successfully!");
       router.push("/dashboard/admin/purchases");
     } catch (error: any) {
@@ -358,23 +385,65 @@ export default function CreatePurchasePage() {
     }
   };
 
-  const selectedSupplier = suppliers.find((s) => s.id === supplierId);
+  // --- Create Supplier inline ---
+  const handleCreateSupplier = async () => {
+    if (!supplierFormData.name) {
+      toast.error("Please enter a company name");
+      return;
+    }
 
-  const availableProducts = products.filter((product) => {
-    const notInItems = !items.some((item) => item.productId === product.id);
-    const matchesSupplier =
-      !selectedSupplier || product.supplier === selectedSupplier.name;
-    return notInItems && matchesSupplier;
-  });
+    setSubmittingSupplier(true);
+    const payload = {
+      ...supplierFormData,
+      businessId: businessId || supplierFormData.businessId,
+    };
 
-  const getSelectedProductName = () => {
-    const product = products.find((p) => p.id === currentItem.productId);
-    return product ? `${product.name}` : "Select product";
+    try {
+      const res = await fetch("/api/suppliers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to create supplier");
+
+      toast.success("Supplier created successfully!");
+      setIsAddSupplierDialogOpen(false);
+      setSupplierFormData({
+        name: "",
+        contactPerson: "",
+        email: "",
+        phone: "",
+        address: "",
+        category: "",
+        status: "Active",
+        duePayment: 0,
+        businessId: "",
+      });
+      await loadData();
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setSubmittingSupplier(false);
+    }
   };
 
-  const currentDiscountAmount =
-    ((currentItem.unitPrice * currentItem.discountPercent) / 100) *
-    currentItem.quantity;
+  // Filter products by selected supplier
+  const filteredProducts = products.filter((p) => {
+    const matchesSupplier = !selectedSupplier || p.supplier === selectedSupplier.name;
+    if (!matchesSupplier) return false;
+    if (searchTerm === "") return true;
+    const s = searchTerm.toLowerCase();
+    return (
+      p.name.toLowerCase().includes(s) ||
+      p.sku.toLowerCase().includes(s) ||
+      (p.companyCode && p.companyCode.toLowerCase().includes(s))
+    );
+  });
+
+  const currentLineDiscountAmount =
+    ((parseNumber(currentItem.unitPrice) * parseNumber(currentItem.discountPercent)) / 100) *
+    parseNumber(currentItem.quantity);
 
   if (loadingData) {
     return (
@@ -417,19 +486,17 @@ export default function CreatePurchasePage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        {/* LEFT COLUMN - Forms */}
+        {/* LEFT COLUMN */}
         <div className="lg:col-span-2 space-y-3">
-          {/* 1. Purchase Details Card */}
+          {/* Purchase Details */}
           <Card>
             <CardHeader>
-              <CardTitle>Purchase Details</CardTitle>
-              <CardDescription>
-                Supplier and invoice information
-              </CardDescription>
+              <CardTitle className="flex items-center gap-2">
+                <Building2 className="w-4 h-4" /> Purchase Details
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                {/* ✅ Added Business Selector */}
                 <div className="space-y-2">
                   <Label>Purchasing Business</Label>
                   <Select
@@ -437,10 +504,7 @@ export default function CreatePurchasePage() {
                     onValueChange={setBusinessId}
                   >
                     <SelectTrigger className="w-full">
-                      <div className="flex items-center gap-2">
-                        <Building2 className="w-4 h-4 text-muted-foreground" />
-                        <SelectValue placeholder="Select Business" />
-                      </div>
+                      <SelectValue placeholder="Select Business" />
                     </SelectTrigger>
                     <SelectContent>
                       {businesses.map((b) => (
@@ -451,9 +515,19 @@ export default function CreatePurchasePage() {
                     </SelectContent>
                   </Select>
                 </div>
-
                 <div className="space-y-2">
-                  <Label>Supplier</Label>
+                  <div className="flex items-center justify-between">
+                    <Label>Supplier</Label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto p-0 text-xs text-primary hover:text-primary hover:bg-transparent"
+                      type="button"
+                      onClick={() => setIsAddSupplierDialogOpen(true)}
+                    >
+                      <Plus className="w-3 h-3 mr-1" /> New
+                    </Button>
+                  </div>
                   <Select
                     value={supplierId || ""}
                     onValueChange={handleSupplierChange}
@@ -470,7 +544,6 @@ export default function CreatePurchasePage() {
                     </SelectContent>
                   </Select>
                 </div>
-
                 <div className="space-y-2">
                   <Label htmlFor="date">Purchase Date</Label>
                   <Input
@@ -480,179 +553,146 @@ export default function CreatePurchasePage() {
                     onChange={(e) => setPurchaseDate(e.target.value)}
                   />
                 </div>
-
                 <div className="space-y-2">
                   <Label htmlFor="invoice">Invoice Number</Label>
                   <Input
                     id="invoice"
-                    placeholder="Supplier's invoice/bill number"
+                    placeholder="Enter Invoice No"
                     value={invoiceNumber}
                     onChange={(e) => setInvoiceNumber(e.target.value)}
                   />
                 </div>
-
                 <div className="space-y-2">
-                  <Label htmlFor="arrivalDate">Delivered Date</Label>
+                  <Label htmlFor="arrivalDate">Arrival Date</Label>
                   <Input
                     id="arrivalDate"
                     type="date"
                     value={arrivalDate}
                     onChange={(e) => setArrivalDate(e.target.value)}
-                    placeholder="Select date"
                   />
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* 2. Add Items Card (Existing code...) */}
+          {/* Add Items */}
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Add Items</CardTitle>
-              <CardDescription>
-                {supplierId
-                  ? `Select products from ${
-                      suppliers.find((s) => s.id === supplierId)?.name
-                    }`
-                  : "Select a supplier to see available products"}
-              </CardDescription>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={loadData}
+                className="text-xs"
+                type="button"
+              >
+                <RefreshCcw className="w-3 h-3 mr-1" /> Refresh
+              </Button>
             </CardHeader>
-            {/* ... Rest of item selection/table code remains identical to your existing code ... */}
             <CardContent>
               <div className="space-y-4">
-                {/* Row 1: Product Search */}
-                <div className="w-full">
-                  <Label htmlFor="product" className="mb-2 block">
-                    Item Name / Search Product
+                {/* Custom Searchable Dropdown */}
+                <div className="w-full relative" ref={dropdownRef}>
+                  <Label className="mb-2 block">
+                    Product Search ({filteredProducts.length} products) —{" "}
+                    <span className="text-xs text-muted-foreground">
+                      {supplierId ? "Shift+F to focus" : "Select a supplier first"}
+                    </span>
                   </Label>
-                  <Popover
-                    open={productSearchOpen}
-                    onOpenChange={setProductSearchOpen}
-                  >
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={productSearchOpen}
-                        className="w-full h-10 justify-between"
-                        disabled={!supplierId}
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      ref={searchInputRef}
+                      placeholder="Type product name or SKU..."
+                      className="pl-8"
+                      value={searchTerm}
+                      disabled={!supplierId}
+                      onChange={(e) => {
+                        setSearchTerm(e.target.value);
+                        setIsDropdownOpen(true);
+                        setHighlightedIndex(-1);
+                      }}
+                      onFocus={() => setIsDropdownOpen(true)}
+                      onKeyDown={handleSearchKeyDown}
+                    />
+                    {searchTerm && (
+                      <button
+                        onClick={() => {
+                          setSearchTerm("");
+                          setCurrentItem((prev) => ({ ...prev, productId: "" }));
+                          setHighlightedIndex(-1);
+                        }}
+                        className="absolute right-2 top-2.5 text-muted-foreground hover:text-black"
                       >
-                        <span className="truncate">
-                          {currentItem.productId
-                            ? getSelectedProductName()
-                            : supplierId
-                            ? "Select product by Name or SKU"
-                            : "Please select a supplier first"}
-                        </span>
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[500px] p-0" align="start">
-                      <Command>
-                        <CommandInput placeholder="Search product by name or SKU..." />
-                        <CommandList>
-                          <CommandEmpty>
-                            No product found for this supplier.
-                          </CommandEmpty>
-                          <CommandGroup>
-                            {availableProducts.length === 0 ? (
-                              <div className="p-4 text-center text-sm text-muted-foreground">
-                                {supplierId
-                                  ? "No items available for this supplier"
-                                  : "Select a supplier to view items"}
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+
+                  {isDropdownOpen && supplierId && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                      {filteredProducts.length === 0 ? (
+                        <div className="p-3 text-sm text-center text-gray-500">
+                          No products found
+                        </div>
+                      ) : (
+                        filteredProducts.map((product, index) => (
+                          <div
+                            key={product.id}
+                            ref={(el) => { itemRefs.current[index] = el; }}
+                            className={`p-2 cursor-pointer border-b border-gray-50 last:border-0 ${
+                              highlightedIndex === index
+                                ? "bg-gray-100"
+                                : "hover:bg-gray-50"
+                            }`}
+                            onMouseEnter={() => setHighlightedIndex(index)}
+                            onClick={() => handleProductSelect(product)}
+                          >
+                            <div className="font-medium text-sm text-gray-900 border-b border-gray-100 pb-1 mb-1">
+                              {product.name}
+                            </div>
+                            <div className="text-xs text-gray-600 grid grid-cols-2 gap-1 font-medium">
+                              <div>
+                                <span className="text-gray-400 font-normal">Item Code:</span> {product.sku}
                               </div>
-                            ) : (
-                              availableProducts.map((product) => (
-                                <CommandItem
-                                  key={product.id}
-                                  value={`${product.name} ${product.sku} ${product.id}`}
-                                  onSelect={() =>
-                                    handleProductSelect(product.id)
-                                  }
-                                >
-                                  <Check
-                                    className={cn(
-                                      "mr-2 h-4 w-4",
-                                      currentItem.productId === product.id
-                                        ? "opacity-100"
-                                        : "opacity-0"
-                                    )}
-                                  />
-                                  <div className="flex flex-col">
-                                    <span className="font-medium">
-                                      {product.name}
-                                    </span>
-                                    <span className="text-xs text-muted-foreground">
-                                      Code: {product.sku} | MRP: {product.mrp}
-                                    </span>
-                                  </div>
-                                </CommandItem>
-                              ))
-                            )}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
+                              {product.companyCode && (
+                                <div>
+                                  <span className="text-gray-400 font-normal">Company Code:</span>{" "}
+                                  <span className="text-blue-600">{product.companyCode}</span>
+                                </div>
+                              )}
+                              <div className="col-span-2">
+                                <span className="text-gray-400 font-normal">Supplier:</span>{" "}
+                                {product.supplier || "No Supplier"}
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                {/* Row 2: Item Details */}
+                {/* Item Detail Fields */}
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 items-end">
                   <div className="col-span-1">
                     <Label className="mb-2 block text-xs">Item Code</Label>
                     <Input
                       value={currentItem.sku || ""}
                       disabled
-                      className="h-9 bg-muted"
+                      className="h-9 bg-muted text-xs"
                       placeholder="Auto"
                     />
                   </div>
-
-                  {/* Unit of Measure Field */}
                   <div className="col-span-1">
                     <Label className="mb-2 block text-xs">Unit</Label>
                     <Input
                       value={currentItem.unit || ""}
                       disabled
-                      className="h-9 bg-muted"
+                      className="h-9 bg-muted text-xs"
                       placeholder="Unit"
                     />
                   </div>
-
-                  <div className="col-span-1">
-                    <Label className="mb-2 block text-xs">MRP</Label>
-                    <Input
-                      type="number"
-                      value={currentItem.mrp || ""}
-                      onChange={(e) =>
-                        setCurrentItem({
-                          ...currentItem,
-                          mrp: parseFloat(e.target.value) || 0,
-                        })
-                      }
-                      className="h-9"
-                      placeholder="0.00"
-                    />
-                  </div>
-
-                  <div className="col-span-1">
-                    <Label className="mb-2 block text-xs font-semibold text-blue-600">
-                      Cost Price
-                    </Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={currentItem.unitPrice || ""}
-                      onChange={(e) =>
-                        handleUnitPriceChange(parseFloat(e.target.value) || 0)
-                      }
-                      onKeyDown={handleKeyDown}
-                      placeholder="Cost Price"
-                      className="h-9 border-blue-200"
-                    />
-                  </div>
-
                   <div className="col-span-1">
                     <Label className="mb-2 block text-xs">Quantity</Label>
                     <Input
@@ -663,74 +703,79 @@ export default function CreatePurchasePage() {
                       onChange={(e) =>
                         setCurrentItem({
                           ...currentItem,
-                          quantity: parseInt(e.target.value) || 1,
+                          quantity: e.target.value === "" ? "" : parseInt(e.target.value),
                         })
                       }
                       onKeyDown={handleKeyDown}
-                      className="h-9"
+                      className="h-9 text-xs"
                     />
                   </div>
-
                   <div className="col-span-1">
-                    <Label className="mb-2 block text-xs text-green-600">
-                      Free Qty
-                    </Label>
+                    <Label className="mb-2 block text-xs text-green-600">Free Qty</Label>
                     <Input
                       type="number"
                       min="0"
-                      value={
-                        currentItem.freeQuantity > 0
-                          ? currentItem.freeQuantity
-                          : ""
-                      }
+                      value={currentItem.freeQuantity}
                       onChange={(e) =>
                         setCurrentItem({
                           ...currentItem,
-                          freeQuantity: parseInt(e.target.value) || 0,
+                          freeQuantity: e.target.value === "" ? "" : parseInt(e.target.value),
                         })
                       }
                       onKeyDown={handleKeyDown}
-                      placeholder="0"
-                      className="h-9 border-green-200"
+                      className="h-9 border-green-200 text-xs"
                     />
                   </div>
-
                   <div className="col-span-1">
-                    <Label className="mb-2 block text-xs">Discount (%)</Label>
+                    <Label className="mb-2 block text-xs font-semibold text-blue-600">Cost Price</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={currentItem.unitPrice}
+                      onChange={(e) =>
+                        setCurrentItem({
+                          ...currentItem,
+                          unitPrice: e.target.value === "" ? "" : parseFloat(e.target.value),
+                        })
+                      }
+                      onKeyDown={handleKeyDown}
+                      className="h-9 border-blue-200 text-xs"
+                    />
+                  </div>
+                  <div className="col-span-1">
+                    <Label className="mb-2 block text-xs">Disc %</Label>
                     <Input
                       type="number"
                       min="0"
                       max="100"
                       step="0.01"
-                      value={currentItem.discountPercent || ""}
+                      value={currentItem.discountPercent}
                       onChange={(e) =>
-                        handleDiscountChange(parseFloat(e.target.value) || 0)
+                        setCurrentItem({
+                          ...currentItem,
+                          discountPercent: e.target.value === "" ? "" : parseFloat(e.target.value),
+                        })
                       }
                       onKeyDown={handleKeyDown}
-                      placeholder="0%"
-                      className="h-9"
+                      className="h-9 text-xs"
                     />
                   </div>
-
                   <div className="col-span-1">
-                    <Label className="mb-2 block text-xs">D. Amount</Label>
+                    <Label className="mb-2 block text-xs text-muted-foreground">Disc Amt</Label>
                     <Input
-                      value={
-                        currentDiscountAmount > 0
-                          ? currentDiscountAmount.toFixed(2)
-                          : ""
-                      }
+                      value={currentLineDiscountAmount > 0 ? currentLineDiscountAmount.toFixed(2) : ""}
                       disabled
-                      className="h-9 bg-muted"
+                      className="h-9 bg-muted text-xs"
                       placeholder="0.00"
                     />
                   </div>
-
                   <div className="col-span-1">
                     <Label className="mb-2 block text-xs">Selling Price</Label>
                     <Input
                       type="number"
                       min="0"
+                      step="0.01"
                       value={currentItem.sellingPrice || ""}
                       onChange={(e) =>
                         setCurrentItem({
@@ -738,10 +783,9 @@ export default function CreatePurchasePage() {
                           sellingPrice: parseFloat(e.target.value) || 0,
                         })
                       }
-                      className="h-9"
+                      className="h-9 text-xs"
                     />
                   </div>
-
                   <div className="col-span-1">
                     <Button
                       onClick={handleAddItem}
@@ -756,167 +800,143 @@ export default function CreatePurchasePage() {
             </CardContent>
           </Card>
 
-          {/* 3. Items List Table (Existing code...) */}
+          {/* Items Table */}
           <Card>
-            <CardHeader>
-              <CardTitle>Purchase Items</CardTitle>
-              <CardDescription>
-                List of items added to this order
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {items.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Package className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                  <p>No items added yet</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Item Code</TableHead>
-                        <TableHead>Item Name</TableHead>
-                        <TableHead className="text-center">Unit</TableHead>
-                        <TableHead className="text-right">Cost Price</TableHead>
-                        <TableHead className="text-right">Qty</TableHead>
-                        <TableHead className="text-right text-green-600">
-                          Free
-                        </TableHead>
-                        <TableHead className="text-right">Disc(%)</TableHead>
-                        <TableHead className="text-right">D. Amount</TableHead>
-                        <TableHead className="text-right">Total</TableHead>
-                        <TableHead className="w-[50px]"></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {items.map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell className="font-mono text-xs">
-                            {item.sku}
-                          </TableCell>
-                          <TableCell
-                            className="font-medium text-sm max-w-[150px] truncate"
-                            title={item.productName}
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Product</TableHead>
+                    <TableHead className="text-right">Cost</TableHead>
+                    <TableHead className="text-right">Qty</TableHead>
+                    <TableHead className="text-right">Free</TableHead>
+                    <TableHead className="text-right">Disc</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead className="w-[50px]"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {items.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                        No items added
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    items.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell>
+                          <div className="font-medium">{item.productName}</div>
+                          <div className="text-xs text-muted-foreground">{item.sku}</div>
+                        </TableCell>
+                        <TableCell className="text-right">{item.unitPrice}</TableCell>
+                        <TableCell className="text-right">{item.quantity}</TableCell>
+                        <TableCell className="text-right text-green-600">
+                          {item.freeQuantity || "-"}
+                        </TableCell>
+                        <TableCell className="text-right text-red-500">
+                          {item.discountAmount > 0 ? item.discountAmount.toFixed(2) : "-"}
+                        </TableCell>
+                        <TableCell className="text-right font-bold">
+                          {item.total.toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => handleRemoveItem(item.id)}
                           >
-                            {item.productName}
-                          </TableCell>
-                          <TableCell className="text-center text-xs text-muted-foreground">
-                            {item.unit}
-                          </TableCell>
-                          <TableCell className="text-right text-blue-600">
-                            {item.unitPrice.toLocaleString()}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {item.quantity}
-                          </TableCell>
-                          <TableCell className="text-right text-green-600 font-medium">
-                            {item.freeQuantity > 0 ? item.freeQuantity : "-"}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {item.discountPercent > 0
-                              ? item.discountPercent.toFixed(1) + "%"
-                              : "-"}
-                          </TableCell>
-                          <TableCell className="text-right text-red-500">
-                            {item.discountAmount > 0
-                              ? item.discountAmount.toFixed(2)
-                              : "-"}
-                          </TableCell>
-                          <TableCell className="text-right font-bold">
-                            {item.total.toLocaleString()}
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              onClick={() => handleRemoveItem(item.id)}
-                            >
-                              <Trash2 className="w-4 h-4 text-destructive" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
+                            <Trash2 className="w-4 h-4 text-gray-500" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         </div>
 
         {/* RIGHT COLUMN - Summary */}
         <div className="lg:col-span-1">
-          <Card className="sticky top-6">
-            <CardHeader>
-              <CardTitle>Purchase Summary</CardTitle>
+          <Card className="sticky top-6 shadow-md">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg">Order Summary</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                {/* ✅ Added Business Summary */}
-                <div className="flex justify-between text-sm">
+            <CardContent className="space-y-4 pt-6">
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
                   <span className="text-muted-foreground">Business:</span>
                   <span className="font-medium">
-                    {businesses.find((b) => b.id === businessId)?.name ||
-                      "Not selected"}
+                    {businesses.find((b) => b.id === businessId)?.name || "None"}
                   </span>
                 </div>
-                <div className="flex justify-between text-sm">
+                <div className="flex justify-between">
                   <span className="text-muted-foreground">Supplier:</span>
                   <span className="font-medium">
-                    {suppliers.find((s) => s.id === supplierId)?.name ||
-                      "Not selected"}
+                    {suppliers.find((s) => s.id === supplierId)?.name || "None"}
                   </span>
                 </div>
-                <div className="flex justify-between text-sm">
+                <div className="flex justify-between">
                   <span className="text-muted-foreground">Date:</span>
                   <span className="font-medium">
                     {new Date(purchaseDate).toLocaleDateString()}
                   </span>
                 </div>
-                <div className="flex justify-between text-sm">
+                <div className="flex justify-between">
                   <span className="text-muted-foreground">Invoice #:</span>
-                  <span className="font-medium">
-                    {invoiceNumber || "Not set"}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Payment:</span>
-                  <span className="font-medium capitalize text-red-600">
-                    Unpaid
-                  </span>
+                  <span className="font-medium">{invoiceNumber || "-"}</span>
                 </div>
               </div>
-
-              <div className="border-t pt-4 space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Gross Cost:</span>
-                  <span>LKR {totalGross.toLocaleString()}</span>
+              <div className="border-t pt-4 space-y-3">
+                <div className="flex justify-between text-sm font-medium border-t border-dashed pt-2">
+                  <span>Subtotal:</span>
+                  <span>LKR {subtotal.toLocaleString()}</span>
                 </div>
-                {totalDiscount > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">
-                      Total Discount:
-                    </span>
-                    <span className="text-green-600">
-                      - LKR {totalDiscount.toLocaleString()}
-                    </span>
+                <div className="space-y-2 bg-gray-50 p-3 rounded-md border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs text-gray-700">Extra Discount (%)</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={extraDiscountPercent}
+                      onChange={(e) =>
+                        setExtraDiscountPercent(
+                          e.target.value === "" ? "" : parseFloat(e.target.value)
+                        )
+                      }
+                      placeholder="0%"
+                      className="h-7 w-20 text-right text-xs bg-white"
+                    />
                   </div>
-                )}
-                <div className="flex justify-between items-center pt-2 border-t">
-                  <span className="font-semibold">Net Payable:</span>
-                  <span className="text-2xl font-bold text-primary">
-                    LKR {subtotal.toLocaleString()}
+                  {extraDiscountAmount > 0 && (
+                    <div className="flex justify-between text-xs text-gray-600 font-medium">
+                      <span>Amount:</span>
+                      <span>
+                        - LKR{" "}
+                        {extraDiscountAmount.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex justify-between items-center pt-4 border-t-2 border-gray-200 mt-2">
+                  <span className="font-bold text-lg">Net Payable:</span>
+                  <span className="text-2xl font-bold">
+                    LKR{" "}
+                    {Math.max(0, finalTotal).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                    })}
                   </span>
                 </div>
-                <p className="text-xs text-muted-foreground pt-2">
-                  This is what you will pay to the supplier
-                </p>
               </div>
-
               <Button
                 onClick={handleSavePurchase}
-                className="w-full"
+                className="w-full mt-4"
                 size="lg"
                 disabled={items.length === 0 || submitting}
               >
@@ -924,8 +944,7 @@ export default function CreatePurchasePage() {
                   "Processing..."
                 ) : (
                   <>
-                    <Save className="w-4 h-4 mr-2" />
-                    Create Purchase Order
+                    <Save className="w-4 h-4 mr-2" /> Confirm Purchase
                   </>
                 )}
               </Button>
@@ -933,6 +952,19 @@ export default function CreatePurchasePage() {
           </Card>
         </div>
       </div>
+
+      <SupplierDialogs
+        isAddDialogOpen={isAddSupplierDialogOpen}
+        setIsAddDialogOpen={setIsAddSupplierDialogOpen}
+        formData={supplierFormData}
+        setFormData={setSupplierFormData}
+        onSave={handleCreateSupplier}
+        selectedSupplier={null}
+        businessOptions={[]}
+        isDeleteDialogOpen={false}
+        setIsDeleteDialogOpen={() => {}}
+        onDeleteConfirm={() => {}}
+      />
     </div>
   );
 }

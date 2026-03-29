@@ -150,8 +150,8 @@ export default function SuppliersPage() {
   };
 
   const handleSaveSupplier = async () => {
-    if (!formData.name || !formData.contactPerson || !formData.phone) {
-      toast.error("Please fill in all required fields");
+    if (!formData.name) {
+      toast.error("Please enter a company name");
       return;
     }
 

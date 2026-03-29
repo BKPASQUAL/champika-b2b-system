@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(curl -s \"http://localhost:3000/api/reports/sierra?from=2026-01-01&to=2026-03-29\")"
+      "Bash(curl -s \"http://localhost:3000/api/reports/sierra?from=2026-01-01&to=2026-03-29\")",
+      "Bash(find /c/Projects/champika-b2b-system/app/dashboard/office/orange/purchases/[id] -type f)",
+      "Bash(find /c/Projects/champika-b2b-system/app/dashboard/office/distribution/purchases/[id] -type f)",
+      "Bash(find /c/Projects/champika-b2b-system/app/dashboard/office/sierra/purchases/[id] -type f)",
+      "Bash(find /c/Projects/champika-b2b-system/app/dashboard/admin/purchases/[id] -type f)",
+      "Bash(find /c/Projects/champika-b2b-system/app/dashboard/office/wireman/purchases/[id] -type f)"
     ]
   }
 }
