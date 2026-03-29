@@ -28,9 +28,9 @@ export function ProductFilters({
   categories,
 }: ProductFiltersProps) {
   return (
-    <div className="flex flex-col gap-3">
-      {/* Search — full width on all screens */}
-      <div className="relative">
+    <div className="flex flex-col sm:flex-row gap-2">
+      {/* Search */}
+      <div className="relative flex-1">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           placeholder="Search by name, SKU..."
@@ -40,33 +40,30 @@ export function ProductFilters({
         />
       </div>
 
-      {/* Filters — stack on mobile, row on sm+ */}
-      <div className="flex flex-col sm:flex-row gap-2">
-        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-          <SelectTrigger className="w-full sm:w-[180px] border-orange-100">
-            <SelectValue placeholder="Category" />
-          </SelectTrigger>
-          <SelectContent>
-            {categories.map((category) => (
-              <SelectItem key={category} value={category}>
-                {category === "all" ? "All Categories" : category}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+        <SelectTrigger className="w-full sm:w-[180px] border-orange-100">
+          <SelectValue placeholder="Category" />
+        </SelectTrigger>
+        <SelectContent>
+          {categories.map((category) => (
+            <SelectItem key={category} value={category}>
+              {category === "all" ? "All Categories" : category}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
 
-        <Select value={stockFilter} onValueChange={setStockFilter}>
-          <SelectTrigger className="w-full sm:w-[180px] border-orange-100">
-            <SelectValue placeholder="Stock Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Stock</SelectItem>
-            <SelectItem value="in-stock">In Stock</SelectItem>
-            <SelectItem value="low">Low Stock</SelectItem>
-            <SelectItem value="out-of-stock">Out of Stock</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      <Select value={stockFilter} onValueChange={setStockFilter}>
+        <SelectTrigger className="w-full sm:w-[180px] border-orange-100">
+          <SelectValue placeholder="Stock Status" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All Stock</SelectItem>
+          <SelectItem value="in-stock">In Stock</SelectItem>
+          <SelectItem value="low">Low Stock</SelectItem>
+          <SelectItem value="out-of-stock">Out of Stock</SelectItem>
+        </SelectContent>
+      </Select>
     </div>
   );
 }

@@ -27,7 +27,7 @@ import { toast } from "sonner";
 // Updated hook to support refreshing data
 const useSettings = (type: string) => {
   const [data, setData] = useState<
-    { id: string; name: string; parent_id?: string; category_id?: string }[]
+    { id: string; name: string; parent_id?: string; category_id?: string; description?: string }[]
   >([]);
   const [version, setVersion] = useState(0);
 
@@ -74,6 +74,12 @@ export function ProductDialogs({
   const { data: brands } = useSettings("brand");
   const { data: models } = useSettings("model");
   const { data: specs, refresh: refreshSpecs } = useSettings("spec");
+  const { data: packSizes } = useSettings("pack_size");
+
+  // Pack Size Logic
+  const selectedPack = packSizes.find((p) => p.name === formData.unitOfMeasure);
+  const packQuantity = selectedPack && selectedPack.description ? parseFloat(selectedPack.description) : 1;
+  const isMultiPack = packQuantity > 1;
 
   // --- Filtering Logic ---
   const mainCategories = categories.filter((c) => !c.parent_id);
@@ -536,7 +542,7 @@ export function ProductDialogs({
 
             {/* Pricing Section */}
             <div className="col-span-2 grid grid-cols-3 gap-4 border-t pt-4">
-              <div className="space-y-2">
+              <div className="space-y-2 relative">
                 <Label>MRP (LKR)</Label>
                 <Input
                   type="number"
@@ -549,8 +555,13 @@ export function ProductDialogs({
                     })
                   }
                 />
+                {isMultiPack && Number(formData.mrp) > 0 && (
+                  <p className="text-[10px] text-muted-foreground absolute -bottom-4 left-0">
+                    Per Pcs: {(Number(formData.mrp) / packQuantity).toFixed(2)}
+                  </p>
+                )}
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 relative">
                 <Label>Selling Price (LKR)</Label>
                 <Input
                   type="number"
@@ -564,8 +575,13 @@ export function ProductDialogs({
                   }
                   className="border-green-200 focus-visible:ring-green-400"
                 />
+                {isMultiPack && Number(formData.sellingPrice) > 0 && (
+                  <p className="text-[10px] text-muted-foreground absolute -bottom-4 left-0">
+                    Per Pcs: {(Number(formData.sellingPrice) / packQuantity).toFixed(2)}
+                  </p>
+                )}
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 relative">
                 <Label>Cost Price (LKR)</Label>
                 <Input
                   type="number"
@@ -578,13 +594,18 @@ export function ProductDialogs({
                     })
                   }
                 />
+                {isMultiPack && Number(formData.costPrice) > 0 && (
+                  <p className="text-[10px] text-muted-foreground absolute -bottom-4 left-0">
+                    Per Pcs: {(Number(formData.costPrice) / packQuantity).toFixed(2)}
+                  </p>
+                )}
               </div>
             </div>
 
             {/* Stock Section */}
-            <div className="col-span-2 grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label>Unit</Label>
+            <div className="col-span-2 grid grid-cols-3 gap-4 pt-4">
+              <div className="space-y-2 relative">
+                <Label>Pack Size (Unit)</Label>
                 <Select
                   value={formData.unitOfMeasure}
                   onValueChange={(val) =>
@@ -592,13 +613,17 @@ export function ProductDialogs({
                   }
                 >
                   <SelectTrigger className="w-full">
-                    <SelectValue />
+                    <SelectValue placeholder="Select Pack Size" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Pcs">Pcs</SelectItem>
-                    <SelectItem value="Box">Box</SelectItem>
-                    <SelectItem value="Set">Set</SelectItem>
-                    <SelectItem value="Meters">Meters</SelectItem>
+                    {!packSizes.some(p => p.name.toLowerCase() === 'pcs') && (
+                      <SelectItem value="Pcs">Pcs (1 pc)</SelectItem>
+                    )}
+                    {packSizes.map((pack) => (
+                      <SelectItem key={pack.id} value={pack.name}>
+                        {pack.name} {pack.description && `(${pack.description} pcs)`}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
