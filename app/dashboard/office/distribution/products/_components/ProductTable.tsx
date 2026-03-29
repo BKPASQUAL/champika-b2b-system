@@ -298,7 +298,7 @@ export function ProductTable({
             {Math.min(currentPage * 7, totalPages * 7)} of {totalPages * 7}{" "}
             entries
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <Button
               variant="outline"
               size="sm"
@@ -307,11 +307,37 @@ export function ProductTable({
             >
               <ChevronLeft className="h-4 w-4 mr-1" /> Previous
             </Button>
-            <div className="flex items-center gap-1">
-              <Button variant="default" size="sm" className="w-9">
-                {currentPage}
-              </Button>
-            </div>
+            {(() => {
+              const pages: (number | "ellipsis")[] = [];
+              if (totalPages <= 6) {
+                for (let i = 1; i <= totalPages; i++) pages.push(i);
+              } else {
+                pages.push(1);
+                if (currentPage > 3) pages.push("ellipsis");
+                for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
+                  pages.push(i);
+                }
+                if (currentPage < totalPages - 2) pages.push("ellipsis");
+                pages.push(totalPages);
+              }
+              return pages.map((page, idx) =>
+                page === "ellipsis" ? (
+                  <span key={`ellipsis-${idx}`} className="px-2 text-muted-foreground">
+                    ...
+                  </span>
+                ) : (
+                  <Button
+                    key={page}
+                    variant={currentPage === page ? "default" : "outline"}
+                    size="sm"
+                    className="w-9"
+                    onClick={() => onPageChange(page)}
+                  >
+                    {page}
+                  </Button>
+                )
+              );
+            })()}
             <Button
               variant="outline"
               size="sm"

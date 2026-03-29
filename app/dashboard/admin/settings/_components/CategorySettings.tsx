@@ -99,6 +99,15 @@ export function CategorySettings() {
     string | null
   >(null);
 
+  // State for spec hierarchy view
+  const [allModelsForSpec, setAllModelsForSpec] = useState<Category[]>([]);
+  const [inlineAddSpec, setInlineAddSpec] = useState<{
+    parentId: string;
+    categoryId: string;
+    value: string;
+    saving: boolean;
+  } | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [newName, setNewName] = useState("");
@@ -127,7 +136,7 @@ export function CategorySettings() {
   }>({ open: false, sourceId: null, sourceCategoryId: null, newName: "", cloning: false, loadingSpecs: false, specsByParent: {} });
 
   const [activeType, setActiveType] = useState<
-    "category" | "brand" | "model" | "spec" | "supplier" | "route" | "lorry" | "pack_size"
+    "category" | "brand" | "model" | "spec" | "route" | "lorry" | "pack_size"
   >("category");
 
   useEffect(() => {
@@ -135,7 +144,7 @@ export function CategorySettings() {
       const params = new URLSearchParams(window.location.search);
       const subtab = params.get("subtab") as any;
       if (
-        ["category", "brand", "model", "spec", "supplier", "route", "lorry", "pack_size"].includes(subtab)
+        ["category", "brand", "model", "spec", "route", "lorry", "pack_size"].includes(subtab)
       ) {
         setActiveType(subtab);
       }
@@ -211,15 +220,6 @@ export function CategorySettings() {
       bgColor: "bg-indigo-50 dark:bg-indigo-950/30",
       borderColor: "border-indigo-200 dark:border-indigo-800",
       description: "Manage fleet vehicles",
-    },
-    {
-      value: "supplier",
-      label: "Suppliers",
-      icon: Building2,
-      color: "text-teal-600",
-      bgColor: "bg-teal-50 dark:bg-teal-950/30",
-      borderColor: "border-teal-200 dark:border-teal-800",
-      description: "Manage supplier categories",
     },
     {
       value: "pack_size",
@@ -345,7 +345,19 @@ export function CategorySettings() {
     setSelectedSpecSubModelId(null);
     setNewName("");
     setNewDescription("");
+    setInlineAddSpec(null);
   }, [fetchCategories]);
+
+  useEffect(() => {
+    if (activeType === "spec") {
+      fetch("/api/settings/categories?type=model")
+        .then((res) => res.json())
+        .then((data) => setAllModelsForSpec(data))
+        .catch(() => setAllModelsForSpec([]));
+    } else {
+      setAllModelsForSpec([]);
+    }
+  }, [activeType]);
 
   const openAddDialog = (parentId: string | null = null) => {
     setSelectedParent(parentId);
@@ -624,6 +636,392 @@ export function CategorySettings() {
     } catch (error) {
       toast.error("Failed to delete");
     }
+  };
+
+  const handleInlineAddSpec = async () => {
+    if (!inlineAddSpec?.value.trim() || !inlineAddSpec?.parentId) return;
+    setInlineAddSpec((prev) => (prev ? { ...prev, saving: true } : prev));
+    try {
+      const res = await fetch("/api/settings/categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: inlineAddSpec.value.trim(),
+          type: "spec",
+          parent_id: inlineAddSpec.parentId,
+          category_id: inlineAddSpec.categoryId,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to add");
+      }
+      toast.success(
+        <div className="flex items-center gap-2">
+          <Check className="h-4 w-4" />
+          <span>Specification added</span>
+        </div>
+      );
+      fetchCategories(true);
+      setInlineAddSpec(null);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to add specification");
+      setInlineAddSpec((prev) => (prev ? { ...prev, saving: false } : prev));
+    }
+  };
+
+  const renderSpecList = () => {
+    // Build specs indexed by their parent_id
+    const specsByParentId: Record<string, Category[]> = {};
+    categories.forEach((spec) => {
+      const key = spec.parent_id || "__root__";
+      if (!specsByParentId[key]) specsByParentId[key] = [];
+      specsByParentId[key].push(spec);
+    });
+
+    // Main models (no parent_id) indexed by their category_id
+    const mainModelsByCatId: Record<string, Category[]> = {};
+    allModelsForSpec.forEach((model) => {
+      if (!model.parent_id && model.category_id) {
+        if (!mainModelsByCatId[model.category_id]) mainModelsByCatId[model.category_id] = [];
+        mainModelsByCatId[model.category_id].push(model);
+      }
+    });
+
+    // Sub-models indexed by their parent model id
+    const subModelsByModelId: Record<string, Category[]> = {};
+    allModelsForSpec.forEach((model) => {
+      if (model.parent_id) {
+        if (!subModelsByModelId[model.parent_id]) subModelsByModelId[model.parent_id] = [];
+        subModelsByModelId[model.parent_id].push(model);
+      }
+    });
+
+    // Determine which categories to display (have specs or models)
+    const categoryIdsWithContent = new Set<string>();
+    categories.forEach((spec) => {
+      if (spec.category_id) categoryIdsWithContent.add(spec.category_id);
+      if (spec.parent_id) {
+        const parentIsCategory = fullCategoryList.some((c) => c.id === spec.parent_id);
+        if (parentIsCategory) categoryIdsWithContent.add(spec.parent_id);
+      }
+    });
+    allModelsForSpec.forEach((model) => {
+      if (!model.parent_id && model.category_id) {
+        categoryIdsWithContent.add(model.category_id);
+      }
+    });
+
+    const categoriesWithContent = fullCategoryList.filter((c) =>
+      categoryIdsWithContent.has(c.id)
+    );
+
+    // Unassigned specs (no category_id and parent is not a category)
+    const unassignedSpecs = categories.filter((spec) => {
+      if (spec.category_id) return false;
+      if (spec.parent_id) {
+        const parentIsCategory = fullCategoryList.some((c) => c.id === spec.parent_id);
+        return !parentIsCategory;
+      }
+      return true;
+    });
+
+    const isEmpty = categoriesWithContent.length === 0 && unassignedSpecs.length === 0;
+
+    if (isEmpty) {
+      return (
+        <Card className="border-2 border-dashed border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/30">
+          <CardContent className="flex flex-col items-center justify-center py-16">
+            <div className="h-20 w-20 rounded-full bg-orange-50 dark:bg-orange-950/30 ring-4 ring-offset-4 ring-orange-200 flex items-center justify-center mb-6">
+              <FileText className="h-10 w-10 text-orange-600" />
+            </div>
+            <h3 className="text-xl font-semibold mb-2">No Specifications Yet</h3>
+            <p className="text-sm text-muted-foreground text-center max-w-md mb-6">
+              Get started by adding your first specification using the button above.
+            </p>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    const renderSpecRow = (spec: Category) => (
+      <div
+        key={spec.id}
+        className="group flex items-center justify-between px-3 py-2 rounded-md hover:bg-muted/50 transition-colors"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <FileText className="h-3.5 w-3.5 text-orange-500 shrink-0" />
+          <span className="text-sm font-medium truncate">{spec.name}</span>
+        </div>
+        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => openEditDialog(spec.id, spec.name, spec.description || "")}
+            className="h-7 w-7 p-0 hover:bg-primary/10 hover:text-primary"
+            title="Edit"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => confirmDelete(spec.id, spec.name)}
+            className="h-7 w-7 p-0 hover:bg-destructive/10 hover:text-destructive"
+            title="Delete"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </div>
+    );
+
+    const renderInlineAdd = (parentId: string, categoryId: string, placeholder: string) => {
+      const isActive = inlineAddSpec?.parentId === parentId;
+      if (isActive) {
+        return (
+          <div className="flex items-center gap-2 px-3 py-2 mt-1">
+            <FileText className="h-3.5 w-3.5 text-orange-400 shrink-0" />
+            <Input
+              autoFocus
+              placeholder={placeholder}
+              value={inlineAddSpec.value}
+              onChange={(e) =>
+                setInlineAddSpec((prev) => (prev ? { ...prev, value: e.target.value } : prev))
+              }
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleInlineAddSpec();
+                if (e.key === "Escape") setInlineAddSpec(null);
+              }}
+              className="h-7 text-sm flex-1"
+              disabled={inlineAddSpec.saving}
+            />
+            <Button
+              size="sm"
+              onClick={handleInlineAddSpec}
+              disabled={inlineAddSpec.saving || !inlineAddSpec.value.trim()}
+              className="h-7 px-2 bg-orange-600 hover:bg-orange-700 text-white"
+            >
+              {inlineAddSpec.saving ? (
+                <div className="h-3 w-3 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+              ) : (
+                <Check className="h-3 w-3" />
+              )}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setInlineAddSpec(null)}
+              disabled={inlineAddSpec.saving}
+              className="h-7 px-2 text-xs"
+            >
+              ✕
+            </Button>
+          </div>
+        );
+      }
+      return (
+        <button
+          onClick={() => setInlineAddSpec({ parentId, categoryId, value: "", saving: false })}
+          className="w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-xs text-muted-foreground hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/20 transition-colors border border-dashed border-muted-foreground/20 hover:border-orange-300 mt-1"
+        >
+          <Plus className="h-3 w-3" />
+          Add Specification
+        </button>
+      );
+    };
+
+    return (
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {categoriesWithContent.map((cat) => {
+          const catDirectSpecs = specsByParentId[cat.id] || [];
+          const models = mainModelsByCatId[cat.id] || [];
+          const parentCatName = cat.parent_id
+            ? fullCategoryList.find((c) => c.id === cat.parent_id)?.name
+            : null;
+
+          let totalSpecs = catDirectSpecs.length;
+          models.forEach((model) => {
+            totalSpecs += (specsByParentId[model.id] || []).length;
+            (subModelsByModelId[model.id] || []).forEach((sub) => {
+              totalSpecs += (specsByParentId[sub.id] || []).length;
+            });
+          });
+
+          return (
+            <Card key={cat.id} className="overflow-hidden shadow-sm h-fit">
+              <Accordion type="single" collapsible className="w-full">
+                <AccordionItem value={cat.id} className="border-b-0">
+                  <AccordionTrigger
+                    className={cn(
+                      "px-4 py-3 hover:no-underline",
+                      "bg-orange-50 dark:bg-orange-950/30",
+                      "rounded-t-lg data-[state=closed]:rounded-b-lg"
+                    )}
+                  >
+                    <div className="flex items-center justify-between w-full pr-2">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="h-8 w-8 rounded-lg bg-background shadow-sm flex items-center justify-center shrink-0">
+                          <Package className="h-4 w-4 text-orange-600" />
+                        </div>
+                        <div className="min-w-0 text-left">
+                          <p className="text-sm font-semibold leading-tight truncate">{cat.name}</p>
+                          {parentCatName && (
+                            <span className="text-[10px] text-muted-foreground">
+                              Sub-category of {parentCatName}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                        <Badge variant="secondary" className="text-xs px-2 py-0.5">
+                          {totalSpecs} spec{totalSpecs !== 1 ? "s" : ""}
+                        </Badge>
+                        {models.length > 0 && (
+                          <Badge variant="outline" className="text-xs px-2 py-0.5 text-muted-foreground">
+                            {models.length} model{models.length !== 1 ? "s" : ""}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </AccordionTrigger>
+
+                  <AccordionContent className="pt-0">
+                  <Separator />
+                  <div className="p-3 space-y-3">
+
+                {/* Category-wide specs (applies to ALL models) */}
+                {catDirectSpecs.length > 0 && (
+                  <div className="rounded-lg border border-orange-200 dark:border-orange-800 overflow-hidden">
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-orange-100/50 dark:bg-orange-950/20">
+                      <FileText className="h-3 w-3 text-orange-600" />
+                      <span className="text-[10px] font-semibold text-orange-700 dark:text-orange-400 uppercase tracking-wide">
+                        All Models
+                      </span>
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-orange-300 ml-auto">
+                        {catDirectSpecs.length}
+                      </Badge>
+                    </div>
+                    <div className="px-1 py-1">
+                      {catDirectSpecs.map(renderSpecRow)}
+                    </div>
+                  </div>
+                )}
+
+                {/* Models */}
+                {models.map((model) => {
+                  const modelSpecs = specsByParentId[model.id] || [];
+                  const subModels = subModelsByModelId[model.id] || [];
+                  const totalModelSpecs =
+                    modelSpecs.length +
+                    subModels.reduce(
+                      (sum, sub) => sum + (specsByParentId[sub.id] || []).length,
+                      0
+                    );
+
+                  return (
+                    <div key={model.id} className="rounded-lg border bg-card overflow-hidden">
+                      {/* Model Header */}
+                      <div className="flex items-center justify-between px-3 py-2 bg-muted/40">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="h-6 w-6 rounded-md bg-orange-50 dark:bg-orange-950/30 flex items-center justify-center shrink-0">
+                            <Layers className="h-3 w-3 text-orange-600" />
+                          </div>
+                          <span className="text-sm font-semibold truncate">{model.name}</span>
+                        </div>
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] text-orange-600 border-orange-200 dark:border-orange-800 shrink-0 ml-2"
+                        >
+                          {totalModelSpecs}
+                        </Badge>
+                      </div>
+
+                      {/* Model-level specs + inline add */}
+                      <div className="px-2 py-1.5 bg-background">
+                        {modelSpecs.map(renderSpecRow)}
+                        {renderInlineAdd(model.id, cat.id, `Add spec to ${model.name}...`)}
+                      </div>
+
+                      {/* Sub-Models */}
+                      {subModels.length > 0 && (
+                        <div className="border-t px-2 pb-2 pt-1 space-y-1.5 bg-background">
+                          {subModels.map((sub) => {
+                            const subSpecs = specsByParentId[sub.id] || [];
+                            return (
+                              <div
+                                key={sub.id}
+                                className="rounded-md border border-muted overflow-hidden"
+                              >
+                                <div className="flex items-center gap-2 px-2.5 py-1.5 bg-muted/30">
+                                  <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                                  <span className="text-xs font-semibold flex-1 truncate">{sub.name}</span>
+                                  <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 shrink-0">
+                                    {subSpecs.length}
+                                  </Badge>
+                                </div>
+                                <div className="px-2 py-1">
+                                  {subSpecs.map(renderSpecRow)}
+                                  {renderInlineAdd(sub.id, cat.id, `Add spec to ${sub.name}...`)}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Empty state within category */}
+                {models.length === 0 && catDirectSpecs.length === 0 && (
+                  <p className="text-xs text-muted-foreground italic px-2 py-2">
+                    No specifications yet for this category.
+                  </p>
+                )}
+                  </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </Card>
+          );
+        })}
+
+        {/* Unassigned specs */}
+        {unassignedSpecs.length > 0 && (
+          <Card className="border-2 border-amber-200 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-950/20 shadow-sm h-fit">
+            <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="unassigned" className="border-b-0">
+                <AccordionTrigger className="px-4 hover:no-underline hover:bg-amber-100/50 dark:hover:bg-amber-900/10 rounded-t-lg data-[state=closed]:rounded-b-lg">
+                  <div className="flex items-center justify-between w-full pr-4">
+                    <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                        <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-500" />
+                      </div>
+                      <div className="text-left">
+                        <p className="text-sm font-semibold text-amber-900 dark:text-amber-500">Not Assigned</p>
+                        <p className="text-[10px] text-amber-700 dark:text-amber-400">
+                          {unassignedSpecs.length} spec{unassignedSpecs.length !== 1 ? "s" : ""} without a category
+                        </p>
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="border-amber-300 dark:border-amber-700">
+                      {unassignedSpecs.length}
+                    </Badge>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="pt-0">
+                  <Separator className="bg-amber-200 dark:bg-amber-900" />
+                  <div className="p-3 space-y-1">
+                    {unassignedSpecs.map(renderSpecRow)}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </Card>
+        )}
+      </div>
+    );
   };
 
   const renderCategoryBasedList = () => {
@@ -1054,7 +1452,7 @@ export function CategorySettings() {
             )}
 
             {/* For other types (route, lorry, supplier, pack_size) — no sub-items, just a bottom padding */}
-            {(activeType === "route" || activeType === "lorry" || activeType === "supplier" || activeType === "pack_size") && (
+            {(activeType === "route" || activeType === "lorry" || activeType === "pack_size") && (
               <div className="h-1" />
             )}
           </Card>
@@ -1407,7 +1805,9 @@ export function CategorySettings() {
               <p className="text-sm text-muted-foreground">Loading...</p>
             </CardContent>
           </Card>
-        ) : activeType === "model" || activeType === "spec" ? (
+        ) : activeType === "spec" ? (
+          renderSpecList()
+        ) : activeType === "model" ? (
           renderCategoryBasedList()
         ) : (
           renderHierarchicalList()
