@@ -44,6 +44,32 @@ interface Product {
   images: string[];
 }
 
+const NUMBER_WORDS: Record<string, string> = {
+  "0": "zero", "1": "one", "2": "two", "3": "three", "4": "four",
+  "5": "five", "6": "six", "7": "seven", "8": "eight", "9": "nine",
+  "10": "ten", "11": "eleven", "12": "twelve", "13": "thirteen",
+  "14": "fourteen", "15": "fifteen", "16": "sixteen", "17": "seventeen",
+  "18": "eighteen", "19": "nineteen", "20": "twenty", "24": "twenty four",
+  "30": "thirty", "40": "forty", "50": "fifty", "100": "hundred",
+};
+const WORD_NUMBERS: Record<string, string> = Object.fromEntries(
+  Object.entries(NUMBER_WORDS).map(([n, w]) => [w, n])
+);
+function getSearchTerms(query: string): string[] {
+  const q = query.toLowerCase().trim();
+  if (!q) return [];
+  const terms = new Set<string>([q]);
+  if (NUMBER_WORDS[q]) terms.add(NUMBER_WORDS[q]);
+  if (WORD_NUMBERS[q]) terms.add(WORD_NUMBERS[q]);
+  Object.entries(NUMBER_WORDS).forEach(([num, word]) => {
+    if (word.includes(q)) { terms.add(word); terms.add(num); }
+  });
+  Object.entries(NUMBER_WORDS).forEach(([num, word]) => {
+    if (num.startsWith(q)) { terms.add(num); terms.add(word); }
+  });
+  return Array.from(terms);
+}
+
 export default function RepProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,9 +105,14 @@ export default function RepProductsPage() {
   ];
 
   const filteredProducts = products.filter((product) => {
+    const searchTerms = getSearchTerms(searchQuery);
+    const haystack = [
+      product.name, product.sku, product.category,
+      product.brand ?? "", product.modelType ?? "", product.sizeSpec ?? "",
+    ].join(" ").toLowerCase();
     const matchesSearch =
-      product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.sku.toLowerCase().includes(searchQuery.toLowerCase());
+      searchQuery.trim() === "" ||
+      searchTerms.some((term) => haystack.includes(term));
 
     const matchesCategory =
       categoryFilter === "all" || product.category === categoryFilter;

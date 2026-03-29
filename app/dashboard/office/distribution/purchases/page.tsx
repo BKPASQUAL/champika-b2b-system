@@ -75,11 +75,12 @@ export default function DistributionPurchasesPage() {
 
   // --- 2. Filter Logic ---
   const filteredPurchases = purchases.filter((p) => {
+    const searchTerms = getSearchTerms(searchQuery);
+    const haystack = [p.purchaseId, p.supplierName, p.invoiceNo ?? ""]
+      .join(" ").toLowerCase();
     const matchesSearch =
-      p.purchaseId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.supplierName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (p.invoiceNo &&
-        p.invoiceNo.toLowerCase().includes(searchQuery.toLowerCase()));
+      searchQuery.trim() === "" ||
+      searchTerms.some((term) => haystack.includes(term));
     const matchesStatus = statusFilter === "all" || p.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
