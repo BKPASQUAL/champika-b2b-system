@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import {
   Table,
   TableBody,
@@ -9,11 +10,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Eye,
   Edit,
   Trash2,
   AlertTriangle,
+  Building2,
   Tag,
   ArrowUpDown,
   ArrowUp,
@@ -22,13 +25,10 @@ import {
   ChevronRight,
   Loader2,
   Percent,
+  PackageX,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import {
-  Product,
-  SortField,
-  SortOrder,
-} from "@/app/dashboard/admin/products/types";
+import { Product, SortField, SortOrder } from "../types";
 
 interface ProductTableProps {
   products: Product[];
@@ -57,6 +57,24 @@ export function ProductTable({
 }: ProductTableProps) {
   const router = useRouter();
 
+  const [packSizes, setPackSizes] = useState<
+    { id: string; name: string; description?: string }[]
+  >([]);
+
+  useEffect(() => {
+    fetch("/api/settings/categories?type=pack_size")
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) setPackSizes(data);
+      })
+      .catch((err) => console.error(err));
+  }, []);
+
+  const getPackQuantity = (unit: string) => {
+    const pack = packSizes.find((p) => p.name === unit);
+    return pack && pack.description ? parseFloat(pack.description) : 1;
+  };
+
   const getSortIcon = (field: SortField) => {
     if (sortField !== field)
       return <ArrowUpDown className="w-4 h-4 ml-1 opacity-40" />;
@@ -69,215 +87,447 @@ export function ProductTable({
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin mr-2 text-orange-600" />
-        <span className="text-muted-foreground">Loading inventory...</span>
+      <div className="flex justify-center items-center py-16">
+        <Loader2 className="h-6 w-6 animate-spin mr-2 text-orange-500" />
+        <span className="text-muted-foreground">Loading products...</span>
       </div>
     );
   }
 
+  if (products.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
+        <PackageX className="w-10 h-10 opacity-30" />
+        <p className="text-sm">No products found</p>
+      </div>
+    );
+  }
+
+  const pagination = (
+    <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-t">
+      <div className="text-xs sm:text-sm text-muted-foreground">
+        Showing {(currentPage - 1) * 7 + 1} –{" "}
+        {Math.min(currentPage * 7, totalPages * 7)} of {totalPages * 7} entries
+      </div>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+        >
+          <ChevronLeft className="h-4 w-4 mr-1" />
+          <span className="hidden sm:inline">Previous</span>
+        </Button>
+        <Button variant="default" size="sm" className="w-9">
+          {currentPage}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+        >
+          <span className="hidden sm:inline">Next</span>
+          <ChevronRight className="h-4 w-4 ml-1" />
+        </Button>
+      </div>
+    </div>
+  );
+
   return (
     <>
-      <div className="overflow-x-auto">
-        <Table>
-          <TableHeader className="bg-orange-50/50">
-            <TableRow>
-              <TableHead
-                className="cursor-pointer hover:bg-orange-100/50 pl-4"
-                onClick={() => onSort("name")}
-              >
-                <div className="flex items-center text-orange-900">
-                  Product Details {getSortIcon("name")}
-                </div>
-              </TableHead>
-              <TableHead
-                className="cursor-pointer hover:bg-orange-100/50"
-                onClick={() => onSort("category")}
-              >
-                <div className="flex items-center text-orange-900">
-                  Category {getSortIcon("category")}
-                </div>
-              </TableHead>
+      {/* ─── MOBILE & TABLET: Card Grid (hidden on lg+) ─── */}
+      <div className="lg:hidden">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4">
+          {products.map((product) => {
+            const packQty = getPackQuantity(product.unitOfMeasure);
+            const isMultiPack = packQty > 1;
 
-              {/* Removed Supplier Column - Redundant */}
-
-              <TableHead className="text-right text-orange-900">
-                Commission
-              </TableHead>
-
-              <TableHead
-                className="text-right cursor-pointer hover:bg-orange-100/50"
-                onClick={() => onSort("stock")}
+            return (
+              <div
+                key={product.id}
+                className={`rounded-xl border bg-white shadow-sm overflow-hidden flex flex-col ${
+                  !product.isActive ? "opacity-60" : ""
+                }`}
               >
-                <div className="flex items-center justify-end text-orange-900">
-                  Stock {getSortIcon("stock")}
-                </div>
-              </TableHead>
-
-              {/* ✅ ADDED MRP COLUMN */}
-              <TableHead
-                className="text-right cursor-pointer hover:bg-orange-100/50"
-                onClick={() => onSort("mrp")}
-              >
-                <div className="flex items-center justify-end text-orange-900">
-                  MRP {getSortIcon("mrp")}
-                </div>
-              </TableHead>
-
-              <TableHead
-                className="text-right cursor-pointer hover:bg-orange-100/50"
-                onClick={() => onSort("sellingPrice")}
-              >
-                <div className="flex items-center justify-end text-orange-900">
-                  Price {getSortIcon("sellingPrice")}
-                </div>
-              </TableHead>
-              <TableHead className="text-right text-orange-900 pr-4">
-                Actions
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {products.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={8} // Increased colSpan to account for new column
-                  className="text-center py-8 text-muted-foreground"
-                >
-                  No Orange products found matching your criteria.
-                </TableCell>
-              </TableRow>
-            ) : (
-              products.map((product) => (
-                <TableRow
-                  key={product.id}
-                  className="hover:bg-orange-50/10 transition-colors"
-                >
-                  <TableCell className="font-medium pl-4">
-                    <div className="flex flex-col">
-                      <span className="text-sm text-foreground">
-                        {product.name}
+                {/* Card Header */}
+                <div className="bg-orange-50/60 px-4 py-3 border-b flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm text-foreground leading-snug line-clamp-2">
+                      {product.name}
+                    </p>
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+                      <span className="text-[11px] text-muted-foreground font-mono">
+                        SKU: {product.sku}
                       </span>
-                      <span className="text-xs text-muted-foreground font-mono">
-                        {product.sku}
-                      </span>
-                      <div className="mt-1">
-                        {product.stock === 0 ? (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700">
-                            Out of Stock
-                          </span>
-                        ) : product.stock < product.minStock ? (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-700">
-                            Low Stock
-                          </span>
-                        ) : null}
-                      </div>
+                      {product.companyCode && (
+                        <span className="text-[11px] text-muted-foreground font-mono">
+                          CC: {product.companyCode}
+                        </span>
+                      )}
                     </div>
-                  </TableCell>
-                  <TableCell>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-700 border">
-                      <Tag className="w-3 h-3 mr-1" /> {product.category}
-                    </span>
-                  </TableCell>
+                  </div>
 
-                  {/* Commission Value */}
-                  <TableCell className="text-right">
-                    <span className="font-mono text-sm text-muted-foreground">
+                  {/* Stock Alert */}
+                  <div className="shrink-0">
+                    {product.stock === 0 ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700">
+                        <AlertTriangle className="w-3 h-3 mr-1" /> Out
+                      </span>
+                    ) : product.stock < product.minStock ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">
+                        <AlertTriangle className="w-3 h-3 mr-1" /> Low
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+
+                {/* Card Body */}
+                <div className="px-4 py-3 flex-1 space-y-3">
+                  {/* Badges Row */}
+                  <div className="flex flex-wrap gap-2">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                      <Tag className="w-3 h-3 mr-1" />
+                      {product.category}
+                    </span>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                      <Building2 className="w-3 h-3 mr-1" />
+                      {product.supplier}
+                    </span>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700">
+                      <Percent className="w-3 h-3 mr-1" />
                       {product.commissionValue ?? 0}%
                     </span>
-                  </TableCell>
+                    {product.isActive ? (
+                      <Badge
+                        variant="outline"
+                        className="border-green-500 text-green-600 bg-green-50 text-[11px] px-2"
+                      >
+                        Active
+                      </Badge>
+                    ) : (
+                      <Badge
+                        variant="outline"
+                        className="border-gray-400 text-gray-500 bg-gray-100 text-[11px] px-2"
+                      >
+                        Inactive
+                      </Badge>
+                    )}
+                  </div>
 
-                  <TableCell className="text-right">
+                  {/* Price Grid */}
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="bg-slate-50 rounded-lg px-2 py-2">
+                      <p className="text-[10px] text-muted-foreground mb-0.5">Cost</p>
+                      <p className="text-xs font-semibold text-blue-600">
+                        {product.costPrice > 0
+                          ? `LKR ${product.costPrice.toLocaleString()}`
+                          : "-"}
+                      </p>
+                      {isMultiPack && product.costPrice > 0 && (
+                        <p className="text-[9px] text-muted-foreground">
+                          Pcs: {(product.costPrice / packQty).toFixed(2)}
+                        </p>
+                      )}
+                    </div>
+                    <div className="bg-green-50 rounded-lg px-2 py-2">
+                      <p className="text-[10px] text-muted-foreground mb-0.5">Price</p>
+                      <p className="text-xs font-semibold text-green-600">
+                        LKR {product.sellingPrice.toLocaleString()}
+                      </p>
+                      {isMultiPack && product.sellingPrice > 0 && (
+                        <p className="text-[9px] text-muted-foreground">
+                          Pcs: {(product.sellingPrice / packQty).toFixed(2)}
+                        </p>
+                      )}
+                    </div>
+                    <div className="bg-slate-50 rounded-lg px-2 py-2">
+                      <p className="text-[10px] text-muted-foreground mb-0.5">MRP</p>
+                      <p className="text-xs font-semibold">
+                        {product.mrp > 0
+                          ? `LKR ${product.mrp.toLocaleString()}`
+                          : "-"}
+                      </p>
+                      {isMultiPack && product.mrp > 0 && (
+                        <p className="text-[9px] text-muted-foreground">
+                          Pcs: {(product.mrp / packQty).toFixed(2)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Stock Row */}
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground text-xs">Stock</span>
                     <span
-                      className={`font-medium text-sm ${
+                      className={`font-medium text-xs ${
                         product.stock === 0
                           ? "text-red-600"
                           : product.stock < product.minStock
-                          ? "text-orange-600"
+                          ? "text-amber-600"
                           : "text-foreground"
                       }`}
                     >
                       {product.stock}{" "}
-                      <span className="text-xs font-normal text-muted-foreground">
+                      <span className="font-normal text-muted-foreground">
                         {product.unitOfMeasure}
                       </span>
                     </span>
-                  </TableCell>
+                  </div>
+                </div>
 
-                  {/* ✅ ADDED MRP CELL */}
-                  <TableCell className="text-right font-medium text-sm text-muted-foreground">
-                    {product.mrp && product.mrp > 0 ? `LKR ${product.mrp.toLocaleString()}` : "-"}
-                  </TableCell>
-
-                  <TableCell className="text-right font-medium text-sm">
-                    LKR {product.sellingPrice.toLocaleString()}
-                  </TableCell>
-                  <TableCell className="text-right pr-4">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-slate-500 hover:text-orange-600 hover:bg-orange-50"
-                        onClick={() =>
-                          router.push(
-                            `/dashboard/office/orange/products/${product.id}`
-                          )
-                        }
-                      >
-                        <Eye className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-slate-500 hover:text-blue-600 hover:bg-blue-50"
-                        onClick={() => onEdit(product)}
-                      >
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-slate-500 hover:text-red-600 hover:bg-red-50"
-                        onClick={() => onDelete(product)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+                {/* Card Footer: Actions */}
+                <div className="px-4 py-2 border-t bg-slate-50/50 flex items-center justify-end gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-3 text-slate-500 hover:text-orange-600 hover:bg-orange-50"
+                    onClick={() =>
+                      router.push(
+                        `/dashboard/office/orange/products/${product.id}`
+                      )
+                    }
+                  >
+                    <Eye className="w-4 h-4 mr-1" />
+                    <span className="text-xs">View</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-3 text-slate-500 hover:text-blue-600 hover:bg-blue-50"
+                    onClick={() => onEdit(product)}
+                  >
+                    <Edit className="w-4 h-4 mr-1" />
+                    <span className="text-xs">Edit</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-3 text-slate-500 hover:text-red-600 hover:bg-red-50"
+                    onClick={() => onDelete(product)}
+                  >
+                    <Trash2 className="w-4 h-4 mr-1" />
+                    <span className="text-xs">Delete</span>
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {pagination}
       </div>
 
-      {!loading && products.length > 0 && (
-        <div className="flex items-center justify-between px-6 py-4 border-t bg-slate-50/30">
-          <div className="text-xs text-muted-foreground">
-            Page {currentPage} of {totalPages}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPageChange(currentPage - 1)}
-              disabled={currentPage === 1}
-              className="h-8"
-            >
-              <ChevronLeft className="h-4 w-4 mr-1" /> Prev
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPageChange(currentPage + 1)}
-              disabled={currentPage === totalPages}
-              className="h-8"
-            >
-              Next <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
-          </div>
+      {/* ─── DESKTOP: Full Table (hidden below lg) ─── */}
+      <div className="hidden lg:block">
+        <div className="overflow-x-auto px-4">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead
+                  className="cursor-pointer hover:bg-muted/50"
+                  onClick={() => onSort("name")}
+                >
+                  <div className="flex items-center">
+                    Product Name {getSortIcon("name")}
+                  </div>
+                </TableHead>
+                <TableHead
+                  className="cursor-pointer hover:bg-muted/50"
+                  onClick={() => onSort("category")}
+                >
+                  <div className="flex items-center">
+                    Category {getSortIcon("category")}
+                  </div>
+                </TableHead>
+                <TableHead
+                  className="cursor-pointer hover:bg-muted/50"
+                  onClick={() => onSort("supplier")}
+                >
+                  <div className="flex items-center">
+                    Supplier {getSortIcon("supplier")}
+                  </div>
+                </TableHead>
+                <TableHead className="text-right">Commission</TableHead>
+                <TableHead className="text-center">Status</TableHead>
+                <TableHead
+                  className="text-right cursor-pointer hover:bg-muted/50"
+                  onClick={() => onSort("stock")}
+                >
+                  <div className="flex items-center justify-end">
+                    Stock {getSortIcon("stock")}
+                  </div>
+                </TableHead>
+                <TableHead className="text-right">Cost Price</TableHead>
+                <TableHead
+                  className="text-right cursor-pointer hover:bg-muted/50"
+                  onClick={() => onSort("sellingPrice")}
+                >
+                  <div className="flex items-center justify-end">
+                    Selling Price {getSortIcon("sellingPrice")}
+                  </div>
+                </TableHead>
+                <TableHead
+                  className="text-right cursor-pointer hover:bg-muted/50"
+                  onClick={() => onSort("mrp")}
+                >
+                  <div className="flex items-center justify-end">
+                    MRP {getSortIcon("mrp")}
+                  </div>
+                </TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {products.map((product) => {
+                const packQty = getPackQuantity(product.unitOfMeasure);
+                const isMultiPack = packQty > 1;
+
+                return (
+                  <TableRow
+                    key={product.id}
+                    className={!product.isActive ? "opacity-60 bg-muted/20" : ""}
+                  >
+                    <TableCell className="font-medium align-top">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          {product.name}
+                          {product.stock === 0 ? (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-red-100 text-red-700">
+                              <AlertTriangle className="w-3 h-3 mr-1" /> Out
+                            </span>
+                          ) : product.stock < product.minStock ? (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-destructive/10 text-destructive">
+                              <AlertTriangle className="w-3 h-3 mr-1" /> Low
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="flex gap-2 text-[10px] text-muted-foreground font-mono">
+                          <span>SKU: {product.sku}</span>
+                          {product.companyCode && (
+                            <span>CC: {product.companyCode}</span>
+                          )}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                        <Tag className="w-3 h-3 mr-1" /> {product.category}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                        <Building2 className="w-3 h-3 mr-1" /> {product.supplier}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700">
+                        <Percent className="w-3 h-3 mr-1" />
+                        {product.commissionValue ?? 0}%
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {product.isActive ? (
+                        <Badge
+                          variant="outline"
+                          className="border-green-500 text-green-600 bg-green-50"
+                        >
+                          Active
+                        </Badge>
+                      ) : (
+                        <Badge
+                          variant="outline"
+                          className="border-gray-400 text-gray-500 bg-gray-100"
+                        >
+                          Inactive
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <span
+                        className={
+                          product.stock === 0
+                            ? "text-red-600 font-bold"
+                            : product.stock < product.minStock
+                            ? "text-destructive font-medium"
+                            : ""
+                        }
+                      >
+                        {product.stock} {product.unitOfMeasure}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="text-blue-600">
+                        LKR {product.costPrice.toLocaleString()}
+                      </div>
+                      {isMultiPack && product.costPrice > 0 && (
+                        <div className="text-[10px] text-muted-foreground">
+                          Pcs: {(product.costPrice / packQty).toFixed(2)}
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="text-green-600 font-medium">
+                        LKR {product.sellingPrice.toLocaleString()}
+                      </div>
+                      {isMultiPack && product.sellingPrice > 0 && (
+                        <div className="text-[10px] text-muted-foreground">
+                          Pcs: {(product.sellingPrice / packQty).toFixed(2)}
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div>
+                        {product.mrp && product.mrp > 0
+                          ? `LKR ${product.mrp.toLocaleString()}`
+                          : "-"}
+                      </div>
+                      {isMultiPack && product.mrp > 0 && (
+                        <div className="text-[10px] text-muted-foreground">
+                          Pcs: {(product.mrp / packQty).toFixed(2)}
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-slate-500 hover:text-orange-600 hover:bg-orange-50"
+                          onClick={() =>
+                            router.push(
+                              `/dashboard/office/orange/products/${product.id}`
+                            )
+                          }
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-slate-500 hover:text-blue-600 hover:bg-blue-50"
+                          onClick={() => onEdit(product)}
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-slate-500 hover:text-red-600 hover:bg-red-50"
+                          onClick={() => onDelete(product)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         </div>
-      )}
+        {pagination}
+      </div>
     </>
   );
 }

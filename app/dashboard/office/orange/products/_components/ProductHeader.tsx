@@ -19,29 +19,29 @@ export function ProductHeader({
   onExportPDF,
 }: ProductHeaderProps) {
   return (
-    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-orange-900">
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-orange-900">
           Orange Products
         </h1>
-        <p className="text-muted-foreground mt-1">
+        <p className="text-muted-foreground mt-1 text-sm">
           Manage exclusive inventory for Orange Agency
         </p>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 self-start sm:self-auto">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               variant="outline"
               className="border-orange-200 hover:bg-orange-50 text-orange-700"
             >
-              <Download className="w-4 h-4 mr-2" /> Reports
+              <Download className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">Reports</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={onExportExcel}>
-              <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" /> Export
-              Excel
+              <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" /> Export Excel
             </DropdownMenuItem>
             <DropdownMenuItem onClick={onExportPDF}>
               <FileText className="w-4 h-4 mr-2 text-red-600" /> Export PDF
@@ -52,7 +52,9 @@ export function ProductHeader({
           onClick={onAddClick}
           className="bg-orange-600 hover:bg-orange-700 text-white"
         >
-          <Plus className="w-4 h-4 mr-2" /> Add Orange Product
+          <Plus className="w-4 h-4 sm:mr-2" />
+          <span className="hidden sm:inline">Add Orange Product</span>
+          <span className="sm:hidden">Add</span>
         </Button>
       </div>
     </div>

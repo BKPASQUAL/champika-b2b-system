@@ -28,21 +28,22 @@ export function ProductFilters({
   categories,
 }: ProductFiltersProps) {
   return (
-    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-      <div className="flex-1 max-w-md">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search Orange products by name, SKU..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 border-orange-100 focus-visible:ring-orange-400"
-          />
-        </div>
+    <div className="flex flex-col gap-3">
+      {/* Search — full width on all screens */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          placeholder="Search by name, SKU..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-9 border-orange-100 focus-visible:ring-orange-400"
+        />
       </div>
-      <div className="flex items-center gap-2">
+
+      {/* Filters — stack on mobile, row on sm+ */}
+      <div className="flex flex-col sm:flex-row gap-2">
         <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-          <SelectTrigger className="w-[180px] border-orange-100">
+          <SelectTrigger className="w-full sm:w-[180px] border-orange-100">
             <SelectValue placeholder="Category" />
           </SelectTrigger>
           <SelectContent>
@@ -54,10 +55,8 @@ export function ProductFilters({
           </SelectContent>
         </Select>
 
-        {/* Supplier Filter Removed - Exclusive to Orange */}
-
         <Select value={stockFilter} onValueChange={setStockFilter}>
-          <SelectTrigger className="w-[180px] border-orange-100">
+          <SelectTrigger className="w-full sm:w-[180px] border-orange-100">
             <SelectValue placeholder="Stock Status" />
           </SelectTrigger>
           <SelectContent>

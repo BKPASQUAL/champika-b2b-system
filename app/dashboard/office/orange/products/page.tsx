@@ -13,7 +13,7 @@ import {
   SortField,
   SortOrder,
   ProductFormData,
-} from "@/app/dashboard/admin/products/types";
+} from "./types";
 
 // Import LOCAL Orange Components
 import { ProductStats } from "./_components/ProductStats";
@@ -49,6 +49,7 @@ export default function OrangeProductsPage() {
   // Form Data - Force Supplier to Orange Agency
   const [formData, setFormData] = useState<ProductFormData>({
     sku: "",
+    companyCode: "",
     name: "",
     category: "",
     subCategory: "",
@@ -207,6 +208,7 @@ export default function OrangeProductsPage() {
   const resetForm = () => {
     setFormData({
       sku: "",
+      companyCode: "",
       name: "",
       category: "",
       subCategory: "",
@@ -305,6 +307,7 @@ export default function OrangeProductsPage() {
             onEdit={(p) => {
               setFormData({
                 sku: p.sku,
+                companyCode: p.companyCode || "",
                 name: p.name,
                 category: p.category,
                 subCategory: p.subCategory || "",

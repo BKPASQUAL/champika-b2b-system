@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Package, DollarSign } from "lucide-react";
-import { Product } from "@/app/dashboard/admin/products/types";
+import { Product } from "../types";
 
 interface ProductStatsProps {
   products: Product[];
