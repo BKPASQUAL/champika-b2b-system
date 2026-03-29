@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import {
   Plus,
   Trash2,
+  Pencil,
+  Copy,
   ChevronRight,
   MapPin,
   Truck,
@@ -106,6 +108,23 @@ export function CategorySettings() {
     id: string | null;
     name: string;
   }>({ open: false, id: null, name: "" });
+
+  const [editDialog, setEditDialog] = useState<{
+    open: boolean;
+    id: string | null;
+    name: string;
+    description: string;
+  }>({ open: false, id: null, name: "", description: "" });
+
+  const [cloneDialog, setCloneDialog] = useState<{
+    open: boolean;
+    sourceId: string | null;
+    sourceCategoryId: string | null;
+    newName: string;
+    cloning: boolean;
+    loadingSpecs: boolean;
+    specsByParent: Record<string, { id: string; name: string; category_id: string | null }[]>;
+  }>({ open: false, sourceId: null, sourceCategoryId: null, newName: "", cloning: false, loadingSpecs: false, specsByParent: {} });
 
   const [activeType, setActiveType] = useState<
     "category" | "brand" | "model" | "spec" | "supplier" | "route" | "lorry" | "pack_size"
@@ -423,6 +442,164 @@ export function CategorySettings() {
     setDeleteDialog({ open: true, id, name });
   };
 
+  const openEditDialog = (id: string, name: string, description: string = "") => {
+    setEditDialog({ open: true, id, name, description });
+  };
+
+  const handleEdit = async () => {
+    if (!editDialog.id || !editDialog.name.trim()) {
+      toast.error("Please enter a name");
+      return;
+    }
+    try {
+      const res = await fetch(`/api/settings/categories/${editDialog.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editDialog.name.trim(),
+          description: editDialog.description || undefined,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to update");
+      toast.success(
+        <div className="flex items-center gap-2">
+          <Check className="h-4 w-4" />
+          <span>Updated successfully</span>
+        </div>
+      );
+      setEditDialog({ open: false, id: null, name: "", description: "" });
+      fetchCategories(true);
+      fetchAllCategories();
+    } catch (error) {
+      toast.error("Failed to update item");
+    }
+  };
+
+  const openCloneDialog = async (item: Category) => {
+    const subModels = categories.filter((c) => c.parent_id === item.id);
+    setCloneDialog({
+      open: true,
+      sourceId: item.id,
+      sourceCategoryId: item.category_id || null,
+      newName: `Copy of ${item.name}`,
+      cloning: false,
+      loadingSpecs: true,
+      specsByParent: {},
+    });
+
+    // Fetch all specs attached to this model and its sub-models
+    try {
+      const parentIds = [item.id, ...subModels.map((s) => s.id)];
+      const url = item.category_id
+        ? `/api/settings/categories?type=spec&category_id=${item.category_id}`
+        : `/api/settings/categories?type=spec`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const allSpecs: { id: string; name: string; parent_id: string | null; category_id: string | null }[] = await res.json();
+        const byParent: Record<string, { id: string; name: string; category_id: string | null }[]> = {};
+        allSpecs
+          .filter((s) => s.parent_id && parentIds.includes(s.parent_id))
+          .forEach((s) => {
+            const key = s.parent_id!;
+            if (!byParent[key]) byParent[key] = [];
+            byParent[key].push({ id: s.id, name: s.name, category_id: s.category_id });
+          });
+        setCloneDialog((prev) => ({ ...prev, specsByParent: byParent, loadingSpecs: false }));
+      } else {
+        setCloneDialog((prev) => ({ ...prev, loadingSpecs: false }));
+      }
+    } catch {
+      setCloneDialog((prev) => ({ ...prev, loadingSpecs: false }));
+    }
+  };
+
+  const handleClone = async () => {
+    if (!cloneDialog.sourceId || !cloneDialog.newName.trim()) {
+      toast.error("Please enter a name for the new model");
+      return;
+    }
+    setCloneDialog((prev) => ({ ...prev, cloning: true }));
+
+    const postCategory = async (payload: object) => {
+      const res = await fetch("/api/settings/categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to create item");
+      }
+      return res.json();
+    };
+
+    try {
+      // 1. Create the new model
+      const newModel = await postCategory({
+        name: cloneDialog.newName.trim(),
+        type: "model",
+        category_id: cloneDialog.sourceCategoryId,
+        parent_id: null,
+      });
+
+      // 2. Copy model-level specs
+      const modelSpecs = cloneDialog.specsByParent[cloneDialog.sourceId!] || [];
+      await Promise.all(
+        modelSpecs.map((spec) =>
+          postCategory({
+            name: spec.name,
+            type: "spec",
+            parent_id: newModel.id,
+            category_id: spec.category_id,
+          })
+        )
+      );
+
+      // 3. Copy sub-models (sequentially so each gets its specs right)
+      const subModels = categories.filter((c) => c.parent_id === cloneDialog.sourceId);
+      let totalSpecsCopied = modelSpecs.length;
+
+      for (const sub of subModels) {
+        const newSub = await postCategory({
+          name: sub.name,
+          type: "model",
+          parent_id: newModel.id,
+          category_id: null,
+        });
+
+        // Copy this sub-model's specs
+        const subSpecs = cloneDialog.specsByParent[sub.id] || [];
+        totalSpecsCopied += subSpecs.length;
+        await Promise.all(
+          subSpecs.map((spec) =>
+            postCategory({
+              name: spec.name,
+              type: "spec",
+              parent_id: newSub.id,
+              category_id: spec.category_id,
+            })
+          )
+        );
+      }
+
+      toast.success(
+        <div className="flex items-center gap-2">
+          <Check className="h-4 w-4" />
+          <span>
+            Cloned as &quot;{newModel.name}&quot;
+            {subModels.length > 0 ? `, ${subModels.length} sub-model${subModels.length !== 1 ? "s" : ""}` : ""}
+            {totalSpecsCopied > 0 ? `, ${totalSpecsCopied} spec${totalSpecsCopied !== 1 ? "s" : ""}` : ""}
+          </span>
+        </div>
+      );
+      setCloneDialog({ open: false, sourceId: null, sourceCategoryId: null, newName: "", cloning: false, loadingSpecs: false, specsByParent: {} });
+      fetchCategories(true);
+    } catch (error: any) {
+      toast.error(error.message || "Clone failed");
+      setCloneDialog((prev) => ({ ...prev, cloning: false }));
+    }
+  };
+
   const handleDelete = async () => {
     if (!deleteDialog.id) return;
     const deletedId = deleteDialog.id;
@@ -517,14 +694,9 @@ export function CategorySettings() {
     return (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {Object.keys(groupedByCategory).map((categoryId) => {
-          let categoryName =
-            fullCategoryList.find((c) => c.id === categoryId)?.name ||
-            "Unknown Category";
-          const isSub = fullCategoryList.find(
-            (c) => c.id === categoryId
-          )?.parent_id;
-          if (isSub) categoryName += " (Sub-Category)";
-
+          const catEntry = fullCategoryList.find((c) => c.id === categoryId);
+          let categoryName = catEntry?.name || "Unknown Category";
+          const isSub = catEntry?.parent_id;
           const items = groupedByCategory[categoryId];
 
           return (
@@ -534,118 +706,149 @@ export function CategorySettings() {
             >
               <Accordion type="single" collapsible className="w-full">
                 <AccordionItem value={categoryId} className="border-b-0">
-                  <AccordionTrigger className={cn("px-4 hover:no-underline", activeTab?.bgColor, "rounded-t-lg data-[state=closed]:rounded-b-lg")}>
-                    <div className="flex items-center justify-between w-full pr-4">
+                  <AccordionTrigger
+                    className={cn(
+                      "px-4 py-3 hover:no-underline",
+                      activeTab?.bgColor,
+                      "rounded-t-lg data-[state=closed]:rounded-b-lg"
+                    )}
+                  >
+                    <div className="flex items-center justify-between w-full pr-2">
                       <div className="flex items-center gap-3">
-                        <div
-                          className={cn(
-                            "h-10 w-10 rounded-lg flex items-center justify-center",
-                            "bg-background shadow-sm"
-                          )}
-                        >
-                          <Package className={cn("h-5 w-5", activeTab?.color)} />
+                        <div className="h-9 w-9 rounded-lg bg-background shadow-sm flex items-center justify-center shrink-0">
+                          <Package className={cn("h-4 w-4", activeTab?.color)} />
                         </div>
                         <div className="text-left">
-                          <CardTitle className="text-lg font-semibold">
+                          <p className="text-sm font-semibold leading-tight">
                             {categoryName}
-                          </CardTitle>
-                          <CardDescription className="text-xs">
-                            {items.length} {activeType}
-                            {items.length !== 1 ? "s" : ""}
-                          </CardDescription>
+                          </p>
+                          {isSub && (
+                            <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">
+                              Sub-Category
+                            </span>
+                          )}
                         </div>
                       </div>
-                      <Badge variant="secondary" className="text-sm px-3 py-1">
+                      <Badge variant="secondary" className="text-xs px-2 py-0.5 shrink-0">
                         {items.length}
                       </Badge>
                     </div>
                   </AccordionTrigger>
+
                   <AccordionContent className="pt-0">
                     <Separator />
-                    <div className="p-4 space-y-2">
-                  {items.map((item) => (
-                    <div key={item.id} className="space-y-2">
-                      <div className="group flex items-center justify-between p-4 bg-muted/50 rounded-lg hover:bg-muted transition-all">
-                        <div className="flex items-center gap-3">
-                          <div
-                            className={cn(
-                              "h-9 w-9 rounded-md flex items-center justify-center",
-                              activeTab?.bgColor
-                            )}
-                          >
-                            {activeTab && (
-                              <activeTab.icon
-                                className={cn("h-4 w-4", activeTab.color)}
-                              />
-                            )}
-                          </div>
-                          <div className="flex flex-col">
-                            <span className="font-medium">{item.name}</span>
-                            {/* Show if it's a global spec (attached to category/subcat directly) */}
-                            {activeType === "spec" &&
-                              (item.parent_id === categoryId ||
-                                item.parent_id === selectedCategoryId) && (
-                                <span className="text-[10px] text-blue-600 font-semibold bg-blue-100 px-1 rounded w-fit">
-                                  ALL MODELS
-                                </span>
-                              )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {activeType === "model" && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => openAddDialog(item.id)}
-                              className="h-8"
-                            >
-                              <Plus className="h-3 w-3 mr-1" />
-                              Sub Model
-                            </Button>
-                          )}
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => confirmDelete(item.id, item.name)}
-                            className="h-8 hover:bg-destructive/10 hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
+                    <div className="p-3 space-y-2">
+                      {items.map((item) => {
+                        const subModels = activeType === "model"
+                          ? categories.filter((c) => c.parent_id === item.id)
+                          : [];
 
-                      {/* Sub-Models Render */}
-                      {activeType === "model" && (
-                        <div className="ml-12 space-y-1">
-                          {categories
-                            .filter((c) => c.parent_id === item.id)
-                            .map((sub) => (
-                              <div
-                                key={sub.id}
-                                className="group flex items-center justify-between p-3 rounded-md bg-background border hover:border-primary/50 transition-all"
-                              >
-                                <div className="flex items-center gap-2 text-sm">
-                                  <ChevronRight className="h-3 w-3 text-muted-foreground" />
-                                  <span className="font-medium">
-                                    {sub.name}
-                                  </span>
+                        return (
+                          <div key={item.id} className="rounded-lg border bg-card overflow-hidden">
+                            {/* Model / Spec row */}
+                            <div className="flex items-center justify-between px-3 py-2.5 bg-muted/40 hover:bg-muted/70 transition-colors">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className={cn("h-7 w-7 rounded-md flex items-center justify-center shrink-0", activeTab?.bgColor)}>
+                                  {activeTab && (
+                                    <activeTab.icon className={cn("h-3.5 w-3.5", activeTab.color)} />
+                                  )}
                                 </div>
+                                <div className="min-w-0">
+                                  <span className="text-sm font-medium truncate block">{item.name}</span>
+                                  {activeType === "model" && subModels.length > 0 && (
+                                    <span className="text-[10px] text-muted-foreground">
+                                      {subModels.length} sub-model{subModels.length !== 1 ? "s" : ""}
+                                    </span>
+                                  )}
+                                  {activeType === "spec" &&
+                                    (item.parent_id === categoryId || item.parent_id === selectedCategoryId) && (
+                                      <span className="text-[10px] text-blue-600 font-semibold bg-blue-100 dark:bg-blue-950 px-1 rounded">
+                                        ALL MODELS
+                                      </span>
+                                    )}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0 ml-2">
+                                {activeType === "model" && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => openCloneDialog(item)}
+                                    className="h-7 w-7 p-0 hover:bg-green-50 hover:text-green-600"
+                                    title="Clone model"
+                                  >
+                                    <Copy className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
                                 <Button
                                   size="sm"
                                   variant="ghost"
-                                  onClick={() =>
-                                    confirmDelete(sub.id, sub.name)
-                                  }
-                                  className="h-7 hover:bg-destructive/10 hover:text-destructive"
+                                  onClick={() => openEditDialog(item.id, item.name, item.description || "")}
+                                  className="h-7 w-7 p-0 hover:bg-primary/10 hover:text-primary"
+                                  title="Edit"
                                 >
-                                  <Trash2 className="h-3 w-3" />
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => confirmDelete(item.id, item.name)}
+                                  className="h-7 w-7 p-0 hover:bg-destructive/10 hover:text-destructive"
+                                  title="Delete"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
                               </div>
-                            ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                            </div>
+
+                            {/* Sub-Models list + Add button */}
+                            {activeType === "model" && (
+                              <div className="px-3 pb-2 pt-1 space-y-1 border-t bg-background">
+                                {subModels.map((sub) => (
+                                  <div
+                                    key={sub.id}
+                                    className="group flex items-center justify-between pl-3 pr-1 py-1.5 rounded-md hover:bg-muted/50 transition-colors"
+                                  >
+                                    <div className="flex items-center gap-1.5 text-sm min-w-0">
+                                      <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                                      <span className="truncate">{sub.name}</span>
+                                    </div>
+                                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => openEditDialog(sub.id, sub.name, sub.description || "")}
+                                        className="h-6 w-6 p-0 hover:bg-primary/10 hover:text-primary"
+                                        title="Edit"
+                                      >
+                                        <Pencil className="h-3 w-3" />
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => confirmDelete(sub.id, sub.name)}
+                                        className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
+                                        title="Delete"
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ))}
+
+                                {/* Inline Add Sub Model button */}
+                                <button
+                                  onClick={() => openAddDialog(item.id)}
+                                  className="w-full flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-md text-xs text-muted-foreground hover:text-primary hover:bg-primary/5 transition-colors border border-dashed border-muted-foreground/20 hover:border-primary/40 mt-1"
+                                >
+                                  <Plus className="h-3 w-3" />
+                                  Add Sub Model
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </AccordionContent>
                 </AccordionItem>
@@ -666,40 +869,49 @@ export function CategorySettings() {
                       </div>
                       <div className="text-left">
                         <CardTitle className="text-lg text-amber-900 dark:text-amber-500">
-                          Not Assigned to Category
+                          Not Assigned
                         </CardTitle>
                         <CardDescription className="text-xs text-amber-700 dark:text-amber-400">
-                          These items need to be assigned
+                          {withoutCategory.length} item{withoutCategory.length !== 1 ? "s" : ""} need category
                         </CardDescription>
                       </div>
                     </div>
-                    <Badge
-                      variant="outline"
-                      className="border-amber-300 dark:border-amber-700"
-                    >
+                    <Badge variant="outline" className="border-amber-300 dark:border-amber-700">
                       {withoutCategory.length}
                     </Badge>
                   </div>
                 </AccordionTrigger>
                 <AccordionContent className="pt-0">
                   <Separator className="bg-amber-200 dark:bg-amber-900" />
-                  <div className="p-4 space-y-2">
-                {withoutCategory.map((item) => (
-                  <div
-                    key={item.id}
-                    className="group flex items-center justify-between p-3 bg-background rounded-lg border hover:border-amber-300 dark:hover:border-amber-700 transition-colors"
-                  >
-                    <span className="font-medium">{item.name}</span>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => confirmDelete(item.id, item.name)}
-                      className="hover:bg-destructive/10 hover:text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
+                  <div className="p-3 space-y-1.5">
+                    {withoutCategory.map((item) => (
+                      <div
+                        key={item.id}
+                        className="group flex items-center justify-between px-3 py-2 bg-background rounded-lg border hover:border-amber-300 dark:hover:border-amber-700 transition-colors"
+                      >
+                        <span className="text-sm font-medium">{item.name}</span>
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => openEditDialog(item.id, item.name, item.description || "")}
+                            className="h-7 w-7 p-0 hover:bg-primary/10 hover:text-primary"
+                            title="Edit"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => confirmDelete(item.id, item.name)}
+                            className="h-7 w-7 p-0 hover:bg-destructive/10 hover:text-destructive"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </AccordionContent>
               </AccordionItem>
@@ -752,95 +964,99 @@ export function CategorySettings() {
             key={item.id}
             className="overflow-hidden hover:shadow-md transition-shadow"
           >
-            <CardContent className="p-4">
-              <div className="space-y-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3 flex-1">
-                    <div
-                      className={cn(
-                        "h-12 w-12 rounded-xl flex items-center justify-center shrink-0",
-                        activeTab?.bgColor
-                      )}
-                    >
-                      {activeTab && (
-                        <activeTab.icon
-                          className={cn("h-6 w-6", activeTab.color)}
-                        />
-                      )}
+            {/* Card Header */}
+            <div className={cn("px-4 py-3 flex items-center justify-between gap-3", activeTab?.bgColor)}>
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="h-9 w-9 rounded-lg bg-background shadow-sm flex items-center justify-center shrink-0">
+                  {activeTab && (
+                    <activeTab.icon className={cn("h-4 w-4", activeTab.color)} />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <h4 className="font-semibold text-sm truncate">{item.name}</h4>
+                  {activeType === "pack_size" && item.description ? (
+                    <span className="text-xs text-muted-foreground">
+                      {item.description} pcs/pack
+                    </span>
+                  ) : item.children && item.children.length > 0 ? (
+                    <span className="text-xs text-muted-foreground">
+                      {item.children.length} sub-item{item.children.length !== 1 ? "s" : ""}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => openEditDialog(item.id, item.name, item.description || "")}
+                  className="h-7 w-7 p-0 hover:bg-background/70 hover:text-primary"
+                  title="Edit"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => confirmDelete(item.id, item.name)}
+                  className="h-7 w-7 p-0 hover:bg-background/70 hover:text-destructive"
+                  title="Delete"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+
+            {/* Children + Add Sub button */}
+            {(activeType === "category" || activeType === "brand") && (
+              <div className="px-3 py-2 space-y-1 bg-background">
+                {item.children && item.children.map((child) => (
+                  <div
+                    key={child.id}
+                    className="group flex items-center justify-between pl-3 pr-1 py-1.5 rounded-md hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-1.5 text-sm min-w-0">
+                      <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                      <span className="truncate font-medium">{child.name}</span>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <h4 className="font-semibold text-base truncate flex items-center gap-2">
-                        {item.name}
-                        {activeType === "pack_size" && item.description && (
-                          <Badge variant="secondary" className="text-xs">
-                            Qty: {item.description}
-                          </Badge>
-                        )}
-                      </h4>
-                      {item.children && item.children.length > 0 && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {item.children.length} sub-item
-                          {item.children.length !== 1 ? "s" : ""}
-                        </p>
-                      )}
+                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => openEditDialog(child.id, child.name, child.description || "")}
+                        className="h-6 w-6 p-0 hover:bg-primary/10 hover:text-primary"
+                        title="Edit"
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => confirmDelete(child.id, child.name)}
+                        className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
+                        title="Delete"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
                     </div>
                   </div>
-                </div>
+                ))}
 
-                <Separator />
-
-                <div className="flex items-center gap-2">
-                  {(activeType === "category" ||
-                    activeType === "brand" ||
-                    activeType === "model") && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => openAddDialog(item.id)}
-                      className="flex-1 h-8"
-                    >
-                      <Plus className="h-3 w-3 mr-1" />
-                      Add Sub
-                    </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => confirmDelete(item.id, item.name)}
-                    className="h-8 hover:bg-destructive/10 hover:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-
-                {item.children && item.children.length > 0 && (
-                  <>
-                    <Separator />
-                    <div className="space-y-1">
-                      {item.children.map((child) => (
-                        <div
-                          key={child.id}
-                          className="group flex items-center justify-between p-2 rounded-md bg-muted/50 hover:bg-muted transition-colors"
-                        >
-                          <div className="flex items-center gap-2 text-sm">
-                            <ChevronRight className="h-3 w-3 text-muted-foreground" />
-                            <span className="font-medium">{child.name}</span>
-                          </div>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => confirmDelete(child.id, child.name)}
-                            className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
+                {/* Inline Add Sub button */}
+                <button
+                  onClick={() => openAddDialog(item.id)}
+                  className="w-full flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-md text-xs text-muted-foreground hover:text-primary hover:bg-primary/5 transition-colors border border-dashed border-muted-foreground/20 hover:border-primary/40 mt-1"
+                >
+                  <Plus className="h-3 w-3" />
+                  Add Sub {activeTab?.label.slice(0, -1)}
+                </button>
               </div>
-            </CardContent>
+            )}
+
+            {/* For other types (route, lorry, supplier, pack_size) — no sub-items, just a bottom padding */}
+            {(activeType === "route" || activeType === "lorry" || activeType === "supplier" || activeType === "pack_size") && (
+              <div className="h-1" />
+            )}
           </Card>
         ))}
       </div>
@@ -1197,6 +1413,197 @@ export function CategorySettings() {
           renderHierarchicalList()
         )}
       </div>
+
+      {/* Clone Dialog */}
+      <Dialog
+        open={cloneDialog.open}
+        onOpenChange={(open) =>
+          !open && !cloneDialog.cloning &&
+          setCloneDialog({ open: false, sourceId: null, sourceCategoryId: null, newName: "", cloning: false, loadingSpecs: false, specsByParent: {} })
+        }
+      >
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <Copy className="h-5 w-5 text-green-600" />
+              Clone Model
+            </DialogTitle>
+            <DialogDescription>
+              Creates a new model with the same sub-models. Give it a new name below.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="clone-name" className="text-base font-semibold">
+                New Model Name <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="clone-name"
+                value={cloneDialog.newName}
+                onChange={(e) =>
+                  setCloneDialog((prev) => ({ ...prev, newName: e.target.value }))
+                }
+                onKeyDown={(e) => e.key === "Enter" && !cloneDialog.cloning && handleClone()}
+                className="h-11"
+                autoFocus
+                disabled={cloneDialog.cloning}
+              />
+            </div>
+            {cloneDialog.sourceId && (
+              <div className="rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 p-3 space-y-2 max-h-56 overflow-y-auto">
+                {cloneDialog.loadingSpecs ? (
+                  <div className="flex items-center gap-2 text-xs text-green-600 dark:text-green-400">
+                    <div className="h-3 w-3 rounded-full border-2 border-green-300 border-t-green-600 animate-spin" />
+                    Loading specifications…
+                  </div>
+                ) : (
+                  <>
+                    {/* Model-level specs */}
+                    {(cloneDialog.specsByParent[cloneDialog.sourceId] || []).length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-semibold text-green-700 dark:text-green-400 uppercase tracking-wide mb-1">
+                          Model Specs ({(cloneDialog.specsByParent[cloneDialog.sourceId] || []).length})
+                        </p>
+                        {(cloneDialog.specsByParent[cloneDialog.sourceId] || []).map((spec) => (
+                          <div key={spec.id} className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-500 py-0.5 pl-2">
+                            <FileText className="h-2.5 w-2.5 shrink-0" />
+                            {spec.name}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Sub-models and their specs */}
+                    {categories.filter((c) => c.parent_id === cloneDialog.sourceId).map((sub) => {
+                      const subSpecs = cloneDialog.specsByParent[sub.id] || [];
+                      return (
+                        <div key={sub.id}>
+                          <div className="flex items-center gap-1.5 text-xs font-medium text-green-700 dark:text-green-400">
+                            <ChevronRight className="h-3 w-3 shrink-0" />
+                            {sub.name}
+                            {subSpecs.length > 0 && (
+                              <span className="text-[10px] text-green-500">({subSpecs.length} spec{subSpecs.length !== 1 ? "s" : ""})</span>
+                            )}
+                          </div>
+                          {subSpecs.map((spec) => (
+                            <div key={spec.id} className="flex items-center gap-1.5 text-xs text-green-500 dark:text-green-600 py-0.5 pl-6">
+                              <FileText className="h-2.5 w-2.5 shrink-0" />
+                              {spec.name}
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
+
+                    {/* Empty state */}
+                    {categories.filter((c) => c.parent_id === cloneDialog.sourceId).length === 0 &&
+                      Object.keys(cloneDialog.specsByParent).length === 0 && (
+                        <p className="text-xs text-green-600 dark:text-green-500 italic">No sub-models or specs found.</p>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() =>
+                setCloneDialog({ open: false, sourceId: null, sourceCategoryId: null, newName: "", cloning: false, loadingSpecs: false, specsByParent: {} })
+              }
+              disabled={cloneDialog.cloning}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleClone}
+              disabled={cloneDialog.cloning || cloneDialog.loadingSpecs || !cloneDialog.newName.trim()}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              {cloneDialog.cloning ? (
+                <>
+                  <div className="h-4 w-4 mr-2 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                  Cloning…
+                </>
+              ) : (
+                <>
+                  <Copy className="h-4 w-4 mr-2" />
+                  Clone Model
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog
+        open={editDialog.open}
+        onOpenChange={(open) =>
+          !open && setEditDialog({ open: false, id: null, name: "", description: "" })
+        }
+      >
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              {activeTab && (
+                <activeTab.icon className={cn("h-5 w-5", activeTab.color)} />
+              )}
+              Edit {activeTab?.label.slice(0, -1)}
+            </DialogTitle>
+            <DialogDescription>
+              Update the name{activeType === "pack_size" ? " and quantity" : ""} of this item.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name" className="text-base font-semibold">
+                Name <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="edit-name"
+                value={editDialog.name}
+                onChange={(e) =>
+                  setEditDialog((prev) => ({ ...prev, name: e.target.value }))
+                }
+                onKeyDown={(e) => e.key === "Enter" && handleEdit()}
+                className="h-11"
+                autoFocus
+              />
+            </div>
+            {activeType === "pack_size" && (
+              <div className="space-y-2">
+                <Label htmlFor="edit-description" className="text-base font-semibold">
+                  Pieces per Pack
+                </Label>
+                <Input
+                  id="edit-description"
+                  type="number"
+                  value={editDialog.description}
+                  onChange={(e) =>
+                    setEditDialog((prev) => ({ ...prev, description: e.target.value }))
+                  }
+                  className="h-11"
+                />
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() =>
+                setEditDialog({ open: false, id: null, name: "", description: "" })
+              }
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleEdit}>
+              <Check className="h-4 w-4 mr-2" />
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog

@@ -50,7 +50,7 @@ export default function OrangeProductsPage() {
   const [formData, setFormData] = useState<ProductFormData>({
     sku: "",
     companyCode: "",
-    name: "",
+    name: "Orange ",
     category: "",
     subCategory: "",
     brand: "",
@@ -209,7 +209,7 @@ export default function OrangeProductsPage() {
     setFormData({
       sku: "",
       companyCode: "",
-      name: "",
+      name: "Orange ",
       category: "",
       subCategory: "",
       brand: "",
