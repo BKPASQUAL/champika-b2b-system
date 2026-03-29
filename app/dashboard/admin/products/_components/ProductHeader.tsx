@@ -4,20 +4,23 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Download, Plus, FileSpreadsheet, FileText } from "lucide-react";
+import { Download, Plus, FileSpreadsheet, FileText, ClipboardList } from "lucide-react";
 
 interface ProductHeaderProps {
   onAddClick: () => void;
   onExportExcel: () => void;
   onExportPDF: () => void;
+  onPriceListReport: () => void;
 }
 
 export function ProductHeader({
   onAddClick,
   onExportExcel,
   onExportPDF,
+  onPriceListReport,
 }: ProductHeaderProps) {
   return (
     <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -35,6 +38,10 @@ export function ProductHeader({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onPriceListReport}>
+              <ClipboardList className="w-4 h-4 mr-2 text-blue-600" /> Price List Report (by Supplier)
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onExportExcel}>
               <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" /> Export
               to Excel

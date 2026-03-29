@@ -14,6 +14,7 @@ import {
   SortOrder,
   ProductFormData,
 } from "./types";
+import { printPriceListReport } from "@/app/dashboard/admin/products/print-price-list";
 
 // Import LOCAL Orange Components
 import { ProductStats } from "./_components/ProductStats";
@@ -334,6 +335,7 @@ export default function OrangeProductsPage() {
         }}
         onExportExcel={generateExcel}
         onExportPDF={generatePDF}
+        onPriceListReport={() => printPriceListReport(sortedProducts)}
       />
 
       <ProductStats products={products} />

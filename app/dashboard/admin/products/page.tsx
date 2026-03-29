@@ -8,6 +8,7 @@ import autoTable from "jspdf-autotable";
 import { toast } from "sonner";
 
 import { Product, SortField, SortOrder, ProductFormData } from "./types";
+import { printPriceListReport } from "./print-price-list";
 import { ProductStats } from "./_components/ProductStats";
 import { ProductHeader } from "./_components/ProductHeader";
 import { ProductFilters } from "./_components/ProductFilters";
@@ -341,6 +342,7 @@ export default function ProductsPage() {
         }}
         onExportExcel={generateExcel}
         onExportPDF={generatePDF}
+        onPriceListReport={() => printPriceListReport(sortedProducts)}
       />
       <ProductStats products={products} />
 
