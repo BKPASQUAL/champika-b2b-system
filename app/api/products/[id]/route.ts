@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
 
 const updateSchema = z.object({
+  sku: z.string().optional(),
   name: z.string().optional(),
   companyCode: z.string().optional(),
   category: z.string().optional(),
@@ -102,6 +103,7 @@ export async function PATCH(
       dbUpdates.price_history = [historyEntry, ...currentHistory];
     }
 
+    if (val.sku) dbUpdates.sku = val.sku.trim();
     if (val.name) dbUpdates.name = val.name.trim();
     if (val.companyCode !== undefined)
       dbUpdates.company_code = val.companyCode.trim();

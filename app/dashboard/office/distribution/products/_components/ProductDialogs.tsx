@@ -537,9 +537,17 @@ export function ProductDialogs({
             <Label>Supplier *</Label>
             <Select
               value={formData.supplier}
-              onValueChange={(val) =>
-                setFormData({ ...formData, supplier: val })
-              }
+              onValueChange={async (val) => {
+                const current = { ...formData, supplier: val };
+                setFormData(current);
+                if (selectedProduct) {
+                  const res = await fetch(`/api/products/next-sku?supplier=${encodeURIComponent(val)}`);
+                  if (res.ok) {
+                    const { sku } = await res.json();
+                    setFormData({ ...current, sku });
+                  }
+                }
+              }}
             >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select Supplier" />
