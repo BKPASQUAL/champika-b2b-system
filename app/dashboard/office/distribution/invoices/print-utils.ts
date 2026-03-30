@@ -22,7 +22,7 @@ const calculateStatus = (invoice: any) => {
 // Exporting this so we can reuse it for bulk generation
 export const generateInvoiceHTML = async (invoice: any) => {
   const invoiceUrl = typeof window !== "undefined"
-    ? `${window.location.origin}/dashboard/office/distribution/invoices/${invoice._id || invoice.id}`
+    ? `${window.location.origin}/invoice/${invoice._id || invoice.id}`
     : "";
   const qrDataUrl = invoiceUrl
     ? await QRCode.toDataURL(invoiceUrl, { width: 80, margin: 1 })
