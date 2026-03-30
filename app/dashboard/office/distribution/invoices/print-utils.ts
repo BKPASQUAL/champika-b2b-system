@@ -1,3 +1,4 @@
+import QRCode from "qrcode";
 import { toast } from "sonner";
 
 // Helper to calculate status if missing
@@ -19,7 +20,13 @@ const calculateStatus = (invoice: any) => {
 };
 
 // Exporting this so we can reuse it for bulk generation
-export const generateInvoiceHTML = (invoice: any) => {
+export const generateInvoiceHTML = async (invoice: any) => {
+  const invoiceUrl = typeof window !== "undefined"
+    ? `${window.location.origin}/dashboard/office/distribution/invoices/${invoice._id || invoice.id}`
+    : "";
+  const qrDataUrl = invoiceUrl
+    ? await QRCode.toDataURL(invoiceUrl, { width: 80, margin: 1 })
+    : "";
   const fmt = (amount: number) =>
     new Intl.NumberFormat("en-LK", {
       minimumFractionDigits: 2,
@@ -66,10 +73,15 @@ export const generateInvoiceHTML = (invoice: any) => {
           </div>
         </td>
         <td style="vertical-align:top; text-align:right; width:40%;">
-          <div style="font-size:18px; font-weight:700; color:#000; letter-spacing:0.5px;">${invoice.invoiceNo || "-"}</div>
-          <div style="font-size:11px; color:#333; margin-top:2px; line-height:1.5;">
-            ${formatDate(invoice.date || invoice.createdAt)}<br>
-            ${salesRep}
+          <div style="display:inline-flex; align-items:flex-start; gap:10px; justify-content:flex-end;">
+            ${qrDataUrl ? `<img src="${qrDataUrl}" style="width:70px;height:70px;display:block;" />` : ""}
+            <div>
+              <div style="font-size:18px; font-weight:700; color:#000; letter-spacing:0.5px;">${invoice.invoiceNo || "-"}</div>
+              <div style="font-size:11px; color:#333; margin-top:2px; line-height:1.5;">
+                ${formatDate(invoice.date || invoice.createdAt)}<br>
+                ${salesRep}
+              </div>
+            </div>
           </div>
         </td>
       </tr>
@@ -234,7 +246,7 @@ export const printInvoice = async (invoiceOrId: string | any) => {
 
     printHTML(
       getDocumentWrapper(
-        generateInvoiceHTML(invoiceData),
+        await generateInvoiceHTML(invoiceData),
         `Invoice ${invoiceData.invoiceNo}`
       )
     );
@@ -267,7 +279,7 @@ export const printBulkInvoices = async (invoiceIds: string[]) => {
     const invoices = await Promise.all(promises);
 
     // 2. Generate HTML for all
-    const allHtml = invoices.map((inv) => generateInvoiceHTML(inv)).join("");
+    const allHtml = (await Promise.all(invoices.map((inv) => generateInvoiceHTML(inv)))).join("");
 
     // 3. Print
     printHTML(getDocumentWrapper(allHtml, "Bulk Invoices"));
