@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
 
     // Apply Status Filter if provided
     if (status) {
-      query = query.eq("status", status);
+      query = query.filter("status::text", "eq", status);
     }
 
     // Apply Business Filter if provided

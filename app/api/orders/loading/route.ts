@@ -23,19 +23,23 @@ export async function GET(request: NextRequest) {
         `
         id,
         order_id,
+        invoice_no,
         status,
         total_amount,
-        created_at,
+        order_date,
         customers (
           shop_name,
           route
         ),
         profiles!orders_sales_rep_id_fkey (
           full_name
+        ),
+        invoices (
+          invoice_no
         )
       `
       )
-      .eq("status", "Loading");
+      .filter("status::text", "eq", "Loading");
 
     // ✅ Filter by Business ID if provided
     if (businessId) {
@@ -48,18 +52,21 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
 
-    const formattedOrders = orders.map((order: any) => ({
+    const formattedOrders = (orders ?? []).map((order: any) => ({
       id: order.id,
       orderId: order.order_id,
+      invoiceNo: order.invoices?.[0]?.invoice_no || order.invoice_no || null,
       shopName: order.customers?.shop_name || "Unknown",
       route: order.customers?.route || "-",
       salesRepName: order.profiles?.full_name || "Unknown",
       totalAmount: order.total_amount,
       status: order.status,
+      date: order.order_date,
     }));
 
     return NextResponse.json(formattedOrders);
   } catch (error: any) {
+    console.error("GET /api/orders/loading error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

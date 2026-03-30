@@ -57,7 +57,10 @@ export default function DistributionLoadingOrdersPage() {
       setLoading(true);
       // Fetch orders with 'Loading' status
       const res = await fetch("/api/orders/loading");
-      if (!res.ok) throw new Error("Failed to fetch loading orders");
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to fetch loading orders");
+      }
       const data = await res.json();
       setOrders(data);
       setSelectedOrders([]);
