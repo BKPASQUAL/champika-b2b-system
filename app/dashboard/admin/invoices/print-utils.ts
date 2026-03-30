@@ -26,10 +26,10 @@ export const printInvoice = async (invoiceId: string) => {
     doc.setTextColor(50, 50, 50);
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
-    doc.text("No 45, Main Street, Galle", pageWidth / 2, 26, {
+    doc.text("Pranawatta Road, Wallabada, Boossa", pageWidth / 2, 26, {
       align: "center",
     });
-    doc.text("Tel: 077-1234567 | Email: sales@champika.lk", pageWidth / 2, 31, {
+    doc.text("Tel: 0777681663", pageWidth / 2, 31, {
       align: "center",
     });
 

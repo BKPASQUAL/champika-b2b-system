@@ -166,7 +166,7 @@ function GeneralSettings() {
             <Phone className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               id="phone"
-              defaultValue="077-1234567"
+              defaultValue="0777681663"
               className="pl-9 h-10 border-gray-200 focus:border-blue-400 focus:ring-blue-100"
               placeholder="077-XXXXXXX"
             />
@@ -198,7 +198,7 @@ function GeneralSettings() {
             <MapPin className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               id="address"
-              defaultValue="No 45, Main Street, Galle"
+              defaultValue="Pranawatta Road, Wallabada, Boossa"
               className="pl-9 h-10 border-gray-200 focus:border-blue-400 focus:ring-blue-100"
               placeholder="Street, City, Postal Code"
             />

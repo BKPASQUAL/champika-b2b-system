@@ -26,7 +26,7 @@ export const printPriceListReport = (products: Product[]) => {
     doc.setTextColor(60, 60, 60);
     doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
-    doc.text("No 45, Main Street, Galle  |  Tel: 077-1234567  |  sales@champika.lk", pageWidth / 2, 21, { align: "center" });
+    doc.text("Pranawatta Road, Wallabada, Boossa  |  Tel: 0777681663", pageWidth / 2, 21, { align: "center" });
 
     doc.setDrawColor(0, 0, 0);
     doc.setLineWidth(0.5);

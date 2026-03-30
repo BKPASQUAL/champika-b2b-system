@@ -1,22 +1,30 @@
 // app/dashboard/office/distribution/orders/pending/page.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Search,
-  Filter,
   ArrowRight,
   Loader2,
-  Clock,
   User,
   Calendar,
   FileText,
   AlertCircle,
+  Download,
+  ArrowUpDown,
 } from "lucide-react";
 import {
   Table,
@@ -27,8 +35,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-// ✅ FIXED IMPORT: Points to the correct types file in the parent folder
 import { Order } from "../types";
+import { downloadLoadingSummary } from "../loading/print-loading-summary";
 
 export default function DistributionPendingOrdersPage() {
   const router = useRouter();
@@ -36,13 +44,14 @@ export default function DistributionPendingOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
+  const [selectedRep, setSelectedRep] = useState<string>("all");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
-  // --- 1. Fetch Pending Orders ---
   useEffect(() => {
     const fetchOrders = async () => {
       try {
         setLoading(true);
-        // Fetch only Pending orders
         const res = await fetch("/api/orders?status=Pending");
         if (!res.ok) throw new Error("Failed to load pending orders");
         const data = await res.json();
@@ -54,24 +63,49 @@ export default function DistributionPendingOrdersPage() {
         setLoading(false);
       }
     };
-
     fetchOrders();
   }, []);
 
-  // --- 2. Filter Logic ---
-  const filteredOrders = orders.filter((order) => {
-    const searchLower = searchQuery.toLowerCase();
-    const invoiceMatch = (order as any).invoiceNo
-      ? (order as any).invoiceNo.toLowerCase().includes(searchLower)
-      : false;
+  // Unique sales reps derived from loaded orders
+  const salesReps = useMemo(() => {
+    const names = Array.from(new Set(orders.map((o) => o.salesRep).filter(Boolean)));
+    return names.sort();
+  }, [orders]);
 
-    return (
-      invoiceMatch ||
-      order.orderId.toLowerCase().includes(searchLower) ||
-      order.shopName.toLowerCase().includes(searchLower) ||
-      order.customerName.toLowerCase().includes(searchLower)
+  const filteredOrders = useMemo(() => {
+    const searchLower = searchQuery.toLowerCase();
+    return orders
+      .filter((order) => {
+        const invoiceMatch = (order as any).invoiceNo
+          ? (order as any).invoiceNo.toLowerCase().includes(searchLower)
+          : false;
+        const textMatch =
+          invoiceMatch ||
+          order.orderId.toLowerCase().includes(searchLower) ||
+          order.shopName.toLowerCase().includes(searchLower) ||
+          order.customerName.toLowerCase().includes(searchLower);
+        const repMatch =
+          selectedRep === "all" || order.salesRep === selectedRep;
+        return textMatch && repMatch;
+      })
+      .sort((a, b) => {
+        const dateA = new Date(a.date).getTime();
+        const dateB = new Date(b.date).getTime();
+        return sortOrder === "asc" ? dateA - dateB : dateB - dateA;
+      });
+  }, [orders, searchQuery, selectedRep, sortOrder]);
+
+  const toggleSelect = (id: string) =>
+    setSelectedOrders((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
-  });
+
+  const toggleSelectAll = () =>
+    setSelectedOrders(
+      selectedOrders.length === filteredOrders.length
+        ? []
+        : filteredOrders.map((o) => o.id)
+    );
 
   if (loading) {
     return (
@@ -91,12 +125,27 @@ export default function DistributionPendingOrdersPage() {
             Orders waiting for approval or processing.
           </p>
         </div>
+        {selectedOrders.length > 0 && (
+          <Button
+            variant="outline"
+            onClick={() =>
+              downloadLoadingSummary(selectedOrders, {
+                title: "PENDING ORDERS — ITEMS SUMMARY REPORT",
+                filePrefix: "Pending_Summary",
+              })
+            }
+            className="animate-in fade-in zoom-in duration-300 bg-white border-slate-200"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Download Summary ({selectedOrders.length})
+          </Button>
+        )}
       </div>
 
       {/* Main Content Card */}
       <Card className="border-0 sm:border shadow-none sm:shadow-sm bg-transparent sm:bg-card">
         <CardHeader className="px-0 sm:px-6 pb-2 pt-2">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -106,14 +155,36 @@ export default function DistributionPendingOrdersPage() {
                 className="pl-9 bg-white border-slate-200"
               />
             </div>
-            <Button variant="outline" size="icon" className="shrink-0 bg-white">
-              <Filter className="h-4 w-4" />
+            {/* Sales Rep Filter */}
+            <Select value={selectedRep} onValueChange={setSelectedRep}>
+              <SelectTrigger className="w-full sm:w-[200px] bg-white border-slate-200">
+                <User className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+                <SelectValue placeholder="All Sales Reps" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Sales Reps</SelectItem>
+                {salesReps.map((rep) => (
+                  <SelectItem key={rep} value={rep}>
+                    {rep}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {/* Sort by Date */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSortOrder((s) => (s === "asc" ? "desc" : "asc"))}
+              className="bg-white border-slate-200 gap-1.5 shrink-0"
+            >
+              <ArrowUpDown className="h-3.5 w-3.5" />
+              {sortOrder === "desc" ? "Newest first" : "Oldest first"}
             </Button>
           </div>
         </CardHeader>
 
         <CardContent className="px-0 sm:px-6 pt-0">
-          {/* --- MOBILE VIEW: CARDS (md:hidden) --- */}
+          {/* --- MOBILE VIEW --- */}
           <div className="grid grid-cols-1 gap-3 md:hidden">
             {filteredOrders.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground bg-slate-50 rounded-lg border border-dashed">
@@ -123,85 +194,112 @@ export default function DistributionPendingOrdersPage() {
                 </div>
               </div>
             ) : (
-              filteredOrders.map((order) => (
-                <div
-                  key={order.id}
-                  className="bg-white border rounded-xl p-4 shadow-sm flex flex-col gap-3 active:scale-[0.99] transition-transform"
-                  onClick={() =>
-                    router.push(
-                      `/dashboard/office/distribution/orders/${order.id}`
-                    )
-                  }
-                >
-                  {/* Row 1: Invoice No, Date, Status */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-1 font-mono font-bold text-yellow-700 bg-yellow-50 px-2 py-0.5 rounded text-xs">
-                        <FileText className="h-3 w-3" />
-                        {(order as any).invoiceNo || "N/A"}
-                      </div>
-                      <span className="text-[10px] text-muted-foreground font-mono">
-                        ({order.orderId})
-                      </span>
-                    </div>
-                    <Badge
-                      variant="outline"
-                      className="bg-yellow-50 text-yellow-700 border-yellow-200 shrink-0"
-                    >
-                      Pending
-                    </Badge>
-                  </div>
-
-                  {/* Row 2: Shop & Sales Rep */}
-                  <div className="flex justify-between items-start gap-2">
-                    <div className="flex flex-col min-w-0">
-                      <p className="text-sm font-bold text-slate-900 truncate">
-                        {order.shopName}
-                      </p>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Calendar className="h-3 w-3" />
-                        {new Date(order.date).toLocaleDateString()}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0 bg-slate-50 border border-slate-100 text-slate-600 px-2 py-1 rounded text-xs font-medium">
-                      <User className="h-3 w-3" />
-                      <span>{order.salesRep}</span>
-                    </div>
-                  </div>
-
-                  {/* Row 3: Totals */}
-                  <div className="grid grid-cols-2 gap-2 text-sm border-t pt-2 mt-1">
-                    <div>
-                      <p className="text-xs text-muted-foreground">Items</p>
-                      <p className="font-medium">{order.itemCount}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-muted-foreground">
-                        Total Amount
-                      </p>
-                      <p className="font-bold text-slate-900">
-                        LKR {order.totalAmount.toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Row 4: Action Button */}
-                  <Button
-                    size="sm"
-                    className="w-full mt-1 bg-yellow-600 hover:bg-yellow-700 text-white h-9"
+              filteredOrders.map((order) => {
+                const isSelected = selectedOrders.includes(order.id);
+                return (
+                  <div
+                    key={order.id}
+                    className={`bg-white border rounded-xl p-4 shadow-sm flex flex-col gap-3 transition-all duration-200 ${
+                      isSelected
+                        ? "border-yellow-400 ring-1 ring-yellow-400 bg-yellow-50/10"
+                        : "border-slate-200"
+                    }`}
                   >
-                    Process Order <ArrowRight className="ml-2 h-3 w-3" />
-                  </Button>
-                </div>
-              ))
+                    {/* Row 1: Checkbox, Invoice, Status */}
+                    <div className="flex items-start gap-3">
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => toggleSelect(order.id)}
+                        className="mt-1"
+                      />
+                      <div
+                        className="flex-1 min-w-0 cursor-pointer"
+                        onClick={() =>
+                          router.push(
+                            `/dashboard/office/distribution/orders/${order.id}`
+                          )
+                        }
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1 font-mono font-bold text-yellow-700 bg-yellow-50 px-2 py-0.5 rounded text-xs">
+                              <FileText className="h-3 w-3" />
+                              {(order as any).invoiceNo || "N/A"}
+                            </div>
+                            <span className="text-[10px] text-muted-foreground font-mono">
+                              ({order.orderId})
+                            </span>
+                          </div>
+                          <Badge
+                            variant="outline"
+                            className="bg-yellow-50 text-yellow-700 border-yellow-200 shrink-0"
+                          >
+                            Pending
+                          </Badge>
+                        </div>
+
+                        <div className="flex justify-between items-start gap-2 mt-1">
+                          <div className="flex flex-col min-w-0">
+                            <p className="text-sm font-bold text-slate-900 truncate">
+                              {order.shopName}
+                            </p>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <Calendar className="h-3 w-3" />
+                              {new Date(order.date).toLocaleDateString()}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0 bg-slate-50 border border-slate-100 text-slate-600 px-2 py-1 rounded text-xs font-medium">
+                            <User className="h-3 w-3" />
+                            <span>{order.salesRep}</span>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-sm border-t pt-2 mt-2">
+                          <div>
+                            <p className="text-xs text-muted-foreground">Items</p>
+                            <p className="font-medium">{order.itemCount}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs text-muted-foreground">Total Amount</p>
+                            <p className="font-bold text-slate-900">
+                              LKR {order.totalAmount.toLocaleString()}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Button
+                      size="sm"
+                      className="w-full mt-1 bg-yellow-600 hover:bg-yellow-700 text-white h-9"
+                      onClick={() =>
+                        router.push(
+                          `/dashboard/office/distribution/orders/${order.id}`
+                        )
+                      }
+                    >
+                      Process Order <ArrowRight className="ml-2 h-3 w-3" />
+                    </Button>
+                  </div>
+                );
+              })
             )}
           </div>
 
-          {/* --- DESKTOP VIEW: TABLE (hidden md:block) --- */}
+          {/* --- DESKTOP VIEW --- */}
           <div className="hidden md:block rounded-md border bg-white overflow-hidden">
             <Table>
               <TableHeader className="bg-slate-50">
                 <TableRow>
+                  <TableHead className="w-[50px]">
+                    <Checkbox
+                      checked={
+                        filteredOrders.length > 0 &&
+                        selectedOrders.length === filteredOrders.length
+                      }
+                      onCheckedChange={toggleSelectAll}
+                    />
+                  </TableHead>
                   <TableHead className="w-[100px]">Date</TableHead>
                   <TableHead>Invoice No</TableHead>
                   <TableHead>Customer / Shop</TableHead>
@@ -216,7 +314,7 @@ export default function DistributionPendingOrdersPage() {
                 {filteredOrders.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={8}
+                      colSpan={9}
                       className="text-center py-12 text-muted-foreground"
                     >
                       <div className="flex flex-col items-center justify-center">
@@ -227,7 +325,18 @@ export default function DistributionPendingOrdersPage() {
                   </TableRow>
                 ) : (
                   filteredOrders.map((order) => (
-                    <TableRow key={order.id} className="hover:bg-slate-50">
+                    <TableRow
+                      key={order.id}
+                      className={`hover:bg-slate-50 ${
+                        selectedOrders.includes(order.id) ? "bg-yellow-50/30" : ""
+                      }`}
+                    >
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selectedOrders.includes(order.id)}
+                          onCheckedChange={() => toggleSelect(order.id)}
+                        />
+                      </TableCell>
                       <TableCell className="whitespace-nowrap text-muted-foreground text-xs">
                         {new Date(order.date).toLocaleDateString()}
                       </TableCell>
@@ -252,9 +361,7 @@ export default function DistributionPendingOrdersPage() {
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell className="text-sm">
-                        {order.salesRep}
-                      </TableCell>
+                      <TableCell className="text-sm">{order.salesRep}</TableCell>
                       <TableCell className="text-right text-sm">
                         {order.itemCount}
                       </TableCell>

@@ -27,9 +27,11 @@ import {
   FileText,
   User,
   MapPin,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingSheetDialog } from "@/app/dashboard/admin/orders/_components/LoadingSheetDialog"; // Reusing Admin component
+import { downloadLoadingSummary } from "./print-loading-summary";
 
 interface Order {
   id: string;
@@ -180,13 +182,22 @@ export default function DistributionLoadingOrdersPage() {
             <History className="w-4 h-4 mr-2" /> History
           </Button>
           {selectedOrders.length > 0 && (
-            <Button
-              onClick={() => setIsDialogOpen(true)}
-              className="animate-in fade-in zoom-in duration-300 bg-indigo-600 hover:bg-indigo-700 text-white"
-            >
-              <PlusCircle className="w-4 h-4 mr-2" /> Create Load (
-              {selectedOrders.length})
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                onClick={() => downloadLoadingSummary(selectedOrders)}
+                className="animate-in fade-in zoom-in duration-300 bg-white border-slate-200"
+              >
+                <Download className="w-4 h-4 mr-2" /> Summary ({selectedOrders.length})
+              </Button>
+              <Button
+                onClick={() => setIsDialogOpen(true)}
+                className="animate-in fade-in zoom-in duration-300 bg-indigo-600 hover:bg-indigo-700 text-white"
+              >
+                <PlusCircle className="w-4 h-4 mr-2" /> Create Load (
+                {selectedOrders.length})
+              </Button>
+            </>
           )}
         </div>
       </div>

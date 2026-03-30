@@ -20,31 +20,30 @@ const calculateStatus = (invoice: any) => {
 
 // Exporting this so we can reuse it for bulk generation
 export const generateInvoiceHTML = (invoice: any) => {
-  // Format currency helper
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-LK", {
-      style: "currency",
-      currency: "LKR",
+  const fmt = (amount: number) =>
+    new Intl.NumberFormat("en-LK", {
       minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     }).format(amount || 0);
-  };
 
   const formatDate = (dateString: string) => {
     if (!dateString) return "-";
     return new Date(dateString).toLocaleDateString("en-GB", {
       year: "numeric",
-      month: "long",
+      month: "short",
       day: "numeric",
     });
   };
 
-  // Safe Accessors
   const customerName =
     invoice.customer?.name || invoice.customerName || "Unknown Customer";
   const shopName = invoice.customer?.shop || invoice.shopName || customerName;
   const phone = invoice.customer?.phone || invoice.phone || "";
   const address = invoice.customer?.address || invoice.address || "";
+  const route = invoice.customer?.route || invoice.route || "";
   const items = invoice.items || [];
+  const paymentStatus = calculateStatus(invoice);
+  const salesRep = invoice.salesRep || invoice.salesRepName || "-";
 
   const subTotal = items.reduce(
     (sum: number, item: any) => sum + (item.total || 0),
@@ -52,130 +51,163 @@ export const generateInvoiceHTML = (invoice: any) => {
   );
   const grandTotal = invoice.grandTotal || invoice.totalAmount || 0;
   const extraDiscount = Math.max(0, subTotal - grandTotal);
-  const netTotal = grandTotal;
+  const paidAmount = invoice.paidAmount || 0;
+  const dueAmount = grandTotal - paidAmount;
+
+  const statusColor =
+    paymentStatus === "Paid"
+      ? "#16a34a"
+      : paymentStatus === "Partial"
+      ? "#d97706"
+      : "#dc2626";
+  const statusBg =
+    paymentStatus === "Paid"
+      ? "#f0fdf4"
+      : paymentStatus === "Partial"
+      ? "#fffbeb"
+      : "#fef2f2";
 
   return `
-    <div class="invoice-page" style="page-break-after: always; max-width: 800px; margin: 0 auto; padding: 20px 30px; background: white; min-height: 95vh; position: relative;">
-        <div class="header" style="display: flex; justify-content: space-between; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #cbd5e1;">
-          <div class="company-logo">
-            <h1 style="margin: 0; font-size: 20px; color: #000000; text-transform: uppercase; letter-spacing: -0.5px; font-weight: 700;">CHAMPIKA HARDWARE</h1>
-            <div class="company-details" style="margin-top: 4px; font-size: 11px; color: #000000;">
-              Distribution Division<br>
-              45, Main Street, Galle<br>
-              Tel: 077-1234567
-            </div>
-          </div>
-          <div class="invoice-details-top" style="text-align: right;">
-            <div class="invoice-no" style="font-size: 18px; font-weight: 700; color: #000000; margin-bottom: 4px;"> ${
-              invoice.invoiceNo
-            }</div>
-            <div class="invoice-meta" style="font-size: 12px; color: #000000; line-height: 1.4;">
-               ${formatDate(invoice.date || invoice.createdAt)}<br>
-               ${invoice.salesRep || invoice.salesRepName || "-"}
-            </div>
-          </div>
-        </div>
+  <div class="invoice-page" style="page-break-after:always; width:780px; margin:0 auto; padding:32px 36px; background:#fff; font-family:'Inter',sans-serif; color:#111; box-sizing:border-box;">
 
-        <div class="info-grid" style="margin-bottom: 20px;">
-          <div class="info-group">
-            <p style="margin: 0; font-size: 15px; font-weight: 600; color: #000000;">${shopName}</p>
-            <div class="sub-text" style="color: #000000; font-weight: 400; margin-top: 2px; font-size: 12px;">
-              ${customerName !== shopName ? customerName + "<br>" : ""}
-              ${address ? address + "<br>" : ""}
-              ${phone || "No Phone Provided"}
-            </div>
+    <!-- ══ HEADER ══ -->
+    <table style="width:100%; border-collapse:collapse; margin-bottom:0;">
+      <tr>
+        <td style="vertical-align:top; width:55%;">
+          <div style="font-size:22px; font-weight:800; letter-spacing:-0.5px; color:#0f172a; line-height:1;">CHAMPIKA HARDWARE</div>
+          <div style="font-size:10px; color:#475569; margin-top:5px; line-height:1.7;">
+            Distribution Division<br>
+            Pranawatta Road, Wallabada, Boossa<br>
+            Tel: 0777681663
           </div>
-        </div>
+        </td>
+        <td style="vertical-align:top; text-align:right; width:45%;">
+          <div style="font-size:28px; font-weight:800; color:#0f172a; letter-spacing:-1px; line-height:1;">INVOICE</div>
+          <div style="font-size:14px; font-weight:700; color:#2563eb; margin-top:4px;">${invoice.invoiceNo || "-"}</div>
+          <div style="font-size:10px; color:#64748b; margin-top:6px; line-height:1.8;">
+            <b style="color:#0f172a;">Date:</b> ${formatDate(invoice.date || invoice.createdAt)}<br>
+            <b style="color:#0f172a;">Sales Rep:</b> ${salesRep}
+          </div>
+        </td>
+      </tr>
+    </table>
 
-        <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px;">
-          <thead>
-            <tr>
-              <th style="text-align: left; padding: 8px 6px; background: #f1f1f1; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #000000; font-weight: 700; border-bottom: 1px solid #cbd5e1; width: 5%">#</th>
-              <th style="text-align: left; padding: 8px 6px; background: #f1f1f1; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #000000; font-weight: 700; border-bottom: 1px solid #cbd5e1; width: 45%">Item Description</th>
-              <th style="text-align: right; padding: 8px 6px; background: #f1f1f1; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #000000; font-weight: 700; border-bottom: 1px solid #cbd5e1; width: 15%">Price</th>
-              <th style="text-align: center; padding: 8px 6px; background: #f1f1f1; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #000000; font-weight: 700; border-bottom: 1px solid #cbd5e1; width: 10%">Qty</th>
-              <th style="text-align: center; padding: 8px 6px; background: #f1f1f1; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #000000; font-weight: 700; border-bottom: 1px solid #cbd5e1; width: 10%">Unit</th>
-              <th style="text-align: center; padding: 8px 6px; background: #f1f1f1; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #000000; font-weight: 700; border-bottom: 1px solid #cbd5e1; width: 10%">Free</th>
-              <th style="text-align: center; padding: 8px 6px; background: #f1f1f1; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #000000; font-weight: 700; border-bottom: 1px solid #cbd5e1; width: 5%">Disc.</th>
-              <th style="text-align: right; padding: 8px 6px; background: #f1f1f1; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #000000; font-weight: 700; border-bottom: 1px solid #cbd5e1; width: 15%">Total</th>
+    <!-- ══ DIVIDER ══ -->
+    <div style="border-top:2.5px solid #0f172a; margin:14px 0 16px;"></div>
+
+    <!-- ══ BILL TO + META ══ -->
+    <table style="width:100%; border-collapse:collapse; margin-bottom:20px;">
+      <tr>
+        <td style="vertical-align:top; width:55%;">
+          <div style="font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:#94a3b8; margin-bottom:5px;">Bill To</div>
+          <div style="font-size:14px; font-weight:700; color:#0f172a;">${shopName}</div>
+          ${customerName !== shopName ? `<div style="font-size:11px; color:#475569; margin-top:1px;">${customerName}</div>` : ""}
+          ${address ? `<div style="font-size:11px; color:#475569; margin-top:1px;">${address}</div>` : ""}
+          ${route ? `<div style="font-size:11px; color:#475569; margin-top:1px;">Route: ${route}</div>` : ""}
+          ${phone ? `<div style="font-size:11px; color:#475569; margin-top:1px;">Tel: ${phone}</div>` : ""}
+        </td>
+        <td style="vertical-align:top; text-align:right; width:45%;">
+          <div style="display:inline-block; background:${statusBg}; color:${statusColor}; border:1.5px solid ${statusColor}; border-radius:4px; padding:3px 12px; font-size:11px; font-weight:700; letter-spacing:0.5px;">${paymentStatus.toUpperCase()}</div>
+          ${
+            paidAmount > 0
+              ? `<div style="font-size:10px; color:#475569; margin-top:8px; line-height:1.8;">
+              <b style="color:#0f172a;">Paid:</b> LKR ${fmt(paidAmount)}<br>
+              <b style="color:#dc2626;">Balance Due:</b> LKR ${fmt(dueAmount)}
+            </div>`
+              : ""
+          }
+        </td>
+      </tr>
+    </table>
+
+    <!-- ══ ITEMS TABLE ══ -->
+    <table style="width:100%; border-collapse:collapse; margin-bottom:18px; border:1px solid #e2e8f0; border-radius:6px; overflow:hidden;">
+      <thead>
+        <tr style="background:#0f172a;">
+          <th style="padding:9px 8px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:#fff; text-align:center; width:4%; border-right:1px solid #334155;">#</th>
+          <th style="padding:9px 8px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:#fff; text-align:left; width:38%; border-right:1px solid #334155;">Item Description</th>
+          <th style="padding:9px 8px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:#fff; text-align:center; width:8%; border-right:1px solid #334155;">Qty</th>
+          <th style="padding:9px 8px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:#fff; text-align:center; width:8%; border-right:1px solid #334155;">Free</th>
+          <th style="padding:9px 8px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:#fff; text-align:center; width:8%; border-right:1px solid #334155;">Disc.</th>
+          <th style="padding:9px 8px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:#fff; text-align:right; width:17%; border-right:1px solid #334155;">Unit Price</th>
+          <th style="padding:9px 8px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:#fff; text-align:right; width:17%;">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${items
+          .map(
+            (item: any, index: number) => `
+          <tr style="background:${index % 2 === 0 ? "#fff" : "#f8fafc"};">
+            <td style="padding:8px 8px; font-size:11px; color:#64748b; text-align:center; border-bottom:1px solid #f1f5f9; border-right:1px solid #f1f5f9;">${index + 1}</td>
+            <td style="padding:8px 8px; font-size:12px; color:#0f172a; font-weight:600; border-bottom:1px solid #f1f5f9; border-right:1px solid #f1f5f9;">${item.productName || item.name || "-"}
+              ${item.sku ? `<div style="font-size:9px; color:#94a3b8; font-weight:400; margin-top:1px;">${item.sku}</div>` : ""}
+            </td>
+            <td style="padding:8px 8px; font-size:12px; font-weight:700; color:#0f172a; text-align:center; border-bottom:1px solid #f1f5f9; border-right:1px solid #f1f5f9;">${item.quantity}</td>
+            <td style="padding:8px 8px; font-size:12px; text-align:center; border-bottom:1px solid #f1f5f9; border-right:1px solid #f1f5f9; color:${item.freeQuantity > 0 ? "#16a34a" : "#94a3b8"}; font-weight:${item.freeQuantity > 0 ? "700" : "400"};">${item.freeQuantity > 0 ? item.freeQuantity : "-"}</td>
+            <td style="padding:8px 8px; font-size:11px; text-align:center; border-bottom:1px solid #f1f5f9; border-right:1px solid #f1f5f9; color:${item.discountPercent > 0 ? "#d97706" : "#94a3b8"};">${item.discountPercent > 0 ? "-" + item.discountPercent + "%" : "-"}</td>
+            <td style="padding:8px 8px; font-size:11px; color:#475569; text-align:right; border-bottom:1px solid #f1f5f9; border-right:1px solid #f1f5f9;">LKR ${fmt(item.unitPrice || item.price)}</td>
+            <td style="padding:8px 8px; font-size:12px; font-weight:700; color:#0f172a; text-align:right; border-bottom:1px solid #f1f5f9;">LKR ${fmt(item.total)}</td>
+          </tr>`
+          )
+          .join("")}
+      </tbody>
+    </table>
+
+    <!-- ══ TOTALS ══ -->
+    <table style="width:100%; border-collapse:collapse; margin-bottom:28px;">
+      <tr>
+        <td style="width:55%; vertical-align:bottom;">
+          ${
+            invoice.notes
+              ? `<div style="font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:#94a3b8; margin-bottom:4px;">Notes</div>
+            <div style="font-size:11px; color:#475569; max-width:280px; line-height:1.5;">${invoice.notes}</div>`
+              : ""
+          }
+        </td>
+        <td style="width:45%; vertical-align:top;">
+          <table style="width:100%; border-collapse:collapse; border:1px solid #e2e8f0; border-radius:6px; overflow:hidden;">
+            <tr style="background:#f8fafc;">
+              <td style="padding:7px 12px; font-size:11px; color:#475569; border-bottom:1px solid #e2e8f0;">Subtotal</td>
+              <td style="padding:7px 12px; font-size:11px; color:#0f172a; text-align:right; border-bottom:1px solid #e2e8f0;">LKR ${fmt(subTotal)}</td>
             </tr>
-          </thead>
-          <tbody>
-            ${items
-              .map(
-                (item: any, index: number) => `
-              <tr>
-                <td style="padding: 8px 6px; font-size: 12px; border-bottom: 1px solid #e2e8f0; vertical-align: top; color: #000000;">${
-                  index + 1
-                }</td>
-                <td style="padding: 8px 6px; font-size: 12px; border-bottom: 1px solid #e2e8f0; vertical-align: top; color: #000000;">
-                  <span style="font-weight: 600; font-size: 12px;">${
-                    item.productName || item.name
-                  }</span>
-                </td>
-                <td style="padding: 8px 6px; font-size: 12px; border-bottom: 1px solid #e2e8f0; vertical-align: top; color: #000000; text-align: right; font-family: 'Courier New', monospace;">${formatCurrency(
-                  item.unitPrice || item.price
-                )}</td>
-                <td style="padding: 8px 6px; font-size: 12px; border-bottom: 1px solid #e2e8f0; vertical-align: top; color: #000000; text-align: center; font-weight: 600;">${
-                  item.quantity
-                }</td>
-                <td style="padding: 8px 6px; font-size: 12px; border-bottom: 1px solid #e2e8f0; vertical-align: top; color: #000000; text-align: center; font-size: 11px;">${
-                  item.unit || "-"
-                }</td>
-                <td style="padding: 8px 6px; font-size: 12px; border-bottom: 1px solid #e2e8f0; vertical-align: top; color: #000000; text-align: center;">${
-                  item.freeQuantity > 0 ? item.freeQuantity : "-"
-                }</td>
-                <td style="padding: 8px 6px; font-size: 12px; border-bottom: 1px solid #e2e8f0; vertical-align: top; color: #000000; text-align: center; font-size: 10px;">
-                    ${
-                      item.discountPercent > 0
-                        ? "-" + item.discountPercent + "%"
-                        : "-"
-                    }
-                </td>
-                <td style="padding: 8px 6px; font-size: 12px; border-bottom: 1px solid #e2e8f0; vertical-align: top; color: #000000; text-align: right; font-family: 'Courier New', monospace; font-weight: 700;">${formatCurrency(
-                  item.total
-                )}</td>
-              </tr>
-            `
-              )
-              .join("")}
-          </tbody>
-        </table>
-
-        <div class="totals-section" style="display: flex; justify-content: flex-end; margin-top: 10px;">
-          <div class="totals-box" style="width: 250px;">
-            <div class="total-row" style="display: flex; justify-content: space-between; padding: 3px 0; font-size: 12px; color: #000000;">
-              <span>Subtotal</span>
-              <span>${formatCurrency(subTotal)}</span>
-            </div>
-            
             ${
               extraDiscount > 1
-                ? `
-            <div class="total-row" style="display: flex; justify-content: space-between; padding: 3px 0; font-size: 12px; color: #000000;">
-              <span>Extra Discount</span>
-              <span>- ${formatCurrency(extraDiscount)}</span>
-            </div>
-            `
+                ? `<tr style="background:#fffbeb;">
+              <td style="padding:7px 12px; font-size:11px; color:#d97706; border-bottom:1px solid #e2e8f0;">Extra Discount</td>
+              <td style="padding:7px 12px; font-size:11px; color:#d97706; text-align:right; border-bottom:1px solid #e2e8f0;">- LKR ${fmt(extraDiscount)}</td>
+            </tr>`
                 : ""
             }
+            <tr style="background:#0f172a;">
+              <td style="padding:10px 12px; font-size:13px; font-weight:700; color:#fff;">NET TOTAL</td>
+              <td style="padding:10px 12px; font-size:13px; font-weight:800; color:#fff; text-align:right;">LKR ${fmt(grandTotal)}</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
 
-            <div class="final-total" style="display: flex; justify-content: space-between; margin-top: 8px; padding-top: 8px; border-top: 2px solid #cbd5e1; font-size: 14px; font-weight: 700; color: #000000;">
-              <span>Net Total</span>
-              <span>${formatCurrency(netTotal)}</span>
-            </div>
-          </div>
-        </div>
-        
-        <div class="signatures" style="margin-top: 50px; display: flex; justify-content: flex-end; font-size: 11px; color: #000000;">
-            <div class="sig-line" style="border-top: 1px solid #cbd5e1; padding-top: 4px; width: 200px; text-align: center; font-weight: 600;">Customer Signature & Stamp</div>
-        </div>
+    <!-- ══ SIGNATURES ══ -->
+    <table style="width:100%; border-collapse:collapse; margin-top:10px; margin-bottom:24px;">
+      <tr>
+        <td style="width:45%; text-align:center; padding-top:40px; border-top:1px solid #cbd5e1;">
+          <div style="font-size:10px; color:#475569; font-weight:600;">Authorized Signature</div>
+        </td>
+        <td style="width:10%;"></td>
+        <td style="width:45%; text-align:center; padding-top:40px; border-top:1px solid #cbd5e1;">
+          <div style="font-size:10px; color:#475569; font-weight:600;">Customer Signature &amp; Stamp</div>
+        </td>
+      </tr>
+    </table>
 
-        <div class="footer" style="margin-top: 30px; padding-top: 10px; border-top: 1px solid #cbd5e1; text-align: center; font-size: 10px; color: #000000;">
-           Thank you for your business!
-        </div>
+    <!-- ══ FOOTER ══ -->
+    <div style="border-top:1px solid #e2e8f0; padding-top:10px; display:flex; justify-content:space-between; align-items:center;">
+      <div style="font-size:9px; color:#94a3b8;">Champika Hardware — Distribution Division</div>
+      <div style="font-size:10px; color:#475569; font-weight:600;">Thank you for your business!</div>
+      <div style="font-size:9px; color:#94a3b8;">Tel: 0777681663</div>
     </div>
-  `;
+
+  </div>`;
 };
 
 // Base wrapper for the printable document
@@ -184,27 +216,26 @@ const getDocumentWrapper = (content: string, title: string) => `
     <html>
     <head>
       <title>${title}</title>
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
       <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        * { box-sizing: border-box; }
         body {
-          font-family: 'Inter', sans-serif;
+          font-family: 'Inter', Arial, sans-serif;
           margin: 0;
-          padding: 0;
-          background-color: white;
+          padding: 20px 0;
+          background: #f1f5f9;
         }
         @media print {
-          @page { margin: 0; }
-          body { 
-            -webkit-print-color-adjust: exact; 
-            background-color: white;
+          @page { margin: 10mm; size: A4; }
+          body {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+            background: white;
+            padding: 0;
           }
-          /* Ensure breaks work */
-          .invoice-page {
-             page-break-after: always;
-          }
-          .invoice-page:last-child {
-             page-break-after: auto;
-          }
+          .invoice-page { page-break-after: always; }
+          .invoice-page:last-child { page-break-after: auto; }
         }
       </style>
     </head>
