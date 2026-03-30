@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
     > = {};
 
     invoices.forEach((inv) => {
-      inv.items.forEach((item) => {
+      inv.items.forEach((item: any) => {
         const key = item.productId || item.productName;
         if (!summaryMap[key]) {
           summaryMap[key] = {
