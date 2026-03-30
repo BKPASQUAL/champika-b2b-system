@@ -212,8 +212,6 @@ export const printInvoice = async (invoiceId: string) => {
       { align: "right" }
     );
 
-    // Removed Balance Due as requested
-
     // --- Signature & Stamp Section (Bottom of Page) ---
     const signatureY = pageHeight - 35;
 
@@ -223,14 +221,14 @@ export const printInvoice = async (invoiceId: string) => {
     doc.setDrawColor(0, 0, 0);
 
     // 1. Customer Signature & Stamp (Left)
-    doc.line(14, signatureY, 80, signatureY); // Line
+    doc.line(14, signatureY, 80, signatureY);
     doc.text("Customer Signature & Stamp", 14, signatureY + 5);
 
     // 2. Date (Right)
-    doc.line(pageWidth - 60, signatureY, pageWidth - 14, signatureY); // Line
+    doc.line(pageWidth - 60, signatureY, pageWidth - 14, signatureY);
     doc.text("Date", pageWidth - 60, signatureY + 5);
 
-    // 3. Authorized By (Center - Optional)
+    // 3. Authorized By (Center)
     doc.line(pageWidth / 2 - 20, signatureY, pageWidth / 2 + 20, signatureY);
     doc.text("Authorized By", pageWidth / 2, signatureY + 5, {
       align: "center",
@@ -244,7 +242,7 @@ export const printInvoice = async (invoiceId: string) => {
       align: "center",
     });
 
-    // 3. Save PDF
+    // Save PDF
     doc.save(`Invoice_${invoice.invoiceNo}.pdf`);
     toast.success("Invoice downloaded successfully");
   } catch (error) {

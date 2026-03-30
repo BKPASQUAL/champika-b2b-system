@@ -30,7 +30,7 @@ export const generateInvoiceHTML = (invoice: any) => {
     if (!dateString) return "-";
     return new Date(dateString).toLocaleDateString("en-GB", {
       year: "numeric",
-      month: "short",
+      month: "long",
       day: "numeric",
     });
   };
@@ -42,7 +42,6 @@ export const generateInvoiceHTML = (invoice: any) => {
   const address = invoice.customer?.address || invoice.address || "";
   const route = invoice.customer?.route || invoice.route || "";
   const items = invoice.items || [];
-  const paymentStatus = calculateStatus(invoice);
   const salesRep = invoice.salesRep || invoice.salesRepName || "-";
 
   const subTotal = items.reduce(
@@ -51,102 +50,71 @@ export const generateInvoiceHTML = (invoice: any) => {
   );
   const grandTotal = invoice.grandTotal || invoice.totalAmount || 0;
   const extraDiscount = Math.max(0, subTotal - grandTotal);
-  const paidAmount = invoice.paidAmount || 0;
-  const dueAmount = grandTotal - paidAmount;
-
-  const statusColor =
-    paymentStatus === "Paid"
-      ? "#16a34a"
-      : paymentStatus === "Partial"
-      ? "#d97706"
-      : "#dc2626";
-  const statusBg =
-    paymentStatus === "Paid"
-      ? "#f0fdf4"
-      : paymentStatus === "Partial"
-      ? "#fffbeb"
-      : "#fef2f2";
 
   return `
-  <div class="invoice-page" style="page-break-after:always; width:780px; margin:0 auto; padding:32px 36px; background:#fff; font-family:'Inter',sans-serif; color:#111; box-sizing:border-box;">
+  <div class="invoice-page" style="page-break-after:always; width:100%; min-height:100vh; padding:5mm 8mm; background:#fff; font-family:'Inter',Arial,sans-serif; color:#111; box-sizing:border-box;">
 
     <!-- ══ HEADER ══ -->
     <table style="width:100%; border-collapse:collapse; margin-bottom:0;">
       <tr>
-        <td style="vertical-align:top; width:55%;">
-          <div style="font-size:22px; font-weight:800; letter-spacing:-0.5px; color:#0f172a; line-height:1;">CHAMPIKA HARDWARE</div>
-          <div style="font-size:10px; color:#475569; margin-top:5px; line-height:1.7;">
+        <td style="vertical-align:top; width:60%;">
+          <div style="font-size:18px; font-weight:800; color:#000; letter-spacing:-0.3px; line-height:1.1;">CHAMPIKA HARDWARE</div>
+          <div style="font-size:10px; color:#333; margin-top:2px; line-height:1.5;">
             Distribution Division<br>
             Pranawatta Road, Wallabada, Boossa<br>
             Tel: 0777681663
           </div>
         </td>
-        <td style="vertical-align:top; text-align:right; width:45%;">
-          <div style="font-size:28px; font-weight:800; color:#0f172a; letter-spacing:-1px; line-height:1;">INVOICE</div>
-          <div style="font-size:14px; font-weight:700; color:#2563eb; margin-top:4px;">${invoice.invoiceNo || "-"}</div>
-          <div style="font-size:10px; color:#64748b; margin-top:6px; line-height:1.8;">
-            <b style="color:#0f172a;">Date:</b> ${formatDate(invoice.date || invoice.createdAt)}<br>
-            <b style="color:#0f172a;">Sales Rep:</b> ${salesRep}
+        <td style="vertical-align:top; text-align:right; width:40%;">
+          <div style="font-size:18px; font-weight:700; color:#000; letter-spacing:0.5px;">${invoice.invoiceNo || "-"}</div>
+          <div style="font-size:11px; color:#333; margin-top:2px; line-height:1.5;">
+            ${formatDate(invoice.date || invoice.createdAt)}<br>
+            ${salesRep}
           </div>
         </td>
       </tr>
     </table>
 
     <!-- ══ DIVIDER ══ -->
-    <div style="border-top:2.5px solid #0f172a; margin:14px 0 16px;"></div>
+    <div style="border-top:1.5px solid #bbb; margin:6px 0 8px;"></div>
 
-    <!-- ══ BILL TO + META ══ -->
-    <table style="width:100%; border-collapse:collapse; margin-bottom:20px;">
-      <tr>
-        <td style="vertical-align:top; width:55%;">
-          <div style="font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:#94a3b8; margin-bottom:5px;">Bill To</div>
-          <div style="font-size:14px; font-weight:700; color:#0f172a;">${shopName}</div>
-          ${customerName !== shopName ? `<div style="font-size:11px; color:#475569; margin-top:1px;">${customerName}</div>` : ""}
-          ${address ? `<div style="font-size:11px; color:#475569; margin-top:1px;">${address}</div>` : ""}
-          ${route ? `<div style="font-size:11px; color:#475569; margin-top:1px;">Route: ${route}</div>` : ""}
-          ${phone ? `<div style="font-size:11px; color:#475569; margin-top:1px;">Tel: ${phone}</div>` : ""}
-        </td>
-        <td style="vertical-align:top; text-align:right; width:45%;">
-          <div style="display:inline-block; background:${statusBg}; color:${statusColor}; border:1.5px solid ${statusColor}; border-radius:4px; padding:3px 12px; font-size:11px; font-weight:700; letter-spacing:0.5px;">${paymentStatus.toUpperCase()}</div>
-          ${
-            paidAmount > 0
-              ? `<div style="font-size:10px; color:#475569; margin-top:8px; line-height:1.8;">
-              <b style="color:#0f172a;">Paid:</b> LKR ${fmt(paidAmount)}<br>
-              <b style="color:#dc2626;">Balance Due:</b> LKR ${fmt(dueAmount)}
-            </div>`
-              : ""
-          }
-        </td>
-      </tr>
-    </table>
+    <!-- ══ CUSTOMER ══ -->
+    <div style="margin-bottom:8px;">
+      <div style="font-size:13px; font-weight:700; color:#000;">${shopName}</div>
+      ${customerName !== shopName ? `<div style="font-size:12px; color:#333;">${customerName}</div>` : ""}
+      ${address ? `<div style="font-size:12px; color:#333;">${address}${route ? ", " + route : ""}</div>` : route ? `<div style="font-size:12px; color:#333;">${route}</div>` : ""}
+      ${phone ? `<div style="font-size:12px; color:#333;">${phone}</div>` : ""}
+    </div>
 
     <!-- ══ ITEMS TABLE ══ -->
-    <table style="width:100%; border-collapse:collapse; margin-bottom:18px; border:1px solid #e2e8f0; border-radius:6px; overflow:hidden;">
+    <table style="width:100%; border-collapse:collapse; margin-bottom:6px;">
       <thead>
-        <tr style="background:#0f172a;">
-          <th style="padding:9px 8px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:#fff; text-align:center; width:4%; border-right:1px solid #334155;">#</th>
-          <th style="padding:9px 8px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:#fff; text-align:left; width:38%; border-right:1px solid #334155;">Item Description</th>
-          <th style="padding:9px 8px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:#fff; text-align:center; width:8%; border-right:1px solid #334155;">Qty</th>
-          <th style="padding:9px 8px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:#fff; text-align:center; width:8%; border-right:1px solid #334155;">Free</th>
-          <th style="padding:9px 8px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:#fff; text-align:center; width:8%; border-right:1px solid #334155;">Disc.</th>
-          <th style="padding:9px 8px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:#fff; text-align:right; width:17%; border-right:1px solid #334155;">Unit Price</th>
-          <th style="padding:9px 8px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:#fff; text-align:right; width:17%;">Total</th>
+        <tr style="background:#1a1a1a;">
+          <th style="padding:7px 8px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:#fff; text-align:center; width:4%;">#</th>
+          <th style="padding:7px 8px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:#fff; text-align:left; width:14%;">Item Code</th>
+          <th style="padding:7px 8px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:#fff; text-align:left; width:30%;">Item Description</th>
+          <th style="padding:7px 8px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:#fff; text-align:right; width:13%;">Price</th>
+          <th style="padding:7px 8px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:#fff; text-align:center; width:7%;">Qty</th>
+          <th style="padding:7px 8px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:#fff; text-align:center; width:7%;">Unit</th>
+          <th style="padding:7px 8px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:#fff; text-align:center; width:7%;">Free</th>
+          <th style="padding:7px 8px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:#fff; text-align:center; width:7%;">Disc.</th>
+          <th style="padding:7px 8px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:#fff; text-align:right; width:11%;">Total</th>
         </tr>
       </thead>
       <tbody>
         ${items
           .map(
             (item: any, index: number) => `
-          <tr style="background:${index % 2 === 0 ? "#fff" : "#f8fafc"};">
-            <td style="padding:8px 8px; font-size:11px; color:#64748b; text-align:center; border-bottom:1px solid #f1f5f9; border-right:1px solid #f1f5f9;">${index + 1}</td>
-            <td style="padding:8px 8px; font-size:12px; color:#0f172a; font-weight:600; border-bottom:1px solid #f1f5f9; border-right:1px solid #f1f5f9;">${item.productName || item.name || "-"}
-              ${item.sku ? `<div style="font-size:9px; color:#94a3b8; font-weight:400; margin-top:1px;">${item.sku}</div>` : ""}
-            </td>
-            <td style="padding:8px 8px; font-size:12px; font-weight:700; color:#0f172a; text-align:center; border-bottom:1px solid #f1f5f9; border-right:1px solid #f1f5f9;">${item.quantity}</td>
-            <td style="padding:8px 8px; font-size:12px; text-align:center; border-bottom:1px solid #f1f5f9; border-right:1px solid #f1f5f9; color:${item.freeQuantity > 0 ? "#16a34a" : "#94a3b8"}; font-weight:${item.freeQuantity > 0 ? "700" : "400"};">${item.freeQuantity > 0 ? item.freeQuantity : "-"}</td>
-            <td style="padding:8px 8px; font-size:11px; text-align:center; border-bottom:1px solid #f1f5f9; border-right:1px solid #f1f5f9; color:${item.discountPercent > 0 ? "#d97706" : "#94a3b8"};">${item.discountPercent > 0 ? "-" + item.discountPercent + "%" : "-"}</td>
-            <td style="padding:8px 8px; font-size:11px; color:#475569; text-align:right; border-bottom:1px solid #f1f5f9; border-right:1px solid #f1f5f9;">LKR ${fmt(item.unitPrice || item.price)}</td>
-            <td style="padding:8px 8px; font-size:12px; font-weight:700; color:#0f172a; text-align:right; border-bottom:1px solid #f1f5f9;">LKR ${fmt(item.total)}</td>
+          <tr style="border-bottom:1px solid #e5e5e5;">
+            <td style="padding:7px 8px; font-size:11px; color:#555; text-align:center;">${index + 1}</td>
+            <td style="padding:7px 8px; font-size:11px; color:#333;">${item.sku || "-"}</td>
+            <td style="padding:7px 8px; font-size:12px; color:#000; font-weight:600;">${item.productName || item.name || "-"}</td>
+            <td style="padding:7px 8px; font-size:11px; color:#333; text-align:right; white-space:nowrap;">LKR ${fmt(item.unitPrice || item.price)}</td>
+            <td style="padding:7px 8px; font-size:12px; font-weight:700; color:#000; text-align:center;">${item.quantity}</td>
+            <td style="padding:7px 8px; font-size:11px; color:#555; text-align:center;">${item.unit || "Pcs"}</td>
+            <td style="padding:7px 8px; font-size:12px; text-align:center; color:#000;">${(item.freeQuantity || item.free || 0) > 0 ? (item.freeQuantity || item.free) : "-"}</td>
+            <td style="padding:7px 8px; font-size:11px; text-align:center; color:#555;">${item.discountPercent > 0 ? "-" + item.discountPercent + "%" : "-"}</td>
+            <td style="padding:7px 8px; font-size:12px; font-weight:700; color:#000; text-align:right; white-space:nowrap;">LKR ${fmt(item.total)}</td>
           </tr>`
           )
           .join("")}
@@ -154,57 +122,51 @@ export const generateInvoiceHTML = (invoice: any) => {
     </table>
 
     <!-- ══ TOTALS ══ -->
-    <table style="width:100%; border-collapse:collapse; margin-bottom:28px;">
+    <table style="width:100%; border-collapse:collapse; margin-bottom:10px;">
       <tr>
-        <td style="width:55%; vertical-align:bottom;">
-          ${
-            invoice.notes
-              ? `<div style="font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:#94a3b8; margin-bottom:4px;">Notes</div>
-            <div style="font-size:11px; color:#475569; max-width:280px; line-height:1.5;">${invoice.notes}</div>`
-              : ""
-          }
+        <td style="width:55%;">
+          ${invoice.notes ? `<div style="font-size:11px; color:#555; line-height:1.5;">${invoice.notes}</div>` : ""}
         </td>
-        <td style="width:45%; vertical-align:top;">
-          <table style="width:100%; border-collapse:collapse; border:1px solid #e2e8f0; border-radius:6px; overflow:hidden;">
-            <tr style="background:#f8fafc;">
-              <td style="padding:7px 12px; font-size:11px; color:#475569; border-bottom:1px solid #e2e8f0;">Subtotal</td>
-              <td style="padding:7px 12px; font-size:11px; color:#0f172a; text-align:right; border-bottom:1px solid #e2e8f0;">LKR ${fmt(subTotal)}</td>
+        <td style="width:45%; vertical-align:top; padding-left:16px;">
+          <table style="width:100%; border-collapse:collapse;">
+            <tr>
+              <td style="padding:5px 0; font-size:12px; color:#333;">Subtotal</td>
+              <td style="padding:5px 0; font-size:12px; color:#000; text-align:right; white-space:nowrap;">LKR ${fmt(subTotal)}</td>
             </tr>
             ${
               extraDiscount > 1
-                ? `<tr style="background:#fffbeb;">
-              <td style="padding:7px 12px; font-size:11px; color:#d97706; border-bottom:1px solid #e2e8f0;">Extra Discount</td>
-              <td style="padding:7px 12px; font-size:11px; color:#d97706; text-align:right; border-bottom:1px solid #e2e8f0;">- LKR ${fmt(extraDiscount)}</td>
+                ? `<tr>
+              <td style="padding:5px 0; font-size:12px; color:#333;">Extra Discount</td>
+              <td style="padding:5px 0; font-size:12px; color:#000; text-align:right; white-space:nowrap;">- LKR ${fmt(extraDiscount)}</td>
             </tr>`
                 : ""
             }
-            <tr style="background:#0f172a;">
-              <td style="padding:10px 12px; font-size:13px; font-weight:700; color:#fff;">NET TOTAL</td>
-              <td style="padding:10px 12px; font-size:13px; font-weight:800; color:#fff; text-align:right;">LKR ${fmt(grandTotal)}</td>
+            <tr>
+              <td style="padding:6px 0 0; border-top:1.5px solid #bbb;"></td>
+              <td style="border-top:1.5px solid #bbb;"></td>
+            </tr>
+            <tr>
+              <td style="padding:4px 0; font-size:13px; font-weight:700; color:#000;">Net Total</td>
+              <td style="padding:4px 0; font-size:14px; font-weight:800; color:#000; text-align:right; white-space:nowrap;">LKR ${fmt(grandTotal)}</td>
             </tr>
           </table>
         </td>
       </tr>
     </table>
 
-    <!-- ══ SIGNATURES ══ -->
-    <table style="width:100%; border-collapse:collapse; margin-top:10px; margin-bottom:24px;">
+    <!-- ══ SIGNATURE ══ -->
+    <table style="width:100%; border-collapse:collapse; margin-bottom:8px;">
       <tr>
-        <td style="width:45%; text-align:center; padding-top:40px; border-top:1px solid #cbd5e1;">
-          <div style="font-size:10px; color:#475569; font-weight:600;">Authorized Signature</div>
-        </td>
-        <td style="width:10%;"></td>
-        <td style="width:45%; text-align:center; padding-top:40px; border-top:1px solid #cbd5e1;">
-          <div style="font-size:10px; color:#475569; font-weight:600;">Customer Signature &amp; Stamp</div>
+        <td style="width:55%;"></td>
+        <td style="width:45%; text-align:center; padding-top:20px; border-top:1px solid #bbb;">
+          <div style="font-size:11px; color:#333; font-weight:600;">Customer Signature &amp; Stamp</div>
         </td>
       </tr>
     </table>
 
     <!-- ══ FOOTER ══ -->
-    <div style="border-top:1px solid #e2e8f0; padding-top:10px; display:flex; justify-content:space-between; align-items:center;">
-      <div style="font-size:9px; color:#94a3b8;">Champika Hardware — Distribution Division</div>
-      <div style="font-size:10px; color:#475569; font-weight:600;">Thank you for your business!</div>
-      <div style="font-size:9px; color:#94a3b8;">Tel: 0777681663</div>
+    <div style="border-top:1px solid #ddd; padding-top:8px; text-align:center; font-size:11px; color:#555;">
+      Thank you for your business!
     </div>
 
   </div>`;
@@ -223,16 +185,18 @@ const getDocumentWrapper = (content: string, title: string) => `
         body {
           font-family: 'Inter', Arial, sans-serif;
           margin: 0;
-          padding: 20px 0;
-          background: #f1f5f9;
+          padding: 0;
+          background: #fff;
         }
         @media print {
-          @page { margin: 10mm; size: A4; }
+          @page {
+            size: A4;
+            margin: 0;
+          }
           body {
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
             background: white;
-            padding: 0;
           }
           .invoice-page { page-break-after: always; }
           .invoice-page:last-child { page-break-after: auto; }
