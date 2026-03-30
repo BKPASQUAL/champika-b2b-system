@@ -1,11 +1,4 @@
-// app/dashboard/office/sierra/invoices/print-utils.ts
-export const printInvoice = async (invoiceId: string) => {
-    // ✅ Updated path for Sierra
-    const url = `/dashboard/office/sierra/invoices/${invoiceId}`;
-    const printWindow = window.open(url, '_blank');
-    if (printWindow) {
-        printWindow.focus();
-    } else {
-        alert("Please allow popups to print invoices");
-    }
-};
+import { printInvoice as _print, downloadInvoice as _download } from "@/app/lib/invoice-print";
+
+export const printInvoice   = (id: string | any) => _print(id, "sierra");
+export const downloadInvoice = (id: string | any) => _download(id, "sierra");
