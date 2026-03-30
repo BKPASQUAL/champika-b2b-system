@@ -163,11 +163,11 @@ export const generateInvoiceHTML = async (
     </table>
 
     <!-- SIGNATURE -->
-    <table style="width:100%;border-collapse:collapse;margin-bottom:8px;">
+    <table style="width:100%;border-collapse:collapse;margin-top:60px;margin-bottom:8px;">
       <tr>
         <td style="width:55%;"></td>
-        <td style="width:45%;text-align:center;padding-top:20px;border-top:1px solid #bbb;">
-          <div style="font-size:11px;color:#333;font-weight:600;">Customer Signature &amp; Stamp</div>
+        <td style="width:45%;text-align:center;padding-top:6px;border-top:1.5px solid #555;">
+          <div style="font-size:11px;color:#333;font-weight:600;margin-top:3px;">Customer Signature &amp; Stamp</div>
         </td>
       </tr>
     </table>
@@ -192,9 +192,10 @@ const getDocumentWrapper = (content: string, title: string) => `
       * { box-sizing: border-box; }
       body { font-family: 'Inter', Arial, sans-serif; margin: 0; padding: 0; background: #fff; }
       @media print {
-        @page { size: A4; margin: 0; }
+        @page { size: A4 portrait; margin: 0; }
+        html, body { width: 210mm; margin: 0; padding: 0; }
         body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        .invoice-page { page-break-after: always; }
+        .invoice-page { page-break-after: always; width: 210mm !important; padding: 5mm 8mm !important; }
         .invoice-page:last-child { page-break-after: auto; }
       }
     </style>
@@ -264,6 +265,8 @@ export const printBulkInvoices = async (
   }
 };
 
+// downloadInvoice uses the exact same iframe + browser print renderer as
+// printInvoice so the output is always pixel-perfect A4.
 export const downloadInvoice = async (
   invoiceOrId: string | any,
   divisionKey: keyof typeof DIVISIONS = "distribution"

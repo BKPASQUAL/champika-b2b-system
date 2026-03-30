@@ -115,18 +115,18 @@ export default function InvoicePrintView({ invoice }: { invoice: any }) {
         .inv-net-label   { font-size: 13px; font-weight: 700; color: #000; }
         .inv-net-value   { font-size: 15px; font-weight: 800; color: #000; }
         /* signature */
-        .inv-sig-wrap { display: flex; justify-content: flex-end; margin-bottom: 14px; }
-        .inv-sig-box  { width: 220px; text-align: center; padding-top: 28px; border-top: 1px solid #aaa; font-size: 11px; color: #333; font-weight: 600; }
+        .inv-sig-wrap { display: flex; justify-content: flex-end; margin-top: 60px; margin-bottom: 14px; }
+        .inv-sig-box  { width: 220px; text-align: center; padding-top: 6px; border-top: 1.5px solid #555; font-size: 11px; color: #333; font-weight: 600; margin-top: 3px; }
         /* footer */
         .inv-footer { border-top: 1px solid #ddd; padding-top: 8px; text-align: center; font-size: 11px; color: #777; }
 
         @media print {
-          @page { size: A4; margin: 0; }
-          html, body { background: #fff; }
-          .top-bar { display: none !important; }
-          .pdf-outer { padding: 0; background: #fff; }
-          .pdf-scaler { transform: none !important; width: 100% !important; }
-          .inv-page { width: 100%; box-shadow: none; padding: 5mm 8mm; }
+          @page { size: A4 portrait; margin: 0; }
+          html, body { background: #fff !important; width: 210mm; margin: 0; padding: 0; }
+          .top-bar    { display: none !important; }
+          .pdf-outer  { display: block !important; padding: 0 !important; margin: 0 !important; background: #fff !important; }
+          .pdf-scaler { transform: none !important; width: 210mm !important; margin: 0 !important; padding: 0 !important; }
+          .inv-page   { width: 210mm !important; max-width: 210mm !important; box-shadow: none !important; padding: 5mm 8mm !important; margin: 0 !important; }
           body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
       `}</style>
