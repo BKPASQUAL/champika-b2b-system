@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
+import { downloadFromElement } from "@/app/lib/invoice-print";
 
 const fmt = (amount: number) =>
   new Intl.NumberFormat("en-LK", {
@@ -24,6 +25,7 @@ export default function InvoicePrintView({ invoice }: { invoice: any }) {
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [scale, setScale] = useState(1);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const pageRef = useRef<HTMLDivElement>(null);
 
   // Generate QR
   useEffect(() => {
@@ -57,7 +59,7 @@ export default function InvoicePrintView({ invoice }: { invoice: any }) {
         * { box-sizing: border-box; margin: 0; padding: 0; }
         html, body {
           background: #888;
-          font-family: 'Inter', Arial, sans-serif;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, Helvetica, sans-serif;
           min-height: 100vh;
         }
         .top-bar {
@@ -70,6 +72,11 @@ export default function InvoicePrintView({ invoice }: { invoice: any }) {
           background: #fff; color: #000; border: none; border-radius: 4px;
           padding: 7px 16px; font-size: 13px; font-weight: 700; cursor: pointer;
         }
+        .top-bar-btn-outline {
+          background: transparent; color: #fff; border: 1.5px solid #fff; border-radius: 4px;
+          padding: 7px 16px; font-size: 13px; font-weight: 700; cursor: pointer;
+        }
+        .top-bar-actions { display: flex; gap: 8px; }
         .pdf-outer {
           display: flex;
           justify-content: center;
@@ -134,7 +141,10 @@ export default function InvoicePrintView({ invoice }: { invoice: any }) {
       {/* Sticky bar */}
       <div className="top-bar">
         <span className="top-bar-title">Invoice {invoice.invoiceNo}</span>
-        <button className="top-bar-btn" onClick={() => window.print()}>Save as PDF</button>
+        <div className="top-bar-actions">
+          <button className="top-bar-btn-outline" onClick={() => pageRef.current && downloadFromElement(pageRef.current, `${invoice.invoiceNo || "Invoice"}.pdf`)}>Download PDF</button>
+          <button className="top-bar-btn" onClick={() => window.print()}>Save as PDF</button>
+        </div>
       </div>
 
       {/* PDF scaled container */}
@@ -144,7 +154,7 @@ export default function InvoicePrintView({ invoice }: { invoice: any }) {
           className="pdf-scaler"
           style={{ transform: `scale(${scale})`, marginBottom: scale < 1 ? `${(scale - 1) * 100}%` : 0 }}
         >
-          <div className="inv-page">
+          <div className="inv-page" ref={pageRef}>
 
             {/* HEADER */}
             <div className="inv-header">
