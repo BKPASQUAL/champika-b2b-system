@@ -91,7 +91,8 @@ export async function GET(
           category,
           brand,
           model_type,
-          size_spec
+          size_spec,
+          supplier
         )
       `,
       )
@@ -148,6 +149,7 @@ export async function GET(
         description: item.products?.description || "",
         category: item.products?.category || "",
         brand: item.products?.brand || "",
+        supplier: item.products?.supplier || "",
         model: item.products?.model_type || "",
         size: item.products?.size_spec || "",
 

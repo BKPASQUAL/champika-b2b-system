@@ -548,6 +548,47 @@ export default function DistributionViewInvoicePage({
               </CardContent>
             </Card>
 
+            {/* Supplier Summary */}
+            {(() => {
+              const map: Record<string, { qty: number; total: number }> = {};
+              invoice.items.forEach((item: any) => {
+                const key = item.supplier || item.brand || "Unknown";
+                if (!map[key]) map[key] = { qty: 0, total: 0 };
+                map[key].qty += item.quantity || 0;
+                map[key].total += item.total || 0;
+              });
+              const entries = Object.entries(map);
+              return (
+                <Card className="shadow-sm overflow-hidden">
+                  <CardHeader className="bg-slate-50/50 border-b py-4">
+                    <CardTitle className="text-lg font-semibold">Items by Supplier</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-slate-50/50 hover:bg-slate-50/50">
+                          <TableHead className="pl-6">Supplier</TableHead>
+                          <TableHead className="text-center">Qty</TableHead>
+                          <TableHead className="text-right pr-6">Amount</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {entries.map(([name, s]) => (
+                          <TableRow key={name} className="hover:bg-muted/30">
+                            <TableCell className="pl-6 font-medium text-sm">{name}</TableCell>
+                            <TableCell className="text-center text-sm">{s.qty}</TableCell>
+                            <TableCell className="text-right pr-6 font-mono text-sm">
+                              LKR {s.total.toLocaleString("en-LK", { minimumFractionDigits: 2 })}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              );
+            })()}
+
             {/* Returns & Adjustments */}
             {returns.length > 0 && (
               <Card className="shadow-sm border-l-4 border-l-orange-500 overflow-hidden">

@@ -67,6 +67,21 @@ export const generateInvoiceHTML = async (
   const grandTotal   = invoice.grandTotal || invoice.totalAmount || 0;
   const extraDiscount = Math.max(0, subTotal - grandTotal);
 
+  // ── Supplier summary ────────────────────────────────────────────────────
+  const supplierMap: Record<string, { qty: number; total: number }> = {};
+  items.forEach((item: any) => {
+    const key = item.supplier || item.brand || "Unknown";
+    if (!supplierMap[key]) supplierMap[key] = { qty: 0, total: 0 };
+    supplierMap[key].qty   += item.quantity || 0;
+    supplierMap[key].total += item.total    || 0;
+  });
+  const supplierRows = Object.entries(supplierMap).map(([name, s], i, arr) => `
+    <tr style="${i < arr.length - 1 ? "border-bottom:1px solid #e8e8e8;" : ""}">
+      <td style="padding:5px 8px;font-size:11px;font-weight:600;color:#111;">${name}</td>
+      <td style="padding:5px 8px;font-size:11px;color:#555;text-align:center;">${s.qty}</td>
+      <td style="padding:5px 8px;font-size:11px;font-weight:700;color:#111;text-align:right;white-space:nowrap;">LKR ${fmt(s.total)}</td>
+    </tr>`).join("");
+
   const rows = items.map((item: any, idx: number) => `
     <tr style="${idx < items.length - 1 ? "border-bottom:1px solid #e8e8e8;" : ""}">
       <td style="padding:7px 8px;font-size:11px;color:#777;text-align:center;vertical-align:middle;">${idx + 1}</td>
@@ -138,6 +153,18 @@ export const generateInvoiceHTML = async (
         </tr>
       </thead>
       <tbody>${rows}</tbody>
+    </table>
+
+    <!-- SUPPLIER SUMMARY -->
+    <table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
+      <thead>
+        <tr style="background:#f0f0f0;">
+          <th style="padding:5px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#555;text-align:left;width:60%;">Supplier</th>
+          <th style="padding:5px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#555;text-align:center;width:20%;">Qty</th>
+          <th style="padding:5px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#555;text-align:right;width:20%;">Amount</th>
+        </tr>
+      </thead>
+      <tbody>${supplierRows}</tbody>
     </table>
 
     <!-- TOTALS -->
