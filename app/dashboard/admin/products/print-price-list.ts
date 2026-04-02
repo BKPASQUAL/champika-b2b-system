@@ -4,10 +4,36 @@ import autoTable from "jspdf-autotable";
 import { toast } from "sonner";
 import { Product } from "./types";
 
-export const printPriceListReport = (products: Product[]) => {
+const loadImageAsBase64 = (url: string): Promise<string | null> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext("2d");
+      ctx?.drawImage(img, 0, 0);
+      resolve(canvas.toDataURL("image/jpeg"));
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+};
+
+export const printPriceListReport = async (products: Product[]) => {
   if (products.length === 0) {
     toast.error("No products to generate report");
     return;
+  }
+
+  // Pre-load all first product images as base64
+  const imageMap: Record<string, string | null> = {};
+  for (const p of products) {
+    const imgUrl = p.images?.[0];
+    if (imgUrl && !(imgUrl in imageMap)) {
+      imageMap[imgUrl] = await loadImageAsBase64(imgUrl);
+    }
   }
 
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -102,17 +128,18 @@ export const printPriceListReport = (products: Product[]) => {
 
     currentY += 9;
 
-    // Table rows
+    // Table rows — empty string placeholder for image column
     const tableRows = supplierProducts.map((p, idx) => [
       idx + 1,
       p.sku || "-",
+      "",            // image cell — drawn via didDrawCell
       p.name,
       p.unitOfMeasure || "-",
       `LKR ${p.sellingPrice.toLocaleString("en-LK", { minimumFractionDigits: 2 })}`,
     ]);
 
     autoTable(doc, {
-      head: [["#", "Item Code", "Item Name", "Pack Size", "Selling Price"]],
+      head: [["#", "Item Code", "Image", "Item Name", "Pack Size", "Selling Price"]],
       body: tableRows,
       startY: currentY,
       theme: "plain",
@@ -133,6 +160,7 @@ export const printPriceListReport = (products: Product[]) => {
         fontSize: 8,
         lineColor: [220, 220, 220],
         lineWidth: 0.2,
+        minCellHeight: 12,
       },
 
       alternateRowStyles: {
@@ -145,11 +173,30 @@ export const printPriceListReport = (products: Product[]) => {
       },
 
       columnStyles: {
-        0: { cellWidth: 12, halign: "center" },
-        1: { cellWidth: 28 },
-        2: { cellWidth: "auto" },
-        3: { cellWidth: 26, halign: "center" },
-        4: { cellWidth: 32, halign: "right", fontStyle: "bold" },
+        0: { cellWidth: 10, halign: "center" },
+        1: { cellWidth: 26 },
+        2: { cellWidth: 14, halign: "center", cellPadding: 1 },
+        3: { cellWidth: "auto" },
+        4: { cellWidth: 24, halign: "center" },
+        5: { cellWidth: 32, halign: "right", fontStyle: "bold" },
+      },
+
+      didDrawCell: (data) => {
+        // Draw product image in the Image column (index 2) for body rows
+        if (data.column.index === 2 && data.section === "body") {
+          const product = supplierProducts[data.row.index];
+          const imgUrl = product?.images?.[0];
+          if (imgUrl && imageMap[imgUrl]) {
+            const cellX = data.cell.x;
+            const cellY = data.cell.y;
+            const cellH = data.cell.height;
+            const cellW = data.cell.width;
+            const imgSize = Math.min(cellH - 2, cellW - 2, 10);
+            const x = cellX + (cellW - imgSize) / 2;
+            const y = cellY + (cellH - imgSize) / 2;
+            doc.addImage(imageMap[imgUrl]!, "JPEG", x, y, imgSize, imgSize);
+          }
+        }
       },
 
       didDrawPage: () => {
