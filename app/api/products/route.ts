@@ -106,11 +106,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const val = productSchema.parse(body);
 
-    // ✅ 1. Check for Duplicate Product Name
+    // Check for Duplicate Product Name
     const { data: existingName } = await supabaseAdmin
       .from("products")
       .select("id")
-      .ilike("name", val.name.trim()) // Case-insensitive check
+      .ilike("name", val.name.trim())
       .maybeSingle();
 
     if (existingName) {
@@ -120,7 +120,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ✅ 2. Check for Duplicate Company Code (only if provided)
+    // Check selling price is greater than cost price
+    if (val.sellingPrice !== undefined && val.costPrice !== undefined) {
+      if (val.sellingPrice <= val.costPrice) {
+        return NextResponse.json(
+          { error: "Selling price must be greater than cost price." },
+          { status: 400 },
+        );
+      }
+    }
+
+    // Check for Duplicate Company Code (only if provided — same name is allowed, but code must be unique)
     if (val.companyCode && val.companyCode.trim() !== "") {
       const { data: existingCode } = await supabaseAdmin
         .from("products")

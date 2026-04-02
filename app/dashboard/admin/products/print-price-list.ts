@@ -177,7 +177,7 @@ export const printPriceListReport = async (products: Product[]) => {
         0: { cellWidth: 10, halign: "center" },
         1: { cellWidth: 26 },
         2: { cellWidth: 14, halign: "center", cellPadding: 1 },
-        3: { cellWidth: "auto" },
+        3: { cellWidth: "auto", overflow: "linebreak" },
         4: { cellWidth: 24, halign: "center" },
         5: { cellWidth: 32, halign: "right", fontStyle: "bold" },
       },

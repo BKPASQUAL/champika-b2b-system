@@ -33,24 +33,24 @@ export async function PATCH(
     const body = await request.json();
     const val = updateSchema.parse(body);
 
-    // ✅ 1. Check for Duplicate Name (Excluding current product)
+    // Check for Duplicate Product Name (excluding current product)
     if (val.name) {
       const { data: existingName } = await supabaseAdmin
         .from("products")
         .select("id")
         .ilike("name", val.name.trim())
-        .neq("id", id) // Exclude self
+        .neq("id", id)
         .maybeSingle();
 
       if (existingName) {
         return NextResponse.json(
-          { error: "Product name already exists." },
+          { error: "A product with this name already exists." },
           { status: 400 },
         );
       }
     }
 
-    // ✅ 2. Check for Duplicate Company Code (Excluding current product)
+    // Check for Duplicate Company Code (excluding current product)
     if (val.companyCode && val.companyCode.trim() !== "") {
       const { data: existingCode } = await supabaseAdmin
         .from("products")
@@ -77,6 +77,16 @@ export async function PATCH(
       .single();
 
     if (fetchError) throw fetchError;
+
+    // Check selling price is greater than cost price (compare against current values if only one is changing)
+    const effectiveSelling = val.sellingPrice !== undefined ? val.sellingPrice : currentProduct.selling_price;
+    const effectiveCost = val.costPrice !== undefined ? val.costPrice : currentProduct.cost_price;
+    if (effectiveSelling <= effectiveCost) {
+      return NextResponse.json(
+        { error: "Selling price must be greater than cost price." },
+        { status: 400 },
+      );
+    }
 
     const dbUpdates: any = {};
 
