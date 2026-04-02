@@ -1,0 +1,21 @@
+{
+  "agencySupplier": [],
+  "orelSupplier": [
+    {
+      "id": "ccc7c82c-52ba-41de-89e5-5586849bcf88",
+      "supplier_id": "S-1004",
+      "name": "Wireman ( Orel Corporation)",
+      "contact_person": "Mr Erran",
+      "email": null,
+      "phone": "0779789088",
+      "address": null,
+      "category": null,
+      "status": "Active",
+      "due_payment": 1000,
+      "created_at": "2026-01-16T03:02:17.958595+00:00",
+      "updated_at": "2026-01-16T03:02:17.958595+00:00",
+      "business_id": "094b649e-be59-4e2b-b709-7e36ad1ef280"
+    }
+  ],
+  "productsAgencyCount": 17
+}
