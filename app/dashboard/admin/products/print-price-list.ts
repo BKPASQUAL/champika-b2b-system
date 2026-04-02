@@ -161,6 +161,7 @@ export const printPriceListReport = async (products: Product[]) => {
         lineColor: [220, 220, 220],
         lineWidth: 0.2,
         minCellHeight: 12,
+        valign: "middle",
       },
 
       alternateRowStyles: {

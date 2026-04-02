@@ -177,7 +177,7 @@ export function ProductTable({
                 const isMultiPack = packQty > 1;
                 return (
                   <TableRow key={product.id} className={!product.isActive ? "opacity-60 bg-muted/20" : ""}>
-                    <TableCell className="w-14 px-3 py-2">
+                    <TableCell className="w-14 px-3 py-2 align-middle">
                       {product.images?.[0] ? (
                         <button onClick={() => setLightboxImage(product.images[0])} className="focus:outline-none">
                           <img
@@ -192,7 +192,7 @@ export function ProductTable({
                         </div>
                       )}
                     </TableCell>
-                    <TableCell className="font-medium align-top">
+                    <TableCell className="font-medium align-middle">
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-2">
                           {product.name}
