@@ -77,7 +77,9 @@ export const printPriceListReport = (products: Product[]) => {
   let currentY = 45;
 
   supplierNames.forEach((supplierName, sIndex) => {
-    const supplierProducts = grouped[supplierName];
+    const supplierProducts = grouped[supplierName].sort((a, b) =>
+      (a.sku || "").localeCompare(b.sku || "", undefined, { numeric: true, sensitivity: "base" })
+    );
 
     // Check if we need a new page for the supplier block
     if (currentY > pageHeight - 50) {
