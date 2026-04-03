@@ -8,6 +8,7 @@ export async function GET(request: NextRequest) {
     const userId = searchParams.get("userId");
     const supplier = searchParams.get("supplier"); // ✅ Get supplier filter
     const supplierLike = searchParams.get("supplierLike");
+    const includeOutOfStock = searchParams.get("includeOutOfStock") === "true";
 
     if (!userId) {
       return NextResponse.json({ error: "User ID required" }, { status: 400 });
@@ -51,8 +52,12 @@ export async function GET(request: NextRequest) {
         )
       `
       )
-      .in("location_id", locationIds)
-      .gt("quantity", 0); // Only show items that are actually in stock
+      .in("location_id", locationIds);
+
+    // Only filter by quantity > 0 in normal mode; allow 0-stock when override is active
+    if (!includeOutOfStock) {
+      query = query.gt("quantity", 0);
+    }
 
     // ✅ 3. Apply Supplier Filter if provided
     if (supplier) {

@@ -12,6 +12,7 @@ import {
   Check,
   ChevronsUpDown,
   User,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -85,6 +86,7 @@ export default function CreateOrderPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [outOfStockOverride, setOutOfStockOverride] = useState(false);
 
   // Data State
   const [products, setProducts] = useState<Product[]>([]);
@@ -129,6 +131,7 @@ export default function CreateOrderPage() {
       try {
         // 1. Load Current User from Local Storage
         let userId = "";
+        let userBusinessId: string | null = null;
 
         if (typeof window !== "undefined") {
           const storedUser = localStorage.getItem("currentUser");
@@ -146,6 +149,7 @@ export default function CreateOrderPage() {
             }
             setCurrentUser(parsedUser);
             userId = parsedUser.id;
+            userBusinessId = parsedUser.businessId || null;
           }
         }
 
@@ -156,8 +160,22 @@ export default function CreateOrderPage() {
           return;
         }
 
-        // 2. Fetch Products (Specific to Rep's Location)
-        const productsRes = await fetch(`/api/rep/stock?userId=${userId}`);
+        // 2. Check if out-of-stock override is active
+        let overrideEnabled = false;
+        try {
+          const overrideRes = await fetch("/api/settings/invoice-override");
+          const overrideData = await overrideRes.json();
+          overrideEnabled = overrideData.enabled ?? false;
+          setOutOfStockOverride(overrideEnabled);
+        } catch {
+          // If check fails, default to normal mode
+        }
+
+        // 3. Fetch Products (Specific to Rep's Location)
+        const stockUrl = overrideEnabled
+          ? `/api/rep/stock?userId=${userId}&includeOutOfStock=true`
+          : `/api/rep/stock?userId=${userId}`;
+        const productsRes = await fetch(stockUrl);
 
         if (!productsRes.ok) {
           throw new Error("Failed to load rep stock");
@@ -177,8 +195,11 @@ export default function CreateOrderPage() {
           }))
         );
 
-        // 3. Fetch Customers
-        const customersRes = await fetch("/api/customers");
+        // 4. Fetch Customers — filtered to the rep's own business
+        const customersUrl = userBusinessId
+          ? `/api/customers?businessId=${userBusinessId}`
+          : "/api/customers";
+        const customersRes = await fetch(customersUrl);
         const customersData = await customersRes.json();
         setCustomers(
           customersData.map((c: any) => ({
@@ -228,12 +249,14 @@ export default function CreateOrderPage() {
       return;
     }
 
-    const totalReqQty = currentItem.quantity + currentItem.freeQuantity;
-    if (totalReqQty > currentItem.stockAvailable) {
-      toast.error(
-        `Insufficient stock! Available: ${currentItem.stockAvailable}`
-      );
-      return;
+    if (!outOfStockOverride) {
+      const totalReqQty = currentItem.quantity + currentItem.freeQuantity;
+      if (totalReqQty > currentItem.stockAvailable) {
+        toast.error(
+          `Insufficient stock! Available: ${currentItem.stockAvailable}`
+        );
+        return;
+      }
     }
 
     const product = products.find((p) => p.id === currentItem.productId);
@@ -365,6 +388,17 @@ export default function CreateOrderPage() {
 
   return (
     <div className="space-y-4 mx-auto pb-10">
+      {outOfStockOverride && (
+        <div className="flex items-start gap-2 bg-orange-50 border border-orange-300 rounded-xl px-4 py-3 text-sm text-orange-800">
+          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-orange-500" />
+          <span>
+            <strong>Special Sales Period Active:</strong> Out-of-stock items
+            are visible and can be invoiced. Stock validation is temporarily
+            disabled.
+          </span>
+        </div>
+      )}
+
       <div className="flex items-center gap-4">
         <Button
           variant="ghost"
@@ -506,7 +540,9 @@ export default function CreateOrderPage() {
             <CardHeader>
               <CardTitle>Add Products</CardTitle>
               <CardDescription>
-                Select items from your assigned stock
+                {outOfStockOverride
+                  ? "All items available — including out-of-stock products"
+                  : "Select items from your assigned stock"}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -626,9 +662,10 @@ export default function CreateOrderPage() {
                 <div className="space-y-2">
                   <Label>Stock</Label>
                   <Input
-                    value={currentItem.stockAvailable || "-"}
+                    value={currentItem.stockAvailable || (currentItem.productId ? "0" : "-")}
                     disabled
                     className={
+                      !outOfStockOverride &&
                       currentItem.stockAvailable > 0 &&
                       currentItem.stockAvailable < 10
                         ? "text-destructive font-bold bg-muted h-10"

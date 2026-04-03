@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { CategorySettings } from "./_components/CategorySettings";
 import { BusinessSettings } from "./_components/BusinessSettings";
 import { LocationSettings } from "./_components/LocationSettings";
@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import {
   Settings,
   Shield,
@@ -26,6 +27,8 @@ import {
   Save,
   ChevronRight,
   Info,
+  ToggleRight,
+  AlertTriangle,
 } from "lucide-react";
 
 // ── Navigation items ──────────────────────────────────────────────────────────
@@ -99,6 +102,16 @@ const navItems = [
     bgColor: "bg-slate-50",
     borderColor: "border-slate-200",
     gradient: "from-slate-700 to-slate-600",
+  },
+  {
+    id: "operations",
+    label: "Operations",
+    icon: ToggleRight,
+    description: "Temporary overrides & controls",
+    color: "text-orange-600",
+    bgColor: "bg-orange-50",
+    borderColor: "border-orange-200",
+    gradient: "from-orange-600 to-red-500",
   },
 ] as const;
 
@@ -365,6 +378,121 @@ function SecuritySettings() {
   );
 }
 
+// ── Operations Section ────────────────────────────────────────────────────────
+function OperationsSettings() {
+  const [enabled, setEnabled] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/settings/invoice-override")
+      .then((r) => r.json())
+      .then((d) => setEnabled(d.enabled ?? false))
+      .catch(() => setEnabled(false))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleToggle = async (value: boolean) => {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/settings/invoice-override", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: value }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to save");
+      setEnabled(data.enabled);
+      toast.success(
+        data.enabled
+          ? "Out-of-stock invoicing enabled for reps"
+          : "Out-of-stock invoicing disabled — normal mode restored"
+      );
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save setting");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-8">
+      {/* Section Header */}
+      <div className="flex items-center gap-4">
+        <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-orange-600 to-red-500 flex items-center justify-center shadow-md shadow-orange-200">
+          <ToggleRight className="h-6 w-6 text-white" />
+        </div>
+        <div>
+          <h2 className="text-xl font-bold text-gray-900">Operational Overrides</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Temporary controls for special sales periods
+          </p>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Override Toggle Card */}
+      <div
+        className={cn(
+          "rounded-xl border-2 p-5 transition-colors",
+          enabled
+            ? "border-orange-300 bg-orange-50"
+            : "border-gray-100 bg-white"
+        )}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1 flex-1">
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold text-gray-800">
+                Allow Reps to Invoice Out-of-Stock Items
+              </p>
+              {enabled && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 text-xs font-semibold">
+                  <AlertTriangle className="h-3 w-3" />
+                  ACTIVE
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              When enabled, reps can create invoices for any product even if
+              stock is 0. All products (including out-of-stock) will appear in
+              the product list. Turn this off to restore normal stock
+              validation.
+            </p>
+          </div>
+          <Switch
+            checked={enabled}
+            onCheckedChange={handleToggle}
+            disabled={loading || saving}
+            className="shrink-0 mt-0.5 data-[state=checked]:bg-orange-500"
+          />
+        </div>
+
+        {enabled && (
+          <div className="mt-4 flex items-start gap-2 bg-orange-100 border border-orange-200 rounded-lg p-3 text-sm text-orange-800">
+            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+            <span>
+              <strong>Override is ON.</strong> Reps can currently invoice any
+              item regardless of stock levels. Remember to turn this off after
+              the sales period ends.
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-lg p-3 text-sm text-blue-700">
+        <Info className="h-4 w-4 mt-0.5 shrink-0" />
+        <span>
+          This setting takes effect immediately for all reps. When turned off,
+          normal stock validation is fully restored with no changes to existing
+          invoices.
+        </span>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState<SectionId>("general");
@@ -400,6 +528,7 @@ export default function SettingsPage() {
       case "commissions":   return <CommissionSettings />;
       case "notifications": return <NotificationsSettings />;
       case "security":      return <SecuritySettings />;
+      case "operations":    return <OperationsSettings />;
     }
   };
 
