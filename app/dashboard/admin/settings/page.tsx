@@ -380,20 +380,24 @@ function SecuritySettings() {
 
 // ── Operations Section ────────────────────────────────────────────────────────
 function OperationsSettings() {
-  const [enabled, setEnabled] = useState(false);
+  const [stockOverride, setStockOverride] = useState(false);
+  const [repCustomerCreate, setRepCustomerCreate] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [savingStock, setSavingStock] = useState(false);
+  const [savingCustomer, setSavingCustomer] = useState(false);
 
   useEffect(() => {
-    fetch("/api/settings/invoice-override")
-      .then((r) => r.json())
-      .then((d) => setEnabled(d.enabled ?? false))
-      .catch(() => setEnabled(false))
-      .finally(() => setLoading(false));
+    Promise.all([
+      fetch("/api/settings/invoice-override").then((r) => r.json()).catch(() => ({ enabled: false })),
+      fetch("/api/settings/rep-customer-creation").then((r) => r.json()).catch(() => ({ enabled: false })),
+    ]).then(([stock, cust]) => {
+      setStockOverride(stock.enabled ?? false);
+      setRepCustomerCreate(cust.enabled ?? false);
+    }).finally(() => setLoading(false));
   }, []);
 
-  const handleToggle = async (value: boolean) => {
-    setSaving(true);
+  const handleStockToggle = async (value: boolean) => {
+    setSavingStock(true);
     try {
       const res = await fetch("/api/settings/invoice-override", {
         method: "POST",
@@ -402,7 +406,7 @@ function OperationsSettings() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to save");
-      setEnabled(data.enabled);
+      setStockOverride(data.enabled);
       toast.success(
         data.enabled
           ? "Out-of-stock invoicing enabled for reps"
@@ -411,7 +415,30 @@ function OperationsSettings() {
     } catch (err: any) {
       toast.error(err.message || "Failed to save setting");
     } finally {
-      setSaving(false);
+      setSavingStock(false);
+    }
+  };
+
+  const handleCustomerToggle = async (value: boolean) => {
+    setSavingCustomer(true);
+    try {
+      const res = await fetch("/api/settings/rep-customer-creation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: value }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to save");
+      setRepCustomerCreate(data.enabled);
+      toast.success(
+        data.enabled
+          ? "Reps can now create customers for their business"
+          : "Rep customer creation disabled"
+      );
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save setting");
+    } finally {
+      setSavingCustomer(false);
     }
   };
 
@@ -425,68 +452,98 @@ function OperationsSettings() {
         <div>
           <h2 className="text-xl font-bold text-gray-900">Operational Overrides</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Temporary controls for special sales periods
+            Temporary controls and rep permissions
           </p>
         </div>
       </div>
 
       <Separator />
 
-      {/* Override Toggle Card */}
-      <div
-        className={cn(
-          "rounded-xl border-2 p-5 transition-colors",
-          enabled
-            ? "border-orange-300 bg-orange-50"
-            : "border-gray-100 bg-white"
-        )}
-      >
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-1 flex-1">
-            <div className="flex items-center gap-2">
-              <p className="text-sm font-semibold text-gray-800">
-                Allow Reps to Invoice Out-of-Stock Items
+      <div className="space-y-4">
+        {/* Stock Override Toggle */}
+        <div
+          className={cn(
+            "rounded-xl border-2 p-5 transition-colors",
+            stockOverride ? "border-orange-300 bg-orange-50" : "border-gray-100 bg-white"
+          )}
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1 flex-1">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-semibold text-gray-800">
+                  Allow Reps to Invoice Out-of-Stock Items
+                </p>
+                {stockOverride && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 text-xs font-semibold">
+                    <AlertTriangle className="h-3 w-3" />
+                    ACTIVE
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                When enabled, reps can create invoices for any product even if
+                stock is 0. All products (including out-of-stock) will appear in
+                the product list. Turn this off to restore normal stock validation.
               </p>
-              {enabled && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 text-xs font-semibold">
-                  <AlertTriangle className="h-3 w-3" />
-                  ACTIVE
-                </span>
-              )}
             </div>
-            <p className="text-xs text-muted-foreground">
-              When enabled, reps can create invoices for any product even if
-              stock is 0. All products (including out-of-stock) will appear in
-              the product list. Turn this off to restore normal stock
-              validation.
-            </p>
+            <Switch
+              checked={stockOverride}
+              onCheckedChange={handleStockToggle}
+              disabled={loading || savingStock}
+              className="shrink-0 mt-0.5 data-[state=checked]:bg-orange-500"
+            />
           </div>
-          <Switch
-            checked={enabled}
-            onCheckedChange={handleToggle}
-            disabled={loading || saving}
-            className="shrink-0 mt-0.5 data-[state=checked]:bg-orange-500"
-          />
+          {stockOverride && (
+            <div className="mt-4 flex items-start gap-2 bg-orange-100 border border-orange-200 rounded-lg p-3 text-sm text-orange-800">
+              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+              <span>
+                <strong>Override is ON.</strong> Reps can currently invoice any
+                item regardless of stock levels. Remember to turn this off after
+                the sales period ends.
+              </span>
+            </div>
+          )}
         </div>
 
-        {enabled && (
-          <div className="mt-4 flex items-start gap-2 bg-orange-100 border border-orange-200 rounded-lg p-3 text-sm text-orange-800">
-            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-            <span>
-              <strong>Override is ON.</strong> Reps can currently invoice any
-              item regardless of stock levels. Remember to turn this off after
-              the sales period ends.
-            </span>
+        {/* Rep Customer Creation Toggle */}
+        <div
+          className={cn(
+            "rounded-xl border-2 p-5 transition-colors",
+            repCustomerCreate ? "border-blue-300 bg-blue-50" : "border-gray-100 bg-white"
+          )}
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1 flex-1">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-semibold text-gray-800">
+                  Allow Reps to Create New Customers
+                </p>
+                {repCustomerCreate && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold">
+                    ACTIVE
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                When enabled, reps will see a &quot;New Customer&quot; option in the
+                order form. Customers are created under their own business only.
+              </p>
+            </div>
+            <Switch
+              checked={repCustomerCreate}
+              onCheckedChange={handleCustomerToggle}
+              disabled={loading || savingCustomer}
+              className="shrink-0 mt-0.5 data-[state=checked]:bg-blue-500"
+            />
           </div>
-        )}
+        </div>
       </div>
 
       <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-lg p-3 text-sm text-blue-700">
         <Info className="h-4 w-4 mt-0.5 shrink-0" />
         <span>
-          This setting takes effect immediately for all reps. When turned off,
-          normal stock validation is fully restored with no changes to existing
-          invoices.
+          All settings take effect immediately. Turning off a setting restores
+          the default behaviour with no changes to existing records.
         </span>
       </div>
     </div>

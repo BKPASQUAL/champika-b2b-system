@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -13,6 +13,8 @@ import {
   ChevronsUpDown,
   User,
   AlertTriangle,
+  UserPlus,
+  MapPin,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +47,21 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -87,14 +104,29 @@ export default function CreateOrderPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [outOfStockOverride, setOutOfStockOverride] = useState(false);
+  const [canCreateCustomer, setCanCreateCustomer] = useState(false);
+  const [userBusinessId, setUserBusinessId] = useState<string | null>(null);
+
+  // New Customer Dialog
+  const [newCustomerOpen, setNewCustomerOpen] = useState(false);
+  const [creatingCustomer, setCreatingCustomer] = useState(false);
+  const [routes, setRoutes] = useState<{ id: string; name: string }[]>([]);
+  const [newCustomer, setNewCustomer] = useState({
+    shopName: "",
+    ownerName: "",
+    phone: "",
+    email: "",
+    address: "",
+    route: "",
+    creditLimit: 0,
+    status: "Active",
+  });
 
   // Data State
   const [products, setProducts] = useState<Product[]>([]);
-  const [customers, setCustomers] = useState<{ id: string; name: string }[]>(
-    []
-  );
+  const [customers, setCustomers] = useState<{ id: string; name: string }[]>([]);
 
-  // User State (For actual login info)
+  // User State
   const [currentUser, setCurrentUser] = useState<UserData | null>(null);
 
   // Form State
@@ -105,24 +137,26 @@ export default function CreateOrderPage() {
 
   // Items State
   const [items, setItems] = useState<OrderItem[]>([]);
-  const [extraDiscount, setExtraDiscount] = useState<number>(0);
+  const [extraDiscount, setExtraDiscount] = useState<string>("");
 
   // Popover States
   const [customerOpen, setCustomerOpen] = useState(false);
   const [productOpen, setProductOpen] = useState(false);
 
-  // Current Item Being Added
+  // Current Item Being Added — string-based inputs like distribution
   const [currentItem, setCurrentItem] = useState({
     productId: "",
     sku: "",
-    quantity: 0,
-    freeQuantity: 0,
+    quantity: "",
+    freeQuantity: "",
     unit: "",
     mrp: 0,
     unitPrice: 0,
-    discountPercent: 0,
+    discountPercent: "",
     stockAvailable: 0,
   });
+
+  const qtyInputRef = useRef<HTMLInputElement>(null);
 
   // --- Fetch Data on Mount ---
   useEffect(() => {
@@ -131,56 +165,49 @@ export default function CreateOrderPage() {
       try {
         // 1. Load Current User from Local Storage
         let userId = "";
-        let userBusinessId: string | null = null;
+        let bizId: string | null = null;
 
         if (typeof window !== "undefined") {
           const storedUser = localStorage.getItem("currentUser");
           if (storedUser) {
             const parsedUser = JSON.parse(storedUser);
-            // Ensure we have the ID.
             if (!parsedUser.id) {
-              // Fallback: Try to fetch user by email if ID is missing
               const userRes = await fetch("/api/users");
               const users = await userRes.json();
-              const found = users.find(
-                (u: any) => u.email === parsedUser.email
-              );
+              const found = users.find((u: any) => u.email === parsedUser.email);
               if (found) parsedUser.id = found.id;
             }
             setCurrentUser(parsedUser);
             userId = parsedUser.id;
-            userBusinessId = parsedUser.businessId || null;
+            bizId = parsedUser.businessId || null;
+            setUserBusinessId(bizId);
           }
         }
 
         if (!userId) {
-          // If no user is logged in, we can't load their stock
           toast.error("User not identified. Please login.");
           setLoading(false);
           return;
         }
 
-        // 2. Check if out-of-stock override is active
-        let overrideEnabled = false;
-        try {
-          const overrideRes = await fetch("/api/settings/invoice-override");
-          const overrideData = await overrideRes.json();
-          overrideEnabled = overrideData.enabled ?? false;
-          setOutOfStockOverride(overrideEnabled);
-        } catch {
-          // If check fails, default to normal mode
-        }
+        // 2. Check settings in parallel
+        const [overrideData, customerCreateData, routesData] = await Promise.all([
+          fetch("/api/settings/invoice-override").then((r) => r.json()).catch(() => ({ enabled: false })),
+          fetch("/api/settings/rep-customer-creation").then((r) => r.json()).catch(() => ({ enabled: false })),
+          fetch("/api/settings/categories?type=route").then((r) => r.json()).catch(() => []),
+        ]);
+
+        const overrideEnabled = overrideData.enabled ?? false;
+        setOutOfStockOverride(overrideEnabled);
+        setCanCreateCustomer(customerCreateData.enabled ?? false);
+        setRoutes(routesData.filter((r: any) => r.name));
 
         // 3. Fetch Products (Specific to Rep's Location)
         const stockUrl = overrideEnabled
           ? `/api/rep/stock?userId=${userId}&includeOutOfStock=true`
           : `/api/rep/stock?userId=${userId}`;
         const productsRes = await fetch(stockUrl);
-
-        if (!productsRes.ok) {
-          throw new Error("Failed to load rep stock");
-        }
-
+        if (!productsRes.ok) throw new Error("Failed to load rep stock");
         const productsData = await productsRes.json();
 
         setProducts(
@@ -195,17 +222,14 @@ export default function CreateOrderPage() {
           }))
         );
 
-        // 4. Fetch Customers — filtered to the rep's own business
-        const customersUrl = userBusinessId
-          ? `/api/customers?businessId=${userBusinessId}`
+        // 4. Fetch Customers — filtered to rep's own business
+        const customersUrl = bizId
+          ? `/api/customers?businessId=${bizId}`
           : "/api/customers";
         const customersRes = await fetch(customersUrl);
         const customersData = await customersRes.json();
         setCustomers(
-          customersData.map((c: any) => ({
-            id: c.id,
-            name: c.shopName,
-          }))
+          customersData.map((c: any) => ({ id: c.id, name: c.shopName }))
         );
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -226,35 +250,46 @@ export default function CreateOrderPage() {
     setCurrentItem({
       productId: product.id,
       sku: product.sku,
-      quantity: 0,
-      freeQuantity: 0,
+      quantity: "",
+      freeQuantity: "",
       unit: product.unit_of_measure,
       mrp: product.mrp,
       unitPrice: product.selling_price,
-      discountPercent: 0,
+      discountPercent: "",
       stockAvailable: product.stock_quantity,
     });
+
     setProductOpen(false);
+    setTimeout(() => qtyInputRef.current?.focus(), 100);
+  };
+
+  // Enter key to add item quickly
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleAddItem();
+    }
   };
 
   // --- Add Item to Order ---
   const handleAddItem = () => {
+    const qty = parseFloat(currentItem.quantity);
+    const free = parseFloat(currentItem.freeQuantity) || 0;
+    const discPerc = parseFloat(currentItem.discountPercent) || 0;
+
     if (!currentItem.productId) {
       toast.error("Please select a product");
       return;
     }
-
-    if (currentItem.quantity <= 0) {
-      toast.error("Quantity must be at least 1");
+    if (!qty || qty <= 0) {
+      toast.error("Quantity must be greater than 0");
       return;
     }
 
     if (!outOfStockOverride) {
-      const totalReqQty = currentItem.quantity + currentItem.freeQuantity;
+      const totalReqQty = qty + free;
       if (totalReqQty > currentItem.stockAvailable) {
-        toast.error(
-          `Insufficient stock! Available: ${currentItem.stockAvailable}`
-        );
+        toast.error(`Insufficient stock! Available: ${currentItem.stockAvailable}`);
         return;
       }
     }
@@ -262,8 +297,8 @@ export default function CreateOrderPage() {
     const product = products.find((p) => p.id === currentItem.productId);
     if (!product) return;
 
-    const grossTotal = currentItem.unitPrice * currentItem.quantity;
-    const discountAmount = (grossTotal * currentItem.discountPercent) / 100;
+    const grossTotal = currentItem.unitPrice * qty;
+    const discountAmount = (grossTotal * discPerc) / 100;
     const netTotal = grossTotal - discountAmount;
 
     const newItem: OrderItem = {
@@ -272,27 +307,27 @@ export default function CreateOrderPage() {
       sku: product.sku,
       productName: product.name,
       unit: product.unit_of_measure,
-      quantity: currentItem.quantity,
-      freeQuantity: currentItem.freeQuantity,
+      quantity: qty,
+      freeQuantity: free,
       mrp: currentItem.mrp,
       unitPrice: currentItem.unitPrice,
-      discountPercent: currentItem.discountPercent,
+      discountPercent: discPerc,
       discountAmount: discountAmount,
       total: netTotal,
     };
 
     setItems([...items, newItem]);
 
-    // Reset Item Form
+    // Reset
     setCurrentItem({
       productId: "",
       sku: "",
-      quantity: 0,
-      freeQuantity: 0,
+      quantity: "",
+      freeQuantity: "",
       unit: "",
       mrp: 0,
       unitPrice: 0,
-      discountPercent: 0,
+      discountPercent: "",
       stockAvailable: 0,
     });
   };
@@ -301,21 +336,70 @@ export default function CreateOrderPage() {
     setItems(items.filter((item) => item.id !== id));
   };
 
-  // --- Totals Calculation ---
+  // --- Create New Customer ---
+  const handleCreateCustomer = async () => {
+    if (!newCustomer.phone.trim() || newCustomer.phone.trim().length < 9) {
+      toast.error("A valid phone number is required");
+      return;
+    }
+    if (!newCustomer.shopName.trim()) {
+      toast.error("Shop name is required");
+      return;
+    }
+    if (!userBusinessId) {
+      toast.error("Business ID not found — please re-login");
+      return;
+    }
+
+    setCreatingCustomer(true);
+    try {
+      const res = await fetch("/api/customers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shopName: newCustomer.shopName.trim(),
+          ownerName: newCustomer.ownerName.trim() || undefined,
+          phone: newCustomer.phone.trim(),
+          email: newCustomer.email.trim() || undefined,
+          address: newCustomer.address.trim() || undefined,
+          route: newCustomer.route || "General",
+          creditLimit: newCustomer.creditLimit || 0,
+          businessId: userBusinessId,
+          status: newCustomer.status,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to create customer");
+
+      const created = { id: data.data.id, name: newCustomer.shopName.trim() };
+      setCustomers((prev) => [created, ...prev]);
+      setCustomerId(created.id);
+      setNewCustomerOpen(false);
+      setNewCustomer({ shopName: "", ownerName: "", phone: "", email: "", address: "", route: "", creditLimit: 0, status: "Active" });
+      toast.success(`Customer "${created.name}" created and selected`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to create customer");
+    } finally {
+      setCreatingCustomer(false);
+    }
+  };
+
+  // --- Totals ---
   const subtotal = items.reduce((sum, item) => sum + item.total, 0);
-  const totalItemDiscount = items.reduce(
-    (sum, item) => sum + item.discountAmount,
-    0
-  );
-  const grossTotal = items.reduce(
-    (sum, item) => sum + item.unitPrice * item.quantity,
-    0
-  );
+  const totalItemDiscount = items.reduce((sum, item) => sum + item.discountAmount, 0);
+  const grossTotal = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
 
-  const extraDiscountAmount = (subtotal * extraDiscount) / 100;
-  const grandTotal = subtotal - extraDiscountAmount;
+  const extraDiscPercVal = parseFloat(extraDiscount) || 0;
+  const extraDiscountAmount = (subtotal * extraDiscPercVal) / 100;
+  const grandTotal = Math.max(0, subtotal - extraDiscountAmount);
 
-  // --- Save Order Logic (INTEGRATED) ---
+  // Current item live totals
+  const qtyNum = parseFloat(currentItem.quantity) || 0;
+  const discPercNum = parseFloat(currentItem.discountPercent) || 0;
+  const currentDiscountAmt = (currentItem.unitPrice * qtyNum * discPercNum) / 100;
+  const currentTotal = currentItem.unitPrice * qtyNum - currentDiscountAmt;
+
+  // --- Save Order ---
   const handleSaveOrder = async () => {
     if (!customerId) {
       toast.error("Please select a customer.");
@@ -336,10 +420,10 @@ export default function CreateOrderPage() {
       customerId,
       salesRepId: currentUser.id,
       invoiceDate: orderDate,
-      orderStatus: "Pending", // Always Pending for Reps
+      orderStatus: "Pending",
       items,
       subTotal: subtotal,
-      extraDiscountPercent: extraDiscount,
+      extraDiscountPercent: extraDiscPercVal,
       extraDiscountAmount: extraDiscountAmount,
       grandTotal: grandTotal,
       notes: "Created via Rep Portal",
@@ -353,10 +437,7 @@ export default function CreateOrderPage() {
       });
 
       const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to place order");
-      }
+      if (!res.ok) throw new Error(data.error || "Failed to place order");
 
       toast.success("Order Placed Successfully!");
       router.push("/dashboard/rep");
@@ -371,12 +452,6 @@ export default function CreateOrderPage() {
     (p) => !items.some((i) => i.productId === p.id)
   );
 
-  const currentDiscountAmt =
-    (currentItem.unitPrice *
-      currentItem.quantity *
-      currentItem.discountPercent) /
-    100;
-
   if (loading) {
     return (
       <div className="flex justify-center items-center h-full min-h-64">
@@ -387,14 +462,14 @@ export default function CreateOrderPage() {
   }
 
   return (
-    <div className="space-y-4 mx-auto pb-10">
+    <div className="space-y-4 mx-auto pb-20">
+      {/* Out-of-stock override banner */}
       {outOfStockOverride && (
         <div className="flex items-start gap-2 bg-orange-50 border border-orange-300 rounded-xl px-4 py-3 text-sm text-orange-800">
           <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-orange-500" />
           <span>
-            <strong>Special Sales Period Active:</strong> Out-of-stock items
-            are visible and can be invoiced. Stock validation is temporarily
-            disabled.
+            <strong>Special Sales Period Active:</strong> Out-of-stock items are
+            visible and can be invoiced. Stock validation is temporarily disabled.
           </span>
         </div>
       )}
@@ -430,30 +505,41 @@ export default function CreateOrderPage() {
       <div className="grid gap-6 lg:grid-cols-3">
         {/* LEFT COLUMN */}
         <div className="lg:col-span-2 space-y-6">
+
           {/* 1. Order Details */}
           <Card>
             <CardHeader>
               <CardTitle>Customer Details</CardTitle>
-              <CardDescription>
-                Select the customer for this order
-              </CardDescription>
+              <CardDescription>Select the customer for this order</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 {/* Customer Select */}
                 <div className="space-y-2">
-                  <Label>Select Customer</Label>
+                  <div className="flex items-center justify-between">
+                    <Label>Customer</Label>
+                    {canCreateCustomer && (
+                      <button
+                        type="button"
+                        onClick={() => setNewCustomerOpen(true)}
+                        className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                      >
+                        <UserPlus className="h-3.5 w-3.5" />
+                        New Customer
+                      </button>
+                    )}
+                  </div>
                   <Popover open={customerOpen} onOpenChange={setCustomerOpen}>
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
                         role="combobox"
                         aria-expanded={customerOpen}
-                        className="w-full justify-between h-11"
+                        className="w-full justify-between"
                       >
                         {customerId
                           ? customers.find((c) => c.id === customerId)?.name
-                          : "Search Customer..."}
+                          : "Select Customer"}
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
                     </PopoverTrigger>
@@ -461,7 +547,7 @@ export default function CreateOrderPage() {
                       className="w-[var(--radix-popover-trigger-width)] p-0"
                       align="start"
                     >
-                      <Command className="bg-blue-50">
+                      <Command>
                         <CommandInput placeholder="Search customer..." />
                         <CommandList>
                           <CommandEmpty>No customer found.</CommandEmpty>
@@ -474,7 +560,6 @@ export default function CreateOrderPage() {
                                   setCustomerId(customer.id);
                                   setCustomerOpen(false);
                                 }}
-                                className="data-[selected=true]:bg-blue-50 data-[selected=true]:text-blue-900"
                               >
                                 <Check
                                   className={cn(
@@ -501,20 +586,16 @@ export default function CreateOrderPage() {
                     type="date"
                     value={orderDate}
                     onChange={(e) => setOrderDate(e.target.value)}
-                    className="h-11"
                   />
                 </div>
               </div>
 
-              {/* Dynamic User Info Row */}
-              <div className="grid grid-cols-2 gap-4 pt-2">
+              {/* Rep info row */}
+              <div className="grid grid-cols-2 gap-4 pt-1">
                 <div className="flex items-center gap-3 p-3 rounded-md border bg-muted/20">
                   <User className="h-5 w-5 text-muted-foreground" />
                   <div className="flex flex-col">
-                    <span className="text-xs text-muted-foreground uppercase">
-                      Sales Rep
-                    </span>
-                    {/* Display Real User Name */}
+                    <span className="text-xs text-muted-foreground uppercase">Sales Rep</span>
                     <span className="font-medium text-sm">
                       {currentUser ? currentUser.name : "Loading..."}
                     </span>
@@ -523,112 +604,97 @@ export default function CreateOrderPage() {
                 <div className="flex items-center gap-3 p-3 rounded-md border bg-muted/20">
                   <Package className="h-5 w-5 text-muted-foreground" />
                   <div className="flex flex-col">
-                    <span className="text-xs text-muted-foreground uppercase">
-                      Order Status
-                    </span>
-                    <span className="font-medium text-sm text-yellow-600">
-                      Pending Approval
-                    </span>
+                    <span className="text-xs text-muted-foreground uppercase">Order Status</span>
+                    <span className="font-medium text-sm text-yellow-600">Pending Approval</span>
                   </div>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* 2. Add Items */}
+          {/* 2. Add Products */}
           <Card>
             <CardHeader>
               <CardTitle>Add Products</CardTitle>
               <CardDescription>
                 {outOfStockOverride
                   ? "All items available — including out-of-stock products"
-                  : "Select items from your assigned stock"}
+                  : "Search and add products to the order"}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Product Selection */}
-              <div className="space-y-2">
-                <Label>Product</Label>
-                <Popover open={productOpen} onOpenChange={setProductOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={productOpen}
-                      className="w-full justify-between h-11"
+              {/* Product Search — full width */}
+              <div className="grid grid-cols-4 gap-4">
+                <div className="col-span-4 space-y-2">
+                  <Label>Product</Label>
+                  <Popover open={productOpen} onOpenChange={setProductOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={productOpen}
+                        className="w-full justify-between"
+                      >
+                        {currentItem.productId
+                          ? products.find((p) => p.id === currentItem.productId)?.name
+                          : "Select Product"}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      className="w-[var(--radix-popover-trigger-width)] p-0"
+                      align="start"
                     >
-                      {currentItem.productId
-                        ? products.find((p) => p.id === currentItem.productId)
-                            ?.name
-                        : "Select Product"}
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent
-                    className="w-[var(--radix-popover-trigger-width)] p-0"
-                    align="start"
-                  >
-                    <Command className="bg-blue-50">
-                      <CommandInput placeholder="Search product by name or SKU..." />
-                      <CommandList>
-                        <CommandEmpty>
-                          No product found in your stock.
-                        </CommandEmpty>
-                        <CommandGroup>
-                          {availableProducts.map((product) => (
-                            <CommandItem
-                              key={product.id}
-                              value={product.name}
-                              onSelect={() => {
-                                handleProductSelect(product.id);
-                              }}
-                              className="data-[selected=true]:bg-blue-50 data-[selected=true]:text-blue-900"
-                            >
-                              <Check
-                                className={cn(
-                                  "mr-2 h-4 w-4",
-                                  currentItem.productId === product.id
-                                    ? "opacity-100"
-                                    : "opacity-0"
-                                )}
-                              />
-                              <div className="flex-1">
-                                <div className="font-medium">
-                                  {product.name}
+                      <Command>
+                        <CommandInput placeholder="Search product by name or SKU..." />
+                        <CommandList>
+                          <CommandEmpty>No product found in your stock.</CommandEmpty>
+                          <CommandGroup>
+                            {availableProducts.map((product) => (
+                              <CommandItem
+                                key={product.id}
+                                value={product.name}
+                                onSelect={() => handleProductSelect(product.id)}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    currentItem.productId === product.id
+                                      ? "opacity-100"
+                                      : "opacity-0"
+                                  )}
+                                />
+                                <div className="flex-1">
+                                  <div className="font-medium">{product.name}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {product.sku} • Stock: {product.stock_quantity} • LKR{" "}
+                                    {product.selling_price}
+                                  </div>
                                 </div>
-                                <div className="text-xs text-muted-foreground">
-                                  {product.sku} • Stock:{" "}
-                                  {product.stock_quantity} • LKR{" "}
-                                  {product.selling_price}
-                                </div>
-                              </div>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </div>
 
-              {/* Quantity & Pricing Inputs */}
+              {/* Quantity row */}
               <div className="grid grid-cols-4 gap-4">
                 <div className="space-y-2">
                   <Label>Quantity</Label>
                   <Input
+                    ref={qtyInputRef}
                     type="number"
                     min="1"
-                    className="h-10"
-                    placeholder="0"
-                    value={
-                      currentItem.quantity === 0 ? "" : currentItem.quantity
-                    }
+                    placeholder="Qty"
+                    value={currentItem.quantity}
                     onChange={(e) =>
-                      setCurrentItem({
-                        ...currentItem,
-                        quantity: Number(e.target.value),
-                      })
+                      setCurrentItem({ ...currentItem, quantity: e.target.value })
                     }
+                    onKeyDown={handleKeyDown}
                   />
                 </div>
                 <div className="space-y-2">
@@ -636,19 +702,12 @@ export default function CreateOrderPage() {
                   <Input
                     type="number"
                     min="0"
-                    className="h-10"
                     placeholder="0"
-                    value={
-                      currentItem.freeQuantity === 0
-                        ? ""
-                        : currentItem.freeQuantity
-                    }
+                    value={currentItem.freeQuantity}
                     onChange={(e) =>
-                      setCurrentItem({
-                        ...currentItem,
-                        freeQuantity: Number(e.target.value),
-                      })
+                      setCurrentItem({ ...currentItem, freeQuantity: e.target.value })
                     }
+                    onKeyDown={handleKeyDown}
                   />
                 </div>
                 <div className="space-y-2">
@@ -656,43 +715,53 @@ export default function CreateOrderPage() {
                   <Input
                     value={currentItem.unit || "-"}
                     disabled
-                    className="bg-muted h-10"
+                    className="bg-muted"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label>Stock</Label>
                   <Input
-                    value={currentItem.stockAvailable || (currentItem.productId ? "0" : "-")}
+                    value={
+                      currentItem.productId
+                        ? currentItem.stockAvailable
+                        : "-"
+                    }
                     disabled
                     className={
                       !outOfStockOverride &&
                       currentItem.stockAvailable > 0 &&
                       currentItem.stockAvailable < 10
-                        ? "text-destructive font-bold bg-muted h-10"
-                        : "bg-muted h-10"
+                        ? "text-destructive font-bold bg-muted"
+                        : "bg-muted"
                     }
                   />
                 </div>
               </div>
 
+              {/* Price row */}
               <div className="grid grid-cols-4 gap-4">
+                <div className="space-y-2">
+                  <Label>MRP</Label>
+                  <Input
+                    type="number"
+                    value={currentItem.mrp || ""}
+                    onChange={(e) =>
+                      setCurrentItem({ ...currentItem, mrp: Number(e.target.value) })
+                    }
+                    onKeyDown={handleKeyDown}
+                    placeholder="0.00"
+                  />
+                </div>
                 <div className="space-y-2">
                   <Label>Unit Price</Label>
                   <Input
                     type="number"
-                    min="0"
-                    step="0.01"
-                    value={
-                      currentItem.unitPrice === 0 ? "" : currentItem.unitPrice
-                    }
+                    value={currentItem.unitPrice || ""}
                     onChange={(e) =>
-                      setCurrentItem({
-                        ...currentItem,
-                        unitPrice: Number(e.target.value),
-                      })
+                      setCurrentItem({ ...currentItem, unitPrice: Number(e.target.value) })
                     }
+                    onKeyDown={handleKeyDown}
                     placeholder="0.00"
-                    className="h-10"
                   />
                 </div>
                 <div className="space-y-2">
@@ -701,41 +770,30 @@ export default function CreateOrderPage() {
                     type="number"
                     min="0"
                     max="100"
-                    step="0.01"
-                    value={
-                      currentItem.discountPercent === 0
-                        ? ""
-                        : currentItem.discountPercent
-                    }
-                    onChange={(e) =>
-                      setCurrentItem({
-                        ...currentItem,
-                        discountPercent: Number(e.target.value),
-                      })
-                    }
                     placeholder="0"
-                    className="h-10"
+                    value={currentItem.discountPercent}
+                    onChange={(e) =>
+                      setCurrentItem({ ...currentItem, discountPercent: e.target.value })
+                    }
+                    onKeyDown={handleKeyDown}
                   />
                 </div>
-                <div className="space-y-2 col-span-2">
-                  <Label>Line Total</Label>
+                <div className="space-y-2">
+                  <Label>Total</Label>
                   <Input
-                    value={(
-                      currentItem.unitPrice * currentItem.quantity -
-                      currentDiscountAmt
-                    ).toFixed(2)}
+                    value={currentTotal.toFixed(2)}
                     disabled
-                    className="font-bold bg-muted h-10 text-right"
+                    className="font-bold bg-muted"
                   />
                 </div>
               </div>
 
               <Button
                 onClick={handleAddItem}
-                className="w-full h-11 text-base bg-black hover:bg-gray-800 text-white"
+                className="w-full bg-blue-600 hover:bg-blue-700"
                 disabled={!currentItem.productId}
               >
-                <Plus className="w-5 h-5 mr-2" />
+                <Plus className="w-4 h-4 mr-2" />
                 Add to Order
               </Button>
             </CardContent>
@@ -752,11 +810,12 @@ export default function CreateOrderPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-12">#</TableHead>
                       <TableHead>Product</TableHead>
                       <TableHead className="text-center w-20">Qty</TableHead>
                       <TableHead className="text-center w-20">Free</TableHead>
-                      <TableHead className="text-right w-24">Price</TableHead>
-                      <TableHead className="text-center w-16">Disc%</TableHead>
+                      <TableHead className="text-right w-24">Unit Price</TableHead>
+                      <TableHead className="text-center w-20">Disc%</TableHead>
                       <TableHead className="text-right w-28">Total</TableHead>
                       <TableHead className="w-12"></TableHead>
                     </TableRow>
@@ -765,7 +824,7 @@ export default function CreateOrderPage() {
                     {items.length === 0 ? (
                       <TableRow>
                         <TableCell
-                          colSpan={7}
+                          colSpan={8}
                           className="text-center text-muted-foreground py-8"
                         >
                           <Package className="w-8 h-8 mx-auto mb-2 opacity-50" />
@@ -775,16 +834,13 @@ export default function CreateOrderPage() {
                     ) : (
                       items.map((item, idx) => (
                         <TableRow key={item.id}>
+                          <TableCell>{idx + 1}</TableCell>
                           <TableCell>
-                            <div className="font-medium">
-                              {item.productName}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {item.sku}
-                            </div>
+                            <div className="font-medium">{item.productName}</div>
+                            <div className="text-xs text-muted-foreground">{item.sku}</div>
                           </TableCell>
                           <TableCell className="text-center">
-                            {item.quantity}
+                            {item.quantity} {item.unit}
                           </TableCell>
                           <TableCell className="text-center">
                             {item.freeQuantity || "-"}
@@ -803,7 +859,7 @@ export default function CreateOrderPage() {
                           <TableCell>
                             <Button
                               variant="ghost"
-                              size="icon-sm"
+                              size="icon"
                               onClick={() => handleRemoveItem(item.id)}
                             >
                               <Trash2 className="w-4 h-4 text-destructive" />
@@ -819,11 +875,11 @@ export default function CreateOrderPage() {
           </Card>
         </div>
 
-        {/* RIGHT COLUMN */}
+        {/* RIGHT COLUMN — Summary */}
         <div className="lg:col-span-1">
           <Card className="sticky top-6">
             <CardHeader>
-              <CardTitle>Summary</CardTitle>
+              <CardTitle>Order Summary</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2 text-sm">
@@ -849,7 +905,7 @@ export default function CreateOrderPage() {
                   <span>LKR {grossTotal.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Discounts:</span>
+                  <span className="text-muted-foreground">Item Discounts:</span>
                   <span className="text-destructive">
                     - LKR {totalItemDiscount.toLocaleString()}
                   </span>
@@ -862,16 +918,14 @@ export default function CreateOrderPage() {
 
               <div className="border-t pt-4 space-y-3">
                 <div className="space-y-2">
-                  <Label className="text-xs ">Extra Discount %</Label>
+                  <Label className="text-xs">Extra Discount %</Label>
                   <Input
                     type="number"
                     min="0"
                     max="100"
-                    step="0.01"
-                    value={extraDiscount === 0 ? "" : extraDiscount}
-                    onChange={(e) => setExtraDiscount(Number(e.target.value))}
-                    className="h-9 text-end"
-                    placeholder="0"
+                    placeholder="0%"
+                    value={extraDiscount}
+                    onChange={(e) => setExtraDiscount(e.target.value)}
                   />
                 </div>
                 <div className="flex justify-between text-sm">
@@ -890,10 +944,160 @@ export default function CreateOrderPage() {
                   </span>
                 </div>
               </div>
+
+              <Button
+                onClick={handleSaveOrder}
+                disabled={items.length === 0 || submitting}
+                className="w-full bg-black hover:bg-gray-800 text-white mt-2"
+              >
+                {submitting ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4 mr-2" />
+                )}
+                Place Order
+              </Button>
             </CardContent>
           </Card>
         </div>
       </div>
+
+      {/* New Customer Dialog */}
+      <Dialog open={newCustomerOpen} onOpenChange={setNewCustomerOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Add New Customer</DialogTitle>
+            <DialogDescription>
+              Enter new customer information below.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-2 gap-4 py-4">
+            {/* Shop Name — full width */}
+            <div className="col-span-2 space-y-2">
+              <Label>Shop Name *</Label>
+              <Input
+                value={newCustomer.shopName}
+                onChange={(e) => setNewCustomer({ ...newCustomer, shopName: e.target.value })}
+                placeholder="e.g. Singer Plus - Galle"
+              />
+            </div>
+
+            {/* Owner / Phone — side by side */}
+            <div className="space-y-2">
+              <Label>Owner / Contact Person</Label>
+              <Input
+                value={newCustomer.ownerName}
+                onChange={(e) => setNewCustomer({ ...newCustomer, ownerName: e.target.value })}
+                placeholder="e.g. Mr. Perera"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Phone Number *</Label>
+              <Input
+                value={newCustomer.phone}
+                onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })}
+                placeholder="077xxxxxxx"
+              />
+            </div>
+
+            {/* Email — full width */}
+            <div className="col-span-2 space-y-2">
+              <Label>Email (Optional)</Label>
+              <Input
+                value={newCustomer.email}
+                onChange={(e) => setNewCustomer({ ...newCustomer, email: e.target.value })}
+                placeholder="email@example.com"
+              />
+            </div>
+
+            {/* Address — full width */}
+            <div className="col-span-2 space-y-2">
+              <Label>Address</Label>
+              <Input
+                value={newCustomer.address}
+                onChange={(e) => setNewCustomer({ ...newCustomer, address: e.target.value })}
+                placeholder="Full Street address"
+              />
+            </div>
+
+            {/* Route / Credit Limit — side by side */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1">
+                <MapPin className="w-3 h-3" /> Route / Area *
+              </Label>
+              <Select
+                value={newCustomer.route}
+                onValueChange={(v) => setNewCustomer({ ...newCustomer, route: v })}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select Route" />
+                </SelectTrigger>
+                <SelectContent>
+                  {routes.length === 0 && (
+                    <SelectItem value="General">General (Default)</SelectItem>
+                  )}
+                  {routes.map((r) => (
+                    <SelectItem key={r.id} value={r.name}>
+                      {r.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Credit Limit (LKR)</Label>
+              <Input
+                type="number"
+                min="0"
+                value={newCustomer.creditLimit}
+                onChange={(e) =>
+                  setNewCustomer({
+                    ...newCustomer,
+                    creditLimit: parseFloat(e.target.value) || 0,
+                  })
+                }
+              />
+            </div>
+
+            {/* Status */}
+            <div className="space-y-2">
+              <Label>Status</Label>
+              <Select
+                value={newCustomer.status}
+                onValueChange={(v) => setNewCustomer({ ...newCustomer, status: v })}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Active">Active</SelectItem>
+                  <SelectItem value="Inactive">Inactive</SelectItem>
+                  <SelectItem value="Blocked">Blocked</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setNewCustomerOpen(false)}
+              disabled={creatingCustomer}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateCustomer}
+              disabled={creatingCustomer}
+              className="bg-black hover:bg-gray-800 text-white"
+            >
+              {creatingCustomer && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Add Customer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

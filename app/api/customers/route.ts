@@ -4,12 +4,12 @@ import { z } from "zod";
 
 // Validation Schema
 const customerSchema = z.object({
-  shopName: z.string().min(2, "Shop name is required"),
+  shopName: z.string().min(1, "Shop name is required"),
   ownerName: z.string().optional(),
-  phone: z.string().min(9, "Valid phone number is required"),
+  phone: z.string().min(9, "A valid phone number is required"),
   email: z.string().email().optional().or(z.literal("")),
   address: z.string().optional(),
-  route: z.string().min(1, "Route is required"),
+  route: z.string().optional().default("General"),
   status: z.enum(["Active", "Inactive", "Blocked"]).default("Active"),
   creditLimit: z.number().min(0).default(0),
   businessId: z.string().min(1, "Business is required"),
@@ -82,6 +82,21 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const val = customerSchema.parse(body);
+
+    // Duplicate phone check within the same business
+    const { data: existing } = await supabaseAdmin
+      .from("customers")
+      .select("id")
+      .eq("phone", val.phone)
+      .eq("business_id", val.businessId)
+      .maybeSingle();
+
+    if (existing) {
+      return NextResponse.json(
+        { error: "A customer with this phone number already exists in this business." },
+        { status: 409 }
+      );
+    }
 
     const { data, error } = await supabaseAdmin
       .from("customers")
