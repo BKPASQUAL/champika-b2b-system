@@ -61,6 +61,21 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const businessId = searchParams.get("businessId");
 
+    // Step 1: if filtering by business, get the customer IDs for that business first
+    let customerIds: string[] | null = null;
+    if (businessId) {
+      const { data: customers, error: custError } = await supabaseAdmin
+        .from("customers")
+        .select("id")
+        .eq("business_id", businessId);
+      if (custError) throw custError;
+      customerIds = (customers ?? []).map((c: any) => c.id);
+      // If no customers found for this business, return empty
+      if (customerIds.length === 0) {
+        return NextResponse.json([]);
+      }
+    }
+
     let query = supabaseAdmin
       .from("invoices")
       .select(
@@ -68,12 +83,13 @@ export async function GET(request: NextRequest) {
         *,
         customers (
           shop_name,
-          owner_name
+          owner_name,
+          business_id
         ),
         orders!inner (
           status,
           order_date,
-          business_id, 
+          business_id,
           profiles!orders_sales_rep_id_fkey (
             full_name
           ),
@@ -88,9 +104,9 @@ export async function GET(request: NextRequest) {
       )
       .order("created_at", { ascending: false });
 
-    // Apply Business Filter if provided
-    if (businessId) {
-      query = query.eq("orders.business_id", businessId);
+    // Step 2: filter invoices to only those belonging to this business's customers
+    if (customerIds !== null) {
+      query = query.in("customer_id", customerIds);
     }
 
     const { data, error } = await query;
@@ -101,7 +117,7 @@ export async function GET(request: NextRequest) {
     const invoices = data.map((inv: any) => {
       const repName = inv.orders?.profiles?.full_name || "Unknown";
       const orderStatus = inv.orders?.status || "Pending";
-      const bId = inv.orders?.business_id;
+      const bId = inv.orders?.business_id ?? inv.customers?.business_id ?? null;
 
       // --- 💰 PROFIT CALCULATION ---
       let totalProfit = 0;
