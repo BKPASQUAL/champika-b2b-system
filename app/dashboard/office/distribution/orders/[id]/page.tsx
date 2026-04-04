@@ -15,6 +15,7 @@ import {
   Save,
   X,
   Trash2,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -74,6 +75,8 @@ export default function ViewOrderPage({
   const [items, setItems] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [unpaidInvoices, setUnpaidInvoices] = useState<any[]>([]);
+  const [invoicesLoaded, setInvoicesLoaded] = useState(false);
 
   // Edit Mode State
   const [isEditing, setIsEditing] = useState(false);
@@ -93,6 +96,20 @@ export default function ViewOrderPage({
 
       const data = await res.json();
       setOrder(data);
+
+      // Fetch unpaid invoices for this customer
+      if (data.customerId) {
+        const invRes = await fetch(
+          `/api/customers/${data.customerId}/invoices?unpaid=true`
+        );
+        if (invRes.ok) {
+          const invData = await invRes.json();
+          setUnpaidInvoices(
+            invData.filter((inv: any) => inv.invoiceNo !== data.invoiceNo)
+          );
+        }
+      }
+      setInvoicesLoaded(true);
 
       const mappedItems = data.items.map((item: any) => {
         const grossAmount = item.price * item.qty;
@@ -622,7 +639,7 @@ export default function ViewOrderPage({
           </Card>
         </div>
 
-        <div className="lg:col-span-1">
+        <div className="lg:col-span-1 space-y-6">
           <Card className="sticky top-6">
             <CardHeader className="pb-4">
               <CardTitle className="text-lg">Order Summary</CardTitle>
@@ -693,6 +710,87 @@ export default function ViewOrderPage({
               )}
             </CardContent>
           </Card>
+
+          {invoicesLoaded && (
+            <Card className={unpaidInvoices.length > 0 ? "border-orange-200 bg-orange-50/50" : "border-green-200 bg-green-50/50"}>
+              <CardHeader className="pb-3">
+                <CardTitle className={`text-base flex items-center gap-2 ${unpaidInvoices.length > 0 ? "text-orange-700" : "text-green-700"}`}>
+                  <AlertTriangle className="w-4 h-4" />
+                  Outstanding Invoices
+                </CardTitle>
+                {unpaidInvoices.length > 0 && (
+                  <CardDescription className="text-xs text-orange-600">
+                    {unpaidInvoices.length} unpaid invoice
+                    {unpaidInvoices.length > 1 ? "s" : ""} for this customer
+                  </CardDescription>
+                )}
+              </CardHeader>
+              <CardContent className="space-y-2 pt-0">
+                {unpaidInvoices.length === 0 ? (
+                  <p className="text-xs text-green-700 text-center py-2">
+                    No unpaid invoices for this customer
+                  </p>
+                ) : (
+                  <>
+                    {unpaidInvoices.map((inv) => (
+                      <div
+                        key={inv.id}
+                        className="p-2.5 rounded-md border border-orange-200 bg-white text-sm space-y-1"
+                      >
+                        <div className="flex justify-between items-center">
+                          <span className="font-mono font-semibold text-orange-800 text-xs">
+                            {inv.invoiceNo}
+                          </span>
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] h-4 border-orange-300 text-orange-700"
+                          >
+                            {inv.status}
+                          </Badge>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-muted-foreground">Invoice Date</span>
+                          <span className="font-medium">
+                            {new Date(inv.date).toLocaleDateString()}{" "}
+                            <span className="text-muted-foreground">
+                              ({Math.floor((Date.now() - new Date(inv.date).getTime()) / 86400000)} days ago)
+                            </span>
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-muted-foreground">Due Amount</span>
+                          <span className="font-semibold text-red-600">
+                            LKR{" "}
+                            {(inv.dueAmount ?? inv.amount).toLocaleString()}
+                          </span>
+                        </div>
+                        {inv.dueDate && (
+                          <div className="flex justify-between text-xs">
+                            <span className="text-muted-foreground">Due Date</span>
+                            <span className="font-medium text-orange-700">
+                              {new Date(inv.dueDate).toLocaleDateString()}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    <div className="flex justify-between text-xs font-semibold pt-1 border-t border-orange-200">
+                      <span className="text-orange-700">Total Outstanding</span>
+                      <span className="text-red-600">
+                        LKR{" "}
+                        {unpaidInvoices
+                          .reduce(
+                            (sum, inv) => sum + (inv.dueAmount ?? inv.amount),
+                            0
+                          )
+                          .toLocaleString()}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
 

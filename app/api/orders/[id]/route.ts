@@ -67,6 +67,7 @@ export async function GET(
       status: order.status,
       paymentStatus: order.invoices?.[0]?.status || "Unpaid",
       salesRep: order.profiles?.full_name || "Unknown",
+      customerId: order.customer_id,
 
       // Customer Details
       customer: {
