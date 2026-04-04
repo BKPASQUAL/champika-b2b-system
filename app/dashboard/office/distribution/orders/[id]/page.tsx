@@ -55,6 +55,7 @@ interface OrderItem {
   name: string;
   unit: string;
   price: number;
+  sellingPrice: number;
   qty: number;
   free: number;
   discountPercent: number;
@@ -120,6 +121,7 @@ export default function ViewOrderPage({
 
         return {
           ...item,
+          sellingPrice: item.sellingPrice ?? item.price,
           discountPercent: parseFloat(discountPercent.toFixed(2)),
           discountAmount: discountAmount,
         };
@@ -507,13 +509,27 @@ export default function ViewOrderPage({
                         </TableCell>
                       </TableRow>
                     ) : (
-                      items.map((item) => (
-                        <TableRow key={item.id}>
+                      items.map((item) => {
+                        const priceChanged = item.price !== item.sellingPrice;
+                        const hasDiscount = item.discountPercent > 0;
+                        const isModified = priceChanged || hasDiscount;
+                        return (
+                        <TableRow
+                          key={item.id}
+                          className={isModified && !isEditing ? "bg-red-50 hover:bg-red-100" : ""}
+                        >
                           <TableCell className="font-mono text-xs text-muted-foreground">
                             {item.sku}
                           </TableCell>
                           <TableCell className="font-medium text-sm">
-                            {item.name}
+                            <div className="flex items-center gap-2">
+                              {item.name}
+                              {isModified && !isEditing && (
+                                <span className="text-[10px] bg-red-100 text-red-600 border border-red-200 rounded px-1 py-0.5 font-semibold whitespace-nowrap">
+                                  Modified
+                                </span>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="text-right text-xs text-muted-foreground">
                             {item.unit}
@@ -532,6 +548,15 @@ export default function ViewOrderPage({
                                   )
                                 }
                               />
+                            ) : priceChanged ? (
+                              <div>
+                                <div className="font-semibold text-red-600 text-sm">
+                                  {item.price.toLocaleString()}
+                                </div>
+                                <div className="text-xs text-muted-foreground line-through">
+                                  {item.sellingPrice.toLocaleString()}
+                                </div>
+                              </div>
                             ) : (
                               <span className="text-sm">
                                 {item.price.toLocaleString()}
@@ -599,7 +624,7 @@ export default function ViewOrderPage({
                               <div className="flex flex-col items-center">
                                 {item.discountPercent > 0 ? (
                                   <>
-                                    <span className="text-xs font-medium text-red-500">
+                                    <span className="text-xs font-semibold text-red-600">
                                       {item.discountPercent}%
                                     </span>
                                     <span className="text-[10px] text-muted-foreground">
@@ -630,7 +655,8 @@ export default function ViewOrderPage({
                             </TableCell>
                           )}
                         </TableRow>
-                      ))
+                        );
+                      })
                     )}
                   </TableBody>
                 </Table>

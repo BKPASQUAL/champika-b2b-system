@@ -40,7 +40,8 @@ export async function GET(
             sku,
             name,
             unit_of_measure,
-            images
+            images,
+            selling_price
           )
         )
       `
@@ -87,6 +88,7 @@ export async function GET(
         unit: item.products?.unit_of_measure || "unit",
         image: item.products?.images?.[0] || null,
         price: item.unit_price,
+        sellingPrice: item.products?.selling_price ?? item.unit_price,
         qty: item.quantity,
         free: item.free_quantity,
         disc: 0,

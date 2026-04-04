@@ -76,6 +76,7 @@ interface InvoiceItem {
   unit: string;
   mrp: number;
   unitPrice: number;
+  originalPrice: number;
   discountPercent: number;
   discountAmount: number;
   total: number;
@@ -103,7 +104,7 @@ export default function CreateDistributionInvoicePage() {
   );
   const [invoiceNumber, setInvoiceNumber] = useState("INV-NEW");
   const [salesRepId, setSalesRepId] = useState<string>("");
-  const [orderStatus, setOrderStatus] = useState<string>("Delivered");
+  const [orderStatus, setOrderStatus] = useState<string>("Pending");
 
   // Items State
   const [items, setItems] = useState<InvoiceItem[]>([]);
@@ -301,6 +302,7 @@ export default function CreateDistributionInvoicePage() {
       freeQuantity: free,
       mrp: currentItem.mrp,
       unitPrice: currentItem.unitPrice,
+      originalPrice: product.selling_price,
       discountPercent: discPerc,
       discountAmount: discountAmount,
       total: netTotal,
@@ -882,12 +884,24 @@ export default function CreateDistributionInvoicePage() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      items.map((item, idx) => (
-                        <TableRow key={item.id}>
+                      items.map((item, idx) => {
+                        const priceChanged = item.unitPrice !== item.originalPrice;
+                        const hasDiscount = item.discountPercent > 0;
+                        const isModified = priceChanged || hasDiscount;
+                        return (
+                        <TableRow
+                          key={item.id}
+                          className={isModified ? "bg-red-50 hover:bg-red-100" : ""}
+                        >
                           <TableCell>{idx + 1}</TableCell>
                           <TableCell>
-                            <div className="font-medium">
+                            <div className="font-medium flex items-center gap-2">
                               {item.productName}
+                              {isModified && (
+                                <span className="text-[10px] bg-red-100 text-red-600 border border-red-200 rounded px-1 py-0.5 font-semibold">
+                                  Modified
+                                </span>
+                              )}
                             </div>
                             <div className="text-xs text-muted-foreground">
                               {item.sku}
@@ -900,12 +914,27 @@ export default function CreateDistributionInvoicePage() {
                             {item.freeQuantity || "-"}
                           </TableCell>
                           <TableCell className="text-right">
-                            {item.unitPrice.toLocaleString()}
+                            {priceChanged ? (
+                              <div>
+                                <div className="font-semibold text-red-600">
+                                  {item.unitPrice.toLocaleString()}
+                                </div>
+                                <div className="text-xs text-muted-foreground line-through">
+                                  {item.originalPrice.toLocaleString()}
+                                </div>
+                              </div>
+                            ) : (
+                              item.unitPrice.toLocaleString()
+                            )}
                           </TableCell>
                           <TableCell className="text-center">
-                            {item.discountPercent > 0
-                              ? `${item.discountPercent}%`
-                              : "-"}
+                            {hasDiscount ? (
+                              <span className="font-semibold text-red-600">
+                                {item.discountPercent}%
+                              </span>
+                            ) : (
+                              "-"
+                            )}
                           </TableCell>
                           <TableCell className="text-right font-bold">
                             {item.total.toLocaleString()}
@@ -920,7 +949,8 @@ export default function CreateDistributionInvoicePage() {
                             </Button>
                           </TableCell>
                         </TableRow>
-                      ))
+                        );
+                      })
                     )}
                   </TableBody>
                 </Table>
