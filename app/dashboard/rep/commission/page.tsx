@@ -36,8 +36,8 @@ interface CommissionRecord {
   shopName: string;
   orderTotal: number;
   commission: number;
-  status: "Pending" | "Paid" | "Unpaid Order";
-  date: string; // This is now the "Effective Date" (Payment Date or Order Date)
+  status: "Pending" | "Paid";
+  date: string; // Payment date (effective date for commission)
   orderDue: number;
 }
 
@@ -156,9 +156,10 @@ export default function RepCommissionPage() {
       0
     );
 
-    const totalCommission = filteredRecords
-      .filter((r) => r.status !== "Unpaid Order")
-      .reduce((acc, r) => acc + (Number(r.commission) || 0), 0);
+    const totalCommission = filteredRecords.reduce(
+      (acc, r) => acc + (Number(r.commission) || 0),
+      0
+    );
 
     const totalDue = filteredRecords.reduce(
       (acc, r) => acc + (Number(r.orderDue) || 0),
@@ -281,11 +282,9 @@ export default function RepCommissionPage() {
                           <Calendar className="w-3 h-3 text-muted-foreground" />
                           {new Date(record.date).toLocaleDateString()}
                         </div>
-                        {record.status === "Paid" && (
-                          <span className="text-[10px] text-green-600 ml-5">
-                            (Paid Date)
-                          </span>
-                        )}
+                        <span className="text-[10px] text-green-600 ml-5">
+                          (Payment Date)
+                        </span>
                       </div>
                     </TableCell>
                     <TableCell className="font-mono text-xs">
@@ -309,14 +308,10 @@ export default function RepCommissionPage() {
                         className={
                           record.status === "Paid"
                             ? "bg-green-100 text-green-800 hover:bg-green-100"
-                            : record.status === "Pending"
-                            ? "bg-orange-100 text-orange-800 hover:bg-orange-100"
-                            : "bg-red-100 text-red-800 hover:bg-red-100"
+                            : "bg-orange-100 text-orange-800 hover:bg-orange-100"
                         }
                       >
-                        {record.status === "Unpaid Order"
-                          ? "Collect Payment"
-                          : record.status}
+                        {record.status}
                       </Badge>
                     </TableCell>
                   </TableRow>
