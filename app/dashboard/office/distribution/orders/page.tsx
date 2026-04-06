@@ -239,7 +239,7 @@ export default function OrdersPage() {
             totalPages={totalPages}
             onPageChange={setCurrentPage}
             onView={(order) =>
-              router.push(`/dashboard/admin/orders/${order.id}`)
+              router.push(`/dashboard/office/distribution/orders/${order.id}`)
             }
             onUpdateStatus={handleUpdateStatus}
           />
