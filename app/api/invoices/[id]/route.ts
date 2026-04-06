@@ -71,7 +71,11 @@ export async function GET(
       .eq("id", id)
       .single();
 
-    if (invError || !invoice) throw new Error("Invoice not found");
+    if (invError) {
+      console.error("Invoice fetch error:", invError);
+      throw new Error(invError.message);
+    }
+    if (!invoice) throw new Error("Invoice not found");
 
     // 2. Fetch Order Items with FULL Product Details
     const { data: items, error: itemsError } = await supabaseAdmin
@@ -91,8 +95,7 @@ export async function GET(
           category,
           brand,
           model_type,
-          size_spec,
-          supplier
+          size_spec
         )
       `,
       )
@@ -122,6 +125,7 @@ export async function GET(
       notes: invoice.orders?.notes,
       grandTotal: invoice.total_amount,
       paidAmount: invoice.paid_amount,
+      dueDate: invoice.due_date || null,
 
       // Extra Discount
       extraDiscountPercent: invoice.orders?.extra_discount_percent || 0,
@@ -149,7 +153,6 @@ export async function GET(
         description: item.products?.description || "",
         category: item.products?.category || "",
         brand: item.products?.brand || "",
-        supplier: item.products?.supplier || "",
         model: item.products?.model_type || "",
         size: item.products?.size_spec || "",
 

@@ -60,6 +60,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const businessId = searchParams.get("businessId");
+    const repId = searchParams.get("repId");
 
     // Step 1: if filtering by business, get the customer IDs for that business first
     let customerIds: string[] | null = null;
@@ -90,6 +91,7 @@ export async function GET(request: NextRequest) {
           status,
           order_date,
           business_id,
+          sales_rep_id,
           profiles!orders_sales_rep_id_fkey (
             full_name
           ),
@@ -107,6 +109,11 @@ export async function GET(request: NextRequest) {
     // Step 2: filter invoices to only those belonging to this business's customers
     if (customerIds !== null) {
       query = query.in("customer_id", customerIds);
+    }
+
+    // Step 3: filter by sales rep if repId is provided
+    if (repId) {
+      query = query.eq("orders.sales_rep_id", repId);
     }
 
     const { data, error } = await query;

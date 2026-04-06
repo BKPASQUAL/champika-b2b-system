@@ -322,6 +322,11 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           icon: ShoppingCart,
         },
         {
+          name: "My Invoices",
+          href: "/dashboard/rep/invoices",
+          icon: Receipt,
+        },
+        {
           name: "Product Catalog",
           href: "/dashboard/rep/products",
           icon: Store,
