@@ -178,24 +178,25 @@ export default function OrdersPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+    <div className="space-y-5">
+      {/* Page header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">All Orders</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage and track order workflow
+          <h1 className="text-2xl font-bold tracking-tight">All Orders</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Manage and track your order workflow
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline">
+              <Button variant="outline" size="sm" className="h-9">
                 <Download className="w-4 h-4 mr-2" /> Export
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem>
-                <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" />{" "}
+                <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" />
                 Export to Excel
               </DropdownMenuItem>
               <DropdownMenuItem>
@@ -204,7 +205,7 @@ export default function OrdersPage() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <Button onClick={() => router.push("/dashboard/admin/orders/create")}>
+          <Button size="sm" className="h-9" onClick={() => router.push("/dashboard/admin/orders/create")}>
             <Plus className="w-4 h-4 mr-2" /> Create Order
           </Button>
         </div>
@@ -212,9 +213,8 @@ export default function OrdersPage() {
 
       <OrderStats orders={orders} />
 
-      <Card>
-        <CardHeader>
-          {/* Passed reps prop here */}
+      <Card className="shadow-sm">
+        <CardHeader className="pb-0 pt-4 px-4">
           <OrderFilters
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
@@ -225,7 +225,7 @@ export default function OrdersPage() {
             reps={reps}
           />
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-4 pt-4 pb-4">
           <OrderTable
             orders={paginatedOrders}
             sortField={sortField}
