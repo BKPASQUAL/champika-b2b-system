@@ -506,7 +506,19 @@ export default function CreateDistributionPurchasePage() {
     }
   };
 
+  const selectedSupplierName = supplierId
+    ? suppliers.find((s) => s.id === supplierId)?.name ?? null
+    : null;
+
   const filteredProducts = products.filter((p) => {
+    // No supplier selected → show nothing
+    if (!selectedSupplierName) return false;
+
+    // Only show products belonging to the selected supplier
+    if (!p.supplier || p.supplier.toLowerCase() !== selectedSupplierName.toLowerCase()) {
+      return false;
+    }
+
     if (searchTerm === "") return true;
     const s = searchTerm.toLowerCase();
     return (
