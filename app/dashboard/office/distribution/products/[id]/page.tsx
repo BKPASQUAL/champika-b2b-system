@@ -47,6 +47,7 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
+  LineChart,
   PieChart,
   Pie,
   Cell,
@@ -151,6 +152,25 @@ export default function ProductDetailsPage({
     startTransactionIndex,
     startTransactionIndex + ITEMS_PER_PAGE
   );
+
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat("en-LK", { style: "currency", currency: "LKR" }).format(amount);
+
+  // Build price timeline: oldest first, current price as last point
+  const priceTimeline = [
+    ...[...(product.priceHistory || [])].reverse().map((h: any) => ({
+      date: new Date(h.date).toLocaleDateString("en-LK", { day: "2-digit", month: "short", year: "2-digit" }),
+      costPrice: h.costPrice,
+      sellingPrice: h.sellingPrice,
+      mrp: h.mrp || 0,
+    })),
+    {
+      date: "Current",
+      costPrice: product.costPrice,
+      sellingPrice: product.sellingPrice,
+      mrp: product.mrp || 0,
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -389,6 +409,36 @@ export default function ProductDetailsPage({
 
             <TabsContent value="analytics" className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
+                {/* Price History Line Chart */}
+                <Card className="col-span-2">
+                  <CardHeader>
+                    <CardTitle>Price History</CardTitle>
+                    <CardDescription>
+                      Cost price and selling price changes over time
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {priceTimeline.length < 2 ? (
+                      <div className="flex items-center justify-center h-[200px] text-muted-foreground text-sm">
+                        No price changes recorded yet.
+                      </div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height={260}>
+                        <LineChart data={priceTimeline}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                          <YAxis tickFormatter={(v) => `LKR ${v.toLocaleString()}`} width={100} />
+                          <Tooltip formatter={(value: any) => `LKR ${Number(value).toLocaleString()}`} />
+                          <Legend />
+                          <Line type="monotone" dataKey="costPrice" name="Cost Price" stroke="#ef4444" strokeWidth={2} dot={{ r: 4 }} />
+                          <Line type="monotone" dataKey="sellingPrice" name="Selling Price" stroke="#22c55e" strokeWidth={2} dot={{ r: 4 }} />
+                          <Line type="monotone" dataKey="mrp" name="MRP" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} strokeDasharray="4 4" />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    )}
+                  </CardContent>
+                </Card>
+
                 <Card className="col-span-2">
                   <CardHeader>
                     <CardTitle>Monthly Sales & Profit</CardTitle>
@@ -587,6 +637,55 @@ export default function ProductDetailsPage({
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Price History Table */}
+              {product.priceHistory && product.priceHistory.length > 0 && (
+                <Card className="mt-4">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <History className="w-4 h-4" />
+                      Price Change History
+                    </CardTitle>
+                    <CardDescription>
+                      Previous cost and selling prices before each update
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date Changed</TableHead>
+                          <TableHead className="text-right">Old Cost Price</TableHead>
+                          <TableHead className="text-right">Old Selling Price</TableHead>
+                          <TableHead className="text-right">Old MRP</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {product.priceHistory.map((h: any, i: number) => (
+                          <TableRow key={i}>
+                            <TableCell className="flex items-center gap-2 text-muted-foreground">
+                              <History className="w-3 h-3" />
+                              {new Date(h.date).toLocaleDateString()}
+                              <span className="text-xs">
+                                {new Date(h.date).toLocaleTimeString()}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-sm text-red-600">
+                              {formatCurrency(h.costPrice)}
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-sm text-green-600">
+                              {formatCurrency(h.sellingPrice)}
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-sm">
+                              {h.mrp && h.mrp > 0 ? formatCurrency(h.mrp) : "-"}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              )}
             </TabsContent>
           </Tabs>
         </div>
