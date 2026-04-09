@@ -43,94 +43,76 @@ export function InvoiceStats({ invoices }: InvoiceStatsProps) {
   ).length;
 
   return (
-    <div className="grid gap-4 grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-      {/* Card 1: Total Revenue */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-          <Banknote className="w-4 h-4 text-muted-foreground" />
+    <div className="grid gap-2 sm:gap-4 grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <Card className="p-0">
+        <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-4 pb-1 sm:pb-2">
+          <CardTitle className="text-xs sm:text-sm font-medium leading-tight">Total Revenue</CardTitle>
+          <Banknote className="w-3 h-3 sm:w-4 sm:h-4 text-muted-foreground shrink-0" />
         </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">
+        <CardContent className="px-3 sm:px-4 pb-3 sm:pb-4 pt-0">
+          <div className="text-base sm:text-2xl font-bold leading-tight">
             LKR {(totalRevenue / 1000000).toFixed(2)}M
           </div>
-          <p className="text-xs text-muted-foreground mt-1">Lifetime sales</p>
+          <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">Lifetime sales</p>
         </CardContent>
       </Card>
 
-      {/* Card 2: Revenue (30 Days) */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-sm font-medium">
-            Revenue (30 Days)
-          </CardTitle>
-          <CalendarClock className="w-4 h-4 text-blue-600" />
+      <Card className="p-0">
+        <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-4 pb-1 sm:pb-2">
+          <CardTitle className="text-xs sm:text-sm font-medium leading-tight">Revenue (30 Days)</CardTitle>
+          <CalendarClock className="w-3 h-3 sm:w-4 sm:h-4 text-blue-600 shrink-0" />
         </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold text-blue-600">
+        <CardContent className="px-3 sm:px-4 pb-3 sm:pb-4 pt-0">
+          <div className="text-base sm:text-2xl font-bold text-blue-600 leading-tight">
             LKR {(last30DaysRevenue / 100000).toFixed(2)}L
           </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            Sales in last month
-          </p>
+          <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">Last month</p>
         </CardContent>
       </Card>
 
-      {/* Card 3: Due Amount */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-sm font-medium">Due Amount</CardTitle>
-          <AlertCircle className="w-4 h-4 text-red-600" />
+      <Card className="p-0">
+        <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-4 pb-1 sm:pb-2">
+          <CardTitle className="text-xs sm:text-sm font-medium leading-tight">Due Amount</CardTitle>
+          <AlertCircle className="w-3 h-3 sm:w-4 sm:h-4 text-red-600 shrink-0" />
         </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold text-red-600">
+        <CardContent className="px-3 sm:px-4 pb-3 sm:pb-4 pt-0">
+          <div className="text-base sm:text-2xl font-bold text-red-600 leading-tight">
             LKR {(totalDue / 100000).toFixed(2)}L
           </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            Outstanding payments
-          </p>
+          <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">Outstanding</p>
         </CardContent>
       </Card>
 
-      {/* Card 4: Paid Invoices */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-sm font-medium">Paid Invoices</CardTitle>
-          <CheckCircle2 className="w-4 h-4 text-green-600" />
+      <Card className="p-0">
+        <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-4 pb-1 sm:pb-2">
+          <CardTitle className="text-xs sm:text-sm font-medium leading-tight">Paid Invoices</CardTitle>
+          <CheckCircle2 className="w-3 h-3 sm:w-4 sm:h-4 text-green-600 shrink-0" />
         </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold text-green-600">{paidCount}</div>
-          <p className="text-xs text-muted-foreground mt-1">
-            Fully settled bills
-          </p>
+        <CardContent className="px-3 sm:px-4 pb-3 sm:pb-4 pt-0">
+          <div className="text-base sm:text-2xl font-bold text-green-600 leading-tight">{paidCount}</div>
+          <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">Settled bills</p>
         </CardContent>
       </Card>
 
-      {/* Card 5: Pending Bills */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-sm font-medium">Pending Bills</CardTitle>
-          <Clock className="w-4 h-4 text-amber-600" />
+      <Card className="p-0">
+        <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-4 pb-1 sm:pb-2">
+          <CardTitle className="text-xs sm:text-sm font-medium leading-tight">Pending Bills</CardTitle>
+          <Clock className="w-3 h-3 sm:w-4 sm:h-4 text-amber-600 shrink-0" />
         </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold text-amber-600">
-            {pendingCount}
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">Unpaid & Partial</p>
+        <CardContent className="px-3 sm:px-4 pb-3 sm:pb-4 pt-0">
+          <div className="text-base sm:text-2xl font-bold text-amber-600 leading-tight">{pendingCount}</div>
+          <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">Unpaid & Partial</p>
         </CardContent>
       </Card>
 
-      {/* Card 6: Overdue Bills */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-sm font-medium">Overdue Bills</CardTitle>
-          <AlertOctagon className="w-4 h-4 text-destructive" />
+      <Card className="p-0">
+        <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-4 pb-1 sm:pb-2">
+          <CardTitle className="text-xs sm:text-sm font-medium leading-tight">Overdue Bills</CardTitle>
+          <AlertOctagon className="w-3 h-3 sm:w-4 sm:h-4 text-destructive shrink-0" />
         </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold text-destructive">
-            {overdueCount}
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">Payment missed</p>
+        <CardContent className="px-3 sm:px-4 pb-3 sm:pb-4 pt-0">
+          <div className="text-base sm:text-2xl font-bold text-destructive leading-tight">{overdueCount}</div>
+          <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">Payment missed</p>
         </CardContent>
       </Card>
     </div>

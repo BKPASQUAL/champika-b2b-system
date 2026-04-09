@@ -148,7 +148,7 @@ export function InvoiceTable({
   return (
     <>
       {/* --- DESKTOP TABLE VIEW --- */}
-      <div className="hidden md:block overflow-x-auto rounded-md border">
+      <div className="hidden lg:block overflow-x-auto rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
@@ -370,8 +370,8 @@ export function InvoiceTable({
         </Table>
       </div>
 
-      {/* --- MOBILE CARD VIEW --- */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:hidden">
+      {/* --- MOBILE / TABLET CARD VIEW --- */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:hidden">
         {invoices.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground col-span-full border rounded-md">
             No invoices found
