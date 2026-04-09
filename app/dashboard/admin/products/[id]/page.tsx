@@ -493,8 +493,8 @@ export default function ProductDetailsPage({
                   Performance over the last 12 months
                 </CardDescription>
               </CardHeader>
-              <CardContent className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={analytics.monthly}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" />
@@ -525,8 +525,8 @@ export default function ProductDetailsPage({
               <CardHeader>
                 <CardTitle>Sales by Business</CardTitle>
               </CardHeader>
-              <CardContent className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie
                       data={analytics.business}
@@ -566,8 +566,8 @@ export default function ProductDetailsPage({
               <CardHeader>
                 <CardTitle>Top Selling Representatives</CardTitle>
               </CardHeader>
-              <CardContent className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={analytics.reps} layout="vertical">
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis type="number" hide />

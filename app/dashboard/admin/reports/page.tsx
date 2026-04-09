@@ -763,11 +763,11 @@ export default function AdminReportsPage() {
             </CardHeader>
             <CardContent>
               <div className="grid md:grid-cols-2 gap-8">
-                <div className="h-[400px]">
+                <div>
                   <h3 className="text-lg font-medium mb-4 text-center">
                     Expenses by Category
                   </h3>
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height={360}>
                     <BarChart data={expensesByCategory} layout="vertical">
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis type="number" />
