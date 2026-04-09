@@ -103,33 +103,46 @@ export function ProductTable({
     );
   }
 
+  const buildPages = () => {
+    const pages: (number | "ellipsis")[] = [];
+    if (totalPages <= 5) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (currentPage > 3) pages.push("ellipsis");
+      for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) pages.push(i);
+      if (currentPage < totalPages - 2) pages.push("ellipsis");
+      pages.push(totalPages);
+    }
+    return pages;
+  };
+
   const pagination = (
-    <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-t">
-      <div className="text-xs sm:text-sm text-muted-foreground">
-        Showing {(currentPage - 1) * 7 + 1} –{" "}
-        {Math.min(currentPage * 7, totalPages * 7)} of {totalPages * 7} entries
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-4 py-3 border-t">
+      <div className="text-xs text-muted-foreground text-center sm:text-left">
+        Showing {(currentPage - 1) * 7 + 1}–{Math.min(currentPage * 7, totalPages * 7)} of {totalPages * 7}
       </div>
-      <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onPageChange(currentPage - 1)}
-          disabled={currentPage === 1}
-        >
-          <ChevronLeft className="h-4 w-4 mr-1" />
-          <span className="hidden sm:inline">Previous</span>
+      <div className="flex items-center justify-center gap-1">
+        <Button variant="outline" size="sm" onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1} className="h-8 px-2">
+          <ChevronLeft className="h-4 w-4" /><span className="hidden sm:inline ml-1">Previous</span>
         </Button>
-        <Button variant="default" size="sm" className="w-9">
-          {currentPage}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onPageChange(currentPage + 1)}
-          disabled={currentPage === totalPages}
-        >
-          <span className="hidden sm:inline">Next</span>
-          <ChevronRight className="h-4 w-4 ml-1" />
+        {buildPages().map((page, idx) =>
+          page === "ellipsis" ? (
+            <span key={`ellipsis-${idx}`} className="px-1 text-xs text-muted-foreground">…</span>
+          ) : (
+            <Button
+              key={page}
+              variant={currentPage === page ? "default" : "outline"}
+              size="sm"
+              className="h-8 w-8 p-0 text-xs"
+              onClick={() => onPageChange(page)}
+            >
+              {page}
+            </Button>
+          )
+        )}
+        <Button variant="outline" size="sm" onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages} className="h-8 px-2">
+          <span className="hidden sm:inline mr-1">Next</span><ChevronRight className="h-4 w-4" />
         </Button>
       </div>
     </div>
