@@ -3,12 +3,12 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { 
-  Card, 
-  CardContent, 
-  CardHeader, 
-  CardTitle, 
-  CardDescription 
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -168,63 +168,71 @@ export default function DistributionDashboardPage() {
       </div>
 
       {/* KPI Cards Row */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {/* Pending Orders */}
         <Link href="/dashboard/office/distribution/orders/pending">
-            <Card className="hover:shadow-md transition-shadow cursor-pointer border-l-4 border-l-yellow-500">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Pending Approval</CardTitle>
-                <Clock className="h-4 w-4 text-yellow-600" />
-            </CardHeader>
-            <CardContent>
-                <div className="text-2xl font-bold text-yellow-700">{data.stats.pendingOrders}</div>
-                <p className="text-xs text-muted-foreground mt-1">Orders waiting for check</p>
+          <Card className="hover:shadow-md transition-shadow cursor-pointer border-l-4 border-l-yellow-400">
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-muted-foreground truncate pr-1">Pending Approval</span>
+                <div className="rounded-md p-1.5 shrink-0 bg-yellow-100 text-yellow-600">
+                  <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                </div>
+              </div>
+              <div className="text-2xl font-bold leading-none text-yellow-600">{data.stats.pendingOrders}</div>
+              <p className="text-xs text-muted-foreground mt-1 truncate">Orders waiting for check</p>
             </CardContent>
-            </Card>
+          </Card>
         </Link>
 
         {/* Active Loads */}
         <Link href="/dashboard/office/distribution/orders/loading">
-            <Card className="hover:shadow-md transition-shadow cursor-pointer border-l-4 border-l-blue-500">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Active Loads</CardTitle>
-                <Truck className="h-4 w-4 text-blue-600" />
-            </CardHeader>
-            <CardContent>
-                <div className="text-2xl font-bold text-blue-700">{data.stats.activeLoads}</div>
-                <p className="text-xs text-muted-foreground mt-1">Vehicles loading/transit</p>
+          <Card className="hover:shadow-md transition-shadow cursor-pointer border-l-4 border-l-blue-400">
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-muted-foreground truncate pr-1">Active Loads</span>
+                <div className="rounded-md p-1.5 shrink-0 bg-blue-100 text-blue-600">
+                  <Truck className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                </div>
+              </div>
+              <div className="text-2xl font-bold leading-none text-blue-600">{data.stats.activeLoads}</div>
+              <p className="text-xs text-muted-foreground mt-1 truncate">Vehicles loading/transit</p>
             </CardContent>
-            </Card>
+          </Card>
         </Link>
 
         {/* Overdue Invoices */}
         <Link href="/dashboard/office/distribution/invoices/due">
-            <Card className="hover:shadow-md transition-shadow cursor-pointer border-l-4 border-l-red-500 bg-red-50/20">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-red-700">Due Invoices</CardTitle>
-                <AlertCircle className="h-4 w-4 text-red-600" />
-            </CardHeader>
-            <CardContent>
-                <div className="text-2xl font-bold text-red-700">
-                    {data.stats.overdueInvoiceCount} <span className="text-sm font-normal text-red-600/80">({(data.stats.overdueAmount / 1000).toFixed(0)}k)</span>
+          <Card className="hover:shadow-md transition-shadow cursor-pointer border-l-4 border-l-red-400">
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-muted-foreground truncate pr-1">Due Invoices</span>
+                <div className="rounded-md p-1.5 shrink-0 bg-red-100 text-red-600">
+                  <AlertCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                 </div>
-                <p className="text-xs text-red-600/80 mt-1">Payments overdue  30 days</p>
+              </div>
+              <div className="text-2xl font-bold leading-none text-red-600">
+                {data.stats.overdueInvoiceCount} <span className="text-sm font-normal text-red-500/80">({(data.stats.overdueAmount / 1000).toFixed(0)}k)</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1 truncate">Payments overdue 30 days</p>
             </CardContent>
-            </Card>
+          </Card>
         </Link>
 
         {/* Low Stock */}
         <Link href="/dashboard/office/distribution/inventory">
-            <Card className="hover:shadow-md transition-shadow cursor-pointer border-l-4 border-l-orange-500">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Low Stock</CardTitle>
-                <Warehouse className="h-4 w-4 text-orange-600" />
-            </CardHeader>
-            <CardContent>
-                <div className="text-2xl font-bold text-orange-700">{data.stats.lowStockCount}</div>
-                <p className="text-xs text-muted-foreground mt-1">Items below minimum level</p>
+          <Card className="hover:shadow-md transition-shadow cursor-pointer border-l-4 border-l-orange-400">
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-muted-foreground truncate pr-1">Low Stock</span>
+                <div className="rounded-md p-1.5 shrink-0 bg-orange-100 text-orange-600">
+                  <Warehouse className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                </div>
+              </div>
+              <div className="text-2xl font-bold leading-none text-orange-600">{data.stats.lowStockCount}</div>
+              <p className="text-xs text-muted-foreground mt-1 truncate">Items below minimum level</p>
             </CardContent>
-            </Card>
+          </Card>
         </Link>
       </div>
 
