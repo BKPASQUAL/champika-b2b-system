@@ -68,12 +68,19 @@ interface ExtendedProduct extends Product {
     damaged: number;
     lastUpdated: string;
   }[];
+  priceHistory?: any[];
 }
 
 interface Transaction {
   id: string;
   date: string;
-  type: "SALE" | "PURCHASE" | "RETURN" | "DAMAGE" | "ADJUSTMENT";
+  type: "SALE" | "PURCHASE" | "RETURN" | "DAMAGE" | "ADJUSTMENT" | "FREE ISSUE";
+  freeQuantity?: number;
+  currentStock?: number;
+  buyingPrice?: number;
+  sellingPrice?: number;
+  reference?: string;
+  notes?: string;
   quantity: number;
   customer?: string;
   location: string;
@@ -303,13 +310,13 @@ export default function ProductDetailsPage({
                               <User className="h-3 w-3 shrink-0" />{transaction.customer}
                             </div>
                           )}
-                          {(transaction.buyingPrice > 0 || transaction.sellingPrice > 0) && (
+                          {((transaction.buyingPrice ?? 0) > 0 || (transaction.sellingPrice ?? 0) > 0) && (
                             <div className="flex gap-3 text-xs">
-                              {transaction.buyingPrice > 0 && (
-                                <span className="text-muted-foreground">Buy: <span className="font-mono">{formatCurrency(transaction.buyingPrice)}</span></span>
+                              {(transaction.buyingPrice ?? 0) > 0 && (
+                                <span className="text-muted-foreground">Buy: <span className="font-mono">{formatCurrency(transaction.buyingPrice ?? 0)}</span></span>
                               )}
-                              {transaction.sellingPrice > 0 && (
-                                <span className="text-muted-foreground">Sell: <span className="font-mono text-green-600">{formatCurrency(transaction.sellingPrice)}</span></span>
+                              {(transaction.sellingPrice ?? 0) > 0 && (
+                                <span className="text-muted-foreground">Sell: <span className="font-mono text-green-600">{formatCurrency(transaction.sellingPrice ?? 0)}</span></span>
                               )}
                             </div>
                           )}

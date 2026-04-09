@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 // 1. Import standard Google Fonts instead of Geist
 import { Inter, Roboto_Mono } from "next/font/google";
 import { Toaster } from "sonner";
@@ -16,12 +16,18 @@ const geistMono = Roboto_Mono({
   subsets: ["latin"],
 });
 
+export const viewport: Viewport = {
+  themeColor: "#2563eb",
+  minimumScale: 1,
+  initialScale: 1,
+  width: "device-width",
+  viewportFit: "cover",
+};
+
 export const metadata: Metadata = {
   title: "Finora Farm",
   description: "Finora Farm B2B Management System",
   manifest: "/manifest.json",
-  themeColor: "#2563eb",
-  viewport: "minimum-scale=1, initial-scale=1, width=device-width, shrink-to-fit=no, viewport-fit=cover",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
