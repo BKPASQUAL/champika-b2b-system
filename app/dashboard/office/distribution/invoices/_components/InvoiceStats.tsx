@@ -43,7 +43,7 @@ export function InvoiceStats({ invoices }: InvoiceStatsProps) {
   ).length;
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+    <div className="grid gap-4 grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       {/* Card 1: Total Revenue */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">

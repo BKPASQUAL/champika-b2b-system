@@ -135,7 +135,109 @@ export function InvoiceTable({
 
   return (
     <>
-      <div className="overflow-x-auto rounded-md border">
+      {/* ── Mobile / Tablet Card View (hidden on lg+) ── */}
+      <div className="block lg:hidden space-y-3">
+        {invoices.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+            No invoices found
+          </div>
+        ) : (
+          invoices.map((invoice) => (
+            <div
+              key={invoice.id}
+              className="rounded-lg border bg-card shadow-sm p-4 space-y-3"
+            >
+              {/* Top row: Invoice # + Date */}
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
+                  {invoice.invoiceNo}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {new Date(invoice.date).toLocaleDateString()}
+                </span>
+              </div>
+
+              {/* Customer + Rep */}
+              <div>
+                <div className="font-semibold text-sm">{invoice.customerName}</div>
+                <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                  <User className="w-3 h-3" /> {invoice.salesRepName}
+                </div>
+              </div>
+
+              {/* Badges */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Truck className="w-3 h-3" />
+                </div>
+                {renderOrderStatusBadge(invoice.orderStatus)}
+                {renderPaymentBadge(invoice.status)}
+              </div>
+
+              {/* Amounts */}
+              <div className="grid grid-cols-2 gap-2 pt-1 border-t">
+                <div>
+                  <p className="text-xs text-muted-foreground">Total</p>
+                  <p className="font-semibold text-sm">
+                    LKR {invoice.totalAmount.toLocaleString()}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-muted-foreground">Due</p>
+                  <p
+                    className={`font-semibold text-sm ${
+                      invoice.dueAmount > 0 ? "text-red-600" : "text-muted-foreground"
+                    }`}
+                  >
+                    LKR {invoice.dueAmount.toLocaleString()}
+                  </p>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-1 pt-1 border-t">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => onView(invoice.id)}
+                  title="View Details"
+                >
+                  <Eye className="w-4 h-4 text-blue-600" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => onEdit(invoice.id)}
+                  disabled={isLocked(invoice.orderStatus)}
+                  title={isLocked(invoice.orderStatus) ? "Locked" : "Edit Invoice"}
+                >
+                  <Edit
+                    className={`w-4 h-4 ${
+                      isLocked(invoice.orderStatus) ? "opacity-30" : "text-muted-foreground"
+                    }`}
+                  />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => handleDownload(invoice.id)}
+                  disabled={downloadingId === invoice.id}
+                  title="Print Invoice"
+                >
+                  {downloadingId === invoice.id ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Printer className="w-4 h-4 text-muted-foreground" />
+                  )}
+                </Button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* ── Desktop Table View (hidden below lg) ── */}
+      <div className="hidden lg:block overflow-x-auto rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
@@ -222,7 +324,7 @@ export function InvoiceTable({
                     <div className="font-medium text-sm">
                       {invoice.customerName}
                     </div>
-                    <div className="text-xs text-muted-foreground hidden md:flex items-center gap-1">
+                    <div className="text-xs text-muted-foreground flex items-center gap-1">
                       <User className="w-3 h-3" /> {invoice.salesRepName}
                     </div>
                   </TableCell>
@@ -248,7 +350,6 @@ export function InvoiceTable({
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
-                      {/* View Button */}
                       <Button
                         variant="ghost"
                         size="icon-sm"
@@ -257,8 +358,6 @@ export function InvoiceTable({
                       >
                         <Eye className="w-4 h-4 text-blue-600" />
                       </Button>
-
-                      {/* Edit Button */}
                       <Button
                         variant="ghost"
                         size="icon-sm"
@@ -278,8 +377,6 @@ export function InvoiceTable({
                           }`}
                         />
                       </Button>
-
-                      {/* Print Button */}
                       <Button
                         variant="ghost"
                         size="icon-sm"
