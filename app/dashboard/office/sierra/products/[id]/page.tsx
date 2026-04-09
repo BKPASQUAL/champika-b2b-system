@@ -194,7 +194,7 @@ export default function SierraProductDetailsPage({
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
         <Card className="border-t-4 border-t-red-600 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Current Stock</CardTitle>
@@ -255,12 +255,11 @@ export default function SierraProductDetailsPage({
       </div>
 
       <Tabs defaultValue="history" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="history">Transaction History</TabsTrigger>
-          <TabsTrigger value="prices">Price History</TabsTrigger>{" "}
-          {/* ✅ New Tab */}
+        <TabsList className="w-full sm:w-auto">
+          <TabsTrigger value="history"><span className="sm:hidden">History</span><span className="hidden sm:inline">Transaction History</span></TabsTrigger>
+          <TabsTrigger value="prices"><span className="sm:hidden">Prices</span><span className="hidden sm:inline">Price History</span></TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
-          <TabsTrigger value="details">Product Details</TabsTrigger>
+          <TabsTrigger value="details"><span className="sm:hidden">Details</span><span className="hidden sm:inline">Product Details</span></TabsTrigger>
         </TabsList>
 
         {/* --- UNIFIED TRANSACTION HISTORY TAB --- */}
@@ -273,6 +272,65 @@ export default function SierraProductDetailsPage({
               </CardDescription>
             </CardHeader>
             <CardContent>
+              {/* Mobile Card View */}
+              <div className="md:hidden space-y-2">
+                {paginatedTransactions.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground text-sm">No transactions found.</div>
+                ) : (
+                  paginatedTransactions.map((transaction) => (
+                    <div key={transaction.id} className="border rounded-lg p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">{transaction.date}</span>
+                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                          transaction.type === "SALE" ? "bg-black text-white" :
+                          transaction.type === "PURCHASE" ? "bg-green-100 text-green-700" :
+                          transaction.type === "FREE ISSUE" ? "bg-green-100 text-green-700" :
+                          transaction.type === "RETURN" ? "bg-blue-100 text-blue-700" :
+                          transaction.type === "DAMAGE" ? "bg-red-100 text-red-700" :
+                          "bg-gray-100 text-gray-700"
+                        }`}>{transaction.type}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <div className="text-sm">
+                          <span className="text-muted-foreground text-xs">Qty </span>
+                          <span className={`font-semibold ${transaction.quantity < 0 ? "text-red-500" : "text-green-600"}`}>
+                            {transaction.quantity > 0 ? "+" : ""}{transaction.quantity}
+                          </span>
+                          {transaction.freeQuantity && transaction.freeQuantity > 0 && (
+                            <span className="text-[10px] text-muted-foreground ml-1">(+{transaction.freeQuantity} free)</span>
+                          )}
+                        </div>
+                        <div className="text-sm">
+                          <span className="text-muted-foreground text-xs">Stock </span>
+                          <span className="font-bold font-mono">{transaction.currentStock}</span>
+                        </div>
+                      </div>
+                      {transaction.customer && transaction.customer !== "-" && (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground truncate">
+                          <User className="h-3 w-3 shrink-0" />{transaction.customer}
+                        </div>
+                      )}
+                      {(transaction.buyingPrice > 0 || transaction.sellingPrice > 0) && (
+                        <div className="flex gap-3 text-xs">
+                          {transaction.buyingPrice > 0 && (
+                            <span className="text-muted-foreground">Buy: <span className="font-mono">{formatCurrency(transaction.buyingPrice)}</span></span>
+                          )}
+                          {transaction.sellingPrice > 0 && (
+                            <span className="text-muted-foreground">Sell: <span className="font-mono text-green-600">{formatCurrency(transaction.sellingPrice)}</span></span>
+                          )}
+                        </div>
+                      )}
+                      <div className="flex justify-between text-[11px] text-muted-foreground border-t pt-1">
+                        <span>{transaction.reference}</span>
+                        {transaction.notes && transaction.notes !== "-" && <span>{transaction.notes}</span>}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Desktop Table */}
+              <div className="hidden md:block">
               <Table className="w-full">
                 <TableHeader>
                   <TableRow>
@@ -434,6 +492,7 @@ export default function SierraProductDetailsPage({
                   )}
                 </TableBody>
               </Table>
+              </div>
 
               {/* Pagination */}
               {allTransactions.length > 0 && (
