@@ -15,6 +15,9 @@ import {
   AlertTriangle,
   UserPlus,
   MapPin,
+  ShoppingCart,
+  FileText,
+  BadgeCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -103,6 +106,7 @@ export default function CreateOrderPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [submitStep, setSubmitStep] = useState(0); // 0=idle 1=validating 2=saving 3=done
   const [outOfStockOverride, setOutOfStockOverride] = useState(false);
   const [canCreateCustomer, setCanCreateCustomer] = useState(false);
   const [userBusinessId, setUserBusinessId] = useState<string | null>(null);
@@ -415,6 +419,7 @@ export default function CreateOrderPage() {
     }
 
     setSubmitting(true);
+    setSubmitStep(1);
 
     const orderData = {
       customerId,
@@ -430,6 +435,10 @@ export default function CreateOrderPage() {
     };
 
     try {
+      // Step 1 → Step 2 after a short beat so user sees the transition
+      await new Promise((r) => setTimeout(r, 600));
+      setSubmitStep(2);
+
       const res = await fetch("/api/invoices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -439,12 +448,13 @@ export default function CreateOrderPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to place order");
 
-      toast.success("Order Placed Successfully!");
-      router.push("/dashboard/rep");
+      setSubmitStep(3);
+      await new Promise((r) => setTimeout(r, 1200));
+      router.push(`/dashboard/rep/invoices/${data.id}`);
     } catch (error: any) {
       toast.error(error.message || "Failed to create order");
-    } finally {
       setSubmitting(false);
+      setSubmitStep(0);
     }
   };
 
@@ -459,6 +469,131 @@ export default function CreateOrderPage() {
       </div>
     );
   }
+
+  // ── Submission overlay ─────────────────────────────────────────────────────
+  const steps = [
+    { icon: ShoppingCart, label: "Validating order",   desc: "Checking items & customer details" },
+    { icon: FileText,     label: "Creating invoice",   desc: "Saving your order to the system"    },
+    { icon: BadgeCheck,   label: "Order confirmed!",   desc: "Everything is set — redirecting…"   },
+  ];
+
+  if (submitting) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white">
+        {/* Subtle animated background */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-primary/5 blur-3xl animate-pulse" />
+          <div className="absolute -bottom-40 -left-40 w-96 h-96 rounded-full bg-primary/5 blur-3xl animate-pulse [animation-delay:1s]" />
+        </div>
+
+        <div className="relative z-10 flex flex-col items-center gap-10 w-full max-w-sm px-6">
+          {/* Central icon ring */}
+          <div className="relative flex items-center justify-center">
+            {/* Outer pulse rings */}
+            {submitStep < 3 && (
+              <>
+                <span className="absolute inline-flex h-28 w-28 rounded-full bg-primary/10 animate-ping [animation-duration:1.4s]" />
+                <span className="absolute inline-flex h-24 w-24 rounded-full bg-primary/15 animate-ping [animation-duration:1.4s] [animation-delay:0.3s]" />
+              </>
+            )}
+            {/* Icon circle */}
+            <div className={cn(
+              "relative h-20 w-20 rounded-full flex items-center justify-center shadow-xl transition-all duration-700",
+              submitStep === 3
+                ? "bg-emerald-500 scale-110 shadow-emerald-200"
+                : "bg-primary shadow-primary/30"
+            )}>
+              {submitStep === 3 ? (
+                <BadgeCheck className="h-10 w-10 text-white animate-[scale-in_0.3s_ease-out]" strokeWidth={1.8} />
+              ) : (
+                <Loader2 className="h-10 w-10 text-white animate-spin" strokeWidth={1.8} />
+              )}
+            </div>
+          </div>
+
+          {/* Steps list */}
+          <div className="w-full space-y-3">
+            {steps.map((step, idx) => {
+              const Icon = step.icon;
+              const stepNum = idx + 1;
+              const isDone    = submitStep > stepNum;
+              const isActive  = submitStep === stepNum;
+              const isPending = submitStep < stepNum;
+
+              return (
+                <div
+                  key={idx}
+                  className={cn(
+                    "flex items-center gap-4 rounded-2xl px-5 py-4 transition-all duration-500",
+                    isActive  && "bg-primary/8 border border-primary/20 shadow-sm scale-[1.02]",
+                    isDone    && "bg-emerald-50 border border-emerald-100",
+                    isPending && "opacity-35"
+                  )}
+                >
+                  {/* Step icon / check */}
+                  <div className={cn(
+                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-all duration-500",
+                    isActive  && "bg-primary text-white",
+                    isDone    && "bg-emerald-500 text-white",
+                    isPending && "bg-muted text-muted-foreground"
+                  )}>
+                    {isDone
+                      ? <Check className="h-4 w-4" strokeWidth={2.5} />
+                      : <Icon className={cn("h-4 w-4", isActive && "animate-pulse")} />
+                    }
+                  </div>
+
+                  {/* Text */}
+                  <div className="flex-1 min-w-0">
+                    <p className={cn(
+                      "text-sm font-semibold leading-tight",
+                      isActive  && "text-primary",
+                      isDone    && "text-emerald-700",
+                      isPending && "text-muted-foreground"
+                    )}>
+                      {step.label}
+                    </p>
+                    {(isActive || isDone) && (
+                      <p className={cn(
+                        "text-xs mt-0.5",
+                        isDone   && "text-emerald-600",
+                        isActive && "text-muted-foreground"
+                      )}>
+                        {step.desc}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Active spinner dot */}
+                  {isActive && (
+                    <div className="flex gap-1">
+                      {[0, 1, 2].map((i) => (
+                        <span
+                          key={i}
+                          className="h-1.5 w-1.5 rounded-full bg-primary animate-bounce"
+                          style={{ animationDelay: `${i * 0.15}s` }}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Progress bar */}
+          <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
+            <div
+              className="h-full rounded-full bg-primary transition-all duration-700 ease-out"
+              style={{ width: submitStep === 0 ? "0%" : submitStep === 1 ? "33%" : submitStep === 2 ? "66%" : "100%",
+                       backgroundColor: submitStep === 3 ? "rgb(16 185 129)" : undefined }}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+  // ── End overlay ─────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-4 mx-auto pb-20">
