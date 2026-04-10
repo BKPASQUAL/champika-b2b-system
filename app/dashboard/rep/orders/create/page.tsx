@@ -596,7 +596,8 @@ export default function CreateOrderPage() {
   // ── End overlay ─────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-4 mx-auto pb-20">
+    <div className="space-y-4 mx-auto pb-28 lg:pb-6">
+
       {/* Out-of-stock override banner */}
       {outOfStockOverride && (
         <div className="flex items-start gap-2 bg-orange-50 border border-orange-300 rounded-xl px-4 py-3 text-sm text-orange-800">
@@ -608,50 +609,55 @@ export default function CreateOrderPage() {
         </div>
       )}
 
-      <div className="flex items-center gap-4">
+      {/* ── Page header ── */}
+      <div className="flex items-center gap-3">
         <Button
           variant="ghost"
           size="icon"
+          className="shrink-0"
           onClick={() => router.push("/dashboard/rep")}
         >
           <ArrowLeft className="w-4 h-4" />
         </Button>
-        <div className="flex-1">
-          <h1 className="text-3xl font-bold tracking-tight">New Sales Order</h1>
-          <p className="text-muted-foreground mt-1">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight truncate">
+            New Sales Order
+          </h1>
+          <p className="text-muted-foreground text-xs sm:text-sm mt-0.5 hidden sm:block">
             Create a new order for your customer
           </p>
         </div>
+        {/* Desktop Place Order button — hidden on mobile (uses sticky bar below) */}
         <Button
           onClick={handleSaveOrder}
           disabled={items.length === 0 || submitting}
-          className="bg-black hover:bg-gray-800 text-white"
+          className="hidden lg:flex bg-black hover:bg-gray-800 text-white shrink-0"
         >
-          {submitting ? (
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-          ) : (
-            <Save className="w-4 h-4 mr-2" />
-          )}
+          <Save className="w-4 h-4 mr-2" />
           Place Order
         </Button>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* LEFT COLUMN */}
-        <div className="lg:col-span-2 space-y-6">
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
 
-          {/* 1. Order Details */}
+        {/* ── LEFT COLUMN ── */}
+        <div className="lg:col-span-2 space-y-4 sm:space-y-6">
+
+          {/* 1. Customer Details */}
           <Card>
-            <CardHeader>
-              <CardTitle>Customer Details</CardTitle>
-              <CardDescription>Select the customer for this order</CardDescription>
+            <CardHeader className="pb-3 sm:pb-6">
+              <CardTitle className="text-base sm:text-lg">Customer Details</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
+                Select the customer for this order
+              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                {/* Customer Select */}
+            <CardContent className="space-y-3 sm:space-y-4">
+
+              {/* Customer + Date */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <Label>Customer</Label>
+                    <Label className="text-xs sm:text-sm">Customer</Label>
                     {canCreateCustomer && (
                       <button
                         type="button"
@@ -669,11 +675,13 @@ export default function CreateOrderPage() {
                         variant="outline"
                         role="combobox"
                         aria-expanded={customerOpen}
-                        className="w-full justify-between"
+                        className="w-full justify-between text-sm"
                       >
-                        {customerId
-                          ? customers.find((c) => c.id === customerId)?.name
-                          : "Select Customer"}
+                        <span className="truncate">
+                          {customerId
+                            ? customers.find((c) => c.id === customerId)?.name
+                            : "Select Customer"}
+                        </span>
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
                     </PopoverTrigger>
@@ -697,7 +705,7 @@ export default function CreateOrderPage() {
                               >
                                 <Check
                                   className={cn(
-                                    "mr-2 h-4 w-4",
+                                    "mr-2 h-4 w-4 shrink-0",
                                     customerId === customer.id
                                       ? "opacity-100"
                                       : "opacity-0"
@@ -713,33 +721,39 @@ export default function CreateOrderPage() {
                   </Popover>
                 </div>
 
-                {/* Order Date */}
                 <div className="space-y-2">
-                  <Label>Order Date</Label>
+                  <Label className="text-xs sm:text-sm">Order Date</Label>
                   <Input
                     type="date"
                     value={orderDate}
                     onChange={(e) => setOrderDate(e.target.value)}
+                    className="text-sm"
                   />
                 </div>
               </div>
 
               {/* Rep info row */}
-              <div className="grid grid-cols-2 gap-4 pt-1">
-                <div className="flex items-center gap-3 p-3 rounded-md border bg-muted/20">
-                  <User className="h-5 w-5 text-muted-foreground" />
-                  <div className="flex flex-col">
-                    <span className="text-xs text-muted-foreground uppercase">Sales Rep</span>
-                    <span className="font-medium text-sm">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 pt-1">
+                <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-md border bg-muted/20">
+                  <User className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground shrink-0" />
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[10px] sm:text-xs text-muted-foreground uppercase">
+                      Sales Rep
+                    </span>
+                    <span className="font-medium text-xs sm:text-sm truncate">
                       {currentUser ? currentUser.name : "Loading..."}
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 p-3 rounded-md border bg-muted/20">
-                  <Package className="h-5 w-5 text-muted-foreground" />
-                  <div className="flex flex-col">
-                    <span className="text-xs text-muted-foreground uppercase">Order Status</span>
-                    <span className="font-medium text-sm text-yellow-600">Pending Approval</span>
+                <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-md border bg-muted/20">
+                  <Package className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground shrink-0" />
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[10px] sm:text-xs text-muted-foreground uppercase">
+                      Status
+                    </span>
+                    <span className="font-medium text-xs sm:text-sm text-yellow-600 truncate">
+                      Pending
+                    </span>
                   </div>
                 </div>
               </div>
@@ -748,77 +762,80 @@ export default function CreateOrderPage() {
 
           {/* 2. Add Products */}
           <Card>
-            <CardHeader>
-              <CardTitle>Add Products</CardTitle>
-              <CardDescription>
+            <CardHeader className="pb-3 sm:pb-6">
+              <CardTitle className="text-base sm:text-lg">Add Products</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
                 {outOfStockOverride
                   ? "All items available — including out-of-stock products"
                   : "Search and add products to the order"}
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Product Search — full width */}
-              <div className="grid grid-cols-4 gap-4">
-                <div className="col-span-4 space-y-2">
-                  <Label>Product</Label>
-                  <Popover open={productOpen} onOpenChange={setProductOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={productOpen}
-                        className="w-full justify-between"
-                      >
+            <CardContent className="space-y-3 sm:space-y-4">
+
+              {/* Product search */}
+              <div className="space-y-2">
+                <Label className="text-xs sm:text-sm">Product</Label>
+                <Popover open={productOpen} onOpenChange={setProductOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={productOpen}
+                      className="w-full justify-between text-sm"
+                    >
+                      <span className="truncate">
                         {currentItem.productId
                           ? products.find((p) => p.id === currentItem.productId)?.name
                           : "Select Product"}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent
-                      className="w-[var(--radix-popover-trigger-width)] p-0"
-                      align="start"
-                    >
-                      <Command>
-                        <CommandInput placeholder="Search product by name or SKU..." />
-                        <CommandList>
-                          <CommandEmpty>No product found in your stock.</CommandEmpty>
-                          <CommandGroup>
-                            {availableProducts.map((product) => (
-                              <CommandItem
-                                key={product.id}
-                                value={product.name}
-                                onSelect={() => handleProductSelect(product.id)}
-                              >
-                                <Check
-                                  className={cn(
-                                    "mr-2 h-4 w-4",
-                                    currentItem.productId === product.id
-                                      ? "opacity-100"
-                                      : "opacity-0"
-                                  )}
-                                />
-                                <div className="flex-1">
-                                  <div className="font-medium">{product.name}</div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {product.sku} • Stock: {product.stock_quantity} • LKR{" "}
-                                    {product.selling_price}
-                                  </div>
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className="w-[var(--radix-popover-trigger-width)] p-0"
+                    align="start"
+                  >
+                    <Command>
+                      <CommandInput placeholder="Search product by name or SKU..." />
+                      <CommandList>
+                        <CommandEmpty>No product found in your stock.</CommandEmpty>
+                        <CommandGroup>
+                          {availableProducts.map((product) => (
+                            <CommandItem
+                              key={product.id}
+                              value={product.name}
+                              onSelect={() => handleProductSelect(product.id)}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4 shrink-0",
+                                  currentItem.productId === product.id
+                                    ? "opacity-100"
+                                    : "opacity-0"
+                                )}
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium text-sm truncate">
+                                  {product.name}
                                 </div>
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {product.sku} · Stock: {product.stock_quantity} · LKR{" "}
+                                  {product.selling_price}
+                                </div>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
 
-              {/* Quantity row */}
-              <div className="grid grid-cols-4 gap-4">
+              {/* Qty / Free / Unit / Stock — 2 cols on mobile, 4 on sm+ */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
                 <div className="space-y-2">
-                  <Label>Quantity</Label>
+                  <Label className="text-xs sm:text-sm">Quantity</Label>
                   <Input
                     ref={qtyInputRef}
                     type="number"
@@ -829,10 +846,11 @@ export default function CreateOrderPage() {
                       setCurrentItem({ ...currentItem, quantity: e.target.value })
                     }
                     onKeyDown={handleKeyDown}
+                    className="text-sm"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Free Qty</Label>
+                  <Label className="text-xs sm:text-sm">Free Qty</Label>
                   <Input
                     type="number"
                     min="0"
@@ -842,40 +860,38 @@ export default function CreateOrderPage() {
                       setCurrentItem({ ...currentItem, freeQuantity: e.target.value })
                     }
                     onKeyDown={handleKeyDown}
+                    className="text-sm"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Unit</Label>
+                  <Label className="text-xs sm:text-sm">Unit</Label>
                   <Input
                     value={currentItem.unit || "-"}
                     disabled
-                    className="bg-muted"
+                    className="bg-muted text-sm"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Stock</Label>
+                  <Label className="text-xs sm:text-sm">Stock</Label>
                   <Input
-                    value={
-                      currentItem.productId
-                        ? currentItem.stockAvailable
-                        : "-"
-                    }
+                    value={currentItem.productId ? currentItem.stockAvailable : "-"}
                     disabled
-                    className={
+                    className={cn(
+                      "text-sm",
                       !outOfStockOverride &&
                       currentItem.stockAvailable > 0 &&
                       currentItem.stockAvailable < 10
                         ? "text-destructive font-bold bg-muted"
                         : "bg-muted"
-                    }
+                    )}
                   />
                 </div>
               </div>
 
-              {/* Price row */}
-              <div className="grid grid-cols-4 gap-4">
+              {/* MRP / Unit Price / Discount / Total — 2 cols on mobile, 4 on sm+ */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
                 <div className="space-y-2">
-                  <Label>MRP</Label>
+                  <Label className="text-xs sm:text-sm">MRP</Label>
                   <Input
                     type="number"
                     value={currentItem.mrp || ""}
@@ -884,10 +900,11 @@ export default function CreateOrderPage() {
                     }
                     onKeyDown={handleKeyDown}
                     placeholder="0.00"
+                    className="text-sm"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Unit Price</Label>
+                  <Label className="text-xs sm:text-sm">Unit Price</Label>
                   <Input
                     type="number"
                     value={currentItem.unitPrice || ""}
@@ -896,10 +913,11 @@ export default function CreateOrderPage() {
                     }
                     onKeyDown={handleKeyDown}
                     placeholder="0.00"
+                    className="text-sm"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Discount %</Label>
+                  <Label className="text-xs sm:text-sm">Disc %</Label>
                   <Input
                     type="number"
                     min="0"
@@ -910,14 +928,15 @@ export default function CreateOrderPage() {
                       setCurrentItem({ ...currentItem, discountPercent: e.target.value })
                     }
                     onKeyDown={handleKeyDown}
+                    className="text-sm"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Total</Label>
+                  <Label className="text-xs sm:text-sm">Total</Label>
                   <Input
                     value={currentTotal.toFixed(2)}
                     disabled
-                    className="font-bold bg-muted"
+                    className="font-bold bg-muted text-sm"
                   />
                 </div>
               </div>
@@ -933,25 +952,76 @@ export default function CreateOrderPage() {
             </CardContent>
           </Card>
 
-          {/* 3. Items Table */}
+          {/* 3. Order Items */}
           <Card>
-            <CardHeader>
-              <CardTitle>Order Items</CardTitle>
-              <CardDescription>{items.length} item(s) added</CardDescription>
+            <CardHeader className="pb-3 sm:pb-6">
+              <CardTitle className="text-base sm:text-lg">Order Items</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
+                {items.length} item(s) added
+              </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="border rounded-md">
+            <CardContent className="p-0 sm:p-6 sm:pt-0">
+
+              {/* ── Mobile card list (hidden on sm+) ── */}
+              <div className="sm:hidden divide-y">
+                {items.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+                    <Package className="w-8 h-8 mb-2 opacity-40" />
+                    <p className="text-sm">No items added yet</p>
+                  </div>
+                ) : (
+                  items.map((item, idx) => (
+                    <div key={item.id} className="flex items-start gap-3 px-4 py-3">
+                      <span className="text-xs text-muted-foreground pt-0.5 w-5 shrink-0">
+                        {idx + 1}
+                      </span>
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <p className="font-medium text-sm leading-tight truncate">
+                          {item.productName}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{item.sku}</p>
+                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                          <span>Qty: <span className="text-foreground font-medium">{item.quantity} {item.unit}</span></span>
+                          {item.freeQuantity > 0 && (
+                            <span>Free: <span className="text-foreground font-medium">{item.freeQuantity}</span></span>
+                          )}
+                          <span>Price: <span className="text-foreground font-medium">LKR {item.unitPrice.toLocaleString()}</span></span>
+                          {item.discountPercent > 0 && (
+                            <span>Disc: <span className="text-foreground font-medium">{item.discountPercent}%</span></span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        <span className="font-bold text-sm">
+                          LKR {item.total.toLocaleString()}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => handleRemoveItem(item.id)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* ── Desktop table (hidden on mobile) ── */}
+              <div className="hidden sm:block border rounded-md">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-12">#</TableHead>
+                      <TableHead className="w-10">#</TableHead>
                       <TableHead>Product</TableHead>
                       <TableHead className="text-center w-20">Qty</TableHead>
-                      <TableHead className="text-center w-20">Free</TableHead>
+                      <TableHead className="text-center w-16">Free</TableHead>
                       <TableHead className="text-right w-24">Unit Price</TableHead>
-                      <TableHead className="text-center w-20">Disc%</TableHead>
+                      <TableHead className="text-center w-16">Disc%</TableHead>
                       <TableHead className="text-right w-28">Total</TableHead>
-                      <TableHead className="w-12"></TableHead>
+                      <TableHead className="w-10"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -968,7 +1038,7 @@ export default function CreateOrderPage() {
                     ) : (
                       items.map((item, idx) => (
                         <TableRow key={item.id}>
-                          <TableCell>{idx + 1}</TableCell>
+                          <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
                           <TableCell>
                             <div className="font-medium">{item.productName}</div>
                             <div className="text-xs text-muted-foreground">{item.sku}</div>
@@ -1009,8 +1079,8 @@ export default function CreateOrderPage() {
           </Card>
         </div>
 
-        {/* RIGHT COLUMN — Summary */}
-        <div className="lg:col-span-1">
+        {/* ── RIGHT COLUMN — Summary (desktop sidebar) ── */}
+        <div className="lg:col-span-1 hidden lg:block">
           <Card className="sticky top-6">
             <CardHeader>
               <CardTitle>Order Summary</CardTitle>
@@ -1019,7 +1089,7 @@ export default function CreateOrderPage() {
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Customer:</span>
-                  <span className="font-medium">
+                  <span className="font-medium truncate ml-2 text-right">
                     {customers.find((c) => c.id === customerId)?.name || "-"}
                   </span>
                 </div>
@@ -1084,11 +1154,7 @@ export default function CreateOrderPage() {
                 disabled={items.length === 0 || submitting}
                 className="w-full bg-black hover:bg-gray-800 text-white mt-2"
               >
-                {submitting ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Save className="w-4 h-4 mr-2" />
-                )}
+                <Save className="w-4 h-4 mr-2" />
                 Place Order
               </Button>
             </CardContent>
@@ -1096,9 +1162,56 @@ export default function CreateOrderPage() {
         </div>
       </div>
 
+      {/* ── Mobile / Tablet sticky bottom bar ── */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t shadow-lg px-4 py-3 safe-area-inset-bottom">
+        <div className="flex items-center gap-3 max-w-2xl mx-auto">
+          {/* Mini totals */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-xs text-muted-foreground">Total</span>
+              <span className="font-bold text-base text-primary truncate">
+                LKR {grandTotal.toLocaleString()}
+              </span>
+            </div>
+            <div className="flex gap-2 text-xs text-muted-foreground">
+              <span>{items.length} item{items.length !== 1 ? "s" : ""}</span>
+              {extraDiscountAmount > 0 && (
+                <span>· Disc: LKR {extraDiscountAmount.toLocaleString()}</span>
+              )}
+            </div>
+          </div>
+
+          {/* Extra discount quick input */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Label className="text-xs text-muted-foreground whitespace-nowrap">
+              Extra %
+            </Label>
+            <Input
+              type="number"
+              min="0"
+              max="100"
+              placeholder="0"
+              value={extraDiscount}
+              onChange={(e) => setExtraDiscount(e.target.value)}
+              className="w-16 h-9 text-sm text-center"
+            />
+          </div>
+
+          {/* Place Order */}
+          <Button
+            onClick={handleSaveOrder}
+            disabled={items.length === 0 || submitting}
+            className="bg-black hover:bg-gray-800 text-white shrink-0"
+          >
+            <Save className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">Place Order</span>
+          </Button>
+        </div>
+      </div>
+
       {/* New Customer Dialog */}
       <Dialog open={newCustomerOpen} onOpenChange={setNewCustomerOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl">
           <DialogHeader>
             <DialogTitle>Add New Customer</DialogTitle>
             <DialogDescription>
@@ -1106,9 +1219,9 @@ export default function CreateOrderPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-2 gap-4 py-4">
-            {/* Shop Name — full width */}
-            <div className="col-span-2 space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 py-4">
+            {/* Shop Name */}
+            <div className="sm:col-span-2 space-y-2">
               <Label>Shop Name *</Label>
               <Input
                 value={newCustomer.shopName}
@@ -1117,7 +1230,7 @@ export default function CreateOrderPage() {
               />
             </div>
 
-            {/* Owner / Phone — side by side */}
+            {/* Owner / Phone */}
             <div className="space-y-2">
               <Label>Owner / Contact Person</Label>
               <Input
@@ -1135,8 +1248,8 @@ export default function CreateOrderPage() {
               />
             </div>
 
-            {/* Email — full width */}
-            <div className="col-span-2 space-y-2">
+            {/* Email */}
+            <div className="sm:col-span-2 space-y-2">
               <Label>Email (Optional)</Label>
               <Input
                 value={newCustomer.email}
@@ -1145,8 +1258,8 @@ export default function CreateOrderPage() {
               />
             </div>
 
-            {/* Address — full width */}
-            <div className="col-span-2 space-y-2">
+            {/* Address */}
+            <div className="sm:col-span-2 space-y-2">
               <Label>Address</Label>
               <Input
                 value={newCustomer.address}
@@ -1155,7 +1268,7 @@ export default function CreateOrderPage() {
               />
             </div>
 
-            {/* Route / Credit Limit — side by side */}
+            {/* Route */}
             <div className="space-y-2">
               <Label className="flex items-center gap-1">
                 <MapPin className="w-3 h-3" /> Route / Area *
@@ -1179,6 +1292,8 @@ export default function CreateOrderPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Credit Limit */}
             <div className="space-y-2">
               <Label>Credit Limit (LKR)</Label>
               <Input
@@ -1213,18 +1328,19 @@ export default function CreateOrderPage() {
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="flex-row gap-2 sm:flex-row">
             <Button
               variant="outline"
               onClick={() => setNewCustomerOpen(false)}
               disabled={creatingCustomer}
+              className="flex-1 sm:flex-none"
             >
               Cancel
             </Button>
             <Button
               onClick={handleCreateCustomer}
               disabled={creatingCustomer}
-              className="bg-black hover:bg-gray-800 text-white"
+              className="flex-1 sm:flex-none bg-black hover:bg-gray-800 text-white"
             >
               {creatingCustomer && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Add Customer
