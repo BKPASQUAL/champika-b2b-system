@@ -14,6 +14,16 @@ import { wiremanOfficeNavItems } from "@/app/config/wireman-nav-config";
 import { sierraOfficeNavItems } from "@/app/config/sierra-nav-config";
 import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface AppSidebarProps {
   role: UserRole;
@@ -79,14 +89,18 @@ export function AppSidebar({
   }, []);
 
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {
+      // continue regardless
+    }
     localStorage.removeItem("currentUser");
-    setTimeout(() => {
-      router.push("/login");
-      setIsLoggingOut(false);
-    }, 1000);
+    sessionStorage.clear();
+    router.push("/login");
   };
 
   return (
@@ -212,7 +226,7 @@ export function AppSidebar({
         <Button
           variant="ghost"
           size="sm"
-          onClick={handleLogout}
+          onClick={() => setShowLogoutDialog(true)}
           disabled={isLoggingOut}
           className={cn(
             "w-full justify-start gap-2",
@@ -227,6 +241,38 @@ export function AppSidebar({
           {isLoggingOut ? "Logging out..." : "Logout"}
         </Button>
       </div>
+
+      {/* Logout confirmation dialog */}
+      <AlertDialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Logout</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to log out? You will need to sign in again to access the system.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isLoggingOut}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              {isLoggingOut ? (
+                <span className="flex items-center gap-2">
+                  <LogOut className="h-4 w-4 animate-pulse" />
+                  Logging out...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <LogOut className="h-4 w-4" />
+                  Yes, Logout
+                </span>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

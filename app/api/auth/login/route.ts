@@ -123,7 +123,19 @@ export async function POST(request: NextRequest) {
       ? profile.businesses[0]
       : profile.businesses;
 
-    // 6. Return Success
+    // 6. Set remember-me cookie if requested (30 days, HTTP-only)
+    const rememberMe = body.rememberMe === true;
+    if (rememberMe) {
+      cookieStore.set("champika_rm", "1", {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 30 * 24 * 60 * 60, // 30 days in seconds
+        sameSite: "strict",
+        path: "/",
+      });
+    }
+
+    // 7. Return Success
     return NextResponse.json({
       message: "Login successful",
       role: profile.role,
