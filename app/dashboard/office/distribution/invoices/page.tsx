@@ -22,6 +22,7 @@ import {
   RefreshCw,
   Filter,
   AlertCircle,
+  Printer,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -35,7 +36,7 @@ import { BUSINESS_IDS } from "@/app/config/business-constants";
 import { Invoice, SortField, SortOrder } from "./types";
 import { InvoiceTable } from "./_components/InvoiceTable";
 import { InvoiceStats } from "./_components/InvoiceStats";
-import { printOutstandingReport } from "./outstanding-report";
+import { downloadOutstandingReport, printOutstandingReport } from "./outstanding-report";
 
 const NUMBER_WORDS: Record<string, string> = {
   "0": "zero", "1": "one", "2": "two", "3": "three", "4": "four",
@@ -244,11 +245,18 @@ export default function DistributionInvoicesPage() {
                 <FileText className="w-4 h-4 mr-2 text-red-600" /> Export PDF
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => printOutstandingReport(invoices)}
+                onClick={() => downloadOutstandingReport(invoices, repFilter)}
                 className="text-red-700 focus:text-red-700"
               >
                 <AlertCircle className="w-4 h-4 mr-2 text-red-600" />
-                Outstanding Report
+                Download Outstanding Report
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => printOutstandingReport(invoices, repFilter)}
+                className="text-red-700 focus:text-red-700"
+              >
+                <Printer className="w-4 h-4 mr-2 text-red-600" />
+                Print Outstanding Report
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

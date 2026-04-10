@@ -222,20 +222,30 @@ export function downloadOutstandingReport(invoices: Invoice[], repFilter: string
 export function printOutstandingReport(invoices: Invoice[], repFilter: string = "all") {
   const outstanding = invoices.filter((inv) => inv.status !== "Paid" && inv.dueAmount > 0);
   if (outstanding.length === 0) { toast.info("No outstanding bills found"); return; }
+
   const doc = buildDoc(invoices, repFilter);
   doc.autoPrint();
   const blob = doc.output("blob");
   const url  = URL.createObjectURL(blob);
-  const win  = window.open(url, "_blank");
-  if (win) {
-    win.onload = () => {
-      win.focus();
-      win.print();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-    };
-  } else {
-    doc.save(`Outstanding_By_Customer_${new Date().toISOString().split("T")[0]}.pdf`);
-    toast.warning("Popup blocked – file downloaded instead");
-  }
+
+  // Print via hidden iframe — stays on same page, no navigation
+  const existing = document.getElementById("__print_frame__");
+  if (existing) existing.remove();
+
+  const iframe = document.createElement("iframe");
+  iframe.id  = "___print_frame__";
+  iframe.src = url;
+  iframe.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;border:none;";
+  document.body.appendChild(iframe);
+
+  iframe.onload = () => {
+    iframe.contentWindow?.focus();
+    iframe.contentWindow?.print();
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+      iframe.remove();
+    }, 10000);
+  };
+
   toast.success(`Print ready – ${outstanding.length} outstanding bill${outstanding.length > 1 ? "s" : ""}`);
 }
