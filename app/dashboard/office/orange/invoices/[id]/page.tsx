@@ -204,7 +204,7 @@ export default function OrangeViewInvoicePage({
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-[80vh]">
+      <div className="flex justify-center items-center py-16">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -286,8 +286,8 @@ export default function OrangeViewInvoicePage({
                 </SheetHeader>
                 <div className="mt-6 space-y-6">
                   {historyLoading ? (
-                    <div className="flex justify-center py-8">
-                      <Loader2 className="animate-spin text-muted-foreground" />
+                    <div className="flex justify-center items-center py-16">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
                     </div>
                   ) : historyLogs.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">

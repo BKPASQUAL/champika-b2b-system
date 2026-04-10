@@ -260,8 +260,8 @@ export default function OrangeReturnsPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-12">
-                      <Loader2 className="h-6 w-6 animate-spin mx-auto text-orange-600" />
+                    <TableCell colSpan={8} className="text-center py-16">
+                      <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
                     </TableCell>
                   </TableRow>
                 ) : returns.length === 0 ? (

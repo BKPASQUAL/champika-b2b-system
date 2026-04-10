@@ -200,8 +200,8 @@ export function BusinessSettings() {
             </CardHeader>
             <CardContent>
               {loading ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                <div className="flex justify-center items-center py-16">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
               ) : businesses.length === 0 ? (
                 <div className="text-center py-12 border-2 border-dashed rounded-xl border-amber-200 bg-amber-50/30">

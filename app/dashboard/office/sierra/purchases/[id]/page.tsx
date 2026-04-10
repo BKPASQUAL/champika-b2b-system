@@ -176,8 +176,8 @@ export default function WiremanViewBillPage({
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-[80vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-red-600" />
+      <div className="flex justify-center items-center py-16">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }

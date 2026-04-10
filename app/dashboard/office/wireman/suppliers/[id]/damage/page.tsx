@@ -120,8 +120,8 @@ export default function WiremanSupplierDamagePage() {
 
   if (loading)
     return (
-      <div className="flex justify-center h-96 items-center">
-        <Loader2 className="animate-spin text-red-600" />
+      <div className="flex justify-center items-center py-16">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   if (!supplier) return <div className="p-8">Supplier not found.</div>;

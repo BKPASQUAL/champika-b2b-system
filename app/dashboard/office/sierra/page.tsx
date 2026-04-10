@@ -129,8 +129,8 @@ export default function SierraDashboardPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-[80vh]">
-        <Loader2 className="h-10 w-10 animate-spin text-purple-600" />
+      <div className="flex justify-center items-center py-16">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }

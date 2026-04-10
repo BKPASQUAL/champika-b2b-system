@@ -255,10 +255,9 @@ export default function DistributionDeliveryHistoryPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-12">
-                      <div className="flex justify-center items-center gap-2 text-muted-foreground">
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                        Loading delivery history...
+                    <TableCell colSpan={8} className="text-center py-16">
+                      <div className="flex justify-center items-center">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
                       </div>
                     </TableCell>
                   </TableRow>

@@ -35,6 +35,7 @@ import {
   FileSpreadsheet,
   ChevronLeft,
   ChevronRight,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
@@ -148,8 +149,8 @@ export default function WiremanInventoryPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center p-10">
-        <RefreshCw className="animate-spin h-8 w-8 text-red-600" />
+      <div className="flex justify-center items-center py-16">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }

@@ -286,8 +286,8 @@ export default function CheckRegistryPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center">
-                      <Loader2 className="w-6 h-6 animate-spin mx-auto" />
+                    <TableCell colSpan={7} className="text-center py-16">
+                      <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
                     </TableCell>
                   </TableRow>
                 ) : paginatedCheques.length === 0 ? (

@@ -359,7 +359,7 @@ export default function SierraPaymentEntryPage() {
           {!selectedCustomerId ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-3"><AlertCircle className="h-8 w-8 opacity-40" /><p className="text-sm">No customer selected</p></div>
           ) : loadingInvoices ? (
-            <div className="flex items-center justify-center py-12 gap-2 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /><span className="text-sm">Loading invoices…</span></div>
+            <div className="flex justify-center items-center py-16"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
           ) : pendingInvoices.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-3"><ReceiptText className="h-8 w-8 opacity-40" /><p className="text-sm">No pending invoices for this customer</p></div>
           ) : (

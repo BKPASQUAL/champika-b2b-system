@@ -17,6 +17,7 @@ import {
   AlertCircle,
   Check,
   Calculator,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1800,9 +1801,8 @@ export function CategorySettings() {
         {/* Content Section */}
         {loading ? (
           <Card>
-            <CardContent className="flex flex-col items-center justify-center py-16">
-              <div className="h-12 w-12 rounded-full border-4 border-primary/20 border-t-primary animate-spin mb-4" />
-              <p className="text-sm text-muted-foreground">Loading...</p>
+            <CardContent className="flex justify-center items-center py-16">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </CardContent>
           </Card>
         ) : activeType === "spec" ? (

@@ -126,8 +126,8 @@ export default function SupplierDamagePage() {
 
   if (loading)
     return (
-      <div className="flex justify-center h-96 items-center">
-        <Loader2 className="animate-spin text-muted-foreground" />
+      <div className="flex justify-center items-center py-16">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   if (!supplier)

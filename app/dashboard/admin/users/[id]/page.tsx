@@ -11,6 +11,7 @@ import {
   Activity,
   Search,
   Filter,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -114,8 +115,8 @@ export default function ViewUserPage() {
 
   if (loading) {
     return (
-      <div className="p-8 text-center text-muted-foreground">
-        Loading profile...
+      <div className="flex justify-center items-center py-16">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }

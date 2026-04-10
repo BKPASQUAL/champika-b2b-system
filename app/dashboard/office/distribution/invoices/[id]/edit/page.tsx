@@ -475,9 +475,8 @@ export default function DistributionEditInvoicePage({
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-full min-h-64">
-        <Loader2 className="h-6 w-6 animate-spin mr-2" />
-        <p className="text-lg text-muted-foreground">Loading Invoice...</p>
+      <div className="flex justify-center items-center py-16">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -522,8 +521,8 @@ export default function DistributionEditInvoicePage({
               </SheetHeader>
               <div className="mt-6 space-y-6">
                 {historyLoading ? (
-                  <div className="flex justify-center">
-                    <Loader2 className="animate-spin" />
+                  <div className="flex justify-center items-center py-16">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
                   </div>
                 ) : historyLogs.length === 0 ? (
                   <p className="text-center text-muted-foreground">

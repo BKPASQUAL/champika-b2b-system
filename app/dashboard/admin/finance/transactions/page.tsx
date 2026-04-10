@@ -283,8 +283,8 @@ export default function TransactionsPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="h-32 text-center">
-                    <Loader2 className="w-6 h-6 animate-spin mx-auto" />
+                  <TableCell colSpan={8} className="text-center py-16">
+                    <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
                   </TableCell>
                 </TableRow>
               ) : paginated.length === 0 ? (

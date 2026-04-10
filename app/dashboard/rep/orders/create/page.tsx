@@ -454,9 +454,8 @@ export default function CreateOrderPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-full min-h-64">
-        <Loader2 className="h-6 w-6 animate-spin mr-2" />
-        <p className="text-lg text-muted-foreground">Loading Your Stock...</p>
+      <div className="flex justify-center items-center py-16">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }

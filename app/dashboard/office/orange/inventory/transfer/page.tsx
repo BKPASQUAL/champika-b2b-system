@@ -275,8 +275,8 @@ export default function OrangeStockTransferPage() {
 
   if (loading && locations.length === 0) {
     return (
-      <div className="flex justify-center p-10">
-        <Loader2 className="animate-spin h-8 w-8 text-orange-600" />
+      <div className="flex justify-center items-center py-16">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -441,9 +441,8 @@ export default function OrangeStockTransferPage() {
             </CardHeader>
             <CardContent>
               {stockLoading ? (
-                <div className="flex justify-center py-4 text-muted-foreground">
-                  <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading
-                  stock...
+                <div className="flex justify-center items-center py-16">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
               ) : (
                 <div className="space-y-4">

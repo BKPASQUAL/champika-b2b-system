@@ -257,11 +257,8 @@ export default function ProcessOrderPage({
 
   if (loading) {
     return (
-      <div className="flex flex-col justify-center items-center h-[calc(100vh-200px)]">
-        <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
-        <p className="text-muted-foreground animate-pulse">
-          Loading Order Details...
-        </p>
+      <div className="flex justify-center items-center py-16">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }

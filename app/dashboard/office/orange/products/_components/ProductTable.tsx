@@ -88,8 +88,7 @@ export function ProductTable({
   if (loading) {
     return (
       <div className="flex justify-center items-center py-16">
-        <Loader2 className="h-6 w-6 animate-spin mr-2 text-orange-500" />
-        <span className="text-muted-foreground">Loading products...</span>
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }

@@ -111,8 +111,8 @@ export default function DamageHistoryPage() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+            <div className="flex justify-center items-center py-16">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : filteredDamages.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">

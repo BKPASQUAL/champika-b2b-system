@@ -234,8 +234,8 @@ export default function SierraReportPage() {
 
       {/* ── KPI Cards ───────────────────────────────────────────────────────── */}
       {loading && !data ? (
-        <div className="flex h-40 items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
+        <div className="flex justify-center items-center py-16">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       ) : (
         <>

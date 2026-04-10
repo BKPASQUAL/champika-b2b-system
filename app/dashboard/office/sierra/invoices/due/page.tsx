@@ -34,6 +34,7 @@ import {
   CreditCard,
   RefreshCw,
   Printer,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
@@ -471,12 +472,9 @@ export default function SierraDueAlertsPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-12">
+                    <TableCell colSpan={6} className="text-center py-16">
                       <div className="flex justify-center items-center">
-                        <RefreshCw className="h-6 w-6 animate-spin text-red-600" />
-                        <span className="ml-2 text-muted-foreground">
-                          Checking overdue invoices...
-                        </span>
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
                       </div>
                     </TableCell>
                   </TableRow>
