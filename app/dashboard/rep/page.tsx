@@ -20,62 +20,65 @@ export default function RepDashboardPage() {
   return (
     <div className="space-y-6">
       {/* Page Title & Action Button */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">My Dashboard</h2>
-          <p className="text-muted-foreground">Welcome back, here is your daily summary.</p>
+          <h2 className="text-xl sm:text-3xl font-bold tracking-tight">My Dashboard</h2>
+          <p className="text-muted-foreground text-xs sm:text-sm hidden sm:block">
+            Welcome back, here is your daily summary.
+          </p>
         </div>
-        <Button 
+        <Button
           onClick={() => router.push("/dashboard/rep/orders/create")}
-          className="bg-black hover:bg-gray-800 text-white"
+          className="bg-black hover:bg-gray-800 text-white shrink-0"
         >
-          <Plus className="mr-2 h-4 w-4" /> Create New Order
+          <Plus className="h-4 w-4 sm:mr-2" />
+          <span className="hidden sm:inline">Create New Order</span>
         </Button>
       </div>
       
       {/* KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Monthly Sales</CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-600" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 pt-4 sm:px-6 sm:pt-6">
+            <CardTitle className="text-xs sm:text-sm font-medium">Monthly Sales</CardTitle>
+            <TrendingUp className="h-4 w-4 text-green-600 shrink-0" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">LKR 850,000</div>
-            <p className="text-xs text-muted-foreground">+12% from last month</p>
+          <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
+            <div className="text-lg sm:text-2xl font-bold">LKR 850,000</div>
+            <p className="text-xs text-muted-foreground mt-0.5">+12% from last month</p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Orders</CardTitle>
-            <ShoppingBag className="h-4 w-4 text-blue-600" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 pt-4 sm:px-6 sm:pt-6">
+            <CardTitle className="text-xs sm:text-sm font-medium">Active Orders</CardTitle>
+            <ShoppingBag className="h-4 w-4 text-blue-600 shrink-0" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">8</div>
-            <p className="text-xs text-muted-foreground">2 Pending Approval</p>
+          <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
+            <div className="text-lg sm:text-2xl font-bold">8</div>
+            <p className="text-xs text-muted-foreground mt-0.5">2 Pending Approval</p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Due Collections</CardTitle>
-            <AlertCircle className="h-4 w-4 text-red-600" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 pt-4 sm:px-6 sm:pt-6">
+            <CardTitle className="text-xs sm:text-sm font-medium">Due Collections</CardTitle>
+            <AlertCircle className="h-4 w-4 text-red-600 shrink-0" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">LKR 125,000</div>
-            <p className="text-xs text-muted-foreground">From 3 Customers</p>
+          <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
+            <div className="text-lg sm:text-2xl font-bold text-red-600">LKR 125,000</div>
+            <p className="text-xs text-muted-foreground mt-0.5">From 3 Customers</p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">My Commission</CardTitle>
-            <CreditCard className="h-4 w-4 text-purple-600" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 pt-4 sm:px-6 sm:pt-6">
+            <CardTitle className="text-xs sm:text-sm font-medium">My Commission</CardTitle>
+            <CreditCard className="h-4 w-4 text-purple-600 shrink-0" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">LKR 42,500</div>
-            <p className="text-xs text-muted-foreground">Pending Payout</p>
+          <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
+            <div className="text-lg sm:text-2xl font-bold">LKR 42,500</div>
+            <p className="text-xs text-muted-foreground mt-0.5">Pending Payout</p>
           </CardContent>
         </Card>
       </div>
@@ -83,7 +86,7 @@ export default function RepDashboardPage() {
       {/* Recent Activity & Route Section */}
       <div className="grid gap-4 md:grid-cols-7">
         {/* Recent Orders List */}
-        <Card className="md:col-span-4">
+        <Card className="col-span-full md:col-span-4">
           <CardHeader>
             <CardTitle>Recent Orders</CardTitle>
           </CardHeader>
@@ -112,7 +115,7 @@ export default function RepDashboardPage() {
         </Card>
 
         {/* Route & Visits */}
-        <Card className="md:col-span-3">
+        <Card className="col-span-full md:col-span-3">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <MapPin className="h-4 w-4" /> Route Status
