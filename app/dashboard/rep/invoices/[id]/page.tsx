@@ -66,6 +66,7 @@ export default function RepInvoiceDetailPage({
   const [invoice, setInvoice] = useState<any>(null);
 
   useEffect(() => {
+    if (!id) return;
     const fetchInvoice = async () => {
       try {
         const res = await fetch(`/api/invoices/${id}`);

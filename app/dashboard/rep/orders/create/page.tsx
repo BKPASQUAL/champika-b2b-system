@@ -450,7 +450,7 @@ export default function CreateOrderPage() {
 
       setSubmitStep(3);
       await new Promise((r) => setTimeout(r, 1200));
-      router.push(`/dashboard/rep/invoices/${data.id}`);
+      router.push(`/dashboard/rep/invoices/${data.data.id}`);
     } catch (error: any) {
       toast.error(error.message || "Failed to create order");
       setSubmitting(false);
