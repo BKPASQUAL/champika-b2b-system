@@ -52,10 +52,11 @@ export default function UsersPage() {
     fullName: "",
     username: "",
     email: "",
+    phone: "",
     password: "",
     role: "office",
     status: "Active",
-    businessId: "", // Initialize
+    businessId: "",
   });
 
   // --- 1. FETCH DATA (Users + Businesses) ---
@@ -112,6 +113,7 @@ export default function UsersPage() {
       fullName: "",
       username: "",
       email: "",
+      phone: "",
       password: "",
       role: "office",
       status: "Active",
@@ -126,10 +128,11 @@ export default function UsersPage() {
       fullName: user.fullName,
       username: user.username,
       email: user.email,
+      phone: user.phone || "",
       password: "",
       role: user.role,
       status: user.status as any,
-      businessId: user.businessId || "", // Populate business
+      businessId: user.businessId || "",
     });
     setIsAddDialogOpen(true);
   };

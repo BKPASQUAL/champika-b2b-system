@@ -38,6 +38,7 @@ export async function GET(request: NextRequest) {
       fullName: profile.full_name,
       username: profile.username,
       email: profile.email,
+      phone: profile.phone,
       role: profile.role,
       status: profile.is_active ? "Active" : "Inactive",
       lastActive: profile.updated_at,
@@ -56,6 +57,23 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const validatedData = createUserSchema.parse(body);
+
+    // 1a. Check for duplicate phone number (if provided)
+    const phoneValue = validatedData.phone || null;
+    if (phoneValue) {
+      const { data: existing } = await supabaseAdmin
+        .from("profiles")
+        .select("id")
+        .eq("phone", phoneValue)
+        .maybeSingle();
+
+      if (existing) {
+        return NextResponse.json(
+          { error: "Phone number is already in use by another user" },
+          { status: 400 }
+        );
+      }
+    }
 
     // 1. Create User in Supabase Auth
     const { data: authData, error: authError } =
@@ -85,9 +103,10 @@ export async function POST(request: NextRequest) {
         full_name: validatedData.fullName,
         username: validatedData.username,
         email: validatedData.email,
+        phone: phoneValue,
         role: validatedData.role,
         is_active: validatedData.status === "Active",
-        business_id: validatedData.businessId || null, // Save Business ID
+        business_id: validatedData.businessId || null,
       });
 
     if (profileError) {

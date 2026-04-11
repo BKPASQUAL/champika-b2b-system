@@ -7,19 +7,21 @@ export interface User {
   fullName: string;
   username: string;
   email: string;
+  phone?: string | null;
   role: UserRole;
   status: UserStatus;
   lastActive: string;
-  businessId?: string | null; // Added businessId
-  businessName?: string | null; // Added for display
+  businessId?: string | null;
+  businessName?: string | null;
 }
 
 export interface UserFormData {
   fullName: string;
   username: string;
   email: string;
+  phone: string;
   password: string;
   role: UserRole;
   status: UserStatus;
-  businessId?: string; // Added businessId
+  businessId?: string;
 }

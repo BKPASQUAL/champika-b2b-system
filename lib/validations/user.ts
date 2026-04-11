@@ -1,17 +1,26 @@
 import { z } from "zod";
 
+// Sri Lanka phone: optional, must be 10 digits starting with 07x if provided
+const phoneSchema = z
+  .string()
+  .regex(/^07[0-9]{8}$/, "Phone must be a valid Sri Lanka mobile number (e.g. 0771234567)")
+  .optional()
+  .nullable()
+  .or(z.literal(""));
+
 // Schema for Creating a User
 export const createUserSchema = z.object({
   fullName: z.string().min(2, "Full name is required"),
   username: z.string().min(3, "Username must be at least 3 characters"),
   email: z.string().email("Invalid email address"),
+  phone: phoneSchema,
   password: z.string().min(6, "Password must be at least 6 characters"),
   role: z.enum(["admin", "office", "rep", "delivery"]),
   status: z
     .enum(["Active", "Inactive", "Suspended"])
     .optional()
     .default("Active"),
-  businessId: z.string().optional().nullable(), // Added
+  businessId: z.string().optional().nullable(),
 });
 
 // Schema for Updating a User
@@ -19,10 +28,11 @@ export const updateUserSchema = z.object({
   fullName: z.string().min(2).optional(),
   username: z.string().min(3).optional(),
   email: z.string().email().optional(),
+  phone: phoneSchema,
   password: z.string().min(6).optional().or(z.literal("")),
   role: z.enum(["admin", "office", "rep", "delivery"]).optional(),
   status: z.enum(["Active", "Inactive", "Suspended"]).optional(),
-  businessId: z.string().optional().nullable(), // Added
+  businessId: z.string().optional().nullable(),
 });
 
 export const toggleStatusSchema = z.object({

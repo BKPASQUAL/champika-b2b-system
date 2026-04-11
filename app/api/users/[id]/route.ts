@@ -12,6 +12,24 @@ export async function PATCH(
     const body = await request.json();
     const validatedData = updateUserSchema.parse(body);
 
+    // Check for duplicate phone (if phone is being updated)
+    const phoneValue = validatedData.phone !== undefined ? (validatedData.phone || null) : undefined;
+    if (phoneValue) {
+      const { data: existing } = await supabaseAdmin
+        .from("profiles")
+        .select("id")
+        .eq("phone", phoneValue)
+        .neq("id", id)
+        .maybeSingle();
+
+      if (existing) {
+        return NextResponse.json(
+          { error: "Phone number is already in use by another user" },
+          { status: 400 }
+        );
+      }
+    }
+
     // Update Profile Data
     const profileUpdates: any = {};
     if (validatedData.fullName)
@@ -21,6 +39,11 @@ export async function PATCH(
     if (validatedData.role) profileUpdates.role = validatedData.role;
     if (validatedData.status)
       profileUpdates.is_active = validatedData.status === "Active";
+
+    // Allow updating phone (undefined = not changing, null/string = set value)
+    if (phoneValue !== undefined) {
+      profileUpdates.phone = phoneValue;
+    }
 
     // Allow updating business_id (check undefined to distinguish between clearing and not updating)
     if (validatedData.businessId !== undefined) {
@@ -86,12 +109,13 @@ export async function GET(
       full_name: profile.full_name,
       username: profile.username,
       email: profile.email,
+      phone: profile.phone,
       role: profile.role,
       is_active: profile.is_active,
       created_at: profile.created_at,
       updated_at: profile.updated_at,
-      business_id: profile.business_id, // Return ID
-      business_name: profile.businesses?.name, // Return Name
+      business_id: profile.business_id,
+      business_name: profile.businesses?.name,
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
