@@ -39,6 +39,8 @@ export async function PATCH(
     if (validatedData.role) profileUpdates.role = validatedData.role;
     if (validatedData.status)
       profileUpdates.is_active = validatedData.status === "Active";
+    // Keep profiles.email in sync so username-based login still works
+    if (validatedData.email) profileUpdates.email = validatedData.email;
 
     // Allow updating phone (undefined = not changing, null/string = set value)
     if (phoneValue !== undefined) {
