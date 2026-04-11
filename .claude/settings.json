@@ -3,7 +3,13 @@
     "allow": [
       "Bash(grep -Ev \"h-4 w-4|w-4 h-4|h-3 w-3|w-3 h-3|h-5 w-5|w-5 h-5|h-8 w-8 animate-spin text-primary|h-8 w-8 animate-spin mx-auto text-primary|border-t-|border-2 border|h-screen|animate-spin text-slate|animate-spin\\\\\" \\\\}|animate-spin\\\\\"$|\\\\} from|RefreshCw|w-[0-9]+ h-[0-9]+ animate-spin.*mr-2|inline.*animate-spin|animate-spin.*inline|text-muted-foreground.*Loader2.*h-3|Loader2.*h-3.*animate-spin\")",
       "Bash(grep -Ev \"\\\\\"Loader2, \\\\\"|Loader2,$|Loader2,|from|RefreshCw|border-t-|border-2 border|h-screen|animate-spin text-slate|animate-spin text-red-600\\\\\"|animate-spin text-orange-600\\\\\"|animate-spin\\\\\"$|\\\\/\\\\/$|inline.*animate|animate.*inline|h-[34] w-[34]|h-3 w-3|w-4 h-4|h-4 w-4|h-5 w-5|w-5 h-5\")",
-      "Bash(grep -v \"layout.tsx\\\\|border-2\\\\|border-t\\\\|//\")"
+      "Bash(grep -v \"layout.tsx\\\\|border-2\\\\|border-t\\\\|//\")",
+      "Bash(python3 -c ':*)",
+      "Bash(curl -s -X POST http://localhost:3000/api/orange/inter-branch/bill -H 'Content-Type: application/json' -d '{\"customerName\": \"Champika Hardware - Distribution\"}')",
+      "Bash(curl -s \"http://localhost:3000/api/invoices?businessId=41b55e39-2edb-43ac-9877-dabd23902335\")",
+      "Bash(curl -s -X POST http://localhost:3000/api/orange/inter-branch/bill -H 'Content-Type: application/json' -d '{\"customerName\": \"Champika Hardware - Retail\"}')",
+      "Bash(curl -s -X POST http://localhost:3000/api/wireman/inter-branch/bill -H 'Content-Type: application/json' -d '{\"customerName\": \"Champika Hardware - Distribution\"}')",
+      "Bash(curl -s -X POST http://localhost:3000/api/wireman/inter-branch/bill -H 'Content-Type: application/json' -d '{\"customerName\": \"Champika Hardware - Retail\"}')"
     ],
     "additionalDirectories": [
       "\\tmp"

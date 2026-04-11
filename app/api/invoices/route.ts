@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
+import { triggerAgencyBillsForInvoice } from "@/app/lib/inter-branch-billing";
 
 // --- Validation Schemas ---
 
@@ -203,7 +204,19 @@ export async function POST(request: NextRequest) {
     const invoiceNo = `INV-${nextId}`;
     // -------------------------------------------------------------
 
-    // 2. Calculate Dates
+    // 2. Resolve business_id — if not sent (e.g. rep portal), look it up from the customer.
+    // This ensures the order always has the correct business_id so billing queries work.
+    let resolvedBusinessId: string | null = val.businessId || null;
+    if (!resolvedBusinessId) {
+      const { data: custBizData } = await supabaseAdmin
+        .from("customers")
+        .select("business_id")
+        .eq("id", val.customerId)
+        .single();
+      resolvedBusinessId = custBizData?.business_id || null;
+    }
+
+    // 3. Calculate Dates
     const invoiceDate =
       val.invoiceDate || new Date().toISOString().split("T")[0];
     const dueDate =
@@ -214,8 +227,7 @@ export async function POST(request: NextRequest) {
         return date.toISOString().split("T")[0];
       })();
 
-    // 3. Create Order Record
-    // Use TIMESTAMP for unique Order ID to avoid collisions
+    // 4. Create Order Record
     const orderId = `ORD-${Date.now()}`;
 
     const { data: orderData, error: orderError } = await supabaseAdmin
@@ -229,7 +241,7 @@ export async function POST(request: NextRequest) {
         total_amount: val.grandTotal,
         notes: val.notes || null,
         created_by: val.salesRepId,
-        business_id: val.businessId,
+        business_id: resolvedBusinessId,
         extra_discount_percent: val.extraDiscountPercent,
         extra_discount_amount: val.extraDiscountAmount,
       })
@@ -347,7 +359,7 @@ export async function POST(request: NextRequest) {
       // Auto-Deposit to Retail Cash if applicable
       if (
         val.paymentType === "Cash" &&
-        val.businessId === BUSINESS_IDS.CHAMPIKA_RETAIL
+        resolvedBusinessId === BUSINESS_IDS.CHAMPIKA_RETAIL
       ) {
         const { data: retailCashAccount } = await supabaseAdmin
           .from("bank_accounts")
@@ -454,6 +466,24 @@ export async function POST(request: NextRequest) {
             remainingToDeduct -= deduct;
           }
         }
+      }
+    }
+
+    // 10. Auto-trigger inter-branch agency bills
+    // resolvedBusinessId is already correctly set (from val.businessId or customer lookup).
+    // If it's a Champika business, scan the invoice items for agency supplier products
+    // and create/update the monthly bill in each matching agency portal.
+    const champikaBusinessIds: string[] = [
+      BUSINESS_IDS.CHAMPIKA_RETAIL,
+      BUSINESS_IDS.CHAMPIKA_DISTRIBUTION,
+    ];
+
+    if (resolvedBusinessId && champikaBusinessIds.includes(resolvedBusinessId)) {
+      const productIds = val.items.map((i) => i.productId);
+      try {
+        await triggerAgencyBillsForInvoice(resolvedBusinessId, productIds);
+      } catch (err) {
+        console.error("Inter-branch auto-billing failed (non-critical):", err);
       }
     }
 

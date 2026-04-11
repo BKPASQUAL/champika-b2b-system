@@ -89,7 +89,7 @@ export default function CreateInvoicePage() {
 
   // Data State
   const [products, setProducts] = useState<Product[]>([]);
-  const [customers, setCustomers] = useState<{ id: string; name: string }[]>(
+  const [customers, setCustomers] = useState<{ id: string; name: string; businessId?: string }[]>(
     []
   );
   const [reps, setReps] = useState<{ id: string; name: string }[]>([]);
@@ -159,6 +159,7 @@ export default function CreateInvoicePage() {
           customersData.map((c: any) => ({
             id: c.id,
             name: c.shopName,
+            businessId: c.businessId || c.business_id,
           }))
         );
 
@@ -325,9 +326,11 @@ export default function CreateInvoicePage() {
 
     setLoading(true);
 
+    const selectedCustomer = customers.find((c) => c.id === customerId);
     const invoiceData = {
       customerId,
       salesRepId,
+      businessId: selectedCustomer?.businessId,
       items,
       invoiceNumber,
       invoiceDate,

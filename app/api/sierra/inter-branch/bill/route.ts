@@ -7,30 +7,30 @@ export async function POST(request: NextRequest) {
     const { customerName } = await request.json();
 
     let targetBusinessId: string | null = null;
-    let invoicePrefix = "WM";
+    let invoicePrefix = "SI";
 
     if (customerName?.includes("Retail")) {
       targetBusinessId = BUSINESS_IDS.CHAMPIKA_RETAIL;
-      invoicePrefix = "RE"; // Wireman -> Retail
+      invoicePrefix = "SI-RE"; // Sierra -> Retail
     } else if (customerName?.includes("Distribution")) {
       targetBusinessId = BUSINESS_IDS.CHAMPIKA_DISTRIBUTION;
-      invoicePrefix = "DI"; // Wireman -> Distribution
+      invoicePrefix = "SI-DI"; // Sierra -> Distribution
     }
 
     if (!targetBusinessId) {
       return NextResponse.json({ error: "Invalid customer" }, { status: 400 });
     }
 
-    // Always resolve customer within Wireman Agency to prevent cross-portal ID contamination
-    const customerId = await ensureCustomerInAgency(BUSINESS_IDS.WIREMAN_AGENCY, customerName);
+    // Always resolve customer within Sierra Agency to prevent cross-portal ID contamination
+    const customerId = await ensureCustomerInAgency(BUSINESS_IDS.SIERRA_AGENCY, customerName);
 
     if (!customerId) {
       return NextResponse.json({ error: "Could not resolve customer" }, { status: 400 });
     }
 
     await generateInterBranchBill({
-      agencyBusinessId: BUSINESS_IDS.WIREMAN_AGENCY,
-      agencyName: "Wireman",
+      agencyBusinessId: BUSINESS_IDS.SIERRA_AGENCY,
+      agencyName: "Sierra",
       invoicePrefix,
       customerId,
       customerName,
@@ -38,12 +38,12 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({
-      message: "Wireman inter-branch bill processed",
+      message: "Sierra inter-branch bill processed",
       invoicePrefix,
       customerName,
     });
   } catch (error: any) {
-    console.error("Wireman inter-branch bill error:", error);
+    console.error("Sierra inter-branch bill error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

@@ -424,6 +424,7 @@ export default function CreateOrderPage() {
     const orderData = {
       customerId,
       salesRepId: currentUser.id,
+      businessId: userBusinessId,
       invoiceDate: orderDate,
       orderStatus: "Pending",
       items,

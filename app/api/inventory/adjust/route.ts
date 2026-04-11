@@ -30,17 +30,17 @@ export async function POST(request: NextRequest) {
       const qtyToSave = Math.max(0, Number(newQuantity));
 
       // 2. Update the Stock
-      const { error: updateError } = await supabaseAdmin
-        .from("product_stocks")
-        .upsert(
-          {
-            location_id: locationId,
-            product_id: productId,
-            quantity: qtyToSave,
-            last_updated: new Date().toISOString(),
-          },
-          { onConflict: "location_id,product_id" },
-        );
+      const stockOperation = oldStock
+        ? supabaseAdmin
+            .from("product_stocks")
+            .update({ quantity: qtyToSave, last_updated: new Date().toISOString() })
+            .eq("location_id", locationId)
+            .eq("product_id", productId)
+        : supabaseAdmin
+            .from("product_stocks")
+            .insert({ location_id: locationId, product_id: productId, quantity: qtyToSave, last_updated: new Date().toISOString() });
+
+      const { error: updateError } = await stockOperation;
 
       if (updateError) {
         console.error(`Error updating product ${productId}:`, updateError);
