@@ -9,7 +9,8 @@
       "Bash(find /c/Projects/champika-b2b-system/app/dashboard/office/wireman/purchases/[id] -type f)",
       "Bash(find /c/Projects/champika-b2b-system -type f -name *setting* -o -name *categor* -o -name *spec*)",
       "Bash(find /c/Projects/champika-b2b-system/app -type f \\\\\\(-name *spec* -o -name *attribute* -o -name *property* \\\\\\))",
-      "Bash(node -e ':*)"
+      "Bash(node -e ':*)",
+      "Bash(npm install:*)"
     ]
   }
 }

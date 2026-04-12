@@ -102,9 +102,9 @@ export default function LoginPage() {
       <div className="min-h-screen w-full flex flex-col items-center justify-center bg-[#F4F4F2] relative overflow-hidden">
         <div className="absolute -top-32 -right-32 w-96 h-96 rounded-full bg-blue-100/50 blur-3xl pointer-events-none" />
         <div className="absolute -bottom-32 -left-32 w-96 h-96 rounded-full bg-stone-300/40 blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col items-center gap-5">
-          <div className="h-16 w-16 rounded-2xl overflow-hidden shadow-2xl shadow-black/10 ring-4 ring-white bg-white">
-            <img src="/logo.svg" alt="Logo" className="h-full w-full object-cover" />
+        <div className="relative z-10 flex flex-col items-center gap-5 animate-pulse">
+          <div className="h-20 w-20 rounded-2xl overflow-hidden shadow-2xl shadow-black/10 ring-4 ring-white bg-white">
+            <img src="/icons/icon-512x512.png" alt="Logo" className="h-full w-full object-cover" />
           </div>
         </div>
       </div>
@@ -113,17 +113,10 @@ export default function LoginPage() {
 
   // ─── Login page ───────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen w-full flex flex-col bg-[#F4F4F2] relative overflow-hidden font-sans text-gray-900">
+    <div className="min-h-screen w-full flex flex-col bg-[#ebebeb] relative overflow-hidden font-sans text-gray-900">
 
-      {/* Decorative background blobs */}
-      <div className="absolute -top-40 -right-40 w-[480px] h-[480px] rounded-full bg-blue-100/50 blur-3xl pointer-events-none select-none" />
-      <div className="absolute -bottom-40 -left-40 w-[480px] h-[480px] rounded-full bg-stone-300/50 blur-3xl pointer-events-none select-none" />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-white/20 blur-3xl pointer-events-none select-none" />
-
-      {/* Logo watermark */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none" aria-hidden="true">
-        <img src="/logo.svg" alt="" className="w-[85vw] max-w-[600px] opacity-[0.04]" />
-      </div>
+      {/* Large curved light shape — top center */}
+      <div className="absolute -top-[10%] left-1/2 -translate-x-1/2 w-[110vw] h-[65vh] rounded-[50%] bg-[#dde3ec] pointer-events-none select-none" />
 
       {/* Content — vertically centered, scrollable on very short screens */}
       <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-4 py-10 sm:px-6">
@@ -135,15 +128,15 @@ export default function LoginPage() {
               {/* Glow ring behind logo */}
               <div className="absolute inset-0 rounded-2xl bg-black/5 blur-xl scale-110" />
               <div className="relative h-[72px] w-[72px] sm:h-20 sm:w-20 rounded-2xl overflow-hidden shadow-2xl shadow-black/15 ring-[3px] ring-white bg-white">
-                <img src="/logo.svg" alt="Champika B2B Logo" className="h-full w-full object-cover" />
+                <img src="/icons/icon-512x512.png" alt="Champika Hardware Logo" className="h-full w-full object-cover" />
               </div>
             </div>
 
             <div className="space-y-1.5">
               <h1 className="text-[26px] sm:text-3xl font-bold tracking-tight text-black leading-none">
-                Champika B2B
+                Champika Hardware
               </h1>
-              <p className="text-sm text-[#78716c] font-medium">Integrated Management Portal</p>
+              <p className="text-sm text-[#78716c] font-medium">B2B Management Portal</p>
             </div>
           </div>
 
@@ -258,7 +251,7 @@ export default function LoginPage() {
 
           {/* Footer */}
           <p className="text-center text-[11px] text-[#b8b2ae] pb-2">
-            © 2025 Champika B2B System · All rights reserved
+            © 2026 Champika Hardware · All rights reserved
           </p>
 
         </div>

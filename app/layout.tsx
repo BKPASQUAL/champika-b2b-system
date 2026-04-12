@@ -25,20 +25,20 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Finora Farm",
-  description: "Finora Farm B2B Management System",
+  title: "Champika Hardware",
+  description: "Champika Hardware B2B Management System",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Finora Farm",
+    title: "Champika Hardware",
   },
   formatDetection: {
     telephone: false,
   },
   icons: {
-    icon: "/logo.svg",
-    apple: "/logo.svg",
+    icon: "/icons/icon-512x512.png",
+    apple: "/icons/icon-512x512.png",
   },
 };
 
