@@ -106,10 +106,6 @@ export default function LoginPage() {
           <div className="h-16 w-16 rounded-2xl overflow-hidden shadow-2xl shadow-black/10 ring-4 ring-white bg-white">
             <img src="/logo.svg" alt="Logo" className="h-full w-full object-cover" />
           </div>
-          <div className="flex items-center gap-2 text-[#a8a29e]">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span className="text-sm font-medium">Checking session…</span>
-          </div>
         </div>
       </div>
     );
