@@ -1,7 +1,7 @@
 // app/dashboard/rep/customers/page.tsx
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -60,7 +60,7 @@ export default function RepCustomersPage() {
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [routeFilter, setRouteFilter] = useState("all"); // <--- ADDED Route Filter State
+  const [routeFilter, setRouteFilter] = useState("all");
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -71,7 +71,6 @@ export default function RepCustomersPage() {
       try {
         setLoading(true);
 
-        // 1. Get Current User ID from Local Storage
         const storedUser = localStorage.getItem("currentUser");
         if (!storedUser) {
           toast.error("User session not found. Please login again.");
@@ -81,7 +80,6 @@ export default function RepCustomersPage() {
         const userObj = JSON.parse(storedUser);
         let repId = userObj.id;
 
-        // Fallback: Find ID by email if not in local storage
         if (!repId) {
           const userRes = await fetch("/api/users");
           const users = await userRes.json();
@@ -94,9 +92,7 @@ export default function RepCustomersPage() {
           return;
         }
 
-        // 2. Fetch Customers filtered by Rep ID
         const res = await fetch(`/api/customers?repId=${repId}`);
-
         if (!res.ok) throw new Error("Failed to load customers");
 
         const data = await res.json();
@@ -112,7 +108,6 @@ export default function RepCustomersPage() {
     fetchMyCustomers();
   }, []);
 
-  // --- Reset Pagination when filters change ---
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, statusFilter, routeFilter]);
@@ -139,7 +134,7 @@ export default function RepCustomersPage() {
       c.phone.includes(searchQuery);
 
     const matchesStatus = statusFilter === "all" || c.status === statusFilter;
-    const matchesRoute = routeFilter === "all" || c.route === routeFilter; // <--- ADDED Route Logic
+    const matchesRoute = routeFilter === "all" || c.route === routeFilter;
 
     return matchesSearch && matchesStatus && matchesRoute;
   });
@@ -173,25 +168,25 @@ export default function RepCustomersPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold tracking-tight">My Customers</h1>
-        <p className="text-muted-foreground">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col gap-1">
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">My Customers</h1>
+        <p className="text-sm text-muted-foreground">
           Manage your customer base and view credit details.
         </p>
       </div>
 
-      {/* KPI Cards Section */}
-      <div className="grid gap-4 md:grid-cols-2">
+      {/* KPI Cards — always 2 columns, even on mobile */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+            <CardTitle className="text-xs sm:text-sm font-medium">
               Total Customers
             </CardTitle>
-            <Users className="w-4 h-4 text-muted-foreground" />
+            <Users className="w-4 h-4 text-muted-foreground shrink-0" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalCustomers}</div>
+          <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
+            <div className="text-xl sm:text-2xl font-bold">{totalCustomers}</div>
             <p className="text-xs text-muted-foreground mt-1">
               {activeCustomers} Active shops
             </p>
@@ -199,29 +194,29 @@ export default function RepCustomersPage() {
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">
-              Total Outstanding
+          <CardHeader className="flex flex-row items-center justify-between pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+            <CardTitle className="text-xs sm:text-sm font-medium">
+              Outstanding
             </CardTitle>
-            <Wallet className="w-4 h-4 text-red-600" />
+            <Wallet className="w-4 h-4 text-red-600 shrink-0" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">
+          <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
+            <div className="text-lg sm:text-2xl font-bold text-red-600 leading-tight">
               LKR {totalOutstanding.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Credit to be collected
+              Credit to collect
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Table Section */}
+      {/* Table / Card List Section */}
       <Card>
-        <CardHeader className="pb-3">
-          <div className="flex flex-col lg:flex-row gap-4 justify-between">
+        <CardHeader className="pb-3 px-3 sm:px-6">
+          <div className="flex flex-col md:flex-row md:items-center gap-3">
             {/* Search Input */}
-            <div className="relative flex-1 max-w-md">
+            <div className="relative w-full md:flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search shop, name or phone..."
@@ -232,12 +227,11 @@ export default function RepCustomersPage() {
             </div>
 
             {/* Filter Dropdowns */}
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Route Filter - ADDED */}
+            <div className="flex items-center gap-2 md:shrink-0">
               <Select value={routeFilter} onValueChange={setRouteFilter}>
-                <SelectTrigger className="w-[160px]">
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <MapPin className="h-4 w-4" />
+                <SelectTrigger className="flex-1 min-w-0 md:w-[150px]">
+                  <div className="flex items-center gap-2 text-muted-foreground min-w-0">
+                    <MapPin className="h-4 w-4 shrink-0" />
                     <SelectValue placeholder="Route" />
                   </div>
                 </SelectTrigger>
@@ -251,11 +245,10 @@ export default function RepCustomersPage() {
                 </SelectContent>
               </Select>
 
-              {/* Status Filter */}
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[140px]">
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Filter className="h-4 w-4" />
+                <SelectTrigger className="flex-1 min-w-0 md:w-[140px]">
+                  <div className="flex items-center gap-2 text-muted-foreground min-w-0">
+                    <Filter className="h-4 w-4 shrink-0" />
                     <SelectValue placeholder="Status" />
                   </div>
                 </SelectTrigger>
@@ -269,17 +262,87 @@ export default function RepCustomersPage() {
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="rounded-md border">
+
+        <CardContent className="px-3 sm:px-6">
+          {/* ── Mobile: Card list (hidden on md+) ── */}
+          <div className="flex flex-col gap-3 md:hidden">
+            {paginatedCustomers.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
+                <Users className="h-8 w-8 opacity-50" />
+                <p className="text-sm">No customers found matching your filters.</p>
+              </div>
+            ) : (
+              paginatedCustomers.map((customer) => (
+                <div
+                  key={customer.id}
+                  className="rounded-lg border bg-white p-3 shadow-sm space-y-2"
+                >
+                  {/* Top row: avatar + name + badge */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Avatar className="h-9 w-9 bg-blue-50 text-blue-700 border border-blue-100 shrink-0">
+                        <AvatarFallback className="font-semibold text-xs">
+                          {customer.shopName.substring(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm text-gray-900 truncate">
+                          {customer.shopName}
+                        </p>
+                        {customer.ownerName && (
+                          <p className="text-xs text-muted-foreground truncate">
+                            {customer.ownerName}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className={`shrink-0 text-xs ${getStatusColor(customer.status)}`}
+                    >
+                      {customer.status}
+                    </Badge>
+                  </div>
+
+                  {/* Bottom row: phone / route / outstanding */}
+                  <div className="flex items-center justify-between gap-2 pt-1 border-t">
+                    <div className="flex flex-col gap-0.5 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Phone className="h-3 w-3" /> {customer.phone}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <MapPin className="h-3 w-3" /> {customer.route || "—"}
+                      </span>
+                    </div>
+                    <div className="flex flex-col items-end gap-0.5">
+                      <span
+                        className={`text-sm font-semibold ${
+                          customer.outstandingBalance > 0
+                            ? "text-red-600"
+                            : "text-gray-600"
+                        }`}
+                      >
+                        LKR {customer.outstandingBalance.toLocaleString()}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">
+                        Limit: {customer.creditLimit.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* ── Desktop: Table (hidden below md) ── */}
+          <div className="hidden md:block rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Customer Details</TableHead>
                   <TableHead>Route</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="text-right">
-                    Outstanding (LKR)
-                  </TableHead>
+                  <TableHead className="text-right">Outstanding (LKR)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -359,11 +422,11 @@ export default function RepCustomersPage() {
 
           {/* Pagination Controls */}
           {filteredCustomers.length > 0 && (
-            <div className="flex items-center justify-between px-2 py-4">
-              <div className="text-sm text-muted-foreground">
-                Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
+            <div className="flex items-center justify-between px-1 py-4 gap-2 flex-wrap">
+              <div className="text-xs sm:text-sm text-muted-foreground">
+                Showing {(currentPage - 1) * itemsPerPage + 1}–
                 {Math.min(currentPage * itemsPerPage, filteredCustomers.length)}{" "}
-                of {filteredCustomers.length} entries
+                of {filteredCustomers.length}
               </div>
               <div className="flex items-center gap-2">
                 <Button
@@ -372,7 +435,7 @@ export default function RepCustomersPage() {
                   onClick={() => setCurrentPage(currentPage - 1)}
                   disabled={currentPage === 1}
                 >
-                  <ChevronLeft className="h-4 w-4 mr-1" /> Previous
+                  <ChevronLeft className="h-4 w-4 mr-1" /> Prev
                 </Button>
                 <Button
                   variant="outline"
