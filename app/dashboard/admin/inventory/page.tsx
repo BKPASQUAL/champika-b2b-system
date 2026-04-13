@@ -41,6 +41,7 @@ import { toast } from "sonner";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
+import { TablePagination } from "@/components/ui/TablePagination";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -409,34 +410,14 @@ export default function InventoryPage() {
             </Table>
           </div>
 
-          {/* Pagination Controls */}
-          <div className="flex items-center justify-between py-4">
-            <div className="text-sm text-muted-foreground">
-              Showing {filteredProducts.length > 0 ? startIndex + 1 : 0} to{" "}
-              {Math.min(startIndex + ITEMS_PER_PAGE, filteredProducts.length)}{" "}
-              of {filteredProducts.length} entries
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-              >
-                <ChevronLeft className="h-4 w-4 mr-1" /> Previous
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setCurrentPage((p) => Math.min(totalPages, p + 1))
-                }
-                disabled={currentPage === totalPages || totalPages === 0}
-              >
-                Next <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
-            </div>
-          </div>
+          {/* Pagination */}
+          <TablePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={filteredProducts.length}
+            itemsPerPage={ITEMS_PER_PAGE}
+            onPageChange={setCurrentPage}
+          />
         </CardContent>
       </Card>
     </div>

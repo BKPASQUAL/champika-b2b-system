@@ -17,8 +17,6 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
-  ChevronLeft,
-  ChevronRight,
   Loader2,
   MapPin,
   CheckCircle2,
@@ -28,6 +26,7 @@ import {
 } from "lucide-react";
 import { Customer, SortField, SortOrder, CustomerStatus } from "../types";
 import { INTERNAL_CUSTOMERS } from "@/app/config/business-constants";
+import { TablePagination } from "@/components/ui/TablePagination";
 
 interface CustomerTableProps {
   customers: Customer[];
@@ -249,33 +248,11 @@ export function CustomerTable({
       </div>
 
       {/* Pagination */}
-      {!loading && customers.length > 0 && (
-        <div className="flex items-center justify-between px-2 py-4 border-t">
-          <div className="text-sm text-muted-foreground">
-            Showing {(currentPage - 1) * 10 + 1} to{" "}
-            {Math.min(currentPage * 10, totalPages * 10)} of {totalPages * 10}{" "}
-            entries
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPageChange(currentPage - 1)}
-              disabled={currentPage === 1}
-            >
-              <ChevronLeft className="h-4 w-4 mr-1" /> Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPageChange(currentPage + 1)}
-              disabled={currentPage === totalPages}
-            >
-              Next <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
-          </div>
-        </div>
-      )}
+      <TablePagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={onPageChange}
+      />
     </>
   );
 }

@@ -99,15 +99,15 @@ export default function WiremanAgencyLayout({
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex h-screen w-full bg-gray-50 overflow-hidden">
       <AppSidebar role="office" isWireman={true} />
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="lg:hidden h-14 bg-white border-b flex items-center px-4 sticky top-0 z-30">
+      <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+        <header className="lg:hidden h-16 bg-white border-b flex items-center px-4 shrink-0 z-30">
           <MobileNav role="office" isWireman={true} />
           <span className="ml-4 font-bold text-gray-700">Wireman Portal</span>
         </header>
 
-        <header className="hidden lg:flex h-14 bg-white border-b items-center justify-between px-8 sticky top-0 z-10">
+        <header className="hidden lg:flex h-16 bg-white border-b items-center justify-between px-8 shrink-0 z-10">
           <div className="flex items-center gap-3">
             <div className="h-8 w-8 bg-red-100 rounded-lg flex items-center justify-center">
               <Zap className="h-4 w-4 text-red-600" />

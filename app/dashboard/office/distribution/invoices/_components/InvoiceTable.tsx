@@ -30,6 +30,7 @@ import {
 // Import print utility from admin folder to reuse code
 import { printInvoice } from "@/app/dashboard/admin/invoices/print-utils";
 import { useState } from "react";
+import { TablePagination } from "@/components/ui/TablePagination";
 
 interface InvoiceTableProps {
   invoices: Invoice[];
@@ -398,31 +399,11 @@ export function InvoiceTable({
         </Table>
       </div>
       {/* Pagination */}
-      {!loading && invoices.length > 0 && (
-        <div className="flex items-center justify-between px-2 py-4">
-          <div className="text-sm text-muted-foreground">
-            Page {currentPage} of {totalPages}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPageChange(currentPage - 1)}
-              disabled={currentPage === 1}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPageChange(currentPage + 1)}
-              disabled={currentPage === totalPages}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
-      )}
+      <TablePagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={onPageChange}
+      />
     </>
   );
 }

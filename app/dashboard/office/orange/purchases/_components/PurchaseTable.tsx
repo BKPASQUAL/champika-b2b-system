@@ -13,8 +13,6 @@ import {
   Eye,
   Trash2,
   FileText,
-  ChevronLeft,
-  ChevronRight,
   Loader2,
   Calendar,
 } from "lucide-react";
@@ -26,6 +24,7 @@ import {
   PurchaseStatus,
 } from "../types";
 import { Badge } from "@/components/ui/badge";
+import { TablePagination } from "@/components/ui/TablePagination";
 
 interface PurchaseTableProps {
   purchases: Purchase[];
@@ -189,32 +188,12 @@ export function PurchaseTable({
         </Table>
       </div>
 
-      {/* Pagination */}
-      {purchases.length > 0 && (
-        <div className="flex items-center justify-between px-2 py-4">
-          <div className="text-sm text-muted-foreground">
-            Page {currentPage} of {totalPages}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPageChange(currentPage - 1)}
-              disabled={currentPage === 1}
-            >
-              <ChevronLeft className="h-4 w-4 mr-1" /> Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPageChange(currentPage + 1)}
-              disabled={currentPage === totalPages}
-            >
-              Next <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
-          </div>
-        </div>
-      )}
+      
+      <TablePagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={onPageChange}
+      />
     </>
   );
 }

@@ -16,8 +16,6 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  ChevronLeft,
-  ChevronRight,
   Loader2,
   Tag,
   CheckCircle2,
@@ -28,6 +26,7 @@ import {
 } from "lucide-react";
 import { Supplier, SortField, SortOrder, SupplierStatus } from "../types";
 import { useRouter } from "next/navigation";
+import { TablePagination } from "@/components/ui/TablePagination";
 
 interface SupplierTableProps {
   suppliers: Supplier[];
@@ -268,38 +267,11 @@ export function SupplierTable({
         </Table>
       </div>
       {/* Pagination */}
-      {!loading && suppliers.length > 0 && (
-        <div className="flex items-center justify-between px-2 py-4 border-t">
-          <div className="text-sm text-muted-foreground">
-            Showing {(currentPage - 1) * 7 + 1} to{" "}
-            {Math.min(currentPage * 7, totalPages * 7)} of {totalPages * 7}{" "}
-            entries
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPageChange(currentPage - 1)}
-              disabled={currentPage === 1}
-            >
-              <ChevronLeft className="h-4 w-4 mr-1" /> Previous
-            </Button>
-            <div className="flex items-center gap-1">
-              <Button variant="default" size="sm" className="w-9">
-                {currentPage}
-              </Button>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPageChange(currentPage + 1)}
-              disabled={currentPage === totalPages}
-            >
-              Next <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
-          </div>
-        </div>
-      )}
+      <TablePagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={onPageChange}
+      />
     </>
   );
 }

@@ -13,12 +13,11 @@ import {
   Edit,
   Trash2,
   FileText,
-  ChevronLeft,
-  ChevronRight,
   Loader2,
   Eye, // ✅ Added Eye Icon
 } from "lucide-react";
 import { Purchase, SortField, SortOrder, PaymentStatus } from "../types";
+import { TablePagination } from "@/components/ui/TablePagination";
 
 interface PurchaseTableProps {
   purchases: Purchase[];
@@ -158,33 +157,12 @@ export function PurchaseTable({
           </TableBody>
         </Table>
       </div>
-      {!loading && purchases.length > 0 && (
-        <div className="flex items-center justify-between px-2 py-4 border-t">
-          <div className="text-sm text-muted-foreground">
-            Showing {(currentPage - 1) * 7 + 1} to{" "}
-            {Math.min(currentPage * 7, totalPages * 7)} of {totalPages * 7}{" "}
-            entries
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPageChange(currentPage - 1)}
-              disabled={currentPage === 1}
-            >
-              <ChevronLeft className="h-4 w-4 mr-1" /> Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPageChange(currentPage + 1)}
-              disabled={currentPage === totalPages}
-            >
-              Next <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
-          </div>
-        </div>
-      )}
+      {/* Pagination */}
+      <TablePagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={onPageChange}
+      />
     </>
   );
 }

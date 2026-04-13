@@ -13,8 +13,6 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  ChevronLeft,
-  ChevronRight,
   Eye,
   MoreHorizontal,
   Calendar,
@@ -31,6 +29,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Order, SortField, SortOrder, OrderStatus } from "../types";
+import { TablePagination } from "@/components/ui/TablePagination";
 
 interface OrderTableProps {
   orders: Order[];
@@ -111,32 +110,11 @@ export function OrderTable({
   );
 
   const pagination = orders.length > 0 && (
-    <div className="flex items-center justify-between px-1 pt-4">
-      <p className="text-xs text-muted-foreground">
-        Page <span className="font-medium text-foreground">{currentPage}</span> of{" "}
-        <span className="font-medium text-foreground">{totalPages}</span>
-      </p>
-      <div className="flex items-center gap-1.5">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onPageChange(currentPage - 1)}
-          disabled={currentPage === 1}
-          className="h-8 px-3 text-xs"
-        >
-          <ChevronLeft className="h-3.5 w-3.5 mr-1" /> Prev
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onPageChange(currentPage + 1)}
-          disabled={currentPage === totalPages}
-          className="h-8 px-3 text-xs"
-        >
-          Next <ChevronRight className="h-3.5 w-3.5 ml-1" />
-        </Button>
-      </div>
-    </div>
+    <TablePagination
+      currentPage={currentPage}
+      totalPages={totalPages}
+      onPageChange={onPageChange}
+    />
   );
 
   return (

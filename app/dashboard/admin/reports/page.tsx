@@ -18,8 +18,6 @@ import {
   Calendar,
   BarChart3,
   Loader2,
-  ChevronLeft,
-  ChevronRight,
   Wallet,
   ArrowDownRight,
   CreditCard,
@@ -52,6 +50,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { TablePagination } from "@/components/ui/TablePagination";
 
 const COLORS = [
   "#0088FE",
@@ -896,31 +895,11 @@ export default function AdminReportsPage() {
                 </TableBody>
               </Table>
 
-              {deliveryData.length > 0 && (
-                <div className="flex items-center justify-end space-x-2 py-4">
-                  <div className="text-sm text-muted-foreground">
-                    Page {deliveryPage} of {totalDeliveryPages}
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setDeliveryPage(deliveryPage - 1)}
-                    disabled={deliveryPage === 1}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                    Previous
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setDeliveryPage(deliveryPage + 1)}
-                    disabled={deliveryPage === totalDeliveryPages}
-                  >
-                    Next
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              )}
+              <TablePagination
+                currentPage={deliveryPage}
+                totalPages={totalDeliveryPages}
+                onPageChange={setDeliveryPage}
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -1402,30 +1381,12 @@ export default function AdminReportsPage() {
                 </TableBody>
               </Table>
 
-              {/* Pagination Controls for Orders */}
-              {orderData.length > 0 && (
-                <div className="flex items-center justify-end space-x-2 py-4">
-                  <div className="text-sm text-muted-foreground">
-                    Page {orderPage} of {totalOrderPages}
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setOrderPage(orderPage - 1)}
-                    disabled={orderPage === 1}
-                  >
-                    <ChevronLeft className="h-4 w-4" /> Previous
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setOrderPage(orderPage + 1)}
-                    disabled={orderPage === totalOrderPages}
-                  >
-                    Next <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              )}
+              {/* Pagination */}
+              <TablePagination
+                currentPage={orderPage}
+                totalPages={totalOrderPages}
+                onPageChange={setOrderPage}
+              />
             </CardContent>
           </Card>
         </TabsContent>

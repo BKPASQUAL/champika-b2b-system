@@ -33,6 +33,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { TablePagination } from "@/components/ui/TablePagination";
 
 interface Invoice {
   id: string;
@@ -88,6 +89,8 @@ export default function RepMyInvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   useEffect(() => {
     const fetchInvoices = async () => {
@@ -135,6 +138,17 @@ export default function RepMyInvoicesPage() {
       return matchesSearch && matchesStatus;
     });
   }, [invoices, search, statusFilter]);
+
+  // Reset to page 1 whenever filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, statusFilter]);
+
+  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+  const paginated = filtered.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
   const stats = useMemo(() => {
     const total = invoices.reduce((s, i) => s + (i.totalAmount || 0), 0);
@@ -262,7 +276,7 @@ export default function RepMyInvoicesPage() {
                 <p className="text-xs mt-1">Try adjusting your search or filter</p>
               </div>
             ) : (
-              filtered.map((inv) => (
+              paginated.map((inv) => (
                 <button
                   key={inv.id}
                   onClick={() => router.push(`/dashboard/rep/invoices/${inv.id}`)}
@@ -370,7 +384,7 @@ export default function RepMyInvoicesPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filtered.map((inv) => (
+                  paginated.map((inv) => (
                     <TableRow key={inv.id} className="hover:bg-muted/50 cursor-pointer" onClick={() => router.push(`/dashboard/rep/invoices/${inv.id}`)}>
                       <TableCell className="font-mono text-xs">
                         <div className="font-semibold">{inv.manualInvoiceNo || inv.invoiceNo}</div>
@@ -434,6 +448,15 @@ export default function RepMyInvoicesPage() {
               </TableBody>
             </Table>
           </div>
+
+          {/* Pagination */}
+          <TablePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={filtered.length}
+            itemsPerPage={ITEMS_PER_PAGE}
+            onPageChange={setCurrentPage}
+          />
 
         </CardContent>
       </Card>

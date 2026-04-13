@@ -11,8 +11,9 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Edit, Trash2, ChevronLeft, ChevronRight, Eye } from "lucide-react"; // Add Eye icon
+import { Edit, Trash2, Eye } from "lucide-react"; // Add Eye icon
 import { User } from "../types";
+import { TablePagination } from "@/components/ui/TablePagination";
 
 interface UserTableProps {
   users: User[];
@@ -167,32 +168,12 @@ export function UserTable({
           </TableBody>
         </Table>
       </div>
-      {/* Pagination Controls (Existing code) */}
-      {users.length > 0 && (
-        <div className="flex items-center justify-between px-2 py-4">
-          <div className="text-sm text-muted-foreground">
-            Page {currentPage} of {totalPages}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPageChange(currentPage - 1)}
-              disabled={currentPage === 1}
-            >
-              <ChevronLeft className="h-4 w-4 mr-1" /> Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPageChange(currentPage + 1)}
-              disabled={currentPage === totalPages}
-            >
-              Next <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
-          </div>
-        </div>
-      )}
+      
+      <TablePagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={onPageChange}
+      />
     </>
   );
 }

@@ -29,11 +29,10 @@ import {
   Phone,
   Loader2,
   Wallet,
-  ChevronLeft,
-  ChevronRight,
   Filter,
 } from "lucide-react";
 import { toast } from "sonner";
+import { TablePagination } from "@/components/ui/TablePagination";
 
 // Types
 type CustomerStatus = "Active" | "Inactive" | "Blocked";
@@ -420,34 +419,14 @@ export default function RepCustomersPage() {
             </Table>
           </div>
 
-          {/* Pagination Controls */}
-          {filteredCustomers.length > 0 && (
-            <div className="flex items-center justify-between px-1 py-4 gap-2 flex-wrap">
-              <div className="text-xs sm:text-sm text-muted-foreground">
-                Showing {(currentPage - 1) * itemsPerPage + 1}–
-                {Math.min(currentPage * itemsPerPage, filteredCustomers.length)}{" "}
-                of {filteredCustomers.length}
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(currentPage - 1)}
-                  disabled={currentPage === 1}
-                >
-                  <ChevronLeft className="h-4 w-4 mr-1" /> Prev
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(currentPage + 1)}
-                  disabled={currentPage === totalPages}
-                >
-                  Next <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              </div>
-            </div>
-          )}
+          {/* Pagination */}
+          <TablePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={filteredCustomers.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+          />
         </CardContent>
       </Card>
     </div>

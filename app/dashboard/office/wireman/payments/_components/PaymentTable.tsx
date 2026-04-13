@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Payment, SortField, SortOrder, ChequeStatus } from "../types";
 import { Loader2 } from "lucide-react";
+import { TablePagination } from "@/components/ui/TablePagination";
 
 interface PaymentTableProps {
   payments: Payment[];
@@ -227,31 +228,12 @@ export function PaymentTable({
         </Table>
       </div>
 
-      {!loading && payments.length > 0 && (
-        <div className="flex items-center justify-between px-2 py-4">
-          <div className="text-sm text-muted-foreground">
-            Page {currentPage} of {totalPages}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPageChange(currentPage - 1)}
-              disabled={currentPage === 1}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPageChange(currentPage + 1)}
-              disabled={currentPage === totalPages}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
-      )}
+      {/* Pagination */}
+      <TablePagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={onPageChange}
+      />
     </>
   );
 }
