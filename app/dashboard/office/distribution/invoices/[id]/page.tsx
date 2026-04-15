@@ -20,6 +20,7 @@ import {
   Banknote,
   Percent,
   Download,
+  MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -51,7 +52,8 @@ import {
 } from "@/components/ui/sheet";
 
 // Import the updated print utils
-import { downloadInvoice, printInvoice,  } from "../print-utils";
+import { downloadInvoice, printInvoice } from "../print-utils";
+import { generateInvoicePdfBlob } from "@/app/lib/invoice-print";
 import { DocumentAttachments } from "@/components/ui/DocumentAttachments";
 
 import { toast } from "sonner";
@@ -112,6 +114,9 @@ export default function DistributionViewInvoicePage({
   const [returnsLoading, setReturnsLoading] = useState(true);
   const [returns, setReturns] = useState<ReturnRecord[]>([]);
 
+  // Share state
+  const [sharing, setSharing] = useState(false);
+
   useEffect(() => {
     const fetchInvoice = async () => {
       try {
@@ -157,6 +162,36 @@ export default function DistributionViewInvoicePage({
       console.error("Failed to fetch history");
     } finally {
       setHistoryLoading(false);
+    }
+  };
+
+  const handleSharePdf = async () => {
+    setSharing(true);
+    const tid = toast.loading("Generating PDF…");
+    try {
+      const { blob, filename } = await generateInvoicePdfBlob(id, "distribution");
+      toast.dismiss(tid);
+      const file = new File([blob], filename, { type: "application/pdf" });
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: filename });
+      } else if (navigator.share) {
+        // Fallback: share without file (just title + text)
+        await navigator.share({ title: filename, text: `Invoice ${invoice?.invoiceNo || ""}` });
+      } else {
+        // Desktop fallback: trigger download
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.success("PDF downloaded");
+      }
+    } catch (err: any) {
+      toast.dismiss(tid);
+      if (err?.name !== "AbortError") toast.error("Share failed");
+    } finally {
+      setSharing(false);
     }
   };
 
@@ -344,6 +379,22 @@ export default function DistributionViewInvoicePage({
             >
               <Printer className="w-4 h-4 md:mr-2 text-muted-foreground" />
               <span className="hidden md:inline">Print</span>
+            </Button>
+
+            {/* Share PDF Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="bg-green-50 border-green-200 text-green-700 hover:bg-green-100 hover:text-green-800"
+              onClick={handleSharePdf}
+              disabled={sharing}
+            >
+              {sharing ? (
+                <Loader2 className="w-4 h-4 md:mr-2 animate-spin" />
+              ) : (
+                <MessageCircle className="w-4 h-4 md:mr-2" />
+              )}
+              <span className="hidden md:inline">{sharing ? "Sharing…" : "Share"}</span>
             </Button>
 
             <Button
