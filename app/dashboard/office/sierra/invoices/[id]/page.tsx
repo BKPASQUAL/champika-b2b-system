@@ -20,6 +20,7 @@ import {
   Banknote,
   Percent,
   Download,
+  Share2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -55,6 +56,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { downloadInvoice , printInvoice } from "../../../distribution/invoices/print-utils";
+import { generateInvoicePdfBlob } from "@/app/lib/invoice-print";
 import { DocumentAttachments } from "@/components/ui/DocumentAttachments";
 
 // --- Interfaces ---
@@ -112,6 +114,9 @@ export default function WiremanViewInvoicePage({
   const [returnsLoading, setReturnsLoading] = useState(true);
   const [returns, setReturns] = useState<ReturnRecord[]>([]);
 
+  // Share state
+  const [sharing, setSharing] = useState(false);
+
   useEffect(() => {
     const fetchInvoice = async () => {
       try {
@@ -158,6 +163,34 @@ export default function WiremanViewInvoicePage({
       console.error("Failed to fetch history");
     } finally {
       setHistoryLoading(false);
+    }
+  };
+
+  const handleSharePdf = async () => {
+    setSharing(true);
+    const tid = toast.loading("Generating PDF…");
+    try {
+      const { blob, filename } = await generateInvoicePdfBlob(id, "sierra");
+      toast.dismiss(tid);
+      const file = new File([blob], filename, { type: "application/pdf" });
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: filename });
+      } else if (navigator.share) {
+        await navigator.share({ title: filename, text: `Invoice ${invoice?.invoiceNo || ""}` });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.success("PDF downloaded");
+      }
+    } catch (err: any) {
+      toast.dismiss(tid);
+      if (err?.name !== "AbortError") toast.error("Share failed");
+    } finally {
+      setSharing(false);
     }
   };
 
@@ -346,6 +379,22 @@ export default function WiremanViewInvoicePage({
             >
               <Printer className="w-4 h-4 mr-2 text-muted-foreground" />
               Print
+            </Button>
+
+            {/* Share PDF Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="bg-green-50 border-green-200 text-green-700 hover:bg-green-100 hover:text-green-800"
+              onClick={handleSharePdf}
+              disabled={sharing}
+            >
+              {sharing ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Share2 className="w-4 h-4 mr-2" />
+              )}
+              {sharing ? "Sharing…" : "Share"}
             </Button>
 
             {/* Edit Button - Redirects to Wireman Edit Page */}

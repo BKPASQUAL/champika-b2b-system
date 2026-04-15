@@ -20,7 +20,7 @@ import {
   Banknote,
   Percent,
   Download,
-  MessageCircle,
+  Share2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -392,7 +392,7 @@ export default function DistributionViewInvoicePage({
               {sharing ? (
                 <Loader2 className="w-4 h-4 md:mr-2 animate-spin" />
               ) : (
-                <MessageCircle className="w-4 h-4 md:mr-2" />
+                <Share2 className="w-4 h-4 md:mr-2" />
               )}
               <span className="hidden md:inline">{sharing ? "Sharing…" : "Share"}</span>
             </Button>

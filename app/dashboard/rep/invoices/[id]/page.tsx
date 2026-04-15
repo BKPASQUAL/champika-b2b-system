@@ -18,6 +18,7 @@ import {
   Percent,
   Loader2,
   Truck,
+  Share2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -65,6 +66,9 @@ export default function RepInvoiceDetailPage({
   const [loading, setLoading] = useState(true);
   const [invoice, setInvoice] = useState<any>(null);
 
+  // Share state
+  const [sharing, setSharing] = useState(false);
+
   useEffect(() => {
     if (!id) return;
     const fetchInvoice = async () => {
@@ -86,6 +90,34 @@ export default function RepInvoiceDetailPage({
     };
     fetchInvoice();
   }, [id, router]);
+
+  const handleSharePdf = async () => {
+    setSharing(true);
+    const tid = toast.loading("Generating PDF…");
+    try {
+      const { blob, filename } = await generateInvoicePdfBlob(id, "distribution");
+      toast.dismiss(tid);
+      const file = new File([blob], filename, { type: "application/pdf" });
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: filename });
+      } else if (navigator.share) {
+        await navigator.share({ title: filename, text: `Invoice ${invoice?.invoiceNo || ""}` });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.success("PDF downloaded");
+      }
+    } catch (err: any) {
+      toast.dismiss(tid);
+      if (err?.name !== "AbortError") toast.error("Share failed");
+    } finally {
+      setSharing(false);
+    }
+  };
 
   const getInitials = (name: string) =>
     (name || "?")
@@ -210,6 +242,22 @@ export default function RepInvoiceDetailPage({
             >
               <Printer className="w-4 h-4 mr-2 text-muted-foreground" />
               Print
+            </Button>
+
+            {/* Share PDF Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="bg-green-50 border-green-200 text-green-700 hover:bg-green-100 hover:text-green-800"
+              onClick={handleSharePdf}
+              disabled={sharing}
+            >
+              {sharing ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Share2 className="w-4 h-4 mr-2" />
+              )}
+              {sharing ? "Sharing…" : "Share"}
             </Button>
           </div>
         </div>
