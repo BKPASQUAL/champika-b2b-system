@@ -31,6 +31,7 @@ import {
   ImageIcon,
   File,
   Loader2,
+  Camera,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -83,6 +84,7 @@ export function DocumentAttachments({
   const [labelInput, setLabelInput] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const fetchAttachments = async () => {
     try {
@@ -188,25 +190,52 @@ export function DocumentAttachments({
                   onChange={(e) => setLabelInput(e.target.value)}
                   className="h-9 text-sm flex-1"
                 />
+                {/* Camera capture button */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => cameraInputRef.current?.click()}
+                  disabled={uploading}
+                  className="gap-1.5 whitespace-nowrap shrink-0"
+                  title="Take a photo"
+                >
+                  {uploading ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Camera className="w-3.5 h-3.5" />
+                  )}
+                  <span className="hidden sm:inline">Camera</span>
+                </Button>
+                {/* File upload button */}
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploading}
-                  className="gap-1.5 whitespace-nowrap"
+                  className="gap-1.5 whitespace-nowrap shrink-0"
                 >
                   {uploading ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   ) : (
                     <Upload className="w-3.5 h-3.5" />
                   )}
-                  {uploading ? "Uploading…" : "Upload File"}
+                  <span className="hidden sm:inline">{uploading ? "Uploading…" : "Upload"}</span>
                 </Button>
+                {/* Hidden: regular file picker */}
                 <input
                   ref={fileInputRef}
                   type="file"
                   className="hidden"
                   accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.xlsx,.xls,.doc,.docx"
+                  onChange={handleFileSelect}
+                />
+                {/* Hidden: camera capture (opens device camera directly) */}
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  className="hidden"
+                  accept="image/*"
+                  capture="environment"
                   onChange={handleFileSelect}
                 />
               </div>

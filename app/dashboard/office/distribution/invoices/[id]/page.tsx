@@ -234,16 +234,16 @@ export default function DistributionViewInvoicePage({
   );
 
   return (
-    <div className=" bg-muted/40  ">
-      <div className="mx-auto space-y-8 ">
+    <div className="bg-muted/40 p-3 md:p-4 lg:p-0">
+      <div className="mx-auto space-y-4">
         {/* --- Top Header Section --- */}
-        <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-3 md:gap-4">
           <div className="space-y-1">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <Button
                 variant="outline"
                 size="icon"
-                className="h-8 w-8 rounded-full bg-background"
+                className="h-8 w-8 rounded-full bg-background shrink-0"
                 onClick={() =>
                   router.push("/dashboard/office/distribution/invoices")
                 }
@@ -266,7 +266,7 @@ export default function DistributionViewInvoicePage({
             </p>
           </div>
 
-          <div className="flex items-center gap-2 ml-11 md:ml-0">
+          <div className="flex items-center gap-2 flex-wrap ml-11 md:ml-0">
             {/* History Sheet */}
             <Sheet>
               <SheetTrigger asChild>
@@ -276,7 +276,7 @@ export default function DistributionViewInvoicePage({
                   onClick={fetchHistory}
                   className="bg-background"
                 >
-                  <History className="w-4 h-4 mr-2 text-muted-foreground" />{" "}
+                  <History className="w-4 h-4 mr-2 text-muted-foreground" />
                   History
                 </Button>
               </SheetTrigger>
@@ -284,7 +284,7 @@ export default function DistributionViewInvoicePage({
                 <SheetHeader>
                   <SheetTitle>Audit History</SheetTitle>
                 </SheetHeader>
-                <div className="mt-6 space-y-6">
+                <div className="mt-4 space-y-4">
                   {historyLoading ? (
                     <div className="flex justify-center items-center py-16">
                       <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -324,26 +324,26 @@ export default function DistributionViewInvoicePage({
               </SheetContent>
             </Sheet>
 
-            {/* Separate Download Button */}
+            {/* Download Button */}
             <Button
               variant="outline"
               size="sm"
               className="bg-background"
               onClick={() => downloadInvoice(id)}
             >
-              <Download className="w-4 h-4 mr-2 text-muted-foreground" />
-              Download
+              <Download className="w-4 h-4 md:mr-2 text-muted-foreground" />
+              <span className="hidden md:inline">Download</span>
             </Button>
 
-            {/* Separate Print Button */}
+            {/* Print Button */}
             <Button
               variant="outline"
               size="sm"
               className="bg-background"
               onClick={() => printInvoice(id)}
             >
-              <Printer className="w-4 h-4 mr-2 text-muted-foreground" />
-              Print
+              <Printer className="w-4 h-4 md:mr-2 text-muted-foreground" />
+              <span className="hidden md:inline">Print</span>
             </Button>
 
             <Button
@@ -354,19 +354,20 @@ export default function DistributionViewInvoicePage({
                 )
               }
             >
-              <Edit className="w-4 h-4 mr-2" /> Edit Invoice
+              <Edit className="w-4 h-4 md:mr-2" />
+              <span className="hidden md:inline">Edit Invoice</span>
             </Button>
           </div>
         </div>
 
         {/* --- Main Content Grid --- */}
-        <div className="grid gap-6 lg:grid-cols-3">
+        <div className="grid gap-4 lg:grid-cols-3">
           {/* LEFT COLUMN */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-4">
             {/* Stakeholders Card */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <Card className="shadow-sm border-l-4 border-l-blue-500">
-                <CardHeader className="pb-2">
+                <CardHeader className="pb-1 pt-3">
                   <CardDescription className="text-xs font-semibold uppercase tracking-wider text-blue-600">
                     Bill To
                   </CardDescription>
@@ -393,7 +394,7 @@ export default function DistributionViewInvoicePage({
               </Card>
 
               <Card className="shadow-sm">
-                <CardHeader className="pb-2">
+                <CardHeader className="pb-1 pt-3">
                   <CardDescription className="text-xs font-semibold uppercase tracking-wider">
                     Sales Representative
                   </CardDescription>
@@ -418,182 +419,145 @@ export default function DistributionViewInvoicePage({
 
             {/* Line Items Table */}
             <Card className="shadow-sm overflow-hidden">
-              <CardHeader className="bg-slate-50/50 border-b py-4">
+              <CardHeader className="bg-slate-50/50 border-b py-3">
                 <div className="flex justify-between items-center">
-                  <CardTitle className="text-lg font-semibold">
-                    Line Items
-                  </CardTitle>
+                  <CardTitle className="text-lg font-semibold">Line Items</CardTitle>
                   <Badge variant="outline" className="font-normal">
                     {invoice.items.length} Items
                   </Badge>
                 </div>
               </CardHeader>
-              <CardContent className="p-0">
+
+              {/* ── Desktop table (lg+) ── */}
+              <CardContent className="p-0 hidden lg:block">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-slate-50/50 hover:bg-slate-50/50">
-                      <TableHead className="w-[35%] pl-6">
-                        Product Details
-                      </TableHead>
+                      <TableHead className="w-[35%] pl-6">Product Details</TableHead>
                       <TableHead className="text-center w-[10%]">Qty</TableHead>
-                      <TableHead className="text-center w-[10%]">
-                        Free
-                      </TableHead>
-                      <TableHead className="text-right w-[15%]">
-                        Price
-                      </TableHead>
-                      <TableHead className="text-center w-[10%]">
-                        Disc.
-                      </TableHead>
-                      <TableHead className="text-right w-[20%] pr-6">
-                        Total
-                      </TableHead>
+                      <TableHead className="text-center w-[10%]">Free</TableHead>
+                      <TableHead className="text-right w-[15%]">Price</TableHead>
+                      <TableHead className="text-center w-[10%]">Disc.</TableHead>
+                      <TableHead className="text-right w-[20%] pr-6">Total</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {invoice.items.map((item: any) => (
                       <TableRow key={item.id} className="hover:bg-muted/30">
-                        <TableCell className="pl-6 py-4">
+                        <TableCell className="pl-6 py-3">
                           <div className="flex items-start gap-3">
                             <div className="h-8 w-8 rounded bg-slate-100 flex items-center justify-center text-slate-400 shrink-0">
                               <Package className="w-4 h-4" />
                             </div>
                             <div>
-                              <p className="font-medium text-sm text-foreground">
-                                {item.productName}
-                              </p>
-                              <p className="text-xs font-mono text-muted-foreground mt-0.5">
-                                {item.sku}
-                              </p>
+                              <p className="font-medium text-sm text-foreground">{item.productName}</p>
+                              <p className="text-xs font-mono text-muted-foreground mt-0.5">{item.sku}</p>
                             </div>
                           </div>
                         </TableCell>
                         <TableCell className="text-center">
                           <span className="font-medium">{item.quantity}</span>
-                          <span className="text-xs text-muted-foreground ml-1">
-                            {item.unit}
-                          </span>
+                          <span className="text-xs text-muted-foreground ml-1">{item.unit}</span>
                         </TableCell>
                         <TableCell className="text-center">
                           {item.freeQuantity > 0 ? (
-                            <Badge
-                              variant="secondary"
-                              className="px-1.5 h-5 text-[10px]"
-                            >
-                              {item.freeQuantity}
-                            </Badge>
-                          ) : (
-                            <span className="text-muted-foreground text-sm">
-                              -
-                            </span>
-                          )}
+                            <Badge variant="secondary" className="px-1.5 h-5 text-[10px]">{item.freeQuantity}</Badge>
+                          ) : <span className="text-muted-foreground text-sm">-</span>}
                         </TableCell>
                         <TableCell className="text-right font-mono text-sm">
-                          {item.unitPrice.toLocaleString("en-LK", {
-                            minimumFractionDigits: 2,
-                          })}
+                          {item.unitPrice.toLocaleString("en-LK", { minimumFractionDigits: 2 })}
                         </TableCell>
                         <TableCell className="text-center text-sm">
                           {item.discountPercent > 0 ? (
                             <div className="flex flex-col items-center">
-                              <span className="font-medium text-red-600 bg-red-50 px-1.5 rounded text-xs">
-                                -{item.discountPercent}%
-                              </span>
+                              <span className="font-medium text-red-600 bg-red-50 px-1.5 rounded text-xs">-{item.discountPercent}%</span>
                               {item.discountAmount > 0 && (
                                 <span className="text-[10px] text-muted-foreground mt-0.5">
-                                  {item.discountAmount.toLocaleString("en-LK", {
-                                    maximumFractionDigits: 0,
-                                  })}
+                                  {item.discountAmount.toLocaleString("en-LK", { maximumFractionDigits: 0 })}
                                 </span>
                               )}
                             </div>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
+                          ) : <span className="text-muted-foreground">-</span>}
                         </TableCell>
                         <TableCell className="text-right pr-6 font-mono font-medium text-sm">
-                          {item.total.toLocaleString("en-LK", {
-                            minimumFractionDigits: 2,
-                          })}
+                          {item.total.toLocaleString("en-LK", { minimumFractionDigits: 2 })}
                         </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                   <TableFooter className="bg-slate-50/50">
                     <TableRow>
-                      <TableCell className="pl-6 font-semibold">
-                        Total
-                      </TableCell>
-                      <TableCell className="text-center font-semibold">
-                        {totalItemsQty}
-                      </TableCell>
-                      <TableCell className="text-center font-semibold">
-                        {totalFreeQty > 0 ? totalFreeQty : "-"}
-                      </TableCell>
+                      <TableCell className="pl-6 font-semibold">Total</TableCell>
+                      <TableCell className="text-center font-semibold">{totalItemsQty}</TableCell>
+                      <TableCell className="text-center font-semibold">{totalFreeQty > 0 ? totalFreeQty : "-"}</TableCell>
                       <TableCell colSpan={3} className="text-right pr-6">
-                        <span className="text-xs text-muted-foreground uppercase mr-2">
-                          Items Subtotal:
-                        </span>
+                        <span className="text-xs text-muted-foreground uppercase mr-2">Items Subtotal:</span>
                         <span className="font-bold font-mono text-base">
-                          LKR{" "}
-                          {invoice.items
-                            .reduce((sum: number, i: any) => sum + i.total, 0)
-                            .toLocaleString("en-LK", {
-                              minimumFractionDigits: 2,
-                            })}
+                          LKR {invoice.items.reduce((s: number, i: any) => s + i.total, 0).toLocaleString("en-LK", { minimumFractionDigits: 2 })}
                         </span>
                       </TableCell>
                     </TableRow>
                   </TableFooter>
                 </Table>
               </CardContent>
+
+              {/* ── Mobile / Tablet card list (< lg) ── */}
+              <CardContent className="p-2 lg:hidden space-y-1.5">
+                {invoice.items.map((item: any, idx: number) => (
+                  <div key={item.id} className="rounded-lg border bg-white p-2.5 space-y-1.5">
+                    {/* Product row */}
+                    <div className="flex items-start gap-3">
+                      <div className="h-8 w-8 rounded bg-slate-100 flex items-center justify-center text-slate-400 shrink-0 mt-0.5">
+                        <Package className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-semibold text-sm text-foreground leading-snug">{item.productName}</p>
+                          <span className="font-bold font-mono text-sm text-foreground whitespace-nowrap">
+                            LKR {item.total.toLocaleString("en-LK", { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                        <p className="text-xs font-mono text-muted-foreground">{item.sku}</p>
+                      </div>
+                    </div>
+                    {/* Stats row */}
+                    <div className="flex items-center gap-3 pl-11 flex-wrap">
+                      <span className="text-xs bg-slate-100 rounded px-2 py-0.5 font-medium">
+                        Qty: {item.quantity} {item.unit}
+                      </span>
+                      {item.freeQuantity > 0 && (
+                        <Badge variant="secondary" className="text-[10px] h-5 px-1.5">
+                          Free: {item.freeQuantity}
+                        </Badge>
+                      )}
+                      <span className="text-xs text-muted-foreground">
+                        @ {item.unitPrice.toLocaleString("en-LK", { minimumFractionDigits: 2 })}
+                      </span>
+                      {item.discountPercent > 0 && (
+                        <span className="text-xs font-medium text-red-600 bg-red-50 px-1.5 py-0.5 rounded">
+                          -{item.discountPercent}%
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {/* Mobile subtotal footer */}
+                <div className="rounded-lg bg-slate-50 border px-4 py-3 flex justify-between items-center">
+                  <span className="text-sm font-semibold text-muted-foreground">
+                    {invoice.items.length} items · {totalItemsQty} units
+                  </span>
+                  <span className="font-bold font-mono text-base">
+                    LKR {invoice.items.reduce((s: number, i: any) => s + i.total, 0).toLocaleString("en-LK", { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </CardContent>
             </Card>
 
-            {/* Supplier Summary */}
-            {(() => {
-              const map: Record<string, { qty: number; total: number }> = {};
-              invoice.items.forEach((item: any) => {
-                const key = item.supplier || item.brand || "Unknown";
-                if (!map[key]) map[key] = { qty: 0, total: 0 };
-                map[key].qty += item.quantity || 0;
-                map[key].total += item.total || 0;
-              });
-              const entries = Object.entries(map);
-              return (
-                <Card className="shadow-sm overflow-hidden">
-                  <CardHeader className="bg-slate-50/50 border-b py-4">
-                    <CardTitle className="text-lg font-semibold">Items by Supplier</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-slate-50/50 hover:bg-slate-50/50">
-                          <TableHead className="pl-6">Supplier</TableHead>
-                          <TableHead className="text-center">Qty</TableHead>
-                          <TableHead className="text-right pr-6">Amount</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {entries.map(([name, s]) => (
-                          <TableRow key={name} className="hover:bg-muted/30">
-                            <TableCell className="pl-6 font-medium text-sm">{name}</TableCell>
-                            <TableCell className="text-center text-sm">{s.qty}</TableCell>
-                            <TableCell className="text-right pr-6 font-mono text-sm">
-                              LKR {s.total.toLocaleString("en-LK", { minimumFractionDigits: 2 })}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </CardContent>
-                </Card>
-              );
-            })()}
 
             {/* Returns & Adjustments */}
             {returns.length > 0 && (
               <Card className="shadow-sm border-l-4 border-l-orange-500 overflow-hidden">
-                <CardHeader className="bg-orange-50/50 border-b py-4">
+                <CardHeader className="bg-orange-50/50 border-b py-3">
                   <div className="flex justify-between items-center">
                     <CardTitle className="text-lg font-semibold flex items-center gap-2">
                       <Undo2 className="h-5 w-5 text-orange-600" />
@@ -604,7 +568,8 @@ export default function DistributionViewInvoicePage({
                     </Badge>
                   </div>
                 </CardHeader>
-                <CardContent className="p-0">
+                {/* Desktop table */}
+                <CardContent className="p-0 hidden lg:block">
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-orange-50/30 hover:bg-orange-50/30">
@@ -618,62 +583,61 @@ export default function DistributionViewInvoicePage({
                     </TableHeader>
                     <TableBody>
                       {returns.map((ret) => (
-                        <TableRow
-                          key={ret.id}
-                          className="hover:bg-orange-50/10"
-                        >
-                          <TableCell className="pl-6 font-mono text-xs font-medium">
-                            {ret.return_number}
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">
-                            {new Date(ret.created_at).toLocaleDateString()}
-                          </TableCell>
+                        <TableRow key={ret.id} className="hover:bg-orange-50/10">
+                          <TableCell className="pl-6 font-mono text-xs font-medium">{ret.return_number}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{new Date(ret.created_at).toLocaleDateString()}</TableCell>
                           <TableCell>
-                            <div className="font-medium text-sm">
-                              {ret.products?.name}
-                            </div>
-                            <div className="text-[10px] text-muted-foreground">
-                              {ret.products?.sku}
-                            </div>
+                            <div className="font-medium text-sm">{ret.products?.name}</div>
+                            <div className="text-[10px] text-muted-foreground">{ret.products?.sku}</div>
                           </TableCell>
                           <TableCell className="text-center">
-                            <Badge
-                              variant="outline"
-                              className={cn(
-                                "text-[10px] h-5 px-1.5",
-                                ret.return_type === "Good"
-                                  ? "text-green-600 bg-green-50 border-green-200"
-                                  : "text-red-600 bg-red-50 border-red-200"
-                              )}
-                            >
+                            <Badge variant="outline" className={cn("text-[10px] h-5 px-1.5", ret.return_type === "Good" ? "text-green-600 bg-green-50 border-green-200" : "text-red-600 bg-red-50 border-red-200")}>
                               {ret.return_type}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-right font-bold text-sm">
-                            -{ret.quantity}
-                          </TableCell>
-                          <TableCell
-                            className="pr-6 text-xs text-muted-foreground max-w-[150px] truncate"
-                            title={ret.reason}
-                          >
-                            {ret.reason
-                              ?.replace(`[${invoice.invoiceNo}]`, "")
-                              .trim() || "-"}
+                          <TableCell className="text-right font-bold text-sm">-{ret.quantity}</TableCell>
+                          <TableCell className="pr-6 text-xs text-muted-foreground max-w-[150px] truncate" title={ret.reason}>
+                            {ret.reason?.replace(`[${invoice.invoiceNo}]`, "").trim() || "-"}
                           </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
                 </CardContent>
-                <CardFooter className="bg-orange-50/30 border-t py-3 flex justify-between">
+
+                {/* Mobile / Tablet cards */}
+                <CardContent className="p-2 lg:hidden space-y-1.5">
+                  {returns.map((ret) => (
+                    <div key={ret.id} className="rounded-lg border bg-white p-2.5 space-y-1.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="font-semibold text-sm">{ret.products?.name}</p>
+                          <p className="text-xs font-mono text-muted-foreground">{ret.products?.sku}</p>
+                        </div>
+                        <Badge variant="outline" className={cn("text-[10px] shrink-0", ret.return_type === "Good" ? "text-green-600 bg-green-50 border-green-200" : "text-red-600 bg-red-50 border-red-200")}>
+                          {ret.return_type}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-3 flex-wrap text-xs text-muted-foreground">
+                        <span className="font-mono font-medium text-foreground">{ret.return_number}</span>
+                        <span>{new Date(ret.created_at).toLocaleDateString()}</span>
+                        <span className="font-bold text-foreground">Qty: -{ret.quantity}</span>
+                      </div>
+                      {ret.reason?.replace(`[${invoice.invoiceNo}]`, "").trim() && (
+                        <p className="text-xs text-muted-foreground border-t pt-2">
+                          {ret.reason.replace(`[${invoice.invoiceNo}]`, "").trim()}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </CardContent>
+
+                <CardFooter className="bg-orange-50/30 border-t py-2 flex flex-col sm:flex-row justify-between gap-2">
                   <div className="text-xs text-muted-foreground">
                     Processed by: {returns[0]?.profiles?.full_name}
                   </div>
                   <div className="text-sm font-medium text-orange-700">
-                    Total Value of Returns: LKR{" "}
-                    {totalRefunded.toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                    })}
+                    Total Value of Returns: LKR {totalRefunded.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </div>
                 </CardFooter>
               </Card>
@@ -681,7 +645,7 @@ export default function DistributionViewInvoicePage({
 
             {/* Payment History Section */}
             <Card className="shadow-sm border-l-4 border-l-emerald-500 overflow-hidden">
-              <CardHeader className="bg-emerald-50/50 border-b py-4">
+              <CardHeader className="bg-emerald-50/50 border-b py-3">
                 <div className="flex justify-between items-center">
                   <CardTitle className="text-lg font-semibold flex items-center gap-2">
                     <Banknote className="h-5 w-5 text-emerald-600" />
@@ -698,82 +662,85 @@ export default function DistributionViewInvoicePage({
                     No payments recorded for this invoice yet.
                   </div>
                 ) : (
+                  <>
+                  {/* Desktop table */}
+                  <div className="hidden lg:block">
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-emerald-50/30 hover:bg-emerald-50/30">
                         <TableHead className="pl-6">Date</TableHead>
                         <TableHead>Method</TableHead>
                         <TableHead>Reference / Cheque</TableHead>
-                        <TableHead className="text-right pr-6">
-                          Amount
-                        </TableHead>
+                        <TableHead className="text-right pr-6">Amount</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {paymentsList.map((pay) => (
-                        <TableRow
-                          key={pay.id}
-                          className="hover:bg-emerald-50/10"
-                        >
-                          <TableCell className="pl-6 text-sm">
-                            {new Date(pay.payment_date).toLocaleDateString()}
-                          </TableCell>
+                        <TableRow key={pay.id} className="hover:bg-emerald-50/10">
+                          <TableCell className="pl-6 text-sm">{new Date(pay.payment_date).toLocaleDateString()}</TableCell>
                           <TableCell className="text-sm">
-                            <Badge
-                              variant="secondary"
-                              className="font-normal text-xs"
-                            >
-                              {pay.method}
-                            </Badge>
+                            <Badge variant="secondary" className="font-normal text-xs">{pay.method}</Badge>
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">
                             {pay.method === "Cheque" ? (
                               <div className="flex flex-col">
-                                <span className="font-mono text-xs font-medium text-foreground">
-                                  {pay.cheque_no}
-                                </span>
-                                <span className="text-[10px]">
-                                  Due:{" "}
-                                  {new Date(
-                                    pay.cheque_date!
-                                  ).toLocaleDateString()}
-                                </span>
-                                {pay.cheque_status && (
-                                  <span className="text-[10px] italic">
-                                    ({pay.cheque_status})
-                                  </span>
-                                )}
+                                <span className="font-mono text-xs font-medium text-foreground">{pay.cheque_no}</span>
+                                <span className="text-[10px]">Due: {new Date(pay.cheque_date!).toLocaleDateString()}</span>
+                                {pay.cheque_status && <span className="text-[10px] italic">({pay.cheque_status})</span>}
                               </div>
-                            ) : (
-                              "-"
-                            )}
+                            ) : "-"}
                           </TableCell>
                           <TableCell className="text-right pr-6 font-mono font-medium">
-                            LKR{" "}
-                            {Number(pay.amount).toLocaleString("en-LK", {
-                              minimumFractionDigits: 2,
-                            })}
+                            LKR {Number(pay.amount).toLocaleString("en-LK", { minimumFractionDigits: 2 })}
                           </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                     <TableFooter className="bg-emerald-50/30">
                       <TableRow>
-                        <TableCell
-                          colSpan={3}
-                          className="pl-6 text-emerald-700 font-medium text-right"
-                        >
+                        <TableCell colSpan={3} className="pl-6 text-emerald-700 font-medium text-right">
                           Total Paid
                         </TableCell>
                         <TableCell className="pr-6 text-right font-bold font-mono text-emerald-700">
-                          LKR{" "}
-                          {totalPaid.toLocaleString("en-LK", {
-                            minimumFractionDigits: 2,
-                          })}
+                          LKR {totalPaid.toLocaleString("en-LK", { minimumFractionDigits: 2 })}
                         </TableCell>
                       </TableRow>
                     </TableFooter>
                   </Table>
+                  </div>
+
+                  {/* Mobile / Tablet payment cards */}
+                  <div className="lg:hidden p-2 space-y-1.5">
+                    {paymentsList.map((pay) => (
+                      <div key={pay.id} className="rounded-lg border bg-white p-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="font-normal text-xs">{pay.method}</Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(pay.payment_date).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <span className="font-bold font-mono text-sm text-emerald-700">
+                            LKR {Number(pay.amount).toLocaleString("en-LK", { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                        {pay.method === "Cheque" && (
+                          <div className="mt-1.5 pl-1 text-xs text-muted-foreground flex gap-3">
+                            <span className="font-mono font-medium text-foreground">{pay.cheque_no}</span>
+                            <span>Due: {new Date(pay.cheque_date!).toLocaleDateString()}</span>
+                            {pay.cheque_status && <span className="italic">({pay.cheque_status})</span>}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-4 py-3 flex justify-between items-center">
+                      <span className="text-sm font-semibold text-emerald-700">Total Paid</span>
+                      <span className="font-bold font-mono text-base text-emerald-700">
+                        LKR {totalPaid.toLocaleString("en-LK", { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+                  </>
                 )}
               </CardContent>
             </Card>
@@ -787,14 +754,14 @@ export default function DistributionViewInvoicePage({
           </div>
 
           {/* RIGHT COLUMN */}
-          <div className="space-y-6">
+          <div className="space-y-4">
             <Card className="shadow-sm">
-              <CardHeader className="pb-3">
+              <CardHeader className="pb-1 pt-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
                   Invoice Metadata
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-medium">Invoice No</span>
                   <span className="text-sm font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-700">
@@ -832,14 +799,14 @@ export default function DistributionViewInvoicePage({
               </CardContent>
             </Card>
 
-            <Card className="shadow-sm border-t-4 border-t-primary sticky top-6">
-              <CardHeader className="bg-muted/20 pb-4">
+            <Card className="shadow-sm border-t-4 border-t-primary lg:sticky lg:top-6">
+              <CardHeader className="bg-muted/20 pb-3">
                 <CardTitle className="flex items-center gap-2">
                   <CreditCard className="w-5 h-5 text-primary" />
                   Payment Details
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4 pt-6">
+              <CardContent className="space-y-3 pt-4">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">
                     Subtotal (Gross)
@@ -926,12 +893,12 @@ export default function DistributionViewInvoicePage({
                   </div>
                 </div>
 
-                {invoice.notes && (
+                {invoice.notes?.replace(/created via rep portal/gi, "").trim() && (
                   <div className="bg-amber-50 border border-amber-100 rounded-md p-3 text-sm text-amber-800">
                     <p className="font-semibold text-xs uppercase tracking-wider mb-1 flex items-center gap-1">
                       <FileText className="w-3 h-3" /> Notes
                     </p>
-                    {invoice.notes}
+                    {invoice.notes.replace(/created via rep portal/gi, "").trim()}
                   </div>
                 )}
               </CardContent>
