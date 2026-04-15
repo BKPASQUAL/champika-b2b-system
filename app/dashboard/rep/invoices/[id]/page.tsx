@@ -43,7 +43,7 @@ import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { printInvoice, downloadInvoice } from "@/app/lib/invoice-print";
+import { printInvoice, downloadInvoice, generateInvoicePdfBlob } from "@/app/lib/invoice-print";
 
 interface PaymentRecord {
   id: string;
