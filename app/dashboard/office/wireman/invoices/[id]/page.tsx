@@ -385,7 +385,7 @@ export default function WiremanViewInvoicePage({
             <Button
               variant="outline"
               size="sm"
-              className="bg-green-50 border-green-200 text-green-700 hover:bg-green-100 hover:text-green-800"
+              className="bg-green-50 border-green-200 text-green-700 hover:bg-green-100 hover:text-green-800 cursor-pointer"
               onClick={handleSharePdf}
               disabled={sharing}
             >
