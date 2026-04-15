@@ -56,6 +56,7 @@ import {  printInvoice } from "../print-utils";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { downloadInvoice } from "../../../distribution/invoices/print-utils";
+import { DocumentAttachments } from "@/components/ui/DocumentAttachments";
 
 // --- Interfaces ---
 interface InvoiceHistory {
@@ -739,6 +740,13 @@ export default function OrangeViewInvoicePage({
                 )}
               </CardContent>
             </Card>
+
+            {/* Image & Document Attachments */}
+            <DocumentAttachments
+              entityType="invoice"
+              entityId={id}
+              title="Images & Attachments"
+            />
           </div>
 
           {/* RIGHT COLUMN */}

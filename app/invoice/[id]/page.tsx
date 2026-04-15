@@ -17,7 +17,7 @@ async function getInvoice(id: string) {
 
   const { data: items } = await supabaseAdmin
     .from("order_items")
-    .select(`*, products (id, name, sku, mrp, selling_price, unit_of_measure)`)
+    .select(`*, products (id, name, sku, mrp, selling_price, unit_of_measure, supplier_name, brand)`)
     .eq("order_id", invoice.order_id);
 
   return {
@@ -44,6 +44,7 @@ async function getInvoice(id: string) {
       freeQuantity: item.free_quantity || 0,
       discountPercent: item.discount_percent || 0,
       total: item.total_price,
+      supplier: item.products?.supplier_name || item.products?.brand || null,
     })),
   };
 }

@@ -52,6 +52,7 @@ import {
 
 // Import the updated print utils
 import { downloadInvoice, printInvoice,  } from "../print-utils";
+import { DocumentAttachments } from "@/components/ui/DocumentAttachments";
 
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -776,6 +777,13 @@ export default function DistributionViewInvoicePage({
                 )}
               </CardContent>
             </Card>
+
+            {/* Image & Document Attachments */}
+            <DocumentAttachments
+              entityType="invoice"
+              entityId={id}
+              title="Images & Attachments"
+            />
           </div>
 
           {/* RIGHT COLUMN */}

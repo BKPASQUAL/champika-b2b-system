@@ -432,7 +432,7 @@ export default function CreateOrderPage() {
       extraDiscountPercent: extraDiscPercVal,
       extraDiscountAmount: extraDiscountAmount,
       grandTotal: grandTotal,
-      notes: "Created via Rep Portal",
+      notes: "",
     };
 
     try {

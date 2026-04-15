@@ -20,6 +20,7 @@ import {
   Banknote,
   AlertCircle,
   Percent,
+  MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,8 +51,11 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { printInvoice } from "../print-utils";
+import { generateInvoicePdfBlob } from "@/app/lib/invoice-print";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { WhatsAppShareDialog } from "@/components/ui/WhatsAppShareDialog";
+import { DocumentAttachments } from "@/components/ui/DocumentAttachments";
 
 // --- Interfaces ---
 interface InvoiceHistory {
@@ -108,6 +112,9 @@ export default function ViewInvoicePage({
   const [returnsLoading, setReturnsLoading] = useState(true);
   const [returns, setReturns] = useState<ReturnRecord[]>([]);
 
+  // WhatsApp State
+  const [whatsappOpen, setWhatsappOpen] = useState(false);
+
   useEffect(() => {
     const fetchInvoice = async () => {
       try {
@@ -163,6 +170,35 @@ export default function ViewInvoicePage({
       .join("")
       .substring(0, 2)
       .toUpperCase();
+  };
+
+  const buildWhatsAppMessage = () => {
+    if (!invoice) return "";
+    const balDue = invoice.grandTotal - (invoice.payments || []).reduce((s: number, p: any) => s + Number(p.amount), 0);
+    const paid = (invoice.payments || []).reduce((s: number, p: any) => s + Number(p.amount), 0);
+    const status = balDue <= 0 ? "Fully Paid ✅" : paid > 0 ? "Partial Payment ⚠️" : "Unpaid ❌";
+    const itemLines = invoice.items
+      .map((item: any) => `  • ${item.productName} (x${item.quantity}) — LKR ${item.total.toLocaleString("en-LK", { minimumFractionDigits: 2 })}`)
+      .join("\n");
+    return `*CHAMPIKA HARDWARE*
+━━━━━━━━━━━━━━━━━━━━
+📄 *Invoice:* ${invoice.invoiceNo}
+📅 *Date:* ${new Date(invoice.date).toLocaleDateString("en-LK")}
+
+👤 *Customer:* ${invoice.customer?.shop || ""}
+   ${invoice.customer?.name || ""}
+
+📦 *Items:*
+${itemLines}
+
+━━━━━━━━━━━━━━━━━━━━
+💰 *Invoice Total:* LKR ${invoice.grandTotal.toLocaleString("en-LK", { minimumFractionDigits: 2 })}
+✅ *Amount Paid:*  LKR ${paid.toLocaleString("en-LK", { minimumFractionDigits: 2 })}
+⚠️  *Balance Due:*  LKR ${Math.max(0, balDue).toLocaleString("en-LK", { minimumFractionDigits: 2 })}
+
+📊 *Status:* ${status}
+━━━━━━━━━━━━━━━━━━━━
+Thank you for your business! 🙏`;
   };
 
   const renderOrderStatusBadge = (status: string) => {
@@ -341,6 +377,15 @@ export default function ViewInvoicePage({
               onClick={() => printInvoice(id)}
             >
               <Printer className="w-4 h-4 mr-2 text-muted-foreground" /> Print
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="bg-green-50 border-green-200 text-green-700 hover:bg-green-100 hover:text-green-800"
+              onClick={() => setWhatsappOpen(true)}
+            >
+              <MessageCircle className="w-4 h-4 mr-2" /> WhatsApp
             </Button>
 
             <Button
@@ -777,6 +822,12 @@ export default function ViewInvoicePage({
                 )}
               </CardContent>
             </Card>
+            {/* Document Attachments */}
+            <DocumentAttachments
+              entityType="invoice"
+              entityId={id}
+              title="Documents & Attachments"
+            />
           </div>
 
           {/* RIGHT COLUMN (Summary) */}
@@ -948,6 +999,20 @@ export default function ViewInvoicePage({
           </div>
         </div>
       </div>
+
+      {/* WhatsApp Share Dialog */}
+      {invoice && (
+        <WhatsAppShareDialog
+          open={whatsappOpen}
+          onOpenChange={setWhatsappOpen}
+          phone={invoice.customer?.phone || ""}
+          message={buildWhatsAppMessage()}
+          title={`Share Invoice ${invoice.invoiceNo}`}
+          pdfGenerator={() => generateInvoicePdfBlob(id, "admin")}
+          entityType="invoice-pdf"
+          entityId={id}
+        />
+      )}
     </div>
   );
 }

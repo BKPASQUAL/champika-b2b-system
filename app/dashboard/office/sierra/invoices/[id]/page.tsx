@@ -55,6 +55,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { downloadInvoice , printInvoice } from "../../../distribution/invoices/print-utils";
+import { DocumentAttachments } from "@/components/ui/DocumentAttachments";
 
 // --- Interfaces ---
 interface InvoiceHistory {
@@ -738,6 +739,13 @@ export default function WiremanViewInvoicePage({
                 )}
               </CardContent>
             </Card>
+
+            {/* Image & Document Attachments */}
+            <DocumentAttachments
+              entityType="invoice"
+              entityId={id}
+              title="Images & Attachments"
+            />
           </div>
 
           {/* RIGHT COLUMN */}

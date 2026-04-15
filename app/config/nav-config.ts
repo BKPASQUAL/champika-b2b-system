@@ -28,6 +28,7 @@ import {
   BarChart3,
   Undo2,
   ArrowRightLeft,
+  HardDrive,
 } from "lucide-react";
 
 export type UserRole = "admin" | "office" | "rep" | "delivery";
@@ -205,6 +206,11 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
       items: [
         { name: "Users", href: "/dashboard/admin/users", icon: Users },
         { name: "Settings", href: "/dashboard/admin/settings", icon: Settings },
+        {
+          name: "Backup & Export",
+          href: "/dashboard/admin/backup",
+          icon: HardDrive,
+        },
       ],
     },
   ],

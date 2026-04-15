@@ -12,7 +12,8 @@
       "Bash(node -e ':*)",
       "Bash(npm install:*)",
       "Bash(python3 -c ':*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(xargs grep:*)"
     ]
   }
 }
