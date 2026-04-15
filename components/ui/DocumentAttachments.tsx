@@ -10,7 +10,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,7 +31,7 @@ import {
   File,
   Loader2,
   Camera,
-  X,
+  Share2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -164,6 +163,30 @@ export function DocumentAttachments({
     }
   };
 
+  const handleShare = async (att: Attachment) => {
+    // Web Share API — works natively on mobile (Android/iOS)
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: att.file_name,
+          text: att.label || att.file_name,
+          url: att.file_url,
+        });
+      } catch (err: any) {
+        // User cancelled — not an error
+        if (err?.name !== "AbortError") toast.error("Share failed");
+      }
+    } else {
+      // Fallback: copy link to clipboard
+      try {
+        await navigator.clipboard.writeText(att.file_url);
+        toast.success("Link copied to clipboard");
+      } catch {
+        toast.error("Sharing not supported on this browser");
+      }
+    }
+  };
+
   return (
     <>
       <Card className="shadow-sm border-l-4 border-l-violet-500 overflow-hidden">
@@ -278,70 +301,92 @@ export function DocumentAttachments({
               {attachments.map((att) => (
                 <div
                   key={att.id}
-                  className="flex items-center gap-3 p-3 rounded-lg border bg-slate-50/50 hover:bg-slate-100/50 transition-colors group"
+                  className="rounded-lg border bg-white overflow-hidden"
                 >
-                  <div className="shrink-0">
-                    <FileIcon mimeType={att.file_type} />
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <p
-                      className="text-sm font-medium truncate"
-                      title={att.file_name}
+                  {/* Image thumbnail */}
+                  {att.file_type.startsWith("image/") && (
+                    <div
+                      className="w-full bg-slate-100 cursor-pointer"
+                      onClick={() => window.open(att.file_url, "_blank")}
                     >
-                      {att.file_name}
-                    </p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      {att.label && (
-                        <span className="text-xs text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded">
-                          {att.label}
-                        </span>
-                      )}
-                      <span className="text-xs text-muted-foreground">
-                        {formatBytes(att.file_size)}
-                      </span>
-                      <span className="text-xs text-muted-foreground">•</span>
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(att.created_at).toLocaleDateString()}
-                      </span>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={att.file_url}
+                        alt={att.file_name}
+                        className="w-full max-h-48 object-cover"
+                      />
                     </div>
-                  </div>
+                  )}
 
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {att.file_type.startsWith("image/") ||
-                    att.file_type === "application/pdf" ? (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7"
-                        title="Preview"
-                        onClick={() => window.open(att.file_url, "_blank")}
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                      </Button>
-                    ) : null}
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7"
-                      title="Download"
-                      asChild
-                    >
-                      <a href={att.file_url} download={att.file_name} target="_blank" rel="noreferrer">
-                        <Download className="w-3.5 h-3.5" />
-                      </a>
-                    </Button>
-                    {allowUpload && (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7 text-destructive hover:text-destructive"
-                        title="Delete"
-                        onClick={() => setDeleteTarget(att)}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
+                  <div className="flex items-center gap-3 px-3 py-2">
+                    {/* Icon (non-image only) */}
+                    {!att.file_type.startsWith("image/") && (
+                      <div className="shrink-0">
+                        <FileIcon mimeType={att.file_type} />
+                      </div>
                     )}
+
+                    {/* Name + meta */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate" title={att.file_name}>
+                        {att.file_name}
+                      </p>
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        {att.label && (
+                          <span className="text-xs text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded">
+                            {att.label}
+                          </span>
+                        )}
+                        <span className="text-xs text-muted-foreground">{formatBytes(att.file_size)}</span>
+                        <span className="text-xs text-muted-foreground">•</span>
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(att.created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Actions — always visible */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {/* Preview (non-image files only — images are clickable above) */}
+                      {!att.file_type.startsWith("image/") && att.file_type === "application/pdf" && (
+                        <Button
+                          size="icon" variant="ghost" className="h-8 w-8"
+                          title="Preview"
+                          onClick={() => window.open(att.file_url, "_blank")}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                      )}
+
+                      {/* Download */}
+                      <Button size="icon" variant="ghost" className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50" title="Download" asChild>
+                        <a href={att.file_url} download={att.file_name} target="_blank" rel="noreferrer">
+                          <Download className="w-4 h-4" />
+                        </a>
+                      </Button>
+
+                      {/* Share */}
+                      <Button
+                        size="icon" variant="ghost"
+                        className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                        title="Share"
+                        onClick={() => handleShare(att)}
+                      >
+                        <Share2 className="w-4 h-4" />
+                      </Button>
+
+                      {/* Delete */}
+                      {allowUpload && (
+                        <Button
+                          size="icon" variant="ghost"
+                          className="h-8 w-8 text-destructive hover:text-destructive hover:bg-red-50"
+                          title="Delete"
+                          onClick={() => setDeleteTarget(att)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
