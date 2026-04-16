@@ -341,8 +341,8 @@ export default function ActivityRecordsPage() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Button variant="outline" size="sm" onClick={exportCSV} className="gap-1.5">
+        <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+          <Button variant="outline" size="sm" onClick={exportCSV} className="gap-1.5 flex-1 sm:flex-none">
             <Download className="h-4 w-4" />
             Export CSV
           </Button>
@@ -351,7 +351,7 @@ export default function ActivityRecordsPage() {
             size="sm"
             onClick={fetchRecords}
             disabled={loading}
-            className="gap-1.5"
+            className="gap-1.5 flex-1 sm:flex-none"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             Refresh
@@ -360,7 +360,7 @@ export default function ActivityRecordsPage() {
       </div>
 
       {/* ── Stats ── */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatCard
           icon={<BarChart3 className="h-4 w-4" />}
           label="Total Records"
@@ -391,7 +391,7 @@ export default function ActivityRecordsPage() {
       {/* ── Filters ── */}
       <Card>
         <CardContent className="px-5 pt-5 pb-5">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
 
             {/* Search */}
             <div className="space-y-1.5">
@@ -504,7 +504,8 @@ export default function ActivityRecordsPage() {
           )}
         </div>
 
-        <div className="overflow-x-auto">
+        {/* ── Desktop table ── */}
+        <div className="hidden md:block overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/30 hover:bg-muted/30">
@@ -555,43 +556,30 @@ export default function ActivityRecordsPage() {
                       className="hover:bg-muted/30 cursor-pointer transition-colors"
                       onClick={() => setSelected(r)}
                     >
-                      {/* Date */}
                       <TableCell className="pl-5">
                         <div className="text-sm font-medium">{fmtDateShort(r.created_at)}</div>
                         <div className="text-xs text-muted-foreground">{fmtTime(r.created_at)}</div>
                       </TableCell>
-
-                      {/* Type badge */}
                       <TableCell>
                         <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${ts?.bg ?? "bg-gray-100"} ${ts?.text ?? "text-gray-700"}`}>
                           <span className={`h-1.5 w-1.5 rounded-full ${ts?.dot ?? "bg-gray-400"}`} />
                           {r.record_type}
                         </span>
                       </TableCell>
-
-                      {/* Portal */}
                       <TableCell>
-                        <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium capitalize ${ps?.bg ?? "bg-gray-100"} ${ps?.text ?? "text-gray-700"}`}>
+                        <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium capitalize ${ps?.bg ?? "bg-gray-100"} ${ps?.text ?? "bg-gray-700"}`}>
                           {r.portal}
                         </span>
                       </TableCell>
-
-                      {/* Business */}
                       <TableCell className="text-sm text-muted-foreground max-w-40 truncate">
                         {r.business_name ?? "—"}
                       </TableCell>
-
-                      {/* Ref */}
                       <TableCell className="font-mono text-sm font-semibold">
                         {r.entity_no ?? "—"}
                       </TableCell>
-
-                      {/* Customer */}
-                      <TableCell className="text-sm font-medium max-w-[180px] truncate">
+                      <TableCell className="text-sm font-medium max-w-40 truncate">
                         {r.customer_name ?? "—"}
                       </TableCell>
-
-                      {/* Performed By */}
                       <TableCell className="text-sm max-w-40">
                         {r.performed_by_name ? (
                           <div className="flex flex-col gap-0.5">
@@ -604,29 +592,18 @@ export default function ActivityRecordsPage() {
                           <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
-
-                      {/* Amount */}
                       <TableCell className="text-right">
-                        <span className="text-sm font-semibold tabular-nums">
-                          {fmt(r.amount)}
-                        </span>
+                        <span className="text-sm font-semibold tabular-nums">{fmt(r.amount)}</span>
                       </TableCell>
-
-                      {/* Classified */}
                       <TableCell className="text-center">
                         {isClassified ? (
                           <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100 text-xs gap-1">
-                            <Check className="h-3 w-3" />
-                            Done
+                            <Check className="h-3 w-3" />Done
                           </Badge>
                         ) : (
-                          <Badge variant="outline" className="text-xs text-muted-foreground">
-                            Pending
-                          </Badge>
+                          <Badge variant="outline" className="text-xs text-muted-foreground">Pending</Badge>
                         )}
                       </TableCell>
-
-                      {/* View */}
                       <TableCell className="pr-5">
                         <Button
                           variant="ghost"
@@ -643,6 +620,81 @@ export default function ActivityRecordsPage() {
               )}
             </TableBody>
           </Table>
+        </div>
+
+        {/* ── Mobile cards ── */}
+        <div className="md:hidden">
+          {loading ? (
+            <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
+              <RefreshCw className="h-6 w-6 animate-spin" />
+              <p className="text-sm">Loading records…</p>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
+              <ClipboardList className="h-8 w-8 opacity-30" />
+              <p className="text-sm font-medium">No records found</p>
+              {hasFilters && (
+                <Button variant="ghost" size="sm" onClick={clearFilters} className="mt-1">
+                  Clear filters
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="divide-y">
+              {filtered.map((r) => {
+                const ts = TYPE_STYLE[r.record_type];
+                const ps = PORTAL_STYLE[r.portal];
+                const isClassified = r.classification && Object.keys(r.classification).length > 0;
+                return (
+                  <div
+                    key={r.id}
+                    className="px-4 py-3 hover:bg-muted/30 cursor-pointer transition-colors active:bg-muted/50"
+                    onClick={() => setSelected(r)}
+                  >
+                    {/* Row 1: type badge + portal + classified */}
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${ts?.bg ?? "bg-gray-100"} ${ts?.text ?? "text-gray-700"}`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${ts?.dot ?? "bg-gray-400"}`} />
+                        {r.record_type}
+                      </span>
+                      <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium capitalize ${ps?.bg ?? "bg-gray-100"} ${ps?.text ?? "text-gray-700"}`}>
+                        {r.portal}
+                      </span>
+                      <div className="ml-auto">
+                        {isClassified ? (
+                          <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100 text-xs gap-1">
+                            <Check className="h-3 w-3" />Done
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-xs text-muted-foreground">Pending</Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Row 2: customer + amount */}
+                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{r.customer_name ?? "—"}</p>
+                        <p className="text-xs text-muted-foreground truncate">{r.business_name ?? ""}</p>
+                      </div>
+                      <span className="text-sm font-semibold tabular-nums shrink-0">{fmt(r.amount)}</span>
+                    </div>
+
+                    {/* Row 3: ref + date + performed by */}
+                    <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-mono font-semibold text-foreground">{r.entity_no ?? "—"}</span>
+                        {r.performed_by_name && (
+                          <span className="truncate">· {r.performed_by_name}</span>
+                        )}
+                      </div>
+                      <span className="shrink-0">{fmtDateShort(r.created_at)}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Pagination */}
