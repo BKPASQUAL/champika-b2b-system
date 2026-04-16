@@ -29,6 +29,7 @@ import {
   Undo2,
   ArrowRightLeft,
   HardDrive,
+  ClipboardList,
 } from "lucide-react";
 
 export type UserRole = "admin" | "office" | "rep" | "delivery";
@@ -198,6 +199,16 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           name: "Expenses",
           href: "/dashboard/admin/expenses",
           icon: Coins,
+        },
+      ],
+    },
+    {
+      title: "Audit & Logs",
+      items: [
+        {
+          name: "Activity Records",
+          href: "/dashboard/admin/activity-records",
+          icon: ClipboardList,
         },
       ],
     },

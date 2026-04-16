@@ -55,6 +55,7 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { ClassificationModal } from "@/components/activity/ClassificationModal";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 
 // --- Types ---
@@ -113,6 +114,8 @@ export default function CreateRetailInvoicePage() {
   const [businessId, setBusinessId] = useState<string | null>(null);
   const [businessName, setBusinessName] = useState<string>("");
   const [userId, setUserId] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
   // Data State
   const [products, setProducts] = useState<Product[]>([]);
@@ -124,6 +127,11 @@ export default function CreateRetailInvoicePage() {
 
   // Form State
   const [customerId, setCustomerId] = useState<string | null>(null);
+  const [classifyOpen, setClassifyOpen] = useState(false);
+  const [classifyRecordId, setClassifyRecordId] = useState<string | null>(null);
+  const [classifyInvoiceNo, setClassifyInvoiceNo] = useState<string | undefined>();
+  const [classifyAmount, setClassifyAmount] = useState<number | undefined>();
+  const [pendingRedirect, setPendingRedirect] = useState<string | null>(null);
   const [invoiceDate, setInvoiceDate] = useState(
     new Date().toISOString().split("T")[0]
   );
@@ -194,6 +202,8 @@ export default function CreateRetailInvoicePage() {
         setBusinessId(user.businessId);
         setBusinessName(user.businessName || "Retail Business");
         setUserId(user.id);
+        setUserName(user.name ?? null);
+        setUserEmail(user.email ?? null);
 
         const customersRes = await fetch("/api/customers");
         const customersData = await customersRes.json();
@@ -419,6 +429,8 @@ export default function CreateRetailInvoicePage() {
       paymentType: paymentType,
       paymentStatus: paymentType === "Cash" ? "Paid" : "Unpaid",
       paidAmount: paymentType === "Cash" ? grandTotal : 0,
+      performedByName: userName ?? null,
+      performedByEmail: userEmail ?? null,
     };
 
     try {
@@ -436,17 +448,19 @@ export default function CreateRetailInvoicePage() {
 
       toast.success("Invoice Created Successfully!");
 
-      if (action === "save") {
-        router.push("/dashboard/office/retail/invoices");
-      } else if (action === "print") {
-        router.push(
-          `/dashboard/office/retail/invoices/${data.data.id}?print=true`
-        );
+      // Determine redirect target based on action
+      let redirect = "/dashboard/office/retail/invoices";
+      if (action === "print") {
+        redirect = `/dashboard/office/retail/invoices/${data.data.id}?print=true`;
       } else if (action === "download") {
-        router.push(
-          `/dashboard/office/retail/invoices/${data.data.id}?download=true`
-        );
+        redirect = `/dashboard/office/retail/invoices/${data.data.id}?download=true`;
       }
+
+      setClassifyRecordId(data.activityRecordId ?? null);
+      setClassifyInvoiceNo(data.manualInvoiceNo || data.invoiceNo);
+      setClassifyAmount(grandTotal);
+      setPendingRedirect(redirect);
+      setClassifyOpen(true);
     } catch (error: any) {
       toast.error(error.message || "Failed to create invoice");
     } finally {
@@ -1105,6 +1119,19 @@ export default function CreateRetailInvoicePage() {
           </Card>
         </div>
       </div>
+
+      <ClassificationModal
+        isOpen={classifyOpen}
+        actionType="retail_invoice"
+        activityRecordId={classifyRecordId}
+        entityNo={classifyInvoiceNo}
+        customerName={customers.find((c) => c.id === customerId)?.name}
+        amount={classifyAmount}
+        onClose={() => {
+          setClassifyOpen(false);
+          if (pendingRedirect) router.push(pendingRedirect);
+        }}
+      />
     </div>
   );
 }

@@ -50,6 +50,8 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { ClassificationModal } from "@/components/activity/ClassificationModal";
+import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 
 // ─── Local Helpers ─────────────────────────────────────────────────────────────
 
@@ -153,6 +155,12 @@ export default function AdminPaymentEntryPage() {
   const [settlements, setSettlements] = useState<
     Record<string, InvoiceSettlement>
   >({});
+
+  // Classification modal state
+  const [classifyOpen, setClassifyOpen] = useState(false);
+  const [classifyRecordId, setClassifyRecordId] = useState<string | null>(null);
+  const [classifyInvoiceNo, setClassifyInvoiceNo] = useState<string | undefined>();
+  const [classifyAmount, setClassifyAmount] = useState<number | undefined>();
 
   // ── Data fetching ─────────────────────────────────────────────────────────────
 
@@ -461,6 +469,8 @@ export default function AdminPaymentEntryPage() {
           chequeNo: paymentMethod === "cheque" ? chequeNumber : null,
           chequeDate: paymentMethod === "cheque" ? chequeDate : null,
           bankId: paymentMethod === "cheque" ? selectedBankId : null,
+          performedByName: getUserBusinessContext()?.name ?? null,
+          performedByEmail: getUserBusinessContext()?.email ?? null,
         };
 
         const res = await fetch("/api/payments", {
@@ -471,6 +481,15 @@ export default function AdminPaymentEntryPage() {
 
         if (res.ok) {
           successCount++;
+          const resData = await res.json();
+          // Use the last successful payment's activity record for classification
+          if (resData.activityRecordId) {
+            setClassifyRecordId(resData.activityRecordId);
+            setClassifyInvoiceNo(
+              pendingInvoices.find((inv) => inv.id === s.invoiceId)?.orderNumber
+            );
+            setClassifyAmount(s.settleAmount);
+          }
         } else {
           const err = await res.json();
           console.error("Payment error:", err);
@@ -503,6 +522,8 @@ export default function AdminPaymentEntryPage() {
           `${successCount} invoice${successCount > 1 ? "s" : ""} settled successfully!`
         );
         resetForm();
+        // Show classification modal after success
+        setClassifyOpen(true);
       }
       if (failCount > 0) {
         toast.error(`${failCount} payment(s) failed. Please check and retry.`);
@@ -1100,6 +1121,22 @@ export default function AdminPaymentEntryPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Classification Modal */}
+      <ClassificationModal
+        isOpen={classifyOpen}
+        actionType="payment_made"
+        activityRecordId={classifyRecordId}
+        entityNo={classifyInvoiceNo}
+        customerName={selectedCustomer?.name}
+        amount={classifyAmount}
+        onClose={() => {
+          setClassifyOpen(false);
+          setClassifyRecordId(null);
+          setClassifyInvoiceNo(undefined);
+          setClassifyAmount(undefined);
+        }}
+      />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
-import { BUSINESS_IDS } from "@/app/config/business-constants";
+import { BUSINESS_IDS, BUSINESS_NAMES } from "@/app/config/business-constants";
 import { triggerAgencyBillsForInvoice } from "@/app/lib/inter-branch-billing";
 
 // --- Validation Schemas ---
@@ -54,6 +54,9 @@ const invoiceSchema = z.object({
     .enum(["Paid", "Unpaid", "Partial", "Overdue"])
     .default("Unpaid"),
   paidAmount: z.number().default(0),
+  // Performer info (logged-in user who created this invoice)
+  performedByName: z.string().optional().nullable(),
+  performedByEmail: z.string().optional().nullable(),
 });
 
 // --- GET: Fetch All Invoices ---
@@ -440,7 +443,7 @@ export async function POST(request: NextRequest) {
     // 8. Update Customer Balance
     const { data: customer } = await supabaseAdmin
       .from("customers")
-      .select("outstanding_balance")
+      .select("outstanding_balance, shop_name")
       .eq("id", val.customerId)
       .single();
 
@@ -535,6 +538,61 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // 11. Save Activity Record (non-critical — never fail the whole request)
+    let activityRecordId: string | null = null;
+    try {
+      const businessName = resolvedBusinessId
+        ? (BUSINESS_NAMES as Record<string, string>)[resolvedBusinessId] ?? "Unknown Business"
+        : null;
+
+      // Determine portal and action_type from businessId
+      const isRetail = resolvedBusinessId === BUSINESS_IDS.CHAMPIKA_RETAIL;
+      const portal = resolvedBusinessId ? "office" : "rep";
+      const actionType = isRetail
+        ? "retail_invoice"
+        : resolvedBusinessId
+        ? "distribution_invoice"
+        : "rep_order";
+      const recordType = isRetail
+        ? "Retail Invoice"
+        : resolvedBusinessId
+        ? "Distribution Invoice"
+        : "Rep Order";
+
+      const { data: actRec, error: actRecError } = await supabaseAdmin.from("activity_records").insert({
+        portal,
+        business_id: resolvedBusinessId,
+        business_name: businessName,
+        action_type: actionType,
+        record_type: recordType,
+        entity_type: "invoice",
+        entity_id: invoiceData.id,
+        entity_no: val.manual_invoice_no || invoiceNo,
+        customer_id: val.customerId,
+        customer_name: customer?.shop_name ?? null,
+        amount: val.grandTotal,
+        performed_by_id: val.salesRepId,
+        performed_by_name: val.performedByName ?? null,
+        performed_by_email: val.performedByEmail ?? null,
+        metadata: {
+          invoiceNo,
+          orderId,
+          grandTotal: val.grandTotal,
+          paidAmount: val.paidAmount,
+          paymentStatus: val.paymentStatus,
+          orderStatus: val.orderStatus,
+          itemCount: val.items.length,
+        },
+      }).select("id").single();
+
+      if (actRecError) {
+        console.error("Activity record (invoice) DB error:", actRecError.message, actRecError.code);
+      }
+      activityRecordId = actRec?.id ?? null;
+    } catch (actErr) {
+      console.error("Activity record (invoice) failed (non-critical):", actErr);
+    }
+
     return NextResponse.json(
       {
         message: "Order created successfully",
@@ -542,6 +600,7 @@ export async function POST(request: NextRequest) {
         manualInvoiceNo: val.manual_invoice_no,
         orderId: orderId,
         data: invoiceData,
+        activityRecordId,
       },
       { status: 201 },
     );

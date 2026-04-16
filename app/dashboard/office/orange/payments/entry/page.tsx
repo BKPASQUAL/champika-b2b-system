@@ -212,7 +212,7 @@ export default function OrangePaymentEntryPage() {
         const res = await fetch("/api/payments", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ orderId: s.invoiceId, amount: s.settleAmount, date: paymentDate, method: paymentMethod, notes: notes || undefined, depositAccountId: paymentMethod !== "cheque" ? selectedAccountId : null, chequeNo: paymentMethod === "cheque" ? chequeNumber : null, chequeDate: paymentMethod === "cheque" ? chequeDate : null, bankId: paymentMethod === "cheque" ? selectedBankId : null, branchCode: paymentMethod === "cheque" ? branchCode : null }),
+          body: JSON.stringify({ orderId: s.invoiceId, amount: s.settleAmount, date: paymentDate, method: paymentMethod, notes: notes || undefined, depositAccountId: paymentMethod !== "cheque" ? selectedAccountId : null, chequeNo: paymentMethod === "cheque" ? chequeNumber : null, chequeDate: paymentMethod === "cheque" ? chequeDate : null, bankId: paymentMethod === "cheque" ? selectedBankId : null, branchCode: paymentMethod === "cheque" ? branchCode : null, performedByName: getUserBusinessContext()?.name ?? null, performedByEmail: getUserBusinessContext()?.email ?? null }),
         });
         if (res.ok) successCount++; else { console.error(await res.json()); failCount++; }
       }

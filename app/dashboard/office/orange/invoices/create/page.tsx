@@ -46,6 +46,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { ClassificationModal } from "@/components/activity/ClassificationModal";
 
 // --- Types ---
 
@@ -84,6 +85,7 @@ export default function CreateInvoicePage() {
   const [currentUser, setCurrentUser] = useState<{
     id: string;
     name: string;
+    email: string;
   } | null>(null);
 
   // Data State
@@ -109,6 +111,11 @@ export default function CreateInvoicePage() {
 
   // Popover States
   const [customerOpen, setCustomerOpen] = useState(false);
+  const [classifyOpen, setClassifyOpen] = useState(false);
+  const [classifyRecordId, setClassifyRecordId] = useState<string | null>(null);
+  const [classifyInvoiceNo, setClassifyInvoiceNo] = useState<string | undefined>();
+  const [classifyAmount, setClassifyAmount] = useState<number | undefined>();
+  const [pendingRedirect, setPendingRedirect] = useState<string | null>(null);
   const [productOpen, setProductOpen] = useState(false);
 
   const [currentItem, setCurrentItem] = useState({
@@ -159,7 +166,7 @@ export default function CreateInvoicePage() {
         }
 
         setBusinessId(user.businessId);
-        setCurrentUser({ id: user.id, name: user.name });
+        setCurrentUser({ id: user.id, name: user.name, email: user.email });
 
         // 2. Fetch Customers (Filtered by Business)
         const customersRes = await fetch(
@@ -332,6 +339,8 @@ export default function CreateInvoicePage() {
       grandTotal: grandTotal,
       orderStatus, // Automatically set to "Delivered"
       businessId,
+      performedByName: currentUser?.name ?? null,
+      performedByEmail: currentUser?.email ?? null,
     };
 
     try {
@@ -348,7 +357,11 @@ export default function CreateInvoicePage() {
       }
 
       toast.success("Invoice Created Successfully!");
-      router.push("/dashboard/office/orange/invoices");
+      setClassifyRecordId(data.activityRecordId ?? null);
+      setClassifyInvoiceNo(data.manualInvoiceNo || data.invoiceNo);
+      setClassifyAmount(grandTotal);
+      setPendingRedirect("/dashboard/office/orange/invoices");
+      setClassifyOpen(true);
     } catch (error: any) {
       toast.error(error.message || "Failed to create invoice");
     } finally {
@@ -886,6 +899,19 @@ export default function CreateInvoicePage() {
           </Card>
         </div>
       </div>
+
+      <ClassificationModal
+        isOpen={classifyOpen}
+        actionType="agency_invoice"
+        activityRecordId={classifyRecordId}
+        entityNo={classifyInvoiceNo}
+        customerName={customers.find((c) => c.id === customerId)?.name}
+        amount={classifyAmount}
+        onClose={() => {
+          setClassifyOpen(false);
+          if (pendingRedirect) router.push(pendingRedirect);
+        }}
+      />
     </div>
   );
 }

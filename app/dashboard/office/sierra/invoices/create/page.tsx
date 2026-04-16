@@ -33,6 +33,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { ClassificationModal } from "@/components/activity/ClassificationModal";
 
 // --- Types ---
 
@@ -83,6 +84,7 @@ export default function CreateSierraInvoicePage() {
   const [currentUser, setCurrentUser] = useState<{
     id: string;
     name: string;
+    email: string;
   } | null>(null);
 
   // Data State
@@ -93,6 +95,11 @@ export default function CreateSierraInvoicePage() {
 
   // Form State
   const [customerId, setCustomerId] = useState<string>("");
+  const [classifyOpen, setClassifyOpen] = useState(false);
+  const [classifyRecordId, setClassifyRecordId] = useState<string | null>(null);
+  const [classifyInvoiceNo, setClassifyInvoiceNo] = useState<string | undefined>();
+  const [classifyAmount, setClassifyAmount] = useState<number | undefined>();
+  const [pendingRedirect, setPendingRedirect] = useState<string | null>(null);
   const [invoiceDate, setInvoiceDate] = useState(
     new Date().toISOString().split("T")[0],
   );
@@ -141,7 +148,7 @@ export default function CreateSierraInvoicePage() {
         }
 
         setBusinessId(user.businessId);
-        setCurrentUser({ id: user.id, name: user.name });
+        setCurrentUser({ id: user.id, name: user.name, email: user.email });
 
         const customersRes = await fetch(
           `/api/customers?businessId=${user.businessId}`,
@@ -348,6 +355,8 @@ export default function CreateSierraInvoicePage() {
       grandTotal: grandTotal,
       orderStatus,
       businessId,
+      performedByName: currentUser?.name ?? null,
+      performedByEmail: currentUser?.email ?? null,
     };
 
     try {
@@ -364,7 +373,11 @@ export default function CreateSierraInvoicePage() {
       }
 
       toast.success("Invoice Created Successfully!");
-      router.push("/dashboard/office/sierra/invoices");
+      setClassifyRecordId(data.activityRecordId ?? null);
+      setClassifyInvoiceNo(data.manualInvoiceNo || data.invoiceNo);
+      setClassifyAmount(grandTotal);
+      setPendingRedirect("/dashboard/office/sierra/invoices");
+      setClassifyOpen(true);
     } catch (error: any) {
       toast.error(error.message || "Failed to create invoice");
     } finally {
@@ -825,6 +838,19 @@ export default function CreateSierraInvoicePage() {
           </Card>
         </div>
       </div>
+
+      <ClassificationModal
+        isOpen={classifyOpen}
+        actionType="agency_invoice"
+        activityRecordId={classifyRecordId}
+        entityNo={classifyInvoiceNo}
+        customerName={customers.find((c) => c.id === customerId)?.name}
+        amount={classifyAmount}
+        onClose={() => {
+          setClassifyOpen(false);
+          if (pendingRedirect) router.push(pendingRedirect);
+        }}
+      />
     </div>
   );
 }

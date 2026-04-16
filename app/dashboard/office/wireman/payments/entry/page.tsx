@@ -437,6 +437,8 @@ export default function WiremanPaymentEntryPage() {
           chequeDate: paymentMethod === "cheque" ? chequeDate : null,
           bankId: paymentMethod === "cheque" ? selectedBankId : null,
           branchCode: paymentMethod === "cheque" ? branchCode : null,
+          performedByName: getUserBusinessContext()?.name ?? null,
+          performedByEmail: getUserBusinessContext()?.email ?? null,
         };
 
         const res = await fetch("/api/payments", {

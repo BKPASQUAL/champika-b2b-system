@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { ClassificationModal } from "@/components/activity/ClassificationModal";
 import { cn } from "@/lib/utils";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 
@@ -272,6 +273,7 @@ export default function CreateWiremanInvoicePage() {
   const [currentUser, setCurrentUser] = useState<{
     id: string;
     name: string;
+    email: string;
   } | null>(null);
 
   // Data State
@@ -282,6 +284,11 @@ export default function CreateWiremanInvoicePage() {
 
   // Form State
   const [customerId, setCustomerId] = useState<string>("");
+  const [classifyOpen, setClassifyOpen] = useState(false);
+  const [classifyRecordId, setClassifyRecordId] = useState<string | null>(null);
+  const [classifyInvoiceNo, setClassifyInvoiceNo] = useState<string | undefined>();
+  const [classifyAmount, setClassifyAmount] = useState<number | undefined>();
+  const [pendingRedirect, setPendingRedirect] = useState<string | null>(null);
   const [invoiceDate, setInvoiceDate] = useState(
     new Date().toISOString().split("T")[0],
   );
@@ -330,7 +337,7 @@ export default function CreateWiremanInvoicePage() {
         }
 
         setBusinessId(user.businessId);
-        setCurrentUser({ id: user.id, name: user.name });
+        setCurrentUser({ id: user.id, name: user.name, email: user.email });
 
         const customersRes = await fetch(
           `/api/customers?businessId=${user.businessId}`,
@@ -537,6 +544,8 @@ export default function CreateWiremanInvoicePage() {
       grandTotal: grandTotal,
       orderStatus,
       businessId,
+      performedByName: currentUser?.name ?? null,
+      performedByEmail: currentUser?.email ?? null,
     };
 
     try {
@@ -553,7 +562,11 @@ export default function CreateWiremanInvoicePage() {
       }
 
       toast.success("Invoice Created Successfully!");
-      router.push("/dashboard/office/wireman/invoices");
+      setClassifyRecordId(data.activityRecordId ?? null);
+      setClassifyInvoiceNo(data.manualInvoiceNo || data.invoiceNo);
+      setClassifyAmount(grandTotal);
+      setPendingRedirect("/dashboard/office/wireman/invoices");
+      setClassifyOpen(true);
     } catch (error: any) {
       toast.error(error.message || "Failed to create invoice");
     } finally {
@@ -1014,6 +1027,19 @@ export default function CreateWiremanInvoicePage() {
           </Card>
         </div>
       </div>
+
+      <ClassificationModal
+        isOpen={classifyOpen}
+        actionType="agency_invoice"
+        activityRecordId={classifyRecordId}
+        entityNo={classifyInvoiceNo}
+        customerName={customers.find((c) => c.id === customerId)?.name}
+        amount={classifyAmount}
+        onClose={() => {
+          setClassifyOpen(false);
+          if (pendingRedirect) router.push(pendingRedirect);
+        }}
+      />
     </div>
   );
 }

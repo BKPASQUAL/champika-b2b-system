@@ -13,7 +13,8 @@
       "Bash(python3 -)"
     ],
     "additionalDirectories": [
-      "\\tmp"
+      "\\tmp",
+      "c:\\Projects\\champika-b2b-system\\app\\api\\activity-records"
     ]
   }
 }

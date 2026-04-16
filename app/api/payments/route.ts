@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
+import { BUSINESS_NAMES } from "@/app/config/business-constants";
 
 // --- Validation Schema ---
 // ✅ Updated: Added .nullable() to optional fields to allow null values from frontend
@@ -17,6 +18,9 @@ const paymentSchema = z.object({
   branchCode: z.string().optional().nullable(), // Added branch string
   // Deposit specific
   depositAccountId: z.string().optional().nullable(),
+  // Performer info (logged-in user)
+  performedByName: z.string().optional().nullable(),
+  performedByEmail: z.string().optional().nullable(),
 });
 
 export async function GET(request: NextRequest) {
@@ -308,8 +312,49 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Collect activityRecordId to return to the client for classification modal
+    let activityRecordId: string | null = null;
+    try {
+      const businessId = orderData.business_id ?? null;
+      const businessName = businessId
+        ? (BUSINESS_NAMES as Record<string, string>)[businessId] ?? "Unknown Business"
+        : null;
+
+      const { data: actRec, error: actRecError } = await supabaseAdmin.from("activity_records").insert({
+        portal: "office",
+        business_id: businessId,
+        business_name: businessName,
+        action_type: "payment_made",
+        record_type: "Payment Made",
+        entity_type: "payment",
+        entity_id: payment.id,
+        entity_no: invoice.invoice_no,
+        customer_id: customer.id,
+        customer_name: customer.shop_name,
+        amount: val.amount,
+        performed_by_name: val.performedByName ?? null,
+        performed_by_email: val.performedByEmail ?? null,
+        metadata: {
+          paymentMethod: val.method,
+          invoiceId: invoice.id,
+          invoiceNo: invoice.invoice_no,
+          previousPaidAmount: Number(invoice.paid_amount) || 0,
+          newPaidAmount,
+          newStatus,
+          isFullyPaid,
+        },
+      }).select("id").single();
+
+      if (actRecError) {
+        console.error("Activity record (payment) DB error:", actRecError.message, actRecError.code);
+      }
+      activityRecordId = actRec?.id ?? null;
+    } catch (actErr) {
+      console.error("Activity record (payment) failed (non-critical):", actErr);
+    }
+
     return NextResponse.json(
-      { message: "Payment recorded successfully", data: payment },
+      { message: "Payment recorded successfully", data: payment, activityRecordId },
       { status: 201 }
     );
   } catch (error: any) {
