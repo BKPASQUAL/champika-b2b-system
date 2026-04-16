@@ -33,11 +33,7 @@ const COLOR = {
 const M = 8;   // left/right margin mm
 const START_Y = 34; // table starts after header
 
-function buildDoc(invoices: Invoice[], repFilter: string): jsPDF {
-  const outstanding = invoices.filter(
-    (inv) => inv.status !== "Paid" && inv.dueAmount > 0
-  );
-
+function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth  = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -210,9 +206,11 @@ function buildDoc(invoices: Invoice[], repFilter: string): jsPDF {
 }
 
 export function downloadOutstandingReport(invoices: Invoice[], repFilter: string = "all") {
-  const outstanding = invoices.filter((inv) => inv.status !== "Paid" && inv.dueAmount > 0);
+  const outstanding = invoices.filter(
+    (inv) => inv.status !== "Paid" && inv.dueAmount > 0 && (repFilter === "all" || inv.salesRepName === repFilter)
+  );
   if (outstanding.length === 0) { toast.info("No outstanding bills found"); return; }
-  const doc = buildDoc(invoices, repFilter);
+  const doc = buildDoc(outstanding, repFilter);
   const date = new Date().toISOString().split("T")[0];
   const repSuffix = repFilter !== "all" ? `_${repFilter.replace(/\s+/g, "_")}` : "";
   doc.save(`Outstanding_By_Customer${repSuffix}_${date}.pdf`);
@@ -220,10 +218,12 @@ export function downloadOutstandingReport(invoices: Invoice[], repFilter: string
 }
 
 export function printOutstandingReport(invoices: Invoice[], repFilter: string = "all") {
-  const outstanding = invoices.filter((inv) => inv.status !== "Paid" && inv.dueAmount > 0);
+  const outstanding = invoices.filter(
+    (inv) => inv.status !== "Paid" && inv.dueAmount > 0 && (repFilter === "all" || inv.salesRepName === repFilter)
+  );
   if (outstanding.length === 0) { toast.info("No outstanding bills found"); return; }
 
-  const doc = buildDoc(invoices, repFilter);
+  const doc = buildDoc(outstanding, repFilter);
   doc.autoPrint();
   const blob = doc.output("blob");
   const url  = URL.createObjectURL(blob);
