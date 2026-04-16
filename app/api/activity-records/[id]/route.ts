@@ -3,7 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
 
 const patchSchema = z.object({
-  classification: z.record(z.any()).optional().nullable(),
+  classification: z.record(z.string(), z.any()).optional().nullable(),
   notes: z.string().optional().nullable(),
 });
 

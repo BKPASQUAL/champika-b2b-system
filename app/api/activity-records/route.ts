@@ -17,8 +17,8 @@ const createSchema = z.object({
   performed_by_id: z.string().uuid().optional().nullable(),
   performed_by_name: z.string().optional().nullable(),
   performed_by_email: z.string().optional().nullable(),
-  classification: z.record(z.any()).optional().nullable(),
-  metadata: z.record(z.any()).optional().nullable(),
+  classification: z.record(z.string(), z.any()).optional().nullable(),
+  metadata: z.record(z.string(), z.any()).optional().nullable(),
   notes: z.string().optional().nullable(),
 });
 

@@ -48,6 +48,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { TablePagination } from "@/components/ui/TablePagination";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -335,8 +336,8 @@ export default function ActivityRecordsPage() {
             <ClipboardList className="h-6 w-6 text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Activity Records</h1>
-            <p className="text-muted-foreground text-sm">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Activity Records</h1>
+            <p className="text-muted-foreground text-xs sm:text-sm">
               All invoice & payment actions — with classification data
             </p>
           </div>
@@ -391,7 +392,7 @@ export default function ActivityRecordsPage() {
       {/* ── Filters ── */}
       <Card>
         <CardContent className="px-5 pt-5 pb-5">
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 lg:grid-cols-4">
 
             {/* Search */}
             <div className="space-y-1.5">
@@ -698,55 +699,21 @@ export default function ActivityRecordsPage() {
         </div>
 
         {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-5 py-3 border-t bg-muted/10">
-            <p className="text-sm text-muted-foreground">
-              {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total} records
-            </p>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 w-8 p-0"
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
-                disabled={page === 0}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-                const p = totalPages <= 5 ? i : Math.max(0, Math.min(page - 2, totalPages - 5)) + i;
-                return (
-                  <Button
-                    key={p}
-                    variant={p === page ? "default" : "outline"}
-                    size="sm"
-                    className="h-8 w-8 p-0 text-xs"
-                    onClick={() => setPage(p)}
-                  >
-                    {p + 1}
-                  </Button>
-                );
-              })}
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 w-8 p-0"
-                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-                disabled={page >= totalPages - 1}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        )}
+        <TablePagination
+          currentPage={page + 1}
+          totalPages={totalPages}
+          onPageChange={(p) => setPage(p - 1)}
+          totalItems={total}
+          itemsPerPage={PAGE_SIZE}
+        />
       </Card>
 
       {/* ── Detail Dialog ── */}
       <Dialog open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
         {selected && (
-          <DialogContent className="sm:max-w-[580px] max-h-[85vh] overflow-y-auto p-0">
+          <DialogContent className="w-[95vw] sm:max-w-[580px] max-h-[90vh] overflow-y-auto p-0 gap-0">
             {/* Dialog header */}
-            <div className="sticky top-0 z-10 bg-background border-b px-6 py-4">
+            <div className="sticky top-0 z-10 bg-background border-b px-4 sm:px-6 py-3 sm:py-4">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2 flex-wrap">
                   {(() => {
@@ -765,7 +732,7 @@ export default function ActivityRecordsPage() {
               </DialogHeader>
             </div>
 
-            <div className="px-6 py-5 space-y-5">
+            <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-4 sm:space-y-5">
               {/* Record details */}
               <DetailSection title="Record Details">
                 <DetailRow label="Date & Time"   value={fmtDate(selected.created_at)} />
@@ -856,16 +823,16 @@ function StatCard({
 
   return (
     <Card className="overflow-hidden">
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
+      <CardContent className="p-4 sm:p-5">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1 sm:mb-2 truncate">
               {label}
             </p>
-            <p className="text-3xl font-bold tabular-nums">{value}</p>
-            {note && <p className="text-xs text-muted-foreground mt-1">{note}</p>}
+            <p className="text-2xl sm:text-3xl font-bold tabular-nums truncate">{value}</p>
+            {note && <p className="text-[10px] sm:text-xs text-muted-foreground mt-1 truncate">{note}</p>}
           </div>
-          <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${colors.bg} ${colors.icon} ring-4 ${colors.ring}`}>
+          <div className={`flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg ${colors.bg} ${colors.icon} ring-2 sm:ring-4 ${colors.ring}`}>
             {icon}
           </div>
         </div>
@@ -907,9 +874,9 @@ function DetailSection({
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-start justify-between px-4 py-2.5 gap-6">
-      <span className="text-xs text-muted-foreground min-w-[130px] pt-0.5">{label}</span>
-      <span className="text-sm text-right">{value}</span>
+    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between px-4 py-3 sm:py-2.5 gap-1 sm:gap-6">
+      <span className="text-xs text-muted-foreground sm:min-w-[130px] pt-0.5">{label}</span>
+      <span className="text-sm font-medium sm:font-normal sm:text-right break-words">{value}</span>
     </div>
   );
 }
