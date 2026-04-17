@@ -119,36 +119,36 @@ export default function LoginPage() {
       <div className="absolute -top-[10%] left-1/2 -translate-x-1/2 w-[110vw] h-[65vh] rounded-[50%] bg-[#dde3ec] pointer-events-none select-none" />
 
       {/* Content — vertically centered, scrollable on very short screens */}
-      <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-4 py-10 sm:px-6">
-        <div className="w-full max-w-[400px] space-y-7">
+      <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-3 py-6 sm:px-6 sm:py-10">
+        <div className="w-full max-w-[400px] space-y-5 sm:space-y-7">
 
           {/* ── Logo + title ── */}
-          <div className="flex flex-col items-center text-center space-y-4">
+          <div className="flex flex-col items-center text-center space-y-3 sm:space-y-4">
             <div className="relative">
               {/* Glow ring behind logo */}
               <div className="absolute inset-0 rounded-2xl bg-black/5 blur-xl scale-110" />
-              <div className="relative h-[72px] w-[72px] sm:h-20 sm:w-20 rounded-2xl overflow-hidden shadow-2xl shadow-black/15 ring-[3px] ring-white bg-white">
+              <div className="relative h-14 w-14 sm:h-20 sm:w-20 rounded-2xl overflow-hidden shadow-2xl shadow-black/15 ring-[3px] ring-white bg-white">
                 <img src="/icons/icon-512x512.png" alt="Champika Hardware Logo" className="h-full w-full object-cover" />
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <h1 className="text-[26px] sm:text-3xl font-bold tracking-tight text-black leading-none">
+            <div className="space-y-1">
+              <h1 className="text-[22px] sm:text-3xl font-bold tracking-tight text-black leading-none">
                 Champika Hardware
               </h1>
-              <p className="text-sm text-[#78716c] font-medium">B2B Management Portal</p>
+              <p className="text-xs sm:text-sm text-[#78716c] font-medium">B2B Management Portal</p>
             </div>
           </div>
 
           {/* ── Card ── */}
-          <div className="bg-white rounded-3xl border border-[#e8e5e3] shadow-[0_2px_8px_rgba(0,0,0,0.04),0_12px_40px_rgba(0,0,0,0.08)] p-7 sm:p-8 space-y-6">
+          <div className="bg-white rounded-3xl border border-[#e8e5e3] shadow-[0_2px_8px_rgba(0,0,0,0.04),0_12px_40px_rgba(0,0,0,0.08)] p-5 sm:p-8 space-y-5 sm:space-y-6">
 
-            <div className="space-y-1">
-              <h2 className="text-[17px] sm:text-lg font-semibold text-black">Sign in to your account</h2>
-              <p className="text-sm text-[#78716c]">Enter your credentials to continue</p>
+            <div className="space-y-0.5">
+              <h2 className="text-base sm:text-lg font-semibold text-black">Sign in to your account</h2>
+              <p className="text-xs sm:text-sm text-[#78716c]">Enter your credentials to continue</p>
             </div>
 
-            <form onSubmit={handleLogin} className="space-y-4">
+            <form onSubmit={handleLogin} className="space-y-3 sm:space-y-4">
 
               {/* Username / Email */}
               <div className="space-y-2">
@@ -250,7 +250,7 @@ export default function LoginPage() {
           </div>
 
           {/* Footer */}
-          <p className="text-center text-[11px] text-[#b8b2ae] pb-2">
+          <p className="text-center text-[10px] sm:text-[11px] text-[#b8b2ae] pb-1 sm:pb-2">
             © 2026 Champika Hardware · All rights reserved
           </p>
 
