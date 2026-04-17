@@ -355,7 +355,7 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           icon: AlertCircle,
         },
         {
-          name: "Commission",
+          name: "Commission Tracker",
           href: "/dashboard/rep/commission",
           icon: CreditCard,
         },

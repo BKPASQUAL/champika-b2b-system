@@ -81,49 +81,17 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Step 2 (rep filter): build a precise list of order IDs the rep is allowed
-    // to see, using reliable pre-queries rather than fragile joined-table filters.
-    //
-    // Rule:
-    //   a) Any order the rep created themselves (sales_rep_id = repId)
-    //   b) Orders for the rep's customers that came from distribution / admin
-    //      (i.e. NOT from the retail business) — so retail cash-customer invoices
-    //      never leak into the rep portal.
+    // Step 2 (rep filter): only show invoices the rep created themselves.
     let repOrderIds: string[] | null = null;
     if (repId) {
-      // a) All orders the rep created
       const { data: ownOrders, error: ownErr } = await supabaseAdmin
         .from("orders")
-        .select("id, customer_id")
+        .select("id")
         .eq("sales_rep_id", repId);
       if (ownErr) throw ownErr;
 
-      const ownOrderRows = ownOrders ?? [];
-      const ownIds = ownOrderRows.map((o: any) => o.id as string);
+      repOrderIds = (ownOrders ?? []).map((o: any) => o.id as string);
 
-      // Unique customer IDs from the rep's own orders
-      const repCustomerIds = [
-        ...new Set(
-          ownOrderRows.map((o: any) => o.customer_id).filter(Boolean) as string[],
-        ),
-      ];
-
-      // b) Orders for those customers created by distribution/admin portals
-      //    (exclude retail so retail cash-customer invoices stay out)
-      let nonRetailIds: string[] = [];
-      if (repCustomerIds.length > 0) {
-        const { data: nonRetailOrders, error: nrErr } = await supabaseAdmin
-          .from("orders")
-          .select("id")
-          .in("customer_id", repCustomerIds)
-          .neq("business_id", BUSINESS_IDS.CHAMPIKA_RETAIL);
-        if (nrErr) throw nrErr;
-        nonRetailIds = (nonRetailOrders ?? []).map((o: any) => o.id as string);
-      }
-
-      repOrderIds = [...new Set([...ownIds, ...nonRetailIds])];
-
-      // Rep has no relevant orders → return empty immediately
       if (repOrderIds.length === 0) {
         return NextResponse.json([]);
       }

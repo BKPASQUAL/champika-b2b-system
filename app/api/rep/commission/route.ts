@@ -3,75 +3,53 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Commission rules:
+ *  - Only Delivered orders qualify
+ *  - Paid within 60 days of invoice date  → commission EARNED
+ *  - Paid after  60 days of invoice date  → commission CUT
+ *  - Not paid,   within 60 days           → commission PENDING
+ *  - Not paid,   over   60 days           → commission CUT
+ */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const repId = searchParams.get("repId");
-
-  if (!repId) {
-    return NextResponse.json({ error: "Rep ID required" }, { status: 400 });
-  }
+  if (!repId) return NextResponse.json({ error: "Rep ID required" }, { status: 400 });
 
   try {
-    // Step 1: Fetch orders with invoices (no nested payments to avoid deep-join issues)
+    // 1. Delivered orders for this rep
     const { data: orders, error: ordersError } = await supabaseAdmin
       .from("orders")
       .select(
-        `
-        id,
-        order_id,
-        total_amount,
-        status,
-        created_at,
-        sales_rep_id,
-        customers (
-          shop_name
-        ),
-        order_items (
-          commission_earned
-        ),
-        rep_commissions (
-          status
-        ),
-        invoices (
-          id,
-          status,
-          total_amount,
-          paid_amount,
-          due_date
-        )
-      `
+        `id, order_id, total_amount, status, created_at, order_date,
+         customers ( shop_name ),
+         order_items ( commission_earned ),
+         rep_commissions ( id, total_commission_amount, status ),
+         invoices ( id, invoice_no, status, total_amount, paid_amount, due_date, created_at )`
       )
       .eq("sales_rep_id", repId)
-      .in("status", ["Delivered", "Completed"])
+      .eq("status", "Delivered")
       .order("created_at", { ascending: false });
 
     if (ordersError) throw ordersError;
     if (!orders || orders.length === 0) return NextResponse.json([]);
 
-    // Step 2: Collect IDs of paid invoices only
-    const paidInvoiceIds: string[] = [];
-    for (const order of orders) {
-      const invoice = Array.isArray(order.invoices)
-        ? order.invoices[0]
-        : order.invoices;
-      if (invoice?.status === "Paid" && invoice.id) {
-        paidInvoiceIds.push(invoice.id);
-      }
-    }
+    // 2. Fetch latest payment date per invoice
+    const invoiceIds = orders
+      .map((o: any) => {
+        const inv = Array.isArray(o.invoices) ? o.invoices[0] : o.invoices;
+        return inv?.id;
+      })
+      .filter(Boolean) as string[];
 
-    // Step 3: Fetch payments for paid invoices
-    let paymentsByInvoice: Record<string, string> = {};
-
-    if (paidInvoiceIds.length > 0) {
-      const { data: payments, error: paymentsError } = await supabaseAdmin
+    const paymentsByInvoice: Record<string, string> = {};
+    if (invoiceIds.length > 0) {
+      const { data: payments } = await supabaseAdmin
         .from("payments")
         .select("invoice_id, payment_date")
-        .in("invoice_id", paidInvoiceIds)
+        .in("invoice_id", invoiceIds)
         .order("payment_date", { ascending: false });
 
-      if (paymentsError) throw paymentsError;
-
-      // Keep only the latest payment date per invoice
       for (const p of payments ?? []) {
         if (!paymentsByInvoice[p.invoice_id]) {
           paymentsByInvoice[p.invoice_id] = p.payment_date;
@@ -79,56 +57,99 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Step 4: Build commission records — ONLY for paid invoices
-    // Commission is counted only when payment date is AFTER the billing (order creation) date
-    const formattedData = orders
-      .map((order: any) => {
-        const invoice = Array.isArray(order.invoices)
-          ? order.invoices[0]
-          : order.invoices;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-        // Skip unpaid / partial invoices entirely
-        if (!invoice || invoice.status !== "Paid") return null;
+    // 3. Build records
+    const records = orders.map((order: any) => {
+      const inv = Array.isArray(order.invoices) ? order.invoices[0] : order.invoices;
+      const repCom = Array.isArray(order.rep_commissions)
+        ? order.rep_commissions[0]
+        : order.rep_commissions;
 
-        const invoiceTotal = invoice.total_amount || 0;
-        const invoicePaid = invoice.paid_amount || 0;
-        const orderDue = Math.max(0, invoiceTotal - invoicePaid);
+      const commissionAmount = repCom
+        ? Number(repCom.total_commission_amount) || 0
+        : (order.order_items ?? []).reduce(
+            (s: number, i: any) => s + (Number(i.commission_earned) || 0), 0
+          );
 
-        // Use the latest payment date as effective date
-        const paymentDate = paymentsByInvoice[invoice.id];
-        const billingDate = order.created_at;
+      const invoiceDate = new Date(inv?.created_at || order.created_at);
+      invoiceDate.setHours(0, 0, 0, 0);
 
-        // Only count commission if payment was received AFTER the billing date
-        const paymentIsAfterBilling =
-          paymentDate && new Date(paymentDate) > new Date(billingDate);
+      const invoiceTotal = Number(inv?.total_amount || order.total_amount || 0);
+      const paidAmount   = Number(inv?.paid_amount || 0);
+      const dueAmount    = Math.max(0, invoiceTotal - paidAmount);
+      const isPaid       = dueAmount === 0 && paidAmount > 0;
+      const isPartial    = paidAmount > 0 && dueAmount > 0;
 
-        const totalCommission = paymentIsAfterBilling
-          ? order.order_items?.reduce(
-              (sum: number, item: any) =>
-                sum + (Number(item.commission_earned) || 0),
-              0
-            ) ?? 0
+      const paymentDateStr = inv?.id ? paymentsByInvoice[inv.id] : undefined;
+      const paymentDate    = paymentDateStr ? new Date(paymentDateStr) : null;
+
+      const daysSinceInvoice = Math.floor(
+        (today.getTime() - invoiceDate.getTime()) / (1000 * 60 * 60 * 24)
+      );
+      const daysToPayment = paymentDate
+        ? Math.floor(
+            (paymentDate.getTime() - invoiceDate.getTime()) / (1000 * 60 * 60 * 24)
+          )
+        : null;
+
+      // Determine collection status
+      let collectionStatus:
+        | "immediate"    // paid same day (≤ 1 day)
+        | "on_time"      // paid 2–60 days
+        | "late_paid"    // paid after 60 days → cut
+        | "pending"      // not paid, ≤ 60 days
+        | "overdue_cut"; // not paid, > 60 days → cut
+
+      if (isPaid || isPartial) {
+        const d = daysToPayment ?? 0;
+        if (d <= 1)       collectionStatus = "immediate";
+        else if (d <= 60) collectionStatus = "on_time";
+        else              collectionStatus = "late_paid";
+      } else {
+        collectionStatus = daysSinceInvoice > 60 ? "overdue_cut" : "pending";
+      }
+
+      // Effective commission earned
+      const commissionEarned =
+        collectionStatus === "immediate" || collectionStatus === "on_time"
+          ? commissionAmount
           : 0;
 
-        const effectiveDate = paymentDate || billingDate;
+      const commissionCut =
+        collectionStatus === "late_paid" || collectionStatus === "overdue_cut"
+          ? commissionAmount
+          : 0;
 
-        const commissionStatus =
-          order.rep_commissions?.[0]?.status || "Pending";
+      const commissionPending =
+        collectionStatus === "pending" ? commissionAmount : 0;
 
-        return {
-          id: order.id,
-          orderRef: order.order_id || "N/A",
-          shopName: order.customers?.shop_name || "Unknown",
-          orderTotal: order.total_amount || 0,
-          commission: totalCommission,
-          status: commissionStatus as "Pending" | "Paid",
-          date: effectiveDate,
-          orderDue: orderDue,
-        };
-      })
-      .filter(Boolean); // Remove null entries (unpaid orders)
+      const payoutStatus: "Pending" | "Paid" =
+        repCom?.status === "Paid" ? "Paid" : "Pending";
 
-    return NextResponse.json(formattedData);
+      return {
+        id: order.id,
+        orderRef: order.order_id || order.id.slice(0, 8).toUpperCase(),
+        invoiceNo: inv?.invoice_no || null,
+        shopName: order.customers?.shop_name || "Unknown",
+        invoiceDate: invoiceDate.toISOString(),
+        paymentDate: paymentDateStr || null,
+        daysToPayment,
+        daysSinceInvoice,
+        orderTotal: invoiceTotal,
+        paidAmount,
+        dueAmount,
+        commissionAmount,
+        commissionEarned,
+        commissionCut,
+        commissionPending,
+        collectionStatus,
+        payoutStatus,
+      };
+    });
+
+    return NextResponse.json(records);
   } catch (error: any) {
     console.error("Commission API Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
