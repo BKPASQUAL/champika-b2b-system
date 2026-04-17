@@ -227,36 +227,9 @@ export async function POST(request: NextRequest) {
     const val = invoiceSchema.parse(body);
 
     // -------------------------------------------------------------
-    // 1. Generate Invoice Number (FIXED LOGIC)
+    // 1. Resolve business_id first — needed to determine invoice prefix.
+    //    If not sent (e.g. rep portal), look it up from the customer.
     // -------------------------------------------------------------
-    // Find the last invoice created to determine the next sequence number.
-    // We sort by created_at DESC to find the most recent one.
-    const { data: lastInvoice } = await supabaseAdmin
-      .from("invoices")
-      .select("invoice_no")
-      .ilike("invoice_no", "INV-%") // Only check auto-generated ones
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    let nextId = 1001; // Default start
-
-    if (lastInvoice && lastInvoice.invoice_no) {
-      // Expect format "INV-XXXX"
-      const parts = lastInvoice.invoice_no.split("-");
-      if (parts.length === 2) {
-        const lastNum = parseInt(parts[1], 10);
-        if (!isNaN(lastNum)) {
-          nextId = lastNum + 1;
-        }
-      }
-    }
-
-    const invoiceNo = `INV-${nextId}`;
-    // -------------------------------------------------------------
-
-    // 2. Resolve business_id — if not sent (e.g. rep portal), look it up from the customer.
-    // This ensures the order always has the correct business_id so billing queries work.
     let resolvedBusinessId: string | null = val.businessId || null;
     if (!resolvedBusinessId) {
       const { data: custBizData } = await supabaseAdmin
@@ -266,6 +239,41 @@ export async function POST(request: NextRequest) {
         .single();
       resolvedBusinessId = custBizData?.business_id || null;
     }
+
+    // -------------------------------------------------------------
+    // 2. Generate Invoice Number with per-business prefix
+    //    Distribution → CHD-0001 | Retail → CHR-0001
+    //    Orange → OR-0001 | Sierra → SI-0001 | Wireman → WI-0001
+    //    Rep portal (no business) → INV-0001
+    // -------------------------------------------------------------
+    const INVOICE_PREFIXES: Record<string, string> = {
+      [BUSINESS_IDS.CHAMPIKA_DISTRIBUTION]: "CHD",
+      [BUSINESS_IDS.CHAMPIKA_RETAIL]:       "CHR",
+      [BUSINESS_IDS.ORANGE_AGENCY]:         "OR",
+      [BUSINESS_IDS.SIERRA_AGENCY]:         "SI",
+      [BUSINESS_IDS.WIREMAN_AGENCY]:        "WI",
+    };
+    const prefix = resolvedBusinessId
+      ? (INVOICE_PREFIXES[resolvedBusinessId] ?? "INV")
+      : "INV";
+
+    const { data: lastInvoice } = await supabaseAdmin
+      .from("invoices")
+      .select("invoice_no")
+      .ilike("invoice_no", `${prefix}-%`)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    let nextSeq = 1;
+    if (lastInvoice?.invoice_no) {
+      const parts = lastInvoice.invoice_no.split("-");
+      const lastNum = parseInt(parts[parts.length - 1], 10);
+      if (!isNaN(lastNum)) nextSeq = lastNum + 1;
+    }
+
+    const invoiceNo = `${prefix}-${String(nextSeq).padStart(4, "0")}`;
+    // -------------------------------------------------------------
 
     // 3. Calculate Dates
     const invoiceDate =

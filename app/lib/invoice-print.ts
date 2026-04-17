@@ -67,7 +67,7 @@ export const printInvoice = async (
     printHTML(
       getDocumentWrapper(
         await generateInvoiceHTML(data, divisionKey),
-        `Invoice ${data.invoiceNo}`
+        data.invoiceNo || "Invoice"
       )
     );
   } catch {
@@ -110,6 +110,8 @@ export const printBulkInvoices = async (
 
 // ── Generate PDF Blob (server-side, for uploading / WhatsApp sharing) ───────
 // Calls the Puppeteer PDF API — identical output to Print.
+// Retries up to 2 times because Puppeteer/Chromium cold-start can cause
+// the first attempt to fail on slow or serverless environments.
 export const generateInvoicePdfBlob = async (
   invoiceOrId: string | any,
   divisionKey: keyof typeof DIVISIONS = "admin"
@@ -118,18 +120,35 @@ export const generateInvoicePdfBlob = async (
     typeof invoiceOrId === "string"
       ? invoiceOrId
       : invoiceOrId.id || invoiceOrId._id;
-  const invoiceNo =
-    typeof invoiceOrId === "string"
-      ? "Invoice"
-      : invoiceOrId.invoiceNo || "Invoice";
 
-  const res = await fetch(
-    `/api/invoices/${id}/pdf?division=${divisionKey}`
-  );
-  if (!res.ok) throw new Error(`PDF API returned HTTP ${res.status}`);
+  const MAX_ATTEMPTS = 3;
+  let lastError: Error = new Error("PDF generation failed");
 
-  const blob = await res.blob();
-  return { blob, filename: `${invoiceNo}.pdf` };
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const res = await fetch(
+        `/api/invoices/${id}/pdf?division=${divisionKey}`
+      );
+      if (!res.ok) throw new Error(`PDF API returned HTTP ${res.status}`);
+
+      // Read the invoice number from the Content-Disposition header so the
+      // filename is always correct even when called with just an ID string.
+      const disposition = res.headers.get("Content-Disposition") || "";
+      const match = disposition.match(/filename="([^"]+)"/);
+      const filename = match ? match[1] : `${id}.pdf`;
+
+      const blob = await res.blob();
+      return { blob, filename };
+    } catch (err: any) {
+      lastError = err;
+      if (attempt < MAX_ATTEMPTS) {
+        // Brief delay before retry — gives Chromium time to settle
+        await new Promise((r) => setTimeout(r, 1500 * attempt));
+      }
+    }
+  }
+
+  throw lastError;
 };
 
 // ── Download — auto-saves PDF, pixel-identical to Print ────────────────────

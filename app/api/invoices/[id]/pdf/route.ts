@@ -95,14 +95,19 @@ export async function GET(
     const puppeteer = await import("puppeteer");
     const browser = await puppeteer.default.launch({
       headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+      ],
+      timeout: 30000,
     });
 
     let pdfBuffer: Uint8Array;
     try {
       const page = await browser.newPage();
       await page.setViewport({ width: 794, height: 1123 });
-      await page.setContent(fullHtml, { waitUntil: "networkidle0" });
+      await page.setContent(fullHtml, { waitUntil: "networkidle0", timeout: 25000 });
 
       pdfBuffer = await page.pdf({
         format: "A4",
