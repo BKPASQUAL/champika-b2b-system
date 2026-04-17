@@ -567,6 +567,22 @@ export async function POST(request: NextRequest) {
         ? "Distribution Invoice"
         : "Rep Order";
 
+      // Server-side fallback: if the frontend didn't send performer info,
+      // look it up from the profiles table using salesRepId.
+      let performedByName = val.performedByName ?? null;
+      let performedByEmail = val.performedByEmail ?? null;
+      if (!performedByName && val.salesRepId) {
+        const { data: profile } = await supabaseAdmin
+          .from("profiles")
+          .select("full_name, email")
+          .eq("id", val.salesRepId)
+          .maybeSingle();
+        if (profile) {
+          performedByName = profile.full_name ?? null;
+          performedByEmail = profile.email ?? performedByEmail;
+        }
+      }
+
       const { data: actRec, error: actRecError } = await supabaseAdmin.from("activity_records").insert({
         portal,
         business_id: resolvedBusinessId,
@@ -580,8 +596,8 @@ export async function POST(request: NextRequest) {
         customer_name: customer?.shop_name ?? null,
         amount: val.grandTotal,
         performed_by_id: val.salesRepId,
-        performed_by_name: val.performedByName ?? null,
-        performed_by_email: val.performedByEmail ?? null,
+        performed_by_name: performedByName,
+        performed_by_email: performedByEmail,
         metadata: {
           invoiceNo,
           orderId,

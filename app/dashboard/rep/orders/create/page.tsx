@@ -433,6 +433,8 @@ export default function CreateOrderPage() {
       extraDiscountAmount: extraDiscountAmount,
       grandTotal: grandTotal,
       notes: "",
+      performedByName: currentUser.name ?? null,
+      performedByEmail: currentUser.email ?? null,
     };
 
     try {

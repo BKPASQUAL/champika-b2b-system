@@ -87,6 +87,12 @@ export default function CreateInvoicePage() {
   const [loading, setLoading] = useState(true);
   const [stockLoading, setStockLoading] = useState(false);
 
+  // Current logged-in admin user (for activity record attribution)
+  const currentUser = React.useMemo(() => {
+    if (typeof window === "undefined") return null;
+    try { return JSON.parse(localStorage.getItem("currentUser") || "null"); } catch { return null; }
+  }, []);
+
   // Data State
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<{ id: string; name: string; businessId?: string }[]>(
@@ -339,6 +345,8 @@ export default function CreateInvoicePage() {
       extraDiscountAmount: extraDiscountAmount,
       grandTotal: grandTotal,
       orderStatus,
+      performedByName: currentUser?.name ?? null,
+      performedByEmail: currentUser?.email ?? null,
     };
 
     try {
