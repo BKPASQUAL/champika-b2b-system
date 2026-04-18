@@ -4,8 +4,10 @@ import React, { useState, useEffect } from "react";
 import {
   Loader2, CheckCircle, XCircle, Eye, Moon, Sun,
   Coffee, Target, TrendingUp, TrendingDown, Banknote,
-  ClipboardCheck, User, RefreshCw, History,
+  ClipboardCheck, User, RefreshCw, History, Search, X,
+  Download, Share2,
 } from "lucide-react";
+import { downloadPayslip, sharePayslip } from "@/app/dashboard/office/distribution/salaries/generate-payslip";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -217,6 +219,16 @@ function PayslipDialog({
             <span className="text-2xl font-extrabold tabular-nums">{fmt(salary.net_salary)}</span>
           </div>
 
+          {/* Download / Share */}
+          <div className="grid grid-cols-2 gap-3">
+            <Button variant="outline" className="h-10 cursor-pointer" onClick={() => downloadPayslip(salary)}>
+              <Download className="w-4 h-4 mr-2 text-emerald-600" /> Download PDF
+            </Button>
+            <Button variant="outline" className="h-10 cursor-pointer" onClick={() => sharePayslip(salary)}>
+              <Share2 className="w-4 h-4 mr-2 text-sky-600" /> Share
+            </Button>
+          </div>
+
           {/* Approval info for approved records */}
           {salary.admin_approval_status === "Approved" && salary.approved_at && (
             <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 px-4 py-3 flex items-center gap-2 text-sm text-emerald-700">
@@ -234,14 +246,14 @@ function PayslipDialog({
           {salary.admin_approval_status === "Pending" && onApprove && onReject && (
             <div className="grid grid-cols-2 gap-3">
               <Button
-                className="bg-emerald-600 hover:bg-emerald-700 h-10"
+                className="bg-emerald-600 hover:bg-emerald-700 h-10 cursor-pointer"
                 onClick={() => { onApprove(salary.id); onClose(); }}
               >
                 <CheckCircle className="w-4 h-4 mr-2" /> Approve
               </Button>
               <Button
                 variant="outline"
-                className="text-red-600 border-red-200 hover:bg-red-50 h-10"
+                className="text-red-600 border-red-200 hover:bg-red-50 h-10 cursor-pointer"
                 onClick={() => { onReject(salary.id); onClose(); }}
               >
                 <XCircle className="w-4 h-4 mr-2" /> Reject
@@ -327,21 +339,37 @@ function SalaryTable({
                   <div className="flex justify-center items-center gap-1">
                     <Button
                       size="icon" variant="ghost"
-                      className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted"
+                      className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer"
                       title="View full slip"
                       onClick={() => onView(s)}
                     >
                       <Eye className="h-4 w-4" />
                     </Button>
+                    <Button
+                      size="icon" variant="ghost"
+                      className="h-8 w-8 text-emerald-600 hover:bg-emerald-50 cursor-pointer"
+                      title="Download payslip PDF"
+                      onClick={() => downloadPayslip(s)}
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="icon" variant="ghost"
+                      className="h-8 w-8 text-sky-600 hover:bg-sky-50 cursor-pointer"
+                      title="Share payslip"
+                      onClick={() => sharePayslip(s)}
+                    >
+                      <Share2 className="h-4 w-4" />
+                    </Button>
                     {isPending && onApprove && onReject && (
                       <>
                         <Button size="sm" variant="outline"
-                          className="h-7 text-xs text-emerald-600 border-emerald-200 hover:bg-emerald-50"
+                          className="h-7 text-xs text-emerald-600 border-emerald-200 hover:bg-emerald-50 cursor-pointer"
                           onClick={() => onApprove(s.id)}>
                           <CheckCircle className="h-3 w-3 mr-1" /> Approve
                         </Button>
                         <Button size="sm" variant="outline"
-                          className="h-7 text-xs text-red-600 border-red-200 hover:bg-red-50"
+                          className="h-7 text-xs text-red-600 border-red-200 hover:bg-red-50 cursor-pointer"
                           onClick={() => onReject(s.id)}>
                           <XCircle className="h-3 w-3 mr-1" /> Reject
                         </Button>
@@ -373,17 +401,23 @@ function SalaryTable({
               <span className="flex items-center gap-1 text-blue-700"><Sun className="h-3 w-3" />{s.working_days ?? 0} days</span>
               <span className="flex items-center gap-1 text-purple-700"><Moon className="h-3 w-3" />{s.night_out_days ?? 0} nights</span>
             </div>
-            <div className="flex gap-2 pt-1">
-              <Button size="sm" variant="ghost" className="flex-none h-8 text-xs px-2" onClick={() => onView(s)}>
+            <div className="flex gap-2 pt-1 flex-wrap">
+              <Button size="sm" variant="ghost" className="flex-none h-8 text-xs px-2 cursor-pointer" onClick={() => onView(s)}>
                 <Eye className="h-3.5 w-3.5 mr-1" /> View
+              </Button>
+              <Button size="sm" variant="ghost" className="flex-none h-8 text-xs px-2 text-emerald-600 cursor-pointer" onClick={() => downloadPayslip(s)}>
+                <Download className="h-3.5 w-3.5 mr-1" /> PDF
+              </Button>
+              <Button size="sm" variant="ghost" className="flex-none h-8 text-xs px-2 text-sky-600 cursor-pointer" onClick={() => sharePayslip(s)}>
+                <Share2 className="h-3.5 w-3.5 mr-1" /> Share
               </Button>
               {isPending && onApprove && onReject && (
                 <>
-                  <Button size="sm" className="flex-1 h-8 text-xs bg-emerald-600 hover:bg-emerald-700"
+                  <Button size="sm" className="flex-1 h-8 text-xs bg-emerald-600 hover:bg-emerald-700 cursor-pointer"
                     onClick={() => onApprove(s.id)}>
                     <CheckCircle className="h-3.5 w-3.5 mr-1" /> Approve
                   </Button>
-                  <Button size="sm" variant="outline" className="flex-1 h-8 text-xs text-red-600 border-red-200 hover:bg-red-50"
+                  <Button size="sm" variant="outline" className="flex-1 h-8 text-xs text-red-600 border-red-200 hover:bg-red-50 cursor-pointer"
                     onClick={() => onReject(s.id)}>
                     <XCircle className="h-3.5 w-3.5 mr-1" /> Reject
                   </Button>
@@ -408,6 +442,10 @@ export default function AdminSalariesApprovalPage() {
   // Filters for "All Salaries" tab
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterMonth, setFilterMonth]   = useState("all");
+  const [searchAll, setSearchAll]       = useState("");
+
+  // Search for "Pending" tab
+  const [searchPending, setSearchPending] = useState("");
 
   useEffect(() => {
     const user = getUserBusinessContext();
@@ -455,8 +493,17 @@ export default function AdminSalariesApprovalPage() {
   const filteredAll = allSalaries.filter((s) => {
     const statusOk = filterStatus === "all" || s.admin_approval_status === filterStatus;
     const monthOk  = filterMonth === "all"  || s.salary_month === filterMonth;
-    return statusOk && monthOk;
+    const searchOk = searchAll.trim() === "" ||
+      (s.profiles?.full_name ?? "").toLowerCase().includes(searchAll.toLowerCase()) ||
+      (s.salary_month ?? "").includes(searchAll);
+    return statusOk && monthOk && searchOk;
   });
+
+  const filteredPending = pending.filter((s) =>
+    searchPending.trim() === "" ||
+    (s.profiles?.full_name ?? "").toLowerCase().includes(searchPending.toLowerCase()) ||
+    (s.salary_month ?? "").includes(searchPending)
+  );
 
   // Stats
   const totalPayout    = pending.reduce((s, r) => s + (r.net_salary ?? 0), 0);
@@ -483,7 +530,7 @@ export default function AdminSalariesApprovalPage() {
             Review pending salaries and browse the full salary history.
           </p>
         </div>
-        <Button variant="outline" size="sm" className="shrink-0 self-start" onClick={loadAll} disabled={isLoading}>
+        <Button variant="outline" size="sm" className="shrink-0 self-start cursor-pointer" onClick={loadAll} disabled={isLoading}>
           <RefreshCw className={`h-3.5 w-3.5 mr-2 ${isLoading ? "animate-spin" : ""}`} />
           Refresh
         </Button>
@@ -539,14 +586,35 @@ export default function AdminSalariesApprovalPage() {
         </TabsList>
 
         {/* ── Pending tab ── */}
-        <TabsContent value="pending" className="mt-4">
+        <TabsContent value="pending" className="mt-4 space-y-3">
+          {/* Search bar */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search by employee name or month…"
+              value={searchPending}
+              onChange={(e) => setSearchPending(e.target.value)}
+              className="w-full h-9 pl-9 pr-8 rounded-md border border-input bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+            {searchPending && (
+              <button
+                onClick={() => setSearchPending("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
           <Card className="shadow-sm">
-            <CardHeader className="px-5 pt-4 pb-3 border-b">
+            <CardHeader className="px-5 pt-4 pb-3 border-b flex-row items-center justify-between">
               <CardTitle className="text-base">Pending Salary Records</CardTitle>
+              <span className="text-xs text-muted-foreground">{filteredPending.length} record{filteredPending.length !== 1 ? "s" : ""}</span>
             </CardHeader>
             <CardContent className="p-0">
               <SalaryTable
-                rows={pending}
+                rows={filteredPending}
                 isPending={true}
                 onView={setDetailSalary}
                 onApprove={(id) => handleStatusChange(id, "Approved")}
@@ -561,6 +629,26 @@ export default function AdminSalariesApprovalPage() {
 
           {/* Filters */}
           <div className="flex flex-wrap gap-3">
+            {/* Search */}
+            <div className="relative flex-1 min-w-48">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search by name or month…"
+                value={searchAll}
+                onChange={(e) => setSearchAll(e.target.value)}
+                className="w-full h-8 pl-9 pr-8 rounded-md border border-input bg-background text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+              {searchAll && (
+                <button
+                  onClick={() => setSearchAll("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+
             <Select value={filterStatus} onValueChange={setFilterStatus}>
               <SelectTrigger className="w-44 h-8 text-xs">
                 <SelectValue placeholder="All statuses" />
@@ -586,8 +674,9 @@ export default function AdminSalariesApprovalPage() {
             </Select>
 
             {(filterStatus !== "all" || filterMonth !== "all") && (
-              <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground"
-                onClick={() => { setFilterStatus("all"); setFilterMonth("all"); }}>
+              <Button variant="ghost" size="sm"
+                className="h-8 text-xs text-muted-foreground cursor-pointer"
+                onClick={() => { setFilterStatus("all"); setFilterMonth("all"); setSearchAll(""); }}>
                 Clear filters
               </Button>
             )}

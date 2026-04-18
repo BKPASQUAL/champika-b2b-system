@@ -4,8 +4,9 @@ import React, { useState, useEffect } from "react";
 import {
   Loader2, Plus, Banknote, Eye, Pencil, Trash2,
   TrendingUp, TrendingDown, CalendarDays, Target,
-  Moon, Sun, Coffee,
+  Moon, Sun, Coffee, Download, Share2,
 } from "lucide-react";
+import { downloadPayslip, sharePayslip } from "./generate-payslip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -682,7 +683,7 @@ export default function SalariesEntryPage() {
                           <div className="flex justify-center gap-1">
                             <Button
                               size="icon" variant="ghost"
-                              className="h-8 w-8 text-indigo-600 hover:bg-indigo-50"
+                              className="h-8 w-8 text-indigo-600 hover:bg-indigo-50 cursor-pointer"
                               title="View salary slip"
                               onClick={() => setViewSalary(s)}
                             >
@@ -690,7 +691,7 @@ export default function SalariesEntryPage() {
                             </Button>
                             <Button
                               size="icon" variant="ghost"
-                              className="h-8 w-8 text-amber-600 hover:bg-amber-50"
+                              className="h-8 w-8 text-amber-600 hover:bg-amber-50 cursor-pointer"
                               title="Edit salary"
                               onClick={() => setEditSalary(s)}
                             >
@@ -698,7 +699,23 @@ export default function SalariesEntryPage() {
                             </Button>
                             <Button
                               size="icon" variant="ghost"
-                              className="h-8 w-8 text-red-600 hover:bg-red-50"
+                              className="h-8 w-8 text-emerald-600 hover:bg-emerald-50 cursor-pointer"
+                              title="Download payslip PDF"
+                              onClick={() => downloadPayslip(s)}
+                            >
+                              <Download className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="icon" variant="ghost"
+                              className="h-8 w-8 text-sky-600 hover:bg-sky-50 cursor-pointer"
+                              title="Share payslip"
+                              onClick={() => sharePayslip(s)}
+                            >
+                              <Share2 className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="icon" variant="ghost"
+                              className="h-8 w-8 text-red-600 hover:bg-red-50 cursor-pointer"
                               title="Delete salary"
                               onClick={() => handleDelete(s.id)}
                             >
