@@ -6,22 +6,18 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Menu, Store, Warehouse, Globe, Zap, Mountain,
-  LogOut, ChevronDown, Check, LayoutDashboard,
+  LogOut, ChevronDown, Check, LayoutDashboard, X,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { roleNavItems, UserRole } from "@/app/config/nav-config";
 import { retailOfficeNavItems } from "@/app/config/retail-nav-config";
 import { distributionNavItems } from "@/app/config/distribution-nav-config";
 import { orangeOfficeNavItems } from "@/app/config/orange-nav-config";
 import { wiremanOfficeNavItems } from "@/app/config/wireman-nav-config";
 import { sierraOfficeNavItems } from "@/app/config/sierra-nav-config";
-import {
-  Sheet,
-  SheetContent,
-  SheetTrigger,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetClose } from "@/components/ui/sheet";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,11 +35,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  BUSINESS_IDS,
-  BUSINESS_NAMES,
-  BUSINESS_ROUTES,
-} from "@/app/config/business-constants";
+import { BUSINESS_IDS, BUSINESS_NAMES, BUSINESS_ROUTES } from "@/app/config/business-constants";
+
 
 interface MobileNavProps {
   role: UserRole;
@@ -66,81 +59,66 @@ export function MobileNav({
   const pathname = usePathname();
   const router = useRouter();
 
-  // Determine which navigation to show
   let navSections;
-  if (isWireman) {
-    navSections = wiremanOfficeNavItems;
-  } else if (isSierra) {
-    navSections = sierraOfficeNavItems;
-  } else if (isOrange) {
-    navSections = orangeOfficeNavItems;
-  } else if (isRetail) {
-    navSections = retailOfficeNavItems;
-  } else if (isDistribution) {
-    navSections = distributionNavItems;
-  } else {
-    navSections = roleNavItems[role];
-  }
+  if (isWireman)           navSections = wiremanOfficeNavItems;
+  else if (isSierra)       navSections = sierraOfficeNavItems;
+  else if (isOrange)       navSections = orangeOfficeNavItems;
+  else if (isRetail)       navSections = retailOfficeNavItems;
+  else if (isDistribution) navSections = distributionNavItems;
+  else                     navSections = roleNavItems[role];
 
-  // --- USER INFO ---
   const [user, setUser] = useState({
-    name: "Loading...",
-    email: "",
-    initials: "..",
+    name: "Loading...", email: "", initials: "..",
     role: "" as string,
-    businessName: null as string | null,
     accessibleBusinessIds: [] as string[],
   });
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const storedUser = localStorage.getItem("currentUser");
-      if (storedUser) {
-        try {
-          const parsed = JSON.parse(storedUser);
-          setUser({
-            name: parsed.name || "User",
-            email: parsed.email || "",
-            initials: parsed.initials || "U",
-            role: parsed.role || "",
-            businessName: parsed.businessName || null,
-            accessibleBusinessIds: parsed.accessibleBusinessIds ?? [],
-          });
-        } catch (e) {
-          console.error("Failed to parse user data");
-        }
+    if (typeof window === "undefined") return;
+    try {
+      const stored = localStorage.getItem("currentUser");
+      if (stored) {
+        const p = JSON.parse(stored);
+        setUser({
+          name: p.name || "User",
+          email: p.email || "",
+          initials: p.initials || "U",
+          role: p.role || "",
+          accessibleBusinessIds: p.accessibleBusinessIds ?? [],
+        });
       }
-    }
+    } catch { /* ignore */ }
   }, []);
 
   const isAdmin = user.role === "admin";
   const isOfficePortal = isOrange || isRetail || isDistribution || isWireman || isSierra;
 
-  const currentBusinessId = isOrange
-    ? BUSINESS_IDS.ORANGE_AGENCY
-    : isRetail
-    ? BUSINESS_IDS.CHAMPIKA_RETAIL
-    : isDistribution
-    ? BUSINESS_IDS.CHAMPIKA_DISTRIBUTION
-    : isWireman
-    ? BUSINESS_IDS.WIREMAN_AGENCY
-    : isSierra
-    ? BUSINESS_IDS.SIERRA_AGENCY
+  const currentBusinessId = isOrange ? BUSINESS_IDS.ORANGE_AGENCY
+    : isRetail       ? BUSINESS_IDS.CHAMPIKA_RETAIL
+    : isDistribution ? BUSINESS_IDS.CHAMPIKA_DISTRIBUTION
+    : isWireman      ? BUSINESS_IDS.WIREMAN_AGENCY
+    : isSierra       ? BUSINESS_IDS.SIERRA_AGENCY
     : null;
 
-  const switcherIds = isAdmin
-    ? Object.values(BUSINESS_IDS)
-    : user.accessibleBusinessIds;
+  const switcherIds = isAdmin ? Object.values(BUSINESS_IDS) : user.accessibleBusinessIds;
+  const canSwitch   = isAdmin || (isOfficePortal && switcherIds.length > 1);
 
-  const canSwitch = isAdmin || (isOfficePortal && switcherIds.length > 1);
+  const CurrentIcon   = isWireman ? Zap : isSierra ? Mountain : isOrange ? Globe
+    : isRetail ? Store : isDistribution ? Warehouse : LayoutDashboard;
+  const currentLabel  = isWireman ? "Wireman Agency" : isSierra ? "Sierra Agency"
+    : isOrange ? "Orange Agency" : isRetail ? "Champika Retail"
+    : isDistribution ? "Distribution" : "Admin Dashboard";
+  const currentIconBg = isWireman ? "bg-red-100" : isSierra ? "bg-purple-100"
+    : isOrange ? "bg-orange-100" : isRetail ? "bg-green-100"
+    : isDistribution ? "bg-blue-100" : "bg-gray-100";
+  const currentIconColor = isWireman ? "text-red-600" : isSierra ? "text-purple-600"
+    : isOrange ? "text-orange-600" : isRetail ? "text-green-600"
+    : isDistribution ? "text-blue-600" : "text-gray-700";
 
   const handlePortalSwitch = (businessId: string) => {
     if (businessId === currentBusinessId) return;
     const route = BUSINESS_ROUTES[businessId as keyof typeof BUSINESS_ROUTES];
-    if (route) {
-      setIsOpen(false);
-      router.push(route);
-    }
+    if (route) { setIsOpen(false); router.push(route); }
   };
 
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -148,11 +126,7 @@ export function MobileNav({
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
-    try {
-      await fetch("/api/auth/logout", { method: "POST" });
-    } catch {
-      // continue regardless
-    }
+    try { await fetch("/api/auth/logout", { method: "POST" }); } catch { /* ignore */ }
     localStorage.removeItem("currentUser");
     sessionStorage.clear();
     setIsOpen(false);
@@ -169,47 +143,25 @@ export function MobileNav({
           </Button>
         </SheetTrigger>
 
-        <SheetContent side="left" className="w-72 p-0 flex flex-col h-full">
-          <SheetTitle className="sr-only">Mobile Navigation Menu</SheetTitle>
+        <SheetContent side="left" className="w-[280px] p-0 flex flex-col h-full" hideCloseButton>
+          <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
 
-          {/* Logo Header / Portal Switcher */}
-          <div className="h-16 flex items-center border-b px-4 shrink-0">
+          {/* ── Header ─────────────────────────────────────── */}
+          <div className="h-16 flex items-center gap-3 border-b px-4 shrink-0">
+
             {canSwitch ? (
+              /* Dropdown trigger */
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="flex items-center gap-2 w-full rounded-lg px-2 py-2 hover:bg-accent transition-colors text-left group cursor-pointer">
-                    {/* Icon */}
-                    <div className={cn(
-                      "h-8 w-8 rounded-lg flex items-center justify-center shrink-0",
-                      isWireman ? "bg-red-100" :
-                      isSierra ? "bg-purple-100" :
-                      isOrange ? "bg-orange-100" :
-                      isRetail ? "bg-green-100" :
-                      isDistribution ? "bg-blue-100" :
-                      "bg-gray-100"
-                    )}>
-                      {isWireman ? <Zap className="h-4 w-4 text-red-600" /> :
-                       isSierra ? <Mountain className="h-4 w-4 text-purple-600" /> :
-                       isOrange ? <Globe className="h-4 w-4 text-orange-600" /> :
-                       isRetail ? <Store className="h-4 w-4 text-green-600" /> :
-                       isDistribution ? <Warehouse className="h-4 w-4 text-blue-600" /> :
-                       <LayoutDashboard className="h-4 w-4 text-gray-700" />}
+                  <button className="flex items-center gap-2.5 flex-1 min-w-0 rounded-xl px-2 py-2 hover:bg-muted transition-colors cursor-pointer group text-left">
+                    <div className={cn("h-8 w-8 rounded-lg flex items-center justify-center shrink-0", currentIconBg)}>
+                      <CurrentIcon className={cn("h-4 w-4", currentIconColor)} />
                     </div>
-                    {/* Name */}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold truncate leading-tight">
-                        {isWireman ? "Wireman Agency" :
-                         isSierra ? "Sierra Agency" :
-                         isOrange ? "Orange Agency" :
-                         isRetail ? "Champika Retail" :
-                         isDistribution ? "Distribution" :
-                         "Admin Dashboard"}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground leading-tight">
-                        Switch portal
-                      </p>
+                      <p className="text-sm font-semibold truncate leading-tight">{currentLabel}</p>
+                      <p className="text-[10px] text-muted-foreground leading-tight">Switch portal</p>
                     </div>
-                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0 group-data-[state=open]:rotate-180 transition-transform" />
+                    <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 group-data-[state=open]:rotate-180 transition-transform" />
                   </button>
                 </DropdownMenuTrigger>
 
@@ -218,12 +170,7 @@ export function MobileNav({
                   {isAdmin && (
                     <>
                       <DropdownMenuItem
-                        onClick={() => {
-                          if (isOfficePortal) {
-                            setIsOpen(false);
-                            router.push("/dashboard/admin");
-                          }
-                        }}
+                        onClick={() => { if (isOfficePortal) { setIsOpen(false); router.push("/dashboard/admin"); } }}
                         className={cn(
                           "flex items-center gap-2.5 select-none",
                           !isOfficePortal
@@ -242,13 +189,12 @@ export function MobileNav({
                   {switcherIds.map((id) => {
                     const name = BUSINESS_NAMES[id as keyof typeof BUSINESS_NAMES] ?? id;
                     const isActive = id === currentBusinessId;
-
                     const dotClass =
-                      id === BUSINESS_IDS.ORANGE_AGENCY ? "bg-orange-500" :
-                      id === BUSINESS_IDS.CHAMPIKA_RETAIL ? "bg-green-500" :
-                      id === BUSINESS_IDS.CHAMPIKA_DISTRIBUTION ? "bg-blue-500" :
-                      id === BUSINESS_IDS.WIREMAN_AGENCY ? "bg-red-500" :
-                      id === BUSINESS_IDS.SIERRA_AGENCY ? "bg-purple-500" :
+                      id === BUSINESS_IDS.ORANGE_AGENCY        ? "bg-orange-500" :
+                      id === BUSINESS_IDS.CHAMPIKA_RETAIL       ? "bg-green-500"  :
+                      id === BUSINESS_IDS.CHAMPIKA_DISTRIBUTION ? "bg-blue-500"   :
+                      id === BUSINESS_IDS.WIREMAN_AGENCY        ? "bg-red-500"    :
+                      id === BUSINESS_IDS.SIERRA_AGENCY         ? "bg-purple-500" :
                       "bg-gray-400";
 
                     return (
@@ -274,84 +220,55 @@ export function MobileNav({
                 </DropdownMenuContent>
               </DropdownMenu>
 
-            ) : isWireman ? (
-              <div className="flex items-center gap-2 px-2">
-                <Zap className="h-6 w-6 text-red-600 shrink-0" />
-                <span className="text-lg font-semibold truncate">Wireman Portal</span>
-              </div>
-            ) : isSierra ? (
-              <div className="flex items-center gap-2 px-2">
-                <Mountain className="h-6 w-6 text-purple-600 shrink-0" />
-                <span className="text-lg font-semibold truncate">Sierra Agency</span>
-              </div>
-            ) : isOrange ? (
-              <div className="flex items-center gap-2 px-2">
-                <Globe className="h-6 w-6 text-orange-600 shrink-0" />
-                <span className="text-lg font-semibold truncate">Agency Portal</span>
-              </div>
-            ) : isRetail ? (
-              <div className="flex items-center gap-2 px-2">
-                <Store className="h-6 w-6 text-green-600 shrink-0" />
-                <span className="text-lg font-semibold truncate">Retail Portal</span>
-              </div>
-            ) : isDistribution ? (
-              <div className="flex items-center gap-2 px-2">
-                <Warehouse className="h-6 w-6 text-blue-600 shrink-0" />
-                <span className="text-lg font-semibold truncate">Distribution</span>
-              </div>
             ) : (
-              <div className="flex items-center gap-2 px-2">
-                <img src="/logo.svg" alt="Logo" className="h-8 w-8 shrink-0 rounded-md" />
-                <span className="text-lg font-bold text-blue-800 tracking-tight truncate">Champika HW</span>
+              /* Static portal name */
+              <div className="flex items-center gap-2.5 flex-1 min-w-0 px-2">
+                <div className={cn("h-8 w-8 rounded-lg flex items-center justify-center shrink-0", currentIconBg)}>
+                  <CurrentIcon className={cn("h-4 w-4", currentIconColor)} />
+                </div>
+                <span className="text-sm font-semibold truncate">{currentLabel}</span>
               </div>
             )}
+
+            {/* Close button */}
+            <SheetClose asChild>
+              <button className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer shrink-0">
+                <X className="h-4 w-4" />
+                <span className="sr-only">Close</span>
+              </button>
+            </SheetClose>
           </div>
 
-          {/* Navigation */}
-          <nav className="flex-1 overflow-y-auto px-4 py-4">
-            <div className="space-y-4">
+          {/* ── Navigation ─────────────────────────────────── */}
+          <nav className="flex-1 overflow-y-auto px-3 py-4">
+            <div className="space-y-5">
               {navSections.map((section, sectionIdx) => (
                 <div key={sectionIdx}>
                   {section.title && (
-                    <h3 className="mb-2 px-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <p className="mb-1.5 px-3 text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
                       {section.title}
-                    </h3>
+                    </p>
                   )}
-                  <div className="space-y-1">
+                  <div className="space-y-0.5">
                     {section.items.map((item) => {
                       const Icon = item.icon;
                       const isActive = pathname === item.href;
-
                       return (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          onClick={() => setIsOpen(false)}
-                          className="block"
-                        >
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className={cn(
-                              "w-full justify-start gap-3 h-10 px-3",
-                              isActive
-                                ? isWireman
-                                  ? "bg-red-100 text-red-700 hover:bg-red-200"
-                                  : isSierra
-                                  ? "bg-purple-100 text-purple-700 hover:bg-purple-200"
-                                  : isOrange
-                                  ? "bg-orange-100 text-orange-700 hover:bg-orange-200"
-                                  : isRetail
-                                  ? "bg-green-100 text-green-700 hover:bg-green-200"
-                                  : isDistribution
-                                  ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
-                                  : "bg-primary text-primary-foreground hover:bg-primary/90"
-                                : "hover:bg-accent"
-                            )}
-                          >
+                        <Link key={item.href} href={item.href} onClick={() => setIsOpen(false)}>
+                          <div className={cn(
+                            "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors",
+                            isActive
+                              ? isWireman      ? "bg-red-100    text-red-700"
+                                : isSierra     ? "bg-purple-100 text-purple-700"
+                                : isOrange     ? "bg-orange-100 text-orange-700"
+                                : isRetail     ? "bg-green-100  text-green-700"
+                                : isDistribution ? "bg-blue-100 text-blue-700"
+                                : "bg-primary/10 text-primary"
+                              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                          )}>
                             <Icon className="h-4 w-4 shrink-0" />
-                            <span className="truncate">{item.name}</span>
-                          </Button>
+                            <span className="text-sm font-medium truncate">{item.name}</span>
+                          </div>
                         </Link>
                       );
                     })}
@@ -361,20 +278,18 @@ export function MobileNav({
             </div>
           </nav>
 
-          {/* User Profile Footer */}
-          <div className="border-t p-4 shrink-0 mt-auto bg-background">
-            <div className="flex items-center gap-3 px-2 mb-3">
-              <div
-                className={cn(
-                  "h-9 w-9 rounded-full flex items-center justify-center font-bold text-xs",
-                  isWireman && "bg-red-100 text-red-700",
-                  isSierra && "bg-purple-100 text-purple-700",
-                  isOrange && "bg-orange-100 text-orange-700",
-                  isRetail && "bg-green-100 text-green-700",
-                  isDistribution && "bg-blue-100 text-blue-700",
-                  !isOrange && !isRetail && !isDistribution && !isWireman && !isSierra && "bg-primary/10 text-primary"
-                )}
-              >
+          {/* ── User footer ─────────────────────────────────── */}
+          <div className="border-t px-3 py-3 shrink-0">
+            <div className="flex items-center gap-3 px-2 py-2 mb-1 rounded-xl">
+              <div className={cn(
+                "h-9 w-9 rounded-full flex items-center justify-center font-bold text-xs shrink-0",
+                isWireman      ? "bg-red-100    text-red-700"
+                  : isSierra   ? "bg-purple-100 text-purple-700"
+                  : isOrange   ? "bg-orange-100 text-orange-700"
+                  : isRetail   ? "bg-green-100  text-green-700"
+                  : isDistribution ? "bg-blue-100 text-blue-700"
+                  : "bg-primary/10 text-primary"
+              )}>
                 {user.initials}
               </div>
               <div className="flex-1 min-w-0">
@@ -383,28 +298,19 @@ export function MobileNav({
               </div>
             </div>
 
-            <Button
-              variant="ghost"
-              size="sm"
+            <button
               onClick={() => setShowLogoutDialog(true)}
               disabled={isLoggingOut}
-              className={cn(
-                "w-full justify-start gap-2",
-                isWireman && "hover:bg-red-50 hover:text-red-600",
-                isSierra && "hover:bg-purple-50 hover:text-purple-600",
-                isOrange && "hover:bg-orange-50 hover:text-orange-600",
-                isRetail && "hover:bg-green-50 hover:text-green-600",
-                isDistribution && "hover:bg-blue-50 hover:text-blue-600"
-              )}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer disabled:opacity-50"
             >
-              <LogOut className="h-4 w-4" />
-              {isLoggingOut ? "Logging out..." : "Logout"}
-            </Button>
+              <LogOut className="h-4 w-4 shrink-0" />
+              {isLoggingOut ? "Logging out…" : "Logout"}
+            </button>
           </div>
         </SheetContent>
       </Sheet>
 
-      {/* Logout confirmation dialog — outside Sheet so it renders above it */}
+      {/* Logout dialog — outside Sheet */}
       <AlertDialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -418,18 +324,12 @@ export function MobileNav({
             <AlertDialogAction
               onClick={handleLogout}
               disabled={isLoggingOut}
-              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+              className="bg-red-600 hover:bg-red-700"
             >
               {isLoggingOut ? (
-                <span className="flex items-center gap-2">
-                  <LogOut className="h-4 w-4 animate-pulse" />
-                  Logging out...
-                </span>
+                <span className="flex items-center gap-2"><LogOut className="h-4 w-4 animate-pulse" /> Logging out…</span>
               ) : (
-                <span className="flex items-center gap-2">
-                  <LogOut className="h-4 w-4" />
-                  Yes, Logout
-                </span>
+                <span className="flex items-center gap-2"><LogOut className="h-4 w-4" /> Yes, Logout</span>
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
