@@ -160,20 +160,20 @@ export function AppSidebar({
               <button className="flex items-center gap-2 w-full rounded-lg px-2 py-2 hover:bg-accent transition-colors text-left group cursor-pointer">
                 {/* Icon */}
                 <div className={cn(
-                  "h-8 w-8 rounded-lg flex items-center justify-center shrink-0",
+                  "h-8 w-8 rounded-lg flex items-center justify-center shrink-0 overflow-hidden",
                   isWireman ? "bg-red-100" :
                   isSierra ? "bg-purple-100" :
                   isOrange ? "bg-orange-100" :
                   isRetail ? "bg-green-100" :
                   isDistribution ? "bg-blue-100" :
-                  "bg-gray-100"
+                  "bg-white ring-1 ring-border"
                 )}>
                   {isWireman ? <Zap className="h-4 w-4 text-red-600" /> :
                    isSierra ? <Mountain className="h-4 w-4 text-purple-600" /> :
                    isOrange ? <Globe className="h-4 w-4 text-orange-600" /> :
                    isRetail ? <Store className="h-4 w-4 text-green-600" /> :
                    isDistribution ? <Warehouse className="h-4 w-4 text-blue-600" /> :
-                   <LayoutDashboard className="h-4 w-4 text-gray-700" />}
+                   <img src="/icons/icon-512x512.png" alt="Champika" className="h-full w-full object-cover" />}
                 </div>
                 {/* Name */}
                 <div className="flex-1 min-w-0">
