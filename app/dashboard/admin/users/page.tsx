@@ -57,6 +57,7 @@ export default function UsersPage() {
     role: "office",
     status: "Active",
     businessId: "",
+    accessibleBusinessIds: [],
   });
 
   // --- 1. FETCH DATA (Users + Businesses) ---
@@ -118,6 +119,7 @@ export default function UsersPage() {
       role: "office",
       status: "Active",
       businessId: "",
+      accessibleBusinessIds: [],
     });
     setIsAddDialogOpen(true);
   };
@@ -133,6 +135,7 @@ export default function UsersPage() {
       role: user.role,
       status: user.status as any,
       businessId: user.businessId || "",
+      accessibleBusinessIds: user.accessibleBusinessIds ?? (user.businessId ? [user.businessId] : []),
     });
     setIsAddDialogOpen(true);
   };
@@ -150,6 +153,21 @@ export default function UsersPage() {
     }
     if (!selectedUser && !formData.password) {
       toast.error("Password is required for new users");
+      return;
+    }
+    if (
+      formData.role === "office" &&
+      (formData.accessibleBusinessIds?.length ?? 0) === 0
+    ) {
+      toast.error("Office staff must have at least one business assigned");
+      return;
+    }
+    if (
+      formData.role === "office" &&
+      formData.accessibleBusinessIds?.length > 0 &&
+      !formData.businessId
+    ) {
+      toast.error("Please set a primary portal for this user");
       return;
     }
 

@@ -84,14 +84,13 @@ export async function POST(request: NextRequest) {
     }
 
     // 4. Fetch User Profile with Business Information
-    // We use the same supabase client which is now authenticated as the user
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select(
         `
-        role, 
-        is_active, 
-        full_name, 
+        role,
+        is_active,
+        full_name,
         username,
         business_id,
         businesses (
@@ -123,6 +122,22 @@ export async function POST(request: NextRequest) {
       ? profile.businesses[0]
       : profile.businesses;
 
+    // 5a. Fetch all accessible businesses for office users
+    let accessibleBusinessIds: string[] = [];
+    if (profile.role === "office") {
+      const { data: accessRows } = await supabaseAdmin
+        .from("user_business_access")
+        .select("business_id")
+        .eq("user_id", authData.user.id);
+
+      if (accessRows && accessRows.length > 0) {
+        accessibleBusinessIds = accessRows.map((r: any) => r.business_id);
+      } else if (profile.business_id) {
+        // backward compat: no rows yet, use profile.business_id
+        accessibleBusinessIds = [profile.business_id];
+      }
+    }
+
     // 6. Set remember-me cookie if requested (30 days, HTTP-only)
     const rememberMe = body.rememberMe === true;
     if (rememberMe) {
@@ -152,6 +167,7 @@ export async function POST(request: NextRequest) {
             description: businessInfo.description,
           }
         : null,
+      accessibleBusinessIds,
       session: authData.session,
     });
   } catch (error) {

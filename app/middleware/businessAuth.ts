@@ -15,9 +15,10 @@ export interface UserBusinessContext {
   name: string;
   email: string;
   role: UserRole;
-  businessId: string | null;
+  businessId: string | null;          // primary business
   businessName: string | null;
   initials: string;
+  accessibleBusinessIds: string[];     // all businesses this user can access
 }
 
 /**
@@ -27,18 +28,17 @@ export function hasBusinessAccess(
   user: UserBusinessContext,
   requiredBusinessId?: string
 ): boolean {
-  // Admin has access to all businesses
-  if (user.role === "admin") {
-    return true;
-  }
+  if (user.role === "admin") return true;
+  if (!requiredBusinessId) return true;
 
-  // If no specific business is required, allow access
-  if (!requiredBusinessId) {
-    return true;
-  }
+  // Check multi-business access list first, fall back to single businessId
+  const accessList = user.accessibleBusinessIds?.length
+    ? user.accessibleBusinessIds
+    : user.businessId
+    ? [user.businessId]
+    : [];
 
-  // Check if user's business matches required business
-  return user.businessId === requiredBusinessId;
+  return accessList.includes(requiredBusinessId);
 }
 
 /**
@@ -143,22 +143,20 @@ export function verifyBusinessRouteAccess(
     return { canAccess: true, redirectTo: null };
   }
 
-  // Office staff can only access their assigned business
+  // Office staff — check against their full access list
   if (user.role === "office") {
-    if (user.businessId === businessId) {
+    const accessList = user.accessibleBusinessIds?.length
+      ? user.accessibleBusinessIds
+      : user.businessId
+      ? [user.businessId]
+      : [];
+
+    if (accessList.includes(businessId)) {
       return { canAccess: true, redirectTo: null };
-    } else {
-      // Not their business — send to login
-      return {
-        canAccess: false,
-        redirectTo: "/login",
-      };
     }
+    return { canAccess: false, redirectTo: "/login" };
   }
 
   // Other roles can't access office business routes — send to login
-  return {
-    canAccess: false,
-    redirectTo: "/login",
-  };
+  return { canAccess: false, redirectTo: "/login" };
 }

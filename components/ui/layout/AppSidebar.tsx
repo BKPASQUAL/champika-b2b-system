@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { LogOut, Package, Store, Warehouse, Globe, Zap, Mountain } from "lucide-react"; // ✅ Added Mountain for Sierra
+import { LogOut, Store, Warehouse, Globe, Zap, Mountain, ChevronDown, Check, LayoutDashboard } from "lucide-react";
 import { roleNavItems, UserRole } from "@/app/config/nav-config";
 import { retailOfficeNavItems } from "@/app/config/retail-nav-config";
 import { distributionNavItems } from "@/app/config/distribution-nav-config";
@@ -13,7 +13,13 @@ import { orangeOfficeNavItems } from "@/app/config/orange-nav-config";
 import { wiremanOfficeNavItems } from "@/app/config/wireman-nav-config";
 import { sierraOfficeNavItems } from "@/app/config/sierra-nav-config";
 import { useState, useEffect } from "react";
-import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,6 +30,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  BUSINESS_IDS,
+  BUSINESS_NAMES,
+  BUSINESS_ROUTES,
+} from "@/app/config/business-constants";
 
 interface AppSidebarProps {
   role: UserRole;
@@ -66,7 +77,9 @@ export function AppSidebar({
     name: "Loading...",
     email: "",
     initials: "..",
+    role: "" as string,
     businessName: null as string | null,
+    accessibleBusinessIds: [] as string[],
   });
 
   useEffect(() => {
@@ -79,7 +92,9 @@ export function AppSidebar({
             name: parsed.name || "User",
             email: parsed.email || "",
             initials: parsed.initials || "U",
+            role: parsed.role || "",
             businessName: parsed.businessName || null,
+            accessibleBusinessIds: parsed.accessibleBusinessIds ?? [],
           });
         } catch (e) {
           console.error("Failed to parse user data");
@@ -87,6 +102,37 @@ export function AppSidebar({
       }
     }
   }, []);
+
+  const isAdmin = user.role === "admin";
+
+  // Determine which business ID corresponds to the current portal
+  const currentBusinessId = isOrange
+    ? BUSINESS_IDS.ORANGE_AGENCY
+    : isRetail
+    ? BUSINESS_IDS.CHAMPIKA_RETAIL
+    : isDistribution
+    ? BUSINESS_IDS.CHAMPIKA_DISTRIBUTION
+    : isWireman
+    ? BUSINESS_IDS.WIREMAN_AGENCY
+    : isSierra
+    ? BUSINESS_IDS.SIERRA_AGENCY
+    : null;
+
+  const isOfficePortal = isOrange || isRetail || isDistribution || isWireman || isSierra;
+
+  // Admins see all portals; office users see their assigned portals (2+)
+  const switcherIds = isAdmin
+    ? Object.values(BUSINESS_IDS)
+    : user.accessibleBusinessIds;
+
+  // Show switcher for admins everywhere, and for office users with 2+ businesses
+  const canSwitch = isAdmin || (isOfficePortal && switcherIds.length > 1);
+
+  const handlePortalSwitch = (businessId: string) => {
+    if (businessId === currentBusinessId) return;
+    const route = BUSINESS_ROUTES[businessId as keyof typeof BUSINESS_ROUTES];
+    if (route) router.push(route);
+  };
 
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
@@ -105,46 +151,136 @@ export function AppSidebar({
 
   return (
     <div className="hidden lg:flex w-64 border-r bg-card h-screen sticky top-0 flex-col shadow-sm z-40">
-      {/* Logo Header */}
-      <div className="h-16 flex items-center border-b px-6 shrink-0">
-        {isWireman ? (
-          <>
+      {/* Logo Header / Portal Switcher */}
+      <div className="h-16 flex items-center border-b px-4 shrink-0">
+        {canSwitch ? (
+          /* ── Multi-business dropdown trigger ── */
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-2 w-full rounded-lg px-2 py-2 hover:bg-accent transition-colors text-left group cursor-pointer">
+                {/* Icon */}
+                <div className={cn(
+                  "h-8 w-8 rounded-lg flex items-center justify-center shrink-0",
+                  isWireman ? "bg-red-100" :
+                  isSierra ? "bg-purple-100" :
+                  isOrange ? "bg-orange-100" :
+                  isRetail ? "bg-green-100" :
+                  isDistribution ? "bg-blue-100" :
+                  "bg-gray-100"
+                )}>
+                  {isWireman ? <Zap className="h-4 w-4 text-red-600" /> :
+                   isSierra ? <Mountain className="h-4 w-4 text-purple-600" /> :
+                   isOrange ? <Globe className="h-4 w-4 text-orange-600" /> :
+                   isRetail ? <Store className="h-4 w-4 text-green-600" /> :
+                   isDistribution ? <Warehouse className="h-4 w-4 text-blue-600" /> :
+                   <LayoutDashboard className="h-4 w-4 text-gray-700" />}
+                </div>
+                {/* Name */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold truncate leading-tight">
+                    {isWireman ? "Wireman Agency" :
+                     isSierra ? "Sierra Agency" :
+                     isOrange ? "Orange Agency" :
+                     isRetail ? "Champika Retail" :
+                     isDistribution ? "Distribution" :
+                     "Admin Dashboard"}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground leading-tight">
+                    Switch portal
+                  </p>
+                </div>
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0 group-data-[state=open]:rotate-180 transition-transform" />
+              </button>
+            </DropdownMenuTrigger>
+
+            <DropdownMenuContent side="bottom" align="start" className="w-56">
+              {/* Admin dashboard entry */}
+              {isAdmin && (
+                <>
+                  <DropdownMenuItem
+                    onClick={() => !isOfficePortal ? undefined : router.push("/dashboard/admin")}
+                    className={cn(
+                      "flex items-center gap-2.5 select-none",
+                      !isOfficePortal
+                        ? "bg-muted font-medium pointer-events-none cursor-default"
+                        : "cursor-pointer"
+                    )}
+                  >
+                    <span className="h-2 w-2 rounded-full shrink-0 bg-gray-800" />
+                    <span className="flex-1 text-sm truncate font-medium">Admin Dashboard</span>
+                    {!isOfficePortal && <Check className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
+
+              {switcherIds.map((id) => {
+                const name = BUSINESS_NAMES[id as keyof typeof BUSINESS_NAMES] ?? id;
+                const isActive = id === currentBusinessId;
+
+                const dotClass =
+                  id === BUSINESS_IDS.ORANGE_AGENCY ? "bg-orange-500" :
+                  id === BUSINESS_IDS.CHAMPIKA_RETAIL ? "bg-green-500" :
+                  id === BUSINESS_IDS.CHAMPIKA_DISTRIBUTION ? "bg-blue-500" :
+                  id === BUSINESS_IDS.WIREMAN_AGENCY ? "bg-red-500" :
+                  id === BUSINESS_IDS.SIERRA_AGENCY ? "bg-purple-500" :
+                  "bg-gray-400";
+
+                return (
+                  <DropdownMenuItem
+                    key={id}
+                    onClick={() => handlePortalSwitch(id)}
+                    className={cn(
+                      "flex items-center gap-2.5 cursor-pointer select-none",
+                      isActive && "bg-muted font-medium pointer-events-none cursor-default"
+                    )}
+                  >
+                    <span className={cn("h-2 w-2 rounded-full shrink-0", dotClass)} />
+                    <span className="flex-1 text-sm truncate">{name}</span>
+                    {isActive && <Check className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+                  </DropdownMenuItem>
+                );
+              })}
+
+              <DropdownMenuSeparator />
+              <div className="px-2 py-1.5 text-[10px] text-muted-foreground">
+                {isAdmin ? "All portals (admin)" : `${switcherIds.length} portals assigned`}
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+        ) : isWireman ? (
+          <div className="flex items-center gap-2 px-2">
             <Zap className="h-6 w-6 text-red-600 shrink-0" />
-            <span className="ml-2 text-lg font-semibold truncate">Wireman Portal</span>
-          </>
+            <span className="text-lg font-semibold truncate">Wireman Portal</span>
+          </div>
         ) : isSierra ? (
-          <>
+          <div className="flex items-center gap-2 px-2">
             <Mountain className="h-6 w-6 text-purple-600 shrink-0" />
-            <span className="ml-2 text-lg font-semibold truncate">Sierra Agency</span>
-          </>
+            <span className="text-lg font-semibold truncate">Sierra Agency</span>
+          </div>
         ) : isOrange ? (
-          <>
+          <div className="flex items-center gap-2 px-2">
             <Globe className="h-6 w-6 text-orange-600 shrink-0" />
-            <span className="ml-2 text-lg font-semibold truncate">
-              Agency Portal
-            </span>
-          </>
+            <span className="text-lg font-semibold truncate">Agency Portal</span>
+          </div>
         ) : isRetail ? (
-          <>
+          <div className="flex items-center gap-2 px-2">
             <Store className="h-6 w-6 text-green-600 shrink-0" />
-            <span className="ml-2 text-lg font-semibold truncate">
-              Retail Portal
-            </span>
-          </>
+            <span className="text-lg font-semibold truncate">Retail Portal</span>
+          </div>
         ) : isDistribution ? (
-          <>
+          <div className="flex items-center gap-2 px-2">
             <Warehouse className="h-6 w-6 text-blue-600 shrink-0" />
-            <span className="ml-2 text-lg font-semibold truncate">
-              Distribution
-            </span>
-          </>
+            <span className="text-lg font-semibold truncate">Distribution</span>
+          </div>
         ) : (
-          <>
-            <img src="/logo.svg" alt="Finora Farm Logo" className="h-8 w-8 shrink-0 rounded-md" />
-            <span className="ml-2 text-lg font-bold text-blue-800 tracking-tight truncate">
-              Finora Farm
+          <div className="flex items-center gap-2 px-2">
+            <img src="/logo.svg" alt="Logo" className="h-8 w-8 shrink-0 rounded-md" />
+            <span className="text-lg font-bold text-blue-800 tracking-tight truncate">
+              Champika HW
             </span>
-          </>
+          </div>
         )}
       </div>
 

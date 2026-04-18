@@ -31,14 +31,13 @@ export default function SierraOfficeLayout({
         return;
       }
 
-      // Allow admin or Sierra Agency users
-      const isAdmin = user.role === "admin";
-      const isSierraUser =
-        user.role === "office" && user.businessId === BUSINESS_IDS.SIERRA_AGENCY;
+      const { canAccess, redirectTo } = verifyBusinessRouteAccess(
+        user,
+        BUSINESS_IDS.SIERRA_AGENCY
+      );
 
-      if (!isAdmin && !isSierraUser) {
-        const { redirectTo } = verifyBusinessRouteAccess(user, BUSINESS_IDS.SIERRA_AGENCY);
-        router.replace(redirectTo || "/dashboard/office");
+      if (!canAccess && redirectTo) {
+        router.replace(redirectTo);
         return;
       }
 
@@ -71,13 +70,13 @@ export default function SierraOfficeLayout({
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         {/* Mobile Header */}
-        <header className="lg:hidden h-16 bg-white border-b flex items-center px-4 flex-shrink-0 z-30">
+        <header className="lg:hidden h-16 bg-white border-b flex items-center px-4 shrink-0 z-30">
           <MobileNav role="office" isSierra={true} />
           <span className="ml-4 font-bold text-gray-700">Sierra Agency</span>
         </header>
 
         {/* Desktop Header */}
-        <header className="hidden lg:flex h-16 bg-white border-b items-center justify-between px-8 flex-shrink-0 z-10">
+        <header className="hidden lg:flex h-16 bg-white border-b items-center justify-between px-8 shrink-0 z-10">
           <div className="flex items-center gap-3">
             <div className="h-8 w-8 bg-purple-100 rounded-lg flex items-center justify-center">
               <Mountain className="h-4 w-4 text-purple-600" />
