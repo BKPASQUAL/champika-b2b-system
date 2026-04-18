@@ -213,6 +213,16 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
       ],
     },
     {
+      title: "HR & Payroll",
+      items: [
+        {
+          name: "Salary Approvals",
+          href: "/dashboard/admin/salaries-approval",
+          icon: Banknote,
+        },
+      ],
+    },
+    {
       title: "System",
       items: [
         { name: "Users", href: "/dashboard/admin/users", icon: Users },

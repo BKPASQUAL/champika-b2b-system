@@ -1,432 +1,295 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  CardFooter,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Banknote,
-  Calendar,
-  CheckCircle2,
-  AlertCircle,
-  TrendingUp,
-  MapPin,
-  Utensils,
-  Moon,
-  Briefcase,
-  Trophy,
+  Loader2, Banknote, Sun, Moon, Coffee, Target,
+  TrendingUp, TrendingDown, ChevronDown, ChevronUp,
+  CheckCircle2, Calendar,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 
-// --- MOCK DATA ---
-const MOCK_SALARY_DATA = {
-  month: "October 2023",
-  workingDays: 24,
-  nightOuts: 5,
-  totalSalesNonOrange: 3250000, // 3.25M (Target Met)
-  totalSalesOrange: 150000,
-  commissionEarned: 42500.0,
-  rates: {
-    dailyBasic: 1200,
-    lunchAllowance: 400,
-    nightOutAllowance: 1500,
-    targetThreshold: 3000000,
-    targetBonus: 5000,
-  },
-  attendance: [
-    { date: "2023-10-01", status: "Present", nightOut: false, sales: 150000 },
-    { date: "2023-10-02", status: "Present", nightOut: true, sales: 210000 },
-    { date: "2023-10-03", status: "Present", nightOut: false, sales: 90000 },
-    { date: "2023-10-04", status: "Present", nightOut: false, sales: 120000 },
-    { date: "2023-10-05", status: "Leave", nightOut: false, sales: 0 },
-    // ... truncated for design
-  ],
-};
+const fmt = (n: number) =>
+  `LKR ${(n ?? 0).toLocaleString("en-LK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-export default function RepSalaryPage() {
-  const [selectedMonth, setSelectedMonth] = useState("oct-2023");
-  const data = MOCK_SALARY_DATA;
-  const rates = data.rates;
+const fmtShort = (n: number) =>
+  `LKR ${(n ?? 0).toLocaleString("en-LK", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
-  // --- CALCULATIONS ---
-  const basicSalary = data.workingDays * rates.dailyBasic;
-  const lunchAllowances = data.workingDays * rates.lunchAllowance;
-  const nightOutAllowances = data.nightOuts * rates.nightOutAllowance;
-  
-  const isTargetMet = data.totalSalesNonOrange >= rates.targetThreshold;
-  const targetBonus = isTargetMet ? rates.targetBonus : 0;
+/* ─── Stat card (matches commission tracker) ──────────────────────────── */
+function StatCard({
+  label, value, sub, icon, iconBg, iconColor, valueColor,
+}: {
+  label: string; value: string; sub: string;
+  icon: React.ReactNode; iconBg: string; iconColor: string; valueColor: string;
+}) {
+  return (
+    <Card className="shadow-sm">
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide leading-tight">
+            {label}
+          </p>
+          <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${iconBg} ${iconColor}`}>
+            {icon}
+          </div>
+        </div>
+        <p className={`text-lg sm:text-xl font-bold tabular-nums ${valueColor} truncate`}>{value}</p>
+        <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 truncate">{sub}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ─── Single salary slip row ──────────────────────────────────────────── */
+function SalaryRow({ label, value, badge }: { label: string; value: number; badge?: string }) {
+  if (value <= 0) return null;
+  return (
+    <div className="flex justify-between items-center py-2 text-sm border-b border-dashed border-muted last:border-0">
+      <span className="text-muted-foreground flex items-center gap-1.5">
+        {badge && (
+          <span className={`inline-block w-1.5 h-1.5 rounded-full ${badge}`} />
+        )}
+        {label}
+      </span>
+      <span className="font-semibold tabular-nums text-foreground">{fmt(value)}</span>
+    </div>
+  );
+}
+
+/* ─── Salary slip card ────────────────────────────────────────────────── */
+function SalarySlip({ s }: { s: any }) {
+  const [expanded, setExpanded] = useState(false);
 
   const totalEarnings =
-    basicSalary +
-    lunchAllowances +
-    nightOutAllowances +
-    data.commissionEarned +
-    targetBonus;
+    (s.basic_salary ?? 0) + (s.auto_commissions ?? 0) +
+    (s.manual_commissions_added ?? 0) + (s.lunch_allowance ?? 0) +
+    (s.night_out_allowance ?? 0) + (s.target_bonus_amount ?? 0);
 
-  // Progress Bar Calculation
-  const progressPercent = Math.min(
-    (data.totalSalesNonOrange / rates.targetThreshold) * 100,
-    100
-  );
+  const totalDeductions =
+    (s.manual_commissions_deducted ?? 0) + (s.other_deductions ?? 0);
 
   return (
-    <div className="space-y-6  mx-auto pb-10">
-      {/* Header & Controls */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <Card className="shadow-sm overflow-hidden">
+
+      {/* ── Header row ── */}
+      <CardHeader className="px-5 pt-4 pb-3 border-b bg-muted/20">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-base font-semibold">{s.salary_month}</CardTitle>
+              <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100 text-[10px] font-semibold">
+                <CheckCircle2 className="h-2.5 w-2.5 mr-1" /> Approved
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5 pl-6">
+              Released: {s.payment_date
+                ? new Date(s.payment_date).toLocaleDateString("en-LK", { day: "numeric", month: "short", year: "numeric" })
+                : "—"}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wide">Net Pay</p>
+            <p className="text-2xl font-extrabold tabular-nums text-foreground">{fmt(s.net_salary)}</p>
+          </div>
+        </div>
+      </CardHeader>
+
+      <CardContent className="p-0">
+
+        {/* ── Attendance strip ── */}
+        <div className="grid grid-cols-2 divide-x border-b bg-muted/10">
+          <div className="flex items-center gap-2.5 px-5 py-3">
+            <div className="h-7 w-7 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+              <Sun className="h-3.5 w-3.5 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Working Days</p>
+              <p className="text-base font-bold tabular-nums">{s.working_days ?? 0}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2.5 px-5 py-3">
+            <div className="h-7 w-7 rounded-lg bg-purple-50 flex items-center justify-center shrink-0">
+              <Moon className="h-3.5 w-3.5 text-purple-600" />
+            </div>
+            <div>
+              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Night Out Days</p>
+              <p className="text-base font-bold tabular-nums">{s.night_out_days ?? 0}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Summary quick row ── */}
+        <div className="grid grid-cols-3 divide-x border-b text-center">
+          {[
+            { label: "Earnings", value: fmtShort(totalEarnings), color: "text-emerald-600" },
+            { label: "Deductions", value: fmtShort(totalDeductions), color: "text-red-500" },
+            { label: "Net Salary", value: fmtShort(s.net_salary), color: "text-foreground font-extrabold" },
+          ].map((item) => (
+            <div key={item.label} className="px-3 py-3">
+              <p className="text-[9px] text-muted-foreground uppercase font-semibold tracking-wider">{item.label}</p>
+              <p className={`text-sm font-bold tabular-nums mt-0.5 ${item.color}`}>{item.value}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Expandable breakdown ── */}
+        <button
+          className="w-full flex items-center justify-between px-5 py-2.5 text-xs font-medium text-muted-foreground hover:bg-muted/20 transition-colors border-b"
+          onClick={() => setExpanded(!expanded)}
+        >
+          <span>Salary Breakdown</span>
+          {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+        </button>
+
+        {expanded && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-0 divide-y md:divide-y-0 md:divide-x">
+
+            {/* Earnings */}
+            <div className="px-5 py-4">
+              <div className="flex items-center gap-1.5 mb-3">
+                <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Earnings</span>
+              </div>
+              <SalaryRow label="Basic Salary" value={s.basic_salary} badge="bg-gray-400" />
+              <SalaryRow label="Auto Commissions" value={s.auto_commissions} badge="bg-blue-400" />
+              <SalaryRow label="Manual Commission (Added)" value={s.manual_commissions_added} badge="bg-emerald-500" />
+              <SalaryRow label="Lunch Allowance" value={s.lunch_allowance} badge="bg-orange-400" />
+              <SalaryRow label="Night Out Allowance" value={s.night_out_allowance} badge="bg-purple-400" />
+              <SalaryRow label="Target Bonus" value={s.target_bonus_amount} badge="bg-sky-400" />
+              <div className="flex justify-between items-center pt-3 mt-1">
+                <span className="text-xs font-bold uppercase text-muted-foreground tracking-wide">Total Earnings</span>
+                <span className="text-sm font-extrabold tabular-nums text-emerald-600">{fmt(totalEarnings)}</span>
+              </div>
+            </div>
+
+            {/* Deductions */}
+            <div className="px-5 py-4">
+              <div className="flex items-center gap-1.5 mb-3">
+                <TrendingDown className="h-3.5 w-3.5 text-red-500" />
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Deductions</span>
+              </div>
+              <SalaryRow label="Manual Commission (Deducted)" value={s.manual_commissions_deducted} badge="bg-red-400" />
+              <SalaryRow label="Other Deductions" value={s.other_deductions} badge="bg-red-300" />
+              {totalDeductions <= 0 && (
+                <p className="text-xs text-muted-foreground italic py-3">No deductions this period.</p>
+              )}
+              <div className="flex justify-between items-center pt-3 mt-1">
+                <span className="text-xs font-bold uppercase text-muted-foreground tracking-wide">Total Deductions</span>
+                <span className="text-sm font-extrabold tabular-nums text-red-500">− {fmt(totalDeductions)}</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ─── Page ────────────────────────────────────────────────────────────── */
+export default function RepSalaryPage() {
+  const [salaries, setSalaries] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = localStorage.getItem("currentUser");
+    if (stored) {
+      const id = JSON.parse(stored).id;
+      if (id) loadMySalaries(id);
+      else setIsLoading(false);
+    } else {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const loadMySalaries = async (userId: string) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/salaries?user_id=${userId}&admin_approval_status=Approved`);
+      if (res.ok) {
+        const data = await res.json();
+        setSalaries(data.salaries || []);
+      }
+    } catch {
+      toast.error("Failed to load salary data");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /* Summary stats across all approved salaries */
+  const totalNetPay    = salaries.reduce((s, r) => s + (r.net_salary ?? 0), 0);
+  const totalBasic     = salaries.reduce((s, r) => s + (r.basic_salary ?? 0), 0);
+  const totalComm      = salaries.reduce((s, r) => s + (r.auto_commissions ?? 0) + (r.manual_commissions_added ?? 0), 0);
+  const totalAllowance = salaries.reduce((s, r) => s + (r.lunch_allowance ?? 0) + (r.night_out_allowance ?? 0), 0);
+
+  if (isLoading) {
+    return (
+      <div className="flex h-[50vh] items-center justify-center">
+        <Loader2 className="w-7 h-7 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Salary & Performance</h1>
-          <p className="text-muted-foreground">
-            View your monthly earnings, allowances, and commission breakdown.
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">My Salary</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Approved salary statements — expand each month for the full breakdown.
           </p>
         </div>
-        <div className="w-[180px]">
-          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-            <SelectTrigger>
-              <Calendar className="mr-2 h-4 w-4" />
-              <SelectValue placeholder="Select Month" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="oct-2023">October 2023</SelectItem>
-              <SelectItem value="sep-2023">September 2023</SelectItem>
-              <SelectItem value="aug-2023">August 2023</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
       </div>
 
-      {/* Top Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="bg-primary/5 border-primary/20">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-primary">
-              Total Earnings
-            </CardTitle>
-            <Banknote className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              LKR {totalEarnings.toLocaleString()}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Final payout for {data.month}
-            </p>
-          </CardContent>
-        </Card>
+      {/* Stat summary cards */}
+      {salaries.length > 0 && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <StatCard
+            label="Total Net Pay" value={fmtShort(totalNetPay)}
+            sub={`${salaries.length} approved month${salaries.length !== 1 ? "s" : ""}`}
+            icon={<Banknote className="h-4 w-4" />}
+            iconBg="bg-emerald-50" iconColor="text-emerald-600" valueColor="text-emerald-700"
+          />
+          <StatCard
+            label="Total Basic" value={fmtShort(totalBasic)}
+            sub="Base salary paid"
+            icon={<TrendingUp className="h-4 w-4" />}
+            iconBg="bg-blue-50" iconColor="text-blue-600" valueColor="text-blue-700"
+          />
+          <StatCard
+            label="Total Commissions" value={fmtShort(totalComm)}
+            sub="Auto + manual additions"
+            icon={<Target className="h-4 w-4" />}
+            iconBg="bg-sky-50" iconColor="text-sky-600" valueColor="text-sky-700"
+          />
+          <StatCard
+            label="Total Allowances" value={fmtShort(totalAllowance)}
+            sub="Lunch + night out"
+            icon={<Coffee className="h-4 w-4" />}
+            iconBg="bg-orange-50" iconColor="text-orange-600" valueColor="text-orange-700"
+          />
+        </div>
+      )}
 
+      {/* Salary slips */}
+      {salaries.length === 0 ? (
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Commissions</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              LKR {data.commissionEarned.toLocaleString()}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              From finalized orders
-            </p>
+          <CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+            <Banknote className="w-10 h-10 mb-3 text-muted-foreground/40" />
+            <p className="font-medium">No approved salary records yet.</p>
+            <p className="text-xs mt-1">Your salary will appear here once approved by admin.</p>
           </CardContent>
         </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Days Worked</CardTitle>
-            <Briefcase className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{data.workingDays} Days</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Includes {data.nightOuts} Night Outs
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className={cn(isTargetMet ? "bg-green-50 border-green-200" : "")}>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Target Bonus</CardTitle>
-            <Trophy className={cn("h-4 w-4", isTargetMet ? "text-green-600" : "text-muted-foreground")} />
-          </CardHeader>
-          <CardContent>
-            <div className={cn("text-2xl font-bold", isTargetMet ? "text-green-700" : "")}>
-              LKR {targetBonus.toLocaleString()}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {isTargetMet ? "Target Achieved! 🎉" : "Keep pushing!"}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-3">
-        {/* Left Column: Breakdown */}
-        <div className="md:col-span-2 space-y-6">
-          
-          {/* Salary Breakdown Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Detailed Breakdown</CardTitle>
-              <CardDescription>Line items for your monthly payment.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Basic Salary */}
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
-                    <Briefcase className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-sm">Basic Salary</p>
-                    <p className="text-xs text-muted-foreground">
-                      {data.workingDays} Days × LKR {rates.dailyBasic}
-                    </p>
-                  </div>
-                </div>
-                <div className="font-semibold">
-                  LKR {basicSalary.toLocaleString()}
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Lunch Allowance */}
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600">
-                    <Utensils className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-sm">Lunch Allowance</p>
-                    <p className="text-xs text-muted-foreground">
-                      {data.workingDays} Days × LKR {rates.lunchAllowance}
-                    </p>
-                  </div>
-                </div>
-                <div className="font-semibold">
-                  LKR {lunchAllowances.toLocaleString()}
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Night Out Allowance */}
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600">
-                    <Moon className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-sm">Night Out Allowance</p>
-                    <p className="text-xs text-muted-foreground">
-                      {data.nightOuts} Nights × LKR {rates.nightOutAllowance}
-                    </p>
-                  </div>
-                </div>
-                <div className="font-semibold">
-                  LKR {nightOutAllowances.toLocaleString()}
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Commissions */}
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center text-green-600">
-                    <TrendingUp className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-sm">Commission Earned</p>
-                    <p className="text-xs text-muted-foreground">
-                      Based on delivered orders
-                    </p>
-                  </div>
-                </div>
-                <div className="font-semibold">
-                  LKR {data.commissionEarned.toLocaleString()}
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Target Bonus */}
-              <div className="flex justify-between items-center bg-yellow-50/50 p-2 rounded-lg -mx-2">
-                <div className="flex items-center gap-3">
-                  <div className="h-8 w-8 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-700">
-                    <Trophy className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-sm text-yellow-900">Monthly Target Bonus</p>
-                    <p className="text-xs text-yellow-700">
-                      Sales  3M (Excl. Orange)
-                    </p>
-                  </div>
-                </div>
-                <div className="font-bold text-yellow-900">
-                  LKR {targetBonus.toLocaleString()}
-                </div>
-              </div>
-
-            </CardContent>
-            <CardFooter className="bg-gray-50 border-t p-4 flex justify-between items-center">
-              <span className="font-semibold text-gray-600">Total Net Salary</span>
-              <span className="text-xl font-bold text-primary">
-                LKR {totalEarnings.toLocaleString()}
-              </span>
-            </CardFooter>
-          </Card>
-
-          {/* Attendance History */}
-           <Card>
-            <CardHeader>
-              <CardTitle>Recent Activity</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Night Out</TableHead>
-                    <TableHead className="text-right">Daily Sales</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.attendance.map((record, i) => (
-                    <TableRow key={i}>
-                      <TableCell>{record.date}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                          {record.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {record.nightOut ? (
-                           <Badge variant="secondary" className="bg-indigo-50 text-indigo-700">Yes</Badge>
-                        ) : (
-                           <span className="text-muted-foreground text-sm">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        LKR {record.sales.toLocaleString()}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+      ) : (
+        <div className="space-y-4">
+          {salaries.map((s) => <SalarySlip key={s.id} s={s} />)}
         </div>
-
-        {/* Right Column: Targets & Info */}
-        <div className="space-y-6">
-          
-          {/* Target Progress Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Monthly Sales Target</CardTitle>
-              <CardDescription>Required for 5,000 Bonus</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Progress</span>
-                  <span className="font-medium">{progressPercent.toFixed(1)}%</span>
-                </div>
-                {/* Custom Progress Bar using divs since component wasn't listed */}
-                <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
-                  <div 
-                    className={cn("h-full transition-all duration-500", isTargetMet ? "bg-green-500" : "bg-primary")} 
-                    style={{ width: `${progressPercent}%` }}
-                  />
-                </div>
-              </div>
-
-              <div className="pt-2 space-y-3">
-                <div className="flex justify-between text-sm border-b pb-2">
-                  <span className="text-muted-foreground">Current Sales</span>
-                  <span className="font-semibold">LKR {(data.totalSalesNonOrange / 1000000).toFixed(2)}M</span>
-                </div>
-                <div className="flex justify-between text-sm border-b pb-2">
-                  <span className="text-muted-foreground">Target Goal</span>
-                  <span className="font-semibold">LKR {(rates.targetThreshold / 1000000).toFixed(2)}M</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Remaining</span>
-                  <span className="font-semibold text-red-500">
-                    {isTargetMet 
-                      ? "Target Reached!" 
-                      : `LKR ${(rates.targetThreshold - data.totalSalesNonOrange).toLocaleString()}`}
-                  </span>
-                </div>
-              </div>
-              
-              {!isTargetMet && (
-                <div className="bg-amber-50 text-amber-800 text-xs p-3 rounded flex items-start gap-2">
-                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                  <p>
-                    You need <strong>LKR {(rates.targetThreshold - data.totalSalesNonOrange).toLocaleString()}</strong> more in sales (excluding Orange items) to unlock the LKR 5,000 bonus.
-                  </p>
-                </div>
-              )}
-               
-               {isTargetMet && (
-                <div className="bg-green-50 text-green-800 text-xs p-3 rounded flex items-start gap-2">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
-                  <p>
-                    Congratulations! You have unlocked the monthly performance bonus.
-                  </p>
-                </div>
-              )}
-
-            </CardContent>
-          </Card>
-
-          {/* Rate Card Info */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Compensation Rates</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Daily Wage</span>
-                <span>LKR 1,200</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Lunch Allowance</span>
-                <span>LKR 400 / day</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Night Out</span>
-                <span>LKR 1,500 / night</span>
-              </div>
-            </CardContent>
-          </Card>
-
-        </div>
-      </div>
+      )}
     </div>
   );
 }

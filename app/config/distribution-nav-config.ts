@@ -159,4 +159,20 @@ export const distributionNavItems: DistNavSection[] = [
       },
     ],
   },
+  // ✅ NEW SECTION FOR HR & PAYROLL
+  {
+    title: "HR & Payroll",
+    items: [
+      {
+        name: "Salaries Entry",
+        href: "/dashboard/office/distribution/salaries",
+        icon: Banknote,
+      },
+      {
+        name: "Targets & Settings",
+        href: "/dashboard/office/distribution/settings/targets",
+        icon: FileText,
+      },
+    ],
+  },
 ];
