@@ -21,6 +21,8 @@ export const createUserSchema = z.object({
     .optional()
     .default("Active"),
   businessId: z.string().optional().nullable(),
+  // multi-business: list of all business IDs the user can access
+  accessibleBusinessIds: z.array(z.string()).optional().default([]),
 });
 
 // Schema for Updating a User
@@ -33,6 +35,7 @@ export const updateUserSchema = z.object({
   role: z.enum(["admin", "office", "rep", "delivery"]).optional(),
   status: z.enum(["Active", "Inactive", "Suspended"]).optional(),
   businessId: z.string().optional().nullable(),
+  accessibleBusinessIds: z.array(z.string()).optional(),
 });
 
 export const toggleStatusSchema = z.object({

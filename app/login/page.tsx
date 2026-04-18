@@ -62,6 +62,7 @@ export default function LoginPage() {
           businessId: data.business?.id || null,
           businessName: data.business?.name || null,
           businessDescription: data.business?.description || null,
+          accessibleBusinessIds: data.accessibleBusinessIds || [],
           initials: data.user.name
             ? data.user.name.split(" ").map((n: string) => n[0]).join("").substring(0, 2).toUpperCase()
             : "U",

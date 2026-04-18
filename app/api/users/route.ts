@@ -32,7 +32,23 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
 
-    // 4. Map to response format
+    // 4. Fetch all user_business_access rows in one query
+    const profileIds = profiles.map((p: any) => p.id);
+    const { data: accessRows } = profileIds.length
+      ? await supabaseAdmin
+          .from("user_business_access")
+          .select("user_id, business_id")
+          .in("user_id", profileIds)
+      : { data: [] };
+
+    // Build a map: userId → business_id[]
+    const accessMap: Record<string, string[]> = {};
+    (accessRows ?? []).forEach((r: any) => {
+      if (!accessMap[r.user_id]) accessMap[r.user_id] = [];
+      accessMap[r.user_id].push(r.business_id);
+    });
+
+    // 5. Map to response format
     const users = profiles.map((profile: any) => ({
       id: profile.id,
       fullName: profile.full_name,
@@ -44,6 +60,7 @@ export async function GET(request: NextRequest) {
       lastActive: profile.updated_at,
       businessId: profile.business_id,
       businessName: profile.businesses?.name,
+      accessibleBusinessIds: accessMap[profile.id] ?? (profile.business_id ? [profile.business_id] : []),
     }));
 
     return NextResponse.json(users);
@@ -96,6 +113,7 @@ export async function POST(request: NextRequest) {
       );
 
     // 2. Create Profile Record
+    const primaryBusinessId = validatedData.businessId || null;
     const { error: profileError } = await supabaseAdmin
       .from("profiles")
       .insert({
@@ -106,24 +124,45 @@ export async function POST(request: NextRequest) {
         phone: phoneValue,
         role: validatedData.role,
         is_active: validatedData.status === "Active",
-        business_id: validatedData.businessId || null,
+        business_id: primaryBusinessId,
       });
 
     if (profileError) {
       // Rollback Auth User
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
-      
+
       if (profileError.code === "23505" && profileError.message?.includes("profiles_username_key")) {
         return NextResponse.json(
           { error: "Username is already taken" },
           { status: 400 }
         );
       }
-      
+
       return NextResponse.json(
         { error: profileError.message },
         { status: 500 }
       );
+    }
+
+    // 3. Insert user_business_access records for office users
+    if (validatedData.role === "office") {
+      const ids = validatedData.accessibleBusinessIds ?? [];
+      // If no explicit list but a businessId was given, default to that one
+      const effectiveIds =
+        ids.length > 0
+          ? ids
+          : primaryBusinessId
+          ? [primaryBusinessId]
+          : [];
+
+      if (effectiveIds.length > 0) {
+        const rows = effectiveIds.map((bid) => ({
+          user_id: authData.user.id,
+          business_id: bid,
+          is_primary: bid === primaryBusinessId,
+        }));
+        await supabaseAdmin.from("user_business_access").insert(rows);
+      }
     }
 
     return NextResponse.json(

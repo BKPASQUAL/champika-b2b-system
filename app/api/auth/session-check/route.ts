@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getBusinessRoute } from "@/app/config/business-constants";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 function getRoleRoute(role: string): string {
   switch (role) {
@@ -63,6 +64,21 @@ export async function GET() {
       ? profile.businesses[0]
       : profile.businesses;
 
+    // Fetch all accessible businesses for office users
+    let accessibleBusinessIds: string[] = [];
+    if (profile.role === "office") {
+      const { data: accessRows } = await supabaseAdmin
+        .from("user_business_access")
+        .select("business_id")
+        .eq("user_id", user.id);
+
+      if (accessRows && accessRows.length > 0) {
+        accessibleBusinessIds = accessRows.map((r: any) => r.business_id);
+      } else if (businessInfo?.id) {
+        accessibleBusinessIds = [businessInfo.id];
+      }
+    }
+
     const redirectPath =
       profile.role === "office"
         ? getBusinessRoute(businessInfo?.id ?? null)
@@ -81,6 +97,7 @@ export async function GET() {
         businessId: businessInfo?.id ?? null,
         businessName: businessInfo?.name ?? null,
         businessDescription: businessInfo?.description ?? null,
+        accessibleBusinessIds,
         initials: name
           .split(" ")
           .map((n) => n[0])

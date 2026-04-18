@@ -5,8 +5,8 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppSidebar } from "@/components/ui/layout/AppSidebar";
 import { MobileNav } from "@/components/ui/layout/MobileNav";
-import { Breadcrumbs } from "@/components/ui/Breadcrumbs"; // Added Breadcrumbs
-import { Loader2 } from "lucide-react"; // Added modern loader
+import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
+import { Loader2 } from "lucide-react";
 import {
   getUserBusinessContext,
   verifyBusinessRouteAccess,
@@ -78,18 +78,17 @@ export default function DistributionOfficeLayout({
       {/* Main Content Wrapper */}
       <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         {/* Mobile Header - Only visible on Mobile */}
-        <header className="lg:hidden h-16 bg-white border-b flex items-center px-4 flex-shrink-0 z-30">
+        <header className="lg:hidden h-16 bg-white border-b flex items-center px-4 shrink-0 z-30">
           <MobileNav role="office" isDistribution={true} />
           <span className="ml-4 font-bold text-gray-700">Distribution</span>
         </header>
 
         {/* Desktop Header - Fixed at top */}
-        <header className="hidden lg:flex h-16 bg-white border-b items-center justify-between px-8 flex-shrink-0 z-10">
+        <header className="hidden lg:flex h-16 bg-white border-b items-center justify-between px-8 shrink-0 z-10">
           {/* Dynamic Breadcrumbs */}
           <Breadcrumbs />
 
           <div className="flex items-center gap-4">
-            {/* Initials / Profile Badge */}
             <div
               className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold text-xs"
               title={businessName}

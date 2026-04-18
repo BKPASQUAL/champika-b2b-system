@@ -1,13 +1,45 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { UserRole } from "@/app/config/nav-config";
 import { AppSidebar } from "@/components/ui/layout/AppSidebar";
 import { MobileNav } from "@/components/ui/layout/MobileNav";
+import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { Loader2 } from "lucide-react";
 
 export default function RepDashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // Defines the role for this layout to load the correct menu items
+  const router = useRouter();
+  const [isAuthorized, setIsAuthorized] = useState(false);
+
+  useEffect(() => {
+    const user = getUserBusinessContext();
+    if (!user) {
+      router.replace("/login");
+      return;
+    }
+    if (user.role !== "rep") {
+      router.replace("/login");
+      return;
+    }
+    setIsAuthorized(true);
+  }, [router]);
+
+  if (!isAuthorized) {
+    return (
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-gray-50">
+        <Loader2 className="h-10 w-10 animate-spin text-primary mb-2" />
+        <p className="text-sm text-muted-foreground font-medium">
+          Verifying access...
+        </p>
+      </div>
+    );
+  }
+
   const userRole: UserRole = "rep";
 
   return (

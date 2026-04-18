@@ -18,9 +18,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { User, UserFormData, UserStatus } from "../types";
 import { UserRole } from "@/app/config/nav-config";
-import { Building2 } from "lucide-react"; // Import icon
+import { Building2, Star, StarOff } from "lucide-react";
 
 interface Business {
   id: string;
@@ -37,7 +38,7 @@ interface UserDialogsProps {
   isDeleteDialogOpen: boolean;
   setIsDeleteDialogOpen: (open: boolean) => void;
   onDeleteConfirm: () => void;
-  businesses: Business[]; // Added prop
+  businesses: Business[];
 }
 
 export function UserDialogs({
@@ -50,12 +51,40 @@ export function UserDialogs({
   isDeleteDialogOpen,
   setIsDeleteDialogOpen,
   onDeleteConfirm,
-  businesses, // Receive businesses
+  businesses,
 }: UserDialogsProps) {
+  const isOffice = formData.role === "office";
+
+  // Toggle a business in the accessible list
+  const toggleBusiness = (id: string) => {
+    const current = formData.accessibleBusinessIds ?? [];
+    const next = current.includes(id)
+      ? current.filter((b) => b !== id)
+      : [...current, id];
+
+    // If we removed the primary, clear it
+    const newPrimary =
+      formData.businessId && !next.includes(formData.businessId)
+        ? next[0] ?? ""
+        : formData.businessId;
+
+    setFormData({
+      ...formData,
+      accessibleBusinessIds: next,
+      businessId: newPrimary,
+    });
+  };
+
+  // Set a business as primary (must already be checked)
+  const setPrimary = (id: string) => {
+    setFormData({ ...formData, businessId: id });
+  };
+
   return (
     <>
+      {/* ── Create / Edit Dialog ─────────────────────────────────────── */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {selectedUser ? "Edit User" : "Create New User"}
@@ -68,6 +97,7 @@ export function UserDialogs({
           </DialogHeader>
 
           <div className="grid gap-4 py-4">
+            {/* Full Name */}
             <div className="grid gap-2">
               <Label htmlFor="fullName">Full Name *</Label>
               <Input
@@ -80,6 +110,7 @@ export function UserDialogs({
               />
             </div>
 
+            {/* Username + Role */}
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
                 <Label htmlFor="username">Username *</Label>
@@ -97,7 +128,16 @@ export function UserDialogs({
                 <Select
                   value={formData.role}
                   onValueChange={(val) =>
-                    setFormData({ ...formData, role: val as UserRole })
+                    setFormData({
+                      ...formData,
+                      role: val as UserRole,
+                      // clear business data when switching away from office
+                      businessId: val === "office" ? formData.businessId : "",
+                      accessibleBusinessIds:
+                        val === "office"
+                          ? formData.accessibleBusinessIds
+                          : [],
+                    })
                   }
                 >
                   <SelectTrigger className="w-full">
@@ -113,44 +153,109 @@ export function UserDialogs({
               </div>
             </div>
 
-            {/* NEW BUSINESS SELECTOR */}
-            <div className="grid gap-2">
-              <Label htmlFor="business">Assign Business</Label>
-              <Select
-                value={formData.businessId || "none"}
-                onValueChange={(val) =>
-                  setFormData({
-                    ...formData,
-                    businessId: val === "none" ? "" : val,
-                  })
-                }
-              >
-                <SelectTrigger className="w-full">
-                  <div className="flex items-center gap-2">
-                    <Building2 className="w-4 h-4 text-muted-foreground" />
-                    <SelectValue placeholder="Select Business (Optional)" />
-                  </div>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none" className="text-muted-foreground">
-                    -- No Business Assigned --
-                  </SelectItem>
-                  {businesses.map((b) => (
-                    <SelectItem key={b.id} value={b.id}>
-                      {b.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {/* ── Business Access (office only) ──────────────────────── */}
+            {isOffice && (
+              <div className="grid gap-2">
+                <div className="flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-muted-foreground" />
+                  <Label>Business Access</Label>
+                  {formData.accessibleBusinessIds?.length > 0 && (
+                    <Badge variant="secondary" className="text-xs">
+                      {formData.accessibleBusinessIds.length} selected
+                    </Badge>
+                  )}
+                </div>
 
+                <div className="rounded-lg border border-border bg-muted/30 divide-y divide-border">
+                  {businesses.map((b) => {
+                    const isChecked = (
+                      formData.accessibleBusinessIds ?? []
+                    ).includes(b.id);
+                    const isPrimary = formData.businessId === b.id;
+
+                    return (
+                      <div
+                        key={b.id}
+                        className={`flex items-center justify-between px-3 py-2.5 transition-colors ${
+                          isChecked ? "bg-primary/5" : "hover:bg-muted/50"
+                        }`}
+                      >
+                        {/* Checkbox + name */}
+                        <label className="flex items-center gap-3 cursor-pointer flex-1 min-w-0">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-border accent-black cursor-pointer shrink-0"
+                            checked={isChecked}
+                            onChange={() => toggleBusiness(b.id)}
+                          />
+                          <span
+                            className={`text-sm truncate ${
+                              isChecked
+                                ? "font-medium text-foreground"
+                                : "text-muted-foreground"
+                            }`}
+                          >
+                            {b.name}
+                          </span>
+                        </label>
+
+                        {/* Primary toggle — only for checked businesses */}
+                        {isChecked && (
+                          <button
+                            type="button"
+                            onClick={() => setPrimary(b.id)}
+                            className={`ml-3 flex items-center gap-1 text-xs px-2 py-1 rounded-md border transition-colors shrink-0 ${
+                              isPrimary
+                                ? "bg-amber-50 border-amber-300 text-amber-700 font-medium"
+                                : "border-border text-muted-foreground hover:border-amber-300 hover:text-amber-600"
+                            }`}
+                            title={
+                              isPrimary
+                                ? "Primary portal (default on login)"
+                                : "Set as primary portal"
+                            }
+                          >
+                            {isPrimary ? (
+                              <>
+                                <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                                Primary
+                              </>
+                            ) : (
+                              <>
+                                <StarOff className="w-3 h-3" />
+                                Set Primary
+                              </>
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {formData.accessibleBusinessIds?.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Select at least one business for office staff.
+                  </p>
+                )}
+                {formData.accessibleBusinessIds?.length > 0 &&
+                  !formData.businessId && (
+                    <p className="text-xs text-amber-600">
+                      Mark one business as Primary — it will be the default
+                      portal on login.
+                    </p>
+                  )}
+              </div>
+            )}
+
+            {/* Email + Phone */}
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
                 <Label htmlFor="email">Email Address *</Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="john@champiks.com"
+                  placeholder="john@champika.com"
                   value={formData.email}
                   onChange={(e) =>
                     setFormData({ ...formData, email: e.target.value })
@@ -171,6 +276,7 @@ export function UserDialogs({
               </div>
             </div>
 
+            {/* Password */}
             <div className="grid gap-2">
               <Label htmlFor="password">
                 {selectedUser ? "New Password (Optional)" : "Password *"}
@@ -190,6 +296,7 @@ export function UserDialogs({
               />
             </div>
 
+            {/* Status */}
             <div className="grid gap-2">
               <Label htmlFor="status">Account Status</Label>
               <Select
@@ -221,7 +328,7 @@ export function UserDialogs({
         </DialogContent>
       </Dialog>
 
-      {/* Delete Dialog remains the same... */}
+      {/* ── Delete Dialog ─────────────────────────────────────────────── */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>

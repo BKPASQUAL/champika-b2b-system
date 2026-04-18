@@ -67,6 +67,31 @@ export async function PATCH(
       throw profileError;
     }
 
+    // Sync user_business_access if accessibleBusinessIds provided (office role)
+    if (
+      validatedData.accessibleBusinessIds !== undefined &&
+      (validatedData.role === "office" || (!validatedData.role && validatedData.businessId !== undefined))
+    ) {
+      const primaryId = validatedData.businessId || null;
+      const ids = validatedData.accessibleBusinessIds ?? [];
+
+      // Delete existing records
+      await supabaseAdmin
+        .from("user_business_access")
+        .delete()
+        .eq("user_id", id);
+
+      // Insert new records
+      if (ids.length > 0) {
+        const rows = ids.map((bid) => ({
+          user_id: id,
+          business_id: bid,
+          is_primary: bid === primaryId,
+        }));
+        await supabaseAdmin.from("user_business_access").insert(rows);
+      }
+    }
+
     // Update Auth Data (Email/Password)
     const authUpdates: any = {};
     if (validatedData.email) authUpdates.email = validatedData.email;
@@ -106,6 +131,21 @@ export async function GET(
     if (error || !profile)
       return NextResponse.json({ error: "User not found" }, { status: 404 });
 
+    // Fetch all accessible businesses for office users
+    let accessibleBusinessIds: string[] = [];
+    if (profile.role === "office") {
+      const { data: accessRows } = await supabaseAdmin
+        .from("user_business_access")
+        .select("business_id")
+        .eq("user_id", id);
+
+      if (accessRows && accessRows.length > 0) {
+        accessibleBusinessIds = accessRows.map((r: any) => r.business_id);
+      } else if (profile.business_id) {
+        accessibleBusinessIds = [profile.business_id];
+      }
+    }
+
     return NextResponse.json({
       id: profile.id,
       full_name: profile.full_name,
@@ -118,6 +158,7 @@ export async function GET(
       updated_at: profile.updated_at,
       business_id: profile.business_id,
       business_name: profile.businesses?.name,
+      accessible_business_ids: accessibleBusinessIds,
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

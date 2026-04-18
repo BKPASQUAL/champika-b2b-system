@@ -13,6 +13,7 @@ export interface User {
   lastActive: string;
   businessId?: string | null;
   businessName?: string | null;
+  accessibleBusinessIds?: string[];
 }
 
 export interface UserFormData {
@@ -23,5 +24,6 @@ export interface UserFormData {
   password: string;
   role: UserRole;
   status: UserStatus;
-  businessId?: string;
+  businessId: string;               // primary business ID
+  accessibleBusinessIds: string[];  // all accessible businesses (includes primary)
 }
