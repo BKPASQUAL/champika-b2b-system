@@ -154,8 +154,13 @@ export function MobileNav({
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="flex items-center gap-2.5 flex-1 min-w-0 rounded-xl px-2 py-2 hover:bg-muted transition-colors cursor-pointer group text-left">
-                    <div className={cn("h-8 w-8 rounded-lg flex items-center justify-center shrink-0", currentIconBg)}>
-                      <CurrentIcon className={cn("h-4 w-4", currentIconColor)} />
+                    <div className={cn(
+                      "h-8 w-8 rounded-lg flex items-center justify-center shrink-0 overflow-hidden",
+                      isOfficePortal ? currentIconBg : "bg-white ring-1 ring-border"
+                    )}>
+                      {isOfficePortal
+                        ? <CurrentIcon className={cn("h-4 w-4", currentIconColor)} />
+                        : <img src="/icons/icon-512x512.png" alt="Champika" className="h-full w-full object-cover" />}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold truncate leading-tight">{currentLabel}</p>

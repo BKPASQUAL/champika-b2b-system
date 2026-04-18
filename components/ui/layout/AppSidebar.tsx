@@ -276,10 +276,8 @@ export function AppSidebar({
           </div>
         ) : (
           <div className="flex items-center gap-2 px-2">
-            <img src="/logo.svg" alt="Logo" className="h-8 w-8 shrink-0 rounded-md" />
-            <span className="text-lg font-bold text-blue-800 tracking-tight truncate">
-              Champika HW
-            </span>
+            <img src="/icons/icon-512x512.png" alt="Champika" className="h-8 w-8 shrink-0 rounded-lg object-cover" />
+            <span className="text-lg font-bold tracking-tight truncate">Champika HW</span>
           </div>
         )}
       </div>
