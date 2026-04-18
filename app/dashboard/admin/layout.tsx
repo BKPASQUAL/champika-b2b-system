@@ -7,10 +7,7 @@ import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { AppSidebar } from "@/components/ui/layout/AppSidebar";
 import { MobileNav } from "@/components/ui/layout/MobileNav";
 import { Loader2 } from "lucide-react";
-import {
-  getUserBusinessContext,
-  getUserBusinessRoute,
-} from "@/app/middleware/businessAuth";
+import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 
 export default function DashboardLayout({
   children,
@@ -34,10 +31,8 @@ export default function DashboardLayout({
 
       // 3. Strict Admin Check
       if (user.role !== "admin") {
-        // User is logged in but NOT an admin.
-        // Redirect them to their appropriate dashboard based on their role/business.
-        const correctRoute = getUserBusinessRoute(user);
-        router.replace(correctRoute);
+        // User is logged in but NOT an admin — send to login
+        router.replace("/login");
         return;
       }
 

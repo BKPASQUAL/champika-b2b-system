@@ -148,17 +148,17 @@ export function verifyBusinessRouteAccess(
     if (user.businessId === businessId) {
       return { canAccess: true, redirectTo: null };
     } else {
-      // Redirect to their actual business
+      // Not their business — send to login
       return {
         canAccess: false,
-        redirectTo: getUserBusinessRoute(user),
+        redirectTo: "/login",
       };
     }
   }
 
-  // Other roles can't access office business routes
+  // Other roles can't access office business routes — send to login
   return {
     canAccess: false,
-    redirectTo: getUserBusinessRoute(user),
+    redirectTo: "/login",
   };
 }
