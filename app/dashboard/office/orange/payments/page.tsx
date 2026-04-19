@@ -63,6 +63,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 // --- Utility Helper ---
 const formatCurrency = (amount: number) => {
@@ -185,9 +186,7 @@ export default function OrangePaymentsPage() {
   // Initialize Business Context
   useEffect(() => {
     const user = getUserBusinessContext();
-    if (user && user.businessId) {
-      setCurrentBusinessId(user.businessId);
-    }
+    setCurrentBusinessId(user?.businessId ?? BUSINESS_IDS.ORANGE_AGENCY);
   }, []);
 
   // Fetch all necessary data

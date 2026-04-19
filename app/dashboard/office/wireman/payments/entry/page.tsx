@@ -51,6 +51,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 // ─── Local Helpers ────────────────────────────────────────────────────────────
 
@@ -160,9 +161,9 @@ export default function WiremanPaymentEntryPage() {
 
   useEffect(() => {
     const user = getUserBusinessContext();
-    if (user?.businessId) {
-      setBusinessId(user.businessId);
-    }
+    // Office users have their businessId set; admins do not —
+    // fall back to this portal's fixed business ID so the page loads for both.
+    setBusinessId(user?.businessId ?? BUSINESS_IDS.WIREMAN_AGENCY);
   }, []);
 
   // ── Data fetching ──────────────────────────────────────────────────────────

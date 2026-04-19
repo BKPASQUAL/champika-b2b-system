@@ -51,6 +51,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const formatCurrency = (amount: number) =>
@@ -99,7 +100,7 @@ export default function RetailPaymentEntryPage() {
 
   useEffect(() => {
     const user = getUserBusinessContext();
-    if (user?.businessId) setBusinessId(user.businessId);
+    setBusinessId(user?.businessId ?? BUSINESS_IDS.CHAMPIKA_RETAIL);
   }, []);
 
   useEffect(() => {

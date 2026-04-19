@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Plus,
   Search,
@@ -61,6 +61,9 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { BUSINESS_NAMES } from "@/app/config/business-constants";
+
+const BUSINESS_OPTIONS = Object.entries(BUSINESS_NAMES).map(([id, name]) => ({ id, name }));
 import { toast } from "sonner";
 
 // --- Utility Helper ---
@@ -147,6 +150,7 @@ interface Order {
 }
 
 export default function PaymentsPage() {
+  const [selectedBusinessId, setSelectedBusinessId] = useState<string>("");
   const [payments, setPayments] = useState<Payment[]>([]);
   const [unpaidOrders, setUnpaidOrders] = useState<Order[]>([]);
   const [banks, setBanks] = useState<Bank[]>([]);
@@ -179,13 +183,14 @@ export default function PaymentsPage() {
   });
 
   // Fetch all necessary data
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
+      const bizParam = selectedBusinessId ? `?businessId=${selectedBusinessId}` : "";
       const [paymentsRes, ordersRes, accountsRes, banksRes] = await Promise.all(
         [
-          fetch("/api/payments"),
-          fetch("/api/orders"),
+          fetch(`/api/payments${bizParam}`),
+          fetch(`/api/orders${bizParam}`),
           fetch("/api/finance/accounts"),
           fetch("/api/finance/bank-codes"),
         ]
@@ -215,12 +220,12 @@ export default function PaymentsPage() {
         .map((o: any) => ({
           id: o.id,
           order_number: o.invoiceNo !== "N/A" ? o.invoiceNo : o.orderId,
-          customer_id: "",
+          customer_id: o.customerId ?? "",
           customer_name: o.customerName,
           order_date: o.date,
           total_amount: o.totalAmount,
-          balance: o.totalAmount,
-          paid_amount: 0,
+          balance: o.dueAmount ?? o.totalAmount,
+          paid_amount: o.paidAmount ?? 0,
           paymentStatus: o.paymentStatus,
           status: o.status,
         }));
@@ -244,16 +249,16 @@ export default function PaymentsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedBusinessId]);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   // Reset page to 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, methodFilter, chequeStatusFilter]);
+  }, [searchTerm, methodFilter, chequeStatusFilter, selectedBusinessId]);
 
   const filteredPayments = payments.filter((payment) => {
     const matchesSearch =
@@ -498,6 +503,28 @@ export default function PaymentsPage() {
           <Plus className="mr-2 h-4 w-4" />
           Add Payment
         </Button>
+      </div>
+
+      {/* Business Filter */}
+      <div className="flex items-center gap-3">
+        <div className="w-64 space-y-1">
+          <Select value={selectedBusinessId} onValueChange={setSelectedBusinessId}>
+            <SelectTrigger>
+              <SelectValue placeholder="All businesses" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">All businesses</SelectItem>
+              {BUSINESS_OPTIONS.map((b) => (
+                <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {selectedBusinessId && (
+          <Button variant="ghost" size="sm" onClick={() => setSelectedBusinessId("")}>
+            Clear filter
+          </Button>
+        )}
       </div>
 
       {/* Stats Cards */}
