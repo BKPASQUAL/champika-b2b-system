@@ -56,6 +56,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { BUSINESS_IDS, BUSINESS_NAMES } from "@/app/config/business-constants";
 
 // --- Types ---
 
@@ -163,14 +164,11 @@ export default function CreateRetailInvoicePage() {
           return;
         }
 
-        if (!user.businessId) {
-          toast.error("No business assigned to user");
-          router.push("/dashboard/office");
-          return;
-        }
+        const resolvedBusinessId = user.businessId ?? BUSINESS_IDS.CHAMPIKA_RETAIL;
+        const resolvedBusinessName = user.businessName ?? BUSINESS_NAMES[BUSINESS_IDS.CHAMPIKA_RETAIL];
 
-        setBusinessId(user.businessId);
-        setBusinessName(user.businessName || "Retail Business");
+        setBusinessId(resolvedBusinessId);
+        setBusinessName(resolvedBusinessName);
         setUserId(user.id);
 
         const customersRes = await fetch("/api/customers");
@@ -180,8 +178,8 @@ export default function CreateRetailInvoicePage() {
 
         const retailCustomers = customersData.filter((c: any) => {
           return (
-            c.business_id === user.businessId ||
-            c.businessId === user.businessId
+            c.business_id === resolvedBusinessId ||
+            c.businessId === resolvedBusinessId
           );
         });
 

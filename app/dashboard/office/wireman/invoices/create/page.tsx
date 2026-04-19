@@ -34,6 +34,7 @@ import { toast } from "sonner";
 import { ClassificationModal } from "@/components/activity/ClassificationModal";
 import { cn } from "@/lib/utils";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 // --- Types ---
 
@@ -330,17 +331,18 @@ export default function CreateWiremanInvoicePage() {
       setLoading(true);
       try {
         const user = getUserBusinessContext();
-        if (!user || !user.businessId) {
+        if (!user) {
           toast.error("Session missing. Please log in again.");
           router.push("/login");
           return;
         }
 
-        setBusinessId(user.businessId);
+        const resolvedBusinessId = user.businessId ?? BUSINESS_IDS.WIREMAN_AGENCY;
+        setBusinessId(resolvedBusinessId);
         setCurrentUser({ id: user.id, name: user.name, email: user.email });
 
         const customersRes = await fetch(
-          `/api/customers?businessId=${user.businessId}`,
+          `/api/customers?businessId=${resolvedBusinessId}`,
         );
         const customersData = await customersRes.json();
         setCustomers(

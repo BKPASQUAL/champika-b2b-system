@@ -21,6 +21,7 @@ import { Customer, SortField, SortOrder, CustomerFormData } from "./types";
 import { CustomerTable } from "./_components/CustomerTable";
 import { CustomerDialogs } from "./_components/CustomerDialogs";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 export default function RetailCustomersPage() {
   const router = useRouter();
@@ -56,7 +57,8 @@ export default function RetailCustomersPage() {
 
   const fetchCustomers = useCallback(async () => {
     const user = getUserBusinessContext();
-    if (!user || !user.businessId) return;
+    if (!user) return;
+    const resolvedBusinessId = user.businessId ?? BUSINESS_IDS.CHAMPIKA_RETAIL;
 
     try {
       setLoading(true);
@@ -64,10 +66,10 @@ export default function RetailCustomersPage() {
       if (!res.ok) throw new Error("Failed to fetch customers");
       const data = await res.json();
 
-      // Filter strictly for the current logged-in business
+      // Filter strictly for the current business
       const retailCustomers = data.filter(
         (c: any) =>
-          c.business_id === user.businessId || c.businessId === user.businessId
+          c.business_id === resolvedBusinessId || c.businessId === resolvedBusinessId
       );
 
       setCustomers(retailCustomers);

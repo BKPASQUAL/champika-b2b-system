@@ -57,6 +57,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { BUSINESS_IDS, BUSINESS_NAMES } from "@/app/config/business-constants";
 
 // --- Types ---
 
@@ -164,14 +165,14 @@ export default function EditRetailInvoicePage({
       try {
         // 1. Check User Context
         const user = getUserBusinessContext();
-        if (!user || !user.businessId) {
+        if (!user) {
           toast.error("User context not found");
           router.push("/login");
           return;
         }
 
-        setBusinessId(user.businessId);
-        setBusinessName(user.businessName || "Retail Business");
+        setBusinessId(user.businessId ?? BUSINESS_IDS.CHAMPIKA_RETAIL);
+        setBusinessName(user.businessName ?? BUSINESS_NAMES[BUSINESS_IDS.CHAMPIKA_RETAIL]);
         setUserId(user.id);
 
         // 2. Fetch Data (Invoice, Customers, Products)

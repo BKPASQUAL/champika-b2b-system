@@ -33,6 +33,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 import { ClassificationModal } from "@/components/activity/ClassificationModal";
 
 // --- Types ---
@@ -141,17 +142,18 @@ export default function CreateSierraInvoicePage() {
       setLoading(true);
       try {
         const user = getUserBusinessContext();
-        if (!user || !user.businessId) {
+        if (!user) {
           toast.error("Session missing. Please log in again.");
           router.push("/login");
           return;
         }
 
-        setBusinessId(user.businessId);
+        const resolvedBusinessId = user.businessId ?? BUSINESS_IDS.SIERRA_AGENCY;
+        setBusinessId(resolvedBusinessId);
         setCurrentUser({ id: user.id, name: user.name, email: user.email });
 
         const customersRes = await fetch(
-          `/api/customers?businessId=${user.businessId}`,
+          `/api/customers?businessId=${resolvedBusinessId}`,
         );
         const customersData = await customersRes.json();
         setCustomers(

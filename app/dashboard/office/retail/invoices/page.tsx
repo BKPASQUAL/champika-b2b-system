@@ -37,6 +37,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import Link from "next/link";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { BUSINESS_IDS, BUSINESS_NAMES } from "@/app/config/business-constants";
 
 type PaymentStatus = "Paid" | "Unpaid" | "Partial" | "Overdue";
 type OrderStatus = "Pending" | "Processing" | "Delivered" | "Cancelled";
@@ -89,8 +90,8 @@ export default function RetailInvoicesPage() {
   useEffect(() => {
     const user = getUserBusinessContext();
     if (user) {
-      setBusinessName(user.businessName || "");
-      setCurrentBusinessId(user.businessId);
+      setBusinessName(user.businessName ?? BUSINESS_NAMES[BUSINESS_IDS.CHAMPIKA_RETAIL]);
+      setCurrentBusinessId(user.businessId ?? BUSINESS_IDS.CHAMPIKA_RETAIL);
     }
     fetchInvoices();
   }, [fetchInvoices]);
