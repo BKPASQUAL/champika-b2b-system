@@ -322,7 +322,7 @@ export default function AdminPaymentEntryPage() {
             date: o.date || o.order_date || o.createdAt?.split("T")[0] || "",
             totalAmount: o.totalAmount ?? 0,
             paidAmount: o.paidAmount ?? 0,
-            balance: o.dueAmount ?? (o.totalAmount - (o.paidAmount ?? 0)) ?? 0,
+            balance: o.dueAmount ?? (o.totalAmount - (o.paidAmount ?? 0)),
           }));
           setPendingInvoices(invoices);
           const map: Record<string, InvoiceSettlement> = {};
