@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import {
   DollarSign,
   Check,
@@ -121,10 +122,30 @@ const formatCurrency = (amount: number) => {
 };
 
 export default function SupplierPaymentsPage() {
-  const [unpaidPurchases, setUnpaidPurchases] = useState<UnpaidPurchase[]>([]);
-  const [paymentHistory, setPaymentHistory] = useState<SupplierPayment[]>([]);
-  const [companyAccounts, setCompanyAccounts] = useState<CompanyAccount[]>([]);
-  const [loading, setLoading] = useState(true);
+  const {
+    data: allPurchasesRaw = [],
+    loading: l1,
+    refetch: refetchPurchases,
+  } = useCachedFetch<any[]>("/api/purchases", [], () =>
+    toast.error("Failed to load data")
+  );
+  const unpaidPurchases = useMemo(
+    () => allPurchasesRaw.filter((p: any) => p.paymentStatus !== "Paid"),
+    [allPurchasesRaw]
+  );
+
+  const {
+    data: paymentHistory = [],
+    loading: l2,
+    refetch: refetchPayments,
+  } = useCachedFetch<SupplierPayment[]>("/api/suppliers/payments", []);
+  const {
+    data: companyAccounts = [],
+    loading: l3,
+    refetch: refetchAccounts,
+  } = useCachedFetch<CompanyAccount[]>("/api/finance/accounts", []);
+
+  const loading = l1 || l2 || l3;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -149,36 +170,11 @@ export default function SupplierPaymentsPage() {
     notes: "",
   });
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const [purchasesRes, paymentsRes, accountsRes] = await Promise.all([
-        fetch("/api/purchases"),
-        fetch("/api/suppliers/payments"),
-        fetch("/api/finance/accounts"),
-      ]);
-
-      if (purchasesRes.ok) {
-        const allPurchases = await purchasesRes.json();
-        // Filter for Unpaid or Partial locally
-        const unpaid = allPurchases.filter(
-          (p: any) => p.paymentStatus !== "Paid"
-        );
-        setUnpaidPurchases(unpaid);
-      }
-
-      if (paymentsRes.ok) setPaymentHistory(await paymentsRes.json());
-      if (accountsRes.ok) setCompanyAccounts(await accountsRes.json());
-    } catch (error) {
-      toast.error("Failed to load data");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
+  const fetchData = useCallback(() => {
+    refetchPurchases();
+    refetchPayments();
+    refetchAccounts();
+  }, [refetchPurchases, refetchPayments, refetchAccounts]);
 
   const openPaymentDialog = (purchase: UnpaidPurchase) => {
     setSelectedPurchase(purchase);

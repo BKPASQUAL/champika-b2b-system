@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useMemo } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -59,70 +60,47 @@ interface OverdueInvoice {
 
 export default function SierraDueAlertsPage() {
   const router = useRouter();
-  const [invoices, setInvoices] = useState<OverdueInvoice[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(
-    null,
-  );
+  const [currentBusinessId] = useState<string>(() => {
+    const user = getUserBusinessContext();
+    return user?.businessId ?? BUSINESS_IDS.SIERRA_AGENCY;
+  });
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [ageFilter, setAgeFilter] = useState("all");
 
-  useEffect(() => {
-    const user = getUserBusinessContext();
-    setCurrentBusinessId(user?.businessId ?? BUSINESS_IDS.SIERRA_AGENCY);
-  }, []);
+  const {
+    data: rawInvoices = [],
+    loading,
+    refetch: fetchOverdueInvoices,
+  } = useCachedFetch<any[]>(
+    `/api/invoices?businessId=${currentBusinessId}`,
+    [],
+    () => toast.error("Failed to load overdue alerts")
+  );
 
-  const fetchOverdueInvoices = useCallback(async () => {
-    if (!currentBusinessId) return;
-
-    try {
-      setLoading(true);
-      const res = await fetch(`/api/invoices?businessId=${currentBusinessId}`);
-      if (!res.ok) throw new Error("Failed to fetch invoices");
-      const data = await res.json();
-
-      const today = new Date();
-
-      const mappedInvoices: OverdueInvoice[] = data
-        .map((inv: any) => {
-          // Determine Bill Date (Invoice Date)
-          const createdDate = new Date(inv.date || inv.createdAt);
-          
-          // Calculate Days Overdue relative to Bill Date
-          const diffTime = today.getTime() - createdDate.getTime();
-          const daysOverdue = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
-          return {
-            id: inv.id,
-            orderId: inv.orderId || inv.id,
-            invoiceNo: inv.invoiceNo,
-            customerName: inv.customerName || "Unknown",
-            shopName: inv.customer?.shopName || inv.shopName || "",
-            phone: inv.customer?.phone || inv.phone || "",
-            invoiceDate: createdDate.toISOString().split("T")[0],
-            dueAmount: inv.dueAmount || 0,
-            daysOverdue: daysOverdue,
-            status: inv.status,
-          };
-        })
-        .filter(
-          (inv: OverdueInvoice) => inv.daysOverdue > 0 && inv.dueAmount > 0,
-        );
-
-      setInvoices(mappedInvoices);
-    } catch (error) {
-      console.error("Error fetching overdue invoices:", error);
-      toast.error("Failed to load overdue alerts");
-    } finally {
-      setLoading(false);
-    }
-  }, [currentBusinessId]);
-
-  useEffect(() => {
-    fetchOverdueInvoices();
-  }, [fetchOverdueInvoices]);
+  const invoices: OverdueInvoice[] = useMemo(() => {
+    const today = new Date();
+    return rawInvoices
+      .map((inv: any) => {
+        const createdDate = new Date(inv.date || inv.createdAt);
+        const diffTime = today.getTime() - createdDate.getTime();
+        const daysOverdue = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        return {
+          id: inv.id,
+          orderId: inv.orderId || inv.id,
+          invoiceNo: inv.invoiceNo,
+          customerName: inv.customerName || "Unknown",
+          shopName: inv.customer?.shopName || inv.shopName || "",
+          phone: inv.customer?.phone || inv.phone || "",
+          invoiceDate: createdDate.toISOString().split("T")[0],
+          dueAmount: inv.dueAmount || 0,
+          daysOverdue,
+          status: inv.status,
+        };
+      })
+      .filter((inv: OverdueInvoice) => inv.daysOverdue > 0 && inv.dueAmount > 0);
+  }, [rawInvoices]);
 
   // --- Filter Logic ---
   const filteredInvoices = invoices.filter((inv) => {

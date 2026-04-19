@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useMemo } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -66,66 +67,47 @@ function getSearchTerms(query: string): string[] {
 
 export default function OrelBillsPage() {
   const router = useRouter();
-  const [purchases, setPurchases] = useState<Purchase[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(
-    null
-  );
+  const [currentBusinessId] = useState<string>(() => {
+    const user = getUserBusinessContext();
+    return user?.businessId ?? BUSINESS_IDS.ORANGE_AGENCY;
+  });
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [paymentFilter, setPaymentFilter] = useState("all");
 
-  // 1. Initialize User Context
-  useEffect(() => {
-    const user = getUserBusinessContext();
-    setCurrentBusinessId(user?.businessId ?? BUSINESS_IDS.ORANGE_AGENCY);
-  }, []);
+  const {
+    data: rawPurchases = [],
+    loading,
+    refetch: fetchBills,
+  } = useCachedFetch<any[]>(
+    `/api/purchases?businessId=${currentBusinessId}`,
+    [],
+    () => toast.error("Failed to load bills")
+  );
 
-  // 2. Fetch Orel Corp Bills
-  const fetchBills = useCallback(async () => {
-    if (!currentBusinessId) return;
-
-    try {
-      setLoading(true);
-      // Fetch purchases for this specific business (Orange Agency)
-      const res = await fetch(`/api/purchases?businessId=${currentBusinessId}`);
-      if (!res.ok) throw new Error("Failed to fetch bills");
-      const data = await res.json();
-
-      // Filter and Map Data
-      const orelBills: Purchase[] = data
+  const purchases: Purchase[] = useMemo(
+    () =>
+      rawPurchases
         .filter((p: any) => {
-          // Strict Check: Either name includes "Orel" OR it belongs to this business
           const name = p.supplierName?.toLowerCase() || "";
           return name.includes("orel") || p.businessId === currentBusinessId;
         })
         .map((p: any) => ({
           id: p.id,
           purchaseId: p.purchaseId,
-          supplierId: p.supplierId, // ✅ Added missing field
+          supplierId: p.supplierId,
           supplierName: p.supplierName || "Orel Corporation Pvt Ltd",
           invoiceNo: p.invoiceNo || "-",
           purchaseDate: p.purchaseDate,
-          status: p.status as PurchaseStatus, // ✅ Type assertion
-          paymentStatus: p.paymentStatus as PaymentStatus, // ✅ Type assertion
+          status: p.status as PurchaseStatus,
+          paymentStatus: p.paymentStatus as PaymentStatus,
           totalAmount: Number(p.totalAmount),
           paidAmount: Number(p.paidAmount),
-          items: p.items || [], // ✅ Added missing field (default to empty array)
-        }));
-
-      setPurchases(orelBills);
-    } catch (error) {
-      console.error("Error fetching bills:", error);
-      toast.error("Failed to load bills");
-    } finally {
-      setLoading(false);
-    }
-  }, [currentBusinessId]);
-
-  useEffect(() => {
-    fetchBills();
-  }, [fetchBills]);
+          items: p.items || [],
+        })),
+    [rawPurchases, currentBusinessId]
+  );
 
   // 3. Filter Logic
   const filteredPurchases = purchases.filter((p) => {

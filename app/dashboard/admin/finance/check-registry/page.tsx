@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import {
   Search,
   CheckCircle,
@@ -75,10 +76,26 @@ const formatCurrency = (amount: number) => {
 
 export default function CheckRegistryPage() {
   const [activeTab, setActiveTab] = useState("pending");
-  const [cheques, setCheques] = useState<Cheque[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [accounts, setAccounts] = useState<Account[]>([]);
+
+  const {
+    data: cheques = [],
+    loading,
+    refetch: fetchCheques,
+  } = useCachedFetch<Cheque[]>(
+    `/api/finance/cheques?status=${activeTab}`,
+    [],
+    () => toast.error("Failed to fetch cheques")
+  );
+
+  const { data: allAccounts = [] } = useCachedFetch<Account[]>("/api/finance/accounts", []);
+  const accounts = useMemo(
+    () => allAccounts.filter((a) => {
+      const t = (a.account_type || "").toLowerCase();
+      return t === "bank" || t === "savings" || t === "current";
+    }),
+    [allAccounts]
+  );
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -97,42 +114,9 @@ export default function CheckRegistryPage() {
   const [returnReason, setReturnReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Fetch Cheques based on Tab
-  const fetchCheques = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/finance/cheques?status=${activeTab}`);
-      if (res.ok) {
-        setCheques(await res.json());
-      } else {
-        toast.error("Failed to load data");
-      }
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to fetch cheques");
-    } finally {
-      setLoading(false);
-    }
-  }, [activeTab]);
-
-  // Fetch Accounts for Deposit — show all bank-type accounts
   useEffect(() => {
-    fetch("/api/finance/accounts")
-      .then((res) => res.json())
-      .then((data: Account[]) => {
-        const bankAccounts = data.filter((a) => {
-          const t = (a.account_type || "").toLowerCase();
-          return t === "bank" || t === "savings" || t === "current";
-        });
-        setAccounts(bankAccounts);
-      })
-      .catch((err) => console.error("Error fetching accounts", err));
-  }, []);
-
-  useEffect(() => {
-    fetchCheques();
     setCurrentPage(1); // Reset page when tab changes
-  }, [fetchCheques]);
+  }, [activeTab]);
 
   const handleDeposit = async () => {
     if (!selectedCheque || !selectedAccountId) return;

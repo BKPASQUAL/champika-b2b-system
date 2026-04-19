@@ -1,7 +1,8 @@
 // app/dashboard/office/distribution/orders/loading/page.tsx
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -48,35 +49,14 @@ interface Order {
 export default function DistributionLoadingOrdersPage() {
   const router = useRouter();
 
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: orders = [], loading, refetch: fetchOrders } = useCachedFetch<Order[]>(
+    "/api/orders/loading",
+    [],
+    () => toast.error("Failed to load orders")
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-
-  const fetchOrders = useCallback(async () => {
-    try {
-      setLoading(true);
-      // Fetch orders with 'Loading' status
-      const res = await fetch("/api/orders/loading");
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || "Failed to fetch loading orders");
-      }
-      const data = await res.json();
-      setOrders(data);
-      setSelectedOrders([]);
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to load orders");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchOrders();
-  }, [fetchOrders]);
 
   const filteredOrders = orders.filter((order) => {
     const searchLower = searchQuery.toLowerCase();

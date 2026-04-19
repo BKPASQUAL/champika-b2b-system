@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useState, useMemo } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { Button } from "@/components/ui/button";
 import { Plus, TrendingDown, Coins } from "lucide-react";
 import { toast } from "sonner";
@@ -18,13 +19,20 @@ import { ExpenseFormDialog } from "./_components/ExpenseDialogs";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 export default function OrangeExpensesPage() {
-  const [loading, setLoading] = useState(true);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const CURRENT_BUSINESS_ID = BUSINESS_IDS.ORANGE_AGENCY;
+
+  const {
+    data: expenses = [],
+    loading,
+    refetch: fetchExpenses,
+  } = useCachedFetch<Expense[]>(
+    `/api/expenses?businessId=${CURRENT_BUSINESS_ID}`,
+    [],
+    () => toast.error("Failed to load expenses")
+  );
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
-
-  // Constants for Orange
-  const CURRENT_BUSINESS_ID = BUSINESS_IDS.ORANGE_AGENCY;
 
   // --- Filtering State ---
   const [searchQuery, setSearchQuery] = useState("");
@@ -32,28 +40,6 @@ export default function OrangeExpensesPage() {
   const [filterMonth, setFilterMonth] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-
-  // --- Fetch Expenses (Filtered by Business ID) ---
-  const fetchExpenses = useCallback(async () => {
-    try {
-      setLoading(true);
-      // Fetch only Orange Agency expenses
-      const res = await fetch(
-        `/api/expenses?businessId=${CURRENT_BUSINESS_ID}`
-      );
-      if (!res.ok) throw new Error("Failed to load");
-      const data = await res.json();
-      setExpenses(data);
-    } catch (error) {
-      toast.error("Failed to load expenses");
-    } finally {
-      setLoading(false);
-    }
-  }, [CURRENT_BUSINESS_ID]);
-
-  useEffect(() => {
-    fetchExpenses();
-  }, [fetchExpenses]);
 
   // --- Filter Logic ---
   const filteredExpenses = useMemo(() => {

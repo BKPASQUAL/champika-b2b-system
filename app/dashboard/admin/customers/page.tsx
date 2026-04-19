@@ -1,7 +1,8 @@
 // app/dashboard/admin/customers/page.tsx
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 // ... imports
 import {
   Download,
@@ -41,8 +42,6 @@ import { CustomerTable } from "./_components/CustomerTable";
 import { CustomerDialogs } from "./_components/CustomerDialogs";
 
 export default function CustomersPage() {
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Filters & State
@@ -70,23 +69,13 @@ export default function CustomersPage() {
     businessId: "", // Initialize
   });
 
-  const fetchCustomers = useCallback(async () => {
-    try {
-      setLoading(true);
-      const res = await fetch("/api/customers");
-      if (!res.ok) throw new Error("Failed to fetch customers");
-      const data = await res.json();
-      setCustomers(data);
-    } catch (error) {
-      toast.error("Error loading customer data");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchCustomers();
-  }, [fetchCustomers]);
+  const {
+    data: customers = [],
+    loading,
+    refetch: fetchCustomers,
+  } = useCachedFetch<Customer[]>("/api/customers", [], () =>
+    toast.error("Error loading customer data")
+  );
 
   // Derived Data
   const routes = ["all", ...Array.from(new Set(customers.map((c) => c.route)))];

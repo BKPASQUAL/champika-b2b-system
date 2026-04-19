@@ -1,7 +1,8 @@
 // app/dashboard/office/distribution/page.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useMemo } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import Link from "next/link";
 import {
   Card,
@@ -46,95 +47,50 @@ interface DashboardData {
 }
 
 export default function DistributionDashboardPage() {
-  const [businessName, setBusinessName] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<DashboardData>({
-    stats: {
-      pendingOrders: 0,
-      processingOrders: 0,
-      activeLoads: 0,
-      completedToday: 0,
-      lowStockCount: 0,
-      overdueInvoiceCount: 0,
-      overdueAmount: 0,
-    },
-    recentPending: [],
-    urgentOverdue: [],
-  });
+  const [businessName] = useState(() => getUserBusinessContext()?.businessName ?? "");
+  const distId = BUSINESS_IDS.CHAMPIKA_DISTRIBUTION;
 
-  useEffect(() => {
-    const user = getUserBusinessContext();
-    if (user?.businessName) {
-      setBusinessName(user.businessName);
-    }
-    fetchAllDashboardData();
-  }, []);
+  const { data: ordersData = [], loading: l1, refetch: refetchOrders } =
+    useCachedFetch<any[]>("/api/orders", [], () => toast.error("Failed to load orders"));
+  const { data: invoicesData = [], loading: l2, refetch: refetchInvoices } =
+    useCachedFetch<any[]>(`/api/invoices?businessId=${distId}&status=Overdue`, [], () => toast.error("Failed to load invoices"));
+  const { data: inventoryRaw, loading: l3, refetch: refetchInventory } =
+    useCachedFetch<any>(`/api/inventory?businessId=${distId}`, null, () => toast.error("Failed to load inventory"));
 
-  const fetchAllDashboardData = async () => {
-    try {
-      setLoading(true);
-      const distId = BUSINESS_IDS.CHAMPIKA_DISTRIBUTION;
+  const loading = l1 || l2 || l3;
 
-      // 1. Fetch Orders (For Pending, Processing, Loads)
-      // Note: In a real scenario, you might want specific endpoints for counts to optimize performance
-      const ordersRes = await fetch(`/api/orders`);
-      const ordersData = ordersRes.ok ? await ordersRes.json() : [];
+  const fetchAllDashboardData = () => { refetchOrders(); refetchInvoices(); refetchInventory(); };
 
-      // 2. Fetch Invoices (For Overdue)
-      const invoicesRes = await fetch(`/api/invoices?businessId=${distId}&status=Overdue`);
-      const invoicesData = invoicesRes.ok ? await invoicesRes.json() : [];
-
-      // 3. Fetch Inventory (For Low Stock)
-      const inventoryRes = await fetch(`/api/inventory?businessId=${distId}`);
-      const inventoryData = inventoryRes.ok ? await inventoryRes.json() : null;
-
-      // --- Process Data ---
-
-      // Orders Stats
-      const pending = ordersData.filter((o: any) => o.status === "Pending");
-      const processing = ordersData.filter((o: any) => o.status === "Processing");
-      const loading = ordersData.filter((o: any) => o.status === "Loading");
-      const today = new Date().toISOString().split('T')[0];
-      const completedToday = ordersData.filter((o: any) => 
-        (o.status === "Delivered" || o.status === "Completed") && 
+  const data = useMemo<DashboardData>(() => {
+    const pending = ordersData.filter((o: any) => o.status === "Pending");
+    const processing = ordersData.filter((o: any) => o.status === "Processing");
+    const activeLoads = ordersData.filter((o: any) => o.status === "Loading");
+    const today = new Date().toISOString().split("T")[0];
+    const completedToday = ordersData.filter(
+      (o: any) =>
+        (o.status === "Delivered" || o.status === "Completed") &&
         o.updatedAt?.startsWith(today)
-      );
-
-      // Invoice Stats (Overdue)
-      // Filter strictly for overdue logic if API doesn't fully handle it
-      const now = new Date();
-      const overdueList = invoicesData.filter((inv: any) => {
-        const dueDate = new Date(inv.createdAt); // Simplified due date logic
-        dueDate.setDate(dueDate.getDate() + 30); // Assuming 30 days credit
-        return dueDate < now && inv.dueAmount > 0;
-      });
-      
-      const totalOverdueAmount = overdueList.reduce((sum: number, inv: any) => sum + inv.dueAmount, 0);
-
-      // Inventory Stats
-      const lowStock = inventoryData?.stats?.lowStock || 0;
-
-      setData({
-        stats: {
-          pendingOrders: pending.length,
-          processingOrders: processing.length,
-          activeLoads: loading.length,
-          completedToday: completedToday.length,
-          lowStockCount: lowStock,
-          overdueInvoiceCount: overdueList.length,
-          overdueAmount: totalOverdueAmount,
-        },
-        recentPending: pending.slice(0, 5), // Top 5 pending
-        urgentOverdue: overdueList.slice(0, 3), // Top 3 overdue
-      });
-
-    } catch (error) {
-      console.error("Dashboard fetch error:", error);
-      toast.error("Failed to update dashboard data");
-    } finally {
-      setLoading(false);
-    }
-  };
+    );
+    const now = new Date();
+    const overdueList = invoicesData.filter((inv: any) => {
+      const dueDate = new Date(inv.createdAt);
+      dueDate.setDate(dueDate.getDate() + 30);
+      return dueDate < now && inv.dueAmount > 0;
+    });
+    return {
+      stats: {
+        pendingOrders: pending.length,
+        processingOrders: processing.length,
+        activeLoads: activeLoads.length,
+        completedToday: completedToday.length,
+        lowStockCount: inventoryRaw?.stats?.lowStock || 0,
+        overdueInvoiceCount: overdueList.length,
+        overdueAmount: overdueList.reduce((sum: number, inv: any) => sum + inv.dueAmount, 0),
+      },
+      recentPending: pending.slice(0, 5),
+      urgentOverdue: overdueList.slice(0, 3),
+    };
+  }, [ordersData, invoicesData, inventoryRaw]);
 
   if (loading) {
     return (

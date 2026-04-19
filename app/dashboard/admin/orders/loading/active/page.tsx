@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useMemo } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -39,30 +40,17 @@ interface ActiveLoad {
 
 export default function ActiveLoadsPage() {
   const router = useRouter();
-  const [loads, setLoads] = useState<ActiveLoad[]>([]);
-  const [loading, setLoading] = useState(true);
+  const {
+    data: allLoads = [],
+    loading,
+  } = useCachedFetch<ActiveLoad[]>("/api/orders/loading/history", [], () =>
+    toast.error("Error loading active deliveries")
+  );
 
-  useEffect(() => {
-    const fetchActiveLoads = async () => {
-      try {
-        // We fetch all history and filter client-side for 'In Transit'
-        // to ensure we get the latest status
-        const res = await fetch("/api/orders/loading/history");
-        if (!res.ok) throw new Error("Failed to fetch loads");
-        const data = await res.json();
-
-        const active = data.filter((load: any) => load.status === "In Transit");
-        setLoads(active);
-      } catch (error) {
-        console.error(error);
-        toast.error("Error loading active deliveries");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchActiveLoads();
-  }, []);
+  const loads = useMemo(
+    () => allLoads.filter((load) => load.status === "In Transit"),
+    [allLoads]
+  );
 
   if (loading) {
     return (

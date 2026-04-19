@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useMemo } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -52,60 +53,41 @@ interface OverdueInvoice {
 
 export default function DueAlertsPage() {
   const router = useRouter();
-  const [invoices, setInvoices] = useState<OverdueInvoice[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [ageFilter, setAgeFilter] = useState("all");
 
-  // --- Fetch Invoices & Calculate Overdue ---
-  const fetchOverdueInvoices = useCallback(async () => {
-    try {
-      setLoading(true);
-      const res = await fetch("/api/invoices");
-      if (!res.ok) throw new Error("Failed to fetch invoices");
-      const data = await res.json();
+  const {
+    data: rawInvoices = [],
+    loading,
+    refetch: fetchOverdueInvoices,
+  } = useCachedFetch<any[]>("/api/invoices", [], () =>
+    toast.error("Failed to load overdue alerts")
+  );
 
-      const today = new Date();
-
-      // Map and Filter for Overdue items only
-      const mappedInvoices: OverdueInvoice[] = data
-        .map((inv: any) => {
-          // Determine Due Date (Fallback to 30 days after creation if not present)
-          const createdDate = new Date(inv.date || inv.createdAt);
-          const dueDate = inv.dueDate
-            ? new Date(inv.dueDate)
-            : new Date(createdDate.setDate(createdDate.getDate() + 30));
-
-          // Calculate Days Overdue
-          const diffTime = today.getTime() - dueDate.getTime();
-          const daysOverdue = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-          return {
-            id: inv.id,
-            invoiceNo: inv.invoiceNo,
-            customerName: inv.customerName || "Unknown",
-            shopName: inv.customer?.shopName || inv.shopName || "-",
-            phone: inv.customer?.phone || inv.phone || "",
-            dueDate: dueDate.toISOString().split("T")[0],
-            amount: inv.dueAmount || 0,
-            daysOverdue: daysOverdue,
-            status: inv.status,
-          };
-        })
-        .filter((inv: OverdueInvoice) => inv.daysOverdue > 0 && inv.amount > 0); // Only show actual overdue items
-
-      setInvoices(mappedInvoices);
-    } catch (error) {
-      console.error("Error fetching overdue invoices:", error);
-      toast.error("Failed to load overdue alerts");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchOverdueInvoices();
-  }, [fetchOverdueInvoices]);
+  const invoices: OverdueInvoice[] = useMemo(() => {
+    const today = new Date();
+    return rawInvoices
+      .map((inv: any) => {
+        const createdDate = new Date(inv.date || inv.createdAt);
+        const dueDate = inv.dueDate
+          ? new Date(inv.dueDate)
+          : new Date(createdDate.setDate(createdDate.getDate() + 30));
+        const diffTime = today.getTime() - dueDate.getTime();
+        const daysOverdue = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        return {
+          id: inv.id,
+          invoiceNo: inv.invoiceNo,
+          customerName: inv.customerName || "Unknown",
+          shopName: inv.customer?.shopName || inv.shopName || "-",
+          phone: inv.customer?.phone || inv.phone || "",
+          dueDate: dueDate.toISOString().split("T")[0],
+          amount: inv.dueAmount || 0,
+          daysOverdue,
+          status: inv.status,
+        };
+      })
+      .filter((inv: OverdueInvoice) => inv.daysOverdue > 0 && inv.amount > 0);
+  }, [rawInvoices]);
 
   // --- Filter Logic ---
   const filteredInvoices = invoices.filter((inv) => {

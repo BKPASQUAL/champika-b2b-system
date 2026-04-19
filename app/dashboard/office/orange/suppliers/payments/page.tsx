@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useMemo } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { DollarSign, Clock, Search, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -95,15 +96,13 @@ const formatCurrency = (amount: number) => {
 };
 
 export default function OrangeSupplierPaymentsPage() {
-  const [unpaidPurchases, setUnpaidPurchases] = useState<UnpaidPurchase[]>([]);
-  const [paymentHistory, setPaymentHistory] = useState<SupplierPayment[]>([]);
-  const [companyAccounts, setCompanyAccounts] = useState<CompanyAccount[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [currentBusinessId] = useState<string>(() => {
+    const user = getUserBusinessContext();
+    return user?.businessId ?? BUSINESS_IDS.ORANGE_AGENCY;
+  });
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(
-    null
-  );
 
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const [isActionDialogOpen, setIsActionDialogOpen] = useState(false);
@@ -125,45 +124,20 @@ export default function OrangeSupplierPaymentsPage() {
     notes: "",
   });
 
-  // 1. Initialize Business Context
-  useEffect(() => {
-    const user = getUserBusinessContext();
-    setCurrentBusinessId(user?.businessId ?? BUSINESS_IDS.ORANGE_AGENCY);
-  }, []);
+  const { data: allPurchasesRaw = [], loading: l1, refetch: refetchPurchases } =
+    useCachedFetch<any[]>(`/api/purchases?businessId=${currentBusinessId}`, [], () => toast.error("Failed to load purchases"));
+  const { data: paymentHistory = [], loading: l2, refetch: refetchPayments } =
+    useCachedFetch<SupplierPayment[]>(`/api/suppliers/payments?businessId=${currentBusinessId}`, [], () => toast.error("Failed to load payments"));
+  const { data: companyAccounts = [], loading: l3, refetch: refetchAccounts } =
+    useCachedFetch<CompanyAccount[]>(`/api/finance/accounts?businessId=${currentBusinessId}`, [], () => toast.error("Failed to load accounts"));
 
-  const fetchData = useCallback(async () => {
-    if (!currentBusinessId) return;
+  const loading = l1 || l2 || l3;
+  const unpaidPurchases = useMemo(
+    () => allPurchasesRaw.filter((p: any) => p.paymentStatus !== "Paid"),
+    [allPurchasesRaw]
+  );
 
-    setLoading(true);
-    try {
-      // Append businessId to all fetch calls
-      const [purchasesRes, paymentsRes, accountsRes] = await Promise.all([
-        fetch(`/api/purchases?businessId=${currentBusinessId}`),
-        fetch(`/api/suppliers/payments?businessId=${currentBusinessId}`),
-        fetch(`/api/finance/accounts?businessId=${currentBusinessId}`),
-      ]);
-
-      if (purchasesRes.ok) {
-        const allPurchases = await purchasesRes.json();
-        // Filter for Unpaid or Partial locally
-        const unpaid = allPurchases.filter(
-          (p: any) => p.paymentStatus !== "Paid"
-        );
-        setUnpaidPurchases(unpaid);
-      }
-
-      if (paymentsRes.ok) setPaymentHistory(await paymentsRes.json());
-      if (accountsRes.ok) setCompanyAccounts(await accountsRes.json());
-    } catch (error) {
-      toast.error("Failed to load data");
-    } finally {
-      setLoading(false);
-    }
-  }, [currentBusinessId]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const fetchData = () => { refetchPurchases(); refetchPayments(); refetchAccounts(); };
 
   const openPaymentDialog = (purchase: UnpaidPurchase) => {
     setSelectedPurchase(purchase);

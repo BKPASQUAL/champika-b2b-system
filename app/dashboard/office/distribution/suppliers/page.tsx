@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -23,13 +24,6 @@ import { SupplierDialogs } from "./_components/SupplierDialogs";
 export default function DistributionSuppliersPage() {
   // Constants
   const CURRENT_BUSINESS_ID = BUSINESS_IDS.CHAMPIKA_DISTRIBUTION;
-
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [categoryOptions, setCategoryOptions] = useState<
-    { id: string; name: string }[]
-  >([]);
-  // We don't need to fetch business options since this page is specific to one business
-  const [loading, setLoading] = useState(true);
 
   // Filters & Sort
   const [searchQuery, setSearchQuery] = useState("");
@@ -59,45 +53,24 @@ export default function DistributionSuppliersPage() {
     category: "",
     status: "Active",
     duePayment: 0,
-    businessId: CURRENT_BUSINESS_ID, // ✅ Auto-set Business ID
+    businessId: CURRENT_BUSINESS_ID,
   });
 
-  // --- 1. Fetch Suppliers ---
-  const fetchSuppliers = useCallback(async () => {
-    try {
-      setLoading(true);
-      const response = await fetch("/api/suppliers");
-      if (!response.ok) throw new Error("Failed to fetch suppliers");
-      const data = await response.json();
+  const {
+    data: rawSuppliers = [],
+    loading,
+    refetch: fetchSuppliers,
+  } = useCachedFetch<Supplier[]>("/api/suppliers", [], () => toast.error("Error loading suppliers"));
 
-      // ✅ Filter for Distribution Business Only
-      const distributionSuppliers = data.filter(
-        (s: Supplier) => s.businessId === CURRENT_BUSINESS_ID
-      );
+  const { data: categoryOptions = [] } = useCachedFetch<{ id: string; name: string }[]>(
+    "/api/settings/categories?type=supplier",
+    []
+  );
 
-      setSuppliers(distributionSuppliers);
-    } catch (error) {
-      toast.error("Error loading suppliers");
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  }, [CURRENT_BUSINESS_ID]);
-
-  // --- 2. Fetch Categories ---
-  const fetchData = useCallback(async () => {
-    try {
-      const catRes = await fetch("/api/settings/categories?type=supplier");
-      if (catRes.ok) setCategoryOptions(await catRes.json());
-    } catch (error) {
-      console.error("Failed to fetch settings data", error);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchSuppliers();
-    fetchData();
-  }, [fetchSuppliers, fetchData]);
+  const suppliers = useMemo(
+    () => rawSuppliers.filter((s: Supplier) => s.businessId === CURRENT_BUSINESS_ID),
+    [rawSuppliers, CURRENT_BUSINESS_ID]
+  );
 
   // --- Logic ---
   const availableCategories = [

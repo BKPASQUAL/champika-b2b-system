@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useMemo } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,12 +27,6 @@ import { OrderTable } from "./_components/OrderTable";
 export default function OrdersPage() {
   const router = useRouter();
 
-  // State for data
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [reps, setReps] = useState<string[]>([]); // State for reps
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
   // Filters State
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -43,49 +38,15 @@ export default function OrdersPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // 1. Fetch Orders
-  const fetchOrders = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const response = await fetch("/api/orders");
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch orders");
-      }
-
-      const data = await response.json();
-      setOrders(data);
-    } catch (err: any) {
-      console.error("Error loading orders:", err);
-      setError("Failed to load orders. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // 2. Fetch Reps
-  const fetchReps = async () => {
-    try {
-      const response = await fetch("/api/users?role=rep");
-
-      if (response.ok) {
-        const users = await response.json();
-        // Extract full names from the user objects
-        const repNames = users.map((u: any) => u.fullName); // Use .fullName, not .full_name          .filter((name: any) => typeof name === "string");
-
-        setReps(repNames);
-      }
-    } catch (err) {
-      console.error("Failed to fetch reps:", err);
-    }
-  };
-
-  // Initial load
-  useEffect(() => {
-    fetchOrders();
-    fetchReps();
-  }, []);
+  const {
+    data: orders = [],
+    loading: isLoading,
+    error,
+    refetch: fetchOrders,
+    setData: setOrders,
+  } = useCachedFetch<Order[]>("/api/orders", []);
+  const { data: repUsers = [] } = useCachedFetch<any[]>("/api/users?role=rep", []);
+  const reps = useMemo(() => repUsers.map((u: any) => u.fullName), [repUsers]);
 
   // Filter Logic
   const filteredOrders = orders.filter((order) => {

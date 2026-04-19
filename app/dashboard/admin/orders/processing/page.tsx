@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,29 +33,14 @@ import { Order } from "../types";
 export default function ProcessingOrdersPage() {
   const router = useRouter();
 
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // --- 1. Fetch Processing Orders ---
-  useEffect(() => {
-    const fetchOrders = async () => {
-      try {
-        setLoading(true);
-        const res = await fetch("/api/orders?status=Processing");
-        if (!res.ok) throw new Error("Failed to load processing orders");
-        const data = await res.json();
-        setOrders(data);
-      } catch (error) {
-        console.error(error);
-        toast.error("Failed to load orders");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchOrders();
-  }, []);
+  const {
+    data: orders = [],
+    loading,
+  } = useCachedFetch<Order[]>("/api/orders?status=Processing", [], () =>
+    toast.error("Failed to load orders")
+  );
 
   // --- 2. Filter Logic ---
   const filteredOrders = orders.filter(

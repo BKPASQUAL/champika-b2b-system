@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,9 +29,14 @@ interface Business {
 }
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<User[]>([]);
-  const [businesses, setBusinesses] = useState<Business[]>([]); // New State
-  const [isLoading, setIsLoading] = useState(true);
+  const {
+    data: users = [],
+    loading: isLoading,
+    refetch: fetchData,
+  } = useCachedFetch<User[]>("/api/users", [], () =>
+    toast.error("Failed to load data")
+  );
+  const { data: businesses = [] } = useCachedFetch<Business[]>("/api/settings/business", []);
   const [searchQuery, setSearchQuery] = useState("");
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -60,32 +66,6 @@ export default function UsersPage() {
     accessibleBusinessIds: [],
   });
 
-  // --- 1. FETCH DATA (Users + Businesses) ---
-  const fetchData = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      // Run both fetches in parallel
-      const [usersRes, businessRes] = await Promise.all([
-        fetch("/api/users"),
-        fetch("/api/settings/business"),
-      ]);
-
-      if (!usersRes.ok) throw new Error("Failed to fetch users");
-      if (businessRes.ok) {
-        setBusinesses(await businessRes.json());
-      }
-
-      setUsers(await usersRes.json());
-    } catch (error) {
-      toast.error("Failed to load data");
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
 
   // --- 2. FILTERING ---
   const filteredUsers = users.filter(

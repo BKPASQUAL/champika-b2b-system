@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useMemo } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,12 +27,10 @@ import { CreatePaymentDialog } from "./_components/CreatePaymentDialog";
 
 export default function SierraPaymentsPage() {
   const router = useRouter();
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [totalDue, setTotalDue] = useState(0);
-  const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(
-    null
-  );
+  const [currentBusinessId] = useState<string>(() => {
+    const user = getUserBusinessContext();
+    return user?.businessId ?? BUSINESS_IDS.SIERRA_AGENCY;
+  });
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -49,26 +48,22 @@ export default function SierraPaymentsPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
 
-  useEffect(() => {
-    const user = getUserBusinessContext();
-    setCurrentBusinessId(user?.businessId ?? BUSINESS_IDS.SIERRA_AGENCY);
-  }, []);
+  const {
+    data: rawPayments = [],
+    loading: l1,
+    refetch: fetchPayments,
+  } = useCachedFetch<any[]>(`/api/payments?businessId=${currentBusinessId}`, [], () => toast.error("Failed to load payment history"));
 
-  const fetchPayments = useCallback(async () => {
-    if (!currentBusinessId) return;
+  const {
+    data: rawInvoices = [],
+    loading: l2,
+  } = useCachedFetch<any[]>(`/api/invoices?businessId=${currentBusinessId}`, []);
 
-    try {
-      setLoading(true);
-      const [paymentsRes, invoicesRes] = await Promise.all([
-        fetch(`/api/payments?businessId=${currentBusinessId}`),
-        fetch(`/api/invoices?businessId=${currentBusinessId}`),
-      ]);
+  const loading = l1 || l2;
 
-      if (!paymentsRes.ok) throw new Error("Failed to fetch payments");
-      const data = await paymentsRes.json();
-
-      // Correctly map API fields to Frontend Types
-      const mapped: Payment[] = data.map((p: any) => ({
+  const payments: Payment[] = useMemo(
+    () =>
+      rawPayments.map((p: any) => ({
         id: p.id,
         invoiceId: p.invoice_id,
         invoiceNo: p.invoices?.invoice_no || "N/A",
@@ -81,28 +76,17 @@ export default function SierraPaymentsPage() {
         chequeDate: p.cheque_date,
         chequeStatus: p.cheque_status,
         collectedBy: "Office",
-      }));
-      setPayments(mapped);
+      })),
+    [rawPayments]
+  );
 
-      // Calculate total due from invoices
-      if (invoicesRes.ok) {
-        const invoices = await invoicesRes.json();
-        const due = invoices
-          .filter((inv: any) => inv.paymentStatus !== "Paid" && (inv.dueAmount ?? 0) > 0)
-          .reduce((sum: number, inv: any) => sum + (inv.dueAmount ?? 0), 0);
-        setTotalDue(due);
-      }
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to load payment history");
-    } finally {
-      setLoading(false);
-    }
-  }, [currentBusinessId]);
-
-  useEffect(() => {
-    fetchPayments();
-  }, [fetchPayments]);
+  const totalDue = useMemo(
+    () =>
+      rawInvoices
+        .filter((inv: any) => inv.paymentStatus !== "Paid" && (inv.dueAmount ?? 0) > 0)
+        .reduce((sum: number, inv: any) => sum + (inv.dueAmount ?? 0), 0),
+    [rawInvoices]
+  );
 
   const filteredPayments = payments.filter((p) => {
     const matchesSearch =

@@ -1,7 +1,8 @@
 // app/dashboard/office/sierra/customers/page.tsx
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import {
   Download,
   Plus,
@@ -36,12 +37,19 @@ import { CustomerTable } from "./_components/CustomerTable";
 import { CustomerDialogs } from "./_components/CustomerDialogs";
 
 export default function SierraCustomersPage() {
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [currentBusinessId] = useState<string>(() => {
+    const user = getUserBusinessContext();
+    return user?.businessId ?? BUSINESS_IDS.SIERRA_AGENCY;
+  });
 
-  // State for business context
-  const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(
-    null
+  const {
+    data: customers = [],
+    loading,
+    refetch: fetchCustomers,
+  } = useCachedFetch<Customer[]>(
+    `/api/customers?businessId=${currentBusinessId}`,
+    [],
+    () => toast.error("Error loading customer data")
   );
 
   // Filters & State
@@ -68,39 +76,12 @@ export default function SierraCustomersPage() {
     route: "",
     status: "Active",
     creditLimit: 0,
-    businessId: "",
+    businessId: currentBusinessId,
   });
 
-  // 1. Initialize User Context
   useEffect(() => {
-    const user = getUserBusinessContext();
-    const resolvedId = user?.businessId ?? BUSINESS_IDS.SIERRA_AGENCY;
-    setCurrentBusinessId(resolvedId);
-    setFormData((prev) => ({ ...prev, businessId: resolvedId }));
-  }, []);
-
-  // 2. Fetch Customers
-  const fetchCustomers = useCallback(async () => {
-    if (!currentBusinessId) return;
-
-    try {
-      setLoading(true);
-      const res = await fetch(`/api/customers?businessId=${currentBusinessId}`);
-      if (!res.ok) throw new Error("Failed to fetch customers");
-      const data = await res.json();
-      setCustomers(data);
-    } catch (error) {
-      console.error(error);
-      toast.error("Error loading customer data");
-    } finally {
-      setLoading(false);
-    }
+    setFormData((prev) => ({ ...prev, businessId: currentBusinessId }));
   }, [currentBusinessId]);
-
-  // 3. Trigger Fetch when Business ID is set
-  useEffect(() => {
-    fetchCustomers();
-  }, [fetchCustomers]);
 
   // Derived Data
   const routes = ["all", ...Array.from(new Set(customers.map((c) => c.route)))];

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -46,12 +47,6 @@ export default function OrangeSuppliersPage() {
   const businessName = BUSINESS_NAMES[CURRENT_BUSINESS_ID];
   const theme = BUSINESS_THEMES[CURRENT_BUSINESS_ID];
 
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [categoryOptions, setCategoryOptions] = useState<
-    { id: string; name: string }[]
-  >([]);
-  const [loading, setLoading] = useState(true);
-
   // Filters & Sort
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -80,44 +75,23 @@ export default function OrangeSuppliersPage() {
     category: "",
     status: "Active",
     duePayment: 0,
-    businessId: CURRENT_BUSINESS_ID, // Force Orange ID
+    businessId: CURRENT_BUSINESS_ID,
   });
 
-  // --- 1. Fetch Suppliers ---
-  const fetchSuppliers = useCallback(async () => {
-    try {
-      setLoading(true);
-      const response = await fetch("/api/suppliers");
-      if (!response.ok) throw new Error("Failed to fetch suppliers");
-      const data = await response.json();
+  const {
+    data: rawSuppliers = [],
+    loading,
+    refetch: fetchSuppliers,
+  } = useCachedFetch<Supplier[]>("/api/suppliers", [], () => toast.error("Error loading suppliers"));
 
-      // FILTER: Only show suppliers for Orange Agency
-      const orangeSuppliers = data.filter(
-        (s: any) => s.businessId === CURRENT_BUSINESS_ID
-      );
-      setSuppliers(orangeSuppliers);
-    } catch (error) {
-      toast.error("Error loading suppliers");
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  }, [CURRENT_BUSINESS_ID]);
+  const { data: categoryOptions = [] } = useCachedFetch<{ id: string; name: string }[]>(
+    "/api/settings/categories?type=supplier", []
+  );
 
-  // --- 2. Fetch Categories ---
-  const fetchData = useCallback(async () => {
-    try {
-      const catRes = await fetch("/api/settings/categories?type=supplier");
-      if (catRes.ok) setCategoryOptions(await catRes.json());
-    } catch (error) {
-      console.error("Failed to fetch settings data", error);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchSuppliers();
-    fetchData();
-  }, [fetchSuppliers, fetchData]);
+  const suppliers = useMemo(
+    () => rawSuppliers.filter((s: any) => s.businessId === CURRENT_BUSINESS_ID),
+    [rawSuppliers, CURRENT_BUSINESS_ID]
+  );
 
   // --- Logic ---
   const availableCategories = [

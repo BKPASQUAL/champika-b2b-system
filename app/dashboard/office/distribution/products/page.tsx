@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
@@ -42,15 +43,6 @@ function getSearchTerms(query: string): string[] {
 }
 
 export default function ProductsPage() {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<
-    { id: string; name: string; parent_id?: string }[]
-  >([]);
-  const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>(
-    [],
-  );
-  const [loading, setLoading] = useState(true);
-
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -90,40 +82,25 @@ export default function ProductsPage() {
     isActive: true,
   });
 
-  const fetchData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const [prodRes, catRes, supRes, setSupRes] = await Promise.all([
-        fetch("/api/products"),
-        fetch("/api/settings/categories?type=category"),
-        fetch("/api/suppliers"),
-        fetch("/api/settings/categories?type=supplier"),
-      ]);
+  const { data: products = [], loading: l1, refetch: refetchProducts } = useCachedFetch<Product[]>("/api/products", []);
+  const { data: categories = [], loading: l2 } = useCachedFetch<{ id: string; name: string; parent_id?: string }[]>(
+    "/api/settings/categories?type=category", []
+  );
+  const { data: rawSuppliers = [], loading: l3 } = useCachedFetch<any[]>("/api/suppliers", []);
+  const { data: settingSuppliers = [], loading: l4 } = useCachedFetch<any[]>(
+    "/api/settings/categories?type=supplier", []
+  );
 
-      if (prodRes.ok) setProducts(await prodRes.json());
-      if (catRes.ok) setCategories(await catRes.json());
-      
-      let allSuppliers: any[] = [];
-      if (supRes.ok) {
-        allSuppliers = [...allSuppliers, ...(await supRes.json())];
-      }
-      if (setSupRes.ok) {
-        allSuppliers = [...allSuppliers, ...(await setSupRes.json())];
-      }
-      
-      // Deduplicate by name
-      const uniqueSuppliers = allSuppliers.filter((v, i, a) => a.findIndex(t => (t.name === v.name)) === i);
-      setSuppliers(uniqueSuppliers);
-    } catch (error) {
-      toast.error("Failed to load product data");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const loading = l1 || l2 || l3 || l4;
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const suppliers = useMemo(
+    () => [...rawSuppliers, ...settingSuppliers].filter((v, i, a) => a.findIndex(t => t.name === v.name) === i),
+    [rawSuppliers, settingSuppliers]
+  );
+
+  const fetchData = useCallback(() => {
+    refetchProducts();
+  }, [refetchProducts]);
 
   // Filter Logic
   const filteredProducts = products.filter((product) => {

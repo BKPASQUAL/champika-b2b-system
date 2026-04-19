@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
@@ -41,11 +42,7 @@ function getSearchTerms(query: string): string[] {
 }
 
 export default function WiremanProductsPage() {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<
-    { id: string; name: string; parent_id?: string }[]
-  >([]);
-  const [loading, setLoading] = useState(true);
+  const WIREMAN_SUPPLIER_NAME = "Wireman ( Orel Corporation)";
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -62,8 +59,6 @@ export default function WiremanProductsPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-
-  const WIREMAN_SUPPLIER_NAME = "Wireman ( Orel Corporation)";
 
   // Form Data
   const [formData, setFormData] = useState<ProductFormData>({
@@ -88,32 +83,21 @@ export default function WiremanProductsPage() {
     isActive: true,
   });
 
-  const fetchData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const [prodRes, catRes] = await Promise.all([
-        fetch("/api/products"),
-        fetch("/api/settings/categories?type=category"),
-      ]);
+  const { data: allProductsRaw = [], loading: l1, refetch: refetchProducts } = useCachedFetch<Product[]>("/api/products", []);
+  const { data: categories = [], loading: l2 } = useCachedFetch<{ id: string; name: string; parent_id?: string }[]>(
+    "/api/settings/categories?type=category", []
+  );
 
-      if (prodRes.ok) {
-        const allProducts: Product[] = await prodRes.json();
-        const wiremanOnly = allProducts.filter((p) =>
-          (p.supplier || "").toLowerCase().includes("wireman"),
-        );
-        setProducts(wiremanOnly);
-      }
-      if (catRes.ok) setCategories(await catRes.json());
-    } catch (error) {
-      toast.error("Failed to load product data");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const loading = l1 || l2;
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const products = useMemo(
+    () => allProductsRaw.filter((p) => (p.supplier || "").toLowerCase().includes("wireman")),
+    [allProductsRaw]
+  );
+
+  const fetchData = useCallback(() => {
+    refetchProducts();
+  }, [refetchProducts]);
 
   // Filters Logic
   const filteredProducts = products.filter((product) => {

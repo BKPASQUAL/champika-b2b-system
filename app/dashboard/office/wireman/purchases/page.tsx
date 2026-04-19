@@ -1,7 +1,8 @@
 // app/dashboard/office/wireman/purchases/page.tsx
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useMemo } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -50,11 +51,10 @@ function getSearchTerms(query: string): string[] {
 
 export default function WiremanPurchasesPage() {
   const router = useRouter();
-  const [purchases, setPurchases] = useState<Purchase[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(
-    null
-  );
+  const [currentBusinessId] = useState<string>(() => {
+    const user = getUserBusinessContext();
+    return user?.businessId ?? BUSINESS_IDS.WIREMAN_AGENCY;
+  });
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -66,22 +66,19 @@ export default function WiremanPurchasesPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  useEffect(() => {
-    const user = getUserBusinessContext();
-    setCurrentBusinessId(user?.businessId ?? BUSINESS_IDS.WIREMAN_AGENCY);
-  }, []);
+  const {
+    data: rawPurchases = [],
+    loading,
+    refetch: fetchPurchases,
+  } = useCachedFetch<any[]>(
+    `/api/purchases?businessId=${currentBusinessId}`,
+    [],
+    () => toast.error("Failed to load purchase history")
+  );
 
-  const fetchPurchases = useCallback(async () => {
-    if (!currentBusinessId) return;
-
-    try {
-      setLoading(true);
-      // Fetch purchases for Wireman Agency
-      const res = await fetch(`/api/purchases?businessId=${currentBusinessId}`);
-      if (!res.ok) throw new Error("Failed to fetch data");
-      const data = await res.json();
-
-      const mappedData: Purchase[] = data.map((p: any) => ({
+  const purchases: Purchase[] = useMemo(
+    () =>
+      rawPurchases.map((p: any) => ({
         id: p.id,
         purchaseId: p.purchaseId,
         supplierId: p.supplierId,
@@ -93,20 +90,9 @@ export default function WiremanPurchasesPage() {
         totalAmount: Number(p.totalAmount),
         paidAmount: Number(p.paidAmount),
         items: p.items || [],
-      }));
-
-      setPurchases(mappedData);
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to load purchase history");
-    } finally {
-      setLoading(false);
-    }
-  }, [currentBusinessId]);
-
-  useEffect(() => {
-    fetchPurchases();
-  }, [fetchPurchases]);
+      })),
+    [rawPurchases]
+  );
 
   // Filter
   const filtered = purchases.filter((p) => {

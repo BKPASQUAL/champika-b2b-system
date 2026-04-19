@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { Loader2, Save, Target, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,56 +46,30 @@ interface TargetRecord {
 }
 
 export default function TargetsSettingsPage() {
-  const [businessId, setBusinessId] = useState<string | null>(null);
-  const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [targets, setTargets] = useState<TargetRecord[]>([]);
-  
+  const [businessId] = useState<string>(() => {
+    const user = getUserBusinessContext();
+    return user?.businessId ?? "";
+  });
+
+  const { data: profiles = [], loading: l1, refetch: refetchProfiles } =
+    useCachedFetch<Profile[]>("/api/users", [], () => toast.error("Failed to load users"));
+  const { data: targetsData, loading: l2, refetch: refetchTargets } =
+    useCachedFetch<{ targets: TargetRecord[] }>(
+      businessId ? `/api/targets?business_id=${businessId}` : "",
+      { targets: [] },
+      () => toast.error("Failed to load targets data.")
+    );
+  const targets = targetsData?.targets || [];
+  const isLoading = l1 || l2;
+  const loadData = () => { refetchProfiles(); refetchTargets(); };
+
   const [userId, setUserId] = useState("");
   const [timeCategory, setTimeCategory] = useState("Monthly");
   const [targetType, setTargetType] = useState("Sales");
   const [targetAmount, setTargetAmount] = useState<number>(0);
   const [bonusAmount, setBonusAmount] = useState<number>(0);
-  
+
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const user = getUserBusinessContext();
-    if (user?.businessId) {
-      setBusinessId(user.businessId);
-    } else {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const loadData = async () => {
-    if (!businessId) return;
-    setIsLoading(true);
-    try {
-      const [profilesRes, targetsRes] = await Promise.all([
-        fetch(`/api/users`),
-        fetch(`/api/targets?business_id=${businessId}`)
-      ]);
-      
-      if (profilesRes.ok) {
-        setProfiles(await profilesRes.json());
-      }
-      
-      if (targetsRes.ok) {
-        const data = await targetsRes.json();
-        setTargets(data.targets || []);
-      }
-    } catch {
-      toast.error("Failed to load targets data.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // We only call API for users if we don't have them
-  useEffect(() => {
-    loadData();
-  }, [businessId]);
 
   const handleSubmit = async () => {
     if (!userId) return toast.error("Please select a user");

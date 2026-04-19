@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import {
   Loader2, CheckCircle, XCircle, Eye, Moon, Sun,
   Coffee, Target, TrendingUp, TrendingDown, Banknote,
@@ -433,10 +434,14 @@ function SalaryTable({
 
 /* ─── Main page ────────────────────────────────────────────────────────── */
 export default function AdminSalariesApprovalPage() {
-  const [pending, setPending]       = useState<any[]>([]);
-  const [allSalaries, setAllSalaries] = useState<any[]>([]);
-  const [isLoading, setIsLoading]   = useState(true);
-  const [adminId, setAdminId]       = useState<string | null>(null);
+  const [adminId, setAdminId] = useState<string | null>(null);
+
+  const { data: salariesResp, loading: isLoading, refetch: loadAll } =
+    useCachedFetch<any>("/api/salaries", null, () =>
+      toast.error("Failed to load salaries")
+    );
+  const allSalaries = useMemo(() => salariesResp?.salaries ?? [], [salariesResp]);
+  const pending     = useMemo(() => allSalaries.filter((s: any) => s.admin_approval_status === "Pending"), [allSalaries]);
   const [detailSalary, setDetailSalary] = useState<any>(null);
 
   // Filters for "All Salaries" tab
@@ -450,24 +455,7 @@ export default function AdminSalariesApprovalPage() {
   useEffect(() => {
     const user = getUserBusinessContext();
     if (user?.id) setAdminId(user.id);
-    loadAll();
   }, []);
-
-  const loadAll = async () => {
-    setIsLoading(true);
-    try {
-      const [pendingRes, allRes] = await Promise.all([
-        fetch("/api/salaries?admin_approval_status=Pending"),
-        fetch("/api/salaries"),
-      ]);
-      if (pendingRes.ok) setPending((await pendingRes.json()).salaries || []);
-      if (allRes.ok)     setAllSalaries((await allRes.json()).salaries || []);
-    } catch {
-      toast.error("Failed to load salaries");
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleStatusChange = async (id: string, status: "Approved" | "Rejected") => {
     try {
@@ -488,9 +476,15 @@ export default function AdminSalariesApprovalPage() {
   };
 
   // Unique months from all salaries for filter dropdown
-  const months = Array.from(new Set(allSalaries.map((s) => s.salary_month).filter(Boolean))).sort().reverse();
+  const months = (Array.from(
+    new Set(
+      allSalaries
+        .map((s: any) => String(s.salary_month ?? ""))
+        .filter((m: string) => m.length > 0)
+    )
+  ) as string[]).sort().reverse();
 
-  const filteredAll = allSalaries.filter((s) => {
+  const filteredAll = allSalaries.filter((s: any) => {
     const statusOk = filterStatus === "all" || s.admin_approval_status === filterStatus;
     const monthOk  = filterMonth === "all"  || s.salary_month === filterMonth;
     const searchOk = searchAll.trim() === "" ||
@@ -499,17 +493,17 @@ export default function AdminSalariesApprovalPage() {
     return statusOk && monthOk && searchOk;
   });
 
-  const filteredPending = pending.filter((s) =>
+  const filteredPending = pending.filter((s: any) =>
     searchPending.trim() === "" ||
     (s.profiles?.full_name ?? "").toLowerCase().includes(searchPending.toLowerCase()) ||
     (s.salary_month ?? "").includes(searchPending)
   );
 
   // Stats
-  const totalPayout    = pending.reduce((s, r) => s + (r.net_salary ?? 0), 0);
-  const totalAllowance = pending.reduce((s, r) => s + (r.lunch_allowance ?? 0) + (r.night_out_allowance ?? 0), 0);
-  const totalDeduct    = pending.reduce((s, r) => s + (r.manual_commissions_deducted ?? 0) + (r.other_deductions ?? 0), 0);
-  const approvedCount  = allSalaries.filter((s) => s.admin_approval_status === "Approved").length;
+  const totalPayout    = pending.reduce((s: any, r: any) => s + (r.net_salary ?? 0), 0);
+  const totalAllowance = pending.reduce((s: any, r: any) => s + (r.lunch_allowance ?? 0) + (r.night_out_allowance ?? 0), 0);
+  const totalDeduct    = pending.reduce((s: any, r: any) => s + (r.manual_commissions_deducted ?? 0) + (r.other_deductions ?? 0), 0);
+  const approvedCount  = allSalaries.filter((s: any) => s.admin_approval_status === "Approved").length;
 
   if (isLoading) {
     return (

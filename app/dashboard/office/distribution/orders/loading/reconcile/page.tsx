@@ -1,7 +1,8 @@
 // app/dashboard/office/distribution/orders/loading/reconcile/page.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useMemo } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,26 +21,14 @@ import { BUSINESS_IDS } from "@/app/config/business-constants";
 export default function DistributionReconcileListPage() {
   const router = useRouter();
   const distributionBusinessId = BUSINESS_IDS.CHAMPIKA_DISTRIBUTION;
-  const [loads, setLoads] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchLoads = async () => {
-      try {
-        const res = await fetch(
-          `/api/orders/loading/history?businessId=${distributionBusinessId}`
-        );
-        const data = await res.json();
-        // Filter for loads that are In Transit (Ready to reconcile)
-        setLoads(data.filter((l: any) => l.status === "In Transit"));
-      } catch (error) {
-        console.error("Failed to load", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchLoads();
-  }, [distributionBusinessId]);
+  const { data: allLoads = [], loading } = useCachedFetch<any[]>(
+    `/api/orders/loading/history?businessId=${distributionBusinessId}`,
+    []
+  );
+  const loads = useMemo(
+    () => allLoads.filter((l: any) => l.status === "In Transit"),
+    [allLoads]
+  );
 
   if (loading)
     return (

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
@@ -68,13 +69,6 @@ function getSearchTerms(query: string): string[] {
 }
 
 export default function OrangeProductsPage() {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<
-    { id: string; name: string; parent_id?: string }[]
-  >([]);
-
-  const [loading, setLoading] = useState(true);
-
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -103,7 +97,7 @@ export default function OrangeProductsPage() {
     modelType: "",
     subModel: "",
     sizeSpec: "",
-    supplier: "Orange Agency", // Locked to Orange
+    supplier: "Orange Agency",
     stock: "",
     minStock: "",
     mrp: "",
@@ -114,33 +108,21 @@ export default function OrangeProductsPage() {
     isActive: true,
   });
 
-  const fetchData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const [prodRes, catRes] = await Promise.all([
-        fetch("/api/products"),
-        fetch("/api/settings/categories?type=category"),
-      ]);
+  const { data: allProductsRaw = [], loading: l1, refetch: refetchProducts } = useCachedFetch<Product[]>("/api/products", []);
+  const { data: categories = [], loading: l2 } = useCachedFetch<{ id: string; name: string; parent_id?: string }[]>(
+    "/api/settings/categories?type=category", []
+  );
 
-      if (prodRes.ok) {
-        const allProducts: Product[] = await prodRes.json();
-        // Strict Filter: Only Orange products
-        const orangeOnly = allProducts.filter((p) =>
-          p.supplier?.toLowerCase().includes("orange")
-        );
-        setProducts(orangeOnly);
-      }
-      if (catRes.ok) setCategories(await catRes.json());
-    } catch (error) {
-      toast.error("Failed to load product data");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const loading = l1 || l2;
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const products = useMemo(
+    () => allProductsRaw.filter((p) => p.supplier?.toLowerCase().includes("orange")),
+    [allProductsRaw]
+  );
+
+  const fetchData = useCallback(() => {
+    refetchProducts();
+  }, [refetchProducts]);
 
   const filteredProducts = products.filter((product) => {
     const searchTerms = getSearchTerms(searchQuery);

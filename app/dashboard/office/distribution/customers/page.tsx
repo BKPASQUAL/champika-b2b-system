@@ -1,7 +1,8 @@
 // app/dashboard/office/distribution/customers/page.tsx
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import {
   Download,
   Plus,
@@ -34,11 +35,18 @@ import { CustomerTable } from "./_components/CustomerTable";
 import { CustomerDialogs } from "./_components/CustomerDialogs";
 
 export default function DistributionCustomersPage() {
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
-
   // Distribution Business ID
   const distributionBusinessId = BUSINESS_IDS.CHAMPIKA_DISTRIBUTION;
+
+  const {
+    data: customers = [],
+    loading,
+    refetch: fetchCustomers,
+  } = useCachedFetch<Customer[]>(
+    `/api/customers?businessId=${distributionBusinessId}`,
+    [],
+    () => toast.error("Error loading customer data")
+  );
 
   // Filters & State
   const [searchQuery, setSearchQuery] = useState("");
@@ -67,26 +75,6 @@ export default function DistributionCustomersPage() {
     businessId: distributionBusinessId, // Locked to Distribution
   });
 
-  const fetchCustomers = useCallback(async () => {
-    try {
-      setLoading(true);
-      // Fetch only for Distribution business
-      const res = await fetch(
-        `/api/customers?businessId=${distributionBusinessId}`
-      );
-      if (!res.ok) throw new Error("Failed to fetch customers");
-      const data = await res.json();
-      setCustomers(data);
-    } catch (error) {
-      toast.error("Error loading customer data");
-    } finally {
-      setLoading(false);
-    }
-  }, [distributionBusinessId]);
-
-  useEffect(() => {
-    fetchCustomers();
-  }, [fetchCustomers]);
 
   // Derived Data
   const routes = ["all", ...Array.from(new Set(customers.map((c) => c.route)))];

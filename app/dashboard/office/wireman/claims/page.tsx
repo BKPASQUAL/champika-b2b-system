@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,30 +21,12 @@ import { toast } from "sonner";
 
 export default function FreeIssueClaimsPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [items, setItems] = useState<any[]>([]);
+  const { data: items = [], loading, refetch: fetchUnclaimedItems } = useCachedFetch<any[]>(
+    "/api/wireman/claims/free-issues",
+    [],
+    () => toast.error("Failed to load unclaimed items")
+  );
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-
-  useEffect(() => {
-    fetchUnclaimedItems();
-  }, []);
-
-  const fetchUnclaimedItems = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch("/api/wireman/claims/free-issues");
-      const data = await res.json();
-      if (res.ok) {
-        setItems(data);
-      } else {
-        toast.error("Failed to load unclaimed items");
-      }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {

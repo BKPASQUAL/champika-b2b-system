@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -13,9 +14,6 @@ import { Purchase, SortField, SortOrder } from "./types";
 
 export default function PurchasesPage() {
   const router = useRouter();
-  const [purchases, setPurchases] = useState<Purchase[]>([]);
-  const [loading, setLoading] = useState(true);
-
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -26,17 +24,17 @@ export default function PurchasesPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // --- 1. Fetch Real Data from API ---
-  const fetchPurchases = useCallback(async () => {
-    try {
-      setLoading(true);
-      const response = await fetch("/api/purchases");
-      if (!response.ok) throw new Error("Failed to fetch purchases");
-      const data = await response.json();
+  const {
+    data: rawPurchases = [],
+    loading,
+    refetch: fetchPurchases,
+  } = useCachedFetch<any[]>("/api/purchases", [], () =>
+    toast.error("Error loading purchases")
+  );
 
-      // Map API response to Frontend Type
-      // Note: The list API doesn't return 'items' array to save bandwidth, so we set it to empty []
-      const mappedData: Purchase[] = data.map((p: any) => ({
+  const purchases: Purchase[] = useMemo(
+    () =>
+      rawPurchases.map((p: any) => ({
         id: p.id,
         purchaseId: p.purchaseId,
         supplierId: p.supplierId,
@@ -44,28 +42,17 @@ export default function PurchasesPage() {
         invoiceNo: p.invoiceNo || "-",
         purchaseDate: p.purchaseDate,
         arrivalDate: p.arrivalDate,
-        billingDate: p.arrivalDate, // Fallback
+        billingDate: p.arrivalDate,
         status: p.status,
         paymentStatus: p.paymentStatus,
         totalAmount: p.totalAmount,
         paidAmount: p.paidAmount,
         businessId: p.businessId || null,
         businessName: p.businessName || null,
-        items: [], // Empty for list view
-      }));
-
-      setPurchases(mappedData);
-    } catch (error) {
-      toast.error("Error loading purchases");
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchPurchases();
-  }, [fetchPurchases]);
+        items: [],
+      })),
+    [rawPurchases]
+  );
 
   // --- 2. Filter Logic ---
   const filteredPurchases = purchases.filter((p) => {

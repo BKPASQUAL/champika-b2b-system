@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useMemo } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import Link from "next/link";
 import {
   Card,
@@ -42,103 +43,39 @@ interface DashboardData {
 }
 
 export default function WiremanDashboardPage() {
-  const [businessName, setBusinessName] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<DashboardData>({
-    stats: {
-      todaySales: 0,
-      todaySalesCount: 0,
-      dueInvoicesCount: 0,
-      dueInvoicesAmount: 0,
-      supplierDueAmount: 0,
-      lowStockCount: 0,
-    },
-    recentInvoices: [],
-    urgentDueInvoices: [],
-  });
+  const [businessName] = useState(() => getUserBusinessContext()?.businessName ?? "");
+  const wiremanId = BUSINESS_IDS.WIREMAN_AGENCY;
 
-  useEffect(() => {
-    const user = getUserBusinessContext();
-    if (user?.businessName) {
-      setBusinessName(user.businessName);
-    }
-    fetchDashboardData();
-  }, []);
+  const { data: invoices = [], loading: l1, refetch: refetchInvoices } =
+    useCachedFetch<any[]>(`/api/invoices?businessId=${wiremanId}`, [], () => toast.error("Failed to load invoices"));
+  const { data: purchases = [], loading: l2, refetch: refetchPurchases } =
+    useCachedFetch<any[]>(`/api/purchases?businessId=${wiremanId}`, [], () => toast.error("Failed to load purchases"));
+  const { data: stockData, loading: l3, refetch: refetchInventory } =
+    useCachedFetch<any>(`/api/inventory?businessId=${wiremanId}`, null, () => toast.error("Failed to load inventory"));
 
-  const fetchDashboardData = async () => {
-    try {
-      setLoading(true);
-      // ✅ Use Wireman ID
-      const wiremanId = BUSINESS_IDS.WIREMAN_AGENCY;
+  const loading = l1 || l2 || l3;
+  const fetchDashboardData = () => { refetchInvoices(); refetchPurchases(); refetchInventory(); };
 
-      // 1. Fetch Invoices (Sales & Dues)
-      const invRes = await fetch(`/api/invoices?businessId=${wiremanId}`);
-      const invoices = invRes.ok ? await invRes.json() : [];
-
-      // 2. Fetch Purchases (Supplier Payables)
-      const purRes = await fetch(`/api/purchases?businessId=${wiremanId}`);
-      const purchases = purRes.ok ? await purRes.json() : [];
-
-      // 3. Fetch Inventory (Stock Levels)
-      const stockRes = await fetch(`/api/inventory?businessId=${wiremanId}`);
-      const stockData = stockRes.ok ? await stockRes.json() : null;
-
-      // --- Process Data ---
-
-      // A. Today's Sales
-      const todayStr = new Date().toISOString().split("T")[0];
-      const todayInvoices = invoices.filter(
-        (inv: any) => inv.date && inv.date.startsWith(todayStr)
-      );
-
-      const todaySalesVal = todayInvoices.reduce(
-        (sum: number, inv: any) =>
-          sum + (inv.finalAmount || inv.totalAmount || 0),
-        0
-      );
-
-      // B. Customer Due (Receivables)
-      const dueInvoices = invoices.filter(
-        (inv: any) =>
-          inv.paymentStatus !== "Paid" &&
-          (inv.dueAmount > 0 || inv.status === "Overdue")
-      );
-      const totalDueAmount = dueInvoices.reduce(
-        (sum: number, inv: any) => sum + (inv.dueAmount || 0),
-        0
-      );
-
-      // C. Supplier Due (Payables to Wireman Suppliers)
-      const supplierDue = purchases.reduce((sum: number, p: any) => {
-        const total = Number(p.totalAmount) || 0;
-        const paid = Number(p.paidAmount) || 0;
-        return sum + (total - paid);
-      }, 0);
-
-      // D. Low Stock
-      const lowStock = stockData?.stats?.lowStock || 0;
-
-      setData({
-        stats: {
-          todaySales: todaySalesVal,
-          todaySalesCount: todayInvoices.length,
-          dueInvoicesCount: dueInvoices.length,
-          dueInvoicesAmount: totalDueAmount,
-          supplierDueAmount: supplierDue,
-          lowStockCount: lowStock,
-        },
-        recentInvoices: invoices.slice(0, 5),
-        urgentDueInvoices: dueInvoices
-          .sort((a: any, b: any) => b.dueAmount - a.dueAmount)
-          .slice(0, 3),
-      });
-    } catch (error) {
-      console.error("Error loading dashboard", error);
-      toast.error("Failed to load dashboard data");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const data = useMemo<DashboardData>(() => {
+    const todayStr = new Date().toISOString().split("T")[0];
+    const todayInvoices = invoices.filter((inv: any) => inv.date && inv.date.startsWith(todayStr));
+    const todaySalesVal = todayInvoices.reduce((sum: number, inv: any) => sum + (inv.finalAmount || inv.totalAmount || 0), 0);
+    const dueInvoices = invoices.filter((inv: any) => inv.paymentStatus !== "Paid" && (inv.dueAmount > 0 || inv.status === "Overdue"));
+    const totalDueAmount = dueInvoices.reduce((sum: number, inv: any) => sum + (inv.dueAmount || 0), 0);
+    const supplierDue = purchases.reduce((sum: number, p: any) => sum + (Number(p.totalAmount) || 0) - (Number(p.paidAmount) || 0), 0);
+    return {
+      stats: {
+        todaySales: todaySalesVal,
+        todaySalesCount: todayInvoices.length,
+        dueInvoicesCount: dueInvoices.length,
+        dueInvoicesAmount: totalDueAmount,
+        supplierDueAmount: supplierDue,
+        lowStockCount: stockData?.stats?.lowStock || 0,
+      },
+      recentInvoices: invoices.slice(0, 5),
+      urgentDueInvoices: dueInvoices.sort((a: any, b: any) => b.dueAmount - a.dueAmount).slice(0, 3),
+    };
+  }, [invoices, purchases, stockData]);
 
   if (loading) {
     return (

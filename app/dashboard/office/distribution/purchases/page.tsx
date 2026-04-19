@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -44,9 +45,6 @@ export default function DistributionPurchasesPage() {
   const router = useRouter();
   const CURRENT_BUSINESS_ID = BUSINESS_IDS.CHAMPIKA_DISTRIBUTION;
 
-  const [purchases, setPurchases] = useState<Purchase[]>([]);
-  const [loading, setLoading] = useState(true);
-
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -57,15 +55,15 @@ export default function DistributionPurchasesPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // --- 1. Fetch Real Data from API ---
-  const fetchPurchases = useCallback(async () => {
-    try {
-      setLoading(true);
-      const response = await fetch("/api/purchases");
-      if (!response.ok) throw new Error("Failed to fetch purchases");
-      const data = await response.json();
+  const {
+    data: rawPurchases = [],
+    loading,
+    refetch: fetchPurchases,
+  } = useCachedFetch<any[]>("/api/purchases", [], () => toast.error("Error loading purchases"));
 
-      const mappedData: Purchase[] = data
+  const purchases: Purchase[] = useMemo(
+    () =>
+      rawPurchases
         .map((p: any) => ({
           id: p.id,
           purchaseId: p.purchaseId,
@@ -83,21 +81,9 @@ export default function DistributionPurchasesPage() {
           businessName: p.businessName || null,
           items: [],
         }))
-        // Filter for Distribution
-        .filter((p: Purchase) => p.businessId === CURRENT_BUSINESS_ID);
-
-      setPurchases(mappedData);
-    } catch (error) {
-      toast.error("Error loading purchases");
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  }, [CURRENT_BUSINESS_ID]);
-
-  useEffect(() => {
-    fetchPurchases();
-  }, [fetchPurchases]);
+        .filter((p: Purchase) => p.businessId === CURRENT_BUSINESS_ID),
+    [rawPurchases, CURRENT_BUSINESS_ID]
+  );
 
   // --- 2. Filter Logic ---
   const filteredPurchases = purchases.filter((p) => {

@@ -1,7 +1,8 @@
 // app/dashboard/office/distribution/orders/checking/page.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,30 +33,12 @@ import { Order } from "../types";
 export default function DistributionCheckingOrdersPage() {
   const router = useRouter();
 
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: orders = [], loading } = useCachedFetch<Order[]>(
+    "/api/orders?status=Checking",
+    [],
+    () => toast.error("Failed to load orders")
+  );
   const [searchQuery, setSearchQuery] = useState("");
-
-  // --- 1. Fetch Checking Orders ---
-  useEffect(() => {
-    const fetchOrders = async () => {
-      try {
-        setLoading(true);
-        // Reuse the same API endpoint
-        const res = await fetch("/api/orders?status=Checking");
-        if (!res.ok) throw new Error("Failed to load checking orders");
-        const data = await res.json();
-        setOrders(data);
-      } catch (error) {
-        console.error(error);
-        toast.error("Failed to load orders");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchOrders();
-  }, []);
 
   // --- 2. Filter Logic ---
   const filteredOrders = orders.filter((order) => {

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useMemo } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import {
   Plus,
   Search,
@@ -151,11 +152,57 @@ interface Order {
 
 export default function PaymentsPage() {
   const [selectedBusinessId, setSelectedBusinessId] = useState<string>("");
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [unpaidOrders, setUnpaidOrders] = useState<Order[]>([]);
-  const [banks, setBanks] = useState<Bank[]>([]);
-  const [companyAccounts, setCompanyAccounts] = useState<CompanyAccount[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  const bizParam = selectedBusinessId ? `?businessId=${selectedBusinessId}` : "";
+  const { data: payments = [], loading: l1, refetch: refetchPayments } =
+    useCachedFetch<Payment[]>(`/api/payments${bizParam}`, [], () => toast.error("Failed to load payments"));
+  const { data: ordersRaw = [], loading: l2, refetch: refetchOrders } =
+    useCachedFetch<any[]>(`/api/orders${bizParam}`, [], () => toast.error("Failed to load orders"));
+  const { data: accountsRaw = [], loading: l3, refetch: refetchAccounts } =
+    useCachedFetch<any[]>("/api/finance/accounts", [], () => toast.error("Failed to load accounts"));
+  const { data: banks = [], loading: l4, refetch: refetchBanks } =
+    useCachedFetch<Bank[]>("/api/finance/bank-codes", [], () => toast.error("Failed to load banks"));
+
+  const loading = l1 || l2 || l3 || l4;
+
+  const unpaidOrders = useMemo<Order[]>(
+    () =>
+      ordersRaw
+        .filter(
+          (o: any) =>
+            o.paymentStatus !== "Paid" &&
+            (o.status === "Delivered" || o.status === "Completed")
+        )
+        .map((o: any) => ({
+          id: o.id,
+          order_number: o.invoiceNo !== "N/A" ? o.invoiceNo : o.orderId,
+          customer_id: o.customerId ?? "",
+          customer_name: o.customerName,
+          order_date: o.date,
+          total_amount: o.totalAmount,
+          balance: o.dueAmount ?? o.totalAmount,
+          paid_amount: o.paidAmount ?? 0,
+          paymentStatus: o.paymentStatus,
+          status: o.status,
+        })),
+    [ordersRaw]
+  );
+
+  const companyAccounts = useMemo<CompanyAccount[]>(
+    () =>
+      accountsRaw.map((acc: any) => ({
+        id: acc.id,
+        account_name: acc.account_name,
+        account_type: (acc.account_type || "").toLowerCase(),
+        account_number: acc.account_number,
+        current_balance: acc.current_balance,
+        banks: acc.bank_codes,
+      })),
+    [accountsRaw]
+  );
+
+  const fetchData = () => { refetchPayments(); refetchOrders(); refetchAccounts(); refetchBanks(); };
+
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -181,79 +228,6 @@ export default function PaymentsPage() {
     chequeDate: "",
     notes: "",
   });
-
-  // Fetch all necessary data
-  const fetchData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const bizParam = selectedBusinessId ? `?businessId=${selectedBusinessId}` : "";
-      const [paymentsRes, ordersRes, accountsRes, banksRes] = await Promise.all(
-        [
-          fetch(`/api/payments${bizParam}`),
-          fetch(`/api/orders${bizParam}`),
-          fetch("/api/finance/accounts"),
-          fetch("/api/finance/bank-codes"),
-        ]
-      );
-
-      if (!paymentsRes.ok) throw new Error("Failed to fetch payments");
-      if (!ordersRes.ok) throw new Error("Failed to fetch orders");
-      if (!accountsRes.ok) throw new Error("Failed to fetch accounts");
-      if (!banksRes.ok) throw new Error("Failed to fetch bank codes");
-
-      const paymentsData = await paymentsRes.json();
-      const ordersData = await ordersRes.json();
-      const accountsData = await accountsRes.json();
-      const banksData = await banksRes.json();
-
-      setPayments(paymentsData);
-
-      // Filter and Map Orders:
-      // 1. Not fully paid (paymentStatus !== "Paid")
-      // 2. Status is Delivered or Completed
-      const mappedOrders: Order[] = ordersData
-        .filter(
-          (o: any) =>
-            o.paymentStatus !== "Paid" &&
-            (o.status === "Delivered" || o.status === "Completed")
-        )
-        .map((o: any) => ({
-          id: o.id,
-          order_number: o.invoiceNo !== "N/A" ? o.invoiceNo : o.orderId,
-          customer_id: o.customerId ?? "",
-          customer_name: o.customerName,
-          order_date: o.date,
-          total_amount: o.totalAmount,
-          balance: o.dueAmount ?? o.totalAmount,
-          paid_amount: o.paidAmount ?? 0,
-          paymentStatus: o.paymentStatus,
-          status: o.status,
-        }));
-      setUnpaidOrders(mappedOrders);
-
-      // Map Accounts — lowercase the type for consistent comparison
-      const mappedAccounts = accountsData.map((acc: any) => ({
-        id: acc.id,
-        account_name: acc.account_name,
-        account_type: (acc.account_type || "").toLowerCase(),
-        account_number: acc.account_number,
-        current_balance: acc.current_balance,
-        banks: acc.bank_codes,
-      }));
-      setCompanyAccounts(mappedAccounts);
-
-      setBanks(banksData);
-    } catch (error) {
-      console.error("Error loading data:", error);
-      toast.error("Failed to load initial data");
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedBusinessId]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
 
   // Reset page to 1 when filters change
   useEffect(() => {
@@ -508,12 +482,15 @@ export default function PaymentsPage() {
       {/* Business Filter */}
       <div className="flex items-center gap-3">
         <div className="w-64 space-y-1">
-          <Select value={selectedBusinessId} onValueChange={setSelectedBusinessId}>
+          <Select
+            value={selectedBusinessId || "all"}
+            onValueChange={(v) => setSelectedBusinessId(v === "all" ? "" : v)}
+          >
             <SelectTrigger>
               <SelectValue placeholder="All businesses" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All businesses</SelectItem>
+              <SelectItem value="all">All businesses</SelectItem>
               {BUSINESS_OPTIONS.map((b) => (
                 <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
               ))}

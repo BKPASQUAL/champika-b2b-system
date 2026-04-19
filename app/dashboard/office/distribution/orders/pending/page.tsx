@@ -1,7 +1,8 @@
 // app/dashboard/office/distribution/orders/pending/page.tsx
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,30 +42,15 @@ import { downloadLoadingSummary } from "../loading/print-loading-summary";
 export default function DistributionPendingOrdersPage() {
   const router = useRouter();
 
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: orders = [], loading } = useCachedFetch<Order[]>(
+    "/api/orders?status=Pending",
+    [],
+    () => toast.error("Failed to load orders")
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [selectedRep, setSelectedRep] = useState<string>("all");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
-
-  useEffect(() => {
-    const fetchOrders = async () => {
-      try {
-        setLoading(true);
-        const res = await fetch("/api/orders?status=Pending");
-        if (!res.ok) throw new Error("Failed to load pending orders");
-        const data = await res.json();
-        setOrders(data);
-      } catch (error) {
-        console.error(error);
-        toast.error("Failed to load orders");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchOrders();
-  }, []);
 
   // Unique sales reps derived from loaded orders
   const salesReps = useMemo(() => {

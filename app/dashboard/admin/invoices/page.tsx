@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useMemo } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -35,14 +36,10 @@ import { InvoiceStats } from "./_components/InvoiceStats";
 
 export default function InvoicesPage() {
   const router = useRouter();
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [loading, setLoading] = useState(true);
-
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [repFilter, setRepFilter] = useState("all");
-  const [reps, setReps] = useState<string[]>([]);
 
   // Sort & Pagination
   const [sortField, setSortField] = useState<SortField>("date");
@@ -50,20 +47,26 @@ export default function InvoicesPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // --- 1. Fetch Invoices ---
-  const fetchInvoices = useCallback(async () => {
-    try {
-      setLoading(true);
-      const res = await fetch("/api/invoices");
-      if (!res.ok) throw new Error("Failed to fetch invoices");
-      const data = await res.json();
+  const {
+    data: rawInvoices = [],
+    loading,
+    refetch: fetchInvoices,
+  } = useCachedFetch<any[]>("/api/invoices", [], () =>
+    toast.error("Failed to load invoices")
+  );
 
-      const mappedInvoices: Invoice[] = data.map((inv: any) => ({
+  const { data: allUsers = [] } = useCachedFetch<any[]>("/api/users", []);
+
+  const invoices: Invoice[] = useMemo(
+    () =>
+      rawInvoices.map((inv: any) => ({
         id: inv.id,
         invoiceNo: inv.invoiceNo,
-        date: inv.date || (inv.createdAt
-          ? inv.createdAt.split("T")[0]
-          : new Date().toISOString().split("T")[0]),
+        date:
+          inv.date ||
+          (inv.createdAt
+            ? inv.createdAt.split("T")[0]
+            : new Date().toISOString().split("T")[0]),
         customerId: inv.customerId,
         customerName: inv.customerName || "Unknown Customer",
         salesRepName: inv.salesRepName || "Unknown",
@@ -71,42 +74,23 @@ export default function InvoicesPage() {
         paidAmount: inv.paidAmount || 0,
         dueAmount: inv.dueAmount || 0,
         status: inv.status,
-
-        // ✅ MAP ORDER STATUS HERE
-        // The API route I provided earlier sends 'orderStatus' at the root of the object
         orderStatus: inv.orderStatus || "Pending",
-
         itemsCount: 0,
-      }));
+      })),
+    [rawInvoices]
+  );
 
-      setInvoices(mappedInvoices);
-    } catch (error) {
-      console.error("Error fetching invoices:", error);
-      toast.error("Failed to load invoices");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // --- 2. Fetch Reps ---
-  useEffect(() => {
-    const fetchReps = async () => {
-      try {
-        const res = await fetch("/api/users");
-        if (res.ok) {
-          const users = await res.json();
-          const repNames = users
+  const reps = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          allUsers
             .filter((u: any) => u.role === "rep")
-            .map((u: any) => u.fullName);
-          setReps(Array.from(new Set(repNames)));
-        }
-      } catch (error) {
-        console.error("Failed to load reps", error);
-      }
-    };
-    fetchReps();
-    fetchInvoices();
-  }, [fetchInvoices]);
+            .map((u: any) => u.fullName)
+        )
+      ),
+    [allUsers]
+  );
 
   // --- 3. Filter Logic ---
   const filteredInvoices = invoices.filter((inv) => {

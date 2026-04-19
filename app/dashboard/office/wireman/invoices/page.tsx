@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -65,17 +66,15 @@ function getSearchTerms(query: string): string[] {
 
 export default function WiremanInvoicesPage() {
   const router = useRouter();
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(
-    null,
-  );
+  const [currentBusinessId] = useState<string>(() => {
+    const user = getUserBusinessContext();
+    return user?.businessId ?? BUSINESS_IDS.WIREMAN_AGENCY;
+  });
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [repFilter, setRepFilter] = useState("all");
-  const [reps, setReps] = useState<string[]>([]);
 
   // Sort & Pagination
   const [sortField, setSortField] = useState<SortField>("date");
@@ -83,30 +82,25 @@ export default function WiremanInvoicesPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // 1. Initialize User Context
-  useEffect(() => {
-    const user = getUserBusinessContext();
-    setCurrentBusinessId(user?.businessId ?? BUSINESS_IDS.WIREMAN_AGENCY);
-  }, []);
+  const {
+    data: rawInvoices = [],
+    loading,
+    refetch: fetchInvoices,
+  } = useCachedFetch<any[]>(
+    `/api/invoices?businessId=${currentBusinessId}`,
+    [],
+    () => toast.error("Failed to load invoices")
+  );
 
-  // 2. Fetch Invoices
-  const fetchInvoices = useCallback(async () => {
-    if (!currentBusinessId) return;
+  const { data: allUsers = [] } = useCachedFetch<any[]>("/api/users", []);
 
-    try {
-      setLoading(true);
-      // Fetch filtered by businessId
-      const res = await fetch(`/api/invoices?businessId=${currentBusinessId}`);
-      if (!res.ok) throw new Error("Failed to fetch invoices");
-      const data = await res.json();
-
-      const mappedInvoices: Invoice[] = data.map((inv: any) => ({
+  const invoices: Invoice[] = useMemo(
+    () =>
+      rawInvoices.map((inv: any) => ({
         id: inv.id,
         invoiceNo: inv.invoiceNo,
-        manualInvoiceNo: inv.manualInvoiceNo, // ✅ Explicitly Mapped
-        date: inv.date || (inv.createdAt
-          ? inv.createdAt.split("T")[0]
-          : new Date().toISOString().split("T")[0]),
+        manualInvoiceNo: inv.manualInvoiceNo,
+        date: inv.date || (inv.createdAt ? inv.createdAt.split("T")[0] : new Date().toISOString().split("T")[0]),
         customerId: inv.customerId,
         customerName: inv.customerName || "Unknown Customer",
         salesRepName: inv.salesRepName || "Unknown",
@@ -116,41 +110,15 @@ export default function WiremanInvoicesPage() {
         status: inv.status,
         orderStatus: inv.orderStatus || "Pending",
         itemsCount: 0,
-        profit: inv.profit || 0, // ✅ Map Profit
-      }));
+        profit: inv.profit || 0,
+      })),
+    [rawInvoices]
+  );
 
-      setInvoices(mappedInvoices);
-    } catch (error) {
-      console.error("Error fetching invoices:", error);
-      toast.error("Failed to load invoices");
-    } finally {
-      setLoading(false);
-    }
-  }, [currentBusinessId]);
-
-  // 3. Fetch Reps
-  useEffect(() => {
-    const fetchReps = async () => {
-      try {
-        const res = await fetch("/api/users");
-        if (res.ok) {
-          const users = await res.json();
-          const repNames = users
-            .filter((u: any) => u.role === "rep")
-            .map((u: any) => u.fullName);
-          setReps(Array.from(new Set(repNames)));
-        }
-      } catch (error) {
-        console.error("Failed to load reps", error);
-      }
-    };
-    fetchReps();
-  }, []);
-
-  // Trigger fetch when business ID is ready
-  useEffect(() => {
-    fetchInvoices();
-  }, [fetchInvoices]);
+  const reps = useMemo(
+    () => Array.from(new Set(allUsers.filter((u: any) => u.role === "rep").map((u: any) => u.fullName))),
+    [allUsers]
+  );
 
   // 4. Filter Logic
   const filteredInvoices = invoices.filter((inv) => {

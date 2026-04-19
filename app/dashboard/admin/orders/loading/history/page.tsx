@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -56,34 +57,18 @@ interface LoadingHistory {
 export default function DeliveryHistoryPage() {
   const router = useRouter();
 
-  const [history, setHistory] = useState<LoadingHistory[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-
-  // Track loading states for specific rows
   const [printingId, setPrintingId] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
-  // Fetch history data
-  const fetchHistory = useCallback(async () => {
-    try {
-      setLoading(true);
-      const res = await fetch("/api/orders/loading/history");
-      if (!res.ok) throw new Error("Failed to fetch delivery history");
-      const data = await res.json();
-      setHistory(data);
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to load delivery history");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchHistory();
-  }, [fetchHistory]);
+  const {
+    data: history = [],
+    loading,
+    refetch: fetchHistory,
+  } = useCachedFetch<LoadingHistory[]>("/api/orders/loading/history", [], () =>
+    toast.error("Failed to load delivery history")
+  );
 
   // Handle Print (Direct)
   const handlePrint = async (e: React.MouseEvent, loadId: string) => {

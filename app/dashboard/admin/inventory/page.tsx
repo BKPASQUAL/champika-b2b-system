@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useRouter } from "next/navigation";
 import {
   Card,
@@ -47,30 +48,16 @@ const ITEMS_PER_PAGE = 10;
 
 export default function InventoryPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
-
-  // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
 
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch("/api/inventory");
-      if (!res.ok) throw new Error("Failed to load inventory");
-      const jsonData = await res.json();
-      setData(jsonData);
-    } catch (error) {
-      toast.error("Error fetching stock data");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
+  const {
+    data,
+    loading,
+    refetch: fetchData,
+  } = useCachedFetch<any>("/api/inventory", null, () =>
+    toast.error("Error fetching stock data")
+  );
 
   // Reset page when search changes
   useEffect(() => {

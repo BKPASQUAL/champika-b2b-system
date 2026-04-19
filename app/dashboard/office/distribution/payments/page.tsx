@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import {
   Plus,
   Search,
@@ -147,11 +148,60 @@ interface Order {
 }
 
 export default function DistributionPaymentsPage() {
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [unpaidOrders, setUnpaidOrders] = useState<Order[]>([]);
-  const [banks, setBanks] = useState<Bank[]>([]);
-  const [companyAccounts, setCompanyAccounts] = useState<CompanyAccount[]>([]);
-  const [loading, setLoading] = useState(true);
+  const businessId = BUSINESS_IDS.CHAMPIKA_DISTRIBUTION;
+
+  const { data: payments = [], loading: l1, refetch: refetchPayments } =
+    useCachedFetch<Payment[]>(`/api/payments?businessId=${businessId}`, [], () => toast.error("Failed to load payments"));
+  const { data: ordersRaw = [], loading: l2, refetch: refetchOrders } =
+    useCachedFetch<any[]>(`/api/orders?businessId=${businessId}`, [], () => toast.error("Failed to load orders"));
+  const { data: accountsRaw = [], loading: l3, refetch: refetchAccounts } =
+    useCachedFetch<any[]>("/api/finance/accounts", [], () => toast.error("Failed to load accounts"));
+  const { data: banks = [], loading: l4, refetch: refetchBanks } =
+    useCachedFetch<Bank[]>("/api/finance/bank-codes", [], () => toast.error("Failed to load banks"));
+
+  const loading = l1 || l2 || l3 || l4;
+
+  const unpaidOrders = useMemo<Order[]>(
+    () =>
+      ordersRaw
+        .filter(
+          (o: any) =>
+            o.paymentStatus !== "Paid" &&
+            (o.status === "Delivered" || o.status === "Completed") &&
+            o.invoiceNo !== "N/A"
+        )
+        .map((o: any) => ({
+          id: o.id,
+          order_number: o.invoiceNo,
+          customer_id: "",
+          customer_name: o.customerName,
+          order_date: o.date,
+          total_amount: o.totalAmount,
+          balance: o.totalAmount,
+          paid_amount: 0,
+          paymentStatus: o.paymentStatus,
+          status: o.status,
+        })),
+    [ordersRaw]
+  );
+
+  const companyAccounts = useMemo<CompanyAccount[]>(
+    () =>
+      accountsRaw.map((acc: any) => ({
+        id: acc.id,
+        account_name: acc.account_name,
+        account_type: acc.account_type.toLowerCase().includes("cash")
+          ? "cash"
+          : acc.account_type.toLowerCase(),
+        account_number: acc.account_number,
+        current_balance: acc.current_balance,
+        banks: acc.bank_codes,
+      })),
+    [accountsRaw]
+  );
+
+  const fetchData = () => { refetchPayments(); refetchOrders(); refetchAccounts(); refetchBanks(); };
+
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -177,85 +227,6 @@ export default function DistributionPaymentsPage() {
     chequeDate: "",
     notes: "",
   });
-
-  // Fetch all necessary data with Business Filter
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const businessId = BUSINESS_IDS.CHAMPIKA_DISTRIBUTION;
-
-      // Fetch payments and orders filtered by business ID
-      const [paymentsRes, ordersRes, accountsRes, banksRes] = await Promise.all(
-        [
-          fetch(`/api/payments?businessId=${businessId}`),
-          fetch(`/api/orders?businessId=${businessId}`),
-          fetch("/api/finance/accounts"),
-          fetch("/api/finance/bank-codes"),
-        ]
-      );
-
-      if (!paymentsRes.ok) throw new Error("Failed to fetch payments");
-      if (!ordersRes.ok) throw new Error("Failed to fetch orders");
-      if (!accountsRes.ok) throw new Error("Failed to fetch accounts");
-      if (!banksRes.ok) throw new Error("Failed to fetch bank codes");
-
-      const paymentsData = await paymentsRes.json();
-      const ordersData = await ordersRes.json();
-      const accountsData = await accountsRes.json();
-      const banksData = await banksRes.json();
-
-      setPayments(paymentsData);
-
-      // Filter and Map Orders:
-      // 1. Not fully paid (paymentStatus !== "Paid")
-      // 2. Status is Delivered or Completed
-      // 3. MUST HAVE AN INVOICE (invoiceNo !== "N/A") to receive payment (Fix for 400 Error)
-      const mappedOrders: Order[] = ordersData
-        .filter(
-          (o: any) =>
-            o.paymentStatus !== "Paid" &&
-            (o.status === "Delivered" || o.status === "Completed") &&
-            o.invoiceNo !== "N/A" // <--- Critical Fix
-        )
-        .map((o: any) => ({
-          id: o.id,
-          order_number: o.invoiceNo, // Use invoiceNo as the primary identifier
-          customer_id: "",
-          customer_name: o.customerName,
-          order_date: o.date,
-          total_amount: o.totalAmount,
-          balance: o.totalAmount, // Assuming full amount is due if partial data is missing
-          paid_amount: 0,
-          paymentStatus: o.paymentStatus,
-          status: o.status,
-        }));
-      setUnpaidOrders(mappedOrders);
-
-      // Map Accounts
-      const mappedAccounts = accountsData.map((acc: any) => ({
-        id: acc.id,
-        account_name: acc.account_name,
-        account_type: acc.account_type.toLowerCase().includes("cash")
-          ? "cash"
-          : acc.account_type.toLowerCase(),
-        account_number: acc.account_number,
-        current_balance: acc.current_balance,
-        banks: acc.bank_codes,
-      }));
-      setCompanyAccounts(mappedAccounts);
-
-      setBanks(banksData);
-    } catch (error) {
-      console.error("Error loading data:", error);
-      toast.error("Failed to load initial data");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
 
   // Reset page to 1 when filters change
   useEffect(() => {

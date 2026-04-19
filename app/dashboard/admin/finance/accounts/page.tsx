@@ -1,7 +1,8 @@
 // app/dashboard/admin/finance/accounts/page.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useCallback } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import {
   Plus,
   Landmark,
@@ -155,9 +156,15 @@ const formatCurrency = (amount: number) =>
   }).format(amount);
 
 export default function FinanceAccountsPage() {
-  const [accounts, setAccounts] = useState<BankAccount[]>([]);
-  const [bankCodes, setBankCodes] = useState<BankCode[]>([]);
-  const [loading, setLoading] = useState(true);
+  const {
+    data: accounts = [],
+    loading,
+    refetch: refetchAccounts,
+  } = useCachedFetch<BankAccount[]>("/api/finance/accounts", [], () =>
+    toast.error("Failed to load finance data")
+  );
+  const { data: bankCodes = [], refetch: refetchBankCodes } =
+    useCachedFetch<BankCode[]>("/api/finance/bank-codes", []);
   const [showInactive, setShowInactive] = useState(false);
 
   // Dialog States
@@ -196,26 +203,10 @@ export default function FinanceAccountsPage() {
     description: "",
   });
 
-  // --- Fetch Data ---
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const [accRes, bankRes] = await Promise.all([
-        fetch("/api/finance/accounts"),
-        fetch("/api/finance/bank-codes"),
-      ]);
-      if (accRes.ok) setAccounts(await accRes.json());
-      if (bankRes.ok) setBankCodes(await bankRes.json());
-    } catch {
-      toast.error("Failed to load finance data");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
+  const fetchData = useCallback(() => {
+    refetchAccounts();
+    refetchBankCodes();
+  }, [refetchAccounts, refetchBankCodes]);
 
   // --- Actions ---
   const handleAddAccount = async () => {

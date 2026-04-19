@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import {
   Plus,
   Search,
@@ -149,11 +150,11 @@ interface Order {
 }
 
 export default function OrangePaymentsPage() {
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [unpaidOrders, setUnpaidOrders] = useState<Order[]>([]);
-  const [banks, setBanks] = useState<Bank[]>([]);
-  const [companyAccounts, setCompanyAccounts] = useState<CompanyAccount[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [currentBusinessId] = useState<string>(() => {
+    const user = getUserBusinessContext();
+    return user?.businessId ?? BUSINESS_IDS.ORANGE_AGENCY;
+  });
+
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -163,9 +164,6 @@ export default function OrangePaymentsPage() {
   const [bankSearchOpen, setBankSearchOpen] = useState(false);
   const [accountSearchOpen, setAccountSearchOpen] = useState(false);
   const [orderSearchOpen, setOrderSearchOpen] = useState(false);
-  const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(
-    null
-  );
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -183,43 +181,37 @@ export default function OrangePaymentsPage() {
     notes: "",
   });
 
-  // Initialize Business Context
-  useEffect(() => {
-    const user = getUserBusinessContext();
-    setCurrentBusinessId(user?.businessId ?? BUSINESS_IDS.ORANGE_AGENCY);
-  }, []);
+  const {
+    data: payments = [],
+    loading: l1,
+    refetch: refetchPayments,
+  } = useCachedFetch<Payment[]>(`/api/payments?businessId=${currentBusinessId}`, []);
 
-  // Fetch all necessary data
-  const fetchData = useCallback(async () => {
-    if (!currentBusinessId) return;
+  const {
+    data: ordersRaw = [],
+    loading: l2,
+    refetch: refetchOrders,
+  } = useCachedFetch<any[]>(`/api/orders?businessId=${currentBusinessId}`, []);
 
-    try {
-      setLoading(true);
-      const [paymentsRes, ordersRes, accountsRes, banksRes] = await Promise.all(
-        [
-          fetch(`/api/payments?businessId=${currentBusinessId}`),
-          fetch(`/api/orders?businessId=${currentBusinessId}`),
-          fetch(`/api/finance/accounts?businessId=${currentBusinessId}`),
-          fetch("/api/finance/bank-codes"),
-        ]
-      );
+  const {
+    data: accountsRaw = [],
+    loading: l3,
+    refetch: refetchAccounts,
+  } = useCachedFetch<any[]>(`/api/finance/accounts?businessId=${currentBusinessId}`, []);
 
-      if (!paymentsRes.ok) throw new Error("Failed to fetch payments");
-      if (!ordersRes.ok) throw new Error("Failed to fetch orders");
-      if (!accountsRes.ok) throw new Error("Failed to fetch accounts");
-      if (!banksRes.ok) throw new Error("Failed to fetch bank codes");
+  const { data: banks = [], loading: l4 } = useCachedFetch<Bank[]>("/api/finance/bank-codes", []);
 
-      const paymentsData = await paymentsRes.json();
-      const ordersData = await ordersRes.json();
-      const accountsData = await accountsRes.json();
-      const banksData = await banksRes.json();
+  const loading = l1 || l2 || l3 || l4;
 
-      setPayments(paymentsData);
+  const fetchData = () => {
+    refetchPayments();
+    refetchOrders();
+    refetchAccounts();
+  };
 
-      // Filter and Map Orders:
-      // 1. Not fully paid (paymentStatus !== "Paid")
-      // 2. Status is Delivered or Completed
-      const mappedOrders: Order[] = ordersData
+  const unpaidOrders: Order[] = useMemo(
+    () =>
+      ordersRaw
         .filter(
           (o: any) =>
             o.paymentStatus !== "Paid" &&
@@ -232,15 +224,17 @@ export default function OrangePaymentsPage() {
           customer_name: o.customerName,
           order_date: o.date,
           total_amount: o.totalAmount,
-          balance: o.totalAmount - (o.paidAmount || 0), // Use calculated balance if available or basic math
+          balance: o.totalAmount - (o.paidAmount || 0),
           paid_amount: o.paidAmount || 0,
           paymentStatus: o.paymentStatus,
           status: o.status,
-        }));
-      setUnpaidOrders(mappedOrders);
+        })),
+    [ordersRaw, currentBusinessId]
+  );
 
-      // Map Accounts
-      const mappedAccounts = accountsData.map((acc: any) => ({
+  const companyAccounts: CompanyAccount[] = useMemo(
+    () =>
+      accountsRaw.map((acc: any) => ({
         id: acc.id,
         account_name: acc.account_name,
         account_type: acc.account_type.toLowerCase().includes("cash")
@@ -249,21 +243,9 @@ export default function OrangePaymentsPage() {
         account_number: acc.account_number,
         current_balance: acc.current_balance,
         banks: acc.bank_codes,
-      }));
-      setCompanyAccounts(mappedAccounts);
-
-      setBanks(banksData);
-    } catch (error) {
-      console.error("Error loading data:", error);
-      toast.error("Failed to load initial data");
-    } finally {
-      setLoading(false);
-    }
-  }, [currentBusinessId]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+      })),
+    [accountsRaw]
+  );
 
   // Reset page to 1 when filters change
   useEffect(() => {

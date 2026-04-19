@@ -1,7 +1,8 @@
 // app/dashboard/office/distribution/invoices/due/page.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useMemo } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -55,67 +56,46 @@ export default function DistributionDueAlertsPage() {
   const router = useRouter();
   const distributionBusinessId = BUSINESS_IDS.CHAMPIKA_DISTRIBUTION;
 
-  const [invoices, setInvoices] = useState<OverdueInvoice[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [ageFilter, setAgeFilter] = useState("all");
 
-  // --- Fetch Data ---
-  useEffect(() => {
-    const fetchDueInvoices = async () => {
-      try {
-        setLoading(true);
-        // Fetch invoices for Distribution business
-        const res = await fetch(
-          `/api/invoices?businessId=${distributionBusinessId}&status=Overdue`
-        );
+  const {
+    data: rawInvoices = [],
+    loading,
+  } = useCachedFetch<any[]>(
+    `/api/invoices?businessId=${distributionBusinessId}&status=Overdue`,
+    [],
+    () => toast.error("Error loading overdue alerts")
+  );
 
-        if (res.ok) {
-          const data = await res.json();
-          // Filter for overdue only on client side just in case, or map backend logic
-          const now = new Date();
-
-          const mappedInvoices = data
-            .filter((inv: any) => {
-              // Calculate Due Date (Assuming 30 days credit for example, or use actual dueDate field)
-              const invDate = new Date(inv.date || inv.createdAt);
-              const dueDate = new Date(invDate);
-              dueDate.setDate(dueDate.getDate() + 30); // Example credit period
-              return dueDate < now && inv.dueAmount > 0;
-            })
-            .map((inv: any) => {
-              const invDate = new Date(inv.date || inv.createdAt);
-              const dueDate = new Date(invDate);
-              dueDate.setDate(dueDate.getDate() + 30);
-
-              const diffTime = Math.abs(now.getTime() - dueDate.getTime());
-              const daysOverdue = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-              return {
-                id: inv.id,
-                invoiceNo: inv.invoiceNo,
-                customerName: inv.customerName || "Unknown",
-                shopName: inv.customer?.shopName || inv.customerName, // Fallback
-                phone: inv.customer?.phone || "N/A",
-                dueDate: dueDate.toISOString().split("T")[0],
-                amount: inv.dueAmount,
-                daysOverdue: daysOverdue,
-                status: "Overdue",
-              };
-            });
-
-          setInvoices(mappedInvoices);
-        }
-      } catch (error) {
-        console.error("Failed to fetch due invoices", error);
-        toast.error("Error loading overdue alerts");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchDueInvoices();
-  }, [distributionBusinessId]);
+  const invoices: OverdueInvoice[] = useMemo(() => {
+    const now = new Date();
+    return rawInvoices
+      .filter((inv: any) => {
+        const invDate = new Date(inv.date || inv.createdAt);
+        const dueDate = new Date(invDate);
+        dueDate.setDate(dueDate.getDate() + 30);
+        return dueDate < now && inv.dueAmount > 0;
+      })
+      .map((inv: any) => {
+        const invDate = new Date(inv.date || inv.createdAt);
+        const dueDate = new Date(invDate);
+        dueDate.setDate(dueDate.getDate() + 30);
+        const diffTime = Math.abs(now.getTime() - dueDate.getTime());
+        const daysOverdue = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        return {
+          id: inv.id,
+          invoiceNo: inv.invoiceNo,
+          customerName: inv.customerName || "Unknown",
+          shopName: inv.customer?.shopName || inv.customerName,
+          phone: inv.customer?.phone || "N/A",
+          dueDate: dueDate.toISOString().split("T")[0],
+          amount: inv.dueAmount,
+          daysOverdue,
+          status: "Overdue" as const,
+        };
+      });
+  }, [rawInvoices]);
 
   // --- Filter Logic ---
   const filteredInvoices = invoices.filter((inv) => {

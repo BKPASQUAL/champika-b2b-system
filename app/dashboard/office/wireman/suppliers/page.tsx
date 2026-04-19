@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -20,12 +21,6 @@ import { SupplierStats } from "./_components/SupplierStats";
 import { SupplierFilters } from "./_components/SupplierFilters";
 
 export default function WiremanSuppliersPage() {
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [categoryOptions, setCategoryOptions] = useState<
-    { id: string; name: string }[]
-  >([]);
-  const [loading, setLoading] = useState(true);
-
   // Filters & Sort
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -40,9 +35,7 @@ export default function WiremanSuppliersPage() {
   // Dialogs
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(
-    null,
-  );
+  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
 
   // Form Data
   const [formData, setFormData] = useState<SupplierFormData>({
@@ -54,43 +47,22 @@ export default function WiremanSuppliersPage() {
     category: "",
     status: "Active",
     duePayment: 0,
-    // ✅ Automatically assign Wireman Business ID
     businessId: BUSINESS_IDS.WIREMAN_AGENCY,
   });
 
-  // --- 1. Fetch Suppliers (Filtered for Wireman) ---
-  const fetchSuppliers = useCallback(async () => {
-    try {
-      setLoading(true);
-      // ✅ Pass businessId param
-      const response = await fetch(
-        `/api/suppliers?businessId=${BUSINESS_IDS.WIREMAN_AGENCY}`,
-      );
-      if (!response.ok) throw new Error("Failed to fetch suppliers");
-      const data = await response.json();
-      setSuppliers(data);
-    } catch (error) {
-      toast.error("Error loading suppliers");
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const {
+    data: suppliers = [],
+    loading,
+    refetch: fetchSuppliers,
+  } = useCachedFetch<Supplier[]>(
+    `/api/suppliers?businessId=${BUSINESS_IDS.WIREMAN_AGENCY}`,
+    [],
+    () => toast.error("Error loading suppliers")
+  );
 
-  // --- 2. Fetch Categories ---
-  const fetchData = useCallback(async () => {
-    try {
-      const catRes = await fetch("/api/settings/categories?type=supplier");
-      if (catRes.ok) setCategoryOptions(await catRes.json());
-    } catch (error) {
-      console.error("Failed to fetch categories", error);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchSuppliers();
-    fetchData();
-  }, [fetchSuppliers, fetchData]);
+  const { data: categoryOptions = [] } = useCachedFetch<{ id: string; name: string }[]>(
+    "/api/settings/categories?type=supplier", []
+  );
 
   // --- Logic ---
   const availableCategories = [

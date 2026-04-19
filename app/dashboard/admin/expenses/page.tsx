@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useState, useMemo } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { Button } from "@/components/ui/button";
 import { Plus, TrendingDown } from "lucide-react";
 import { toast } from "sonner";
@@ -11,8 +12,6 @@ import { Expense, ExpenseFormData } from "./types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function ExpensesPage() {
-  const [loading, setLoading] = useState(true);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
@@ -23,23 +22,13 @@ export default function ExpensesPage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
-  const fetchExpenses = useCallback(async () => {
-    try {
-      setLoading(true);
-      const res = await fetch("/api/expenses");
-      if (!res.ok) throw new Error("Failed to load");
-      const data = await res.json();
-      setExpenses(data);
-    } catch (error) {
-      toast.error("Failed to load expenses");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchExpenses();
-  }, [fetchExpenses]);
+  const {
+    data: expenses = [],
+    loading,
+    refetch: fetchExpenses,
+  } = useCachedFetch<Expense[]>("/api/expenses", [], () =>
+    toast.error("Failed to load expenses")
+  );
 
   // --- Filter Logic ---
   const filteredExpenses = useMemo(() => {

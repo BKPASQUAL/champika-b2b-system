@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useRouter } from "next/navigation";
 import {
   Card,
@@ -34,26 +35,15 @@ import { toast } from "sonner";
 
 export default function DamageHistoryPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [damages, setDamages] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
 
-  useEffect(() => {
-    fetchDamages();
-  }, []);
-
-  const fetchDamages = async () => {
-    try {
-      const res = await fetch("/api/inventory/damage");
-      if (!res.ok) throw new Error("Failed to load damage history");
-      const data = await res.json();
-      setDamages(data);
-    } catch (error) {
-      toast.error("Error loading history");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const {
+    data: damages = [],
+    loading,
+    refetch: fetchDamages,
+  } = useCachedFetch<any[]>("/api/inventory/damage", [], () =>
+    toast.error("Error loading history")
+  );
 
   const filteredDamages = damages.filter(
     (item) =>

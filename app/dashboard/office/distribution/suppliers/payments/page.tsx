@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useMemo } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { DollarSign, Clock, Loader2, AlertCircle, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -102,23 +103,14 @@ const formatCurrency = (amount: number) => {
 export default function DistributionSupplierPaymentsPage() {
   const CURRENT_BUSINESS_ID = BUSINESS_IDS.CHAMPIKA_DISTRIBUTION;
 
-  const [unpaidPurchases, setUnpaidPurchases] = useState<Purchase[]>([]);
-  const [paymentHistory, setPaymentHistory] = useState<SupplierPayment[]>([]);
-  const [companyAccounts, setCompanyAccounts] = useState<CompanyAccount[]>([]);
-  const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const [isActionDialogOpen, setIsActionDialogOpen] = useState(false);
-  const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(
-    null
-  );
-  const [selectedPayment, setSelectedPayment] =
-    useState<SupplierPayment | null>(null);
-  const [actionType, setActionType] = useState<"passed" | "returned" | null>(
-    null
-  );
+  const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
+  const [selectedPayment, setSelectedPayment] = useState<SupplierPayment | null>(null);
+  const [actionType, setActionType] = useState<"passed" | "returned" | null>(null);
 
   const [paymentForm, setPaymentForm] = useState({
     amount: "",
@@ -130,51 +122,40 @@ export default function DistributionSupplierPaymentsPage() {
     notes: "",
   });
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      // ✅ FIX 1: Pass businessId to the API to get pre-filtered payments
-      const [purchasesRes, paymentsRes, accountsRes] = await Promise.all([
-        fetch("/api/purchases"),
-        fetch(`/api/suppliers/payments?businessId=${CURRENT_BUSINESS_ID}`),
-        fetch("/api/finance/accounts"),
-      ]);
+  const {
+    data: allPurchasesRaw = [],
+    loading: l1,
+    refetch: refetchPurchases,
+  } = useCachedFetch<Purchase[]>("/api/purchases", []);
 
-      // 1. Process Purchases
-      if (purchasesRes.ok) {
-        const allPurchases: Purchase[] = await purchasesRes.json();
-        const distributionPurchases = allPurchases.filter(
-          (p) => p.businessId === CURRENT_BUSINESS_ID
-        );
-        setUnpaidPurchases(
-          distributionPurchases.filter((p) => p.paymentStatus !== "Paid")
-        );
-      }
+  const {
+    data: paymentHistory = [],
+    loading: l2,
+    refetch: refetchPayments,
+  } = useCachedFetch<SupplierPayment[]>(
+    `/api/suppliers/payments?businessId=${CURRENT_BUSINESS_ID}`, []
+  );
 
-      // 2. Process Payments
-      if (paymentsRes.ok) {
-        const allPayments: SupplierPayment[] = await paymentsRes.json();
-        // ✅ FIX 2: Removed strict client-side ID filtering.
-        // We trust the backend `?businessId=` param or simply show what we received.
-        setPaymentHistory(allPayments);
-      }
+  const {
+    data: companyAccounts = [],
+    loading: l3,
+    refetch: refetchAccounts,
+  } = useCachedFetch<CompanyAccount[]>("/api/finance/accounts", []);
 
-      // 3. Process Accounts
-      if (accountsRes.ok) {
-        const allAccounts = await accountsRes.json();
-        setCompanyAccounts(allAccounts);
-      }
-    } catch (error) {
-      toast.error("Failed to load data");
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
+  const loading = l1 || l2 || l3;
+
+  const unpaidPurchases = useMemo(
+    () =>
+      allPurchasesRaw
+        .filter((p) => p.businessId === CURRENT_BUSINESS_ID && p.paymentStatus !== "Paid"),
+    [allPurchasesRaw, CURRENT_BUSINESS_ID]
+  );
+
+  const fetchData = () => {
+    refetchPurchases();
+    refetchPayments();
+    refetchAccounts();
   };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
 
   const openPaymentDialog = (purchase: Purchase) => {
     setSelectedPurchase(purchase);

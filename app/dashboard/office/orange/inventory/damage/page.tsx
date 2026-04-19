@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -27,29 +28,12 @@ import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 export default function OrangeDamageHistoryPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [damages, setDamages] = useState<any[]>([]);
+  const { data: damages = [], loading, refetch: fetchDamages } = useCachedFetch<any[]>(
+    `/api/inventory/damage?businessId=${BUSINESS_IDS.ORANGE_AGENCY}`,
+    [],
+    () => toast.error("Error loading history")
+  );
   const [searchQuery, setSearchQuery] = useState("");
-
-  useEffect(() => {
-    fetchDamages();
-  }, []);
-
-  const fetchDamages = async () => {
-    try {
-      // Pass businessId to filter specifically for Orange Agency
-      const res = await fetch(
-        `/api/inventory/damage?businessId=${BUSINESS_IDS.ORANGE_AGENCY}`
-      );
-      if (!res.ok) throw new Error("Failed to load damage history");
-      const data = await res.json();
-      setDamages(data);
-    } catch (error) {
-      toast.error("Error loading history");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const filteredDamages = damages.filter(
     (item) =>
