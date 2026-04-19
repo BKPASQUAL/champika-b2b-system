@@ -120,3 +120,30 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ── iOS PWA: fix Radix UI stuck scroll-lock ──────────────────────────────
+   On iOS Safari (standalone PWA mode), Radix Dialog/Sheet locks the body
+   via data-scroll-locked. If the component unmounts mid-animation (e.g.
+   during a Next.js client navigation), the lock is never removed, freezing
+   touch events on the new page. These rules make the lock recoverable and
+   ensure the unlocked state always allows full touch interaction.
+   ───────────────────────────────────────────────────────────────────────── */
+@supports (-webkit-touch-callout: none) {
+  /* When Radix scroll-lock is active, use position:fixed to prevent iOS
+     rubber-band scroll instead of relying solely on overflow:hidden */
+  body[data-scroll-locked] {
+    position: fixed;
+    width: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  /* Once the lock attribute is removed, immediately restore normal touch */
+  body:not([data-scroll-locked]) {
+    position: static;
+    overflow: auto;
+    overscroll-behavior: auto;
+    touch-action: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
