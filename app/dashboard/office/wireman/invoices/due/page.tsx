@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -70,9 +71,7 @@ export default function WiremanDueAlertsPage() {
 
   useEffect(() => {
     const user = getUserBusinessContext();
-    if (user && user.businessId) {
-      setCurrentBusinessId(user.businessId);
-    }
+    setCurrentBusinessId(user?.businessId ?? BUSINESS_IDS.WIREMAN_AGENCY);
   }, []);
 
   const fetchOverdueInvoices = useCallback(async () => {

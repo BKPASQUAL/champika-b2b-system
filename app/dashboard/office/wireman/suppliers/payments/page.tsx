@@ -44,6 +44,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 // --- Types ---
 interface CompanyAccount {
@@ -128,9 +129,7 @@ export default function WiremanSupplierPaymentsPage() {
   // 1. Initialize Business Context
   useEffect(() => {
     const user = getUserBusinessContext();
-    if (user && user.businessId) {
-      setCurrentBusinessId(user.businessId);
-    }
+    setCurrentBusinessId(user?.businessId ?? BUSINESS_IDS.WIREMAN_AGENCY);
   }, []);
 
   const fetchData = useCallback(async () => {

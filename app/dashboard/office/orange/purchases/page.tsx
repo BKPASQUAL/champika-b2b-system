@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 // Import the shared type and the Stats Component
 import { Purchase, PurchaseStatus, PaymentStatus } from "./types";
@@ -78,9 +79,7 @@ export default function OrelBillsPage() {
   // 1. Initialize User Context
   useEffect(() => {
     const user = getUserBusinessContext();
-    if (user && user.businessId) {
-      setCurrentBusinessId(user.businessId);
-    }
+    setCurrentBusinessId(user?.businessId ?? BUSINESS_IDS.ORANGE_AGENCY);
   }, []);
 
   // 2. Fetch Orel Corp Bills
