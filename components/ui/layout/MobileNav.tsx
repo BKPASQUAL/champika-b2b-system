@@ -59,6 +59,29 @@ export function MobileNav({
   const pathname = usePathname();
   const router = useRouter();
 
+  // Fix: iOS PWA — close sheet and restore body state on every route change.
+  // Radix Dialog applies scroll-lock styles (overflow:hidden, touch-action:none)
+  // to <body>. If Next.js navigates while the sheet is still animating closed,
+  // the component unmounts before Radix can clean up, leaving the page frozen.
+  useEffect(() => {
+    setIsOpen(false);
+    // Force-restore any stuck body styles from Radix's remove-scroll
+    document.body.removeAttribute("data-scroll-locked");
+    document.body.style.removeProperty("overflow");
+    document.body.style.removeProperty("pointer-events");
+    document.body.style.removeProperty("touch-action");
+  }, [pathname]);
+
+  // Also restore on unmount (e.g. layout changes)
+  useEffect(() => {
+    return () => {
+      document.body.removeAttribute("data-scroll-locked");
+      document.body.style.removeProperty("overflow");
+      document.body.style.removeProperty("pointer-events");
+      document.body.style.removeProperty("touch-action");
+    };
+  }, []);
+
   let navSections;
   if (isWireman)           navSections = wiremanOfficeNavItems;
   else if (isSierra)       navSections = sierraOfficeNavItems;

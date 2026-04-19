@@ -192,12 +192,12 @@ export default function CreateSierraPurchasePage() {
   // --- 1. Get User Context ---
   useEffect(() => {
     const user = getUserBusinessContext();
-    if (user && user.businessId) {
-      setCurrentBusinessId(user.businessId);
-      setCurrentBusinessName(user.businessName || "Sierra Agency");
-    } else {
-      toast.error("Business context not found. Please log in again.");
+    if (!user) {
+      toast.error("Session not found. Please log in again.");
       router.push("/login");
+    } else {
+      setCurrentBusinessId(user.businessId ?? BUSINESS_IDS.SIERRA_AGENCY);
+      setCurrentBusinessName(user.businessName ?? "Sierra Agency");
     }
   }, [router]);
 

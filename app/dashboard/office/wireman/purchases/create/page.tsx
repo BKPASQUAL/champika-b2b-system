@@ -188,12 +188,12 @@ export default function CreateWiremanPurchasePage() {
   // --- 1. Get User Context ---
   useEffect(() => {
     const user = getUserBusinessContext();
-    if (user && user.businessId) {
-      setCurrentBusinessId(user.businessId);
-      setCurrentBusinessName(user.businessName || "Wireman Agency");
-    } else {
-      toast.error("Business context not found. Please log in again.");
+    if (!user) {
+      toast.error("Session not found. Please log in again.");
       router.push("/login");
+    } else {
+      setCurrentBusinessId(user.businessId ?? BUSINESS_IDS.WIREMAN_AGENCY);
+      setCurrentBusinessName(user.businessName ?? "Wireman Agency");
     }
   }, [router]);
 

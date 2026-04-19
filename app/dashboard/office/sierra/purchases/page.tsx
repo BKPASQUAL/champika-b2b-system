@@ -16,6 +16,7 @@ import {
 import { Search, Filter, RefreshCw, Factory, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 import { Purchase, SortField, SortOrder } from "./types";
 import { PurchaseStats } from "./_components/PurchaseStats";
@@ -67,9 +68,7 @@ export default function SierraPurchasesPage() {
 
   useEffect(() => {
     const user = getUserBusinessContext();
-    if (user && user.businessId) {
-      setCurrentBusinessId(user.businessId);
-    }
+    setCurrentBusinessId(user?.businessId ?? BUSINESS_IDS.SIERRA_AGENCY);
   }, []);
 
   const fetchPurchases = useCallback(async () => {

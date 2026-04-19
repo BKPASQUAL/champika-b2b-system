@@ -21,7 +21,10 @@ export async function GET(request: NextRequest) {
         ),
         invoices (
           status,
-          invoice_no
+          invoice_no,
+          paid_amount,
+          due_amount,
+          total_amount
         ),
         order_items (
           id
@@ -55,14 +58,22 @@ export async function GET(request: NextRequest) {
       const repName = order.profiles?.full_name || "Unknown";
       const itemsCount = order.order_items?.length || 0;
 
+      const invoice = order.invoices?.[0];
+      const invoicePaidAmount = invoice?.paid_amount ?? 0;
+      const invoiceTotalAmount = invoice?.total_amount ?? order.total_amount ?? 0;
+      const invoiceDueAmount = invoice?.due_amount ?? (invoiceTotalAmount - invoicePaidAmount);
+
       return {
         id: order.id,
         orderId: order.order_id,
         invoiceNo: invoiceNumber, // Mapped Invoice Number
+        customerId: order.customer_id,
         customerName: order.customers?.owner_name || "Unknown",
         shopName: order.customers?.shop_name || "Unknown Shop",
         date: order.order_date,
-        totalAmount: order.total_amount,
+        totalAmount: invoiceTotalAmount,
+        paidAmount: invoicePaidAmount,
+        dueAmount: invoiceDueAmount,
         itemCount: itemsCount,
         status: order.status,
         paymentStatus: paymentStatus,

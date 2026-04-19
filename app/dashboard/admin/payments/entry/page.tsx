@@ -52,6 +52,13 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ClassificationModal } from "@/components/activity/ClassificationModal";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { BUSINESS_IDS, BUSINESS_NAMES } from "@/app/config/business-constants";
+
+// ─── Business options for admin selector ───────────────────────────────────────
+const BUSINESS_OPTIONS = Object.entries(BUSINESS_NAMES).map(([id, name]) => ({
+  id,
+  name,
+}));
 
 // ─── Local Helpers ─────────────────────────────────────────────────────────────
 
@@ -117,6 +124,9 @@ function StepBadge({ step, label }: { step: number; label: string }) {
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export default function AdminPaymentEntryPage() {
+  // Business filter (admin-only selector)
+  const [selectedBusinessId, setSelectedBusinessId] = useState<string>("");
+
   // Master data
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [banks, setBanks] = useState<Bank[]>([]);
@@ -124,7 +134,7 @@ export default function AdminPaymentEntryPage() {
   const [pendingInvoices, setPendingInvoices] = useState<PendingInvoice[]>([]);
 
   // Loading / submitting
-  const [loadingCustomers, setLoadingCustomers] = useState(true);
+  const [loadingCustomers, setLoadingCustomers] = useState(false);
   const [loadingBanks, setLoadingBanks] = useState(true);
   const [loadingAccounts, setLoadingAccounts] = useState(true);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
@@ -164,11 +174,24 @@ export default function AdminPaymentEntryPage() {
 
   // ── Data fetching ─────────────────────────────────────────────────────────────
 
+  // Re-fetch customers whenever the selected business changes
   useEffect(() => {
-    // Fetch only customers who have pending/due invoices
+    if (!selectedBusinessId) {
+      setCustomers([]);
+      setSelectedCustomerId("");
+      setPendingInvoices([]);
+      setSettlements({});
+      return;
+    }
+
     const fetchCustomers = async () => {
+      setLoadingCustomers(true);
+      setCustomers([]);
+      setSelectedCustomerId("");
+      setPendingInvoices([]);
+      setSettlements({});
       try {
-        const res = await fetch("/api/orders");
+        const res = await fetch(`/api/orders?businessId=${selectedBusinessId}`);
         const data = await res.json();
         if (res.ok) {
           const orders: any[] = Array.isArray(data) ? data : [];
@@ -200,6 +223,10 @@ export default function AdminPaymentEntryPage() {
       }
     };
 
+    fetchCustomers();
+  }, [selectedBusinessId]);
+
+  useEffect(() => {
     const fetchBanks = async () => {
       try {
         const res = await fetch("/api/finance/bank-codes");
@@ -232,7 +259,6 @@ export default function AdminPaymentEntryPage() {
       }
     };
 
-    fetchCustomers();
     fetchBanks();
     fetchAccounts();
   }, []);
@@ -278,8 +304,10 @@ export default function AdminPaymentEntryPage() {
         });
         setSettlements(map);
       } else {
-        // Fallback: fetch all orders and filter by customer
-        const fallbackRes = await fetch("/api/orders");
+        // Fallback: fetch orders filtered by business and customer
+        const qs = new URLSearchParams();
+        if (selectedBusinessId) qs.set("businessId", selectedBusinessId);
+        const fallbackRes = await fetch(`/api/orders?${qs.toString()}`);
         if (fallbackRes.ok) {
           const allOrders = await fallbackRes.json();
           const filtered = allOrders.filter(
@@ -291,10 +319,10 @@ export default function AdminPaymentEntryPage() {
           const invoices: PendingInvoice[] = filtered.map((o: any) => ({
             id: o.id,
             orderNumber: o.invoiceNo || o.orderId || o.order_number || o.id,
-            date: o.date || o.createdAt?.split("T")[0] || "",
+            date: o.date || o.order_date || o.createdAt?.split("T")[0] || "",
             totalAmount: o.totalAmount ?? 0,
             paidAmount: o.paidAmount ?? 0,
-            balance: o.dueAmount ?? o.totalAmount ?? 0,
+            balance: o.dueAmount ?? (o.totalAmount - (o.paidAmount ?? 0)) ?? 0,
           }));
           setPendingInvoices(invoices);
           const map: Record<string, InvoiceSettlement> = {};
@@ -313,7 +341,7 @@ export default function AdminPaymentEntryPage() {
     } finally {
       setLoadingInvoices(false);
     }
-  }, []);
+  }, [selectedBusinessId]);
 
   useEffect(() => {
     if (selectedCustomerId) {
@@ -561,6 +589,34 @@ export default function AdminPaymentEntryPage() {
         </div>
       </div>
 
+      {/* ── Business Selector ──────────────────────────────────────────── */}
+      <Card>
+        <CardContent className="pt-5 pb-4">
+          <div className="flex items-center gap-4">
+            <div className="space-y-1 flex-1 max-w-xs">
+              <Label>Business *</Label>
+              <Select value={selectedBusinessId} onValueChange={setSelectedBusinessId}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select a business…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {BUSINESS_OPTIONS.map((b) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      {b.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {selectedBusinessId && (
+              <p className="text-xs text-muted-foreground mt-5">
+                Showing customers &amp; invoices for this business only
+              </p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* ── SECTION 1: Payment Details ──────────────────────────────────── */}
       <Card>
         <CardHeader className="pb-3">
@@ -572,7 +628,7 @@ export default function AdminPaymentEntryPage() {
         <CardContent>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 
-            {/* Customer — ALL customers */}
+            {/* Customer — filtered by selected business */}
             <div className="space-y-2 sm:col-span-2 lg:col-span-1">
               <Label>Customer *</Label>
               <Popover open={customerOpen} onOpenChange={setCustomerOpen}>
@@ -582,13 +638,15 @@ export default function AdminPaymentEntryPage() {
                     role="combobox"
                     aria-expanded={customerOpen}
                     className="w-full justify-between font-normal"
-                    disabled={loadingCustomers}
+                    disabled={loadingCustomers || !selectedBusinessId}
                   >
                     {loadingCustomers ? (
                       <span className="flex items-center gap-2 text-muted-foreground">
                         <Loader2 className="h-3 w-3 animate-spin" />
                         Loading…
                       </span>
+                    ) : !selectedBusinessId ? (
+                      <span className="text-muted-foreground">Select a business first…</span>
                     ) : selectedCustomer ? (
                       <span className="truncate">{selectedCustomer.name}</span>
                     ) : (

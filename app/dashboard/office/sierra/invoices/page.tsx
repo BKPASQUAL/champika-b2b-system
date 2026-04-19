@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -85,9 +86,7 @@ export default function SierraInvoicesPage() {
   // 1. Initialize User Context
   useEffect(() => {
     const user = getUserBusinessContext();
-    if (user && user.businessId) {
-      setCurrentBusinessId(user.businessId);
-    }
+    setCurrentBusinessId(user?.businessId ?? BUSINESS_IDS.SIERRA_AGENCY);
   }, []);
 
   // 2. Fetch Invoices

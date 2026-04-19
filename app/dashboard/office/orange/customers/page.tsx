@@ -27,6 +27,7 @@ import {
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 // Import local components and types
 import { Customer, SortField, SortOrder, CustomerFormData } from "./types";
@@ -72,10 +73,9 @@ export default function AgencyCustomersPage() {
   // 1. Initialize User Context Safely (Prevents Loop)
   useEffect(() => {
     const user = getUserBusinessContext();
-    if (user && user.businessId) {
-      setCurrentBusinessId(user.businessId);
-      setFormData((prev) => ({ ...prev, businessId: user.businessId! }));
-    }
+    const resolvedId = user?.businessId ?? BUSINESS_IDS.ORANGE_AGENCY;
+    setCurrentBusinessId(resolvedId);
+    setFormData((prev) => ({ ...prev, businessId: resolvedId }));
   }, []);
 
   // 2. Fetch Customers (Depends only on currentBusinessId)

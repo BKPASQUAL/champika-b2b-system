@@ -51,6 +51,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat("en-LK", { style: "currency", currency: "LKR", minimumFractionDigits: 2 }).format(amount);
@@ -98,7 +99,7 @@ export default function SierraPaymentEntryPage() {
 
   useEffect(() => {
     const user = getUserBusinessContext();
-    if (user?.businessId) setBusinessId(user.businessId);
+    setBusinessId(user?.businessId ?? BUSINESS_IDS.SIERRA_AGENCY);
   }, []);
 
   useEffect(() => {

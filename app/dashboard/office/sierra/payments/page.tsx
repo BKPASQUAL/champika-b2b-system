@@ -15,6 +15,7 @@ import {
 import { Search, Plus, RefreshCw, Filter } from "lucide-react";
 import { toast } from "sonner";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 // Local Imports
 import { Payment, SortField, SortOrder } from "./types";
@@ -50,9 +51,7 @@ export default function SierraPaymentsPage() {
 
   useEffect(() => {
     const user = getUserBusinessContext();
-    if (user && user.businessId) {
-      setCurrentBusinessId(user.businessId);
-    }
+    setCurrentBusinessId(user?.businessId ?? BUSINESS_IDS.SIERRA_AGENCY);
   }, []);
 
   const fetchPayments = useCallback(async () => {

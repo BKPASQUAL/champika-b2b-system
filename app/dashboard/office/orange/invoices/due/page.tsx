@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 import { toast } from "sonner";
 
 // --- Types ---
@@ -66,9 +67,7 @@ export default function OrangeDueAlertsPage() {
   // 1. Initialize User Context
   useEffect(() => {
     const user = getUserBusinessContext();
-    if (user && user.businessId) {
-      setCurrentBusinessId(user.businessId);
-    }
+    setCurrentBusinessId(user?.businessId ?? BUSINESS_IDS.ORANGE_AGENCY);
   }, []);
 
   // 2. Fetch Invoices & Calculate Overdue
