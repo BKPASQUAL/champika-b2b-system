@@ -151,6 +151,66 @@ export const generateInvoicePdfBlob = async (
   throw lastError;
 };
 
+// ── Share Invoice PDF ───────────────────────────────────────────────────────
+// Handles iOS PWA (user-gesture loss after async), Android Chrome, and desktop.
+// Strategy:
+//   1. Try Web Share API with the PDF file
+//   2. If share throws (iOS PWA gesture loss), open the blob URL in a new tab
+//      so the user can share from the browser's native UI
+//   3. On desktop (no share API), trigger download
+export const shareInvoice = async (
+  id: string,
+  divisionKey: keyof typeof DIVISIONS,
+  invoiceNo: string,
+  onLoadingChange?: (loading: boolean) => void
+) => {
+  onLoadingChange?.(true);
+  const tid = toast.loading("Generating PDF…");
+  try {
+    const { blob, filename } = await generateInvoicePdfBlob(id, divisionKey);
+    toast.dismiss(tid);
+
+    // Desktop fallback — no Share API
+    if (!navigator.share) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      toast.success("PDF downloaded");
+      return;
+    }
+
+    const file = new File([blob], filename, { type: "application/pdf" });
+    const canShareFile = navigator.canShare?.({ files: [file] }) ?? false;
+
+    try {
+      if (canShareFile) {
+        await navigator.share({ files: [file], title: filename });
+      } else {
+        await navigator.share({ title: filename, text: `Invoice ${invoiceNo}` });
+      }
+    } catch (shareErr: any) {
+      if (shareErr?.name === "AbortError") return; // User cancelled — not an error
+
+      // iOS PWA: gesture context lost after async PDF fetch — open PDF in new tab
+      // so the user can share from Safari's native share button
+      const blobUrl = URL.createObjectURL(blob);
+      window.open(blobUrl, "_blank");
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+      toast.info("PDF opened — use your browser's share button to send it");
+    }
+  } catch (err: any) {
+    toast.dismiss(tid);
+    toast.error("Failed to generate PDF");
+  } finally {
+    onLoadingChange?.(false);
+  }
+};
+
 // ── Download — auto-saves PDF, pixel-identical to Print ────────────────────
 export const downloadInvoice = async (
   invoiceOrId: string | any,

@@ -53,7 +53,7 @@ import {
 
 // Import the updated print utils
 import { downloadInvoice, printInvoice } from "../print-utils";
-import { generateInvoicePdfBlob } from "@/app/lib/invoice-print";
+import { shareInvoice } from "@/app/lib/invoice-print";
 import { DocumentAttachments } from "@/components/ui/DocumentAttachments";
 
 import { toast } from "sonner";
@@ -165,35 +165,8 @@ export default function DistributionViewInvoicePage({
     }
   };
 
-  const handleSharePdf = async () => {
-    setSharing(true);
-    const tid = toast.loading("Generating PDF…");
-    try {
-      const { blob, filename } = await generateInvoicePdfBlob(id, "distribution");
-      toast.dismiss(tid);
-      const file = new File([blob], filename, { type: "application/pdf" });
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title: filename });
-      } else if (navigator.share) {
-        // Fallback: share without file (just title + text)
-        await navigator.share({ title: filename, text: `Invoice ${invoice?.invoiceNo || ""}` });
-      } else {
-        // Desktop fallback: trigger download
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(url);
-        toast.success("PDF downloaded");
-      }
-    } catch (err: any) {
-      toast.dismiss(tid);
-      if (err?.name !== "AbortError") toast.error("Share failed");
-    } finally {
-      setSharing(false);
-    }
-  };
+  const handleSharePdf = () =>
+    shareInvoice(id, "distribution", invoice?.invoiceNo || "", setSharing);
 
   const getInitials = (name: string) => {
     return name

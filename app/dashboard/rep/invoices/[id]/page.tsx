@@ -43,7 +43,7 @@ import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { printInvoice, downloadInvoice, generateInvoicePdfBlob } from "@/app/lib/invoice-print";
+import { printInvoice, downloadInvoice, shareInvoice } from "@/app/lib/invoice-print";
 
 interface PaymentRecord {
   id: string;
@@ -91,33 +91,8 @@ export default function RepInvoiceDetailPage({
     fetchInvoice();
   }, [id, router]);
 
-  const handleSharePdf = async () => {
-    setSharing(true);
-    const tid = toast.loading("Generating PDF…");
-    try {
-      const { blob, filename } = await generateInvoicePdfBlob(id, "distribution");
-      toast.dismiss(tid);
-      const file = new File([blob], filename, { type: "application/pdf" });
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title: filename });
-      } else if (navigator.share) {
-        await navigator.share({ title: filename, text: `Invoice ${invoice?.invoiceNo || ""}` });
-      } else {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(url);
-        toast.success("PDF downloaded");
-      }
-    } catch (err: any) {
-      toast.dismiss(tid);
-      if (err?.name !== "AbortError") toast.error("Share failed");
-    } finally {
-      setSharing(false);
-    }
-  };
+  const handleSharePdf = () =>
+    shareInvoice(id, "distribution", invoice?.invoiceNo || "", setSharing);
 
   const getInitials = (name: string) =>
     (name || "?")
