@@ -89,6 +89,14 @@ export async function POST(request: NextRequest) {
 
       const { id: _, created_at: __, ...sourceProductDataWithoutId } = sourceP;
 
+      const newCostPrice = sourceP.cost_price 
+        ? parseFloat(((sourceP.cost_price * sourceQuantity) / targetQuantity).toFixed(2))
+        : 0;
+      
+      const newMrp = sourceP.mrp 
+        ? parseFloat(((sourceP.mrp * sourceQuantity) / targetQuantity).toFixed(2))
+        : newProductDetails.sellingPrice;
+
       const { data: newTargetProduct, error: newProductError } = await supabaseAdmin
         .from("products")
         .insert({
@@ -97,6 +105,9 @@ export async function POST(request: NextRequest) {
           name: newProductDetails.name.trim(),
           unit_of_measure: newProductDetails.unitOfMeasure,
           selling_price: newProductDetails.sellingPrice,
+          company_code: null,
+          cost_price: newCostPrice,
+          mrp: newMrp,
           stock_quantity: 0, 
         })
         .select("id")

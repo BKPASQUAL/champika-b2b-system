@@ -12,6 +12,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import { Loader2, ArrowRight } from "lucide-react";
 import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
@@ -44,8 +51,9 @@ export function StockConversionModal({
   // New Target Product State
   const [createNew, setCreateNew] = useState(false);
   const [newProductName, setNewProductName] = useState("");
-  const [newUnit, setNewUnit] = useState("Meter");
+  const [newUnit, setNewUnit] = useState("");
   const [newPrice, setNewPrice] = useState<number | "">("");
+  const [packSizes, setPackSizes] = useState<{id: string, name: string}[]>([]);
 
   // Fetch target products
   useEffect(() => {
@@ -70,8 +78,20 @@ export function StockConversionModal({
           setLoadingProducts(false);
         }
       };
+
+      const fetchPackSizes = async () => {
+        try {
+          const res = await fetch("/api/settings/categories?type=pack_size");
+          if (!res.ok) throw new Error("Failed to fetch");
+          const data = await res.json();
+          setPackSizes(data);
+        } catch (error) {
+          console.error("Failed to load pack sizes", error);
+        }
+      };
       
       fetchProducts();
+      fetchPackSizes();
       
       // Reset form
       setTargetProductId("");
@@ -221,7 +241,18 @@ export function StockConversionModal({
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <Label className="text-xs">Unit</Label>
-                      <Input placeholder="e.g. Meter" value={newUnit} onChange={e => setNewUnit(e.target.value)} />
+                      <Select value={newUnit} onValueChange={setNewUnit}>
+                        <SelectTrigger className="w-full h-9">
+                          <SelectValue placeholder="Select Unit" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-[200px]">
+                          {packSizes.map((ps) => (
+                            <SelectItem key={ps.id} value={ps.name}>
+                              {ps.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs">Selling Price (LKR)</Label>
