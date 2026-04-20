@@ -35,6 +35,8 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { SupplierDialogs } from "@/app/dashboard/admin/suppliers/_components/SupplierDialogs";
 import { SupplierFormData } from "@/app/dashboard/admin/suppliers/types";
+import { ProductDialogs } from "@/app/dashboard/admin/products/_components/ProductDialogs";
+import { ProductFormData } from "@/app/dashboard/admin/products/types";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 // --- Types ---
@@ -93,6 +95,32 @@ export default function CreatePurchasePage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [businesses, setBusinesses] = useState<Business[]>([]);
+
+  // Inline Product Creation State
+  const [isAddProductDialogOpen, setIsAddProductDialogOpen] = useState(false);
+  const [productFormData, setProductFormData] = useState<ProductFormData>({
+    sku: "",
+    companyCode: "",
+    name: "",
+    category: "",
+    subCategory: "",
+    brand: "",
+    subBrand: "",
+    modelType: "",
+    subModel: "",
+    sizeSpec: "",
+    supplier: "",
+    stock: "0",
+    minStock: "0",
+    mrp: "",
+    sellingPrice: "",
+    costPrice: "",
+    images: [],
+    unitOfMeasure: "Pcs",
+    isActive: true,
+  });
+  const [submittingProduct, setSubmittingProduct] = useState(false);
+  const [categories, setCategories] = useState<{ id: string; name: string; parent_id?: string }[]>([]);
 
   // Inline Supplier Creation State
   const [isAddSupplierDialogOpen, setIsAddSupplierDialogOpen] = useState(false);
@@ -161,15 +189,17 @@ export default function CreatePurchasePage() {
   const loadData = async () => {
     setLoadingData(true);
     try {
-      const [prodRes, supRes, bizRes] = await Promise.all([
+      const [prodRes, supRes, bizRes, catRes] = await Promise.all([
         fetch("/api/products?active=true"),
         fetch("/api/suppliers"),
         fetch("/api/settings/business"),
+        fetch("/api/settings/categories?type=category"),
       ]);
 
       if (prodRes.ok) setProducts(await prodRes.json());
       if (supRes.ok) setSuppliers(await supRes.json());
       if (bizRes.ok) setBusinesses(await bizRes.json());
+      if (catRes.ok) setCategories(await catRes.json());
     } catch (error) {
       toast.error("Failed to load initial data");
     } finally {
@@ -385,6 +415,64 @@ export default function CreatePurchasePage() {
     }
   };
 
+  // --- Create Product inline ---
+  const handleCreateProduct = async () => {
+    if (!productFormData.name || !productFormData.category) {
+      toast.error("Please fill required fields (Name, Category)");
+      return;
+    }
+
+    setSubmittingProduct(true);
+    const payload = {
+      ...productFormData,
+      supplier: productFormData.supplier || selectedSupplier?.name || "",
+      stock: Number(productFormData.stock) || 0,
+      minStock: Number(productFormData.minStock) || 0,
+      mrp: Number(productFormData.mrp) || 0,
+      sellingPrice: Number(productFormData.sellingPrice) || 0,
+      costPrice: Number(productFormData.costPrice) || 0,
+    };
+
+    try {
+      const res = await fetch("/api/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Operation failed");
+
+      toast.success("Product created successfully!");
+      setIsAddProductDialogOpen(false);
+      setProductFormData({
+        sku: "",
+        companyCode: "",
+        name: "",
+        category: "",
+        subCategory: "",
+        brand: "",
+        subBrand: "",
+        modelType: "",
+        subModel: "",
+        sizeSpec: "",
+        supplier: selectedSupplier?.name || "",
+        stock: "0",
+        minStock: "0",
+        mrp: "",
+        sellingPrice: "",
+        costPrice: "",
+        images: [],
+        unitOfMeasure: "Pcs",
+        isActive: true,
+      });
+      await loadData();
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setSubmittingProduct(false);
+    }
+  };
+
   // --- Create Supplier inline ---
   const handleCreateSupplier = async () => {
     if (!supplierFormData.name) {
@@ -578,15 +666,29 @@ export default function CreatePurchasePage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Add Items</CardTitle>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={loadData}
-                className="text-xs"
-                type="button"
-              >
-                <RefreshCcw className="w-3 h-3 mr-1" /> Refresh
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setProductFormData((prev) => ({ ...prev, supplier: selectedSupplier?.name || "" }));
+                    setIsAddProductDialogOpen(true);
+                  }}
+                  className="text-xs border-dashed"
+                  type="button"
+                >
+                  <Plus className="w-3 h-3 mr-1" /> New Item
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={loadData}
+                  className="text-xs"
+                  type="button"
+                >
+                  <RefreshCcw className="w-3 h-3 mr-1" /> Refresh
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -952,6 +1054,19 @@ export default function CreatePurchasePage() {
         </div>
       </div>
 
+      <ProductDialogs
+        isAddDialogOpen={isAddProductDialogOpen}
+        setIsAddDialogOpen={setIsAddProductDialogOpen}
+        formData={productFormData}
+        setFormData={setProductFormData}
+        onSave={handleCreateProduct}
+        selectedProduct={null}
+        isDeleteDialogOpen={false}
+        setIsDeleteDialogOpen={() => {}}
+        onDeleteConfirm={() => {}}
+        suppliers={suppliers}
+        categories={categories}
+      />
       <SupplierDialogs
         isAddDialogOpen={isAddSupplierDialogOpen}
         setIsAddDialogOpen={setIsAddSupplierDialogOpen}
