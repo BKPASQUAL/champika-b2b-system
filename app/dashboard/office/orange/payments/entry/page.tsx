@@ -279,7 +279,7 @@ export default function OrangePaymentEntryPage() {
             <div className="space-y-2">
               <Label>Payment Method *</Label>
               <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as PaymentMethod)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="cash">Cash</SelectItem>
                   <SelectItem value="bank">Bank Transfer</SelectItem>
@@ -352,7 +352,7 @@ export default function OrangePaymentEntryPage() {
               <div className="space-y-2">
                 <Label>{paymentMethod === "cash" ? "Cash Account" : "Bank Account"} *</Label>
                 <Select value={selectedAccountId} onValueChange={setSelectedAccountId} disabled={loadingAccounts}>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     {loadingAccounts ? <span className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" />Loading…</span> : <SelectValue placeholder="Select account…" />}
                   </SelectTrigger>
                   <SelectContent>
