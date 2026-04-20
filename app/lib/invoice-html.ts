@@ -94,7 +94,7 @@ export const generateInvoiceHTML = async (
     <table style="width:100%;border-collapse:collapse;margin-bottom:0;">
       <tr>
         <td style="vertical-align:top;width:60%;">
-          <div style="font-size:18px;font-weight:800;color:#000;letter-spacing:-0.3px;line-height:1.1;">CHAMPIKA HARDWARE</div>
+          <div style="font-size:24px;font-weight:800;color:#000;letter-spacing:-0.3px;line-height:1.1;">CHAMPIKA HARDWARE</div>
           <div style="font-size:10px;color:#333;margin-top:2px;line-height:1.5;">
             ${cfg.division}<br>${cfg.address}<br>Tel: ${cfg.tel}
           </div>
