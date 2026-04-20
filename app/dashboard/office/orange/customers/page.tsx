@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import {
   Download,
@@ -217,34 +217,36 @@ export default function AgencyCustomersPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+    <div className="space-y-4 sm:space-y-6">
+      {/* Page Header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-orange-900">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-orange-900">
             Distributors & Shops
           </h1>
-          <p className="text-muted-foreground mt-1">
+          <p className="text-muted-foreground text-sm mt-0.5">
             Manage distribution customer database
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button
             variant="outline"
             size="icon"
             onClick={fetchCustomers}
             disabled={loading}
+            title="Refresh"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline">
-                <Download className="w-4 h-4 mr-2" /> Export
+              <Button variant="outline" size="sm">
+                <Download className="w-4 h-4 mr-1.5" /> Export
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={generateExcel}>
-                <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" />{" "}
+                <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" />
                 Export Excel
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -255,27 +257,31 @@ export default function AgencyCustomersPage() {
               setIsAddDialogOpen(true);
             }}
             className="bg-orange-600 hover:bg-orange-700"
+            size="sm"
           >
-            <Plus className="w-4 h-4 mr-2" /> Add Customer
+            <Plus className="w-4 h-4 mr-1.5" /> Add Customer
           </Button>
         </div>
       </div>
 
       <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="flex-1 max-w-sm relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <CardHeader className="pb-3 px-3 sm:px-6">
+          {/* Mobile: search row 1, dropdowns row 2 — Desktop: all one row */}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            {/* Row 1 (mobile) / Left side (desktop): Search */}
+            <div className="relative w-full sm:flex-1 sm:min-w-0">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
               <Input
-                placeholder="Search..."
+                placeholder="Search shop, owner, phone…"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
+                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                className="pl-9 h-9 text-sm w-full"
               />
             </div>
+            {/* Row 2 (mobile) / Right side (desktop): Dropdowns + count */}
             <div className="flex items-center gap-2">
-              <Select value={routeFilter} onValueChange={setRouteFilter}>
-                <SelectTrigger className="w-[180px]">
+              <Select value={routeFilter} onValueChange={(v) => { setRouteFilter(v); setCurrentPage(1); }}>
+                <SelectTrigger className="flex-1 sm:flex-none sm:w-[140px] h-9 text-sm">
                   <SelectValue placeholder="Route" />
                 </SelectTrigger>
                 <SelectContent>
@@ -286,6 +292,19 @@ export default function AgencyCustomersPage() {
                   ))}
                 </SelectContent>
               </Select>
+              <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setCurrentPage(1); }}>
+                <SelectTrigger className="flex-1 sm:flex-none sm:w-[130px] h-9 text-sm">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="Active">Active</SelectItem>
+                  <SelectItem value="Inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+              <span className="text-xs text-muted-foreground whitespace-nowrap hidden sm:inline">
+                {sortedCustomers.length} found
+              </span>
             </div>
           </div>
         </CardHeader>

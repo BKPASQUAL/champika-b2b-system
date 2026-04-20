@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import Link from "next/link";
 import {
@@ -24,6 +24,8 @@ import {
   Loader2,
   Wallet,
   Clock,
+  RefreshCw,
+  PlusCircle,
 } from "lucide-react";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
@@ -93,183 +95,182 @@ export default function OrangeDashboardPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center py-16">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="flex justify-center items-center py-24">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-9 w-9 animate-spin text-orange-500" />
+          <p className="text-sm text-muted-foreground">Loading dashboard…</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 px-1 sm:px-0">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
             Agency Overview
           </h1>
-          <p className="text-slate-500 mt-1 flex items-center gap-2">
-            <TrendingUp className="h-4 w-4" />
-            {businessName || "Orange Agency"} •{" "}
-            {new Date().toLocaleDateString()}
+          <p className="text-slate-500 mt-1 text-sm flex items-center gap-1.5">
+            <TrendingUp className="h-3.5 w-3.5" />
+            {businessName || "Orange Agency"} &bull;{" "}
+            {new Date().toLocaleDateString("en-US", { weekday: "short", year: "numeric", month: "short", day: "numeric" })}
           </p>
         </div>
         <div className="flex gap-2">
-          <Link href="/dashboard/office/orange/invoices/create">
-            <Button className="bg-orange-600 hover:bg-orange-700 text-white">
-              + New Invoice
+          <Link href="/dashboard/office/orange/invoices/create" className="flex-1 sm:flex-none">
+            <Button className="bg-orange-600 hover:bg-orange-700 text-white w-full sm:w-auto gap-1.5">
+              <PlusCircle className="h-4 w-4" />
+              New Invoice
             </Button>
           </Link>
-          <Button variant="outline" onClick={fetchDashboardData}>
-            Refresh
+          <Button variant="outline" onClick={fetchDashboardData} size="icon" title="Refresh">
+            <RefreshCw className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {/* 1. Today's Sales */}
+      {/* KPI Cards — 2 per row on mobile/tablet, 4 on desktop */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        {/* Today's Sales */}
         <Card className="border-l-4 border-l-green-500 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Today's Sales</CardTitle>
-            <ShoppingCart className="h-4 w-4 text-green-600" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3 px-3 sm:px-6 sm:pt-4">
+            <CardTitle className="text-xs sm:text-sm font-medium text-slate-600">Today&apos;s Sales</CardTitle>
+            <div className="p-1.5 bg-green-100 rounded-md">
+              <ShoppingCart className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-600" />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-700">
+          <CardContent className="px-3 pb-3 sm:px-6 sm:pb-4">
+            <div className="text-lg sm:text-2xl font-bold text-green-700">
               LKR {(data.stats.todaySales / 1000).toFixed(1)}k
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {data.stats.todaySalesCount} invoices generated
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {data.stats.todaySalesCount} invoice{data.stats.todaySalesCount !== 1 ? "s" : ""} today
             </p>
           </CardContent>
         </Card>
 
-        {/* 2. Customer Due (Receivables) */}
+        {/* Customer Dues */}
         <Link href="/dashboard/office/orange/invoices/due">
-          <Card className="hover:shadow-md transition-shadow cursor-pointer border-l-4 border-l-red-500 bg-red-50/10">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-red-700">
-                Customer Dues
-              </CardTitle>
-              <AlertCircle className="h-4 w-4 text-red-600" />
+          <Card className="hover:shadow-md transition-shadow cursor-pointer border-l-4 border-l-red-500 bg-red-50/20 h-full">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3 px-3 sm:px-6 sm:pt-4">
+              <CardTitle className="text-xs sm:text-sm font-medium text-red-700">Customer Dues</CardTitle>
+              <div className="p-1.5 bg-red-100 rounded-md">
+                <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-red-600" />
+              </div>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-red-700">
+            <CardContent className="px-3 pb-3 sm:px-6 sm:pb-4">
+              <div className="text-lg sm:text-2xl font-bold text-red-700">
                 LKR {(data.stats.dueInvoicesAmount / 1000).toFixed(1)}k
               </div>
-              <p className="text-xs text-red-600/80 mt-1">
-                {data.stats.dueInvoicesCount} invoices pending
+              <p className="text-xs text-red-500 mt-0.5">
+                {data.stats.dueInvoicesCount} pending
               </p>
             </CardContent>
           </Card>
         </Link>
 
-        {/* 3. Supplier Payables (Orel) */}
+        {/* Payable to Orel */}
         <Link href="/dashboard/office/orange/purchases">
-          <Card className="hover:shadow-md transition-shadow cursor-pointer border-l-4 border-l-blue-500">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Payable to Orel
-              </CardTitle>
-              <Factory className="h-4 w-4 text-blue-600" />
+          <Card className="hover:shadow-md transition-shadow cursor-pointer border-l-4 border-l-blue-500 h-full">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3 px-3 sm:px-6 sm:pt-4">
+              <CardTitle className="text-xs sm:text-sm font-medium text-slate-600 leading-tight">Payable to Orel</CardTitle>
+              <div className="p-1.5 bg-blue-100 rounded-md">
+                <Factory className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-600" />
+              </div>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-blue-700">
+            <CardContent className="px-3 pb-3 sm:px-6 sm:pb-4">
+              <div className="text-lg sm:text-2xl font-bold text-blue-700">
                 LKR {(data.stats.supplierDueAmount / 1000).toFixed(1)}k
               </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Outstanding bills balance
-              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">Outstanding balance</p>
             </CardContent>
           </Card>
         </Link>
 
-        {/* 4. Low Stock */}
+        {/* Low Stock */}
         <Link href="/dashboard/office/orange/inventory">
-          <Card className="hover:shadow-md transition-shadow cursor-pointer border-l-4 border-l-amber-500">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Low Stock</CardTitle>
-              <Package className="h-4 w-4 text-amber-600" />
+          <Card className="hover:shadow-md transition-shadow cursor-pointer border-l-4 border-l-amber-500 h-full">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3 px-3 sm:px-6 sm:pt-4">
+              <CardTitle className="text-xs sm:text-sm font-medium text-slate-600">Low Stock</CardTitle>
+              <div className="p-1.5 bg-amber-100 rounded-md">
+                <Package className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-600" />
+              </div>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-amber-700">
+            <CardContent className="px-3 pb-3 sm:px-6 sm:pb-4">
+              <div className="text-lg sm:text-2xl font-bold text-amber-700">
                 {data.stats.lowStockCount}
               </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Items below reorder level
-              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">Below reorder level</p>
             </CardContent>
           </Card>
         </Link>
       </div>
 
-      {/* Main Content Areas */}
-      <div className="grid gap-6 md:grid-cols-7">
-        {/* Left Column: Recent Invoices (Wide) */}
-        <Card className="md:col-span-4 lg:col-span-5">
-          <CardHeader>
+      {/* Main Content — stacked on mobile/tablet, side-by-side on desktop */}
+      <div className="grid gap-5 lg:grid-cols-7">
+        {/* Recent Invoices */}
+        <Card className="lg:col-span-5">
+          <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Banknote className="h-5 w-5 text-slate-500" />
+                <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                  <Banknote className="h-4 w-4 sm:h-5 sm:w-5 text-slate-500" />
                   Recent Invoices
                 </CardTitle>
-                <CardDescription>
-                  Latest customer billing activity.
+                <CardDescription className="text-xs sm:text-sm mt-0.5">
+                  Latest customer billing activity
                 </CardDescription>
               </div>
               <Link href="/dashboard/office/orange/invoices">
-                <Button variant="ghost" size="sm">
-                  View All &rarr;
+                <Button variant="ghost" size="sm" className="text-xs sm:text-sm gap-1">
+                  View All <ArrowUpRight className="h-3 w-3" />
                 </Button>
               </Link>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-3 sm:px-6">
             {data.recentInvoices.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground bg-slate-50 rounded-lg border border-dashed">
+              <div className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground bg-slate-50 rounded-lg border border-dashed">
                 <Wallet className="h-10 w-10 mb-2 opacity-20" />
-                <p>No invoices recorded yet.</p>
+                <p className="text-sm">No invoices recorded yet.</p>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-2.5">
                 {data.recentInvoices.map((inv: any) => (
                   <div
                     key={inv.id}
-                    className="flex items-center justify-between p-4 bg-white border rounded-lg hover:bg-slate-50 transition-colors"
+                    className="flex items-center gap-3 p-3 sm:p-4 bg-white border rounded-lg hover:bg-slate-50 transition-colors"
                   >
-                    <div className="flex items-start gap-3">
-                      <div className="p-2 bg-green-100 rounded text-green-700">
-                        <Banknote className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-slate-900">
-                          {inv.customerName || "Walking Customer"}
-                        </p>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground mt-0.5">
-                          <span className="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">
-                            {inv.invoiceNo}
-                          </span>
-                          <span>
-                            •{" "}
-                            {inv.date
-                              ? new Date(inv.date).toLocaleDateString()
-                              : "-"}
-                          </span>
-                        </div>
+                    <div className="p-2 bg-green-100 rounded-md text-green-700 shrink-0">
+                      <Banknote className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-slate-900 text-sm truncate">
+                        {inv.customerName || "Walking Customer"}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                        <span className="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">
+                          {inv.invoiceNo}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {inv.date ? new Date(inv.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "-"}
+                        </span>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-bold text-slate-900">
-                        LKR {inv.finalAmount?.toLocaleString()}
+                    <div className="text-right shrink-0">
+                      <p className="font-bold text-slate-900 text-sm">
+                        LKR {inv.finalAmount?.toLocaleString() ?? "-"}
                       </p>
                       <Badge
                         variant="outline"
                         className={
                           inv.paymentStatus === "Paid"
-                            ? "text-green-600 border-green-200 bg-green-50"
+                            ? "text-green-600 border-green-200 bg-green-50 text-xs"
                             : inv.paymentStatus === "Unpaid"
-                            ? "text-red-600 border-red-200 bg-red-50"
-                            : "text-amber-600 border-amber-200 bg-amber-50"
+                            ? "text-red-600 border-red-200 bg-red-50 text-xs"
+                            : "text-amber-600 border-amber-200 bg-amber-50 text-xs"
                         }
                       >
                         {inv.paymentStatus}
@@ -282,41 +283,39 @@ export default function OrangeDashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Right Column: Urgent Alerts (Narrow) */}
-        <div className="md:col-span-3 lg:col-span-2 space-y-6">
-          {/* Urgent Collections */}
+        {/* Right Column: Alerts + Quick Actions */}
+        <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-5">
+          {/* High Value Due */}
           <Card className="border-red-200 shadow-sm">
-            <CardHeader className="bg-red-50/50 pb-3">
-              <CardTitle className="text-base flex items-center gap-2 text-red-800">
+            <CardHeader className="bg-red-50/60 pb-2 pt-3 px-4 rounded-t-lg">
+              <CardTitle className="text-sm flex items-center gap-2 text-red-800">
                 <Clock className="h-4 w-4" />
                 High Value Due
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-4">
+            <CardContent className="pt-3 px-4 pb-3">
               {data.urgentDueInvoices.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">
+                <p className="text-xs text-muted-foreground text-center py-4">
                   No major dues pending.
                 </p>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2.5">
                   {data.urgentDueInvoices.map((inv: any) => (
                     <div
                       key={inv.id}
                       className="flex items-center justify-between border-b pb-2 last:border-0 last:pb-0"
                     >
-                      <div className="overflow-hidden">
-                        <p className="text-sm font-medium truncate w-28">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">
                           {inv.customerName}
                         </p>
                         <p className="text-xs text-red-500 font-mono">
                           {inv.invoiceNo}
                         </p>
                       </div>
-                      <div className="text-right">
-                        <span className="text-sm font-bold text-red-700">
-                          {(inv.dueAmount / 1000).toFixed(1)}k
-                        </span>
-                      </div>
+                      <span className="text-sm font-bold text-red-700 ml-2 shrink-0">
+                        LKR {(inv.dueAmount / 1000).toFixed(1)}k
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -325,9 +324,9 @@ export default function OrangeDashboardPage() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="w-full mt-3 text-red-600 hover:text-red-700 hover:bg-red-50"
+                  className="w-full mt-3 text-red-600 hover:text-red-700 hover:bg-red-50 text-xs"
                 >
-                  View All Dues
+                  View All Dues →
                 </Button>
               </Link>
             </CardContent>
@@ -335,27 +334,27 @@ export default function OrangeDashboardPage() {
 
           {/* Quick Actions */}
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-slate-500">
+            <CardHeader className="pb-2 pt-3 px-4">
+              <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
                 Quick Actions
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
-              <Link href="/dashboard/office/orange/payments">
-                <Button variant="outline" className="w-full justify-start">
-                  <ArrowDownRight className="mr-2 h-4 w-4 text-green-600" />
+            <CardContent className="space-y-2 px-4 pb-4">
+              <Link href="/dashboard/office/orange/payments/entry">
+                <Button variant="outline" className="w-full justify-start text-sm gap-2">
+                  <ArrowDownRight className="h-4 w-4 text-green-600 shrink-0" />
                   Receive Payment
                 </Button>
               </Link>
               <Link href="/dashboard/office/orange/suppliers/payments">
-                <Button variant="outline" className="w-full justify-start">
-                  <ArrowUpRight className="mr-2 h-4 w-4 text-red-600" />
+                <Button variant="outline" className="w-full justify-start text-sm gap-2">
+                  <ArrowUpRight className="h-4 w-4 text-red-600 shrink-0" />
                   Pay Supplier
                 </Button>
               </Link>
               <Link href="/dashboard/office/orange/inventory/damage/create">
-                <Button variant="outline" className="w-full justify-start">
-                  <AlertCircle className="mr-2 h-4 w-4 text-orange-600" />
+                <Button variant="outline" className="w-full justify-start text-sm gap-2">
+                  <AlertCircle className="h-4 w-4 text-orange-600 shrink-0" />
                   Report Damage
                 </Button>
               </Link>
