@@ -6,7 +6,7 @@ import { z } from "zod";
 const customerSchema = z.object({
   shopName: z.string().min(1, "Shop name is required"),
   ownerName: z.string().optional(),
-  phone: z.string().min(9, "A valid phone number is required"),
+  phone: z.string().optional().or(z.literal("")),
   email: z.string().email().optional().or(z.literal("")),
   address: z.string().optional(),
   route: z.string().optional().default("General"),
@@ -83,19 +83,21 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const val = customerSchema.parse(body);
 
-    // Duplicate phone check within the same business
-    const { data: existing } = await supabaseAdmin
-      .from("customers")
-      .select("id")
-      .eq("phone", val.phone)
-      .eq("business_id", val.businessId)
-      .maybeSingle();
+    // Duplicate phone check within the same business (only when phone is provided)
+    if (val.phone) {
+      const { data: existing } = await supabaseAdmin
+        .from("customers")
+        .select("id")
+        .eq("phone", val.phone)
+        .eq("business_id", val.businessId)
+        .maybeSingle();
 
-    if (existing) {
-      return NextResponse.json(
-        { error: "A customer with this phone number already exists in this business." },
-        { status: 409 }
-      );
+      if (existing) {
+        return NextResponse.json(
+          { error: "A customer with this phone number already exists in this business." },
+          { status: 409 }
+        );
+      }
     }
 
     const { data, error } = await supabaseAdmin

@@ -12,6 +12,23 @@ import {
   getDocumentWrapper,
   DIVISIONS,
 } from "@/app/lib/invoice-html";
+import { getBrowser } from "@/app/lib/browser";
+
+async function renderPdf(html: string): Promise<Uint8Array> {
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  try {
+    await page.setViewport({ width: 794, height: 1123 });
+    await page.setContent(html, { waitUntil: "networkidle0", timeout: 25000 });
+    return await page.pdf({
+      format: "A4",
+      printBackground: true,
+      margin: { top: "0", bottom: "0", left: "0", right: "0" },
+    });
+  } finally {
+    await page.close().catch(() => {});
+  }
+}
 
 export async function GET(
   request: NextRequest,
@@ -91,31 +108,16 @@ export async function GET(
       invoiceData.invoiceNo || "Invoice"
     );
 
-    // ── 3. Render with Puppeteer ────────────────────────────────────────
-    const puppeteer = await import("puppeteer");
-    const browser = await puppeteer.default.launch({
-      headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-      ],
-      timeout: 30000,
-    });
-
+    // ── 3. Render with Puppeteer (retry once on stale browser) ──────────
     let pdfBuffer: Uint8Array;
     try {
-      const page = await browser.newPage();
-      await page.setViewport({ width: 794, height: 1123 });
-      await page.setContent(fullHtml, { waitUntil: "networkidle0", timeout: 25000 });
-
-      pdfBuffer = await page.pdf({
-        format: "A4",
-        printBackground: true,
-        margin: { top: "0", bottom: "0", left: "0", right: "0" },
-      });
-    } finally {
-      await browser.close();
+      pdfBuffer = await renderPdf(fullHtml);
+    } catch (e: any) {
+      if (e?.message?.includes("Connection closed") || e?.message?.includes("Target closed")) {
+        pdfBuffer = await renderPdf(fullHtml);
+      } else {
+        throw e;
+      }
     }
 
     const filename = `${invoiceData.invoiceNo || "Invoice"}.pdf`;

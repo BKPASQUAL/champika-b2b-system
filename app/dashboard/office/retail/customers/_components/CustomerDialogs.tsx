@@ -68,7 +68,10 @@ export function CustomerDialogs({
             {/* Phone */}
             <div className="space-y-2">
               <Label>
-                Phone Number <span className="text-red-500">*</span>
+                Phone Number{" "}
+                <span className="text-muted-foreground text-xs">
+                  (Optional)
+                </span>
               </Label>
               <Input
                 value={formData.phone}

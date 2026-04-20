@@ -86,7 +86,7 @@ export default function RetailCustomersPage() {
       router.push("/login");
       return;
     }
-    setBusinessId(user.businessId || "");
+    setBusinessId(user.businessId ?? BUSINESS_IDS.CHAMPIKA_RETAIL);
     setBusinessName(user.businessName || "");
     fetchCustomers();
   }, [router, fetchCustomers]);
@@ -129,9 +129,8 @@ export default function RetailCustomersPage() {
   };
 
   const handleSaveCustomer = async () => {
-    // Validation: Only Name and Phone are required now
-    if (!formData.shopName || !formData.phone || !businessId) {
-      toast.error("Please fill required fields (Name, Phone)");
+    if (!formData.shopName || !businessId) {
+      toast.error("Please fill required fields (Name)");
       return;
     }
 
