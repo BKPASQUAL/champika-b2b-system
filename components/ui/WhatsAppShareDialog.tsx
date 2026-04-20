@@ -156,7 +156,7 @@ export function WhatsAppShareDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[540px]">
+      <DialogContent className="sm:max-w-[540px] max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center">
@@ -166,7 +166,7 @@ export function WhatsAppShareDialog({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
+        <div className="space-y-4 py-2 overflow-y-auto flex-1 pr-1">
           {/* Phone Number */}
           <div className="space-y-1.5">
             <Label className="text-sm font-medium flex items-center gap-1.5">
@@ -269,7 +269,7 @@ export function WhatsAppShareDialog({
             <Textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              className="min-h-[180px] text-sm font-mono resize-none bg-green-50/40 border-green-200 focus-visible:ring-green-300"
+              className="min-h-[120px] max-h-[220px] text-sm font-mono resize-none bg-green-50/40 border-green-200 focus-visible:ring-green-300"
             />
             <p className="text-xs text-muted-foreground">
               You can edit this message before sending.

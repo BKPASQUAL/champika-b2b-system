@@ -21,6 +21,7 @@ import {
   AlertCircle,
   Percent,
   MessageCircle,
+  Share2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -51,7 +52,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { printInvoice } from "../print-utils";
-import { generateInvoicePdfBlob } from "@/app/lib/invoice-print";
+import { generateInvoicePdfBlob, shareInvoice } from "@/app/lib/invoice-print";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { WhatsAppShareDialog } from "@/components/ui/WhatsAppShareDialog";
@@ -114,6 +115,11 @@ export default function ViewInvoicePage({
 
   // WhatsApp State
   const [whatsappOpen, setWhatsappOpen] = useState(false);
+
+  // Share state
+  const [sharing, setSharing] = useState(false);
+  const handleSharePdf = () =>
+    shareInvoice(id, "admin", invoice?.invoiceNo || "", setSharing);
 
   useEffect(() => {
     const fetchInvoice = async () => {
@@ -386,6 +392,21 @@ Thank you for your business! 🙏`;
               onClick={() => setWhatsappOpen(true)}
             >
               <MessageCircle className="w-4 h-4 mr-2" /> WhatsApp
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="bg-green-50 border-green-200 text-green-700 hover:bg-green-100 hover:text-green-800 cursor-pointer"
+              onClick={handleSharePdf}
+              disabled={sharing}
+            >
+              {sharing ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Share2 className="w-4 h-4 mr-2" />
+              )}
+              {sharing ? "Sharing…" : "Share"}
             </Button>
 
             <Button

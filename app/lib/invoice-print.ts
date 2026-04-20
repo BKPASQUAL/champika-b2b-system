@@ -108,7 +108,10 @@ export const printBulkInvoices = async (
   }
 };
 
-// ── Generate PDF Blob (server-side Puppeteer) ────────────────────────────────
+// ── Generate PDF Blob (server Puppeteer → client-side fallback) ──────────────
+// Tries the Puppeteer API first (best quality). If the server fails or times
+// out (e.g. no Chrome on Vercel), falls back to html2canvas + jsPDF so the
+// function always resolves.
 export const generateInvoicePdfBlob = async (
   invoiceOrId: string | any,
   divisionKey: keyof typeof DIVISIONS = "admin"
@@ -118,26 +121,89 @@ export const generateInvoicePdfBlob = async (
       ? invoiceOrId
       : invoiceOrId.id || invoiceOrId._id;
 
-  const MAX_ATTEMPTS = 3;
-  let lastError: Error = new Error("PDF generation failed");
-
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+  // ── 1. Try server-side Puppeteer (20 s timeout) ──────────────────────────
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
     try {
-      const res = await fetch(`/api/invoices/${id}/pdf?division=${divisionKey}`);
-      if (!res.ok) throw new Error(`PDF API returned HTTP ${res.status}`);
+      const res = await fetch(
+        `/api/invoices/${id}/pdf?division=${divisionKey}`,
+        { signal: controller.signal }
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const disposition = res.headers.get("Content-Disposition") || "";
       const match = disposition.match(/filename="([^"]+)"/);
       const filename = match ? match[1] : `${id}.pdf`;
       const blob = await res.blob();
       return { blob, filename };
-    } catch (err: any) {
-      lastError = err;
-      if (attempt < MAX_ATTEMPTS)
-        await new Promise((r) => setTimeout(r, 1500 * attempt));
+    } finally {
+      clearTimeout(timer);
     }
+  } catch {
+    // Server unavailable — fall through to client-side generation
   }
 
-  throw lastError;
+  // ── 2. Client-side fallback: html2canvas + jsPDF ─────────────────────────
+  let data: any;
+  if (typeof invoiceOrId === "string") {
+    const res = await fetch(`/api/invoices/${id}`);
+    if (!res.ok) throw new Error("Failed to load invoice");
+    data = await res.json();
+  } else {
+    data = invoiceOrId;
+  }
+
+  const invoiceNo = data.invoiceNo || data.invoice_no || id;
+  const filename = `${invoiceNo}.pdf`;
+  const html = await generateInvoiceHTML(data, divisionKey);
+  const fullHtml = getDocumentWrapper(html, invoiceNo);
+
+  const iframe = document.createElement("iframe");
+  iframe.style.cssText =
+    "position:fixed;left:-9999px;top:0;width:794px;height:1123px;border:none;visibility:hidden;";
+  document.body.appendChild(iframe);
+
+  try {
+    await new Promise<void>((resolve) => {
+      iframe.onload = () => resolve();
+      iframe.contentDocument!.open();
+      iframe.contentDocument!.write(fullHtml);
+      iframe.contentDocument!.close();
+    });
+    await new Promise((r) => setTimeout(r, 400));
+
+    const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+      import("html2canvas"),
+      import("jspdf"),
+    ]);
+
+    const body = iframe.contentDocument!.body;
+    body.style.margin = "0";
+    const canvas = await html2canvas(body, {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      backgroundColor: "#ffffff",
+      windowWidth: 794,
+    });
+
+    const imgData = canvas.toDataURL("image/jpeg", 0.95);
+    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const imgH = (canvas.height * pageW) / canvas.width;
+
+    let yOffset = 0;
+    while (yOffset < imgH) {
+      if (yOffset > 0) pdf.addPage();
+      pdf.addImage(imgData, "JPEG", 0, -yOffset, pageW, imgH);
+      yOffset += pageH;
+    }
+
+    return { blob: pdf.output("blob"), filename };
+  } finally {
+    document.body.removeChild(iframe);
+  }
 };
 
 // ── Share Invoice PDF ───────────────────────────────────────────────────────
