@@ -1,12 +1,10 @@
-import type { Browser } from "puppeteer-core";
-
 const IS_VERCEL = !!process.env.VERCEL;
 
 // Local dev singleton — avoids Chromium cold-start on every request
-let browserInstance: Browser | null = null;
-let launching: Promise<Browser> | null = null;
+let browserInstance: any = null;
+let launching: Promise<any> | null = null;
 
-async function launchBrowser(): Promise<Browser> {
+async function launchBrowser(): Promise<any> {
   if (IS_VERCEL) {
     // @sparticuz/chromium provides a serverless-compatible Chromium binary
     const { default: chromium } = await import("@sparticuz/chromium");
@@ -34,7 +32,7 @@ async function launchBrowser(): Promise<Browser> {
   });
 }
 
-export async function getBrowser(): Promise<Browser> {
+export async function getBrowser(): Promise<any> {
   // Vercel: no persistent process between invocations, launch fresh each time
   if (IS_VERCEL) return launchBrowser();
 
