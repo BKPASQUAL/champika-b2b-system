@@ -108,78 +108,36 @@ export const printBulkInvoices = async (
   }
 };
 
-// ── Generate PDF Blob (client-side via html2canvas + jsPDF) ─────────────────
-// Works on Vercel, local, and mobile — no server-side Chromium required.
+// ── Generate PDF Blob (server-side Puppeteer) ────────────────────────────────
 export const generateInvoicePdfBlob = async (
   invoiceOrId: string | any,
   divisionKey: keyof typeof DIVISIONS = "admin"
 ): Promise<{ blob: Blob; filename: string }> => {
-  // Resolve invoice data
-  let data: any;
-  if (typeof invoiceOrId === "string") {
-    const res = await fetch(`/api/invoices/${invoiceOrId}`);
-    if (!res.ok) throw new Error("Failed to load invoice");
-    data = await res.json();
-  } else {
-    data = invoiceOrId;
-  }
+  const id =
+    typeof invoiceOrId === "string"
+      ? invoiceOrId
+      : invoiceOrId.id || invoiceOrId._id;
 
-  const invoiceNo = data.invoiceNo || data.invoice_no || "Invoice";
-  const filename = `${invoiceNo}.pdf`;
+  const MAX_ATTEMPTS = 3;
+  let lastError: Error = new Error("PDF generation failed");
 
-  const html = await generateInvoiceHTML(data, divisionKey);
-  const fullHtml = getDocumentWrapper(html, invoiceNo);
-
-  // Use an iframe so the full HTML document (with <head> styles) renders correctly
-  const iframe = document.createElement("iframe");
-  iframe.style.cssText =
-    "position:fixed;left:-9999px;top:0;width:794px;height:1123px;border:none;visibility:hidden;";
-  document.body.appendChild(iframe);
-
-  try {
-    // Write the full document into the iframe
-    await new Promise<void>((resolve) => {
-      iframe.onload = () => resolve();
-      iframe.contentDocument!.open();
-      iframe.contentDocument!.write(fullHtml);
-      iframe.contentDocument!.close();
-    });
-
-    // Allow fonts/images to settle
-    await new Promise((r) => setTimeout(r, 400));
-
-    const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
-      import("html2canvas"),
-      import("jspdf"),
-    ]);
-
-    const body = iframe.contentDocument!.body;
-    body.style.margin = "0";
-    const canvas = await html2canvas(body, {
-      scale: 2,
-      useCORS: true,
-      logging: false,
-      backgroundColor: "#ffffff",
-      windowWidth: 794,
-    });
-
-    const imgData = canvas.toDataURL("image/jpeg", 0.95);
-    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-    const pageW = pdf.internal.pageSize.getWidth();
-    const pageH = pdf.internal.pageSize.getHeight();
-    const imgH = (canvas.height * pageW) / canvas.width;
-
-    let yOffset = 0;
-    while (yOffset < imgH) {
-      if (yOffset > 0) pdf.addPage();
-      pdf.addImage(imgData, "JPEG", 0, -yOffset, pageW, imgH);
-      yOffset += pageH;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const res = await fetch(`/api/invoices/${id}/pdf?division=${divisionKey}`);
+      if (!res.ok) throw new Error(`PDF API returned HTTP ${res.status}`);
+      const disposition = res.headers.get("Content-Disposition") || "";
+      const match = disposition.match(/filename="([^"]+)"/);
+      const filename = match ? match[1] : `${id}.pdf`;
+      const blob = await res.blob();
+      return { blob, filename };
+    } catch (err: any) {
+      lastError = err;
+      if (attempt < MAX_ATTEMPTS)
+        await new Promise((r) => setTimeout(r, 1500 * attempt));
     }
-
-    return { blob: pdf.output("blob"), filename };
-  } finally {
-    document.body.removeChild(iframe);
   }
+
+  throw lastError;
 };
 
 // ── Share Invoice PDF ───────────────────────────────────────────────────────

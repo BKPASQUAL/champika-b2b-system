@@ -27,6 +27,7 @@ async function renderPdf(html: string): Promise<Uint8Array> {
     });
   } finally {
     await page.close().catch(() => {});
+    if (process.env.VERCEL) await browser.close().catch(() => {});
   }
 }
 
