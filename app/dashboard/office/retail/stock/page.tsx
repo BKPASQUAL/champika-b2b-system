@@ -45,12 +45,18 @@ import {
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { StockConversionModal } from "./_components/StockConversionModal";
 
 export default function RetailStockPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [stockItems, setStockItems] = useState<RetailStockItem[]>([]);
   const [businessName, setBusinessName] = useState("");
+  const [userId, setUserId] = useState("");
+
+  // Modal State
+  const [isConversionModalOpen, setIsConversionModalOpen] = useState(false);
+  const [selectedSourceItem, setSelectedSourceItem] = useState<RetailStockItem | null>(null);
 
   // Filters & Sorting
   const [searchQuery, setSearchQuery] = useState("");
@@ -70,6 +76,7 @@ export default function RetailStockPage() {
     }
 
     setBusinessName(user.businessName || "Retail Business");
+    setUserId(user.id);
     setLoading(true);
 
     try {
@@ -136,6 +143,11 @@ export default function RetailStockPage() {
       setSortField(field);
       setSortOrder("asc");
     }
+  };
+
+  const handleDivideStock = (item: RetailStockItem) => {
+    setSelectedSourceItem(item);
+    setIsConversionModalOpen(true);
   };
 
   // --- Report Generation ---
@@ -384,9 +396,18 @@ export default function RetailStockPage() {
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={setCurrentPage}
+            onDivideStock={handleDivideStock}
           />
         </CardContent>
       </Card>
+
+      <StockConversionModal
+        isOpen={isConversionModalOpen}
+        onClose={() => setIsConversionModalOpen(false)}
+        sourceItem={selectedSourceItem}
+        onSuccess={fetchStock}
+        userId={userId}
+      />
     </div>
   );
 }

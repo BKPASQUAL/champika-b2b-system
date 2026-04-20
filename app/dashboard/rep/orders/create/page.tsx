@@ -214,8 +214,9 @@ export default function CreateOrderPage() {
         if (!productsRes.ok) throw new Error("Failed to load rep stock");
         const productsData = await productsRes.json();
 
+        const b2bProducts = productsData.filter((p: any) => p.subCategory !== "Retail Exclusive");
         setProducts(
-          productsData.map((p: any) => ({
+          b2bProducts.map((p: any) => ({
             id: p.id,
             sku: p.sku,
             name: p.name,

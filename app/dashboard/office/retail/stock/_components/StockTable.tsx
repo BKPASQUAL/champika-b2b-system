@@ -19,6 +19,7 @@ import {
   Package,
   Layers,
   AlertTriangle,
+  Split,
 } from "lucide-react";
 
 // Define the type here or import it if you have a shared types file
@@ -45,6 +46,7 @@ interface StockTableProps {
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
+  onDivideStock?: (item: RetailStockItem) => void;
 }
 
 export function StockTable({
@@ -56,6 +58,7 @@ export function StockTable({
   currentPage,
   totalPages,
   onPageChange,
+  onDivideStock,
 }: StockTableProps) {
   const getSortIcon = (field: SortField) => {
     if (sortField !== field)
@@ -98,21 +101,22 @@ export function StockTable({
                 </div>
               </TableHead>
               <TableHead
-                className="text-right cursor-pointer hover:bg-muted/50 w-[20%]"
+                className="text-right cursor-pointer hover:bg-muted/50 w-[15%]"
                 onClick={() => onSort("stock_quantity")}
               >
                 <div className="flex items-center justify-end">
-                  Stock Level {getSortIcon("stock_quantity")}
+                   Stock Level {getSortIcon("stock_quantity")}
                 </div>
               </TableHead>
-              <TableHead className="text-center w-[20%]">Status</TableHead>
+              <TableHead className="text-center w-[15%]">Status</TableHead>
+              <TableHead className="text-center w-[10%]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {items.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={4}
+                  colSpan={5}
                   className="text-center py-8 text-muted-foreground"
                 >
                   <Package className="w-10 h-10 mx-auto mb-2 opacity-20" />
@@ -191,6 +195,21 @@ export function StockTable({
                       >
                         In Stock
                       </Badge>
+                    )}
+                  </TableCell>
+                  
+                  {/* Actions */}
+                  <TableCell className="text-center">
+                    {onDivideStock && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onDivideStock(item)}
+                        className="text-xs flex items-center h-8"
+                        disabled={item.stock_quantity <= 0}
+                      >
+                        <Split className="w-3 h-3 mr-1" /> Divide
+                      </Button>
                     )}
                   </TableCell>
                 </TableRow>

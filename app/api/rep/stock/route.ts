@@ -45,6 +45,7 @@ export async function GET(request: NextRequest) {
           mrp,
           unit_of_measure,
           category,
+          sub_category,
           brand,
           is_active,
           supplier_name,
@@ -95,6 +96,7 @@ export async function GET(request: NextRequest) {
           stock_quantity: item.quantity,
           unit_of_measure: p.unit_of_measure || "unit",
           category: p.category,
+          subCategory: p.sub_category,
           supplier: p.supplier_name, // Return supplier info
           company_code: p.company_code,
         });
