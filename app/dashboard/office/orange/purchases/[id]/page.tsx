@@ -62,10 +62,23 @@ interface PurchaseItem {
   sku: string;
   quantity: number;
   unit: string;
-  unitCost: number; // Cost Price
-  discount: number; // Discount Amount
-  totalCost: number; // Final Line Total
+  unitCost: number;
+  discount: number;
+  totalCost: number;
   freeQuantity?: number;
+}
+
+interface SupplierPaymentRecord {
+  id: string;
+  paymentNumber: string;
+  amount: number;
+  paymentDate: string;
+  paymentMethod: string;
+  chequeNumber: string | null;
+  chequeDate: string | null;
+  chequeStatus: string | null;
+  notes: string | null;
+  accountName: string | null;
 }
 
 interface PurchaseDetail {
@@ -90,7 +103,7 @@ interface PurchaseDetail {
     name: string;
   };
   items: PurchaseItem[];
-  payments?: any[];
+  payments?: SupplierPaymentRecord[];
 }
 
 export default function OrangeViewBillPage({

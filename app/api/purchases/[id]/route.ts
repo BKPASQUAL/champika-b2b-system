@@ -24,10 +24,23 @@ export async function GET(
           discount_amount,
           total_cost,
           product:products ( name, sku, unit_of_measure )
+        ),
+        payments:supplier_payments (
+          id,
+          payment_number,
+          amount,
+          payment_date,
+          payment_method,
+          cheque_number,
+          cheque_date,
+          cheque_status,
+          notes,
+          account:bank_accounts ( account_name )
         )
       `
       )
       .eq("id", id)
+      .order("payment_date", { referencedTable: "supplier_payments", ascending: true })
       .single();
 
     if (error) {
@@ -71,6 +84,19 @@ export async function GET(
         unitCost: item.unit_cost,
         discount: item.discount_amount,
         totalCost: item.total_cost,
+      })),
+
+      payments: (purchase.payments || []).map((p: any) => ({
+        id: p.id,
+        paymentNumber: p.payment_number,
+        amount: p.amount,
+        paymentDate: p.payment_date,
+        paymentMethod: p.payment_method,
+        chequeNumber: p.cheque_number,
+        chequeDate: p.cheque_date,
+        chequeStatus: p.cheque_status,
+        notes: p.notes,
+        accountName: p.account?.account_name ?? null,
       })),
     };
 

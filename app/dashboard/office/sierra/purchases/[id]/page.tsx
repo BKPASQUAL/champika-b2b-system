@@ -59,10 +59,23 @@ interface PurchaseItem {
   sku: string;
   quantity: number;
   unit: string;
-  unitCost: number; // Cost Price
-  discount: number; // Discount Amount
-  totalCost: number; // Final Line Total
+  unitCost: number;
+  discount: number;
+  totalCost: number;
   freeQuantity?: number;
+}
+
+interface SupplierPaymentRecord {
+  id: string;
+  paymentNumber: string;
+  amount: number;
+  paymentDate: string;
+  paymentMethod: string;
+  chequeNumber: string | null;
+  chequeDate: string | null;
+  chequeStatus: string | null;
+  notes: string | null;
+  accountName: string | null;
 }
 
 interface PurchaseDetail {
@@ -87,7 +100,7 @@ interface PurchaseDetail {
     name: string;
   };
   items: PurchaseItem[];
-  payments?: any[];
+  payments?: SupplierPaymentRecord[];
 }
 
 export default function SierraViewBillPage({
@@ -481,75 +494,111 @@ export default function SierraViewBillPage({
                     <Banknote className="h-5 w-5 text-emerald-600" />
                     Payment History
                   </CardTitle>
+                  <Badge variant="outline" className="font-normal text-xs">
+                    {paymentsList.length} payment{paymentsList.length !== 1 ? "s" : ""}
+                  </Badge>
                 </div>
               </CardHeader>
               <CardContent className="p-0">
                 {paymentsList.length === 0 ? (
-                  // If no detailed list, show summary based on paidAmount
-                  bill.paidAmount > 0 ? (
-                    <div className="p-6">
-                      <div className="flex justify-between items-center bg-emerald-50 p-4 rounded-md border border-emerald-100">
-                        <div>
-                          <p className="font-semibold text-emerald-800">
-                            Total Paid Amount
-                          </p>
-                          <p className="text-xs text-emerald-600">
-                            Detailed records not available
-                          </p>
-                        </div>
-                        <div className="text-xl font-bold font-mono text-emerald-700">
-                          LKR{" "}
-                          {bill.paidAmount.toLocaleString("en-LK", {
-                            minimumFractionDigits: 2,
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="p-8 text-center text-muted-foreground text-sm">
-                      No payments recorded for this bill yet.
-                    </div>
-                  )
+                  <div className="p-8 text-center text-muted-foreground text-sm">
+                    No payments recorded for this bill yet.
+                  </div>
                 ) : (
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-emerald-50/30 hover:bg-emerald-50/30">
                         <TableHead className="pl-6">Date</TableHead>
                         <TableHead>Method</TableHead>
-                        <TableHead>Reference</TableHead>
-                        <TableHead className="text-right pr-6">
-                          Amount
-                        </TableHead>
+                        <TableHead>Account</TableHead>
+                        <TableHead>Cheque No</TableHead>
+                        <TableHead>Cheque Date</TableHead>
+                        <TableHead>Cheque Status</TableHead>
+                        <TableHead>Notes</TableHead>
+                        <TableHead className="text-right pr-6">Amount</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {paymentsList.map((pay: any, idx: number) => (
-                        <TableRow key={idx} className="hover:bg-emerald-50/10">
-                          <TableCell className="pl-6 text-sm">
-                            {new Date(
-                              pay.payment_date || pay.created_at,
-                            ).toLocaleDateString()}
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            <Badge
-                              variant="secondary"
-                              className="font-normal text-xs"
-                            >
-                              {pay.payment_method || "Unknown"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
-                            {pay.reference || pay.notes || "-"}
-                          </TableCell>
-                          <TableCell className="text-right pr-6 font-mono font-medium">
-                            LKR{" "}
-                            {Number(pay.amount).toLocaleString("en-LK", {
-                              minimumFractionDigits: 2,
-                            })}
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {paymentsList.map((pay) => {
+                        const isCheque = pay.paymentMethod === "cheque";
+                        const chequeStatusStyles: Record<string, string> = {
+                          pending:  "bg-yellow-50 text-yellow-700 border-yellow-200",
+                          passed:   "bg-green-50 text-green-700 border-green-200",
+                          returned: "bg-red-50 text-red-700 border-red-200",
+                        };
+                        const methodStyles: Record<string, string> = {
+                          cash:          "bg-green-50 text-green-700",
+                          bank_transfer: "bg-blue-50 text-blue-700",
+                          cheque:        "bg-amber-50 text-amber-700",
+                        };
+                        return (
+                          <TableRow key={pay.id} className="hover:bg-emerald-50/10">
+                            <TableCell className="pl-6 text-sm">
+                              {new Date(pay.paymentDate).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant="secondary"
+                                className={`font-normal text-xs capitalize ${methodStyles[pay.paymentMethod] ?? ""}`}
+                              >
+                                {pay.paymentMethod?.replace("_", " ") || "Unknown"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {pay.accountName ?? "-"}
+                            </TableCell>
+                            <TableCell>
+                              {isCheque && pay.chequeNumber ? (
+                                <span className="font-mono text-sm font-medium text-amber-800">
+                                  {pay.chequeNumber}
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground text-sm">-</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {isCheque && pay.chequeDate
+                                ? new Date(pay.chequeDate).toLocaleDateString()
+                                : "-"}
+                            </TableCell>
+                            <TableCell>
+                              {isCheque && pay.chequeStatus ? (
+                                <Badge
+                                  variant="outline"
+                                  className={`text-xs capitalize ${chequeStatusStyles[pay.chequeStatus.toLowerCase()] ?? "bg-slate-50 text-slate-700 border-slate-200"}`}
+                                >
+                                  {pay.chequeStatus}
+                                </Badge>
+                              ) : (
+                                <span className="text-muted-foreground text-sm">-</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground max-w-[120px] truncate">
+                              {pay.notes ?? "-"}
+                            </TableCell>
+                            <TableCell className="text-right pr-6 font-mono font-medium">
+                              LKR{" "}
+                              {Number(pay.amount).toLocaleString("en-LK", {
+                                minimumFractionDigits: 2,
+                              })}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
+                    <TableFooter className="bg-emerald-50/30">
+                      <TableRow>
+                        <TableCell colSpan={7} className="pl-6 font-semibold text-sm">
+                          Total Paid
+                        </TableCell>
+                        <TableCell className="text-right pr-6 font-bold font-mono">
+                          LKR{" "}
+                          {paymentsList
+                            .reduce((s, p) => s + p.amount, 0)
+                            .toLocaleString("en-LK", { minimumFractionDigits: 2 })}
+                        </TableCell>
+                      </TableRow>
+                    </TableFooter>
                   </Table>
                 )}
               </CardContent>
