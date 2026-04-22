@@ -22,12 +22,12 @@ export function PaymentStats({ payments, totalDue }: PaymentStatsProps) {
 
   // 2. Cash Receipts — all time
   const cashTotal = payments
-    .filter((p) => p.method === "Cash")
+    .filter((p) => p.method?.toLowerCase() === "cash")
     .reduce((sum, p) => sum + p.amount, 0);
 
   // 3. Pending Cheques
   const pendingCheques = payments.filter(
-    (p) => p.method === "Cheque" && p.chequeStatus === "Pending"
+    (p) => p.method?.toLowerCase() === "cheque" && p.chequeStatus === "Pending"
   );
   const pendingChequeAmount = pendingCheques.reduce(
     (sum, p) => sum + p.amount,

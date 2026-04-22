@@ -13,6 +13,12 @@ import {
   ChevronsUpDown,
   CheckCircle,
   XCircle,
+  MoreHorizontal,
+  Eye,
+  FileText,
+  RefreshCw,
+  CreditCard,
+  Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +37,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -39,7 +46,75 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
+
+function DistributionStatusForm({
+  payment,
+  onSuccess,
+  onCancel,
+}: {
+  payment: Payment;
+  onSuccess: () => void;
+  onCancel: () => void;
+}) {
+  const [status, setStatus] = useState(payment.cheque_status || "Pending");
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/payments/${payment.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chequeStatus: status }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      toast.success("Cheque status updated");
+      onSuccess();
+    } catch {
+      toast.error("Error updating status");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="grid gap-4 py-4">
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label className="text-right">Amount</Label>
+          <div className="col-span-3 font-bold">{formatCurrency(payment.amount)}</div>
+        </div>
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label className="text-right">Status</Label>
+          <Select value={status} onValueChange={setStatus}>
+            <SelectTrigger className="col-span-3"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Pending">Pending</SelectItem>
+              <SelectItem value="Deposited">Deposited</SelectItem>
+              <SelectItem value="Passed">Passed</SelectItem>
+              <SelectItem value="Returned">Returned</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <DialogFooter>
+        <Button variant="outline" onClick={onCancel}>Cancel</Button>
+        <Button onClick={handleSave} disabled={saving}>
+          {saving ? "Saving..." : "Save Changes"}
+        </Button>
+      </DialogFooter>
+    </>
+  );
+}
 import {
   Select,
   SelectContent,
@@ -96,6 +171,7 @@ interface Payment {
   id: string;
   payment_number: string;
   payment_date: string;
+  invoice_id: string | null;
   order_id: string | null;
   customer_id: string;
   amount: number;
@@ -116,22 +192,10 @@ interface Payment {
     | null;
   bank_id: string | null;
   deposit_account_id: string | null;
-  customers?: {
-    name: string;
-  };
-  orders?: {
-    order_number: string;
-    total_amount: number;
-    business_name?: string;
-  } | null;
-  banks?: {
-    bank_code: string;
-    bank_name: string;
-  };
-  company_accounts?: {
-    account_name: string;
-    account_type: string;
-  } | null;
+  customers?: { name: string };
+  orders?: { order_number: string; total_amount: number; business_name?: string } | null;
+  banks?: { bank_code: string; bank_name: string };
+  company_accounts?: { account_name: string; account_type: string } | null;
 }
 
 interface Order {
@@ -203,6 +267,9 @@ export default function DistributionPaymentsPage() {
   const fetchData = () => { refetchPayments(); refetchOrders(); refetchAccounts(); refetchBanks(); };
 
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [customerFilter, setCustomerFilter] = useState("all");
@@ -570,109 +637,109 @@ export default function DistributionPaymentsPage() {
         <CardContent>
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Payment ID</TableHead>
-                <TableHead>Bill No</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-                <TableHead>Method</TableHead>
-                <TableHead>Deposit Account</TableHead>
-                <TableHead>Cheque/Bank Details</TableHead>
-                <TableHead className="text-right">Cheque Status</TableHead>
+              <TableRow className="bg-gray-50 hover:bg-gray-50">
+                <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wide py-3 px-4 whitespace-nowrap">Date</TableHead>
+                <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wide py-3 px-4">Payment ID</TableHead>
+                <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wide py-3 px-4">Bill No</TableHead>
+                <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wide py-3 px-4">Customer</TableHead>
+                <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wide py-3 px-4 text-right">Amount</TableHead>
+                <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wide py-3 px-4">Method</TableHead>
+                <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wide py-3 px-4">Deposit Account</TableHead>
+                <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wide py-3 px-4">Cheque / Bank Details</TableHead>
+                <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wide py-3 px-4">Cheque Status</TableHead>
+                <TableHead className="w-12 py-3 px-4" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {paginatedPayments.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-10">
-                    No payments found
-                  </TableCell>
+                  <TableCell colSpan={10} className="text-center py-16 text-muted-foreground">No payments found</TableCell>
                 </TableRow>
               ) : (
-                paginatedPayments.map((payment) => (
-                  <TableRow key={payment.id}>
-                    <TableCell>
-                      {new Date(payment.payment_date).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      {payment.payment_number}
-                    </TableCell>
-                    <TableCell>
-                      {payment.orders?.order_number || "N/A"}
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">
-                          {payment.customers?.name || "N/A"}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {payment.orders?.business_name}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      {formatCurrency(payment.amount)}
-                    </TableCell>
-                    <TableCell className="capitalize">
-                      {payment.payment_method}
-                    </TableCell>
-                    <TableCell>
-                      {payment.company_accounts ? (
-                        <div>
-                          <div className="font-medium">
-                            {payment.company_accounts.account_name}
-                          </div>
-                          <div className="text-xs text-muted-foreground capitalize">
-                            {payment.company_accounts.account_type}
-                          </div>
-                        </div>
-                      ) : (
-                        "N/A"
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {payment.payment_method === "cheque" && (
-                        <div className="space-y-1">
-                          <div className="text-sm">
-                            Cheque: {payment.cheque_number}
-                          </div>
-                          {payment.banks && (
-                            <div className="text-xs text-muted-foreground">
-                              {payment.banks.bank_code} -{" "}
-                              {payment.banks.bank_name}
-                            </div>
-                          )}
-                          {payment.cheque_date && (
-                            <div className="text-xs text-muted-foreground">
-                              Date:{" "}
-                              {new Date(
-                                payment.cheque_date
-                              ).toLocaleDateString()}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                      {payment.payment_method === "bank" && payment.banks && (
-                        <div className="text-sm">
-                          {payment.banks.bank_code} - {payment.banks.bank_name}
-                        </div>
-                      )}
-                      {payment.payment_method === "cash" && (
-                        <span className="text-sm text-muted-foreground">
-                          Cash Payment
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {payment.payment_method === "cheque" &&
-                        getChequeStatusBadge(
-                          payment.cheque_status,
-                          payment.cheque_date
+                paginatedPayments.map((payment) => {
+                  const isCheque = payment.payment_method?.toLowerCase() === "cheque";
+                  return (
+                    <TableRow key={payment.id} className="hover:bg-blue-50/20 transition-colors border-b border-gray-100 last:border-0">
+                      <TableCell className="py-3 px-4 text-sm text-gray-600 whitespace-nowrap">{new Date(payment.payment_date).toLocaleDateString()}</TableCell>
+                      <TableCell className="py-3 px-4">
+                        <span className="font-mono text-xs text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">{payment.payment_number}</span>
+                      </TableCell>
+                      <TableCell className="py-3 px-4">
+                        <span className="text-sm font-semibold text-gray-800">{payment.orders?.order_number || "N/A"}</span>
+                      </TableCell>
+                      <TableCell className="py-3 px-4">
+                        <p className="text-sm font-medium text-gray-800">{payment.customers?.name || "N/A"}</p>
+                        {payment.orders?.business_name && <p className="text-xs text-muted-foreground">{payment.orders.business_name}</p>}
+                      </TableCell>
+                      <TableCell className="py-3 px-4 text-right">
+                        <span className="text-sm font-bold text-gray-800">{formatCurrency(payment.amount)}</span>
+                      </TableCell>
+                      <TableCell className="py-3 px-4">
+                        {isCheque ? (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 text-xs font-medium"><CreditCard className="w-3 h-3" /> Cheque</span>
+                        ) : payment.payment_method?.toLowerCase() === "bank" ? (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 text-xs font-medium"><Building2 className="w-3 h-3" /> Bank</span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 text-xs font-medium"><Banknote className="w-3 h-3" /> Cash</span>
                         )}
-                    </TableCell>
-                  </TableRow>
-                ))
+                      </TableCell>
+                      <TableCell className="py-3 px-4">
+                        {payment.company_accounts ? (
+                          <div className="flex flex-col">
+                            <span className="text-sm font-semibold text-gray-800">{payment.company_accounts.account_name}</span>
+                            <span className="text-xs text-muted-foreground capitalize">{payment.company_accounts.account_type}</span>
+                          </div>
+                        ) : <span className="text-xs text-muted-foreground">N/A</span>}
+                      </TableCell>
+                      <TableCell className="py-3 px-4">
+                        {isCheque ? (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-sm font-medium text-gray-800">Cheque: {payment.cheque_number || "—"}</span>
+                            {payment.banks && <span className="text-xs text-muted-foreground">{payment.banks.bank_code} - {payment.banks.bank_name}</span>}
+                            {payment.cheque_date && <span className="text-xs text-muted-foreground">Date: {new Date(payment.cheque_date).toLocaleDateString()}</span>}
+                          </div>
+                        ) : payment.payment_method?.toLowerCase() === "bank" && payment.banks ? (
+                          <span className="text-sm text-muted-foreground">{payment.banks.bank_code} - {payment.banks.bank_name}</span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground italic">Cash Payment</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="py-3 px-4">
+                        {isCheque ? getChequeStatusBadge(payment.cheque_status, payment.cheque_date) : <span className="text-xs text-muted-foreground">—</span>}
+                      </TableCell>
+                      <TableCell className="py-3 px-4">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-gray-100">
+                              <span className="sr-only">Open menu</span>
+                              <MoreHorizontal className="h-4 w-4 text-gray-500" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-44">
+                            <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">Actions</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="cursor-pointer" onClick={() => { setSelectedPayment(payment); setIsViewDialogOpen(true); }}>
+                              <Eye className="mr-2 h-4 w-4" /> View Details
+                            </DropdownMenuItem>
+                            {payment.invoice_id && (
+                              <DropdownMenuItem className="cursor-pointer" onClick={() => window.open(`/dashboard/office/distribution/invoices/${payment.invoice_id}`, "_blank")}>
+                                <FileText className="mr-2 h-4 w-4" /> View Invoice
+                              </DropdownMenuItem>
+                            )}
+                            {isCheque && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="cursor-pointer" onClick={() => { setSelectedPayment(payment); setIsStatusDialogOpen(true); }}>
+                                  <RefreshCw className="mr-2 h-4 w-4" /> Update Status
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>
@@ -704,6 +771,92 @@ export default function DistributionPaymentsPage() {
           </div>
         </CardFooter>
       </Card>
+
+      {/* View Payment Dialog */}
+      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle>Payment Details</DialogTitle>
+            <DialogDescription>
+              Bill No: <span className="font-mono font-bold text-gray-900">{selectedPayment?.orders?.order_number || "N/A"}</span>
+            </DialogDescription>
+          </DialogHeader>
+          {selectedPayment && (
+            <div className="grid gap-3 py-2 text-sm">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">Customer</p>
+                  <p className="font-semibold">{selectedPayment.customers?.name || "N/A"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">Amount</p>
+                  <p className="font-bold text-gray-800">{formatCurrency(selectedPayment.amount)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">Payment Date</p>
+                  <p>{new Date(selectedPayment.payment_date).toLocaleDateString()}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">Method</p>
+                  <Badge variant="secondary" className="font-normal capitalize">{selectedPayment.payment_method}</Badge>
+                </div>
+              </div>
+              {selectedPayment.company_accounts && (
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">Deposit Account</p>
+                  <p className="font-semibold">{selectedPayment.company_accounts.account_name} <span className="text-muted-foreground font-normal">({selectedPayment.company_accounts.account_type})</span></p>
+                </div>
+              )}
+              {selectedPayment.payment_method?.toLowerCase() === "cheque" && (
+                <div className="mt-1 rounded-lg border border-blue-100 bg-blue-50 p-3 grid grid-cols-2 gap-x-4 gap-y-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">Cheque No</p>
+                    <p className="font-mono font-semibold text-blue-800">{selectedPayment.cheque_number || "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">Cheque Date</p>
+                    <p className="font-semibold text-blue-800">
+                      {selectedPayment.cheque_date ? new Date(selectedPayment.cheque_date).toLocaleDateString() : "—"}
+                    </p>
+                  </div>
+                  {selectedPayment.banks && (
+                    <div className="col-span-2">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">Bank</p>
+                      <p className="text-sm">{selectedPayment.banks.bank_code} - {selectedPayment.banks.bank_name}</p>
+                    </div>
+                  )}
+                  <div className="col-span-2">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-1">Cheque Status</p>
+                    {selectedPayment.cheque_status ? getChequeStatusBadge(selectedPayment.cheque_status, selectedPayment.cheque_date) : <span className="text-muted-foreground">—</span>}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Update Cheque Status Dialog */}
+      {selectedPayment && (
+        <Dialog open={isStatusDialogOpen} onOpenChange={setIsStatusDialogOpen}>
+          <DialogContent className="sm:max-w-[400px]">
+            <DialogHeader>
+              <DialogTitle>Update Cheque Status</DialogTitle>
+              <DialogDescription>
+                Cheque <span className="font-mono font-bold text-gray-900">#{selectedPayment.cheque_number}</span>
+              </DialogDescription>
+            </DialogHeader>
+            <DistributionStatusForm
+              payment={selectedPayment}
+              onSuccess={() => { setIsStatusDialogOpen(false); fetchData(); }}
+              onCancel={() => setIsStatusDialogOpen(false)}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Add Payment Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
