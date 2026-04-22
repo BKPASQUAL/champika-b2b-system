@@ -163,6 +163,166 @@ function BottomSheet({ event, onClose }: { event: ChequeEvent; onClose: () => vo
   );
 }
 
+// ─── Desktop: single-event modal ──────────────────────────────────────────────
+function DesktopEventModal({ event, onClose }: { event: ChequeEvent; onClose: () => void }) {
+  const isCustomer = event.type === "customer";
+  const colors = statusColors(event.status);
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [onClose]);
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ backdropFilter: "blur(3px)", background: "rgba(0,0,0,0.3)" }}
+      onClick={onClose}
+    >
+      <div
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden"
+        style={{ animation: "dmIn 0.18s cubic-bezier(0.34,1.56,0.64,1) both" }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className={`h-1.5 w-full ${isCustomer ? "bg-blue-500" : "bg-orange-500"}`} />
+        <div className="px-6 pt-5 pb-6">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className={`w-2.5 h-2.5 rounded-full ${isCustomer ? "bg-blue-500" : "bg-orange-500"}`} />
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {isCustomer ? "Customer Cheque" : "Supplier Cheque"}
+                </span>
+              </div>
+              <p className="text-lg font-bold text-gray-900 leading-tight">{event.name}</p>
+            </div>
+            <button onClick={onClose} className="ml-3 rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-4 mb-5">
+            <div>
+              <p className="text-[10px] uppercase tracking-widest font-semibold text-muted-foreground mb-0.5">Cheque No</p>
+              <p className="text-sm font-semibold text-gray-800 font-mono">{event.cheque_number || "—"}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-widest font-semibold text-muted-foreground mb-0.5">Amount</p>
+              <p className={`text-base font-bold ${isCustomer ? "text-blue-700" : "text-orange-700"}`}>
+                LKR {Number(event.amount).toLocaleString("en-LK")}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-widest font-semibold text-muted-foreground mb-0.5">Cheque Date</p>
+              <p className="text-sm font-semibold text-gray-800">{event.date}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-widest font-semibold text-muted-foreground mb-0.5">
+                {isCustomer ? "Invoice" : "Payment Date"}
+              </p>
+              <p className="text-sm font-semibold text-gray-800 truncate">{event.reference}</p>
+            </div>
+          </div>
+          <div className="flex items-center justify-between pt-4 border-t">
+            <span className="text-[10px] uppercase tracking-widest font-semibold text-muted-foreground">Status</span>
+            <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${colors.badge}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${colors.dot}`} />
+              {event.status || "Pending"}
+            </span>
+          </div>
+        </div>
+      </div>
+      <style>{`@keyframes dmIn{from{opacity:0;transform:scale(0.92) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
+    </div>
+  );
+}
+
+// ─── Desktop: "more events" day popover ───────────────────────────────────────
+function DesktopDayPopover({
+  date, events, onEventClick, onClose,
+}: {
+  date: Date;
+  events: ChequeEvent[];
+  onEventClick: (e: ChequeEvent) => void;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [onClose]);
+  const isToday = toDateKey(date) === toDateKey(new Date());
+  const totalAmount = events.reduce((s, e) => s + e.amount, 0);
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ backdropFilter: "blur(3px)", background: "rgba(0,0,0,0.3)" }}
+      onClick={onClose}
+    >
+      <div
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden"
+        style={{ animation: "dmIn 0.18s cubic-bezier(0.34,1.56,0.64,1) both" }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className={`px-5 pt-4 pb-3 border-b ${isToday ? "bg-blue-50" : "bg-gray-50"}`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold ${
+                isToday ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-700"
+              }`}>
+                {date.getDate()}
+              </div>
+              <div>
+                <p className="text-sm font-bold text-gray-800">
+                  {DAY_FULL[date.getDay()]}, {MONTH_NAMES[date.getMonth()]} {date.getDate()}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {events.length} cheque{events.length !== 1 ? "s" : ""} · {formatLKR(totalAmount)}
+                </p>
+              </div>
+            </div>
+            <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+        {/* Events list */}
+        <div className="max-h-96 overflow-y-auto p-3 space-y-2">
+          {events.map((ev) => {
+            const isCustomer = ev.type === "customer";
+            const colors = statusColors(ev.status);
+            return (
+              <button
+                key={ev.id}
+                onClick={() => { onEventClick(ev); }}
+                className={`w-full text-left flex items-center gap-3 rounded-xl border px-4 py-3 transition-colors hover:shadow-sm ${
+                  isCustomer ? "border-blue-100 bg-blue-50 hover:bg-blue-100" : "border-orange-100 bg-orange-50 hover:bg-orange-100"
+                }`}
+              >
+                <div className={`w-1 self-stretch rounded-full shrink-0 ${isCustomer ? "bg-blue-500" : "bg-orange-500"}`} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-800 truncate">{ev.name}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    #{ev.cheque_number || "—"} · {isCustomer ? ev.reference : `Pmt ${ev.reference}`}
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className={`text-sm font-bold ${isCustomer ? "text-blue-700" : "text-orange-700"}`}>
+                    LKR {Number(ev.amount).toLocaleString("en-LK")}
+                  </p>
+                  <span className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium mt-0.5 ${colors.badge}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${colors.dot}`} />
+                    {ev.status || "Pending"}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Event Pill (month grid) ───────────────────────────────────────────────────
 function EventPill({
   event, onHover, onHoverEnd, onTap, compact = false,
@@ -472,7 +632,7 @@ function WeekView({
 
 // ─── Month View ────────────────────────────────────────────────────────────────
 function MonthView({
-  year, month, eventsByDate, onHover, onHoverEnd, onTap, onDayClick,
+  year, month, eventsByDate, onHover, onHoverEnd, onTap, onDayClick, onMoreClick,
 }: {
   year: number;
   month: number;
@@ -481,6 +641,7 @@ function MonthView({
   onHoverEnd: () => void;
   onTap: (e: ChequeEvent) => void;
   onDayClick: (date: Date) => void;
+  onMoreClick: (date: Date, events: ChequeEvent[]) => void;
 }) {
   const today = toDateKey(new Date());
   const firstDay = new Date(year, month, 1).getDay();
@@ -545,7 +706,10 @@ function MonthView({
                   <EventPill key={ev.id} event={ev} onHover={onHover} onHoverEnd={onHoverEnd} onTap={onTap} compact />
                 ))}
                 {events.length > 3 && (
-                  <button onClick={() => onDayClick(date)} className="text-[10px] text-blue-500 hover:underline pl-1">
+                  <button
+                    onClick={() => onMoreClick(date, events)}
+                    className="text-[10px] text-blue-600 font-semibold hover:text-blue-800 hover:underline pl-1 text-left"
+                  >
                     +{events.length - 3} more
                   </button>
                 )}
@@ -653,7 +817,19 @@ export function ChequeCalendarView({
     tooltipTimer.current = setTimeout(() => setTooltip(null), 80);
   }, []);
 
-  const handleTap = useCallback((event: ChequeEvent) => setSheet(event), []);
+  // Desktop modals
+  const [desktopEvent, setDesktopEvent] = useState<ChequeEvent | null>(null);
+  const [desktopDay, setDesktopDay] = useState<{ date: Date; events: ChequeEvent[] } | null>(null);
+
+  const handleTap = useCallback((event: ChequeEvent) => {
+    if (isTouchRef.current) setSheet(event);
+    else setDesktopEvent(event);
+  }, []);
+
+  const handleMoreClick = useCallback((date: Date, events: ChequeEvent[]) => {
+    if (isTouchRef.current) { setCurrentDate(new Date(date)); setView("day"); }
+    else setDesktopDay({ date, events });
+  }, []);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -789,7 +965,7 @@ export function ChequeCalendarView({
             onPrev={prev} onNext={next} />
         ) : view === "month" ? (
           <MonthView year={year} month={month} eventsByDate={eventsByDate}
-            onHover={handleHover} onHoverEnd={handleHoverEnd} onTap={handleTap} onDayClick={goToDay} />
+            onHover={handleHover} onHoverEnd={handleHoverEnd} onTap={handleTap} onDayClick={goToDay} onMoreClick={handleMoreClick} />
         ) : (
           <DayView date={currentDate} eventsByDate={eventsByDate}
             onHover={handleHover} onHoverEnd={handleHoverEnd} onTap={handleTap} />
@@ -798,6 +974,15 @@ export function ChequeCalendarView({
 
       {tooltip && <HoverTooltip tooltip={tooltip} />}
       {sheet && <BottomSheet event={sheet} onClose={() => setSheet(null)} />}
+      {desktopEvent && <DesktopEventModal event={desktopEvent} onClose={() => setDesktopEvent(null)} />}
+      {desktopDay && (
+        <DesktopDayPopover
+          date={desktopDay.date}
+          events={desktopDay.events}
+          onEventClick={(ev) => { setDesktopDay(null); setDesktopEvent(ev); }}
+          onClose={() => setDesktopDay(null)}
+        />
+      )}
     </div>
   );
 }
