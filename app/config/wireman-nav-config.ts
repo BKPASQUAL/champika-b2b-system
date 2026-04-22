@@ -13,6 +13,7 @@ import {
   Undo2,
   Gift,
   ClipboardCheck,
+  CalendarDays,
 } from "lucide-react";
 
 interface WiremanNavItem {
@@ -122,6 +123,12 @@ export const wiremanOfficeNavItems: WiremanNavSection[] = [
         name: "Expenses",
         href: "/dashboard/office/wireman/expenses",
         icon: Coins,
+      },
+      {
+        name: "Cheque Calendar",
+        href: "/dashboard/office/wireman/calendar",
+        icon: CalendarDays,
+        description: "View customer & supplier cheques by date",
       },
     ],
   },

@@ -18,6 +18,7 @@ import {
   Layers,
   Undo2,
   Wallet, // ✅ Added for Expenses
+  CalendarDays,
 } from "lucide-react";
 
 interface DistNavItem {
@@ -145,6 +146,17 @@ export const distributionNavItems: DistNavSection[] = [
         name: "Returns",
         href: "/dashboard/office/distribution/inventory/returns",
         icon: Undo2,
+      },
+    ],
+  },
+  {
+    title: "Finance",
+    items: [
+      {
+        name: "Cheque Calendar",
+        href: "/dashboard/office/distribution/calendar",
+        icon: CalendarDays,
+        description: "View customer & supplier cheques by date",
       },
     ],
   },

@@ -13,6 +13,7 @@ import {
   Undo2,
   ClipboardCheck,
   Coins,
+  CalendarDays,
 } from "lucide-react";
 
 interface SierraNavItem {
@@ -116,6 +117,12 @@ export const sierraOfficeNavItems: SierraNavSection[] = [
         name: "Expenses",
         href: "/dashboard/office/sierra/expenses",
         icon: Coins,
+      },
+      {
+        name: "Cheque Calendar",
+        href: "/dashboard/office/sierra/calendar",
+        icon: CalendarDays,
+        description: "View customer & supplier cheques by date",
       },
     ],
   },

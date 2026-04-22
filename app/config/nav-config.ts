@@ -30,6 +30,7 @@ import {
   ArrowRightLeft,
   HardDrive,
   ClipboardList,
+  CalendarDays,
 } from "lucide-react";
 
 export type UserRole = "admin" | "office" | "rep" | "delivery";
@@ -194,6 +195,11 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           name: "Cheque Registry",
           href: "/dashboard/admin/finance/check-registry",
           icon: ScrollText,
+        },
+        {
+          name: "Cheque Calendar",
+          href: "/dashboard/admin/calendar",
+          icon: CalendarDays,
         },
         {
           name: "Expenses",
