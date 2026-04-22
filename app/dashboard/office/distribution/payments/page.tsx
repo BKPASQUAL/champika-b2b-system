@@ -181,15 +181,15 @@ interface Payment {
   cheque_number: string | null;
   cheque_date: string | null;
   cheque_status:
-    | "Pending"
-    | "Deposited"
-    | "Passed"
-    | "Returned"
-    | "pending"
-    | "deposited"
-    | "passed"
-    | "returned"
-    | null;
+  | "Pending"
+  | "Deposited"
+  | "Passed"
+  | "Returned"
+  | "pending"
+  | "deposited"
+  | "passed"
+  | "returned"
+  | null;
   bank_id: string | null;
   deposit_account_id: string | null;
   customers?: { name: string };
@@ -882,13 +882,13 @@ export default function DistributionPaymentsPage() {
                     <span className="truncate">
                       {formData.orderId
                         ? (() => {
-                            const order = unpaidOrders.find(
-                              (o) => o.id === formData.orderId
-                            );
-                            return order
-                              ? `${order.order_number} - ${order.customer_name}`
-                              : "Select an invoice...";
-                          })()
+                          const order = unpaidOrders.find(
+                            (o) => o.id === formData.orderId
+                          );
+                          return order
+                            ? `${order.order_number} - ${order.customer_name}`
+                            : "Select an invoice...";
+                        })()
                         : "Select an invoice..."}
                     </span>
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -1026,22 +1026,22 @@ export default function DistributionPaymentsPage() {
                       <span className="truncate">
                         {formData.depositAccountId
                           ? (() => {
-                              const account = companyAccounts.find(
-                                (a) => a.id === formData.depositAccountId
-                              );
-                              return account ? (
-                                <span>
-                                  {account.account_name}
-                                  {account.banks && (
-                                    <span className="text-muted-foreground ml-2">
-                                      ({account.banks.bank_code})
-                                    </span>
-                                  )}
-                                </span>
-                              ) : (
-                                "Select account..."
-                              );
-                            })()
+                            const account = companyAccounts.find(
+                              (a) => a.id === formData.depositAccountId
+                            );
+                            return account ? (
+                              <span>
+                                {account.account_name}
+                                {account.banks && (
+                                  <span className="text-muted-foreground ml-2">
+                                    ({account.banks.bank_code})
+                                  </span>
+                                )}
+                              </span>
+                            ) : (
+                              "Select account..."
+                            );
+                          })()
                           : "Select account..."}
                       </span>
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -1056,9 +1056,8 @@ export default function DistributionPaymentsPage() {
                           {getAvailableAccounts().map((account) => (
                             <CommandItem
                               key={account.id}
-                              value={`${account.account_name} ${
-                                account.banks?.bank_name || ""
-                              }`}
+                              value={`${account.account_name} ${account.banks?.bank_name || ""
+                                }`}
                               onSelect={() => {
                                 setFormData({
                                   ...formData,
@@ -1116,13 +1115,13 @@ export default function DistributionPaymentsPage() {
                         <span className="truncate">
                           {formData.bankId
                             ? (() => {
-                                const bank = banks.find(
-                                  (b) => b.id === formData.bankId
-                                );
-                                return bank
-                                  ? `${bank.bank_code} - ${bank.bank_name}`
-                                  : "Select bank...";
-                              })()
+                              const bank = banks.find(
+                                (b) => b.id === formData.bankId
+                              );
+                              return bank
+                                ? `${bank.bank_code} - ${bank.bank_name}`
+                                : "Select bank...";
+                            })()
                             : "Select bank..."}
                         </span>
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />

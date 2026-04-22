@@ -180,9 +180,8 @@ function EventPill({
       onMouseEnter={(ev) => onHover(event, ev.clientX, ev.clientY)}
       onMouseMove={(ev) => onHover(event, ev.clientX, ev.clientY)}
       onMouseLeave={onHoverEnd}
-      className={`w-full text-left rounded px-1.5 py-0.5 text-xs font-medium truncate cursor-pointer ${
-        isCustomer ? "bg-blue-500 text-white" : "bg-orange-500 text-white"
-      } ${compact ? "leading-4" : "leading-5"}`}
+      className={`w-full text-left rounded px-1.5 py-0.5 text-xs font-medium truncate cursor-pointer ${isCustomer ? "bg-blue-500 text-white" : "bg-orange-500 text-white"
+        } ${compact ? "leading-4" : "leading-5"}`}
     >
       <span className="opacity-75 mr-1">{isCustomer ? "C" : "S"}</span>
       {event.name} · {formatLKR(event.amount)}
@@ -207,11 +206,10 @@ function EventRow({
       onMouseEnter={(ev) => onHover(event, ev.clientX, ev.clientY)}
       onMouseMove={(ev) => onHover(event, ev.clientX, ev.clientY)}
       onMouseLeave={onHoverEnd}
-      className={`w-full text-left flex items-center gap-3 rounded-xl border px-4 py-3 cursor-pointer active:scale-[0.99] transition-transform ${
-        isCustomer
+      className={`w-full text-left flex items-center gap-3 rounded-xl border px-4 py-3 cursor-pointer active:scale-[0.99] transition-transform ${isCustomer
           ? "border-blue-100 bg-blue-50 active:bg-blue-100"
           : "border-orange-100 bg-orange-50 active:bg-orange-100"
-      }`}
+        }`}
     >
       <div className={`w-1 self-stretch rounded-full shrink-0 ${isCustomer ? "bg-blue-500" : "bg-orange-500"}`} />
       <div className="flex-1 min-w-0">
@@ -360,22 +358,20 @@ function DayStrip({
             className="flex flex-col items-center pt-2 pb-2 gap-1 focus:outline-none"
           >
             {/* Day name */}
-            <span className={`text-[10px] sm:text-xs font-semibold uppercase tracking-wide ${
-              isToday ? "text-blue-500" : "text-muted-foreground"
-            }`}>
+            <span className={`text-[10px] sm:text-xs font-semibold uppercase tracking-wide ${isToday ? "text-blue-500" : "text-muted-foreground"
+              }`}>
               {DAY_SHORT[d.getDay()]}
             </span>
 
             {/* Date number */}
-            <span className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full text-sm sm:text-base font-bold transition-colors ${
-              isSelected && isToday
+            <span className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full text-sm sm:text-base font-bold transition-colors ${isSelected && isToday
                 ? "bg-blue-600 text-white"
                 : isSelected
-                ? "bg-gray-800 text-white"
-                : isToday
-                ? "text-blue-600"
-                : "text-gray-700"
-            }`}>
+                  ? "bg-gray-800 text-white"
+                  : isToday
+                    ? "text-blue-600"
+                    : "text-gray-700"
+              }`}>
               {d.getDate()}
             </span>
 
@@ -528,9 +524,8 @@ function MonthView({
               <div className="flex items-center justify-between px-0.5 mb-0.5">
                 <button
                   onClick={() => onDayClick(date)}
-                  className={`text-xs font-semibold w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center rounded-full ${
-                    isToday ? "bg-blue-600 text-white" : inMonth ? "text-gray-700" : "text-gray-400"
-                  }`}
+                  className={`text-xs font-semibold w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center rounded-full ${isToday ? "bg-blue-600 text-white" : inMonth ? "text-gray-700" : "text-gray-400"
+                    }`}
                 >
                   {date.getDate()}
                 </button>
@@ -591,9 +586,8 @@ function DayView({
       {/* Day header */}
       <div className={`px-5 py-4 border-b ${isToday ? "bg-blue-50" : "bg-gray-50"}`}>
         <div className="flex items-center gap-3 flex-wrap">
-          <div className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold ${
-            isToday ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-700"
-          }`}>
+          <div className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold ${isToday ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-700"
+            }`}>
             {date.getDate()}
           </div>
           <div>
@@ -740,9 +734,8 @@ export function ChequeCalendarView({
           <div className="flex rounded-lg border overflow-hidden text-xs">
             {(["all", "customer", "supplier"] as const).map((f) => (
               <button key={f} onClick={() => setFilter(f)}
-                className={`px-2.5 sm:px-3 py-1.5 capitalize font-medium transition-colors ${
-                  filter === f ? "bg-gray-800 text-white" : "bg-white text-gray-600"
-                }`}>
+                className={`px-2.5 sm:px-3 py-1.5 capitalize font-medium transition-colors ${filter === f ? "bg-gray-800 text-white" : "bg-white text-gray-600"
+                  }`}>
                 {f === "all" ? "All" : f === "customer" ? "Cust." : "Supp."}
               </button>
             ))}
@@ -752,9 +745,8 @@ export function ChequeCalendarView({
           <div className="flex rounded-lg border overflow-hidden text-xs">
             {(["week", "month", "day"] as const).map((v) => (
               <button key={v} onClick={() => setView(v)}
-                className={`px-2.5 sm:px-3 py-1.5 capitalize font-medium transition-colors ${
-                  view === v ? "bg-blue-600 text-white" : "bg-white text-gray-600"
-                }`}>
+                className={`px-2.5 sm:px-3 py-1.5 capitalize font-medium transition-colors ${view === v ? "bg-blue-600 text-white" : "bg-white text-gray-600"
+                  }`}>
                 {v}
               </button>
             ))}
