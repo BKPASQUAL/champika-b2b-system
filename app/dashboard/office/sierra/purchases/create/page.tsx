@@ -39,6 +39,7 @@ import { ProductFormData } from "../../products/types";
 import { SupplierDialogs } from "../../suppliers/_components/SupplierDialogs";
 import { SupplierFormData } from "../../suppliers/types";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
+import { invalidateCache } from "@/hooks/useCachedFetch";
 
 // --- Types ---
 
@@ -453,6 +454,7 @@ export default function CreateSierraPurchasePage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to create purchase");
+      invalidateCache("/api/purchases");
       toast.success("Bill Created Successfully!");
       router.push("/dashboard/office/sierra/purchases");
     } catch (error: any) {

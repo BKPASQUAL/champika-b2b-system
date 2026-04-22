@@ -90,7 +90,7 @@ interface PurchaseDetail {
   payments?: any[];
 }
 
-export default function WiremanViewBillPage({
+export default function SierraViewBillPage({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -118,7 +118,7 @@ export default function WiremanViewBillPage({
         });
       } catch (error) {
         toast.error("Error loading bill details");
-        router.push("/dashboard/office/wireman/purchases");
+        router.push("/dashboard/office/sierra/purchases");
       } finally {
         setLoading(false);
       }
@@ -208,7 +208,7 @@ export default function WiremanViewBillPage({
                 size="icon"
                 className="h-8 w-8 rounded-full bg-background hover:bg-slate-100"
                 onClick={() =>
-                  router.push("/dashboard/office/wireman/purchases")
+                  router.push("/dashboard/office/sierra/purchases")
                 }
               >
                 <ArrowLeft className="w-4 h-4" />
@@ -275,7 +275,7 @@ export default function WiremanViewBillPage({
                 size="sm"
                 className="bg-red-600 hover:bg-red-700 text-white"
                 onClick={() =>
-                  router.push(`/dashboard/office/wireman/purchases/${id}/edit`)
+                  router.push(`/dashboard/office/sierra/purchases/${id}/edit`)
                 }
               >
                 <Edit className="w-4 h-4 mr-2" /> Edit Bill
@@ -336,7 +336,7 @@ export default function WiremanViewBillPage({
                   </Avatar>
                   <div className="space-y-1">
                     <h3 className="font-semibold text-base leading-none">
-                      {bill.business?.name || "Wireman Agency"}
+                      {bill.business?.name || "Sierra Agency"}
                     </h3>
                     <p className="text-xs text-muted-foreground">
                       Authorized Purchase

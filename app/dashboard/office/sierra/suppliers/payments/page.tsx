@@ -3,7 +3,8 @@
 
 import React, { useState, useMemo } from "react";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
-import { DollarSign, Clock, Search, AlertCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { DollarSign, Clock, Search, AlertCircle, CreditCard, Banknote, Building2, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -43,6 +44,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
@@ -81,6 +83,7 @@ interface SupplierPayment {
     account_name: string;
   } | null;
   purchases: {
+    id: string;
     purchase_id: string;
     suppliers: {
       name: string;
@@ -96,7 +99,20 @@ const formatCurrency = (amount: number) => {
   }).format(amount);
 };
 
+const METHOD_BADGE: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
+  cash:          { label: "Cash",          className: "bg-green-50 text-green-700 border-green-200",  icon: <Banknote className="w-3 h-3" /> },
+  bank_transfer: { label: "Bank Transfer", className: "bg-blue-50 text-blue-700 border-blue-200",    icon: <Building2 className="w-3 h-3" /> },
+  cheque:        { label: "Cheque",        className: "bg-amber-50 text-amber-700 border-amber-200", icon: <FileText className="w-3 h-3" /> },
+};
+
+const CHEQUE_STATUS_BADGE: Record<string, string> = {
+  pending:  "bg-yellow-50 text-yellow-700 border-yellow-200",
+  passed:   "bg-green-50 text-green-700 border-green-200",
+  returned: "bg-red-50 text-red-700 border-red-200",
+};
+
 export default function SierraSupplierPaymentsPage() {
+  const router = useRouter();
   const [currentBusinessId] = useState<string>(() => {
     const user = getUserBusinessContext();
     return user?.businessId ?? BUSINESS_IDS.SIERRA_AGENCY;
@@ -368,8 +384,13 @@ export default function SierraSupplierPaymentsPage() {
                       <TableCell>
                         {new Date(p.purchaseDate).toLocaleDateString()}
                       </TableCell>
-                      <TableCell className="font-medium">
-                        {p.purchaseId}
+                      <TableCell>
+                        <button
+                          className="font-mono text-xs bg-red-50 text-red-700 border border-red-100 px-2 py-0.5 rounded hover:bg-red-100 transition-colors"
+                          onClick={() => router.push(`/dashboard/office/sierra/purchases/${p.id}`)}
+                        >
+                          {p.purchaseId}
+                        </button>
                       </TableCell>
                       <TableCell>{p.supplierName}</TableCell>
                       <TableCell className="text-right">
@@ -407,10 +428,11 @@ export default function SierraSupplierPaymentsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Cheque Date</TableHead>
-                    <TableHead>Purchase</TableHead>
+                    <TableHead>Payment Date</TableHead>
+                    <TableHead>Bill ID</TableHead>
                     <TableHead>Supplier</TableHead>
                     <TableHead>Cheque No</TableHead>
+                    <TableHead>Cheque Date</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -418,12 +440,24 @@ export default function SierraSupplierPaymentsPage() {
                 <TableBody>
                   {pendingCheques.map((p) => (
                     <TableRow key={p.id}>
-                      <TableCell>
-                        {new Date(p.cheque_date!).toLocaleDateString()}
+                      <TableCell className="text-sm">
+                        {new Date(p.payment_date).toLocaleDateString()}
                       </TableCell>
-                      <TableCell>{p.purchases?.purchase_id}</TableCell>
+                      <TableCell>
+                        <button
+                          className="font-mono text-xs bg-red-50 text-red-700 border border-red-100 px-2 py-0.5 rounded hover:bg-red-100 transition-colors"
+                          onClick={() => router.push(`/dashboard/office/sierra/purchases/${p.purchases?.id}`)}
+                        >
+                          {p.purchases?.purchase_id}
+                        </button>
+                      </TableCell>
                       <TableCell>{p.purchases?.suppliers?.name}</TableCell>
-                      <TableCell>{p.cheque_number}</TableCell>
+                      <TableCell>
+                        <span className="font-mono text-sm font-medium">{p.cheque_number}</span>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {p.cheque_date ? new Date(p.cheque_date).toLocaleDateString() : "-"}
+                      </TableCell>
                       <TableCell className="text-right font-medium">
                         {formatCurrency(p.amount)}
                       </TableCell>
@@ -455,35 +489,99 @@ export default function SierraSupplierPaymentsPage() {
 
         <TabsContent value="history" className="mt-4">
           <Card>
-            <CardContent>
+            <CardHeader>
+              <CardTitle>Payment History</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Purchase</TableHead>
+                  <TableRow className="bg-slate-50/50">
+                    <TableHead className="pl-4">Date</TableHead>
+                    <TableHead>Bill ID</TableHead>
                     <TableHead>Supplier</TableHead>
                     <TableHead>Method</TableHead>
+                    <TableHead>Cheque No</TableHead>
+                    <TableHead>Cheque Date</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead className="text-right pr-4">Amount</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredHistory.map((p) => (
-                    <TableRow key={p.id}>
-                      <TableCell>
-                        {new Date(p.payment_date).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell>{p.purchases?.purchase_id}</TableCell>
-                      <TableCell>{p.purchases?.suppliers?.name}</TableCell>
-                      <TableCell className="capitalize">
-                        {p.payment_method}
-                      </TableCell>
-                      <TableCell>{p.cheque_status || "Completed"}</TableCell>
-                      <TableCell className="text-right font-medium">
-                        {formatCurrency(p.amount)}
+                  {filteredHistory.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                        No payment history found.
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ) : (
+                    filteredHistory.map((p) => {
+                      const methodMeta = METHOD_BADGE[p.payment_method] ?? {
+                        label: p.payment_method,
+                        className: "bg-slate-50 text-slate-700 border-slate-200",
+                        icon: <CreditCard className="w-3 h-3" />,
+                      };
+                      const isCheque = p.payment_method === "cheque";
+                      const statusKey = p.cheque_status?.toLowerCase() ?? "";
+                      return (
+                        <TableRow key={p.id} className="hover:bg-muted/30">
+                          <TableCell className="pl-4 text-sm">
+                            {new Date(p.payment_date).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell>
+                            <button
+                              className="font-mono text-xs bg-red-50 text-red-700 border border-red-100 px-2 py-0.5 rounded hover:bg-red-100 transition-colors"
+                              onClick={() => router.push(`/dashboard/office/sierra/purchases/${p.purchases?.id}`)}
+                            >
+                              {p.purchases?.purchase_id ?? "-"}
+                            </button>
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {p.purchases?.suppliers?.name ?? "-"}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="outline"
+                              className={`gap-1 text-xs ${methodMeta.className}`}
+                            >
+                              {methodMeta.icon}
+                              {methodMeta.label}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {isCheque && p.cheque_number ? (
+                              <span className="font-mono text-sm font-medium text-amber-800">
+                                {p.cheque_number}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {isCheque && p.cheque_date
+                              ? new Date(p.cheque_date).toLocaleDateString()
+                              : "-"}
+                          </TableCell>
+                          <TableCell>
+                            {isCheque && statusKey ? (
+                              <Badge
+                                variant="outline"
+                                className={`text-xs capitalize ${CHEQUE_STATUS_BADGE[statusKey] ?? "bg-slate-50 text-slate-700 border-slate-200"}`}
+                              >
+                                {p.cheque_status}
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                                Completed
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right pr-4 font-mono font-medium">
+                            {formatCurrency(p.amount)}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
                 </TableBody>
               </Table>
             </CardContent>

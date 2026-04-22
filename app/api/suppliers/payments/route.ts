@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
         `
         *,
         purchases!inner (
+          id,
           purchase_id,
           business_id
         ),
@@ -66,6 +67,7 @@ export async function GET(request: NextRequest) {
           }
         : null,
       purchases: {
+        id: p.purchases?.id,
         purchase_id: p.purchases?.purchase_id,
         suppliers: { name: p.suppliers?.name },
       },
