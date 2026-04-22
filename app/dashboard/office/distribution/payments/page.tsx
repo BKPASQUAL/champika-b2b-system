@@ -65,7 +65,7 @@ function DistributionStatusForm({
   onSuccess: () => void;
   onCancel: () => void;
 }) {
-  const [status, setStatus] = useState(payment.cheque_status || "Pending");
+  const [status, setStatus] = useState<string>(payment.cheque_status || "Pending");
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
