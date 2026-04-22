@@ -300,22 +300,51 @@ function EventsPanel({
   );
 }
 
-// ─── iOS-style Day Strip ───────────────────────────────────────────────────────
+// ─── iOS-style Day Strip (with touch swipe) ───────────────────────────────────
 function DayStrip({
   days,
   selectedKey,
   todayKey,
   eventsByDate,
   onSelect,
+  onSwipeLeft,
+  onSwipeRight,
 }: {
   days: Date[];
   selectedKey: string;
   todayKey: string;
   eventsByDate: Map<string, ChequeEvent[]>;
   onSelect: (d: Date) => void;
+  onSwipeLeft: () => void;
+  onSwipeRight: () => void;
 }) {
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+
+  function handleTouchStart(e: React.TouchEvent) {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  }
+
+  function handleTouchEnd(e: React.TouchEvent) {
+    if (touchStartX.current === null || touchStartY.current === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    const dy = e.changedTouches[0].clientY - touchStartY.current;
+    // Only treat as horizontal swipe if mostly horizontal
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      if (dx < 0) onSwipeLeft();
+      else onSwipeRight();
+    }
+    touchStartX.current = null;
+    touchStartY.current = null;
+  }
+
   return (
-    <div className="grid grid-cols-7 border-b bg-white">
+    <div
+      className="grid grid-cols-7 border-b bg-white select-none"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
       {days.map((d) => {
         const key = toDateKey(d);
         const isToday = key === todayKey;
@@ -364,13 +393,15 @@ function DayStrip({
 
 // ─── Week View (iOS Calendar style) ───────────────────────────────────────────
 function WeekView({
-  weekStart, eventsByDate, onHover, onHoverEnd, onTap,
+  weekStart, eventsByDate, onHover, onHoverEnd, onTap, onPrev, onNext,
 }: {
   weekStart: Date;
   eventsByDate: Map<string, ChequeEvent[]>;
   onHover: (e: ChequeEvent, x: number, y: number) => void;
   onHoverEnd: () => void;
   onTap: (e: ChequeEvent) => void;
+  onPrev: () => void;
+  onNext: () => void;
 }) {
   const todayKey = toDateKey(new Date());
 
@@ -392,6 +423,26 @@ function WeekView({
     setSelectedDate(todayInWeek ?? days[0]);
   }, [weekStart]); // eslint-disable-line
 
+  // Swipe on events panel also navigates weeks
+  const panelTouchX = useRef<number | null>(null);
+  const panelTouchY = useRef<number | null>(null);
+
+  function handlePanelTouchStart(e: React.TouchEvent) {
+    panelTouchX.current = e.touches[0].clientX;
+    panelTouchY.current = e.touches[0].clientY;
+  }
+  function handlePanelTouchEnd(e: React.TouchEvent) {
+    if (panelTouchX.current === null || panelTouchY.current === null) return;
+    const dx = e.changedTouches[0].clientX - panelTouchX.current;
+    const dy = e.changedTouches[0].clientY - panelTouchY.current;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      if (dx < 0) onNext();
+      else onPrev();
+    }
+    panelTouchX.current = null;
+    panelTouchY.current = null;
+  }
+
   const selectedKey = toDateKey(selectedDate);
   const selectedEvents = eventsByDate.get(selectedKey) || [];
 
@@ -402,9 +453,15 @@ function WeekView({
         selectedKey={selectedKey}
         todayKey={todayKey}
         eventsByDate={eventsByDate}
+        onSwipeLeft={onNext}
+        onSwipeRight={onPrev}
         onSelect={setSelectedDate}
       />
-      <div className="flex-1 overflow-auto">
+      <div
+        className="flex-1 overflow-auto"
+        onTouchStart={handlePanelTouchStart}
+        onTouchEnd={handlePanelTouchEnd}
+      >
         <EventsPanel
           date={selectedDate}
           events={selectedEvents}
@@ -736,7 +793,8 @@ export function ChequeCalendarView({
           </div>
         ) : view === "week" ? (
           <WeekView weekStart={weekStart} eventsByDate={eventsByDate}
-            onHover={handleHover} onHoverEnd={handleHoverEnd} onTap={handleTap} />
+            onHover={handleHover} onHoverEnd={handleHoverEnd} onTap={handleTap}
+            onPrev={prev} onNext={next} />
         ) : view === "month" ? (
           <MonthView year={year} month={month} eventsByDate={eventsByDate}
             onHover={handleHover} onHoverEnd={handleHoverEnd} onTap={handleTap} onDayClick={goToDay} />
