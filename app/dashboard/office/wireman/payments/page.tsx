@@ -22,7 +22,7 @@ import { BUSINESS_IDS } from "@/app/config/business-constants";
 import { Payment, SortField, SortOrder } from "./types";
 import { PaymentStats } from "./_components/PaymentStats";
 import { PaymentTable } from "./_components/PaymentTable";
-import { PaymentDialogs } from "./_components/PaymentDialogs";
+import { PaymentDialogs, PaymentViewDialog } from "./_components/PaymentDialogs";
 import { CreatePaymentDialog } from "./_components/CreatePaymentDialog";
 
 export default function WiremanPaymentsPage() {
@@ -46,6 +46,7 @@ export default function WiremanPaymentsPage() {
   // Dialog State
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
 
   const {
@@ -65,16 +66,21 @@ export default function WiremanPaymentsPage() {
     () =>
       rawPayments.map((p: any) => ({
         id: p.id,
+        paymentNumber: p.payment_number || p.id.substring(0, 8).toUpperCase(),
         invoiceId: p.invoice_id,
         invoiceNo: p.invoices?.invoice_no || "N/A",
         customerId: p.customer_id,
         customerName: p.customers?.name || "Unknown Customer",
         amount: Number(p.amount),
         date: p.payment_date,
-        method: p.payment_method || "Cash",
+        method: p.payment_method || "cash",
         chequeNo: p.cheque_number,
         chequeDate: p.cheque_date,
         chequeStatus: p.cheque_status,
+        bankName: p.banks?.bank_name,
+        bankCode: p.banks?.bank_code,
+        depositAccountName: p.company_accounts?.account_name,
+        depositAccountType: p.company_accounts?.account_type,
         collectedBy: "Office",
       })),
     [rawPayments]
@@ -94,10 +100,10 @@ export default function WiremanPaymentsPage() {
       p.invoiceNo.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (p.chequeNo && p.chequeNo.includes(searchQuery));
 
-    const matchesMethod = methodFilter === "all" || p.method === methodFilter;
+    const matchesMethod = methodFilter === "all" || p.method?.toLowerCase() === methodFilter.toLowerCase();
     const matchesStatus =
       statusFilter === "all" ||
-      (p.method === "Cheque" && p.chequeStatus === statusFilter);
+      (p.method?.toLowerCase() === "cheque" && p.chequeStatus === statusFilter);
 
     return matchesSearch && matchesMethod && matchesStatus;
   });
@@ -222,6 +228,10 @@ export default function WiremanPaymentsPage() {
               setSelectedPayment(p);
               setIsDialogOpen(true);
             }}
+            onView={(p) => {
+              setSelectedPayment(p);
+              setIsViewDialogOpen(true);
+            }}
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={setCurrentPage}
@@ -234,6 +244,12 @@ export default function WiremanPaymentsPage() {
         setIsOpen={setIsDialogOpen}
         selectedPayment={selectedPayment}
         onUpdate={fetchPayments}
+      />
+
+      <PaymentViewDialog
+        isOpen={isViewDialogOpen}
+        setIsOpen={setIsViewDialogOpen}
+        payment={selectedPayment}
       />
 
       <CreatePaymentDialog

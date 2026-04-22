@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -121,6 +122,89 @@ export function PaymentDialogs({
           >
             {loading ? "Updating..." : "Save Changes"}
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Payment View Dialog ───────────────────────────────────────────────────────
+interface PaymentViewDialogProps {
+  isOpen: boolean;
+  setIsOpen: (open: boolean) => void;
+  payment: Payment | null;
+}
+
+const CHEQUE_STATUS_STYLES: Record<string, string> = {
+  Pending: "bg-amber-100 text-amber-700 border-amber-200",
+  Cleared: "bg-green-100 text-green-700 border-green-200",
+  Bounced: "bg-red-100 text-red-700 border-red-200",
+  Returned: "bg-gray-100 text-gray-700 border-gray-200",
+};
+
+export function PaymentViewDialog({ isOpen, setIsOpen, payment }: PaymentViewDialogProps) {
+  if (!payment) return null;
+
+  const isCheque = payment.method?.toLowerCase() === "cheque";
+
+  return (
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogContent className="sm:max-w-[440px]">
+        <DialogHeader>
+          <DialogTitle>Payment Details</DialogTitle>
+          <DialogDescription>
+            Invoice: <span className="font-mono font-bold text-gray-900">{payment.invoiceNo}</span>
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-3 py-2 text-sm">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">Customer</p>
+              <p className="font-semibold">{payment.customerName}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">Amount</p>
+              <p className="font-bold text-gray-800">LKR {payment.amount.toLocaleString()}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">Payment Date</p>
+              <p>{payment.date ? new Date(payment.date).toLocaleDateString() : "—"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">Method</p>
+              <Badge variant="secondary" className="font-normal">{payment.method}</Badge>
+            </div>
+          </div>
+
+          {isCheque && (
+            <div className="mt-1 rounded-lg border border-blue-100 bg-blue-50 p-3 grid grid-cols-2 gap-x-4 gap-y-3">
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">Cheque No</p>
+                <p className="font-mono font-semibold text-blue-800">{payment.chequeNo || "—"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">Cheque Date</p>
+                <p className="font-semibold text-blue-800">
+                  {payment.chequeDate ? new Date(payment.chequeDate).toLocaleDateString() : "—"}
+                </p>
+              </div>
+              <div className="col-span-2">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-1">Cheque Status</p>
+                {payment.chequeStatus ? (
+                  <Badge variant="outline" className={`border ${CHEQUE_STATUS_STYLES[payment.chequeStatus] || ""}`}>
+                    {payment.chequeStatus}
+                  </Badge>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setIsOpen(false)}>Close</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
