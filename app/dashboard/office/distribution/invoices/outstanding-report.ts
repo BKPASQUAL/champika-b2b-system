@@ -14,24 +14,25 @@ const fmt = (amount: number) =>
   });
 
 const COLOR = {
-  headerBg:     [139, 0,   0  ] as [number, number, number],
+  headerBg:     [220, 38,   38 ] as [number, number, number], // Sierra Red
   headerText:   [255, 255, 255] as [number, number, number],
-  custBg:       [245, 245, 245] as [number, number, number],
-  custText:     [30,  30,  30 ] as [number, number, number],
-  overdueHigh:  [255, 235, 235] as [number, number, number],
-  overdueText:  [153, 27,  27 ] as [number, number, number],
-  overdueXHigh: [255, 218, 218] as [number, number, number],
+  custBg:       [240, 240, 240] as [number, number, number], // Lighter gray background for customers
+  custText:     [50,  50,  50 ] as [number, number, number], // Dark gray customer text
+  overdueHigh:  [254, 249, 195] as [number, number, number], // Yellow background
+  overdueText:  [161, 98,  7  ] as [number, number, number], // Amber text
+  overdueXHigh: [254, 226, 226] as [number, number, number], // Red background
+  overdueXText: [185, 28,  28 ] as [number, number, number], // Dark red text
   grandBg:      [255, 237, 213] as [number, number, number],
   grandText:    [124, 45,  18 ] as [number, number, number],
-  divider:      [220, 220, 220] as [number, number, number],
-  titleOrange:  [220, 80,  0  ] as [number, number, number],
+  divider:      [200, 200, 200] as [number, number, number],
+  titleOrange:  [220, 38,  38 ] as [number, number, number], // Sierra Red for subtitle
   bodyText:     [50,  50,  50 ] as [number, number, number],
-  mutedText:    [130, 130, 130] as [number, number, number],
+  mutedText:    [120, 120, 120] as [number, number, number], // Softer gray for metadata
 };
 
-// Left margin and table start Y — tightened to reduce white space
-const M = 8;   // left/right margin mm
-const START_Y = 34; // table starts after header
+// Left margin and table start Y
+const M = 15;   // 15mm left/right margin perfectly centers an 180mm table on 210mm A4
+const START_Y = 46; // table starts after header
 
 function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -39,32 +40,28 @@ function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
   const pageHeight = doc.internal.pageSize.getHeight();
 
   // ── Header ────────────────────────────────────────────────────────────────
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.setTextColor(...COLOR.custText);
-  doc.text(COMPANY_NAME, M, 13);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(20);
+  doc.setTextColor(50, 50, 50); // Dark gray/black for main title
+  doc.text(COMPANY_NAME, M, 20);
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(14); // Professional subtitle size
   doc.setTextColor(...COLOR.titleOrange);
   const subtitle =
     repFilter !== "all"
       ? `Outstanding Bills (Grouped by Customer) — ${repFilter}`
       : "Outstanding Bills (Grouped by Customer)";
-  doc.text(subtitle, M, 20);
+  doc.text(subtitle, M, 28);
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
+  doc.setFontSize(9); // Refined metadata size
   doc.setTextColor(...COLOR.mutedText);
   doc.text(
-    `Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`,
-    M, 25
+    `Generated: ${new Date().toLocaleDateString()}, ${new Date().toLocaleTimeString()}`,
+    M, 36
   );
-  doc.text(`Total Outstanding Bills: ${outstanding.length}`, M, 29);
-
-  doc.setDrawColor(...COLOR.divider);
-  doc.setLineWidth(0.3);
-  doc.line(M, 31, pageWidth - M, 31);
+  doc.text(`Total Outstanding Bills: ${outstanding.length}`, M, 42);
 
   // ── Group by Customer ─────────────────────────────────────────────────────
   const grouped: Record<string, Invoice[]> = {};
@@ -97,7 +94,7 @@ function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
           fontStyle: "bold",
           halign: "left",
           fontSize: 8.5,
-          cellPadding: { top: 2, bottom: 2, left: 3, right: 3 },
+          cellPadding: { top: 2, bottom: 2, left: 2, right: 2 },
         },
       },
     ]);
@@ -138,35 +135,34 @@ function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
   autoTable(doc, {
     startY: START_Y,
     margin: { left: M, right: M },
-    head: [["Date", "Invoice No", "Days Overdue", "Total (LKR)", "Paid (LKR)", "Due (LKR)", "Status"]],
+    head: [["Date", "Invoice No", "Days", "Total (LKR)", "Paid (LKR)", "Due (LKR)", "Status"]],
     body: tableData,
     theme: "plain",
     headStyles: {
       fillColor: COLOR.headerBg,
       textColor: COLOR.headerText,
       fontStyle: "bold",
-      fontSize: 8.5,
+      fontSize: 9,
       halign: "center",
       cellPadding: { top: 3, bottom: 3, left: 2, right: 2 },
     },
     styles: {
-      fontSize: 8,
-      cellPadding: { top: 1.8, bottom: 1.8, left: 2, right: 2 },
+      fontSize: 8.5,
+      cellPadding: { top: 2, bottom: 2, left: 2, right: 2 },
       lineColor: COLOR.divider,
-      lineWidth: 0.2,
+      lineWidth: 0.1,
       textColor: COLOR.bodyText,
       overflow: "linebreak",
     },
-    alternateRowStyles: { fillColor: [248, 248, 248] },
     columnStyles: {
-      // Total widths = 210 - 8*2 margin = 194mm
+      // Total widths = 180mm perfectly centers with 15mm left/right margins on 210mm A4
       0: { halign: "left",   cellWidth: 24 },  // Date
       1: { halign: "center", cellWidth: 24 },  // Invoice No
-      2: { halign: "center", cellWidth: 26 },  // Days Overdue
-      3: { halign: "right",  cellWidth: 36 },  // Total
-      4: { halign: "right",  cellWidth: 30 },  // Paid
+      2: { halign: "center", cellWidth: 18 },  // Days
+      3: { halign: "right",  cellWidth: 34 },  // Total
+      4: { halign: "right",  cellWidth: 28 },  // Paid
       5: { halign: "right",  cellWidth: 30, fontStyle: "bold" }, // Due
-      6: { halign: "center", cellWidth: 24 },  // Status
+      6: { halign: "center", cellWidth: 22 },  // Status
     },
     didParseCell(data) {
       const raw = data.row.raw as any[];
@@ -177,14 +173,10 @@ function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
 
       if (days >= 60) {
         data.cell.styles.fillColor = COLOR.overdueXHigh;
-        data.cell.styles.textColor = COLOR.overdueText;
-        if (data.column.index === 2 || data.column.index === 6)
-          data.cell.styles.fontStyle = "bold";
+        data.cell.styles.textColor = COLOR.overdueXText;
       } else if (days >= 45) {
         data.cell.styles.fillColor = COLOR.overdueHigh;
         data.cell.styles.textColor = COLOR.overdueText;
-        if (data.column.index === 2 || data.column.index === 6)
-          data.cell.styles.fontStyle = "bold";
       }
 
       if (data.column.index === 6) {
