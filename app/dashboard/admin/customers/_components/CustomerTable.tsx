@@ -118,7 +118,7 @@ export function CustomerTable({
             const theme = BUSINESS_THEMES[customer.businessId as keyof typeof BUSINESS_THEMES];
             const borderColor = STATUS_BORDER[customer.status] ?? "border-l-gray-300";
             return (
-              <Card key={customer.id} className={`overflow-hidden border-l-4 ${borderColor} shadow-sm`}>
+              <Card key={customer.id} className={`overflow-hidden border-l-4 ${borderColor} shadow-sm ${theme?.bgClass?.replace("-100", "-50") || ""}`}>
                 <CardContent className="p-0">
                   {/* Header strip */}
                   <div className="flex items-center justify-between px-3 py-2 bg-muted/30">

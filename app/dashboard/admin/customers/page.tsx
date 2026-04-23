@@ -245,19 +245,19 @@ export default function CustomersPage() {
       {/* Filter & Table */}
       <Card>
         <CardHeader>
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-             <div className="flex-1 max-w-sm relative">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div className="relative w-full md:flex-1 md:max-w-sm">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
+                className="pl-9 w-full"
               />
             </div>
-             <div className="flex items-center gap-2">
+            <div className="w-full md:w-auto">
               <Select value={routeFilter} onValueChange={setRouteFilter}>
-                <SelectTrigger className="w-[180px]"><SelectValue placeholder="Route" /></SelectTrigger>
+                <SelectTrigger className="w-full md:w-[180px]"><SelectValue placeholder="Route" /></SelectTrigger>
                 <SelectContent>
                   {routes.map((r) => <SelectItem key={r} value={r}>{r === "all" ? "All Routes" : r}</SelectItem>)}
                 </SelectContent>

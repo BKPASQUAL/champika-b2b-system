@@ -207,7 +207,7 @@ export default function InvoicesPage() {
 
       <Card>
         <CardHeader>
-          <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             {/* Search Bar */}
             <div className="relative w-full md:flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
