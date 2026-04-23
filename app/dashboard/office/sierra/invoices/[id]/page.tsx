@@ -127,7 +127,7 @@ export default function WiremanViewInvoicePage({
       } catch (error) {
         toast.error("Error loading invoice details");
         // Redirect to Wireman invoice list on error
-        router.push("/dashboard/office/wireman/invoices");
+        router.push("/dashboard/office/sierra/invoices");
       } finally {
         setLoading(false);
       }
@@ -255,7 +255,7 @@ export default function WiremanViewInvoicePage({
                 size="icon"
                 className="h-8 w-8 rounded-full bg-background hover:bg-slate-100"
                 onClick={() =>
-                  router.push("/dashboard/office/wireman/invoices")
+                  router.push("/dashboard/office/sierra/invoices")
                 }
               >
                 <ArrowLeft className="w-4 h-4" />
@@ -377,7 +377,7 @@ export default function WiremanViewInvoicePage({
               size="sm"
               className="bg-red-600 hover:bg-red-700 text-white"
               onClick={() =>
-                router.push(`/dashboard/office/wireman/invoices/${id}/edit`)
+                router.push(`/dashboard/office/sierra/invoices/${id}/edit`)
               }
             >
               <Edit className="w-4 h-4 mr-2" /> Edit Invoice
