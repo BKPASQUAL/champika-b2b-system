@@ -69,7 +69,7 @@ export default function DistributionCustomersPage() {
     phone: "",
     email: "",
     address: "",
-    route: "",
+    route: "General",
     status: "Active",
     creditLimit: 0,
     businessId: distributionBusinessId, // Locked to Distribution
@@ -183,7 +183,7 @@ export default function DistributionCustomersPage() {
       phone: "",
       email: "",
       address: "",
-      route: "",
+      route: "General",
       status: "Active",
       creditLimit: 0,
       businessId: distributionBusinessId,

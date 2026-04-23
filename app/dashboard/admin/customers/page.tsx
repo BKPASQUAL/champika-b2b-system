@@ -63,7 +63,7 @@ export default function CustomersPage() {
     phone: "",
     email: "",
     address: "",
-    route: "",
+    route: "General",
     status: "Active",
     creditLimit: 0,
     businessId: "", // Initialize
@@ -186,7 +186,7 @@ export default function CustomersPage() {
       phone: "",
       email: "",
       address: "",
-      route: "",
+      route: "General",
       status: "Active",
       creditLimit: 0,
       businessId: "",

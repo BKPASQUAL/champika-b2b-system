@@ -160,14 +160,14 @@ export function CustomerDialogs({
                   />
                 </SelectTrigger>
                 <SelectContent>
-                  {routes.length === 0 && !loading && (
-                    <SelectItem value="General">General (Default)</SelectItem>
-                  )}
-                  {routes.map((r) => (
-                    <SelectItem key={r.id} value={r.name}>
-                      {r.name}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="General">General</SelectItem>
+                  {routes
+                    .filter((r) => r.name !== "General")
+                    .map((r) => (
+                      <SelectItem key={r.id} value={r.name}>
+                        {r.name}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
