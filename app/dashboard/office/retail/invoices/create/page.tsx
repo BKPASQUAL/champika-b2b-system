@@ -55,7 +55,6 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { ClassificationModal } from "@/components/activity/ClassificationModal";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { BUSINESS_IDS, BUSINESS_NAMES } from "@/app/config/business-constants";
 
@@ -128,11 +127,6 @@ export default function CreateRetailInvoicePage() {
 
   // Form State
   const [customerId, setCustomerId] = useState<string | null>(null);
-  const [classifyOpen, setClassifyOpen] = useState(false);
-  const [classifyRecordId, setClassifyRecordId] = useState<string | null>(null);
-  const [classifyInvoiceNo, setClassifyInvoiceNo] = useState<string | undefined>();
-  const [classifyAmount, setClassifyAmount] = useState<number | undefined>();
-  const [pendingRedirect, setPendingRedirect] = useState<string | null>(null);
   const [invoiceDate, setInvoiceDate] = useState(
     new Date().toISOString().split("T")[0]
   );
@@ -454,11 +448,7 @@ export default function CreateRetailInvoicePage() {
         redirect = `/dashboard/office/retail/invoices/${data.data.id}?download=true`;
       }
 
-      setClassifyRecordId(data.activityRecordId ?? null);
-      setClassifyInvoiceNo(data.manualInvoiceNo || data.invoiceNo);
-      setClassifyAmount(grandTotal);
-      setPendingRedirect(redirect);
-      setClassifyOpen(true);
+      router.push(redirect);
     } catch (error: any) {
       toast.error(error.message || "Failed to create invoice");
     } finally {
@@ -1118,18 +1108,6 @@ export default function CreateRetailInvoicePage() {
         </div>
       </div>
 
-      <ClassificationModal
-        isOpen={classifyOpen}
-        actionType="retail_invoice"
-        activityRecordId={classifyRecordId}
-        entityNo={classifyInvoiceNo}
-        customerName={customers.find((c) => c.id === customerId)?.name}
-        amount={classifyAmount}
-        onClose={() => {
-          setClassifyOpen(false);
-          if (pendingRedirect) router.push(pendingRedirect);
-        }}
-      />
     </div>
   );
 }

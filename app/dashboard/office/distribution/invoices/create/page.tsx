@@ -53,7 +53,6 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
-import { ClassificationModal } from "@/components/activity/ClassificationModal";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 
 // --- Types ---
@@ -120,12 +119,6 @@ export default function CreateDistributionInvoicePage() {
   const [productOpen, setProductOpen] = useState(false);
 
   // Classification modal
-  const [classifyOpen, setClassifyOpen] = useState(false);
-  const [classifyRecordId, setClassifyRecordId] = useState<string | null>(null);
-  const [classifyInvoiceNo, setClassifyInvoiceNo] = useState<string | undefined>();
-  const [classifyAmount, setClassifyAmount] = useState<number | undefined>();
-  const [pendingRedirect, setPendingRedirect] = useState<string | null>(null);
-
   // Current Item Being Added
   const [currentItem, setCurrentItem] = useState({
     productId: "",
@@ -404,12 +397,7 @@ export default function CreateDistributionInvoicePage() {
       }
 
       toast.success("Invoice Created Successfully!");
-      // Show classification modal before redirecting
-      setClassifyRecordId(data.activityRecordId ?? null);
-      setClassifyInvoiceNo(data.manualInvoiceNo || data.invoiceNo);
-      setClassifyAmount(grandTotal);
-      setPendingRedirect("/dashboard/office/distribution/invoices");
-      setClassifyOpen(true);
+      router.push("/dashboard/office/distribution/invoices");
     } catch (error: any) {
       toast.error(error.message || "Failed to create invoice");
     } finally {
@@ -1054,19 +1042,6 @@ export default function CreateDistributionInvoicePage() {
         </div>
       </div>
 
-      {/* Classification Modal */}
-      <ClassificationModal
-        isOpen={classifyOpen}
-        actionType="distribution_invoice"
-        activityRecordId={classifyRecordId}
-        entityNo={classifyInvoiceNo}
-        customerName={customers.find((c) => c.id === customerId)?.name}
-        amount={classifyAmount}
-        onClose={() => {
-          setClassifyOpen(false);
-          if (pendingRedirect) router.push(pendingRedirect);
-        }}
-      />
     </div>
   );
 }

@@ -3,7 +3,6 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
 
 const patchSchema = z.object({
-  classification: z.record(z.string(), z.any()).optional().nullable(),
   notes: z.string().optional().nullable(),
 });
 
@@ -18,7 +17,6 @@ export async function PATCH(
     const val = patchSchema.parse(body);
 
     const updateData: Record<string, any> = {};
-    if (val.classification !== undefined) updateData.classification = val.classification;
     if (val.notes !== undefined) updateData.notes = val.notes;
 
     const { data, error } = await supabaseAdmin

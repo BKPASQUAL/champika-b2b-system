@@ -17,7 +17,6 @@ const createSchema = z.object({
   performed_by_id: z.string().uuid().optional().nullable(),
   performed_by_name: z.string().optional().nullable(),
   performed_by_email: z.string().optional().nullable(),
-  classification: z.record(z.string(), z.any()).optional().nullable(),
   metadata: z.record(z.string(), z.any()).optional().nullable(),
   notes: z.string().optional().nullable(),
 });
@@ -82,7 +81,6 @@ export async function POST(request: NextRequest) {
         performed_by_id: val.performed_by_id ?? null,
         performed_by_name: val.performed_by_name ?? null,
         performed_by_email: val.performed_by_email ?? null,
-        classification: val.classification ?? null,
         metadata: val.metadata ?? null,
         notes: val.notes ?? null,
       })

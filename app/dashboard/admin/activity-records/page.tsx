@@ -15,13 +15,12 @@ import {
   FileText,
   CreditCard,
   BarChart3,
-  Tag,
+  Calendar,
   X,
   Eye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -68,7 +67,6 @@ interface ActivityRecord {
   performed_by_id: string | null;
   performed_by_name: string | null;
   performed_by_email: string | null;
-  classification: Record<string, string> | null;
   metadata: Record<string, any> | null;
   notes: string | null;
   created_at: string;
@@ -140,7 +138,6 @@ const MIGRATION_SQL = `CREATE TABLE IF NOT EXISTS public.activity_records (
   performed_by_id     UUID,
   performed_by_name   TEXT,
   performed_by_email  TEXT,
-  classification      JSONB,
   metadata            JSONB,
   notes               TEXT,
   created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -159,7 +156,7 @@ CREATE INDEX IF NOT EXISTS idx_activity_records_business_id
 CREATE INDEX IF NOT EXISTS idx_activity_records_performed_by
   ON public.activity_records (performed_by_id);`;
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 10;
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -224,18 +221,18 @@ export default function ActivityRecordsPage() {
   const invoiceCount = records.filter((r) =>
     ["distribution_invoice","retail_invoice","rep_order","invoice_created","agency_invoice"].includes(r.action_type)
   ).length;
-  const paymentCount    = records.filter((r) => r.action_type === "payment_made").length;
-  const classifiedCount = records.filter((r) => r.classification && Object.keys(r.classification).length > 0).length;
+  const paymentCount = records.filter((r) => r.action_type === "payment_made").length;
+  const todayCount   = records.filter((r) => {
+    const today = new Date().toDateString();
+    return new Date(r.created_at).toDateString() === today;
+  }).length;
 
   const exportCSV = () => {
-    const headers = ["Date/Time","Record Type","Portal","Business","Invoice / Ref","Customer","Amount","Classification"];
+    const headers = ["Date/Time","Record Type","Portal","Business","Invoice / Ref","Customer","Amount"];
     const rows = records.map((r) => [
       fmtDate(r.created_at), r.record_type, r.portal,
       r.business_name ?? "", r.entity_no ?? "", r.customer_name ?? "",
       r.amount ?? "",
-      r.classification
-        ? Object.entries(r.classification).map(([k,v]) => `${k}: ${v}`).join(" | ")
-        : "",
     ]);
     const csv = [headers,...rows]
       .map((row) => row.map((c) => `"${String(c).replace(/"/g,'""')}"`).join(","))
@@ -338,7 +335,7 @@ export default function ActivityRecordsPage() {
           <div>
             <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Activity Records</h1>
             <p className="text-muted-foreground text-xs sm:text-sm">
-              All invoice & payment actions — with classification data
+              All invoice & payment actions
             </p>
           </div>
         </div>
@@ -381,11 +378,10 @@ export default function ActivityRecordsPage() {
           color="emerald"
         />
         <StatCard
-          icon={<Tag className="h-4 w-4" />}
-          label="Classified"
-          value={classifiedCount}
+          icon={<Calendar className="h-4 w-4" />}
+          label="Today's Records"
+          value={todayCount}
           color="violet"
-          note={total > 0 ? `${Math.round((classifiedCount / total) * 100)}% of records` : undefined}
         />
       </div>
 
@@ -518,14 +514,13 @@ export default function ActivityRecordsPage() {
                 <TableHead>Customer</TableHead>
                 <TableHead>Performed By</TableHead>
                 <TableHead className="text-right w-36">Amount</TableHead>
-                <TableHead className="w-28 text-center">Classified</TableHead>
                 <TableHead className="w-16 pr-5"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-16">
+                  <TableCell colSpan={9} className="text-center py-16">
                     <div className="flex flex-col items-center gap-3 text-muted-foreground">
                       <RefreshCw className="h-6 w-6 animate-spin" />
                       <p className="text-sm">Loading records…</p>
@@ -534,7 +529,7 @@ export default function ActivityRecordsPage() {
                 </TableRow>
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-16">
+                  <TableCell colSpan={9} className="text-center py-16">
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <ClipboardList className="h-8 w-8 opacity-30" />
                       <p className="text-sm font-medium">No records found</p>
@@ -550,7 +545,6 @@ export default function ActivityRecordsPage() {
                 filtered.map((r) => {
                   const ts = TYPE_STYLE[r.record_type];
                   const ps = PORTAL_STYLE[r.portal];
-                  const isClassified = r.classification && Object.keys(r.classification).length > 0;
                   return (
                     <TableRow
                       key={r.id}
@@ -596,15 +590,6 @@ export default function ActivityRecordsPage() {
                       <TableCell className="text-right">
                         <span className="text-sm font-semibold tabular-nums">{fmt(r.amount)}</span>
                       </TableCell>
-                      <TableCell className="text-center">
-                        {isClassified ? (
-                          <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100 text-xs gap-1">
-                            <Check className="h-3 w-3" />Done
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-xs text-muted-foreground">Pending</Badge>
-                        )}
-                      </TableCell>
                       <TableCell className="pr-5">
                         <Button
                           variant="ghost"
@@ -645,14 +630,13 @@ export default function ActivityRecordsPage() {
               {filtered.map((r) => {
                 const ts = TYPE_STYLE[r.record_type];
                 const ps = PORTAL_STYLE[r.portal];
-                const isClassified = r.classification && Object.keys(r.classification).length > 0;
                 return (
                   <div
                     key={r.id}
                     className="px-4 py-3 hover:bg-muted/30 cursor-pointer transition-colors active:bg-muted/50"
                     onClick={() => setSelected(r)}
                   >
-                    {/* Row 1: type badge + portal + classified */}
+                    {/* Row 1: type badge + portal */}
                     <div className="flex items-center gap-2 mb-2">
                       <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${ts?.bg ?? "bg-gray-100"} ${ts?.text ?? "text-gray-700"}`}>
                         <span className={`h-1.5 w-1.5 rounded-full ${ts?.dot ?? "bg-gray-400"}`} />
@@ -661,15 +645,6 @@ export default function ActivityRecordsPage() {
                       <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium capitalize ${ps?.bg ?? "bg-gray-100"} ${ps?.text ?? "text-gray-700"}`}>
                         {r.portal}
                       </span>
-                      <div className="ml-auto">
-                        {isClassified ? (
-                          <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100 text-xs gap-1">
-                            <Check className="h-3 w-3" />Done
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-xs text-muted-foreground">Pending</Badge>
-                        )}
-                      </div>
                     </div>
 
                     {/* Row 2: customer + amount */}
@@ -751,31 +726,6 @@ export default function ActivityRecordsPage() {
                     </div>
                   ) : "System"
                 } />
-              </DetailSection>
-
-              {/* Classification */}
-              <DetailSection
-                title="Classification Answers"
-                badge={
-                  selected.classification && Object.keys(selected.classification).length > 0
-                    ? <span className="text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full">Completed</span>
-                    : <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full">Not answered</span>
-                }
-              >
-                {selected.classification && Object.keys(selected.classification).length > 0
-                  ? Object.entries(selected.classification).map(([key, value]) => (
-                      <DetailRow
-                        key={key}
-                        label={key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
-                        value={String(value)}
-                      />
-                    ))
-                  : (
-                    <p className="px-4 py-3 text-sm text-muted-foreground italic">
-                      No classification answers for this entry.
-                    </p>
-                  )
-                }
               </DetailSection>
 
               {/* Metadata */}

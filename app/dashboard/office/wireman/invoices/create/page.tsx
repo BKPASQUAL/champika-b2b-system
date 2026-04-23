@@ -31,7 +31,6 @@ import {
 } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { ClassificationModal } from "@/components/activity/ClassificationModal";
 import { cn } from "@/lib/utils";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
@@ -285,11 +284,6 @@ export default function CreateWiremanInvoicePage() {
 
   // Form State
   const [customerId, setCustomerId] = useState<string>("");
-  const [classifyOpen, setClassifyOpen] = useState(false);
-  const [classifyRecordId, setClassifyRecordId] = useState<string | null>(null);
-  const [classifyInvoiceNo, setClassifyInvoiceNo] = useState<string | undefined>();
-  const [classifyAmount, setClassifyAmount] = useState<number | undefined>();
-  const [pendingRedirect, setPendingRedirect] = useState<string | null>(null);
   const [invoiceDate, setInvoiceDate] = useState(
     new Date().toISOString().split("T")[0],
   );
@@ -564,11 +558,7 @@ export default function CreateWiremanInvoicePage() {
       }
 
       toast.success("Invoice Created Successfully!");
-      setClassifyRecordId(data.activityRecordId ?? null);
-      setClassifyInvoiceNo(data.manualInvoiceNo || data.invoiceNo);
-      setClassifyAmount(grandTotal);
-      setPendingRedirect("/dashboard/office/wireman/invoices");
-      setClassifyOpen(true);
+      router.push("/dashboard/office/wireman/invoices");
     } catch (error: any) {
       toast.error(error.message || "Failed to create invoice");
     } finally {
@@ -1030,18 +1020,6 @@ export default function CreateWiremanInvoicePage() {
         </div>
       </div>
 
-      <ClassificationModal
-        isOpen={classifyOpen}
-        actionType="agency_invoice"
-        activityRecordId={classifyRecordId}
-        entityNo={classifyInvoiceNo}
-        customerName={customers.find((c) => c.id === customerId)?.name}
-        amount={classifyAmount}
-        onClose={() => {
-          setClassifyOpen(false);
-          if (pendingRedirect) router.push(pendingRedirect);
-        }}
-      />
     </div>
   );
 }

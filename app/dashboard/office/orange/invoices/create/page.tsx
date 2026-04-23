@@ -47,7 +47,6 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
-import { ClassificationModal } from "@/components/activity/ClassificationModal";
 
 // --- Types ---
 
@@ -112,11 +111,6 @@ export default function CreateInvoicePage() {
 
   // Popover States
   const [customerOpen, setCustomerOpen] = useState(false);
-  const [classifyOpen, setClassifyOpen] = useState(false);
-  const [classifyRecordId, setClassifyRecordId] = useState<string | null>(null);
-  const [classifyInvoiceNo, setClassifyInvoiceNo] = useState<string | undefined>();
-  const [classifyAmount, setClassifyAmount] = useState<number | undefined>();
-  const [pendingRedirect, setPendingRedirect] = useState<string | null>(null);
   const [productOpen, setProductOpen] = useState(false);
 
   const [currentItem, setCurrentItem] = useState({
@@ -359,11 +353,7 @@ export default function CreateInvoicePage() {
       }
 
       toast.success("Invoice Created Successfully!");
-      setClassifyRecordId(data.activityRecordId ?? null);
-      setClassifyInvoiceNo(data.manualInvoiceNo || data.invoiceNo);
-      setClassifyAmount(grandTotal);
-      setPendingRedirect("/dashboard/office/orange/invoices");
-      setClassifyOpen(true);
+      router.push("/dashboard/office/orange/invoices");
     } catch (error: any) {
       toast.error(error.message || "Failed to create invoice");
     } finally {
@@ -902,18 +892,6 @@ export default function CreateInvoicePage() {
         </div>
       </div>
 
-      <ClassificationModal
-        isOpen={classifyOpen}
-        actionType="agency_invoice"
-        activityRecordId={classifyRecordId}
-        entityNo={classifyInvoiceNo}
-        customerName={customers.find((c) => c.id === customerId)?.name}
-        amount={classifyAmount}
-        onClose={() => {
-          setClassifyOpen(false);
-          if (pendingRedirect) router.push(pendingRedirect);
-        }}
-      />
     </div>
   );
 }
