@@ -23,6 +23,7 @@ export interface Invoice {
   status: PaymentStatus; // Payment Status
   orderStatus: OrderStatus; // Order Status (New Field)
   itemsCount: number;
+  businessId?: string;
 }
 
 export type SortField =

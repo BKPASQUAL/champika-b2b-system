@@ -76,6 +76,7 @@ export default function InvoicesPage() {
         status: inv.status,
         orderStatus: inv.orderStatus || "Pending",
         itemsCount: 0,
+        businessId: inv.businessId,
       })),
     [rawInvoices]
   );
@@ -219,7 +220,7 @@ export default function InvoicesPage() {
             </div>
 
             {/* Filters */}
-            <div className="flex items-center gap-2 w-full md:w-auto">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="w-full md:w-[160px]">
                   <div className="flex items-center gap-2 text-muted-foreground">
