@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { invalidateCache } from "@/hooks/useCachedFetch";
 import {
   ArrowLeft,
   Plus,
@@ -353,6 +354,7 @@ export default function CreateInvoicePage() {
       }
 
       toast.success("Invoice Created Successfully!");
+      invalidateCache("/api/invoices");
       router.push("/dashboard/office/orange/invoices");
     } catch (error: any) {
       toast.error(error.message || "Failed to create invoice");

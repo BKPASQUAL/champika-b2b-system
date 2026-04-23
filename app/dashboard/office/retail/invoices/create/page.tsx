@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { invalidateCache } from "@/hooks/useCachedFetch";
 import {
   ArrowLeft,
   Plus,
@@ -448,6 +449,7 @@ export default function CreateRetailInvoicePage() {
         redirect = `/dashboard/office/retail/invoices/${data.data.id}?download=true`;
       }
 
+      invalidateCache("/api/invoices");
       router.push(redirect);
     } catch (error: any) {
       toast.error(error.message || "Failed to create invoice");
