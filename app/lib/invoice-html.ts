@@ -126,16 +126,16 @@ export const generateInvoiceHTML = async (
 
     <table style="width:100%;border-collapse:collapse;margin-bottom:6px;">
       <thead>
-        <tr style="background:#1a1a1a;">
-          <th style="padding:7px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#fff;text-align:center;width:4%;">#</th>
-          <th style="padding:7px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#fff;text-align:left;width:14%;">Item Code</th>
-          <th style="padding:7px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#fff;text-align:left;width:29%;">Description</th>
-          <th style="padding:7px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#fff;text-align:right;width:13%;">Price</th>
-          <th style="padding:7px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#fff;text-align:center;width:7%;">Qty</th>
-          <th style="padding:7px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#fff;text-align:center;width:7%;">Unit</th>
-          <th style="padding:7px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#fff;text-align:center;width:7%;">Free</th>
-          <th style="padding:7px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#fff;text-align:center;width:7%;">Disc.</th>
-          <th style="padding:7px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#fff;text-align:right;width:12%;">Total</th>
+        <tr style="border-top:2px solid #000;border-bottom:2px solid #000;background:#f0f0f0;">
+          <th style="padding:7px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:center;width:4%;">#</th>
+          <th style="padding:7px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:left;width:14%;">Item Code</th>
+          <th style="padding:7px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:left;width:29%;">Description</th>
+          <th style="padding:7px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:right;width:13%;">Price</th>
+          <th style="padding:7px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:center;width:7%;">Qty</th>
+          <th style="padding:7px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:center;width:7%;">Unit</th>
+          <th style="padding:7px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:center;width:7%;">Free</th>
+          <th style="padding:7px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:center;width:7%;">Disc.</th>
+          <th style="padding:7px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:right;width:12%;">Total</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
