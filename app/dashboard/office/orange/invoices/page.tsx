@@ -21,6 +21,7 @@ import {
   Plus,
   RefreshCw,
   Filter,
+  Printer,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -35,6 +36,7 @@ import { BUSINESS_IDS } from "@/app/config/business-constants";
 import { Invoice, SortField, SortOrder } from "./types";
 import { InvoiceTable } from "./_components/InvoiceTable";
 import { InvoiceStats } from "./_components/InvoiceStats";
+import { downloadOutstandingReport, printOutstandingReport } from "./outstanding-report";
 
 const NUMBER_WORDS: Record<string, string> = {
   "0": "zero", "1": "one", "2": "two", "3": "three", "4": "four",
@@ -216,9 +218,14 @@ export default function InvoicesPage() {
                 Export Excel
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => toast.info("Export PDF coming soon")}
+                onClick={() => downloadOutstandingReport(invoices, repFilter)}
               >
-                <FileText className="w-4 h-4 mr-2 text-red-600" /> Export PDF
+                <FileText className="w-4 h-4 mr-2 text-red-600" /> Outstanding Bills (PDF)
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => printOutstandingReport(invoices, repFilter)}
+              >
+                <Printer className="w-4 h-4 mr-2 text-red-600" /> Print Outstanding Bills
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
