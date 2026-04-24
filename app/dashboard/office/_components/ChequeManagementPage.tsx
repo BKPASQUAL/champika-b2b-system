@@ -39,6 +39,8 @@ import {
   CreditCard,
   History,
   Loader2,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -358,6 +360,10 @@ export function ChequeManagementPage({
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
+  const [historySearch, setHistorySearch] = useState("");
+  const [historyPage, setHistoryPage] = useState(1);
+  const HISTORY_PAGE_SIZE = 10;
+
   const [actionDialog, setActionDialog] = useState<ActionDialog | null>(null);
   const [depositAccountId, setDepositAccountId] = useState("");
   const [confirming, setConfirming] = useState(false);
@@ -431,6 +437,34 @@ export function ChequeManagementPage({
   const totalPending   = pending.reduce((s, c) => s + c.amount, 0);
   const totalDeposited = deposited.reduce((s, c) => s + c.amount, 0);
   const totalCleared   = cleared.reduce((s, c) => s + c.amount, 0);
+
+  const clearedPreview = useMemo(
+    () => [...cleared].sort((a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime()).slice(0, 4),
+    [cleared]
+  );
+
+  const historySorted = useMemo(
+    () =>
+      [...cheques]
+        .sort((a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime())
+        .filter((c) => {
+          if (!historySearch) return true;
+          const q = historySearch.toLowerCase();
+          return (
+            c.customerName.toLowerCase().includes(q) ||
+            c.chequeNo?.toLowerCase().includes(q) ||
+            c.invoiceNo.toLowerCase().includes(q) ||
+            c.bankName?.toLowerCase().includes(q) ||
+            c.bankCode?.toLowerCase().includes(q)
+          );
+        }),
+    [cheques, historySearch]
+  );
+
+  const historyTotalPages = Math.max(1, Math.ceil(historySorted.length / HISTORY_PAGE_SIZE));
+  const historyPageStart = (historyPage - 1) * HISTORY_PAGE_SIZE;
+  const historyPageItems = historySorted.slice(historyPageStart, historyPageStart + HISTORY_PAGE_SIZE);
+  const historyPageTotal = historyPageItems.reduce((s, c) => s + c.amount, 0);
 
   const openAction = (cheque: ChequeRecord, type: ActionType) => {
     setDepositAccountId("");
@@ -623,9 +657,17 @@ export function ChequeManagementPage({
             icon={CheckCircle}
             empty="No cleared cheques"
           >
-            {cleared.map((c) => (
+            {clearedPreview.map((c) => (
               <ChequeCard key={c.id} cheque={c} updatingId={updatingId} />
             ))}
+            {cleared.length > 4 && (
+              <button
+                className="w-full text-xs text-green-700 font-medium hover:underline py-1"
+                onClick={() => { setHistorySearch(""); setHistoryPage(1); setIsHistoryOpen(true); }}
+              >
+                + {cleared.length - 4} more — View All in History
+              </button>
+            )}
           </SectionColumn>
         </div>
       )}
@@ -644,7 +686,7 @@ export function ChequeManagementPage({
       )}
 
       {/* History Sheet */}
-      <Sheet open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+      <Sheet open={isHistoryOpen} onOpenChange={(open) => { setIsHistoryOpen(open); if (!open) { setHistorySearch(""); setHistoryPage(1); } }}>
         <SheetContent side="right" className="w-full sm:max-w-md flex flex-col">
           <SheetHeader className="shrink-0">
             <SheetTitle className="flex items-center gap-2">
@@ -654,6 +696,7 @@ export function ChequeManagementPage({
             <SheetDescription>{portalName} — all {cheques.length} cheques</SheetDescription>
           </SheetHeader>
 
+          {/* Status summary */}
           <div className="shrink-0 grid grid-cols-5 gap-1.5 py-3 border-b">
             {(["Pending", "Deposited", "Cleared", "Bounced", "Returned"] as ChequeStatus[]).map((s) => {
               const count = cheques.filter((c) => c.chequeStatus === s).length;
@@ -669,71 +712,122 @@ export function ChequeManagementPage({
             })}
           </div>
 
+          {/* Search */}
+          <div className="shrink-0 relative py-2">
+            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search customer, cheque no, invoice, bank…"
+              className="pl-8 h-8 text-sm"
+              value={historySearch}
+              onChange={(e) => { setHistorySearch(e.target.value); setHistoryPage(1); }}
+            />
+          </div>
+
+          {/* Page info + total */}
+          <div className="shrink-0 flex items-center justify-between text-xs text-muted-foreground pb-1 border-b">
+            <span>
+              {historySorted.length === 0
+                ? "No results"
+                : `Showing ${historyPageStart + 1}–${Math.min(historyPageStart + HISTORY_PAGE_SIZE, historySorted.length)} of ${historySorted.length}`}
+            </span>
+            <span className="font-semibold text-gray-700">
+              Page total: {formatCurrency(historyPageTotal)}
+            </span>
+          </div>
+
+          {/* List */}
           <div className="flex-1 overflow-y-auto py-2 space-y-2">
-            {[...cheques]
-              .sort((a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime())
-              .map((c) => (
-                <div key={c.id} className="rounded-lg border bg-white p-3 space-y-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-sm font-bold text-gray-800">#{c.chequeNo || "—"}</span>
-                    <StatusBadge status={c.chequeStatus} />
-                  </div>
-                  <p className="text-sm font-medium text-gray-700">{c.customerName}</p>
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>{c.bankCode || "—"}</span>
-                    <span className="font-bold text-gray-800">{formatCurrency(c.amount)}</span>
-                  </div>
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Received: {formatDate(c.paymentDate)}</span>
-                    <span>Cheque: {formatDate(c.chequeDate)}</span>
-                  </div>
-                  {c.depositAccountName && (
-                    <p className="text-[10px] text-blue-600 font-medium">→ {c.depositAccountName}</p>
-                  )}
-                  <div className="flex items-center justify-between pt-0.5">
-                    <span className="font-mono text-[10px] text-gray-400 bg-gray-100 rounded px-1.5 py-0.5">{c.invoiceNo}</span>
-                    {(c.chequeStatus === "Pending" || c.chequeStatus === "Deposited") && (
-                      <div className="flex gap-1">
-                        {c.chequeStatus === "Pending" && (
+            {historyPageItems.map((c) => (
+              <div key={c.id} className="rounded-lg border bg-white p-3 space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-sm font-bold text-gray-800">#{c.chequeNo || "—"}</span>
+                  <StatusBadge status={c.chequeStatus} />
+                </div>
+                <p className="text-sm font-medium text-gray-700">{c.customerName}</p>
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>{c.bankCode || "—"}</span>
+                  <span className="font-bold text-gray-800">{formatCurrency(c.amount)}</span>
+                </div>
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Received: {formatDate(c.paymentDate)}</span>
+                  <span>Cheque: {formatDate(c.chequeDate)}</span>
+                </div>
+                {c.depositAccountName && (
+                  <p className="text-[10px] text-blue-600 font-medium">→ {c.depositAccountName}</p>
+                )}
+                <div className="flex items-center justify-between pt-0.5">
+                  <span className="font-mono text-[10px] text-gray-400 bg-gray-100 rounded px-1.5 py-0.5">{c.invoiceNo}</span>
+                  {(c.chequeStatus === "Pending" || c.chequeStatus === "Deposited") && (
+                    <div className="flex gap-1">
+                      {c.chequeStatus === "Pending" && (
+                        <Button
+                          size="sm"
+                          className="h-6 text-[10px] bg-blue-600 hover:bg-blue-700"
+                          onClick={() => { setIsHistoryOpen(false); setTimeout(() => openAction(c, "deposit"), 150); }}
+                        >
+                          Deposit
+                        </Button>
+                      )}
+                      {c.chequeStatus === "Deposited" && (
+                        <>
                           <Button
                             size="sm"
-                            className="h-6 text-[10px] bg-blue-600 hover:bg-blue-700"
-                            onClick={() => { setIsHistoryOpen(false); setTimeout(() => openAction(c, "deposit"), 150); }}
+                            className="h-6 text-[10px] bg-green-600 hover:bg-green-700"
+                            onClick={() => { setIsHistoryOpen(false); setTimeout(() => openAction(c, "pass"), 150); }}
                           >
-                            Deposit
+                            Pass
                           </Button>
-                        )}
-                        {c.chequeStatus === "Deposited" && (
-                          <>
-                            <Button
-                              size="sm"
-                              className="h-6 text-[10px] bg-green-600 hover:bg-green-700"
-                              onClick={() => { setIsHistoryOpen(false); setTimeout(() => openAction(c, "pass"), 150); }}
-                            >
-                              Pass
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-6 text-[10px] border-red-200 text-red-600 hover:bg-red-50"
-                              onClick={() => { setIsHistoryOpen(false); setTimeout(() => openAction(c, "return"), 150); }}
-                            >
-                              Return
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-6 text-[10px] border-red-200 text-red-600 hover:bg-red-50"
+                            onClick={() => { setIsHistoryOpen(false); setTimeout(() => openAction(c, "return"), 150); }}
+                          >
+                            Return
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
-              ))}
-            {cheques.length === 0 && (
+              </div>
+            ))}
+            {historySorted.length === 0 && (
               <div className="flex flex-col items-center justify-center h-40 text-muted-foreground gap-2">
                 <CreditCard className="h-8 w-8 opacity-20" />
-                <p className="text-sm">No cheques yet</p>
+                <p className="text-sm">{historySearch ? "No matching cheques" : "No cheques yet"}</p>
               </div>
             )}
           </div>
+
+          {/* Pagination */}
+          {historyTotalPages > 1 && (
+            <div className="shrink-0 flex items-center justify-between gap-2 pt-2 border-t">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1"
+                disabled={historyPage === 1}
+                onClick={() => setHistoryPage((p) => p - 1)}
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+                Prev
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                Page {historyPage} / {historyTotalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1"
+                disabled={historyPage === historyTotalPages}
+                onClick={() => setHistoryPage((p) => p + 1)}
+              >
+                Next
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          )}
         </SheetContent>
       </Sheet>
     </div>
