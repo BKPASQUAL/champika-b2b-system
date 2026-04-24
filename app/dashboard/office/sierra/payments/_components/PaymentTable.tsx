@@ -167,7 +167,7 @@ export function PaymentTable({
                 const chequeDateStr = payment.chequeDate ? new Date(payment.chequeDate).toLocaleDateString("en-LK") : null;
 
                 return (
-                  <TableRow key={payment.id} className="hover:bg-purple-50/20 transition-colors border-b border-gray-100 last:border-0">
+                  <TableRow key={payment.id} className={`transition-colors border-b border-gray-100 last:border-0 ${payment.chequeStatus === "Returned" ? "bg-red-50/40 hover:bg-red-50/60" : "hover:bg-purple-50/20"}`}>
                     <TableCell className="py-3 px-4 text-sm text-gray-600 whitespace-nowrap">{dateStr}</TableCell>
                     <TableCell className="py-3 px-4">
                       <span className="font-mono text-xs text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">
@@ -186,9 +186,12 @@ export function PaymentTable({
                       </button>
                     </TableCell>
                     <TableCell className="py-3 px-4 text-right">
-                      <span className="text-sm font-bold text-gray-800">
+                      <span className={`text-sm font-bold ${payment.chequeStatus === "Returned" ? "line-through text-gray-400" : "text-gray-800"}`}>
                         LKR {payment.amount.toLocaleString("en-LK", { minimumFractionDigits: 2 })}
                       </span>
+                      {payment.chequeStatus === "Returned" && (
+                        <p className="text-[10px] text-red-500 font-medium mt-0.5">Reversed</p>
+                      )}
                     </TableCell>
                     <TableCell className="py-3 px-4"><MethodBadge method={payment.method} /></TableCell>
                     <TableCell className="py-3 px-4">
@@ -238,7 +241,7 @@ export function PaymentTable({
                           <DropdownMenuItem onClick={() => window.open(`/dashboard/office/sierra/invoices/${payment.invoiceId}`, "_blank")} className="cursor-pointer">
                             <FileText className="mr-2 h-4 w-4" /> View Invoice
                           </DropdownMenuItem>
-                          {isCheque && (
+                          {isCheque && payment.chequeStatus !== "Returned" && payment.chequeStatus !== "Cleared" && (
                             <>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem onClick={() => onUpdateStatus(payment)} className="cursor-pointer">

@@ -35,6 +35,7 @@ import {
 import { Loader2, Check, ChevronsUpDown } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { invalidatePaymentCaches } from "@/hooks/useCachedFetch";
 
 interface CreatePaymentDialogProps {
   isOpen: boolean;
@@ -188,6 +189,7 @@ export function CreatePaymentDialog({
       if (!res.ok) throw new Error(data.error || "Payment failed");
 
       toast.success("Payment recorded successfully!");
+      invalidatePaymentCaches();
       onPaymentSuccess();
       setIsOpen(false);
     } catch (error: any) {

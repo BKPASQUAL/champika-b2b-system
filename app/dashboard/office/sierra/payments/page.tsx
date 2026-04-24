@@ -208,7 +208,9 @@ export default function SierraPaymentsPage() {
                   <SelectContent>
                     <SelectItem value="all">All Statuses</SelectItem>
                     <SelectItem value="Pending">Pending</SelectItem>
+                    <SelectItem value="Deposited">Deposited</SelectItem>
                     <SelectItem value="Cleared">Cleared</SelectItem>
+                    <SelectItem value="Returned">Returned</SelectItem>
                     <SelectItem value="Bounced">Bounced</SelectItem>
                   </SelectContent>
                 </Select>

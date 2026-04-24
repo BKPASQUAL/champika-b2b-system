@@ -795,6 +795,7 @@ export function ChequeCalendarView({
   const [events, setEvents] = useState<ChequeEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [filter, setFilter] = useState<"all" | "customer" | "supplier">("all");
 
   // Desktop tooltip
@@ -805,6 +806,12 @@ export function ChequeCalendarView({
   const isTouchRef = useRef(false);
 
   useEffect(() => { isTouchRef.current = window.matchMedia("(hover: none)").matches; }, []);
+
+  useEffect(() => {
+    const handler = () => setRefreshKey((k) => k + 1);
+    window.addEventListener("b2b:payment-mutated", handler);
+    return () => window.removeEventListener("b2b:payment-mutated", handler);
+  }, []);
 
   const handleHover = useCallback((event: ChequeEvent, x: number, y: number) => {
     if (isTouchRef.current) return;
@@ -849,7 +856,7 @@ export function ChequeCalendarView({
       .then((d) => { if (d.error) throw new Error(d.error); setEvents(d); })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [year, month, businessId]);
+  }, [year, month, businessId, refreshKey]);
 
   const eventsByDate = useMemo(() => {
     const map = new Map<string, ChequeEvent[]>();

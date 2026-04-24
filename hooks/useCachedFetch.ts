@@ -81,3 +81,23 @@ export function invalidateCache(pattern: string): void {
     if (key.includes(pattern)) _store.delete(key);
   }
 }
+
+/**
+ * Invalidates all caches affected by a payment or invoice mutation, then
+ * broadcasts a window event so any currently-mounted components (e.g. the
+ * cheque calendar, which uses plain fetch) can immediately re-fetch.
+ */
+export function invalidatePaymentCaches(): void {
+  const patterns = [
+    "/api/payments",
+    "/api/invoices",
+    "/api/orders",
+    "/api/admin/calendar",
+    "/api/finance/cheques",
+  ];
+  for (const pattern of patterns) invalidateCache(pattern);
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("b2b:payment-mutated"));
+  }
+}

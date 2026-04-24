@@ -208,7 +208,7 @@ export function PaymentTable({
                 return (
                   <TableRow
                     key={payment.id}
-                    className="hover:bg-red-50/20 transition-colors border-b border-gray-100 last:border-0"
+                    className={`transition-colors border-b border-gray-100 last:border-0 ${payment.chequeStatus === "Returned" ? "bg-red-50/40 hover:bg-red-50/60" : "hover:bg-red-50/20"}`}
                   >
                     {/* Date */}
                     <TableCell className="py-3 px-4 text-sm text-gray-600 whitespace-nowrap">
@@ -246,9 +246,12 @@ export function PaymentTable({
 
                     {/* Amount */}
                     <TableCell className="py-3 px-4 text-right">
-                      <span className="text-sm font-bold text-gray-800">
+                      <span className={`text-sm font-bold ${payment.chequeStatus === "Returned" ? "line-through text-gray-400" : "text-gray-800"}`}>
                         LKR {payment.amount.toLocaleString("en-LK", { minimumFractionDigits: 2 })}
                       </span>
+                      {payment.chequeStatus === "Returned" && (
+                        <p className="text-[10px] text-red-500 font-medium mt-0.5">Reversed</p>
+                      )}
                     </TableCell>
 
                     {/* Method */}
@@ -336,7 +339,7 @@ export function PaymentTable({
                           >
                             <FileText className="mr-2 h-4 w-4" /> View Invoice
                           </DropdownMenuItem>
-                          {isCheque && (
+                          {isCheque && payment.chequeStatus !== "Returned" && payment.chequeStatus !== "Cleared" && (
                             <>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem

@@ -22,6 +22,7 @@ import {
 import { Payment, ChequeStatus } from "../types";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
+import { invalidatePaymentCaches } from "@/hooks/useCachedFetch";
 
 interface PaymentDialogsProps {
   isOpen: boolean;
@@ -51,6 +52,7 @@ export function PaymentDialogs({ isOpen, setIsOpen, selectedPayment, onUpdate }:
       });
       if (!res.ok) throw new Error("Failed to update status");
       toast.success("Cheque status updated");
+      invalidatePaymentCaches();
       onUpdate();
       setIsOpen(false);
     } catch {
@@ -132,6 +134,11 @@ export function PaymentViewDialog({ isOpen, setIsOpen, payment }: PaymentViewDia
         </DialogHeader>
 
         <div className="grid gap-3 py-2 text-sm">
+          {payment.chequeStatus === "Returned" && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 flex items-center gap-2 text-sm text-red-700 font-medium">
+              ⚠ This cheque was returned — the payment has been reversed and the invoice balance restored.
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-x-4 gap-y-3">
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">Customer</p>
@@ -139,7 +146,12 @@ export function PaymentViewDialog({ isOpen, setIsOpen, payment }: PaymentViewDia
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">Amount</p>
-              <p className="font-bold text-gray-800">LKR {payment.amount.toLocaleString()}</p>
+              <p className={`font-bold ${payment.chequeStatus === "Returned" ? "line-through text-gray-400" : "text-gray-800"}`}>
+                LKR {payment.amount.toLocaleString()}
+              </p>
+              {payment.chequeStatus === "Returned" && (
+                <p className="text-xs text-red-500 font-medium">Reversed</p>
+              )}
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">Payment Date</p>
