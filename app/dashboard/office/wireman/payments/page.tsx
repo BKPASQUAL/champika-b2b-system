@@ -256,6 +256,7 @@ export default function WiremanPaymentsPage() {
         isOpen={isAddDialogOpen}
         setIsOpen={setIsAddDialogOpen}
         onPaymentSuccess={fetchPayments}
+        businessId={currentBusinessId}
       />
     </div>
   );

@@ -34,32 +34,29 @@ import {
 } from "@/components/ui/popover";
 import { Loader2, Check, ChevronsUpDown } from "lucide-react";
 import { toast } from "sonner";
-import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { cn } from "@/lib/utils";
 
 interface CreatePaymentDialogProps {
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
   onPaymentSuccess: () => void;
+  businessId: string;
 }
 
 export function CreatePaymentDialog({
   isOpen,
   setIsOpen,
   onPaymentSuccess,
+  businessId,
 }: CreatePaymentDialogProps) {
   const [loading, setLoading] = useState(false);
+  const [orderSearchOpen, setOrderSearchOpen] = useState(false);
+  const [bankSearchOpen, setBankSearchOpen] = useState(false);
 
-  // Data State
   const [unpaidOrders, setUnpaidOrders] = useState<any[]>([]);
   const [banks, setBanks] = useState<any[]>([]);
   const [companyAccounts, setCompanyAccounts] = useState<any[]>([]);
 
-  // UI State
-  const [orderSearchOpen, setOrderSearchOpen] = useState(false);
-  const [bankSearchOpen, setBankSearchOpen] = useState(false);
-
-  // Form State
   const [formData, setFormData] = useState({
     orderId: "",
     amount: 0,
@@ -88,10 +85,6 @@ export function CreatePaymentDialog({
 
       const fetchData = async () => {
         try {
-          const user = getUserBusinessContext();
-          const businessId = user?.businessId;
-
-          // A. Fetch Unpaid Invoices
           const invRes = await fetch(`/api/invoices?businessId=${businessId}`);
           if (invRes.ok) {
             const invData = await invRes.json();
@@ -106,17 +99,10 @@ export function CreatePaymentDialog({
             setUnpaidOrders(pending);
           }
 
-          // B. Fetch Bank Codes
           const banksRes = await fetch(`/api/finance/bank-codes`);
-          if (banksRes.ok) {
-            const banksData = await banksRes.json();
-            setBanks(banksData);
-          }
+          if (banksRes.ok) setBanks(await banksRes.json());
 
-          // C. Fetch Company Accounts
-          const accRes = await fetch(
-            `/api/finance/accounts?businessId=${businessId}`
-          );
+          const accRes = await fetch(`/api/finance/accounts?businessId=${businessId}`);
           if (accRes.ok) {
             const accData = await accRes.json();
             setCompanyAccounts(accData.filter((a: any) => a.is_active));
@@ -199,9 +185,7 @@ export function CreatePaymentDialog({
 
       const data = await res.json();
 
-      if (!res.ok) {
-        throw new Error(data.error || "Payment failed");
-      }
+      if (!res.ok) throw new Error(data.error || "Payment failed");
 
       toast.success("Payment recorded successfully!");
       onPaymentSuccess();
@@ -213,14 +197,15 @@ export function CreatePaymentDialog({
     }
   };
 
+  const selectedOrder = unpaidOrders.find((o) => o.id === formData.orderId);
+  const selectedBank = banks.find((b) => b.id === formData.bankId);
+
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Add Payment</DialogTitle>
-          <DialogDescription>
-            Record a new payment from customer
-          </DialogDescription>
+          <DialogDescription>Record a new payment from customer</DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-2 gap-4 py-2">
@@ -232,23 +217,19 @@ export function CreatePaymentDialog({
                 <Button
                   variant="outline"
                   role="combobox"
-                  className="w-full justify-between h-10"
+                  className="w-full justify-between h-10 font-normal"
                 >
-                  <span className="truncate">
-                    {formData.orderId
-                      ? unpaidOrders.find((o) => o.id === formData.orderId)
-                          ?.order_number +
-                        " - " +
-                        unpaidOrders.find((o) => o.id === formData.orderId)
-                          ?.customer_name
-                      : "Select an order..."}
+                  <span className="truncate text-left">
+                    {selectedOrder
+                      ? `${selectedOrder.order_number} — ${selectedOrder.customer_name}`
+                      : <span className="text-muted-foreground">Select an order...</span>}
                   </span>
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-[400px] p-0" align="start">
+              <PopoverContent className="p-0" style={{ width: "var(--radix-popover-trigger-width)" }}>
                 <Command>
-                  <CommandInput placeholder="Search invoice..." />
+                  <CommandInput placeholder="Search invoice or customer..." />
                   <CommandList>
                     <CommandEmpty>No unpaid orders found.</CommandEmpty>
                     <CommandGroup>
@@ -257,32 +238,17 @@ export function CreatePaymentDialog({
                           key={order.id}
                           value={`${order.order_number} ${order.customer_name}`}
                           onSelect={() => {
-                            setFormData({
-                              ...formData,
-                              orderId: order.id,
-                              amount: order.balance,
-                            });
+                            setFormData({ ...formData, orderId: order.id, amount: order.balance });
                             setOrderSearchOpen(false);
                           }}
                         >
-                          <Check
-                            className={cn(
-                              "mr-2 h-4 w-4",
-                              formData.orderId === order.id
-                                ? "opacity-100"
-                                : "opacity-0"
-                            )}
-                          />
-                          <div className="flex flex-col">
-                            <span className="font-medium">
-                              {order.order_number}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {order.customer_name}
-                            </span>
-                          </div>
-                          <div className="ml-auto font-bold text-purple-600 text-xs">
-                            LKR {order.balance.toLocaleString()}
+                          <Check className={cn("mr-2 h-4 w-4", formData.orderId === order.id ? "opacity-100" : "opacity-0")} />
+                          <div className="flex justify-between w-full">
+                            <div className="flex flex-col">
+                              <span className="font-medium">{order.order_number}</span>
+                              <span className="text-xs text-muted-foreground">{order.customer_name}</span>
+                            </div>
+                            <span className="text-xs font-bold text-purple-600">LKR {order.balance.toLocaleString()}</span>
                           </div>
                         </CommandItem>
                       ))}
@@ -300,10 +266,7 @@ export function CreatePaymentDialog({
               type="number"
               value={formData.amount}
               onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  amount: parseFloat(e.target.value) || 0,
-                })
+                setFormData({ ...formData, amount: parseFloat(e.target.value) || 0 })
               }
             />
           </div>
@@ -314,9 +277,7 @@ export function CreatePaymentDialog({
             <Input
               type="date"
               value={formData.date}
-              onChange={(e) =>
-                setFormData({ ...formData, date: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, date: e.target.value })}
             />
           </div>
 
@@ -325,7 +286,7 @@ export function CreatePaymentDialog({
             <Label>Method</Label>
             <Select
               value={formData.method}
-              onValueChange={(val) => setFormData({ ...formData, method: val })}
+              onValueChange={(val) => setFormData({ ...formData, method: val, depositAccountId: "", bankId: "" })}
             >
               <SelectTrigger className="w-full">
                 <SelectValue />
@@ -344,9 +305,7 @@ export function CreatePaymentDialog({
               <Label>Deposit Account</Label>
               <Select
                 value={formData.depositAccountId}
-                onValueChange={(val) =>
-                  setFormData({ ...formData, depositAccountId: val })
-                }
+                onValueChange={(val) => setFormData({ ...formData, depositAccountId: val })}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select Account" />
@@ -365,7 +324,6 @@ export function CreatePaymentDialog({
           {/* Cheque Fields */}
           {formData.method === "cheque" && (
             <>
-              {/* Searchable Bank Select */}
               <div className="space-y-2">
                 <Label>Cheque Bank</Label>
                 <Popover open={bankSearchOpen} onOpenChange={setBankSearchOpen}>
@@ -373,20 +331,17 @@ export function CreatePaymentDialog({
                     <Button
                       variant="outline"
                       role="combobox"
-                      aria-expanded={bankSearchOpen}
-                      className="w-full justify-between"
+                      className="w-full justify-between h-10 font-normal"
                     >
-                      {formData.bankId
-                        ? banks.find((b) => b.id === formData.bankId)?.bank_name
-                        : "Select Bank..."}
+                      <span className="truncate">
+                        {selectedBank
+                          ? `${selectedBank.bank_name} (${selectedBank.bank_code})`
+                          : <span className="text-muted-foreground">Select Bank...</span>}
+                      </span>
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent
-                    className="w-[--radix-popover-trigger-width] p-0"
-                    align="start"
-                    side="bottom"
-                  >
+                  <PopoverContent className="p-0" style={{ width: "var(--radix-popover-trigger-width)" }}>
                     <Command>
                       <CommandInput placeholder="Search bank..." />
                       <CommandList>
@@ -395,20 +350,13 @@ export function CreatePaymentDialog({
                           {banks.map((bank) => (
                             <CommandItem
                               key={bank.id}
-                              value={bank.bank_name}
+                              value={`${bank.bank_name} ${bank.bank_code}`}
                               onSelect={() => {
                                 setFormData({ ...formData, bankId: bank.id });
                                 setBankSearchOpen(false);
                               }}
                             >
-                              <Check
-                                className={cn(
-                                  "mr-2 h-4 w-4",
-                                  formData.bankId === bank.id
-                                    ? "opacity-100"
-                                    : "opacity-0"
-                                )}
-                              />
+                              <Check className={cn("mr-2 h-4 w-4", formData.bankId === bank.id ? "opacity-100" : "opacity-0")} />
                               {bank.bank_name} ({bank.bank_code})
                             </CommandItem>
                           ))}
@@ -423,9 +371,7 @@ export function CreatePaymentDialog({
                 <Label>Cheque No</Label>
                 <Input
                   value={formData.chequeNo}
-                  onChange={(e) =>
-                    setFormData({ ...formData, chequeNo: e.target.value })
-                  }
+                  onChange={(e) => setFormData({ ...formData, chequeNo: e.target.value })}
                   placeholder="xxxxxx"
                 />
               </div>
@@ -434,9 +380,7 @@ export function CreatePaymentDialog({
                 <Input
                   type="date"
                   value={formData.chequeDate}
-                  onChange={(e) =>
-                    setFormData({ ...formData, chequeDate: e.target.value })
-                  }
+                  onChange={(e) => setFormData({ ...formData, chequeDate: e.target.value })}
                 />
               </div>
             </>
@@ -447,9 +391,7 @@ export function CreatePaymentDialog({
             <Label>Notes</Label>
             <Input
               value={formData.notes}
-              onChange={(e) =>
-                setFormData({ ...formData, notes: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               placeholder="Optional notes..."
             />
           </div>
@@ -464,11 +406,7 @@ export function CreatePaymentDialog({
             disabled={loading}
             className="bg-purple-600 hover:bg-purple-700"
           >
-            {loading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              "Add Payment"
-            )}
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Add Payment"}
           </Button>
         </DialogFooter>
       </DialogContent>

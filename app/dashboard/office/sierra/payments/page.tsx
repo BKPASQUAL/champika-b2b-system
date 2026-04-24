@@ -249,6 +249,7 @@ export default function SierraPaymentsPage() {
         isOpen={isAddDialogOpen}
         setIsOpen={setIsAddDialogOpen}
         onPaymentSuccess={fetchPayments}
+        businessId={currentBusinessId}
       />
 
       <PaymentViewDialog
