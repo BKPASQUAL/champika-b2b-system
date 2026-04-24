@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
-import { useCachedFetch } from "@/hooks/useCachedFetch";
+import { useCachedFetch, invalidatePaymentCaches } from "@/hooks/useCachedFetch";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -450,6 +450,7 @@ export function ChequeManagementPage({
       });
       if (!res.ok) throw new Error("Failed");
       toast.success(`Cheque marked as ${status}`);
+      invalidatePaymentCaches();
       refetch();
     } catch {
       toast.error("Failed to update status");
