@@ -51,8 +51,7 @@ export async function PATCH(
     if (error) throw error;
     if (!data) return NextResponse.json({ error: "Payment not found" }, { status: 404 });
 
-    // When cheque is Cleared, insert a Deposit transaction so the DB trigger
-    // (trg_update_account_balance) adds the amount to the bank account's current_balance
+    // When cheque is Cleared, record transaction and directly update bank account balance
     if (chequeStatus === "Cleared") {
       const resolvedAccountId = depositAccountId || existing.deposit_account_id;
 
@@ -61,17 +60,38 @@ export async function PATCH(
           .from("account_transactions")
           .insert({
             transaction_no: `CHQ-CLR-${id.substring(0, 8).toUpperCase()}-${Date.now()}`,
-            transaction_type: "Deposit",
+            transaction_type: "Cheque Cleared",
             from_account_id: null,
             to_account_id: resolvedAccountId,
             amount: Number(existing.amount),
             transaction_date: new Date().toISOString().split("T")[0],
             description: `Cheque cleared — ref ${id.substring(0, 8).toUpperCase()}`,
+            payment_id: id,
           });
 
         if (txError) {
-          // Log but don't fail the request — status was already updated
           console.error("Failed to create account transaction for cleared cheque:", txError);
+        }
+
+        // Directly update bank account current_balance
+        const { data: accountData, error: fetchBalanceError } = await supabaseAdmin
+          .from("bank_accounts")
+          .select("current_balance")
+          .eq("id", resolvedAccountId)
+          .single();
+
+        if (fetchBalanceError || !accountData) {
+          console.error("Failed to fetch account balance:", fetchBalanceError);
+        } else {
+          const newBalance = Number(accountData.current_balance || 0) + Number(existing.amount);
+          const { error: balanceError } = await supabaseAdmin
+            .from("bank_accounts")
+            .update({ current_balance: newBalance, updated_at: new Date().toISOString() })
+            .eq("id", resolvedAccountId);
+
+          if (balanceError) {
+            console.error("Failed to update account balance:", balanceError);
+          }
         }
       }
     }

@@ -278,6 +278,7 @@ export async function POST(request: NextRequest) {
           description: `Payment from ${customer.shop_name} - ${invoice.invoice_no}`,
           transaction_date: val.date,
           reference_no: invoice.invoice_no,
+          payment_id: payment.id,
         });
 
       if (transactionError) {
