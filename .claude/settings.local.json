@@ -14,6 +14,9 @@
       "Bash(python3 -c ':*)",
       "Bash(npx tsc:*)",
       "Bash(xargs grep:*)"
+    ],
+    "additionalDirectories": [
+      "c:\\Projects\\champika-b2b-system\\app\\api\\payments\\[id]"
     ]
   }
 }

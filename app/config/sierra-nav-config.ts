@@ -14,6 +14,7 @@ import {
   ClipboardCheck,
   Coins,
   CalendarDays,
+  ScrollText,
 } from "lucide-react";
 
 interface SierraNavItem {
@@ -117,6 +118,12 @@ export const sierraOfficeNavItems: SierraNavSection[] = [
         name: "Expenses",
         href: "/dashboard/office/sierra/expenses",
         icon: Coins,
+      },
+      {
+        name: "Cheque Management",
+        href: "/dashboard/office/sierra/cheques",
+        icon: ScrollText,
+        description: "Track pending, deposited and cleared cheques",
       },
       {
         name: "Cheque Calendar",

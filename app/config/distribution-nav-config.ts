@@ -17,8 +17,9 @@ import {
   FileText,
   Layers,
   Undo2,
-  Wallet, // ✅ Added for Expenses
+  Wallet,
   CalendarDays,
+  ScrollText,
 } from "lucide-react";
 
 interface DistNavItem {
@@ -152,6 +153,12 @@ export const distributionNavItems: DistNavSection[] = [
   {
     title: "Finance",
     items: [
+      {
+        name: "Cheque Management",
+        href: "/dashboard/office/distribution/cheques",
+        icon: ScrollText,
+        description: "Track pending, deposited and cleared cheques",
+      },
       {
         name: "Cheque Calendar",
         href: "/dashboard/office/distribution/calendar",
