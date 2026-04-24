@@ -21,6 +21,7 @@ import {
   Percent,
   Download,
   Share2,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -105,6 +106,7 @@ export default function DistributionViewInvoicePage({
 
   const [loading, setLoading] = useState(true);
   const [invoice, setInvoice] = useState<any>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   // History State
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -117,35 +119,38 @@ export default function DistributionViewInvoicePage({
   // Share state
   const [sharing, setSharing] = useState(false);
 
-  useEffect(() => {
-    const fetchInvoice = async () => {
-      try {
-        const res = await fetch(`/api/invoices/${id}`);
-        if (!res.ok) throw new Error("Failed to load invoice");
+  const fetchInvoice = async (silent = false) => {
+    if (!silent) setLoading(true);
+    else setRefreshing(true);
+    try {
+      const res = await fetch(`/api/invoices/${id}`);
+      if (!res.ok) throw new Error("Failed to load invoice");
+      const data = await res.json();
+      setInvoice(data);
+    } catch (error) {
+      toast.error("Error loading invoice details");
+      if (!silent) router.push("/dashboard/office/distribution/invoices");
+    } finally {
+      if (!silent) setLoading(false);
+      else setRefreshing(false);
+    }
+  };
+
+  const fetchReturns = async () => {
+    try {
+      const res = await fetch(`/api/invoices/${id}/returns`);
+      if (res.ok) {
         const data = await res.json();
-        setInvoice(data);
-      } catch (error) {
-        toast.error("Error loading invoice details");
-        router.push("/dashboard/office/distribution/invoices");
-      } finally {
-        setLoading(false);
+        setReturns(data);
       }
-    };
+    } catch (error) {
+      console.error("Failed to fetch returns");
+    } finally {
+      setReturnsLoading(false);
+    }
+  };
 
-    const fetchReturns = async () => {
-      try {
-        const res = await fetch(`/api/invoices/${id}/returns`);
-        if (res.ok) {
-          const data = await res.json();
-          setReturns(data);
-        }
-      } catch (error) {
-        console.error("Failed to fetch returns");
-      } finally {
-        setReturnsLoading(false);
-      }
-    };
-
+  useEffect(() => {
     fetchInvoice();
     fetchReturns();
   }, [id, router]);
@@ -225,7 +230,8 @@ export default function DistributionViewInvoicePage({
   }, 0);
 
   const paymentsList: PaymentRecord[] = invoice.payments || [];
-  const totalPaid = paymentsList.reduce((acc, p) => acc + Number(p.amount), 0);
+  // Use the DB-stored paidAmount (correctly updated on cheque reversals) as the authoritative value
+  const totalPaid = Number(invoice.paidAmount ?? 0);
 
   const netTotal = invoice.grandTotal;
   const extraDiscountAmount = invoice.extraDiscountAmount || 0;
@@ -275,6 +281,18 @@ export default function DistributionViewInvoicePage({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap ml-11 md:ml-0">
+            {/* Refresh Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="bg-background"
+              onClick={() => { fetchInvoice(true); fetchReturns(); }}
+              disabled={refreshing}
+            >
+              <RefreshCw className={`w-4 h-4 md:mr-2 text-muted-foreground ${refreshing ? "animate-spin" : ""}`} />
+              <span className="hidden md:inline">{refreshing ? "Refreshing…" : "Refresh"}</span>
+            </Button>
+
             {/* History Sheet */}
             <Sheet>
               <SheetTrigger asChild>
@@ -695,34 +713,52 @@ export default function DistributionViewInvoicePage({
                         <TableHead className="pl-6">Date</TableHead>
                         <TableHead>Method</TableHead>
                         <TableHead>Reference / Cheque</TableHead>
+                        <TableHead>Status</TableHead>
                         <TableHead className="text-right pr-6">Amount</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {paymentsList.map((pay) => (
-                        <TableRow key={pay.id} className="hover:bg-emerald-50/10">
-                          <TableCell className="pl-6 text-sm">{new Date(pay.payment_date).toLocaleDateString()}</TableCell>
-                          <TableCell className="text-sm">
-                            <Badge variant="secondary" className="font-normal text-xs">{pay.method}</Badge>
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
-                            {pay.method === "Cheque" ? (
-                              <div className="flex flex-col">
-                                <span className="font-mono text-xs font-medium text-foreground">{pay.cheque_no}</span>
-                                <span className="text-[10px]">Due: {new Date(pay.cheque_date!).toLocaleDateString()}</span>
-                                {pay.cheque_status && <span className="text-[10px] italic">({pay.cheque_status})</span>}
-                              </div>
-                            ) : "-"}
-                          </TableCell>
-                          <TableCell className="text-right pr-6 font-mono font-medium">
-                            LKR {Number(pay.amount).toLocaleString("en-LK", { minimumFractionDigits: 2 })}
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {paymentsList.map((pay) => {
+                        const isReturned = pay.cheque_status === "Returned";
+                        const isCheque = pay.method?.toLowerCase() === "cheque";
+                        return (
+                          <TableRow key={pay.id} className={isReturned ? "bg-red-50/40 hover:bg-red-50/60" : "hover:bg-emerald-50/10"}>
+                            <TableCell className="pl-6 text-sm">{new Date(pay.payment_date).toLocaleDateString()}</TableCell>
+                            <TableCell className="text-sm">
+                              <Badge variant="secondary" className="font-normal text-xs">{pay.method}</Badge>
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {isCheque ? (
+                                <div className="flex flex-col">
+                                  <span className={`font-mono text-xs font-medium ${isReturned ? "line-through text-gray-400" : "text-foreground"}`}>{pay.cheque_no}</span>
+                                  {pay.cheque_date && <span className="text-[10px]">Due: {new Date(pay.cheque_date).toLocaleDateString()}</span>}
+                                </div>
+                              ) : "-"}
+                            </TableCell>
+                            <TableCell>
+                              {isCheque && pay.cheque_status ? (
+                                <Badge variant="outline" className={`text-[10px] px-1.5 border ${
+                                  pay.cheque_status === "Cleared" ? "bg-green-50 text-green-700 border-green-200" :
+                                  pay.cheque_status === "Returned" ? "bg-red-50 text-red-700 border-red-200" :
+                                  pay.cheque_status === "Bounced" ? "bg-red-50 text-red-600 border-red-200" :
+                                  pay.cheque_status === "Deposited" ? "bg-blue-50 text-blue-700 border-blue-200" :
+                                  "bg-amber-50 text-amber-700 border-amber-200"
+                                }`}>{pay.cheque_status}</Badge>
+                              ) : <span className="text-xs text-muted-foreground">—</span>}
+                            </TableCell>
+                            <TableCell className="text-right pr-6 font-mono font-medium">
+                              <span className={isReturned ? "line-through text-gray-400" : ""}>
+                                LKR {Number(pay.amount).toLocaleString("en-LK", { minimumFractionDigits: 2 })}
+                              </span>
+                              {isReturned && <p className="text-[10px] text-red-500 font-medium">Reversed</p>}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                     <TableFooter className="bg-emerald-50/30">
                       <TableRow>
-                        <TableCell colSpan={3} className="pl-6 text-emerald-700 font-medium text-right">
+                        <TableCell colSpan={4} className="pl-6 text-emerald-700 font-medium text-right">
                           Total Paid
                         </TableCell>
                         <TableCell className="pr-6 text-right font-bold font-mono text-emerald-700">
@@ -735,28 +771,41 @@ export default function DistributionViewInvoicePage({
 
                   {/* Mobile / Tablet payment cards */}
                   <div className="lg:hidden p-2 space-y-1.5">
-                    {paymentsList.map((pay) => (
-                      <div key={pay.id} className="rounded-lg border bg-white p-2.5">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary" className="font-normal text-xs">{pay.method}</Badge>
-                            <span className="text-xs text-muted-foreground">
-                              {new Date(pay.payment_date).toLocaleDateString()}
-                            </span>
+                    {paymentsList.map((pay) => {
+                      const isReturned = pay.cheque_status === "Returned";
+                      const isCheque = pay.method?.toLowerCase() === "cheque";
+                      return (
+                        <div key={pay.id} className={`rounded-lg border p-2.5 ${isReturned ? "bg-red-50/40" : "bg-white"}`}>
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="secondary" className="font-normal text-xs">{pay.method}</Badge>
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(pay.payment_date).toLocaleDateString()}
+                              </span>
+                              {isCheque && pay.cheque_status && (
+                                <Badge variant="outline" className={`text-[10px] px-1.5 border ${
+                                  pay.cheque_status === "Cleared" ? "bg-green-50 text-green-700 border-green-200" :
+                                  pay.cheque_status === "Returned" ? "bg-red-50 text-red-700 border-red-200" :
+                                  "bg-amber-50 text-amber-700 border-amber-200"
+                                }`}>{pay.cheque_status}</Badge>
+                              )}
+                            </div>
+                            <div className="text-right">
+                              <span className={`font-bold font-mono text-sm ${isReturned ? "line-through text-gray-400" : "text-emerald-700"}`}>
+                                LKR {Number(pay.amount).toLocaleString("en-LK", { minimumFractionDigits: 2 })}
+                              </span>
+                              {isReturned && <p className="text-[10px] text-red-500">Reversed</p>}
+                            </div>
                           </div>
-                          <span className="font-bold font-mono text-sm text-emerald-700">
-                            LKR {Number(pay.amount).toLocaleString("en-LK", { minimumFractionDigits: 2 })}
-                          </span>
+                          {isCheque && pay.cheque_no && (
+                            <div className="mt-1.5 pl-1 text-xs text-muted-foreground flex gap-3">
+                              <span className={`font-mono font-medium ${isReturned ? "line-through text-gray-400" : "text-foreground"}`}>{pay.cheque_no}</span>
+                              {pay.cheque_date && <span>Due: {new Date(pay.cheque_date).toLocaleDateString()}</span>}
+                            </div>
+                          )}
                         </div>
-                        {pay.method === "Cheque" && (
-                          <div className="mt-1.5 pl-1 text-xs text-muted-foreground flex gap-3">
-                            <span className="font-mono font-medium text-foreground">{pay.cheque_no}</span>
-                            <span>Due: {new Date(pay.cheque_date!).toLocaleDateString()}</span>
-                            {pay.cheque_status && <span className="italic">({pay.cheque_status})</span>}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                     <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-4 py-3 flex justify-between items-center">
                       <span className="text-sm font-semibold text-emerald-700">Total Paid</span>
                       <span className="font-bold font-mono text-base text-emerald-700">

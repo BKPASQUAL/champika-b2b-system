@@ -24,6 +24,13 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { invalidatePaymentCaches } from "@/hooks/useCachedFetch";
 
+interface InvoiceSnapshot {
+  paidAmount: number;
+  totalAmount: number;
+  dueAmount: number;
+  status: string;
+}
+
 interface PaymentDialogsProps {
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
@@ -39,12 +46,30 @@ export function PaymentDialogs({
 }: PaymentDialogsProps) {
   const [status, setStatus] = useState<ChequeStatus>("Pending");
   const [loading, setLoading] = useState(false);
+  const [invoiceSnapshot, setInvoiceSnapshot] = useState<InvoiceSnapshot | null>(null);
 
   useEffect(() => {
-    if (selectedPayment && selectedPayment.chequeStatus) {
+    if (selectedPayment?.chequeStatus) {
       setStatus(selectedPayment.chequeStatus);
     }
-  }, [selectedPayment]);
+    setInvoiceSnapshot(null);
+
+    if (isOpen && selectedPayment?.invoiceId) {
+      fetch(`/api/invoices/${selectedPayment.invoiceId}`)
+        .then((r) => r.json())
+        .then((data) => {
+          const paid = Number(data.paid_amount ?? data.paidAmount ?? 0);
+          const total = Number(data.total_amount ?? data.grandTotal ?? data.totalAmount ?? 0);
+          setInvoiceSnapshot({
+            paidAmount: paid,
+            totalAmount: total,
+            dueAmount: Math.max(0, total - paid),
+            status: data.status ?? "",
+          });
+        })
+        .catch(() => {});
+    }
+  }, [isOpen, selectedPayment]);
 
   const handleSave = async () => {
     if (!selectedPayment) return;
@@ -70,9 +95,17 @@ export function PaymentDialogs({
     }
   };
 
+  const showReturnPreview = status === "Returned" && invoiceSnapshot;
+  const afterPaid = showReturnPreview
+    ? Math.max(0, invoiceSnapshot.paidAmount - (selectedPayment?.amount ?? 0))
+    : 0;
+  const afterDue = showReturnPreview
+    ? Math.max(0, invoiceSnapshot.totalAmount - afterPaid)
+    : 0;
+
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[460px]">
         <DialogHeader>
           <DialogTitle>Update Cheque Status</DialogTitle>
           <DialogDescription>
@@ -112,6 +145,36 @@ export function PaymentDialogs({
               </SelectContent>
             </Select>
           </div>
+
+          {showReturnPreview && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-3 space-y-2 text-sm">
+              <p className="font-semibold text-red-700">Invoice will be reversed</p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                <span className="text-muted-foreground">Invoice</span>
+                <span className="font-mono font-semibold text-gray-800">{selectedPayment?.invoiceNo}</span>
+
+                <span className="text-muted-foreground">Current paid</span>
+                <span className="font-semibold text-gray-700">
+                  LKR {invoiceSnapshot.paidAmount.toLocaleString()}
+                </span>
+
+                <span className="text-muted-foreground">Current due (old)</span>
+                <span className="font-semibold text-orange-600">
+                  LKR {invoiceSnapshot.dueAmount.toLocaleString()}
+                </span>
+
+                <span className="text-muted-foreground">After reversal — paid</span>
+                <span className="font-semibold text-gray-700">
+                  LKR {afterPaid.toLocaleString()}
+                </span>
+
+                <span className="text-muted-foreground">After reversal — due</span>
+                <span className="font-bold text-red-600">
+                  LKR {afterDue.toLocaleString()}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setIsOpen(false)}>

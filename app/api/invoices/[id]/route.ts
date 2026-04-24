@@ -115,6 +115,7 @@ export async function GET(
     // 4. Construct Response
     const fullInvoice = {
       id: invoice.id,
+      orderId: invoice.order_id,
       invoiceNo: invoice.invoice_no,
       date: invoice.orders?.order_date
         ? new Date(invoice.orders.order_date).toISOString().split("T")[0]
