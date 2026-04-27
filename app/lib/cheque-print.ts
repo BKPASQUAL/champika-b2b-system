@@ -126,23 +126,20 @@ function buildPanAsiaHTML(data: ChequeData): string {
 <meta charset="utf-8"/>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  @page {
-    size: 178mm 90mm;
-    margin: 0;
-  }
-  body {
+  @page { size: 178mm 90mm; margin: 0; }
+  html, body { margin: 0; padding: 0; background: transparent; }
+  .page {
     width: 178mm;
     height: 90mm;
+    overflow: hidden;
     position: relative;
     font-family: Arial, Helvetica, sans-serif;
     font-size: 9pt;
-    overflow: hidden;
-    background: transparent;
   }
   /* A/C Payee Only crossing — two solid parallel lines with text between them */
   .crossing {
     position: absolute;
-    top: 12mm;
+    top: 9mm;
     left: 80mm;
     width: 32mm;
     border-top: 1.5px solid #000;
@@ -157,7 +154,7 @@ function buildPanAsiaHTML(data: ChequeData): string {
      Each pair sits in its own box column — adjust left values after test print. */
   .date-dd {
     position: absolute;
-    top: 12mm;
+    top: 9mm;
     left: 121mm;
     font-size: 9pt;
     font-weight: bold;
@@ -165,7 +162,7 @@ function buildPanAsiaHTML(data: ChequeData): string {
   }
   .date-mm {
     position: absolute;
-    top: 12mm;
+    top: 9mm;
     left: 133mm;
     font-size: 9pt;
     font-weight: bold;
@@ -173,7 +170,7 @@ function buildPanAsiaHTML(data: ChequeData): string {
   }
   .date-yy {
     position: absolute;
-    top: 12mm;
+    top: 9mm;
     left: 159mm;
     font-size: 9pt;
     font-weight: bold;
@@ -181,7 +178,7 @@ function buildPanAsiaHTML(data: ChequeData): string {
   }
   .payee {
     position: absolute;
-    top: 24mm;
+    top: 20mm;
     left: 20mm;
     width: 128mm;
     font-size: 10pt;
@@ -191,7 +188,7 @@ function buildPanAsiaHTML(data: ChequeData): string {
   }
   .words {
     position: absolute;
-    top: 33mm;
+    top: 29mm;
     left: 20mm;
     width: 152mm;
     font-size: 9pt;
@@ -210,6 +207,7 @@ function buildPanAsiaHTML(data: ChequeData): string {
 </style>
 </head>
 <body>
+<div class="page">
   ${data.acPayeeOnly ? '<div class="crossing">A/C PAYEE ONLY</div>' : ''}
   <div class="date-dd">${dd}</div>
   <div class="date-mm">${mm}</div>
@@ -217,6 +215,7 @@ function buildPanAsiaHTML(data: ChequeData): string {
   <div class="payee">${data.payeeName}</div>
   <div class="words">${words}</div>
   <div class="figures">${figures}</div>
+</div>
 </body>
 </html>`;
 }
@@ -235,18 +234,15 @@ function buildNTBHTML(data: ChequeData): string {
 <meta charset="utf-8"/>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  @page {
-    size: 200mm 85mm;
-    margin: 0;
-  }
-  body {
+  @page { size: 200mm 85mm; margin: 0; }
+  html, body { margin: 0; padding: 0; background: transparent; }
+  .page {
     width: 200mm;
     height: 85mm;
+    overflow: hidden;
     position: relative;
     font-family: Arial, Helvetica, sans-serif;
     font-size: 9pt;
-    overflow: hidden;
-    background: transparent;
   }
   .date-block {
     position: absolute;
@@ -301,6 +297,7 @@ function buildNTBHTML(data: ChequeData): string {
 </style>
 </head>
 <body>
+<div class="page">
   <div class="date-block">
     <span>${dd}</span><span class="date-sep">/</span><span>${mm}</span><span class="date-sep">/</span><span>${yyyy}</span>
   </div>
@@ -308,6 +305,7 @@ function buildNTBHTML(data: ChequeData): string {
   ${data.payeeAccountName ? `<div class="payee-account">${data.payeeAccountName}</div>` : ""}
   <div class="words">${words}</div>
   <div class="figures">${figures}</div>
+</div>
 </body>
 </html>`;
 }
