@@ -3,8 +3,10 @@
 
 import React, { useState, useMemo } from "react";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
-import { DollarSign, Clock, Search, AlertCircle } from "lucide-react";
+import { DollarSign, Clock, Search, AlertCircle, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import WriteChequeDialog from "@/components/write-cheque-dialog";
+import ReprintChequeDialog, { type ReprintChequeData } from "@/components/reprint-cheque-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -107,6 +109,9 @@ export default function WiremanSupplierPaymentsPage() {
 
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const [isActionDialogOpen, setIsActionDialogOpen] = useState(false);
+  const [isChequeDialogOpen, setIsChequeDialogOpen] = useState(false);
+  const [isReprintDialogOpen, setIsReprintDialogOpen] = useState(false);
+  const [reprintData, setReprintData] = useState<ReprintChequeData | null>(null);
   const [selectedPurchase, setSelectedPurchase] = useState<UnpaidPurchase | null>(null);
   const [selectedPayment, setSelectedPayment] = useState<SupplierPayment | null>(null);
   const [actionType, setActionType] = useState<"passed" | "returned" | null>(null);
@@ -382,13 +387,24 @@ export default function WiremanSupplierPaymentsPage() {
                         {formatCurrency(p.totalAmount - p.paidAmount)}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          onClick={() => openPaymentDialog(p)}
-                          className="bg-red-600 hover:bg-red-700"
-                        >
-                          Pay Now
-                        </Button>
+                        <div className="flex gap-1 justify-end">
+                          <Button
+                            size="sm"
+                            onClick={() => openPaymentDialog(p)}
+                            className="bg-red-600 hover:bg-red-700"
+                          >
+                            Pay Now
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => { setSelectedPurchase(p); setIsChequeDialogOpen(true); }}
+                            className="text-amber-700 border-amber-300 hover:bg-amber-50"
+                          >
+                            <Printer className="w-3 h-3 mr-1" />
+                            Cheque
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -428,6 +444,24 @@ export default function WiremanSupplierPaymentsPage() {
                         {formatCurrency(p.amount)}
                       </TableCell>
                       <TableCell className="text-right space-x-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-amber-700 border-amber-300 hover:bg-amber-50"
+                          onClick={() => {
+                            setReprintData({
+                              payeeName:    p.purchases?.suppliers?.name ?? "",
+                              amount:       p.amount,
+                              chequeDate:   p.cheque_date,
+                              chequeNumber: p.cheque_number,
+                              accountName:  p.company_accounts?.account_name ?? "",
+                            });
+                            setIsReprintDialogOpen(true);
+                          }}
+                        >
+                          <Printer className="w-3 h-3 mr-1" />
+                          Print
+                        </Button>
                         <Button
                           size="sm"
                           variant="outline"
@@ -616,6 +650,23 @@ export default function WiremanSupplierPaymentsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Reprint Cheque Dialog */}
+      <ReprintChequeDialog
+        open={isReprintDialogOpen}
+        onClose={() => setIsReprintDialogOpen(false)}
+        cheque={reprintData}
+      />
+
+      {/* Write Cheque Dialog */}
+      <WriteChequeDialog
+        open={isChequeDialogOpen}
+        onClose={() => setIsChequeDialogOpen(false)}
+        purchase={selectedPurchase}
+        companyAccounts={companyAccounts}
+        businessId={currentBusinessId}
+        onSuccess={fetchData}
+      />
 
       {/* Action Dialog */}
       <AlertDialog

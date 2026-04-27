@@ -57,6 +57,9 @@ export async function GET(request: NextRequest) {
       duePayment: parseFloat(s.due_payment) || 0,
       businessId: s.business_id,
       businessName: s.businesses?.name || null,
+      bankAccountName: s.bank_account_name || null,
+      bankAccountNumber: s.bank_account_number || null,
+      bankName: s.bank_name || null,
     }));
 
     return NextResponse.json(mappedSuppliers);

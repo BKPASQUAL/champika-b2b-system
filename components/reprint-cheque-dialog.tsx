@@ -1,0 +1,123 @@
+"use client";
+
+import React, { useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Printer } from "lucide-react";
+import { printCheque, type BankTemplate } from "@/app/lib/cheque-print";
+
+export interface ReprintChequeData {
+  payeeName: string;
+  amount: number;
+  chequeDate: string | null;
+  chequeNumber: string | null;
+  accountName: string;
+}
+
+interface ReprintChequeDialogProps {
+  open: boolean;
+  onClose: () => void;
+  cheque: ReprintChequeData | null;
+}
+
+const BANK_OPTIONS: { value: BankTemplate; label: string }[] = [
+  { value: "pan_asia", label: "Pan Asia Banking Corporation" },
+  { value: "ntb",     label: "Nations Trust Bank" },
+];
+
+const formatCurrency = (n: number) =>
+  new Intl.NumberFormat("en-LK", {
+    style: "currency",
+    currency: "LKR",
+    minimumFractionDigits: 2,
+  }).format(n);
+
+export default function ReprintChequeDialog({
+  open,
+  onClose,
+  cheque,
+}: ReprintChequeDialogProps) {
+  const [bankTemplate, setBankTemplate] = useState<BankTemplate | "">("");
+
+  const handlePrint = () => {
+    if (!cheque || !bankTemplate) return;
+    printCheque(bankTemplate as BankTemplate, {
+      payeeName:    cheque.payeeName,
+      amount:       cheque.amount,
+      chequeDate:   cheque.chequeDate ?? new Date().toISOString().split("T")[0],
+      chequeNumber: cheque.chequeNumber ?? "",
+      accountName:  cheque.accountName,
+    });
+  };
+
+  const handleClose = () => {
+    setBankTemplate("");
+    onClose();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Printer className="w-5 h-5 text-amber-600" />
+            Print Cheque
+          </DialogTitle>
+          {cheque && (
+            <DialogDescription>
+              {cheque.payeeName} · Cheque No. {cheque.chequeNumber} · {formatCurrency(cheque.amount)}
+            </DialogDescription>
+          )}
+        </DialogHeader>
+
+        <div className="space-y-1.5 py-2">
+          <Label>Select Bank</Label>
+          <Select
+            value={bankTemplate}
+            onValueChange={(v) => setBankTemplate(v as BankTemplate)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Choose cheque bank" />
+            </SelectTrigger>
+            <SelectContent>
+              {BANK_OPTIONS.map((b) => (
+                <SelectItem key={b.value} value={b.value}>
+                  {b.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={handleClose}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handlePrint}
+            disabled={!bankTemplate}
+            className="bg-amber-600 hover:bg-amber-700 text-white"
+          >
+            <Printer className="w-4 h-4 mr-2" />
+            Print
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

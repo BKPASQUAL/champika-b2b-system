@@ -147,6 +147,9 @@ export async function PATCH(
     if (body.businessId || body.business_id) {
       updates.business_id = body.businessId || body.business_id;
     }
+    if (body.bankAccountName !== undefined) updates.bank_account_name = body.bankAccountName;
+    if (body.bankAccountNumber !== undefined) updates.bank_account_number = body.bankAccountNumber;
+    if (body.bankName !== undefined) updates.bank_name = body.bankName;
     // Only map due_payment if strictly necessary (usually calculated, not manually updated via this route)
     // if (body.duePayment) updates.due_payment = body.duePayment;
 
