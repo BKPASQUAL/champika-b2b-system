@@ -69,6 +69,7 @@ interface ChequeData {
   chequeDate: string; // YYYY-MM-DD
   chequeNumber: string;
   accountName: string; // company account this cheque draws from
+  acPayeeOnly?: boolean; // print A/C Payee Only crossing lines
 }
 
 function formatChequeDate(dateStr: string): { dd: string; mm: string; yyyy: string } {
@@ -138,7 +139,21 @@ function buildPanAsiaHTML(data: ChequeData): string {
     overflow: hidden;
     background: transparent;
   }
-  /* Date is at the BOTTOM-right. "20" is pre-printed; we print DD MM YY only.
+  /* A/C Payee Only crossing — two solid parallel lines with text between them */
+  .crossing {
+    position: absolute;
+    top: 12mm;
+    left: 80mm;
+    width: 32mm;
+    border-top: 1.5px solid #000;
+    border-bottom: 1.5px solid #000;
+    padding: 2mm 3mm;
+    text-align: center;
+    font-size: 6.5pt;
+    font-weight: bold;
+    letter-spacing: 0.4px;
+  }
+  /* Date — "20" is pre-printed; we print DD MM YY only.
      Each pair sits in its own box column — adjust left values after test print. */
   .date-dd {
     position: absolute;
@@ -195,6 +210,7 @@ function buildPanAsiaHTML(data: ChequeData): string {
 </style>
 </head>
 <body>
+  ${data.acPayeeOnly ? '<div class="crossing">A/C PAYEE ONLY</div>' : ''}
   <div class="date-dd">${dd}</div>
   <div class="date-mm">${mm}</div>
   <div class="date-yy">${yy}</div>

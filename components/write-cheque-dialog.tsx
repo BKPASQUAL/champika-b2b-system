@@ -102,6 +102,7 @@ export default function WriteChequeDialog({
   const [saveToProfile,      setSaveToProfile]       = useState(false);
   const [loadingSupplier,    setLoadingSupplier]     = useState(false);
 
+  const [acPayeeOnly,     setAcPayeeOnly]     = useState(true);
   const [isSubmitting,    setIsSubmitting]    = useState(false);
   const [savedPaymentId,  setSavedPaymentId]  = useState<string | null>(null);
 
@@ -119,6 +120,7 @@ export default function WriteChequeDialog({
     setIsManualEntry(false);
     setSaveToProfile(false);
     setPayeeAccountName("");
+    setAcPayeeOnly(true);
     setForm({
       amount:             (purchase.totalAmount - purchase.paidAmount).toFixed(2),
       cheque_date:        new Date().toISOString().split("T")[0],
@@ -169,6 +171,7 @@ export default function WriteChequeDialog({
       chequeDate:       form.cheque_date,
       chequeNumber:     form.cheque_number.trim(),
       accountName:      selectedAccount?.account_name ?? "",
+      acPayeeOnly,
     });
   };
 
@@ -415,6 +418,21 @@ export default function WriteChequeDialog({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          {/* ── A/C Payee Only ──────────────────────────────────────── */}
+          <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+            <Checkbox
+              id="ac-payee-only"
+              checked={acPayeeOnly}
+              onCheckedChange={(v) => setAcPayeeOnly(!!v)}
+            />
+            <label htmlFor="ac-payee-only" className="text-sm font-medium cursor-pointer select-none">
+              Print <span className="font-semibold">A/C Payee Only</span> crossing
+            </label>
+            <span className="ml-auto text-xs text-muted-foreground">
+              {acPayeeOnly ? "Two lines printed" : "No crossing"}
+            </span>
           </div>
 
           {/* ── Notes ───────────────────────────────────────────────── */}

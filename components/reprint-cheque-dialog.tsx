@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Printer } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { printCheque, type BankTemplate } from "@/app/lib/cheque-print";
 
 export interface ReprintChequeData {
@@ -53,6 +54,7 @@ export default function ReprintChequeDialog({
   cheque,
 }: ReprintChequeDialogProps) {
   const [bankTemplate, setBankTemplate] = useState<BankTemplate | "">("");
+  const [acPayeeOnly,  setAcPayeeOnly]  = useState(true);
 
   const handlePrint = () => {
     if (!cheque || !bankTemplate) return;
@@ -62,11 +64,13 @@ export default function ReprintChequeDialog({
       chequeDate:   cheque.chequeDate ?? new Date().toISOString().split("T")[0],
       chequeNumber: cheque.chequeNumber ?? "",
       accountName:  cheque.accountName,
+      acPayeeOnly,
     });
   };
 
   const handleClose = () => {
     setBankTemplate("");
+    setAcPayeeOnly(true);
     onClose();
   };
 
@@ -85,23 +89,39 @@ export default function ReprintChequeDialog({
           )}
         </DialogHeader>
 
-        <div className="space-y-1.5 py-2">
-          <Label>Select Bank</Label>
-          <Select
-            value={bankTemplate}
-            onValueChange={(v) => setBankTemplate(v as BankTemplate)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Choose cheque bank" />
-            </SelectTrigger>
-            <SelectContent>
-              {BANK_OPTIONS.map((b) => (
-                <SelectItem key={b.value} value={b.value}>
-                  {b.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="space-y-3 py-2">
+          <div className="space-y-1.5">
+            <Label>Select Bank</Label>
+            <Select
+              value={bankTemplate}
+              onValueChange={(v) => setBankTemplate(v as BankTemplate)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Choose cheque bank" />
+              </SelectTrigger>
+              <SelectContent>
+                {BANK_OPTIONS.map((b) => (
+                  <SelectItem key={b.value} value={b.value}>
+                    {b.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+            <Checkbox
+              id="ac-payee-reprint"
+              checked={acPayeeOnly}
+              onCheckedChange={(v) => setAcPayeeOnly(!!v)}
+            />
+            <label htmlFor="ac-payee-reprint" className="text-sm font-medium cursor-pointer select-none">
+              Print <span className="font-semibold">A/C Payee Only</span> crossing
+            </label>
+            <span className="ml-auto text-xs text-muted-foreground">
+              {acPayeeOnly ? "Two lines printed" : "No crossing"}
+            </span>
+          </div>
         </div>
 
         <DialogFooter className="gap-2">
