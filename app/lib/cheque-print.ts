@@ -142,32 +142,32 @@ function buildPanAsiaHTML(data: ChequeData): string {
      Each pair sits in its own box column — adjust left values after test print. */
   .date-dd {
     position: absolute;
-    top: 9mm;
-    left: 136mm;
+    top: 12mm;
+    left: 121mm;
     font-size: 9pt;
     font-weight: bold;
-    letter-spacing: 4.5mm;
+    letter-spacing: 5mm;
   }
   .date-mm {
     position: absolute;
-    top: 9mm;
-    left: 147mm;
+    top: 12mm;
+    left: 133mm;
     font-size: 9pt;
     font-weight: bold;
-    letter-spacing: 4.5mm;
+    letter-spacing: 5mm;
   }
   .date-yy {
     position: absolute;
-    top: 9mm;
-    left: 173mm;
+    top: 12mm;
+    left: 159mm;
     font-size: 9pt;
     font-weight: bold;
-    letter-spacing: 4.5mm;
+    letter-spacing: 5mm;
   }
   .payee {
     position: absolute;
-    top: 23mm;
-    left: 12mm;
+    top: 24mm;
+    left: 20mm;
     width: 128mm;
     font-size: 10pt;
     font-weight: bold;
@@ -176,8 +176,8 @@ function buildPanAsiaHTML(data: ChequeData): string {
   }
   .words {
     position: absolute;
-    top: 32mm;
-    left: 12mm;
+    top: 33mm;
+    left: 20mm;
     width: 152mm;
     font-size: 9pt;
     line-height: 5mm;
@@ -185,8 +185,8 @@ function buildPanAsiaHTML(data: ChequeData): string {
   }
   .figures {
     position: absolute;
-    top: 37mm;
-    right: 30mm;
+    top: 40mm;
+    right: 16mm;
     width: 30mm;
     text-align: right;
     font-size: 10pt;
