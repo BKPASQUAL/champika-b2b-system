@@ -29,9 +29,9 @@ export function amountToWords(amount: number): string {
   const rupees = Math.floor(fixed / 100);
   const cents = fixed % 100;
 
-  if (rupees === 0 && cents === 0) return "Zero Rupees Only";
+  if (rupees === 0 && cents === 0) return "Zero Only";
 
-  let words = "Rupees ";
+  let words = "";
 
   if (rupees >= 10_000_000) {
     words += wordifyHundreds(Math.floor(rupees / 10_000_000)) + " Crore ";
