@@ -96,7 +96,7 @@ export default function ReprintChequeDialog({
               value={bankTemplate}
               onValueChange={(v) => setBankTemplate(v as BankTemplate)}
             >
-              <SelectTrigger>
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Choose cheque bank" />
               </SelectTrigger>
               <SelectContent>

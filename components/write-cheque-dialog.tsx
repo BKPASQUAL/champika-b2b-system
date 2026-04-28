@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -381,7 +381,7 @@ export default function WriteChequeDialog({
               value={form.company_account_id}
               onValueChange={(v) => setForm((f) => ({ ...f, company_account_id: v }))}
             >
-              <SelectTrigger>
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select account" />
               </SelectTrigger>
               <SelectContent>
@@ -406,7 +406,7 @@ export default function WriteChequeDialog({
               value={form.bank_template}
               onValueChange={(v) => setForm((f) => ({ ...f, bank_template: v as BankTemplate }))}
             >
-              <SelectTrigger>
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select bank" />
               </SelectTrigger>
               <SelectContent>

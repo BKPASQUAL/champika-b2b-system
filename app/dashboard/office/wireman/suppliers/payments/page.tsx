@@ -569,7 +569,7 @@ export default function WiremanSupplierPaymentsPage() {
                   setPaymentForm({ ...paymentForm, payment_method: v })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -587,7 +587,7 @@ export default function WiremanSupplierPaymentsPage() {
                   setPaymentForm({ ...paymentForm, company_account_id: v })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select account" />
                 </SelectTrigger>
                 <SelectContent>
