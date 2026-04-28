@@ -32,6 +32,7 @@ export interface UnpaidPurchase {
   id: string;
   purchaseId: string;
   purchaseDate: string;
+  arrivalDate: string | null;
   totalAmount: number;
   paidAmount: number;
   paymentStatus: string;
@@ -70,6 +71,20 @@ const formatCurrency = (n: number) =>
     minimumFractionDigits: 2,
   }).format(n);
 
+function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().split("T")[0];
+}
+
+function formatDisplayDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString("en-LK", {
+    day: "2-digit", month: "short", year: "numeric",
+  });
+}
+
+type DateMode = "60" | "75" | "manual";
+
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export default function WriteChequeDialog({
@@ -97,6 +112,7 @@ export default function WriteChequeDialog({
   const [saveToProfile,      setSaveToProfile]       = useState(false);
   const [loadingSupplier,    setLoadingSupplier]     = useState(false);
 
+  const [dateMode,        setDateMode]        = useState<DateMode>("60");
   const [acPayeeOnly,     setAcPayeeOnly]     = useState(true);
   const [isSubmitting,    setIsSubmitting]    = useState(false);
   const [savedPaymentId,  setSavedPaymentId]  = useState<string | null>(null);
@@ -116,9 +132,11 @@ export default function WriteChequeDialog({
     setSaveToProfile(false);
     setPayeeAccountName("");
     setAcPayeeOnly(true);
+    setDateMode("60");
+    const baseDate = purchase.arrivalDate || purchase.purchaseDate;
     setForm({
       amount:             (purchase.totalAmount - purchase.paidAmount).toFixed(2),
-      cheque_date:        new Date().toISOString().split("T")[0],
+      cheque_date:        addDays(baseDate, 60),
       cheque_number:      "",
       company_account_id: "",
       bank_template:      "pan_asia" as BankTemplate,
@@ -151,6 +169,14 @@ export default function WriteChequeDialog({
     form.cheque_date &&
     form.cheque_number.trim() !== "" &&
     form.company_account_id !== "";
+
+  const handleDateModeChange = (mode: DateMode) => {
+    setDateMode(mode);
+    if (mode !== "manual" && purchase) {
+      const baseDate = purchase.arrivalDate || purchase.purchaseDate;
+      setForm((f) => ({ ...f, cheque_date: addDays(baseDate, parseInt(mode)) }));
+    }
+  };
 
   const handleUseTotal = () =>
     setForm((f) => ({ ...f, amount: balanceDue.toFixed(2) }));
@@ -339,26 +365,57 @@ export default function WriteChequeDialog({
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            {/* Cheque Date */}
-            <div className="space-y-1.5">
-              <Label>Cheque Date</Label>
+          {/* ── Cheque Date ─────────────────────────────────────────── */}
+          <div className="space-y-1.5">
+            <Label>Cheque Date</Label>
+            <Select value={dateMode} onValueChange={(v) => handleDateModeChange(v as DateMode)}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="60">60 days from invoice date</SelectItem>
+                <SelectItem value="75">75 days from invoice date</SelectItem>
+                <SelectItem value="manual">Manual entry</SelectItem>
+              </SelectContent>
+            </Select>
+            {purchase && (
+              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 space-y-1">
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Invoice Date</span>
+                  <span className="font-medium">{formatDisplayDate(purchase.purchaseDate)}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Arrival Date</span>
+                  <span className="font-medium">
+                    {purchase.arrivalDate ? formatDisplayDate(purchase.arrivalDate) : <span className="text-slate-400">Not set</span>}
+                  </span>
+                </div>
+              </div>
+            )}
+            {dateMode === "manual" ? (
               <Input
                 type="date"
                 value={form.cheque_date}
                 onChange={(e) => setForm((f) => ({ ...f, cheque_date: e.target.value }))}
               />
-            </div>
-            {/* Cheque Number */}
-            <div className="space-y-1.5">
-              <Label>Cheque Number</Label>
-              <Input
-                value={form.cheque_number}
-                onChange={(e) => setForm((f) => ({ ...f, cheque_number: e.target.value }))}
-                placeholder="From cheque book"
-                className="font-mono"
-              />
-            </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Arrival date + {dateMode} days
+                <span className="mx-1">→</span>
+                <span className="font-medium text-foreground">{form.cheque_date ? formatDisplayDate(form.cheque_date) : "—"}</span>
+              </p>
+            )}
+          </div>
+
+          {/* ── Cheque Number ────────────────────────────────────────── */}
+          <div className="space-y-1.5">
+            <Label>Cheque Number</Label>
+            <Input
+              value={form.cheque_number}
+              onChange={(e) => setForm((f) => ({ ...f, cheque_number: e.target.value }))}
+              placeholder="From cheque book"
+              className="font-mono"
+            />
           </div>
 
           {/* ── Pay From Account (Accounts Payable) ─────────────────── */}

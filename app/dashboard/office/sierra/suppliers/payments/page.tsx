@@ -66,6 +66,7 @@ interface UnpaidPurchase {
   id: string;
   purchaseId: string;
   purchaseDate: string;
+  arrivalDate: string | null;
   totalAmount: number;
   paidAmount: number;
   paymentStatus: string;
@@ -116,6 +117,20 @@ const CHEQUE_STATUS_BADGE: Record<string, string> = {
   returned: "bg-red-50 text-red-700 border-red-200",
 };
 
+type ChequeDateMode = "60" | "75" | "manual";
+
+function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().split("T")[0];
+}
+
+function formatDisplayDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString("en-LK", {
+    day: "2-digit", month: "short", year: "numeric",
+  });
+}
+
 export default function SierraSupplierPaymentsPage() {
   const router = useRouter();
   const [currentBusinessId] = useState<string>(() => {
@@ -123,8 +138,9 @@ export default function SierraSupplierPaymentsPage() {
     return user?.businessId ?? BUSINESS_IDS.SIERRA_AGENCY;
   });
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [isSubmitting,    setIsSubmitting]    = useState(false);
+  const [searchTerm,      setSearchTerm]      = useState("");
+  const [chequeDateMode,  setChequeDateMode]  = useState<ChequeDateMode>("60");
 
   const [isPaymentDialogOpen,    setIsPaymentDialogOpen]    = useState(false);
   const [isActionDialogOpen,     setIsActionDialogOpen]     = useState(false);
@@ -202,17 +218,26 @@ export default function SierraSupplierPaymentsPage() {
   const openPaymentDialog = (purchase: UnpaidPurchase) => {
     setSelectedPurchase(purchase);
     const balanceDue = purchase.totalAmount - purchase.paidAmount;
-
+    setChequeDateMode("60");
+    const baseDate = purchase.arrivalDate || purchase.purchaseDate;
     setPaymentForm({
       amount: balanceDue.toString(),
       payment_date: new Date().toISOString().split("T")[0],
       company_account_id: "",
       payment_method: "cash",
       cheque_number: "",
-      cheque_date: "",
+      cheque_date: addDays(baseDate, 60),
       notes: `Payment for ${purchase.purchaseId}`,
     });
     setIsPaymentDialogOpen(true);
+  };
+
+  const handleChequeDateMode = (mode: ChequeDateMode) => {
+    setChequeDateMode(mode);
+    if (mode !== "manual" && selectedPurchase) {
+      const baseDate = selectedPurchase.arrivalDate || selectedPurchase.purchaseDate;
+      setPaymentForm((f) => ({ ...f, cheque_date: addDays(baseDate, parseInt(mode)) }));
+    }
   };
 
   const openActionDialog = (
@@ -912,27 +937,55 @@ export default function SierraSupplierPaymentsPage() {
               </Alert>
             )}
             {paymentForm.payment_method === "cheque" && (
-              <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-3">
                 <Input
                   placeholder="Cheque No"
                   value={paymentForm.cheque_number}
-                  onChange={(e) =>
-                    setPaymentForm({
-                      ...paymentForm,
-                      cheque_number: e.target.value,
-                    })
-                  }
+                  onChange={(e) => setPaymentForm({ ...paymentForm, cheque_number: e.target.value })}
+                  className="font-mono"
                 />
-                <Input
-                  type="date"
-                  value={paymentForm.cheque_date}
-                  onChange={(e) =>
-                    setPaymentForm({
-                      ...paymentForm,
-                      cheque_date: e.target.value,
-                    })
-                  }
-                />
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Cheque Date</Label>
+                  <Select value={chequeDateMode} onValueChange={(v) => handleChequeDateMode(v as ChequeDateMode)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="60">60 days from invoice date</SelectItem>
+                      <SelectItem value="75">75 days from invoice date</SelectItem>
+                      <SelectItem value="manual">Manual entry</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {selectedPurchase && (
+                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 space-y-1">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Invoice Date</span>
+                        <span className="font-medium">{formatDisplayDate(selectedPurchase.purchaseDate)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Arrival Date</span>
+                        <span className="font-medium">
+                          {selectedPurchase.arrivalDate ? formatDisplayDate(selectedPurchase.arrivalDate) : <span className="text-slate-400">Not set</span>}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  {chequeDateMode === "manual" ? (
+                    <Input
+                      type="date"
+                      value={paymentForm.cheque_date}
+                      onChange={(e) => setPaymentForm({ ...paymentForm, cheque_date: e.target.value })}
+                    />
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Arrival date + {chequeDateMode} days
+                      <span className="mx-1">→</span>
+                      <span className="font-medium text-foreground">
+                        {paymentForm.cheque_date ? formatDisplayDate(paymentForm.cheque_date) : "—"}
+                      </span>
+                    </p>
+                  )}
+                </div>
               </div>
             )}
           </div>

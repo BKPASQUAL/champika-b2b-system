@@ -40,6 +40,7 @@ export interface UnpaidPurchase {
   id: string;
   purchaseId: string;
   purchaseDate: string;
+  arrivalDate: string | null;
   totalAmount: number;
   paidAmount: number;
   paymentStatus: string;
@@ -72,6 +73,20 @@ const formatCurrency = (n: number) =>
     minimumFractionDigits: 2,
   }).format(n);
 
+type DateMode = "60" | "75" | "manual";
+
+function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().split("T")[0];
+}
+
+function formatDisplayDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString("en-LK", {
+    day: "2-digit", month: "short", year: "numeric",
+  });
+}
+
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export default function WriteMultiChequeDialog({
@@ -100,6 +115,7 @@ export default function WriteMultiChequeDialog({
     notes:              "",
   });
 
+  const [dateMode,         setDateMode]         = useState<DateMode>("60");
   const [payeeAccountName, setPayeeAccountName] = useState("");
   const [isManualEntry,    setIsManualEntry]    = useState(false);
   const [saveToProfile,    setSaveToProfile]    = useState(false);
@@ -122,11 +138,18 @@ export default function WriteMultiChequeDialog({
     setSaveToProfile(false);
     setPayeeAccountName("");
     setAcPayeeOnly(true);
+    setDateMode("60");
+
+    // Use the latest arrival date across all selected invoices as the base
+    const latestBase = purchases.reduce((latest, p) => {
+      const base = p.arrivalDate || p.purchaseDate;
+      return base > latest ? base : latest;
+    }, purchases[0].arrivalDate || purchases[0].purchaseDate);
 
     const invoiceIds = purchases.map((p) => p.purchaseId).join(", ");
     setForm({
       amount:             totalBalance.toFixed(2),
-      cheque_date:        new Date().toISOString().split("T")[0],
+      cheque_date:        addDays(latestBase, 60),
       cheque_number:      "",
       company_account_id: "",
       bank_template:      "pan_asia" as BankTemplate,
@@ -149,6 +172,20 @@ export default function WriteMultiChequeDialog({
       .finally(() => setLoadingSupplier(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, supplierId]);
+
+  const latestBase = purchases.length > 0
+    ? purchases.reduce((latest, p) => {
+        const base = p.arrivalDate || p.purchaseDate;
+        return base > latest ? base : latest;
+      }, purchases[0].arrivalDate || purchases[0].purchaseDate)
+    : new Date().toISOString().split("T")[0];
+
+  const handleDateModeChange = (mode: DateMode) => {
+    setDateMode(mode);
+    if (mode !== "manual") {
+      setForm((f) => ({ ...f, cheque_date: addDays(latestBase, parseInt(mode)) }));
+    }
+  };
 
   const parsedAmount    = parseFloat(form.amount) || 0;
   const selectedAccount = companyAccounts.find((a) => a.id === form.company_account_id);
@@ -264,21 +301,19 @@ export default function WriteMultiChequeDialog({
               {purchases.map((p) => {
                 const due = p.totalAmount - p.paidAmount;
                 return (
-                  <div
-                    key={p.id}
-                    className="flex items-center justify-between px-4 py-2 text-sm"
-                  >
-                    <div>
-                      <span className="font-mono text-xs bg-red-50 text-red-700 border border-red-100 px-1.5 py-0.5 rounded mr-2">
-                        {p.purchaseId}
-                      </span>
-                      <span className="text-muted-foreground">
-                        {new Date(p.purchaseDate).toLocaleDateString()}
-                      </span>
+                  <div key={p.id} className="flex items-center justify-between px-4 py-2 text-sm">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs bg-red-50 text-red-700 border border-red-100 px-1.5 py-0.5 rounded">
+                          {p.purchaseId}
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted-foreground flex gap-3">
+                        <span>Inv: {new Date(p.purchaseDate).toLocaleDateString()}</span>
+                        <span>Arrival: {p.arrivalDate ? new Date(p.arrivalDate).toLocaleDateString() : <span className="italic">Not set</span>}</span>
+                      </div>
                     </div>
-                    <span className="font-medium text-destructive">
-                      {formatCurrency(due)}
-                    </span>
+                    <span className="font-medium text-destructive">{formatCurrency(due)}</span>
                   </div>
                 );
               })}
@@ -370,26 +405,49 @@ export default function WriteMultiChequeDialog({
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            {/* Cheque Date */}
-            <div className="space-y-1.5">
-              <Label>Cheque Date</Label>
+          {/* ── Cheque Date ─────────────────────────────────────────── */}
+          <div className="space-y-1.5">
+            <Label>Cheque Date</Label>
+            <Select value={dateMode} onValueChange={(v) => handleDateModeChange(v as DateMode)}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="60">60 days from latest arrival date</SelectItem>
+                <SelectItem value="75">75 days from latest arrival date</SelectItem>
+                <SelectItem value="manual">Manual entry</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 flex justify-between text-xs">
+              <span className="text-muted-foreground">Latest arrival date</span>
+              <span className="font-medium">{formatDisplayDate(latestBase)}</span>
+            </div>
+            {dateMode === "manual" ? (
               <Input
                 type="date"
                 value={form.cheque_date}
                 onChange={(e) => setForm((f) => ({ ...f, cheque_date: e.target.value }))}
               />
-            </div>
-            {/* Cheque Number */}
-            <div className="space-y-1.5">
-              <Label>Cheque Number</Label>
-              <Input
-                value={form.cheque_number}
-                onChange={(e) => setForm((f) => ({ ...f, cheque_number: e.target.value }))}
-                placeholder="From cheque book"
-                className="font-mono"
-              />
-            </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Latest arrival + {dateMode} days
+                <span className="mx-1">→</span>
+                <span className="font-medium text-foreground">
+                  {form.cheque_date ? formatDisplayDate(form.cheque_date) : "—"}
+                </span>
+              </p>
+            )}
+          </div>
+
+          {/* ── Cheque Number ────────────────────────────────────────── */}
+          <div className="space-y-1.5">
+            <Label>Cheque Number</Label>
+            <Input
+              value={form.cheque_number}
+              onChange={(e) => setForm((f) => ({ ...f, cheque_number: e.target.value }))}
+              placeholder="From cheque book"
+              className="font-mono"
+            />
           </div>
 
           {/* ── Pay From Account ─────────────────────────────────────────── */}

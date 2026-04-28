@@ -31,6 +31,7 @@ export interface UnpaidPurchase {
   id: string;
   purchaseId: string;
   purchaseDate: string;
+  arrivalDate: string | null;
   totalAmount: number;
   paidAmount: number;
   paymentStatus: string;
@@ -63,6 +64,20 @@ const formatCurrency = (n: number) =>
     minimumFractionDigits: 2,
   }).format(n);
 
+type ChequeDateMode = "60" | "75" | "manual";
+
+function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().split("T")[0];
+}
+
+function formatDisplayDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString("en-LK", {
+    day: "2-digit", month: "short", year: "numeric",
+  });
+}
+
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export default function BulkPaymentDialog({
@@ -89,23 +104,39 @@ export default function BulkPaymentDialog({
     notes:              "",
   });
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [done,         setDone]         = useState(false);
+  const [chequeDateMode, setChequeDateMode] = useState<ChequeDateMode>("60");
+  const [isSubmitting,   setIsSubmitting]   = useState(false);
+  const [done,           setDone]           = useState(false);
+
+  const latestBase = purchases.length > 0
+    ? purchases.reduce((latest, p) => {
+        const base = p.arrivalDate || p.purchaseDate;
+        return base > latest ? base : latest;
+      }, purchases[0].arrivalDate || purchases[0].purchaseDate)
+    : new Date().toISOString().split("T")[0];
 
   // Reset when dialog opens
   useEffect(() => {
     if (!open) return;
     setDone(false);
+    setChequeDateMode("60");
     const invoiceIds = purchases.map((p) => p.purchaseId).join(", ");
     setForm({
       payment_date:       new Date().toISOString().split("T")[0],
       company_account_id: "",
       payment_method:     "cash",
       cheque_number:      "",
-      cheque_date:        new Date().toISOString().split("T")[0],
+      cheque_date:        addDays(latestBase, 60),
       notes:              `Bulk payment for ${invoiceIds}`,
     });
-  }, [open, purchases]);
+  }, [open, purchases]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleChequeDateMode = (mode: ChequeDateMode) => {
+    setChequeDateMode(mode);
+    if (mode !== "manual") {
+      setForm((f) => ({ ...f, cheque_date: addDays(latestBase, parseInt(mode)) }));
+    }
+  };
 
   const selectedAccount = companyAccounts.find(
     (a) => a.id === form.company_account_id,
@@ -198,21 +229,17 @@ export default function BulkPaymentDialog({
               {purchases.map((p) => {
                 const due = p.totalAmount - p.paidAmount;
                 return (
-                  <div
-                    key={p.id}
-                    className="flex items-center justify-between px-4 py-2 text-sm"
-                  >
-                    <div>
-                      <span className="font-mono text-xs bg-red-100 text-red-700 border border-red-200 px-1.5 py-0.5 rounded mr-2">
+                  <div key={p.id} className="flex items-center justify-between px-4 py-2 text-sm">
+                    <div className="space-y-0.5">
+                      <span className="font-mono text-xs bg-red-100 text-red-700 border border-red-200 px-1.5 py-0.5 rounded">
                         {p.purchaseId}
                       </span>
-                      <span className="text-muted-foreground">
-                        {new Date(p.purchaseDate).toLocaleDateString()}
-                      </span>
+                      <div className="text-xs text-muted-foreground flex gap-3 pt-0.5">
+                        <span>Inv: {new Date(p.purchaseDate).toLocaleDateString()}</span>
+                        <span>Arrival: {p.arrivalDate ? new Date(p.arrivalDate).toLocaleDateString() : <span className="italic">Not set</span>}</span>
+                      </div>
                     </div>
-                    <span className="font-medium text-destructive">
-                      {formatCurrency(due)}
-                    </span>
+                    <span className="font-medium text-destructive">{formatCurrency(due)}</span>
                   </div>
                 );
               })}
@@ -250,7 +277,7 @@ export default function BulkPaymentDialog({
           </div>
 
           {form.payment_method === "cheque" && (
-            <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-3">
               <div className="space-y-1.5">
                 <Label>Cheque Number</Label>
                 <Input
@@ -262,11 +289,35 @@ export default function BulkPaymentDialog({
               </div>
               <div className="space-y-1.5">
                 <Label>Cheque Date</Label>
-                <Input
-                  type="date"
-                  value={form.cheque_date}
-                  onChange={(e) => setForm((f) => ({ ...f, cheque_date: e.target.value }))}
-                />
+                <Select value={chequeDateMode} onValueChange={(v) => handleChequeDateMode(v as ChequeDateMode)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="60">60 days from latest arrival date</SelectItem>
+                    <SelectItem value="75">75 days from latest arrival date</SelectItem>
+                    <SelectItem value="manual">Manual entry</SelectItem>
+                  </SelectContent>
+                </Select>
+                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 flex justify-between text-xs">
+                  <span className="text-muted-foreground">Latest arrival date</span>
+                  <span className="font-medium">{formatDisplayDate(latestBase)}</span>
+                </div>
+                {chequeDateMode === "manual" ? (
+                  <Input
+                    type="date"
+                    value={form.cheque_date}
+                    onChange={(e) => setForm((f) => ({ ...f, cheque_date: e.target.value }))}
+                  />
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Latest arrival + {chequeDateMode} days
+                    <span className="mx-1">→</span>
+                    <span className="font-medium text-foreground">
+                      {form.cheque_date ? formatDisplayDate(form.cheque_date) : "—"}
+                    </span>
+                  </p>
+                )}
               </div>
             </div>
           )}
