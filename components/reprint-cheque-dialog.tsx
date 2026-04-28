@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -10,14 +10,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Printer } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { printCheque, type BankTemplate } from "@/app/lib/cheque-print";
@@ -36,11 +28,6 @@ interface ReprintChequeDialogProps {
   cheque: ReprintChequeData | null;
 }
 
-const BANK_OPTIONS: { value: BankTemplate; label: string }[] = [
-  { value: "pan_asia", label: "Pan Asia Banking Corporation" },
-  { value: "ntb",     label: "Nations Trust Bank" },
-];
-
 const formatCurrency = (n: number) =>
   new Intl.NumberFormat("en-LK", {
     style: "currency",
@@ -53,12 +40,12 @@ export default function ReprintChequeDialog({
   onClose,
   cheque,
 }: ReprintChequeDialogProps) {
-  const [bankTemplate, setBankTemplate] = useState<BankTemplate | "">("");
+  const bankTemplate: BankTemplate = "pan_asia";
   const [acPayeeOnly,  setAcPayeeOnly]  = useState(true);
 
   const handlePrint = () => {
-    if (!cheque || !bankTemplate) return;
-    printCheque(bankTemplate as BankTemplate, {
+    if (!cheque) return;
+    printCheque(bankTemplate, {
       payeeName:    cheque.payeeName,
       amount:       cheque.amount,
       chequeDate:   cheque.chequeDate ?? new Date().toISOString().split("T")[0],
@@ -69,7 +56,6 @@ export default function ReprintChequeDialog({
   };
 
   const handleClose = () => {
-    setBankTemplate("");
     setAcPayeeOnly(true);
     onClose();
   };
@@ -90,25 +76,6 @@ export default function ReprintChequeDialog({
         </DialogHeader>
 
         <div className="space-y-3 py-2">
-          <div className="space-y-1.5">
-            <Label>Select Bank</Label>
-            <Select
-              value={bankTemplate}
-              onValueChange={(v) => setBankTemplate(v as BankTemplate)}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Choose cheque bank" />
-              </SelectTrigger>
-              <SelectContent>
-                {BANK_OPTIONS.map((b) => (
-                  <SelectItem key={b.value} value={b.value}>
-                    {b.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
           <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
             <Checkbox
               id="ac-payee-reprint"
@@ -130,7 +97,7 @@ export default function ReprintChequeDialog({
           </Button>
           <Button
             onClick={handlePrint}
-            disabled={!bankTemplate}
+            disabled={!cheque}
             className="bg-amber-600 hover:bg-amber-700 text-white"
           >
             <Printer className="w-4 h-4 mr-2" />

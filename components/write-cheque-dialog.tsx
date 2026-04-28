@@ -70,11 +70,6 @@ const formatCurrency = (n: number) =>
     minimumFractionDigits: 2,
   }).format(n);
 
-const BANK_OPTIONS: { value: BankTemplate; label: string }[] = [
-  { value: "pan_asia", label: "Pan Asia Banking Corporation" },
-  { value: "ntb",     label: "Nations Trust Bank" },
-];
-
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export default function WriteChequeDialog({
@@ -92,7 +87,7 @@ export default function WriteChequeDialog({
     cheque_date:        new Date().toISOString().split("T")[0],
     cheque_number:      "",
     company_account_id: "",
-    bank_template:      "" as BankTemplate | "",
+    bank_template:      "pan_asia" as BankTemplate,
     notes:              "",
   });
 
@@ -126,7 +121,7 @@ export default function WriteChequeDialog({
       cheque_date:        new Date().toISOString().split("T")[0],
       cheque_number:      "",
       company_account_id: "",
-      bank_template:      "",
+      bank_template:      "pan_asia" as BankTemplate,
       notes:              `Cheque payment for ${purchase.purchaseId}`,
     });
 
@@ -155,8 +150,7 @@ export default function WriteChequeDialog({
     parsedAmount > 0 &&
     form.cheque_date &&
     form.cheque_number.trim() !== "" &&
-    form.company_account_id !== "" &&
-    form.bank_template !== "";
+    form.company_account_id !== "";
 
   const handleUseTotal = () =>
     setForm((f) => ({ ...f, amount: balanceDue.toFixed(2) }));
@@ -393,26 +387,6 @@ export default function WriteChequeDialog({
                         {a.account_type} · {formatCurrency(a.current_balance)}
                       </span>
                     </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* ── Bank / Cheque Template ──────────────────────────────── */}
-          <div className="space-y-1.5">
-            <Label>Cheque Bank</Label>
-            <Select
-              value={form.bank_template}
-              onValueChange={(v) => setForm((f) => ({ ...f, bank_template: v as BankTemplate }))}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select bank" />
-              </SelectTrigger>
-              <SelectContent>
-                {BANK_OPTIONS.map((b) => (
-                  <SelectItem key={b.value} value={b.value}>
-                    {b.label}
                   </SelectItem>
                 ))}
               </SelectContent>
