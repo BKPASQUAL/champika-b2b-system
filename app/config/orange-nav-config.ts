@@ -18,6 +18,7 @@ import {
   Undo2,
   ClipboardCheck,
   CalendarDays,
+  ScrollText,
 } from "lucide-react";
 
 interface OrangeNavItem {
@@ -121,6 +122,12 @@ export const orangeOfficeNavItems: OrangeNavSection[] = [
         name: "Expenses",
         href: "/dashboard/office/orange/expenses",
         icon: Coins,
+      },
+      {
+        name: "Cheque Management",
+        href: "/dashboard/office/orange/cheques",
+        icon: ScrollText,
+        description: "Track pending, deposited and cleared cheques",
       },
       {
         name: "Cheque Calendar",

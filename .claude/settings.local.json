@@ -13,7 +13,8 @@
       "Bash(npm install:*)",
       "Bash(python3 -c ':*)",
       "Bash(npx tsc:*)",
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(grep -E \"^/c.*:$|^[a-z]\")"
     ],
     "additionalDirectories": [
       "c:\\Projects\\champika-b2b-system\\app\\api\\payments\\[id]"

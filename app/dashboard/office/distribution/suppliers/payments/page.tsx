@@ -1,11 +1,15 @@
+// app/dashboard/office/distribution/suppliers/payments/page.tsx
 "use client";
 
 import React, { useState, useMemo } from "react";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
-import { DollarSign, Clock, Loader2, AlertCircle, Search, Printer } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
+import { DollarSign, Clock, Search, AlertCircle, CreditCard, Banknote, Building2, FileText, Printer, CheckSquare, CheckCircle2 } from "lucide-react";
 import WriteChequeDialog from "@/components/write-cheque-dialog";
+import WriteMultiChequeDialog from "@/components/write-multi-cheque-dialog";
+import BulkPaymentDialog from "@/components/bulk-payment-dialog";
 import ReprintChequeDialog, { type ReprintChequeData } from "@/components/reprint-cheque-dialog";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -16,6 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -44,7 +49,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 // --- Types ---
@@ -52,21 +59,19 @@ interface CompanyAccount {
   id: string;
   account_name: string;
   account_type: string;
-  account_number: string | null;
   current_balance: number;
-  business_id: string;
 }
 
-interface Purchase {
+interface UnpaidPurchase {
   id: string;
   purchaseId: string;
   purchaseDate: string;
+  arrivalDate: string | null;
   totalAmount: number;
   paidAmount: number;
   paymentStatus: string;
   supplierId: string;
   supplierName: string;
-  businessId: string;
 }
 
 interface SupplierPayment {
@@ -79,15 +84,13 @@ interface SupplierPayment {
   cheque_status: string | null;
   notes: string | null;
   company_account_id: string;
-  // removed strict UUID requirement here to match your JSON
-  purchase_id?: string;
   company_accounts: {
     id: string;
     account_name: string;
   } | null;
   purchases: {
-    purchase_id: string; // Readable ID (e.g. PO-1008)
-    business_id?: string;
+    id: string;
+    purchase_id: string;
     suppliers: {
       name: string;
     } | null;
@@ -102,20 +105,68 @@ const formatCurrency = (amount: number) => {
   }).format(amount);
 };
 
+const METHOD_BADGE: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
+  cash:          { label: "Cash",          className: "bg-green-50 text-green-700 border-green-200",  icon: <Banknote className="w-3 h-3" /> },
+  bank_transfer: { label: "Bank Transfer", className: "bg-blue-50 text-blue-700 border-blue-200",    icon: <Building2 className="w-3 h-3" /> },
+  cheque:        { label: "Cheque",        className: "bg-amber-50 text-amber-700 border-amber-200", icon: <FileText className="w-3 h-3" /> },
+};
+
+const CHEQUE_STATUS_BADGE: Record<string, string> = {
+  pending:  "bg-yellow-50 text-yellow-700 border-yellow-200",
+  passed:   "bg-green-50 text-green-700 border-green-200",
+  returned: "bg-red-50 text-red-700 border-red-200",
+};
+
+type ChequeDateMode = "60" | "75" | "manual";
+
+function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().split("T")[0];
+}
+
+function formatDisplayDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString("en-LK", {
+    day: "2-digit", month: "short", year: "numeric",
+  });
+}
+
 export default function DistributionSupplierPaymentsPage() {
-  const CURRENT_BUSINESS_ID = BUSINESS_IDS.CHAMPIKA_DISTRIBUTION;
+  const router = useRouter();
+  const [currentBusinessId] = useState<string>(() => {
+    const user = getUserBusinessContext();
+    return user?.businessId ?? BUSINESS_IDS.CHAMPIKA_DISTRIBUTION;
+  });
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [isSubmitting,    setIsSubmitting]    = useState(false);
+  const [searchTerm,      setSearchTerm]      = useState("");
+  const [chequeDateMode,  setChequeDateMode]  = useState<ChequeDateMode>("60");
 
-  const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
-  const [isActionDialogOpen, setIsActionDialogOpen] = useState(false);
-  const [isChequeDialogOpen, setIsChequeDialogOpen] = useState(false);
-  const [isReprintDialogOpen, setIsReprintDialogOpen] = useState(false);
+  const [isPaymentDialogOpen,    setIsPaymentDialogOpen]    = useState(false);
+  const [isActionDialogOpen,     setIsActionDialogOpen]     = useState(false);
+  const [isChequeDialogOpen,     setIsChequeDialogOpen]     = useState(false);
+  const [isMultiChequeDialogOpen,setIsMultiChequeDialogOpen]= useState(false);
+  const [isBulkPayDialogOpen,    setIsBulkPayDialogOpen]    = useState(false);
+  const [isReprintDialogOpen,    setIsReprintDialogOpen]    = useState(false);
   const [reprintData, setReprintData] = useState<ReprintChequeData | null>(null);
-  const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
-  const [selectedPayment, setSelectedPayment] = useState<SupplierPayment | null>(null);
+  const [selectedPurchase, setSelectedPurchase] = useState<UnpaidPurchase | null>(null);
+  const [selectedPayments, setSelectedPayments] = useState<SupplierPayment[]>([]);
   const [actionType, setActionType] = useState<"passed" | "returned" | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const toggleSelect = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  const toggleSelectAll = (purchases: UnpaidPurchase[]) =>
+    setSelectedIds((prev) =>
+      prev.size === purchases.length
+        ? new Set()
+        : new Set(purchases.map((p) => p.id)),
+    );
 
   const [paymentForm, setPaymentForm] = useState({
     amount: "",
@@ -131,29 +182,29 @@ export default function DistributionSupplierPaymentsPage() {
     data: allPurchasesRaw = [],
     loading: l1,
     refetch: refetchPurchases,
-  } = useCachedFetch<Purchase[]>("/api/purchases", []);
+  } = useCachedFetch<any[]>(`/api/purchases?businessId=${currentBusinessId}`, []);
 
   const {
     data: paymentHistory = [],
     loading: l2,
     refetch: refetchPayments,
   } = useCachedFetch<SupplierPayment[]>(
-    `/api/suppliers/payments?businessId=${CURRENT_BUSINESS_ID}`, []
+    `/api/suppliers/payments?businessId=${currentBusinessId}`, []
   );
 
   const {
     data: companyAccounts = [],
     loading: l3,
     refetch: refetchAccounts,
-  } = useCachedFetch<CompanyAccount[]>("/api/finance/accounts", []);
+  } = useCachedFetch<CompanyAccount[]>(
+    `/api/finance/accounts?businessId=${currentBusinessId}`, []
+  );
 
   const loading = l1 || l2 || l3;
 
   const unpaidPurchases = useMemo(
-    () =>
-      allPurchasesRaw
-        .filter((p) => p.businessId === CURRENT_BUSINESS_ID && p.paymentStatus !== "Paid"),
-    [allPurchasesRaw, CURRENT_BUSINESS_ID]
+    () => allPurchasesRaw.filter((p: any) => p.paymentStatus !== "Paid"),
+    [allPurchasesRaw]
   );
 
   const fetchData = () => {
@@ -162,36 +213,42 @@ export default function DistributionSupplierPaymentsPage() {
     refetchAccounts();
   };
 
-  const openPaymentDialog = (purchase: Purchase) => {
+  const openPaymentDialog = (purchase: UnpaidPurchase) => {
     setSelectedPurchase(purchase);
     const balanceDue = purchase.totalAmount - purchase.paidAmount;
-
+    setChequeDateMode("60");
+    const baseDate = purchase.arrivalDate || purchase.purchaseDate;
     setPaymentForm({
       amount: balanceDue.toString(),
       payment_date: new Date().toISOString().split("T")[0],
       company_account_id: "",
       payment_method: "cash",
       cheque_number: "",
-      cheque_date: "",
+      cheque_date: addDays(baseDate, 60),
       notes: `Payment for ${purchase.purchaseId}`,
     });
     setIsPaymentDialogOpen(true);
   };
 
+  const handleChequeDateMode = (mode: ChequeDateMode) => {
+    setChequeDateMode(mode);
+    if (mode !== "manual" && selectedPurchase) {
+      const baseDate = selectedPurchase.arrivalDate || selectedPurchase.purchaseDate;
+      setPaymentForm((f) => ({ ...f, cheque_date: addDays(baseDate, parseInt(mode)) }));
+    }
+  };
+
   const openActionDialog = (
-    payment: SupplierPayment,
-    action: "passed" | "returned"
+    payments: SupplierPayment[],
+    action: "passed" | "returned",
   ) => {
-    setSelectedPayment(payment);
+    setSelectedPayments(payments);
     setActionType(action);
     setIsActionDialogOpen(true);
   };
 
   const handlePaymentSubmit = async () => {
-    if (!selectedPurchase || !paymentForm.company_account_id) {
-      toast.error("Please select an account");
-      return;
-    }
+    if (!selectedPurchase || !paymentForm.company_account_id) return;
     setIsSubmitting(true);
 
     try {
@@ -208,6 +265,7 @@ export default function DistributionSupplierPaymentsPage() {
           chequeNumber: paymentForm.cheque_number,
           chequeDate: paymentForm.cheque_date,
           notes: paymentForm.notes,
+          businessId: currentBusinessId,
         }),
       });
 
@@ -224,81 +282,173 @@ export default function DistributionSupplierPaymentsPage() {
   };
 
   const handleChequeAction = async () => {
-    if (!selectedPayment || !actionType) return;
+    if (!selectedPayments.length || !actionType) return;
     setIsSubmitting(true);
 
     try {
-      const res = await fetch("/api/suppliers/payments", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          paymentId: selectedPayment.id,
-          action: actionType,
-        }),
-      });
+      const results = await Promise.all(
+        selectedPayments.map((p) =>
+          fetch("/api/suppliers/payments", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              paymentId: p.id,
+              action: actionType,
+            }),
+          })
+        )
+      );
 
-      if (!res.ok) throw new Error("Action failed");
+      const failed = results.filter((r) => !r.ok);
+      if (failed.length > 0) throw new Error("Some actions failed");
 
-      toast.success(`Cheque ${actionType} successfully!`);
+      toast.success(`Cheque(s) ${actionType} successfully!`);
       setIsActionDialogOpen(false);
       fetchData();
     } catch (error) {
-      toast.error("Error updating cheque");
+      toast.error("Error updating cheque(s)");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // --- Filtering & Stats ---
   const filteredPurchases = unpaidPurchases.filter(
     (p) =>
       p.purchaseId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.supplierName.toLowerCase().includes(searchTerm.toLowerCase())
+      p.supplierName.toLowerCase().includes(searchTerm.toLowerCase()),
   );
+
+  const selectedPurchases = filteredPurchases.filter((p) => selectedIds.has(p.id));
+  const multiSupplierIds  = [...new Set(selectedPurchases.map((p) => p.supplierId))];
+  const canWriteMultiCheque = selectedIds.size >= 2 && multiSupplierIds.length === 1;
 
   const pendingCheques = paymentHistory.filter(
-    (p) => p.cheque_status === "pending"
+    (p) => p.cheque_status === "pending",
   );
 
+  const groupedPendingCheques = useMemo(() => {
+    const groups: Record<string, SupplierPayment[]> = {};
+    const noChequeNumber: SupplierPayment[] = [];
+
+    pendingCheques.forEach((p) => {
+      if (p.cheque_number) {
+        if (!groups[p.cheque_number]) groups[p.cheque_number] = [];
+        groups[p.cheque_number].push(p);
+      } else {
+        noChequeNumber.push(p);
+      }
+    });
+
+    const groupedList = Object.entries(groups).map(([cheque_number, payments]) => {
+      const first = payments[0];
+      const totalAmount = payments.reduce((sum, p) => sum + p.amount, 0);
+      const purchaseIds = payments.map((p) => p.purchases?.purchase_id).filter(Boolean);
+      return {
+        id: first.id,
+        payment_date: first.payment_date,
+        cheque_number,
+        cheque_date: first.cheque_date,
+        amount: totalAmount,
+        supplier_name: first.purchases?.suppliers?.name,
+        company_account_name: first.company_accounts?.account_name,
+        isMultiple: payments.length > 1,
+        purchaseIds,
+        payments,
+      };
+    });
+
+    return [
+      ...groupedList,
+      ...noChequeNumber.map((p) => ({
+        id: p.id,
+        payment_date: p.payment_date,
+        cheque_number: p.cheque_number,
+        cheque_date: p.cheque_date,
+        amount: p.amount,
+        supplier_name: p.purchases?.suppliers?.name,
+        company_account_name: p.company_accounts?.account_name,
+        isMultiple: false,
+        purchaseIds: [p.purchases?.purchase_id].filter(Boolean),
+        payments: [p],
+      })),
+    ];
+  }, [pendingCheques]);
+
   const filteredHistory = paymentHistory.filter(
-    (p) => p.cheque_status !== "pending"
+    (p) => p.cheque_status !== "pending",
   );
+
+  const groupedHistory = useMemo(() => {
+    const groups: Record<string, SupplierPayment[]> = {};
+    const ungrouped: SupplierPayment[] = [];
+
+    filteredHistory.forEach((p) => {
+      let key = null;
+      if (p.payment_method === "cheque" && p.cheque_number) {
+        key = `cheque_${p.cheque_number}`;
+      } else if (p.payment_method !== "cheque") {
+        const supplierName = p.purchases?.suppliers?.name ?? "unknown";
+        key = `${p.payment_date}_${p.payment_method}_${supplierName}_${p.company_account_id}`;
+      }
+
+      if (key) {
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(p);
+      } else {
+        ungrouped.push(p);
+      }
+    });
+
+    const groupedList = Object.entries(groups).map(([_, payments]) => {
+      const first = payments[0];
+      const totalAmount = payments.reduce((sum, p) => sum + p.amount, 0);
+      const purchaseIds = payments.map((p) => p.purchases?.purchase_id).filter(Boolean);
+      return {
+        ...first,
+        amount: totalAmount,
+        isMultiple: payments.length > 1,
+        purchaseIds,
+        payments,
+      };
+    });
+
+    return [
+      ...groupedList,
+      ...ungrouped.map((p) => ({
+        ...p,
+        isMultiple: false,
+        purchaseIds: [p.purchases?.purchase_id].filter(Boolean),
+        payments: [p],
+      })),
+    ].sort((a, b) => new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime());
+  }, [filteredHistory]);
 
   const totalBalanceDue = unpaidPurchases.reduce(
     (sum, p) => sum + (p.totalAmount - p.paidAmount),
-    0
+    0,
   );
   const totalPendingChequeAmount = pendingCheques.reduce(
     (sum, p) => sum + p.amount,
-    0
+    0,
   );
 
-  // Overdraft Check
   const selectedAccount = companyAccounts.find(
-    (a) => a.id === paymentForm.company_account_id
+    (a) => a.id === paymentForm.company_account_id,
   );
   const isOverdraft =
     selectedAccount &&
     paymentForm.payment_method !== "cheque" &&
     selectedAccount.current_balance < parseFloat(paymentForm.amount || "0");
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center py-16">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            Distribution Payments
+          <h1 className="text-3xl font-bold tracking-tight text-blue-900">
+            Supplier Payments
           </h1>
           <p className="text-muted-foreground">
-            Manage outgoing payments to suppliers for distribution
+            Manage outgoing payments to suppliers
           </p>
         </div>
       </div>
@@ -306,9 +456,7 @@ export default function DistributionSupplierPaymentsPage() {
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">
-              Total Outstanding
-            </CardTitle>
+            <CardTitle className="text-sm font-medium">Total Outstanding</CardTitle>
             <DollarSign className="w-4 h-4 text-destructive" />
           </CardHeader>
           <CardContent>
@@ -322,9 +470,7 @@ export default function DistributionSupplierPaymentsPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">
-              Pending Cheques
-            </CardTitle>
+            <CardTitle className="text-sm font-medium">Pending Cheques</CardTitle>
             <Clock className="w-4 h-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
@@ -363,13 +509,52 @@ export default function DistributionSupplierPaymentsPage() {
 
         <TabsContent value="unpaid" className="mt-4">
           <Card>
-            <CardHeader>
-              <CardTitle>Outstanding Supplier Bills</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Outstanding Supplier Bills</CardTitle>
+                {selectedIds.size > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {selectedIds.size} invoice(s) selected
+                    {selectedIds.size >= 2 && multiSupplierIds.length > 1 && (
+                      <span className="text-destructive ml-1">
+                        — must be same supplier for combined cheque
+                      </span>
+                    )}
+                  </p>
+                )}
+              </div>
+              {canWriteMultiCheque && (
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => setIsBulkPayDialogOpen(true)}
+                    className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    Pay Now ({selectedIds.size})
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => setIsMultiChequeDialogOpen(true)}
+                    className="bg-amber-600 hover:bg-amber-700 text-white gap-1.5"
+                  >
+                    <CheckSquare className="w-4 h-4" />
+                    Write Cheque ({selectedIds.size})
+                  </Button>
+                </div>
+              )}
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={selectedIds.size === filteredPurchases.length && filteredPurchases.length > 0}
+                        onCheckedChange={() => toggleSelectAll(filteredPurchases)}
+                        aria-label="Select all"
+                      />
+                    </TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead>Purchase ID</TableHead>
                     <TableHead>Supplier</TableHead>
@@ -380,53 +565,62 @@ export default function DistributionSupplierPaymentsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredPurchases.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-6">
-                        No unpaid bills found
+                  {filteredPurchases.map((p) => (
+                    <TableRow
+                      key={p.id}
+                      data-state={selectedIds.has(p.id) ? "selected" : undefined}
+                      className={selectedIds.has(p.id) ? "bg-amber-50/60" : undefined}
+                    >
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedIds.has(p.id)}
+                          onCheckedChange={() => toggleSelect(p.id)}
+                          aria-label={`Select ${p.purchaseId}`}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        {new Date(p.purchaseDate).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        <button
+                          className="font-mono text-xs bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded hover:bg-blue-100 transition-colors"
+                          onClick={() => router.push(`/dashboard/office/distribution/purchases/${p.id}`)}
+                        >
+                          {p.purchaseId}
+                        </button>
+                      </TableCell>
+                      <TableCell>{p.supplierName}</TableCell>
+                      <TableCell className="text-right">
+                        {formatCurrency(p.totalAmount)}
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {formatCurrency(p.paidAmount)}
+                      </TableCell>
+                      <TableCell className="text-right font-bold text-destructive">
+                        {formatCurrency(p.totalAmount - p.paidAmount)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex gap-1 justify-end">
+                          <Button
+                            size="sm"
+                            onClick={() => openPaymentDialog(p)}
+                            className="bg-blue-600 hover:bg-blue-700"
+                          >
+                            Record Payment
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => { setSelectedPurchase(p); setIsChequeDialogOpen(true); }}
+                            className="text-amber-700 border-amber-300 hover:bg-amber-50"
+                          >
+                            <Printer className="w-3 h-3 mr-1" />
+                            Print Cheque
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
-                  ) : (
-                    filteredPurchases.map((p) => (
-                      <TableRow key={p.id}>
-                        <TableCell>
-                          {new Date(p.purchaseDate).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {p.purchaseId}
-                        </TableCell>
-                        <TableCell>{p.supplierName}</TableCell>
-                        <TableCell className="text-right">
-                          {formatCurrency(p.totalAmount)}
-                        </TableCell>
-                        <TableCell className="text-right text-muted-foreground">
-                          {formatCurrency(p.paidAmount)}
-                        </TableCell>
-                        <TableCell className="text-right font-bold text-destructive">
-                          {formatCurrency(p.totalAmount - p.paidAmount)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex gap-1 justify-end">
-                            <Button
-                              size="sm"
-                              onClick={() => openPaymentDialog(p)}
-                            >
-                              Pay Now
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => { setSelectedPurchase(p); setIsChequeDialogOpen(true); }}
-                              className="text-amber-700 border-amber-300 hover:bg-amber-50"
-                            >
-                              <Printer className="w-3 h-3 mr-1" />
-                              Cheque
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
+                  ))}
                 </TableBody>
               </Table>
             </CardContent>
@@ -442,76 +636,84 @@ export default function DistributionSupplierPaymentsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Cheque Date</TableHead>
-                    <TableHead>Purchase</TableHead>
+                    <TableHead>Payment Date</TableHead>
+                    <TableHead>Bill ID</TableHead>
                     <TableHead>Supplier</TableHead>
                     <TableHead>Cheque No</TableHead>
+                    <TableHead>Cheque Date</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {pendingCheques.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-6">
-                        No pending cheques
+                  {groupedPendingCheques.map((group) => (
+                    <TableRow key={group.id}>
+                      <TableCell className="text-sm">
+                        {new Date(group.payment_date).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        {group.isMultiple ? (
+                          <div className="flex flex-wrap gap-1 max-w-[200px]">
+                            {group.purchaseIds.map((id, idx) => (
+                              <span key={idx} className="font-mono text-[10px] bg-blue-50 text-blue-700 border border-blue-100 px-1.5 py-0.5 rounded">
+                                {id}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="font-mono text-xs bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded">
+                            {group.purchaseIds[0] ?? "-"}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell>{group.supplier_name}</TableCell>
+                      <TableCell>
+                        <span className="font-mono text-sm font-medium">{group.cheque_number}</span>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {group.cheque_date ? new Date(group.cheque_date).toLocaleDateString() : "-"}
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {formatCurrency(group.amount)}
+                      </TableCell>
+                      <TableCell className="text-right space-x-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-amber-700 border-amber-300 hover:bg-amber-50"
+                          onClick={() => {
+                            setReprintData({
+                              payeeName:    group.supplier_name ?? "",
+                              amount:       group.amount,
+                              chequeDate:   group.cheque_date,
+                              chequeNumber: group.cheque_number,
+                              accountName:  group.company_account_name ?? "",
+                            });
+                            setIsReprintDialogOpen(true);
+                          }}
+                        >
+                          <Printer className="w-3 h-3 mr-1" />
+                          Print
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-green-600"
+                          onClick={() => openActionDialog(group.payments, "passed")}
+                        >
+                          Pass
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-red-600"
+                          onClick={() => openActionDialog(group.payments, "returned")}
+                        >
+                          Return
+                        </Button>
                       </TableCell>
                     </TableRow>
-                  ) : (
-                    pendingCheques.map((p) => (
-                      <TableRow key={p.id}>
-                        <TableCell>
-                          {p.cheque_date
-                            ? new Date(p.cheque_date).toLocaleDateString()
-                            : "-"}
-                        </TableCell>
-                        <TableCell>{p.purchases?.purchase_id || "-"}</TableCell>
-                        <TableCell>
-                          {p.purchases?.suppliers?.name || "-"}
-                        </TableCell>
-                        <TableCell>{p.cheque_number}</TableCell>
-                        <TableCell className="text-right font-medium">
-                          {formatCurrency(p.amount)}
-                        </TableCell>
-                        <TableCell className="text-right space-x-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-amber-700 border-amber-300 hover:bg-amber-50"
-                            onClick={() => {
-                              setReprintData({
-                                payeeName:    p.purchases?.suppliers?.name ?? "",
-                                amount:       p.amount,
-                                chequeDate:   p.cheque_date,
-                                chequeNumber: p.cheque_number,
-                                accountName:  p.company_accounts?.account_name ?? "",
-                              });
-                              setIsReprintDialogOpen(true);
-                            }}
-                          >
-                            <Printer className="w-3 h-3 mr-1" />
-                            Print
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-green-600"
-                            onClick={() => openActionDialog(p, "passed")}
-                          >
-                            Pass
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-red-600"
-                            onClick={() => openActionDialog(p, "returned")}
-                          >
-                            Return
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
+                  ))}
                 </TableBody>
               </Table>
             </CardContent>
@@ -520,44 +722,113 @@ export default function DistributionSupplierPaymentsPage() {
 
         <TabsContent value="history" className="mt-4">
           <Card>
-            <CardContent>
+            <CardHeader>
+              <CardTitle>Payment History</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Purchase</TableHead>
+                  <TableRow className="bg-slate-50/50">
+                    <TableHead className="pl-4">Date</TableHead>
+                    <TableHead>Bill ID</TableHead>
                     <TableHead>Supplier</TableHead>
                     <TableHead>Method</TableHead>
+                    <TableHead>Cheque No</TableHead>
+                    <TableHead>Cheque Date</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead className="text-right pr-4">Amount</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredHistory.length === 0 ? (
+                  {groupedHistory.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-6">
-                        No payment history
+                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                        No payment history found.
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredHistory.map((p) => (
-                      <TableRow key={p.id}>
-                        <TableCell>
-                          {new Date(p.payment_date).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell>{p.purchases?.purchase_id || "-"}</TableCell>
-                        <TableCell>
-                          {p.purchases?.suppliers?.name || "-"}
-                        </TableCell>
-                        <TableCell className="capitalize">
-                          {p.payment_method}
-                        </TableCell>
-                        <TableCell>{p.cheque_status || "Completed"}</TableCell>
-                        <TableCell className="text-right font-medium">
-                          {formatCurrency(p.amount)}
-                        </TableCell>
-                      </TableRow>
-                    ))
+                    groupedHistory.map((group) => {
+                      const methodMeta = METHOD_BADGE[group.payment_method] ?? {
+                        label: group.payment_method,
+                        className: "bg-slate-50 text-slate-700 border-slate-200",
+                        icon: <CreditCard className="w-3 h-3" />,
+                      };
+                      const isCheque = group.payment_method === "cheque";
+                      const statusKey = group.cheque_status?.toLowerCase() ?? "";
+                      return (
+                        <TableRow key={group.id} className="hover:bg-muted/30">
+                          <TableCell className="pl-4 text-sm">
+                            {new Date(group.payment_date).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell>
+                            {group.isMultiple ? (
+                              <div className="flex flex-wrap gap-1 max-w-[200px]">
+                                {group.purchaseIds.map((id, idx) => (
+                                  <span key={idx} className="font-mono text-[10px] bg-blue-50 text-blue-700 border border-blue-100 px-1.5 py-0.5 rounded">
+                                    {id}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <button
+                                className="font-mono text-xs bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded hover:bg-blue-100 transition-colors"
+                                onClick={() => {
+                                  const singlePurchaseId = group.payments[0]?.purchases?.id;
+                                  if (singlePurchaseId) {
+                                    router.push(`/dashboard/office/distribution/purchases/${singlePurchaseId}`);
+                                  }
+                                }}
+                              >
+                                {group.purchaseIds[0] ?? "-"}
+                              </button>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {group.purchases?.suppliers?.name ?? "-"}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="outline"
+                              className={`gap-1 text-xs ${methodMeta.className}`}
+                            >
+                              {methodMeta.icon}
+                              {methodMeta.label}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {isCheque && group.cheque_number ? (
+                              <span className="font-mono text-sm font-medium text-amber-800">
+                                {group.cheque_number}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {isCheque && group.cheque_date
+                              ? new Date(group.cheque_date).toLocaleDateString()
+                              : "-"}
+                          </TableCell>
+                          <TableCell>
+                            {isCheque && statusKey ? (
+                              <Badge
+                                variant="outline"
+                                className={`text-xs capitalize ${CHEQUE_STATUS_BADGE[statusKey] ?? "bg-slate-50 text-slate-700 border-slate-200"}`}
+                              >
+                                {group.cheque_status}
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                                Completed
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right pr-4 font-mono font-medium">
+                            {formatCurrency(group.amount)}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>
@@ -572,20 +843,17 @@ export default function DistributionSupplierPaymentsPage() {
           <DialogHeader>
             <DialogTitle>Make Payment</DialogTitle>
             <DialogDescription>
-              To {selectedPurchase?.supplierName} for{" "}
-              {selectedPurchase?.purchaseId}
+              To {selectedPurchase?.supplierName} for {selectedPurchase?.purchaseId}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Amount (LKR)</Label>
+                <Label>Amount</Label>
                 <Input
                   type="number"
                   value={paymentForm.amount}
-                  onChange={(e) =>
-                    setPaymentForm({ ...paymentForm, amount: e.target.value })
-                  }
+                  onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
                 />
               </div>
               <div className="space-y-2">
@@ -593,12 +861,7 @@ export default function DistributionSupplierPaymentsPage() {
                 <Input
                   type="date"
                   value={paymentForm.payment_date}
-                  onChange={(e) =>
-                    setPaymentForm({
-                      ...paymentForm,
-                      payment_date: e.target.value,
-                    })
-                  }
+                  onChange={(e) => setPaymentForm({ ...paymentForm, payment_date: e.target.value })}
                 />
               </div>
             </div>
@@ -606,9 +869,7 @@ export default function DistributionSupplierPaymentsPage() {
               <Label>Method</Label>
               <Select
                 value={paymentForm.payment_method}
-                onValueChange={(v) =>
-                  setPaymentForm({ ...paymentForm, payment_method: v })
-                }
+                onValueChange={(v) => setPaymentForm({ ...paymentForm, payment_method: v })}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -621,12 +882,10 @@ export default function DistributionSupplierPaymentsPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>From Account (Distribution)</Label>
+              <Label>From Account</Label>
               <Select
                 value={paymentForm.company_account_id}
-                onValueChange={(v) =>
-                  setPaymentForm({ ...paymentForm, company_account_id: v })
-                }
+                onValueChange={(v) => setPaymentForm({ ...paymentForm, company_account_id: v })}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select account" />
@@ -634,8 +893,7 @@ export default function DistributionSupplierPaymentsPage() {
                 <SelectContent>
                   {companyAccounts.map((a) => (
                     <SelectItem key={a.id} value={a.id}>
-                      {a.account_name}{" "}
-                      {a.account_number ? `- ${a.account_number}` : ""}
+                      {a.account_name} ({formatCurrency(a.current_balance)})
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -651,62 +909,68 @@ export default function DistributionSupplierPaymentsPage() {
               </Alert>
             )}
             {paymentForm.payment_method === "cheque" && (
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Cheque No</Label>
-                  <Input
-                    placeholder="Enter No"
-                    value={paymentForm.cheque_number}
-                    onChange={(e) =>
-                      setPaymentForm({
-                        ...paymentForm,
-                        cheque_number: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Cheque Date</Label>
-                  <Input
-                    type="date"
-                    value={paymentForm.cheque_date}
-                    onChange={(e) =>
-                      setPaymentForm({
-                        ...paymentForm,
-                        cheque_date: e.target.value,
-                      })
-                    }
-                  />
+              <div className="space-y-3">
+                <Input
+                  placeholder="Cheque No"
+                  value={paymentForm.cheque_number}
+                  onChange={(e) => setPaymentForm({ ...paymentForm, cheque_number: e.target.value })}
+                  className="font-mono"
+                />
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Cheque Date</Label>
+                  <Select value={chequeDateMode} onValueChange={(v) => handleChequeDateMode(v as ChequeDateMode)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="60">60 days from invoice date</SelectItem>
+                      <SelectItem value="75">75 days from invoice date</SelectItem>
+                      <SelectItem value="manual">Manual entry</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {selectedPurchase && (
+                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 space-y-1">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Invoice Date</span>
+                        <span className="font-medium">{formatDisplayDate(selectedPurchase.purchaseDate)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Arrival Date</span>
+                        <span className="font-medium">
+                          {selectedPurchase.arrivalDate ? formatDisplayDate(selectedPurchase.arrivalDate) : <span className="text-slate-400">Not set</span>}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  {chequeDateMode === "manual" ? (
+                    <Input
+                      type="date"
+                      value={paymentForm.cheque_date}
+                      onChange={(e) => setPaymentForm({ ...paymentForm, cheque_date: e.target.value })}
+                    />
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Arrival date + {chequeDateMode} days
+                      <span className="mx-1">→</span>
+                      <span className="font-medium text-foreground">
+                        {paymentForm.cheque_date ? formatDisplayDate(paymentForm.cheque_date) : "—"}
+                      </span>
+                    </p>
+                  )}
                 </div>
               </div>
             )}
-            <div className="space-y-2">
-              <Label>Notes</Label>
-              <Input
-                placeholder="Optional notes"
-                value={paymentForm.notes}
-                onChange={(e) =>
-                  setPaymentForm({ ...paymentForm, notes: e.target.value })
-                }
-              />
-            </div>
           </div>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsPaymentDialogOpen(false)}
-            >
+            <Button variant="outline" onClick={() => setIsPaymentDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handlePaymentSubmit} disabled={isSubmitting}>
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Processing
-                </>
-              ) : (
-                "Confirm Payment"
-              )}
+            <Button
+              onClick={handlePaymentSubmit}
+              disabled={isSubmitting}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              Confirm Payment
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -719,32 +983,52 @@ export default function DistributionSupplierPaymentsPage() {
         cheque={reprintData}
       />
 
-      {/* Write Cheque Dialog */}
+      {/* Write Cheque Dialog (single invoice) */}
       <WriteChequeDialog
         open={isChequeDialogOpen}
         onClose={() => setIsChequeDialogOpen(false)}
         purchase={selectedPurchase}
         companyAccounts={companyAccounts}
-        businessId={CURRENT_BUSINESS_ID}
+        businessId={currentBusinessId}
         onSuccess={fetchData}
       />
 
+      {/* Write Combined Cheque Dialog (multiple invoices) */}
+      <WriteMultiChequeDialog
+        open={isMultiChequeDialogOpen}
+        onClose={() => { setIsMultiChequeDialogOpen(false); setSelectedIds(new Set()); }}
+        purchases={selectedPurchases}
+        companyAccounts={companyAccounts}
+        businessId={currentBusinessId}
+        onSuccess={() => { fetchData(); setSelectedIds(new Set()); }}
+      />
+
+      {/* Bulk Payment Dialog (multiple invoices, cash/bank) */}
+      <BulkPaymentDialog
+        open={isBulkPayDialogOpen}
+        onClose={() => { setIsBulkPayDialogOpen(false); setSelectedIds(new Set()); }}
+        purchases={selectedPurchases}
+        companyAccounts={companyAccounts}
+        businessId={currentBusinessId}
+        onSuccess={() => { fetchData(); setSelectedIds(new Set()); }}
+      />
+
       {/* Action Dialog */}
-      <AlertDialog
-        open={isActionDialogOpen}
-        onOpenChange={setIsActionDialogOpen}
-      >
+      <AlertDialog open={isActionDialogOpen} onOpenChange={setIsActionDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm Action</AlertDialogTitle>
             <AlertDialogDescription>
-              Mark cheque {selectedPayment?.cheque_number} as{" "}
+              Mark cheque {selectedPayments[0]?.cheque_number} as{" "}
               <strong>{actionType}</strong>?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleChequeAction}>
+            <AlertDialogAction
+              onClick={handleChequeAction}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
               Confirm
             </AlertDialogAction>
           </AlertDialogFooter>

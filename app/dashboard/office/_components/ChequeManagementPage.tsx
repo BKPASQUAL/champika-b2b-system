@@ -206,12 +206,13 @@ function SectionColumn({
 
 // ─── Theme ─────────────────────────────────────────────────────────────────────
 
-type ThemeColor = "purple" | "red" | "blue";
+type ThemeColor = "purple" | "red" | "blue" | "orange";
 
 const THEME: Record<ThemeColor, { header: string; iconWrap: string }> = {
   purple: { header: "text-purple-900", iconWrap: "bg-purple-100 text-purple-600" },
   red:    { header: "text-red-900",    iconWrap: "bg-red-100 text-red-600" },
   blue:   { header: "text-blue-900",   iconWrap: "bg-blue-100 text-blue-600" },
+  orange: { header: "text-orange-900", iconWrap: "bg-orange-100 text-orange-600" },
 };
 
 // ─── Confirm Action Dialog ─────────────────────────────────────────────────────
