@@ -98,13 +98,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 1. Find Global Main Warehouse
-    let { data: location } = await supabaseAdmin
-      .from("locations")
-      .select("id")
-      .is("business_id", null)
-      .eq("name", "Main Warehouse")
-      .maybeSingle();
+    // 1. Find Global Main Warehouse and supplier name in parallel
+    const [locationResult, supplierResult, countResult] = await Promise.all([
+      supabaseAdmin
+        .from("locations")
+        .select("id")
+        .is("business_id", null)
+        .eq("name", "Main Warehouse")
+        .maybeSingle(),
+      supabaseAdmin
+        .from("suppliers")
+        .select("name")
+        .eq("id", val.supplier_id)
+        .single(),
+      supabaseAdmin
+        .from("purchases")
+        .select("*", { count: "exact", head: true }),
+    ]);
+
+    let location = locationResult.data;
 
     if (!location) {
       const { data: newLocation, error: locError } = await supabaseAdmin
@@ -116,13 +128,13 @@ export async function POST(request: NextRequest) {
       location = newLocation;
     }
 
-    // 2. Generate Purchase ID
-    const { count } = await supabaseAdmin
-      .from("purchases")
-      .select("*", { count: "exact", head: true });
+    // 2. Generate Purchase ID with supplier first letter prefix
+    const supplierPrefix = supplierResult.data?.name
+      ? supplierResult.data.name.trim().charAt(0).toUpperCase()
+      : "";
 
-    const nextId = (count || 0) + 1001;
-    const purchaseId = `PO-${nextId}`;
+    const nextId = (countResult.count || 0) + 1001;
+    const purchaseId = `${supplierPrefix}PO-${nextId}`;
 
     // 3. Insert Purchase
     const { data: purchase, error: purchaseError } = await supabaseAdmin
