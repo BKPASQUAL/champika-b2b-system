@@ -111,6 +111,20 @@ function printHTML(html: string): void {
   };
 }
 
+// Split amount-in-words into lines at word boundaries (max ~55 chars per line)
+function splitWordLines(text: string, maxChars = 55): [string, string] {
+  if (text.length <= maxChars) return [text, ""];
+  const ws = text.split(" ");
+  let line1 = "";
+  for (const w of ws) {
+    const next = line1 ? `${line1} ${w}` : w;
+    if (next.length > maxChars && line1) break;
+    line1 = next;
+  }
+  const line2 = text.slice(line1.length).trim();
+  return [line1, line2];
+}
+
 // ─── Pan Asia Bank Template ───────────────────────────────────────────────────
 // Cheque leaf: 200 mm wide × 85 mm tall
 
@@ -119,6 +133,7 @@ function buildPanAsiaHTML(data: ChequeData): string {
   const yy = yyyy.slice(2); // "20" is pre-printed on the cheque
   const words = amountToWords(data.amount);
   const figures = formatAmount(data.amount);
+  const [line1, line2] = splitWordLines(words);
 
   return `<!DOCTYPE html>
 <html>
@@ -154,24 +169,24 @@ function buildPanAsiaHTML(data: ChequeData): string {
      Each pair sits in its own box column — adjust left values after test print. */
   .date-dd {
     position: absolute;
-    top: 9mm;
-    left: 121mm;
+    top: 8.5mm;
+    left: 122mm;
     font-size: 9pt;
     font-weight: bold;
     letter-spacing: 5mm;
   }
   .date-mm {
     position: absolute;
-    top: 9mm;
-    left: 133mm;
+    top: 8.5mm;
+    left: 134mm;
     font-size: 9pt;
     font-weight: bold;
     letter-spacing: 5mm;
   }
   .date-yy {
     position: absolute;
-    top: 9mm;
-    left: 159mm;
+    top: 8.5mm;
+    left: 160mm;
     font-size: 9pt;
     font-weight: bold;
     letter-spacing: 5mm;
@@ -179,25 +194,30 @@ function buildPanAsiaHTML(data: ChequeData): string {
   .payee {
     position: absolute;
     top: 20mm;
-    left: 20mm;
+    left: 18mm;
     width: 128mm;
     font-size: 10pt;
     font-weight: bold;
     white-space: nowrap;
     overflow: hidden;
   }
-  .words {
+  .words-1 {
     position: absolute;
-    top: 29mm;
-    left: 20mm;
-    width: 152mm;
+    top: 32mm;
+    left: 18mm;
     font-size: 9pt;
-    line-height: 5mm;
-    word-break: break-word;
+    white-space: nowrap;
+  }
+  .words-2 {
+    position: absolute;
+    top: 38mm;
+    left: 18mm;
+    font-size: 9pt;
+    white-space: nowrap;
   }
   .figures {
     position: absolute;
-    top: 40mm;
+    top: 42mm;
     right: 16mm;
     width: 30mm;
     text-align: right;
@@ -213,7 +233,8 @@ function buildPanAsiaHTML(data: ChequeData): string {
   <div class="date-mm">${mm}</div>
   <div class="date-yy">${yy}</div>
   <div class="payee">${data.payeeName}</div>
-  <div class="words">${words}</div>
+  <div class="words-1">${line1}</div>
+  ${line2 ? `<div class="words-2">${line2}</div>` : ''}
   <div class="figures">${figures}</div>
 </div>
 </body>
