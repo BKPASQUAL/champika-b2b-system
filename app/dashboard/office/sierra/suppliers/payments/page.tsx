@@ -4,8 +4,10 @@
 import React, { useState, useMemo } from "react";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useRouter } from "next/navigation";
-import { DollarSign, Clock, Search, AlertCircle, CreditCard, Banknote, Building2, FileText, Printer } from "lucide-react";
+import { DollarSign, Clock, Search, AlertCircle, CreditCard, Banknote, Building2, FileText, Printer, CheckSquare, CheckCircle2 } from "lucide-react";
 import WriteChequeDialog from "@/components/write-cheque-dialog";
+import WriteMultiChequeDialog from "@/components/write-multi-cheque-dialog";
+import BulkPaymentDialog from "@/components/bulk-payment-dialog";
 import ReprintChequeDialog, { type ReprintChequeData } from "@/components/reprint-cheque-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -123,14 +126,33 @@ export default function SierraSupplierPaymentsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
-  const [isActionDialogOpen, setIsActionDialogOpen] = useState(false);
-  const [isChequeDialogOpen, setIsChequeDialogOpen] = useState(false);
-  const [isReprintDialogOpen, setIsReprintDialogOpen] = useState(false);
+  const [isPaymentDialogOpen,    setIsPaymentDialogOpen]    = useState(false);
+  const [isActionDialogOpen,     setIsActionDialogOpen]     = useState(false);
+  const [isChequeDialogOpen,     setIsChequeDialogOpen]     = useState(false);
+  const [isMultiChequeDialogOpen,setIsMultiChequeDialogOpen]= useState(false);
+  const [isBulkPayDialogOpen,    setIsBulkPayDialogOpen]    = useState(false);
+  const [isReprintDialogOpen,    setIsReprintDialogOpen]    = useState(false);
   const [reprintData, setReprintData] = useState<ReprintChequeData | null>(null);
   const [selectedPurchase, setSelectedPurchase] = useState<UnpaidPurchase | null>(null);
-  const [selectedPayment, setSelectedPayment] = useState<SupplierPayment | null>(null);
+  const [selectedPayments, setSelectedPayments] = useState<SupplierPayment[]>([]);
   const [actionType, setActionType] = useState<"passed" | "returned" | null>(null);
+  // Multi-invoice selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const toggleSelect = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  const toggleSelectAll = (purchases: UnpaidPurchase[]) =>
+    setSelectedIds((prev) =>
+      prev.size === purchases.length
+        ? new Set()
+        : new Set(purchases.map((p) => p.id)),
+    );
+
 
   const [paymentForm, setPaymentForm] = useState({
     amount: "",
@@ -194,10 +216,10 @@ export default function SierraSupplierPaymentsPage() {
   };
 
   const openActionDialog = (
-    payment: SupplierPayment,
+    payments: SupplierPayment[],
     action: "passed" | "returned",
   ) => {
-    setSelectedPayment(payment);
+    setSelectedPayments(payments);
     setActionType(action);
     setIsActionDialogOpen(true);
   };
@@ -237,26 +259,31 @@ export default function SierraSupplierPaymentsPage() {
   };
 
   const handleChequeAction = async () => {
-    if (!selectedPayment || !actionType) return;
+    if (!selectedPayments.length || !actionType) return;
     setIsSubmitting(true);
 
     try {
-      const res = await fetch("/api/suppliers/payments", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          paymentId: selectedPayment.id,
-          action: actionType,
-        }),
-      });
+      const results = await Promise.all(
+        selectedPayments.map((p) =>
+          fetch("/api/suppliers/payments", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              paymentId: p.id,
+              action: actionType,
+            }),
+          })
+        )
+      );
 
-      if (!res.ok) throw new Error("Action failed");
+      const failed = results.filter((r) => !r.ok);
+      if (failed.length > 0) throw new Error("Some actions failed");
 
-      toast.success(`Cheque ${actionType} successfully!`);
+      toast.success(`Cheque(s) ${actionType} successfully!`);
       setIsActionDialogOpen(false);
       fetchData();
     } catch (error) {
-      toast.error("Error updating cheque");
+      toast.error("Error updating cheque(s)");
     } finally {
       setIsSubmitting(false);
     }
@@ -268,13 +295,118 @@ export default function SierraSupplierPaymentsPage() {
       p.supplierName.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
+  // Derived multi-selection helpers (after filteredPurchases is defined)
+  const selectedPurchases = filteredPurchases.filter((p) => selectedIds.has(p.id));
+  const multiSupplierIds  = [...new Set(selectedPurchases.map((p) => p.supplierId))];
+  const canWriteMultiCheque = selectedIds.size >= 2 && multiSupplierIds.length === 1;
+
   const pendingCheques = paymentHistory.filter(
     (p) => p.cheque_status === "pending",
   );
 
+  // Group pending cheques by cheque_number
+  const groupedPendingCheques = useMemo(() => {
+    const groups: Record<string, SupplierPayment[]> = {};
+    const noChequeNumber: SupplierPayment[] = []; // Fallback
+
+    pendingCheques.forEach((p) => {
+      if (p.cheque_number) {
+        if (!groups[p.cheque_number]) {
+          groups[p.cheque_number] = [];
+        }
+        groups[p.cheque_number].push(p);
+      } else {
+        noChequeNumber.push(p);
+      }
+    });
+
+    const groupedList = Object.entries(groups).map(([cheque_number, payments]) => {
+      const first = payments[0];
+      const totalAmount = payments.reduce((sum, p) => sum + p.amount, 0);
+      const purchaseIds = payments.map((p) => p.purchases?.purchase_id).filter(Boolean);
+      
+      return {
+        id: first.id, // For key
+        payment_date: first.payment_date,
+        cheque_number,
+        cheque_date: first.cheque_date,
+        amount: totalAmount,
+        supplier_name: first.purchases?.suppliers?.name,
+        company_account_name: first.company_accounts?.account_name,
+        isMultiple: payments.length > 1,
+        purchaseIds,
+        payments, // Keep reference to all payments for bulk actions
+      };
+    });
+
+    return [
+      ...groupedList,
+      ...noChequeNumber.map((p) => ({
+        id: p.id,
+        payment_date: p.payment_date,
+        cheque_number: p.cheque_number,
+        cheque_date: p.cheque_date,
+        amount: p.amount,
+        supplier_name: p.purchases?.suppliers?.name,
+        company_account_name: p.company_accounts?.account_name,
+        isMultiple: false,
+        purchaseIds: [p.purchases?.purchase_id].filter(Boolean),
+        payments: [p],
+      })),
+    ];
+  }, [pendingCheques]);
+
   const filteredHistory = paymentHistory.filter(
     (p) => p.cheque_status !== "pending",
   );
+
+  // Group history as well
+  const groupedHistory = useMemo(() => {
+    const groups: Record<string, SupplierPayment[]> = {};
+    const ungrouped: SupplierPayment[] = [];
+
+    filteredHistory.forEach((p) => {
+      let key = null;
+      if (p.payment_method === "cheque" && p.cheque_number) {
+        key = `cheque_${p.cheque_number}`;
+      } else if (p.payment_method !== "cheque") {
+        // Group cash/bank by date + method + supplier + account
+        const supplierName = p.purchases?.suppliers?.name ?? "unknown";
+        key = `${p.payment_date}_${p.payment_method}_${supplierName}_${p.company_account_id}`;
+      }
+
+      if (key) {
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(p);
+      } else {
+        ungrouped.push(p);
+      }
+    });
+
+    const groupedList = Object.entries(groups).map(([_, payments]) => {
+      const first = payments[0];
+      const totalAmount = payments.reduce((sum, p) => sum + p.amount, 0);
+      const purchaseIds = payments.map((p) => p.purchases?.purchase_id).filter(Boolean);
+      
+      return {
+        ...first, // Base it on the first record
+        amount: totalAmount,
+        isMultiple: payments.length > 1,
+        purchaseIds,
+        payments,
+      };
+    });
+
+    return [
+      ...groupedList,
+      ...ungrouped.map((p) => ({
+        ...p,
+        isMultiple: false,
+        purchaseIds: [p.purchases?.purchase_id].filter(Boolean),
+        payments: [p],
+      })),
+    ].sort((a, b) => new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime());
+  }, [filteredHistory]);
 
   const totalBalanceDue = unpaidPurchases.reduce(
     (sum, p) => sum + (p.totalAmount - p.paidAmount),
@@ -367,13 +499,53 @@ export default function SierraSupplierPaymentsPage() {
 
         <TabsContent value="unpaid" className="mt-4">
           <Card>
-            <CardHeader>
-              <CardTitle>Outstanding Supplier Bills</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Outstanding Supplier Bills</CardTitle>
+                {selectedIds.size > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {selectedIds.size} invoice(s) selected
+                    {selectedIds.size >= 2 && multiSupplierIds.length > 1 && (
+                      <span className="text-destructive ml-1">
+                        — must be same supplier for combined cheque
+                      </span>
+                    )}
+                  </p>
+                )}
+              </div>
+              {/* Toolbar: shown when 2+ same-supplier invoices selected */}
+              {canWriteMultiCheque && (
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => setIsBulkPayDialogOpen(true)}
+                    className="bg-red-600 hover:bg-red-700 text-white gap-1.5"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    Pay Now ({selectedIds.size})
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => setIsMultiChequeDialogOpen(true)}
+                    className="bg-amber-600 hover:bg-amber-700 text-white gap-1.5"
+                  >
+                    <CheckSquare className="w-4 h-4" />
+                    Write Cheque ({selectedIds.size})
+                  </Button>
+                </div>
+              )}
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={selectedIds.size === filteredPurchases.length && filteredPurchases.length > 0}
+                        onCheckedChange={() => toggleSelectAll(filteredPurchases)}
+                        aria-label="Select all"
+                      />
+                    </TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead>Purchase ID</TableHead>
                     <TableHead>Supplier</TableHead>
@@ -385,7 +557,18 @@ export default function SierraSupplierPaymentsPage() {
                 </TableHeader>
                 <TableBody>
                   {filteredPurchases.map((p) => (
-                    <TableRow key={p.id}>
+                    <TableRow
+                      key={p.id}
+                      data-state={selectedIds.has(p.id) ? "selected" : undefined}
+                      className={selectedIds.has(p.id) ? "bg-amber-50/60" : undefined}
+                    >
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedIds.has(p.id)}
+                          onCheckedChange={() => toggleSelect(p.id)}
+                          aria-label={`Select ${p.purchaseId}`}
+                        />
+                      </TableCell>
                       <TableCell>
                         {new Date(p.purchaseDate).toLocaleDateString()}
                       </TableCell>
@@ -414,7 +597,7 @@ export default function SierraSupplierPaymentsPage() {
                             onClick={() => openPaymentDialog(p)}
                             className="bg-red-600 hover:bg-red-700"
                           >
-                            Pay Now
+                            Record Payment
                           </Button>
                           <Button
                             size="sm"
@@ -423,7 +606,7 @@ export default function SierraSupplierPaymentsPage() {
                             className="text-amber-700 border-amber-300 hover:bg-amber-50"
                           >
                             <Printer className="w-3 h-3 mr-1" />
-                            Cheque
+                            Print Cheque
                           </Button>
                         </div>
                       </TableCell>
@@ -454,28 +637,35 @@ export default function SierraSupplierPaymentsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {pendingCheques.map((p) => (
-                    <TableRow key={p.id}>
+                  {groupedPendingCheques.map((group) => (
+                    <TableRow key={group.id}>
                       <TableCell className="text-sm">
-                        {new Date(p.payment_date).toLocaleDateString()}
+                        {new Date(group.payment_date).toLocaleDateString()}
                       </TableCell>
                       <TableCell>
-                        <button
-                          className="font-mono text-xs bg-red-50 text-red-700 border border-red-100 px-2 py-0.5 rounded hover:bg-red-100 transition-colors"
-                          onClick={() => router.push(`/dashboard/office/sierra/purchases/${p.purchases?.id}`)}
-                        >
-                          {p.purchases?.purchase_id}
-                        </button>
+                        {group.isMultiple ? (
+                          <div className="flex flex-wrap gap-1 max-w-[200px]">
+                            {group.purchaseIds.map((id, idx) => (
+                              <span key={idx} className="font-mono text-[10px] bg-red-50 text-red-700 border border-red-100 px-1.5 py-0.5 rounded">
+                                {id}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="font-mono text-xs bg-red-50 text-red-700 border border-red-100 px-2 py-0.5 rounded">
+                            {group.purchaseIds[0] ?? "-"}
+                          </span>
+                        )}
                       </TableCell>
-                      <TableCell>{p.purchases?.suppliers?.name}</TableCell>
+                      <TableCell>{group.supplier_name}</TableCell>
                       <TableCell>
-                        <span className="font-mono text-sm font-medium">{p.cheque_number}</span>
+                        <span className="font-mono text-sm font-medium">{group.cheque_number}</span>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {p.cheque_date ? new Date(p.cheque_date).toLocaleDateString() : "-"}
+                        {group.cheque_date ? new Date(group.cheque_date).toLocaleDateString() : "-"}
                       </TableCell>
                       <TableCell className="text-right font-medium">
-                        {formatCurrency(p.amount)}
+                        {formatCurrency(group.amount)}
                       </TableCell>
                       <TableCell className="text-right space-x-2">
                         <Button
@@ -484,11 +674,11 @@ export default function SierraSupplierPaymentsPage() {
                           className="text-amber-700 border-amber-300 hover:bg-amber-50"
                           onClick={() => {
                             setReprintData({
-                              payeeName:   p.purchases?.suppliers?.name ?? "",
-                              amount:      p.amount,
-                              chequeDate:  p.cheque_date,
-                              chequeNumber: p.cheque_number,
-                              accountName: p.company_accounts?.account_name ?? "",
+                              payeeName:   group.supplier_name ?? "",
+                              amount:      group.amount,
+                              chequeDate:  group.cheque_date,
+                              chequeNumber: group.cheque_number,
+                              accountName: group.company_account_name ?? "",
                             });
                             setIsReprintDialogOpen(true);
                           }}
@@ -500,7 +690,7 @@ export default function SierraSupplierPaymentsPage() {
                           size="sm"
                           variant="outline"
                           className="text-green-600"
-                          onClick={() => openActionDialog(p, "passed")}
+                          onClick={() => openActionDialog(group.payments, "passed")}
                         >
                           Pass
                         </Button>
@@ -508,7 +698,7 @@ export default function SierraSupplierPaymentsPage() {
                           size="sm"
                           variant="outline"
                           className="text-red-600"
-                          onClick={() => openActionDialog(p, "returned")}
+                          onClick={() => openActionDialog(group.payments, "returned")}
                         >
                           Return
                         </Button>
@@ -541,36 +731,51 @@ export default function SierraSupplierPaymentsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredHistory.length === 0 ? (
+                  {groupedHistory.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                         No payment history found.
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredHistory.map((p) => {
-                      const methodMeta = METHOD_BADGE[p.payment_method] ?? {
-                        label: p.payment_method,
+                    groupedHistory.map((group) => {
+                      const methodMeta = METHOD_BADGE[group.payment_method] ?? {
+                        label: group.payment_method,
                         className: "bg-slate-50 text-slate-700 border-slate-200",
                         icon: <CreditCard className="w-3 h-3" />,
                       };
-                      const isCheque = p.payment_method === "cheque";
-                      const statusKey = p.cheque_status?.toLowerCase() ?? "";
+                      const isCheque = group.payment_method === "cheque";
+                      const statusKey = group.cheque_status?.toLowerCase() ?? "";
                       return (
-                        <TableRow key={p.id} className="hover:bg-muted/30">
+                        <TableRow key={group.id} className="hover:bg-muted/30">
                           <TableCell className="pl-4 text-sm">
-                            {new Date(p.payment_date).toLocaleDateString()}
+                            {new Date(group.payment_date).toLocaleDateString()}
                           </TableCell>
                           <TableCell>
-                            <button
-                              className="font-mono text-xs bg-red-50 text-red-700 border border-red-100 px-2 py-0.5 rounded hover:bg-red-100 transition-colors"
-                              onClick={() => router.push(`/dashboard/office/sierra/purchases/${p.purchases?.id}`)}
-                            >
-                              {p.purchases?.purchase_id ?? "-"}
-                            </button>
+                            {group.isMultiple ? (
+                              <div className="flex flex-wrap gap-1 max-w-[200px]">
+                                {group.purchaseIds.map((id, idx) => (
+                                  <span key={idx} className="font-mono text-[10px] bg-red-50 text-red-700 border border-red-100 px-1.5 py-0.5 rounded">
+                                    {id}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <button
+                                className="font-mono text-xs bg-red-50 text-red-700 border border-red-100 px-2 py-0.5 rounded hover:bg-red-100 transition-colors"
+                                onClick={() => {
+                                  const singlePurchaseId = group.payments[0]?.purchases?.id;
+                                  if (singlePurchaseId) {
+                                    router.push(`/dashboard/office/sierra/purchases/${singlePurchaseId}`);
+                                  }
+                                }}
+                              >
+                                {group.purchaseIds[0] ?? "-"}
+                              </button>
+                            )}
                           </TableCell>
                           <TableCell className="text-sm">
-                            {p.purchases?.suppliers?.name ?? "-"}
+                            {group.purchases?.suppliers?.name ?? "-"}
                           </TableCell>
                           <TableCell>
                             <Badge
@@ -582,17 +787,17 @@ export default function SierraSupplierPaymentsPage() {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            {isCheque && p.cheque_number ? (
+                            {isCheque && group.cheque_number ? (
                               <span className="font-mono text-sm font-medium text-amber-800">
-                                {p.cheque_number}
+                                {group.cheque_number}
                               </span>
                             ) : (
                               <span className="text-muted-foreground text-sm">-</span>
                             )}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">
-                            {isCheque && p.cheque_date
-                              ? new Date(p.cheque_date).toLocaleDateString()
+                            {isCheque && group.cheque_date
+                              ? new Date(group.cheque_date).toLocaleDateString()
                               : "-"}
                           </TableCell>
                           <TableCell>
@@ -601,7 +806,7 @@ export default function SierraSupplierPaymentsPage() {
                                 variant="outline"
                                 className={`text-xs capitalize ${CHEQUE_STATUS_BADGE[statusKey] ?? "bg-slate-50 text-slate-700 border-slate-200"}`}
                               >
-                                {p.cheque_status}
+                                {group.cheque_status}
                               </Badge>
                             ) : (
                               <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
@@ -610,7 +815,7 @@ export default function SierraSupplierPaymentsPage() {
                             )}
                           </TableCell>
                           <TableCell className="text-right pr-4 font-mono font-medium">
-                            {formatCurrency(p.amount)}
+                            {formatCurrency(group.amount)}
                           </TableCell>
                         </TableRow>
                       );
@@ -756,7 +961,7 @@ export default function SierraSupplierPaymentsPage() {
         cheque={reprintData}
       />
 
-      {/* Write Cheque Dialog */}
+      {/* Write Cheque Dialog (single invoice) */}
       <WriteChequeDialog
         open={isChequeDialogOpen}
         onClose={() => setIsChequeDialogOpen(false)}
@@ -764,6 +969,26 @@ export default function SierraSupplierPaymentsPage() {
         companyAccounts={companyAccounts}
         businessId={currentBusinessId}
         onSuccess={fetchData}
+      />
+
+      {/* Write Combined Cheque Dialog (multiple invoices) */}
+      <WriteMultiChequeDialog
+        open={isMultiChequeDialogOpen}
+        onClose={() => { setIsMultiChequeDialogOpen(false); setSelectedIds(new Set()); }}
+        purchases={selectedPurchases}
+        companyAccounts={companyAccounts}
+        businessId={currentBusinessId}
+        onSuccess={() => { fetchData(); setSelectedIds(new Set()); }}
+      />
+
+      {/* Bulk Payment Dialog (multiple invoices, cash/bank) */}
+      <BulkPaymentDialog
+        open={isBulkPayDialogOpen}
+        onClose={() => { setIsBulkPayDialogOpen(false); setSelectedIds(new Set()); }}
+        purchases={selectedPurchases}
+        companyAccounts={companyAccounts}
+        businessId={currentBusinessId}
+        onSuccess={() => { fetchData(); setSelectedIds(new Set()); }}
       />
 
       {/* Action Dialog */}
@@ -775,7 +1000,7 @@ export default function SierraSupplierPaymentsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm Action</AlertDialogTitle>
             <AlertDialogDescription>
-              Mark cheque {selectedPayment?.cheque_number} as{" "}
+              Mark cheque {selectedPayments[0]?.cheque_number} as{" "}
               <strong>{actionType}</strong>?
             </AlertDialogDescription>
           </AlertDialogHeader>
