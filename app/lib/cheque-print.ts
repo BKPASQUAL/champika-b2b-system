@@ -111,6 +111,15 @@ function printHTML(html: string): void {
   };
 }
 
+// Pad amount figures with asterisks on both sides (fraud prevention)
+function starPad(amt: string, target = 16): string {
+  if (amt.length >= target - 2) return `***${amt}***`;
+  const pad = target - amt.length;
+  const right = 3;
+  const left  = pad - right;
+  return "*".repeat(left) + amt + "*".repeat(right);
+}
+
 // Split amount-in-words into lines at word boundaries (max ~55 chars per line)
 function splitWordLines(text: string, maxChars = 55): [string, string] {
   if (text.length <= maxChars) return [text, ""];
@@ -132,7 +141,7 @@ function buildPanAsiaHTML(data: ChequeData): string {
   const { dd, mm, yyyy } = formatChequeDate(data.chequeDate);
   const yy = yyyy.slice(2); // "20" is pre-printed on the cheque
   const words = amountToWords(data.amount);
-  const figures = formatAmount(data.amount);
+  const figures = starPad(formatAmount(data.amount));
   const [line1, line2] = splitWordLines(words);
 
   return `<!DOCTYPE html>
@@ -203,26 +212,28 @@ function buildPanAsiaHTML(data: ChequeData): string {
   }
   .words-1 {
     position: absolute;
-    top: 32mm;
+    top: 31mm;
     left: 18mm;
     font-size: 9pt;
     white-space: nowrap;
   }
   .words-2 {
     position: absolute;
-    top: 38mm;
+    top: 37mm;
     left: 18mm;
     font-size: 9pt;
     white-space: nowrap;
   }
   .figures {
     position: absolute;
-    top: 42mm;
+    top: 40mm;
     right: 16mm;
-    width: 30mm;
+    width: 40mm;
     text-align: right;
-    font-size: 10pt;
+    font-size: 9pt;
     font-weight: bold;
+    font-family: "Courier New", Courier, monospace;
+    letter-spacing: 0.5px;
   }
 </style>
 </head>
