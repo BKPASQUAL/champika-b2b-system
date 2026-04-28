@@ -156,8 +156,7 @@ export default function WriteChequeDialog({
     form.cheque_date &&
     form.cheque_number.trim() !== "" &&
     form.company_account_id !== "" &&
-    form.bank_template !== "" &&
-    payeeAccountName.trim() !== "";
+    form.bank_template !== "";
 
   const handleUseTotal = () =>
     setForm((f) => ({ ...f, amount: balanceDue.toFixed(2) }));

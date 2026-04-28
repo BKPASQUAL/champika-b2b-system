@@ -9,7 +9,7 @@ const paymentSchema = z.object({
   purchaseId: z.string().min(1, "Purchase ID is required"),
   supplierId: z.string().min(1, "Supplier ID is required"),
   accountId: z.string().min(1, "Account is required"),
-  amount: z.number().min(1, "Amount must be valid"),
+  amount: z.number().positive("Amount must be valid"),
   date: z.string(),
   method: z.string(),
   chequeNumber: z.string().optional(),
@@ -144,20 +144,34 @@ export async function POST(request: NextRequest) {
         .eq("id", val.supplierId);
     }
 
-    // 5. Account Transaction (Withdrawal) - Only if NOT a cheque (or if you count cheques immediately)
-    // Usually cheques are recorded when printed/issued, but funds leave when cleared.
-    // For simplicity, we record it now or you can wait for clearance.
-    // Let's record Bank Transfer/Cash immediately.
+    // 5. For non-cheque payments: record transaction and deduct balance immediately.
+    //    Cheques only affect the balance when they pass (cleared by the bank).
     if (val.method !== "cheque") {
       await supabaseAdmin.from("account_transactions").insert({
         transaction_no: `TXN-${Date.now()}`,
         transaction_type: "Withdrawal",
-        from_account_id: val.accountId, // Money leaves account
+        from_account_id: val.accountId,
         amount: val.amount,
         description: `Supplier Payment: ${paymentNo}`,
         transaction_date: val.date,
         reference_no: paymentNo,
       });
+
+      const { data: bankAccount } = await supabaseAdmin
+        .from("bank_accounts")
+        .select("current_balance")
+        .eq("id", val.accountId)
+        .single();
+
+      if (bankAccount) {
+        await supabaseAdmin
+          .from("bank_accounts")
+          .update({
+            current_balance: (bankAccount.current_balance || 0) - val.amount,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", val.accountId);
+      }
     }
 
     return NextResponse.json(
@@ -194,24 +208,40 @@ export async function PUT(request: NextRequest) {
         .update({ cheque_status: "passed" })
         .eq("id", val.paymentId);
 
-      // Record the withdrawal now that cheque passed
+      // Cheque cleared by bank — now deduct from account balance
       await supabaseAdmin.from("account_transactions").insert({
         transaction_no: `CHQ-${Date.now()}`,
         transaction_type: "Withdrawal",
         from_account_id: payment.company_account_id,
         amount: payment.amount,
-        description: `Cheque Cleared: ${payment.cheque_number}`,
-        transaction_date: new Date().toISOString(),
+        description: `Cheque Cleared: ${payment.cheque_number} — ${payment.payment_number}`,
+        transaction_date: new Date().toISOString().split("T")[0],
         reference_no: payment.cheque_number,
-        cheque_status: "Passed",
       });
+
+      const { data: bankAccount } = await supabaseAdmin
+        .from("bank_accounts")
+        .select("current_balance")
+        .eq("id", payment.company_account_id)
+        .single();
+
+      if (bankAccount) {
+        await supabaseAdmin
+          .from("bank_accounts")
+          .update({
+            current_balance: (bankAccount.current_balance || 0) - payment.amount,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", payment.company_account_id);
+      }
+
     } else if (val.action === "returned") {
       await supabaseAdmin
         .from("supplier_payments")
         .update({ cheque_status: "returned" })
         .eq("id", val.paymentId);
 
-      // Reverse the Purchase Payment logic
+      // Reverse Purchase paid amount
       const { data: purchase } = await supabaseAdmin
         .from("purchases")
         .select("paid_amount")
@@ -223,12 +253,12 @@ export async function PUT(request: NextRequest) {
           .from("purchases")
           .update({
             paid_amount: Math.max(0, purchase.paid_amount - payment.amount),
-            payment_status: "Partial", // Revert to partial/unpaid
+            payment_status: "Partial",
           })
           .eq("id", payment.purchase_id);
       }
 
-      // Reverse Supplier Balance (Add debt back)
+      // Reverse Supplier due payment
       const { data: supplier } = await supabaseAdmin
         .from("suppliers")
         .select("due_payment")
@@ -239,6 +269,22 @@ export async function PUT(request: NextRequest) {
           .from("suppliers")
           .update({ due_payment: supplier.due_payment + payment.amount })
           .eq("id", payment.supplier_id);
+      }
+
+      // Restore bank account balance (cheque never cleared)
+      const { data: bankAccount } = await supabaseAdmin
+        .from("bank_accounts")
+        .select("current_balance")
+        .eq("id", payment.company_account_id)
+        .single();
+      if (bankAccount) {
+        await supabaseAdmin
+          .from("bank_accounts")
+          .update({
+            current_balance: (bankAccount.current_balance || 0) + payment.amount,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", payment.company_account_id);
       }
     }
 

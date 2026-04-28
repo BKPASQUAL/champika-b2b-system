@@ -60,6 +60,7 @@ interface Transaction {
   cheque_bank_code: string | null;
   cheque_bank_name: string | null;
   invoice_no: string | null;
+  notes: string | null;
 }
 
 // --- Helpers ---
@@ -275,6 +276,11 @@ export default function AccountHistoryPage() {
                           {!tx.invoice_no && tx.description && (
                             <p className="text-xs text-muted-foreground mt-0.5 max-w-[180px] truncate">
                               {tx.description}
+                            </p>
+                          )}
+                          {tx.notes && (
+                            <p className="text-xs text-blue-600 mt-0.5 max-w-[180px] truncate" title={tx.notes}>
+                              {tx.notes}
                             </p>
                           )}
                         </TableCell>
