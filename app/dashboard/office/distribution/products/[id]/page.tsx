@@ -74,6 +74,7 @@ interface ExtendedProduct extends Product {
 interface Transaction {
   id: string;
   date: string;
+  timestamp?: number;
   type: "SALE" | "PURCHASE" | "RETURN" | "DAMAGE" | "ADJUSTMENT" | "FREE ISSUE";
   freeQuantity?: number;
   currentStock?: number;
@@ -178,6 +179,22 @@ export default function ProductDetailsPage({
       mrp: product.mrp || 0,
     },
   ];
+
+  // Enrich price history with related purchases
+  const priceHistoryWithRefs = (product.priceHistory || []).map((h: any) => {
+    const changeDate = new Date(h.date).toLocaleDateString("en-LK");
+    // Find purchases on the same day (or around the same time)
+    const relatedPurchases = allTransactions.filter(
+      (tx) =>
+        tx.type === "PURCHASE" &&
+        new Date(tx.timestamp ?? tx.date).toLocaleDateString("en-LK") === changeDate
+    );
+
+    return {
+      ...h,
+      relatedPurchases,
+    };
+  });
 
   return (
     <div className="space-y-6">
@@ -706,7 +723,7 @@ export default function ProductDetailsPage({
               </Card>
 
               {/* Price History Table */}
-              {product.priceHistory && product.priceHistory.length > 0 && (
+              {priceHistoryWithRefs.length > 0 && (
                 <Card className="mt-4">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -714,7 +731,7 @@ export default function ProductDetailsPage({
                       Price Change History
                     </CardTitle>
                     <CardDescription>
-                      Previous cost and selling prices before each update
+                      Previous cost and selling prices before each update, along with related purchases
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -722,13 +739,14 @@ export default function ProductDetailsPage({
                       <TableHeader>
                         <TableRow>
                           <TableHead>Date Changed</TableHead>
-                          <TableHead className="text-right">Old Cost Price</TableHead>
-                          <TableHead className="text-right">Old Selling Price</TableHead>
+                          <TableHead className="text-right">Old Cost</TableHead>
+                          <TableHead className="text-right">Old Selling</TableHead>
                           <TableHead className="text-right">Old MRP</TableHead>
+                          <TableHead className="pl-6">Related Purchases</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {product.priceHistory.map((h: any, i: number) => (
+                        {priceHistoryWithRefs.map((h: any, i: number) => (
                           <TableRow key={i}>
                             <TableCell className="flex items-center gap-2 text-muted-foreground">
                               <History className="w-3 h-3" />
@@ -745,6 +763,24 @@ export default function ProductDetailsPage({
                             </TableCell>
                             <TableCell className="text-right font-mono text-sm">
                               {h.mrp && h.mrp > 0 ? formatCurrency(h.mrp) : "-"}
+                            </TableCell>
+                            <TableCell className="pl-6">
+                              {h.relatedPurchases && h.relatedPurchases.length > 0 ? (
+                                <div className="flex flex-col gap-1">
+                                  {h.relatedPurchases.map((rp: any, idx: number) => (
+                                    <div key={idx} className="flex items-center gap-1.5 text-xs">
+                                      <Badge variant="outline" className="border-green-200 text-green-700 bg-green-50 text-[10px] px-1.5 py-0 h-4">
+                                        {rp.reference}
+                                      </Badge>
+                                      <span className="text-muted-foreground truncate max-w-[120px]" title={rp.customer}>
+                                        {rp.customer}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-muted-foreground italic">Manual Update</span>
+                              )}
                             </TableCell>
                           </TableRow>
                         ))}
