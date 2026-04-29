@@ -10,8 +10,6 @@ import {
   Save,
   Package,
   Loader2,
-  ChevronsUpDown,
-  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,9 +30,10 @@ import {
 } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
+import { CustomerDialogs } from "../../customers/_components/CustomerDialogs";
+import { CustomerFormData } from "../../customers/types";
 
 // --- Types ---
 
@@ -104,6 +103,20 @@ export default function CreateSierraInvoicePage() {
 
   const salesRepId = currentUser?.id || "";
   const orderStatus = "Delivered";
+
+  // New Customer Dialog State
+  const [isAddCustomerDialogOpen, setIsAddCustomerDialogOpen] = useState(false);
+  const [customerFormData, setCustomerFormData] = useState<CustomerFormData>({
+    shopName: "",
+    ownerName: "",
+    phone: "",
+    email: "",
+    address: "",
+    route: "General",
+    status: "Active",
+    creditLimit: 0,
+    businessId: BUSINESS_IDS.SIERRA_AGENCY,
+  });
 
   // Items State
   const [items, setItems] = useState<InvoiceItem[]>([]);
@@ -324,6 +337,50 @@ export default function CreateSierraInvoicePage() {
     setItems(items.filter((item) => item.id !== id));
   };
 
+  const handleCreateCustomer = async () => {
+    if (!customerFormData.shopName || !customerFormData.phone) {
+      toast.error("Shop name and phone are required");
+      return;
+    }
+    try {
+      const res = await fetch("/api/customers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...customerFormData,
+          businessId: businessId ?? BUSINESS_IDS.SIERRA_AGENCY,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to create customer");
+
+      toast.success("Customer added successfully!");
+      setIsAddCustomerDialogOpen(false);
+      setCustomerFormData({
+        shopName: "",
+        ownerName: "",
+        phone: "",
+        email: "",
+        address: "",
+        route: "General",
+        status: "Active",
+        creditLimit: 0,
+        businessId: BUSINESS_IDS.SIERRA_AGENCY,
+      });
+
+      // Refresh customers and auto-select the new one
+      const customersRes = await fetch(
+        `/api/customers?businessId=${businessId ?? BUSINESS_IDS.SIERRA_AGENCY}`,
+      );
+      const customersData = await customersRes.json();
+      const mapped = customersData.map((c: any) => ({ id: c.id, name: c.shopName }));
+      setCustomers(mapped);
+      if (data.id) setCustomerId(data.id);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to create customer");
+    }
+  };
+
   const handleSaveInvoice = async () => {
     if (!customerId) {
       toast.error("Please select a customer.");
@@ -453,7 +510,18 @@ export default function CreateSierraInvoicePage() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Customer</Label>
+                  <div className="flex items-center justify-between">
+                    <Label>Customer</Label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      type="button"
+                      className="h-auto p-0 text-xs text-red-600 hover:text-red-700 hover:bg-transparent"
+                      onClick={() => setIsAddCustomerDialogOpen(true)}
+                    >
+                      <Plus className="w-3 h-3 mr-1" /> New Customer
+                    </Button>
+                  </div>
                   <SearchableDropdown
                     options={customers.map((c) => ({ id: c.id, name: c.name }))}
                     value={customerId}
@@ -835,6 +903,17 @@ export default function CreateSierraInvoicePage() {
         </div>
       </div>
 
+      <CustomerDialogs
+        isAddDialogOpen={isAddCustomerDialogOpen}
+        setIsAddDialogOpen={setIsAddCustomerDialogOpen}
+        formData={customerFormData}
+        setFormData={setCustomerFormData}
+        onSave={handleCreateCustomer}
+        selectedCustomer={null}
+        isDeleteDialogOpen={false}
+        setIsDeleteDialogOpen={() => {}}
+        onDeleteConfirm={() => {}}
+      />
     </div>
   );
 }
