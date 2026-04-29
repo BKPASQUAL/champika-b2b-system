@@ -6,6 +6,7 @@ import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -143,16 +144,34 @@ function ChequeCard({
   cheque,
   actions,
   updatingId,
+  selected,
+  onToggle,
 }: {
   cheque: ChequeRecord;
   actions?: React.ReactNode;
   updatingId: string | null;
+  selected?: boolean;
+  onToggle?: () => void;
 }) {
   const isUpdating = cheque.ids.some((id) => updatingId === id);
   return (
-    <div className={cn("rounded-lg border bg-white p-3 space-y-2 transition-all", isUpdating && "opacity-60")}>
+    <div className={cn(
+      "rounded-lg border bg-white p-3 space-y-2 transition-all",
+      isUpdating && "opacity-60",
+      selected && "border-blue-400 bg-blue-50/30 ring-1 ring-blue-300",
+    )}>
       <div className="flex items-center justify-between gap-2">
-        <span className="font-mono text-sm font-bold text-gray-800">#{cheque.chequeNo || "—"}</span>
+        <div className="flex items-center gap-2">
+          {onToggle && (
+            <Checkbox
+              checked={selected}
+              onCheckedChange={onToggle}
+              className="shrink-0"
+              aria-label={`Select cheque ${cheque.chequeNo}`}
+            />
+          )}
+          <span className="font-mono text-sm font-bold text-gray-800">#{cheque.chequeNo || "—"}</span>
+        </div>
         <span className="text-sm font-bold text-gray-900">{formatCurrency(cheque.amount)}</span>
       </div>
       <p className="text-sm font-medium text-gray-700 truncate">{cheque.customerName}</p>
@@ -393,6 +412,19 @@ export function ChequeManagementPage({
   const [confirming, setConfirming] = useState(false);
   const [bankAccounts, setBankAccounts] = useState<any[]>([]);
 
+  // ─── Bulk selection state ──────────────────────────────────────────────────
+  const [selectedPendingKeys, setSelectedPendingKeys] = useState<Set<string>>(new Set());
+  const [selectedDepositedKeys, setSelectedDepositedKeys] = useState<Set<string>>(new Set());
+
+  // Bulk deposit dialog (for pending → deposited)
+  const [isBulkDepositOpen, setIsBulkDepositOpen] = useState(false);
+  const [bulkDepositAccId, setBulkDepositAccId] = useState("");
+
+  // Bulk pass dialog (for deposited → cleared)
+  const [isBulkPassOpen, setIsBulkPassOpen] = useState(false);
+
+  const [bulkConfirming, setBulkConfirming] = useState(false);
+
   useEffect(() => {
     fetch("/api/finance/accounts?active=true")
       .then((r) => (r.ok ? r.json() : []))
@@ -419,7 +451,6 @@ export function ChequeManagementPage({
       (p: any) => p.payment_method?.toLowerCase() === "cheque"
     );
 
-    // Group by chequeNo (non-empty); ungrouped (null/empty) stay separate
     const groups = new Map<string, any[]>();
     const ungrouped: any[] = [];
 
@@ -566,6 +597,69 @@ export function ChequeManagementPage({
     setConfirming(false);
   };
 
+  // ─── Bulk deposit handler ──────────────────────────────────────────────────
+  const handleBulkDeposit = async () => {
+    if (!bulkDepositAccId) return;
+    setBulkConfirming(true);
+    try {
+      const selectedCheques = pending.filter((c) => selectedPendingKeys.has(c.ids[0]));
+      await Promise.all(
+        selectedCheques.flatMap((c) =>
+          c.ids.map((id) =>
+            fetch(`/api/payments/${id}/status`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ chequeStatus: "Deposited", depositAccountId: bulkDepositAccId }),
+            }).then((r) => { if (!r.ok) throw new Error("Failed"); })
+          )
+        )
+      );
+      toast.success(`${selectedCheques.length} cheque(s) marked as Deposited`);
+      setSelectedPendingKeys(new Set());
+      setIsBulkDepositOpen(false);
+      invalidatePaymentCaches();
+      refetch();
+    } catch {
+      toast.error("Failed to deposit some cheques");
+    } finally {
+      setBulkConfirming(false);
+    }
+  };
+
+  // ─── Bulk pass handler ─────────────────────────────────────────────────────
+  const handleBulkPass = async () => {
+    setBulkConfirming(true);
+    try {
+      const selectedCheques = deposited.filter((c) => selectedDepositedKeys.has(c.ids[0]));
+      await Promise.all(
+        selectedCheques.flatMap((c) =>
+          c.ids.map((id) =>
+            fetch(`/api/payments/${id}/status`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ chequeStatus: "Cleared" }),
+            }).then((r) => { if (!r.ok) throw new Error("Failed"); })
+          )
+        )
+      );
+      toast.success(`${selectedCheques.length} cheque(s) cleared`);
+      setSelectedDepositedKeys(new Set());
+      setIsBulkPassOpen(false);
+      invalidatePaymentCaches();
+      refetch();
+    } catch {
+      toast.error("Failed to clear some cheques");
+    } finally {
+      setBulkConfirming(false);
+    }
+  };
+
+  // ─── Bulk selection totals ─────────────────────────────────────────────────
+  const selectedPendingCheques  = pending.filter((c) => selectedPendingKeys.has(c.ids[0]));
+  const selectedDepositedCheques = deposited.filter((c) => selectedDepositedKeys.has(c.ids[0]));
+  const bulkPendingTotal   = selectedPendingCheques.reduce((s, c) => s + c.amount, 0);
+  const bulkDepositedTotal = selectedDepositedCheques.reduce((s, c) => s + c.amount, 0);
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -640,8 +734,52 @@ export function ChequeManagementPage({
             icon={Clock}
             empty="No pending cheques"
           >
+            {/* Pending — selection bar */}
+            {pending.length > 0 && (
+              <div className="flex items-center justify-between px-0.5 pb-2 border-b border-amber-100 mb-1">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    checked={selectedPendingKeys.size === pending.length && pending.length > 0}
+                    onCheckedChange={() => {
+                      if (selectedPendingKeys.size === pending.length) {
+                        setSelectedPendingKeys(new Set());
+                      } else {
+                        setSelectedPendingKeys(new Set(pending.map((c) => c.ids[0])));
+                      }
+                    }}
+                    aria-label="Select all pending"
+                  />
+                  <span className="text-xs text-amber-600 font-medium">
+                    {selectedPendingKeys.size > 0
+                      ? `${selectedPendingKeys.size} selected · ${formatCurrency(bulkPendingTotal)}`
+                      : "Select all"}
+                  </span>
+                </div>
+                {selectedPendingKeys.size > 0 && (
+                  <Button
+                    size="sm"
+                    className="h-6 text-[11px] bg-blue-600 hover:bg-blue-700 gap-1 px-2"
+                    onClick={() => { setBulkDepositAccId(""); setIsBulkDepositOpen(true); }}
+                  >
+                    <Banknote className="h-3 w-3" />
+                    Deposit ({selectedPendingKeys.size})
+                  </Button>
+                )}
+              </div>
+            )}
             {pending.map((c) => (
-              <ChequeCard key={c.ids[0]} cheque={c} updatingId={updatingId}
+              <ChequeCard
+                key={c.ids[0]}
+                cheque={c}
+                updatingId={updatingId}
+                selected={selectedPendingKeys.has(c.ids[0])}
+                onToggle={() => {
+                  setSelectedPendingKeys((prev) => {
+                    const next = new Set(prev);
+                    next.has(c.ids[0]) ? next.delete(c.ids[0]) : next.add(c.ids[0]);
+                    return next;
+                  });
+                }}
                 actions={
                   <Button
                     size="sm"
@@ -667,8 +805,52 @@ export function ChequeManagementPage({
             icon={Banknote}
             empty="No deposited cheques"
           >
+            {/* Deposited — selection bar */}
+            {deposited.length > 0 && (
+              <div className="flex items-center justify-between px-0.5 pb-2 border-b border-blue-100 mb-1">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    checked={selectedDepositedKeys.size === deposited.length && deposited.length > 0}
+                    onCheckedChange={() => {
+                      if (selectedDepositedKeys.size === deposited.length) {
+                        setSelectedDepositedKeys(new Set());
+                      } else {
+                        setSelectedDepositedKeys(new Set(deposited.map((c) => c.ids[0])));
+                      }
+                    }}
+                    aria-label="Select all deposited"
+                  />
+                  <span className="text-xs text-blue-600 font-medium">
+                    {selectedDepositedKeys.size > 0
+                      ? `${selectedDepositedKeys.size} selected · ${formatCurrency(bulkDepositedTotal)}`
+                      : "Select all"}
+                  </span>
+                </div>
+                {selectedDepositedKeys.size > 0 && (
+                  <Button
+                    size="sm"
+                    className="h-6 text-[11px] bg-green-600 hover:bg-green-700 gap-1 px-2"
+                    onClick={() => setIsBulkPassOpen(true)}
+                  >
+                    <CheckCircle className="h-3 w-3" />
+                    Pass ({selectedDepositedKeys.size})
+                  </Button>
+                )}
+              </div>
+            )}
             {deposited.map((c) => (
-              <ChequeCard key={c.ids[0]} cheque={c} updatingId={updatingId}
+              <ChequeCard
+                key={c.ids[0]}
+                cheque={c}
+                updatingId={updatingId}
+                selected={selectedDepositedKeys.has(c.ids[0])}
+                onToggle={() => {
+                  setSelectedDepositedKeys((prev) => {
+                    const next = new Set(prev);
+                    next.has(c.ids[0]) ? next.delete(c.ids[0]) : next.add(c.ids[0]);
+                    return next;
+                  });
+                }}
                 actions={
                   <>
                     <Button
@@ -720,7 +902,7 @@ export function ChequeManagementPage({
         </div>
       )}
 
-      {/* Confirmation Dialog */}
+      {/* Single Confirmation Dialog */}
       {actionDialog && (
         <ConfirmActionDialog
           dialog={actionDialog}
@@ -731,6 +913,118 @@ export function ChequeManagementPage({
           onClose={() => setActionDialog(null)}
           confirming={confirming}
         />
+      )}
+
+      {/* Bulk Deposit Dialog */}
+      {isBulkDepositOpen && (
+        <Dialog open onOpenChange={(open) => { if (!open) setIsBulkDepositOpen(false); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Deposit {selectedPendingKeys.size} Cheques</DialogTitle>
+              <DialogDescription>
+                Select one deposit account for all selected cheques.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-1">
+              {/* Selected cheques summary */}
+              <div className="rounded-lg border bg-gray-50 p-3 space-y-1.5 max-h-44 overflow-y-auto">
+                {selectedPendingCheques.map((c) => (
+                  <div key={c.ids[0]} className="flex items-center justify-between gap-2 text-sm">
+                    <span className="font-mono font-bold text-gray-700">#{c.chequeNo || "—"}</span>
+                    <span className="text-gray-500 truncate flex-1 text-xs">{c.customerName}</span>
+                    <span className="font-semibold text-gray-800 shrink-0">{formatCurrency(c.amount)}</span>
+                  </div>
+                ))}
+                <div className="border-t border-gray-200 pt-1.5 flex justify-between font-bold text-sm">
+                  <span className="text-gray-600">Total</span>
+                  <span className="text-gray-900">{formatCurrency(bulkPendingTotal)}</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Deposit Account <span className="text-red-500">*</span></Label>
+                <Select value={bulkDepositAccId} onValueChange={setBulkDepositAccId}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select account…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {bankAccounts.length === 0 ? (
+                      <SelectItem value="__none" disabled>No accounts found</SelectItem>
+                    ) : (
+                      bankAccounts.map((acc) => (
+                        <SelectItem key={acc.id} value={acc.id}>
+                          {acc.account_name}
+                          {acc.account_type ? ` (${acc.account_type})` : ""}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsBulkDepositOpen(false)} disabled={bulkConfirming}>
+                Cancel
+              </Button>
+              <Button
+                className="bg-blue-600 hover:bg-blue-700"
+                onClick={handleBulkDeposit}
+                disabled={bulkConfirming || !bulkDepositAccId}
+              >
+                {bulkConfirming
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : `Deposit ${selectedPendingKeys.size} Cheques`}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Bulk Pass Dialog */}
+      {isBulkPassOpen && (
+        <Dialog open onOpenChange={(open) => { if (!open) setIsBulkPassOpen(false); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Pass / Clear {selectedDepositedKeys.size} Cheques</DialogTitle>
+              <DialogDescription>
+                Confirm all selected cheques have cleared. Deposit account balances will be updated.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-1">
+              <div className="rounded-lg border bg-gray-50 p-3 space-y-1.5 max-h-44 overflow-y-auto">
+                {selectedDepositedCheques.map((c) => (
+                  <div key={c.ids[0]} className="flex items-center justify-between gap-2 text-sm">
+                    <span className="font-mono font-bold text-gray-700">#{c.chequeNo || "—"}</span>
+                    <span className="text-gray-500 truncate flex-1 text-xs">{c.customerName}</span>
+                    <span className="font-semibold text-gray-800 shrink-0">{formatCurrency(c.amount)}</span>
+                  </div>
+                ))}
+                <div className="border-t border-gray-200 pt-1.5 flex justify-between font-bold text-sm">
+                  <span className="text-gray-600">Total</span>
+                  <span className="text-green-700">{formatCurrency(bulkDepositedTotal)}</span>
+                </div>
+              </div>
+              {selectedDepositedCheques.some((c) => c.depositAccountName) && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
+                  Each cheque will be cleared to its assigned deposit account.
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsBulkPassOpen(false)} disabled={bulkConfirming}>
+                Cancel
+              </Button>
+              <Button
+                className="bg-green-600 hover:bg-green-700"
+                onClick={handleBulkPass}
+                disabled={bulkConfirming}
+              >
+                {bulkConfirming
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : `Confirm Pass ${selectedDepositedKeys.size} Cheques`}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
 
       {/* History Sheet */}
