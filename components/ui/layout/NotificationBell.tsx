@@ -357,7 +357,7 @@ export function NotificationBell({
                 {/* Contextual hint */}
                 {pushStatus === "no-sw" && (
                   <p className="text-[10px] text-orange-600 leading-snug">
-                    Install this app on your phone (Add to Home Screen), then open it and enable push from there.
+                    Close this app completely and re-open it from your Home Screen icon, then try again.
                   </p>
                 )}
                 {pushStatus === "denied" && (
