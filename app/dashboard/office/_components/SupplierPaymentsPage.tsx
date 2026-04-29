@@ -5,8 +5,9 @@ import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useRouter } from "next/navigation";
 import {
   DollarSign, Clock, Search, AlertCircle, CreditCard, Banknote,
-  Building2, FileText, Printer, CheckSquare, CheckCircle2,
+  Building2, FileText, Printer, CheckSquare, CheckCircle2, AlertTriangle, ArrowUpDown,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import WriteChequeDialog from "@/components/write-cheque-dialog";
 import WriteMultiChequeDialog from "@/components/write-multi-cheque-dialog";
 import BulkPaymentDialog from "@/components/bulk-payment-dialog";
@@ -109,18 +110,21 @@ function formatDisplayDate(dateStr: string): string {
 // ─── Props ─────────────────────────────────────────────────────────────────────
 
 export interface SupplierPaymentsPageProps {
-  defaultBusinessId: string;
-  routePrefix: string;   // e.g. "/dashboard/office/distribution"
+  defaultBusinessId?: string;   // omit for admin (fetches all)
+  routePrefix: string;          // e.g. "/dashboard/office/distribution"
 }
 
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export function SupplierPaymentsPage({ defaultBusinessId, routePrefix }: SupplierPaymentsPageProps) {
   const router = useRouter();
-  const [currentBusinessId] = useState<string>(() => {
+  const [currentBusinessId] = useState<string | null>(() => {
+    if (!defaultBusinessId) return null;   // admin — no filter
     const user = getUserBusinessContext();
     return user?.businessId ?? defaultBusinessId;
   });
+
+  const bq = currentBusinessId ? `?businessId=${currentBusinessId}` : "";
 
   const [isSubmitting,         setIsSubmitting]         = useState(false);
   const [searchTerm,           setSearchTerm]           = useState("");
@@ -142,6 +146,7 @@ export function SupplierPaymentsPage({ defaultBusinessId, routePrefix }: Supplie
 
   // Selection for pending cheques tab (for bulk pass / return)
   const [selectedChequeGroupIds, setSelectedChequeGroupIds] = useState<Set<string>>(new Set());
+  const [pendingChequeSortDir, setPendingChequeSortDir] = useState<"asc" | "desc">("asc");
 
   const [paymentForm, setPaymentForm] = useState({
     amount: "",
@@ -154,13 +159,13 @@ export function SupplierPaymentsPage({ defaultBusinessId, routePrefix }: Supplie
   });
 
   const { data: allPurchasesRaw = [], loading: l1, refetch: refetchPurchases } =
-    useCachedFetch<any[]>(`/api/purchases?businessId=${currentBusinessId}`, []);
+    useCachedFetch<any[]>(`/api/purchases${bq}`, []);
 
   const { data: paymentHistory = [], loading: l2, refetch: refetchPayments } =
-    useCachedFetch<SupplierPayment[]>(`/api/suppliers/payments?businessId=${currentBusinessId}`, []);
+    useCachedFetch<SupplierPayment[]>(`/api/suppliers/payments${bq}`, []);
 
   const { data: companyAccounts = [], loading: l3, refetch: refetchAccounts } =
-    useCachedFetch<CompanyAccount[]>(`/api/finance/accounts?businessId=${currentBusinessId}`, []);
+    useCachedFetch<CompanyAccount[]>(`/api/finance/accounts${bq}`, []);
 
   const loading = l1 || l2 || l3;
 
@@ -233,7 +238,7 @@ export function SupplierPaymentsPage({ defaultBusinessId, routePrefix }: Supplie
           chequeNumber: paymentForm.cheque_number,
           chequeDate: paymentForm.cheque_date,
           notes: paymentForm.notes,
-          businessId: currentBusinessId,
+          ...(currentBusinessId ? { businessId: currentBusinessId } : {}),
         }),
       });
       if (!res.ok) throw new Error("Payment failed");
@@ -326,8 +331,12 @@ export function SupplierPaymentsPage({ defaultBusinessId, routePrefix }: Supplie
         purchaseIds: [p.purchases?.purchase_id].filter(Boolean),
         payments: [p],
       })),
-    ];
-  }, [pendingCheques]);
+    ].sort((a, b) => {
+      const da = a.cheque_date ? new Date(a.cheque_date).getTime() : (pendingChequeSortDir === "asc" ? Infinity : -Infinity);
+      const db = b.cheque_date ? new Date(b.cheque_date).getTime() : (pendingChequeSortDir === "asc" ? Infinity : -Infinity);
+      return pendingChequeSortDir === "asc" ? da - db : db - da;
+    });
+  }, [pendingCheques, pendingChequeSortDir]);
 
   const filteredHistory = paymentHistory.filter((p) => p.cheque_status !== "pending");
 
@@ -576,6 +585,17 @@ export function SupplierPaymentsPage({ defaultBusinessId, routePrefix }: Supplie
                   </p>
                 )}
               </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => setPendingChequeSortDir((d) => d === "asc" ? "desc" : "asc")}
+                  title="Toggle cheque date sort order"
+                >
+                  <ArrowUpDown className="h-3.5 w-3.5" />
+                  {pendingChequeSortDir === "asc" ? "Earliest first" : "Latest first"}
+                </Button>
               {selectedChequeGroupIds.size > 0 && (
                 <div className="flex items-center gap-2">
                   <Button
@@ -596,6 +616,7 @@ export function SupplierPaymentsPage({ defaultBusinessId, routePrefix }: Supplie
                   </Button>
                 </div>
               )}
+              </div>
             </CardHeader>
             <CardContent>
               <Table>
@@ -616,6 +637,7 @@ export function SupplierPaymentsPage({ defaultBusinessId, routePrefix }: Supplie
                     <TableHead>Supplier</TableHead>
                     <TableHead>Cheque No</TableHead>
                     <TableHead>Cheque Date</TableHead>
+                    <TableHead>Account</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -623,20 +645,35 @@ export function SupplierPaymentsPage({ defaultBusinessId, routePrefix }: Supplie
                 <TableBody>
                   {groupedPendingCheques.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                         No pending cheques.
                       </TableCell>
                     </TableRow>
                   ) : (
-                    groupedPendingCheques.map((group) => (
+                    groupedPendingCheques.map((group) => {
+                      const today = new Date().toISOString().split("T")[0];
+                      const daysLeft = group.cheque_date
+                        ? Math.ceil((new Date(group.cheque_date).getTime() - new Date(today).getTime()) / 86_400_000)
+                        : null;
+                      const isOverdue  = daysLeft !== null && daysLeft < 0;
+                      const isDueToday = daysLeft === 0;
+                      const isDueSoon  = daysLeft !== null && daysLeft > 0 && daysLeft <= 3;
+                      const isSelected = selectedChequeGroupIds.has(group.id);
+                      return (
                       <TableRow
                         key={group.id}
-                        data-state={selectedChequeGroupIds.has(group.id) ? "selected" : undefined}
-                        className={selectedChequeGroupIds.has(group.id) ? "bg-amber-50/60" : undefined}
+                        data-state={isSelected ? "selected" : undefined}
+                        className={cn(
+                          isSelected  ? "bg-amber-50/60" :
+                          isOverdue   ? "bg-red-50/60 hover:bg-red-50/80" :
+                          isDueToday  ? "bg-orange-50/60 hover:bg-orange-50/80" :
+                          isDueSoon   ? "bg-amber-50/40 hover:bg-amber-50/60" :
+                          "hover:bg-muted/30"
+                        )}
                       >
                         <TableCell>
                           <Checkbox
-                            checked={selectedChequeGroupIds.has(group.id)}
+                            checked={isSelected}
                             onCheckedChange={() => toggleChequeGroup(group.id)}
                             aria-label={`Select cheque ${group.cheque_number}`}
                           />
@@ -659,14 +696,49 @@ export function SupplierPaymentsPage({ defaultBusinessId, routePrefix }: Supplie
                             </span>
                           )}
                         </TableCell>
-                        <TableCell>{group.supplier_name}</TableCell>
+                        <TableCell className="font-medium">{group.supplier_name}</TableCell>
                         <TableCell>
-                          <span className="font-mono text-sm font-medium">{group.cheque_number}</span>
+                          <span className="font-mono text-sm font-semibold">{group.cheque_number}</span>
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {group.cheque_date ? new Date(group.cheque_date).toLocaleDateString() : "-"}
+                        <TableCell>
+                          <div className="flex flex-col gap-0.5">
+                            <span className={cn(
+                              "text-sm",
+                              isOverdue  && "text-red-600 font-semibold",
+                              isDueToday && "text-orange-600 font-semibold",
+                            )}>
+                              {group.cheque_date ? new Date(group.cheque_date).toLocaleDateString() : "-"}
+                            </span>
+                            {isOverdue && (
+                              <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-red-600">
+                                <AlertTriangle className="h-2.5 w-2.5" />
+                                {Math.abs(daysLeft!)}d overdue — pass now
+                              </span>
+                            )}
+                            {isDueToday && (
+                              <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-orange-600">
+                                <AlertTriangle className="h-2.5 w-2.5" />
+                                Due today — pass now
+                              </span>
+                            )}
+                            {isDueSoon && (
+                              <span className="text-[10px] text-amber-600 font-medium">
+                                Due in {daysLeft}d
+                              </span>
+                            )}
+                          </div>
                         </TableCell>
-                        <TableCell className="text-right font-medium">
+                        <TableCell>
+                          {group.company_account_name ? (
+                            <div className="flex items-center gap-1.5">
+                              <Banknote className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                              <span className="text-xs text-slate-700 font-medium">{group.company_account_name}</span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right font-semibold">
                           {formatCurrency(group.amount)}
                         </TableCell>
                         <TableCell className="text-right space-x-2">
@@ -706,7 +778,8 @@ export function SupplierPaymentsPage({ defaultBusinessId, routePrefix }: Supplie
                           </Button>
                         </TableCell>
                       </TableRow>
-                    ))
+                    );
+                    })
                   )}
                 </TableBody>
               </Table>
@@ -957,7 +1030,7 @@ export function SupplierPaymentsPage({ defaultBusinessId, routePrefix }: Supplie
         onClose={() => setIsChequeDialogOpen(false)}
         purchase={selectedPurchase}
         companyAccounts={companyAccounts}
-        businessId={currentBusinessId}
+        businessId={currentBusinessId ?? ""}
         onSuccess={fetchData}
       />
 
@@ -966,7 +1039,7 @@ export function SupplierPaymentsPage({ defaultBusinessId, routePrefix }: Supplie
         onClose={() => { setIsMultiChequeDialogOpen(false); setSelectedBillIds(new Set()); }}
         purchases={selectedPurchases}
         companyAccounts={companyAccounts}
-        businessId={currentBusinessId}
+        businessId={currentBusinessId ?? ""}
         onSuccess={() => { fetchData(); setSelectedBillIds(new Set()); }}
       />
 
@@ -975,7 +1048,7 @@ export function SupplierPaymentsPage({ defaultBusinessId, routePrefix }: Supplie
         onClose={() => { setIsBulkPayDialogOpen(false); setSelectedBillIds(new Set()); }}
         purchases={selectedPurchases}
         companyAccounts={companyAccounts}
-        businessId={currentBusinessId}
+        businessId={currentBusinessId ?? ""}
         onSuccess={() => { fetchData(); setSelectedBillIds(new Set()); }}
       />
 

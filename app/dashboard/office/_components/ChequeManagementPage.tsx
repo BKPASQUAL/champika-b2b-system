@@ -42,6 +42,7 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
+  ArrowUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -154,54 +155,117 @@ function ChequeCard({
   onToggle?: () => void;
 }) {
   const isUpdating = cheque.ids.some((id) => updatingId === id);
+
+  // Urgency calculation based on cheque date
+  const today = new Date().toISOString().split("T")[0];
+  const cd = cheque.chequeDate;
+  const daysLeft = cd
+    ? Math.ceil((new Date(cd).getTime() - new Date(today).getTime()) / 86_400_000)
+    : null;
+  const isPending   = cheque.chequeStatus === "Pending";
+  const isDeposited = cheque.chequeStatus === "Deposited";
+  const actionable  = isPending || isDeposited;
+  const isOverdue   = actionable && daysLeft !== null && daysLeft < 0;
+  const isDueToday  = actionable && daysLeft === 0;
+  const isDueSoon   = actionable && daysLeft !== null && daysLeft > 0 && daysLeft <= 3;
+
   return (
     <div className={cn(
-      "rounded-lg border bg-white p-3 space-y-2 transition-all",
+      "rounded-lg border bg-white overflow-hidden transition-all",
       isUpdating && "opacity-60",
-      selected && "border-blue-400 bg-blue-50/30 ring-1 ring-blue-300",
+      selected     && "border-blue-400 ring-1 ring-blue-300",
+      !selected && isOverdue   && "border-red-300",
+      !selected && isDueToday  && "border-orange-300",
+      !selected && isDueSoon   && "border-amber-300",
     )}>
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          {onToggle && (
-            <Checkbox
-              checked={selected}
-              onCheckedChange={onToggle}
-              className="shrink-0"
-              aria-label={`Select cheque ${cheque.chequeNo}`}
-            />
-          )}
-          <span className="font-mono text-sm font-bold text-gray-800">#{cheque.chequeNo || "—"}</span>
-        </div>
-        <span className="text-sm font-bold text-gray-900">{formatCurrency(cheque.amount)}</span>
-      </div>
-      <p className="text-sm font-medium text-gray-700 truncate">{cheque.customerName}</p>
-      <div className="text-xs text-muted-foreground space-y-0.5">
-        <p>{cheque.bankCode ? `${cheque.bankCode}${cheque.bankName ? ` – ${cheque.bankName}` : ""}` : "No bank"}</p>
-        <div className="flex justify-between items-start gap-1">
-          <span>Cheque: {formatDate(cheque.chequeDate)}</span>
-          {cheque.invoiceNos.length > 1 ? (
-            <span className="font-mono text-[10px] bg-amber-50 text-amber-700 border border-amber-200 rounded px-1">
-              {cheque.invoiceNos.length} invoices
-            </span>
-          ) : (
-            <span className="font-mono text-[10px] bg-gray-100 text-gray-500 rounded px-1">
-              {cheque.invoiceNos[0] ?? "N/A"}
-            </span>
-          )}
-        </div>
-        {cheque.depositAccountName && (
-          <p className="text-[10px] text-blue-600 font-medium">→ {cheque.depositAccountName}</p>
-        )}
-      </div>
-      {actions && (
-        <div className="flex gap-1.5 pt-1">
-          {isUpdating ? (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Loader2 className="h-3 w-3 animate-spin" /> Updating…
-            </div>
-          ) : actions}
+      {/* Urgency banner */}
+      {isOverdue && (
+        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500 text-white">
+          <AlertTriangle className="h-3 w-3 shrink-0" />
+          <span className="text-[11px] font-bold flex-1">
+            {isPending ? "Deposit overdue" : "Pass overdue"}
+          </span>
+          <span className="text-[10px] opacity-90">{Math.abs(daysLeft!)}d past due</span>
         </div>
       )}
+      {isDueToday && (
+        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 text-white">
+          <AlertTriangle className="h-3 w-3 shrink-0" />
+          <span className="text-[11px] font-bold">
+            {isPending ? "Deposit today" : "Pass today"}
+          </span>
+        </div>
+      )}
+      {isDueSoon && (
+        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border-b border-amber-200">
+          <Clock className="h-3 w-3 text-amber-600 shrink-0" />
+          <span className="text-[11px] text-amber-700 font-medium">
+            {isPending ? `Deposit in ${daysLeft}d` : `Pass in ${daysLeft}d`}
+          </span>
+        </div>
+      )}
+
+      <div className="p-3 space-y-2">
+        {/* Header row */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            {onToggle && (
+              <Checkbox
+                checked={selected}
+                onCheckedChange={onToggle}
+                className="shrink-0"
+                aria-label={`Select cheque ${cheque.chequeNo}`}
+              />
+            )}
+            <span className="font-mono text-sm font-bold text-gray-800">#{cheque.chequeNo || "—"}</span>
+          </div>
+          <span className="text-sm font-bold text-gray-900">{formatCurrency(cheque.amount)}</span>
+        </div>
+
+        <p className="text-sm font-medium text-gray-700 truncate">{cheque.customerName}</p>
+
+        <div className="text-xs text-muted-foreground space-y-0.5">
+          <p>{cheque.bankCode ? `${cheque.bankCode}${cheque.bankName ? ` – ${cheque.bankName}` : ""}` : "No bank"}</p>
+          <div className="flex justify-between items-start gap-1">
+            <span className={cn(
+              isOverdue  && "text-red-600 font-semibold",
+              isDueToday && "text-orange-600 font-semibold",
+            )}>
+              Cheque: {formatDate(cheque.chequeDate)}
+            </span>
+            {cheque.invoiceNos.length > 1 ? (
+              <span className="font-mono text-[10px] bg-amber-50 text-amber-700 border border-amber-200 rounded px-1">
+                {cheque.invoiceNos.length} invoices
+              </span>
+            ) : (
+              <span className="font-mono text-[10px] bg-gray-100 text-gray-500 rounded px-1">
+                {cheque.invoiceNos[0] ?? "N/A"}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Deposit account — prominent box */}
+        {cheque.depositAccountName && (
+          <div className="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1.5">
+            <Banknote className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-[9px] font-semibold text-blue-500 uppercase tracking-wide leading-none mb-0.5">Deposit Account</p>
+              <p className="text-xs font-bold text-blue-800 truncate">{cheque.depositAccountName}</p>
+            </div>
+          </div>
+        )}
+
+        {actions && (
+          <div className="flex gap-1.5 pt-0.5">
+            {isUpdating ? (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" /> Updating…
+              </div>
+            ) : actions}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -242,13 +306,14 @@ function SectionColumn({
 
 // ─── Theme ─────────────────────────────────────────────────────────────────────
 
-type ThemeColor = "purple" | "red" | "blue" | "orange";
+type ThemeColor = "purple" | "red" | "blue" | "orange" | "gray";
 
 const THEME: Record<ThemeColor, { header: string; iconWrap: string }> = {
   purple: { header: "text-purple-900", iconWrap: "bg-purple-100 text-purple-600" },
   red:    { header: "text-red-900",    iconWrap: "bg-red-100 text-red-600" },
   blue:   { header: "text-blue-900",   iconWrap: "bg-blue-100 text-blue-600" },
   orange: { header: "text-orange-900", iconWrap: "bg-orange-100 text-orange-600" },
+  gray:   { header: "text-gray-900",   iconWrap: "bg-gray-100 text-gray-600" },
 };
 
 // ─── Confirm Action Dialog ─────────────────────────────────────────────────────
@@ -363,7 +428,7 @@ function ConfirmActionDialog({
 // ─── Main Component ────────────────────────────────────────────────────────────
 
 export interface ChequeManagementPageProps {
-  defaultBusinessId: string;
+  defaultBusinessId?: string;   // omit for admin (fetches all)
   portalName: string;
   themeColor: ThemeColor;
   Icon: React.ComponentType<{ className?: string }>;
@@ -377,15 +442,20 @@ export function ChequeManagementPage({
 }: ChequeManagementPageProps) {
   const t = THEME[themeColor];
 
-  const [businessId, setBusinessId] = useState<string>(defaultBusinessId);
+  const [businessId, setBusinessId] = useState<string | null>(defaultBusinessId ?? null);
 
   useEffect(() => {
+    if (!defaultBusinessId) return;   // admin — no context override
     const user = getUserBusinessContext();
     setBusinessId(user?.businessId ?? defaultBusinessId);
   }, [defaultBusinessId]);
 
+  const paymentsUrl = businessId
+    ? `/api/payments?businessId=${businessId}`
+    : `/api/payments`;
+
   const { data: rawPayments = [], loading, refetch } = useCachedFetch<any[]>(
-    `/api/payments?businessId=${businessId}`,
+    paymentsUrl,
     [],
     () => toast.error("Failed to load payments")
   );
@@ -400,6 +470,7 @@ export function ChequeManagementPage({
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [dateType, setDateType] = useState<"cheque" | "payment">("cheque");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
@@ -506,8 +577,15 @@ export function ChequeManagementPage({
       return true;
     });
 
-  const pending   = applyFilters(cheques.filter((c) => c.chequeStatus === "Pending"));
-  const deposited = applyFilters(cheques.filter((c) => c.chequeStatus === "Deposited"));
+  const sortByDate = (list: ChequeRecord[]) =>
+    [...list].sort((a, b) => {
+      const da = a.chequeDate ? new Date(a.chequeDate).getTime() : (sortDir === "asc" ? Infinity : -Infinity);
+      const db = b.chequeDate ? new Date(b.chequeDate).getTime() : (sortDir === "asc" ? Infinity : -Infinity);
+      return sortDir === "asc" ? da - db : db - da;
+    });
+
+  const pending   = sortByDate(applyFilters(cheques.filter((c) => c.chequeStatus === "Pending")));
+  const deposited = sortByDate(applyFilters(cheques.filter((c) => c.chequeStatus === "Deposited")));
   const cleared   = applyFilters(cheques.filter((c) => c.chequeStatus === "Cleared"));
 
   const totalPending   = pending.reduce((s, c) => s + c.amount, 0);
@@ -708,6 +786,16 @@ export function ChequeManagementPage({
           <Input type="date" className="w-[148px]" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
           <span className="text-muted-foreground text-sm shrink-0">to</span>
           <Input type="date" className="w-[148px]" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 shrink-0"
+            onClick={() => setSortDir((d) => d === "asc" ? "desc" : "asc")}
+            title="Toggle cheque date sort order"
+          >
+            <ArrowUpDown className="h-3.5 w-3.5" />
+            {sortDir === "asc" ? "Earliest first" : "Latest first"}
+          </Button>
           {(dateFrom || dateTo || search) && (
             <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setDateFrom(""); setDateTo(""); }}>
               Clear

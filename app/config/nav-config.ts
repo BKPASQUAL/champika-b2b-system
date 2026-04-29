@@ -203,6 +203,11 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           icon: CalendarDays,
         },
         {
+          name: "Cheque Management",
+          href: "/dashboard/admin/cheques",
+          icon: CreditCard,
+        },
+        {
           name: "Cheque Writer",
           href: "/dashboard/admin/cheques/write",
           icon: PenLine,
