@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { AppSidebar } from "@/components/ui/layout/AppSidebar";
 import { MobileNav } from "@/components/ui/layout/MobileNav";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
+import { NotificationBell } from "@/components/ui/layout/NotificationBell";
 import { Loader2 } from "lucide-react";
 import {
   getUserBusinessContext,
@@ -81,6 +82,13 @@ export default function DistributionOfficeLayout({
         <header className="lg:hidden h-16 bg-white border-b flex items-center px-4 shrink-0 z-30">
           <MobileNav role="office" isDistribution={true} />
           <span className="ml-4 font-bold text-gray-700">Distribution</span>
+          <div className="ml-auto">
+            <NotificationBell
+              businessId={BUSINESS_IDS.CHAMPIKA_DISTRIBUTION}
+              chequeRoute="/dashboard/office/distribution/cheques"
+              supplierPaymentsRoute="/dashboard/office/distribution/suppliers/payments"
+            />
+          </div>
         </header>
 
         {/* Desktop Header - Fixed at top */}
@@ -89,6 +97,11 @@ export default function DistributionOfficeLayout({
           <Breadcrumbs />
 
           <div className="flex items-center gap-4">
+            <NotificationBell
+              businessId={BUSINESS_IDS.CHAMPIKA_DISTRIBUTION}
+              chequeRoute="/dashboard/office/distribution/cheques"
+              supplierPaymentsRoute="/dashboard/office/distribution/suppliers/payments"
+            />
             <div
               className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold text-xs"
               title={businessName}

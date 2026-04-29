@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { AppSidebar } from "@/components/ui/layout/AppSidebar";
 import { MobileNav } from "@/components/ui/layout/MobileNav";
+import { NotificationBell } from "@/components/ui/layout/NotificationBell";
 import { Globe } from "lucide-react";
 import {
   getUserBusinessContext,
@@ -113,6 +114,13 @@ export default function OrangeAgencyLayout({
         <header className="lg:hidden h-16 bg-white border-b flex items-center px-4 shrink-0 z-30">
           <MobileNav role="office" isOrange={true} />
           <span className="ml-4 font-bold text-gray-700">Agency Portal</span>
+          <div className="ml-auto">
+            <NotificationBell
+              businessId={BUSINESS_IDS.ORANGE_AGENCY}
+              chequeRoute="/dashboard/office/orange/cheques"
+              supplierPaymentsRoute="/dashboard/office/orange/suppliers/payments"
+            />
+          </div>
         </header>
 
         {/* Desktop Header */}
@@ -129,6 +137,11 @@ export default function OrangeAgencyLayout({
             </div>
           </div>
           <div className="flex items-center gap-4">
+            <NotificationBell
+              businessId={BUSINESS_IDS.ORANGE_AGENCY}
+              chequeRoute="/dashboard/office/orange/cheques"
+              supplierPaymentsRoute="/dashboard/office/orange/suppliers/payments"
+            />
             <div className="h-8 w-8 bg-orange-100 rounded-full flex items-center justify-center text-orange-600 font-bold text-xs">
               OA
             </div>

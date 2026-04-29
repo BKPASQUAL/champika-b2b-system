@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppSidebar } from "@/components/ui/layout/AppSidebar";
 import { MobileNav } from "@/components/ui/layout/MobileNav";
+import { NotificationBell } from "@/components/ui/layout/NotificationBell";
 import { Loader2, Mountain } from "lucide-react";
 import {
   getUserBusinessContext,
@@ -73,6 +74,13 @@ export default function SierraOfficeLayout({
         <header className="lg:hidden h-16 bg-white border-b flex items-center px-4 shrink-0 z-30">
           <MobileNav role="office" isSierra={true} />
           <span className="ml-4 font-bold text-gray-700">Sierra Agency</span>
+          <div className="ml-auto">
+            <NotificationBell
+              businessId={BUSINESS_IDS.SIERRA_AGENCY}
+              chequeRoute="/dashboard/office/sierra/cheques"
+              supplierPaymentsRoute="/dashboard/office/sierra/suppliers/payments"
+            />
+          </div>
         </header>
 
         {/* Desktop Header */}
@@ -87,6 +95,11 @@ export default function SierraOfficeLayout({
             </div>
           </div>
           <div className="flex items-center gap-4">
+            <NotificationBell
+              businessId={BUSINESS_IDS.SIERRA_AGENCY}
+              chequeRoute="/dashboard/office/sierra/cheques"
+              supplierPaymentsRoute="/dashboard/office/sierra/suppliers/payments"
+            />
             <div className="h-8 w-8 bg-purple-100 rounded-full flex items-center justify-center text-purple-600 font-bold text-xs">
               SA
             </div>

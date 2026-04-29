@@ -8,7 +8,7 @@ const withSerwist = withSerwistInit({
 });
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core", "puppeteer"],
+  serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core", "puppeteer", "web-push"],
 };
 
 export default withSerwist(nextConfig);

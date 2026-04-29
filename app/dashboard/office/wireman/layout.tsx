@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { AppSidebar } from "@/components/ui/layout/AppSidebar";
 import { MobileNav } from "@/components/ui/layout/MobileNav";
+import { NotificationBell } from "@/components/ui/layout/NotificationBell";
 import { Zap } from "lucide-react";
 import {
   getUserBusinessContext,
@@ -105,6 +106,13 @@ export default function WiremanAgencyLayout({
         <header className="lg:hidden h-16 bg-white border-b flex items-center px-4 shrink-0 z-30">
           <MobileNav role="office" isWireman={true} />
           <span className="ml-4 font-bold text-gray-700">Wireman Portal</span>
+          <div className="ml-auto">
+            <NotificationBell
+              businessId={BUSINESS_IDS.WIREMAN_AGENCY}
+              chequeRoute="/dashboard/office/wireman/cheques"
+              supplierPaymentsRoute="/dashboard/office/wireman/suppliers/payments"
+            />
+          </div>
         </header>
 
         <header className="hidden lg:flex h-16 bg-white border-b items-center justify-between px-8 shrink-0 z-10">
@@ -120,6 +128,11 @@ export default function WiremanAgencyLayout({
             </div>
           </div>
           <div className="flex items-center gap-4">
+            <NotificationBell
+              businessId={BUSINESS_IDS.WIREMAN_AGENCY}
+              chequeRoute="/dashboard/office/wireman/cheques"
+              supplierPaymentsRoute="/dashboard/office/wireman/suppliers/payments"
+            />
             <div className="h-8 w-8 bg-red-100 rounded-full flex items-center justify-center text-red-600 font-bold text-xs">
               WA
             </div>
