@@ -51,15 +51,15 @@ type ChequeStatus = "Pending" | "Deposited" | "Cleared" | "Bounced" | "Returned"
 type ActionType = "deposit" | "pass" | "return";
 
 interface ChequeRecord {
-  id: string;
+  ids: string[];           // all payment IDs sharing this cheque number
   paymentDate: string;
   chequeDate: string | null;
   chequeNo: string | null;
   customerName: string;
-  invoiceNo: string;
+  invoiceNos: string[];    // all invoice numbers covered by this cheque
   bankName: string | null;
   bankCode: string | null;
-  amount: number;
+  amount: number;          // total across all invoices
   chequeStatus: ChequeStatus;
   depositAccountName: string | null;
   depositAccountId: string | null;
@@ -112,10 +112,19 @@ function ChequeSummary({ cheque }: { cheque: ChequeRecord }) {
       <p className="font-medium text-gray-700">{cheque.customerName}</p>
       <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
         <span>Bank: {cheque.bankCode ? `${cheque.bankCode}${cheque.bankName ? ` – ${cheque.bankName}` : ""}` : "—"}</span>
-        <span>Invoice: {cheque.invoiceNo}</span>
+        <span>
+          {cheque.invoiceNos.length > 1
+            ? `Invoices: ${cheque.invoiceNos.join(", ")}`
+            : `Invoice: ${cheque.invoiceNos[0] ?? "N/A"}`}
+        </span>
         <span>Cheque Date: {formatDate(cheque.chequeDate)}</span>
         <span>Received: {formatDate(cheque.paymentDate)}</span>
       </div>
+      {cheque.ids.length > 1 && (
+        <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+          {cheque.ids.length} invoices — Total: {formatCurrency(cheque.amount)}
+        </div>
+      )}
       {cheque.depositAccountName && (
         <div className="flex items-center gap-2 pt-1 border-t border-gray-200 mt-1">
           <Banknote className="h-3.5 w-3.5 text-blue-500 shrink-0" />
@@ -139,7 +148,7 @@ function ChequeCard({
   actions?: React.ReactNode;
   updatingId: string | null;
 }) {
-  const isUpdating = updatingId === cheque.id;
+  const isUpdating = cheque.ids.some((id) => updatingId === id);
   return (
     <div className={cn("rounded-lg border bg-white p-3 space-y-2 transition-all", isUpdating && "opacity-60")}>
       <div className="flex items-center justify-between gap-2">
@@ -149,9 +158,17 @@ function ChequeCard({
       <p className="text-sm font-medium text-gray-700 truncate">{cheque.customerName}</p>
       <div className="text-xs text-muted-foreground space-y-0.5">
         <p>{cheque.bankCode ? `${cheque.bankCode}${cheque.bankName ? ` – ${cheque.bankName}` : ""}` : "No bank"}</p>
-        <div className="flex justify-between">
+        <div className="flex justify-between items-start gap-1">
           <span>Cheque: {formatDate(cheque.chequeDate)}</span>
-          <span className="font-mono text-[10px] bg-gray-100 text-gray-500 rounded px-1">{cheque.invoiceNo}</span>
+          {cheque.invoiceNos.length > 1 ? (
+            <span className="font-mono text-[10px] bg-amber-50 text-amber-700 border border-amber-200 rounded px-1">
+              {cheque.invoiceNos.length} invoices
+            </span>
+          ) : (
+            <span className="font-mono text-[10px] bg-gray-100 text-gray-500 rounded px-1">
+              {cheque.invoiceNos[0] ?? "N/A"}
+            </span>
+          )}
         </div>
         {cheque.depositAccountName && (
           <p className="text-[10px] text-blue-600 font-medium">→ {cheque.depositAccountName}</p>
@@ -391,26 +408,47 @@ export function ChequeManagementPage({
       .catch(() => {});
   }, []);
 
-  const cheques: ChequeRecord[] = useMemo(
-    () =>
-      rawPayments
-        .filter((p: any) => p.payment_method?.toLowerCase() === "cheque")
-        .map((p: any) => ({
-          id: p.id,
-          paymentDate: p.payment_date,
-          chequeDate: p.cheque_date ?? null,
-          chequeNo: p.cheque_number ?? null,
-          customerName: p.customers?.name || "Unknown",
-          invoiceNo: p.invoices?.invoice_no || "N/A",
-          bankName: p.banks?.bank_name ?? null,
-          bankCode: p.banks?.bank_code ?? null,
-          amount: Number(p.amount),
-          chequeStatus: (p.cheque_status as ChequeStatus) || "Pending",
-          depositAccountName: p.company_accounts?.account_name ?? null,
-          depositAccountId: p.deposit_account_id ?? null,
-        })),
-    [rawPayments]
-  );
+  const cheques: ChequeRecord[] = useMemo(() => {
+    const payments = rawPayments.filter(
+      (p: any) => p.payment_method?.toLowerCase() === "cheque"
+    );
+
+    // Group by chequeNo (non-empty); ungrouped (null/empty) stay separate
+    const groups = new Map<string, any[]>();
+    const ungrouped: any[] = [];
+
+    for (const p of payments) {
+      const no = p.cheque_number?.trim();
+      if (no) {
+        if (!groups.has(no)) groups.set(no, []);
+        groups.get(no)!.push(p);
+      } else {
+        ungrouped.push(p);
+      }
+    }
+
+    const fromGroup = (items: any[]): ChequeRecord => {
+      const first = items[0];
+      return {
+        ids: items.map((p) => p.id),
+        paymentDate: first.payment_date,
+        chequeDate: first.cheque_date ?? null,
+        chequeNo: first.cheque_number ?? null,
+        customerName: first.customers?.name || "Unknown",
+        invoiceNos: items.map((p) => p.invoices?.invoice_no || "N/A"),
+        bankName: first.banks?.bank_name ?? null,
+        bankCode: first.banks?.bank_code ?? null,
+        amount: items.reduce((s, p) => s + Number(p.amount), 0),
+        chequeStatus: (first.cheque_status as ChequeStatus) || "Pending",
+        depositAccountName: first.company_accounts?.account_name ?? null,
+        depositAccountId: first.deposit_account_id ?? null,
+      };
+    };
+
+    const grouped = Array.from(groups.values()).map(fromGroup);
+    const singles = ungrouped.map((p) => fromGroup([p]));
+    return [...grouped, ...singles];
+  }, [rawPayments]);
 
   const applyFilters = (list: ChequeRecord[]) =>
     list.filter((c) => {
@@ -419,7 +457,7 @@ export function ChequeManagementPage({
         if (
           !c.customerName.toLowerCase().includes(q) &&
           !c.chequeNo?.toLowerCase().includes(q) &&
-          !c.invoiceNo.toLowerCase().includes(q) &&
+          !c.invoiceNos.some((inv) => inv.toLowerCase().includes(q)) &&
           !c.bankName?.toLowerCase().includes(q) &&
           !c.bankCode?.toLowerCase().includes(q)
         )
@@ -454,7 +492,7 @@ export function ChequeManagementPage({
           return (
             c.customerName.toLowerCase().includes(q) ||
             c.chequeNo?.toLowerCase().includes(q) ||
-            c.invoiceNo.toLowerCase().includes(q) ||
+            c.invoiceNos.some((inv) => inv.toLowerCase().includes(q)) ||
             c.bankName?.toLowerCase().includes(q) ||
             c.bankCode?.toLowerCase().includes(q)
           );
@@ -472,18 +510,21 @@ export function ChequeManagementPage({
     setActionDialog({ cheque, type });
   };
 
-  const updateStatus = async (id: string, status: ChequeStatus, accountId?: string) => {
-    setUpdatingId(id);
+  const updateStatus = async (ids: string[], status: ChequeStatus, accountId?: string) => {
+    setUpdatingId(ids[0]);
     try {
       const body: Record<string, string> = { chequeStatus: status };
       if (accountId) body.depositAccountId = accountId;
 
-      const res = await fetch(`/api/payments/${id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) throw new Error("Failed");
+      await Promise.all(
+        ids.map((id) =>
+          fetch(`/api/payments/${id}/status`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          }).then((r) => { if (!r.ok) throw new Error("Failed"); })
+        )
+      );
       toast.success(`Cheque marked as ${status}`);
       invalidatePaymentCaches();
       refetch();
@@ -512,7 +553,7 @@ export function ChequeManagementPage({
     setConfirming(true);
     setActionDialog(null);
     await updateStatus(
-      cheque.id,
+      cheque.ids,
       statusMap[type],
       type === "deposit" ? depositAccountId : undefined
     );
@@ -594,7 +635,7 @@ export function ChequeManagementPage({
             empty="No pending cheques"
           >
             {pending.map((c) => (
-              <ChequeCard key={c.id} cheque={c} updatingId={updatingId}
+              <ChequeCard key={c.ids[0]} cheque={c} updatingId={updatingId}
                 actions={
                   <Button
                     size="sm"
@@ -621,7 +662,7 @@ export function ChequeManagementPage({
             empty="No deposited cheques"
           >
             {deposited.map((c) => (
-              <ChequeCard key={c.id} cheque={c} updatingId={updatingId}
+              <ChequeCard key={c.ids[0]} cheque={c} updatingId={updatingId}
                 actions={
                   <>
                     <Button
@@ -659,7 +700,7 @@ export function ChequeManagementPage({
             empty="No cleared cheques"
           >
             {clearedPreview.map((c) => (
-              <ChequeCard key={c.id} cheque={c} updatingId={updatingId} />
+              <ChequeCard key={c.ids[0]} cheque={c} updatingId={updatingId} />
             ))}
             {cleared.length > 4 && (
               <button
@@ -739,7 +780,7 @@ export function ChequeManagementPage({
           {/* List */}
           <div className="flex-1 overflow-y-auto py-2 space-y-2">
             {historyPageItems.map((c) => (
-              <div key={c.id} className="rounded-lg border bg-white p-3 space-y-1.5">
+              <div key={c.ids[0]} className="rounded-lg border bg-white p-3 space-y-1.5">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-mono text-sm font-bold text-gray-800">#{c.chequeNo || "—"}</span>
                   <StatusBadge status={c.chequeStatus} />
@@ -757,7 +798,15 @@ export function ChequeManagementPage({
                   <p className="text-[10px] text-blue-600 font-medium">→ {c.depositAccountName}</p>
                 )}
                 <div className="flex items-center justify-between pt-0.5">
-                  <span className="font-mono text-[10px] text-gray-400 bg-gray-100 rounded px-1.5 py-0.5">{c.invoiceNo}</span>
+                  {c.invoiceNos.length > 1 ? (
+                    <span className="font-mono text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
+                      {c.invoiceNos.length} invoices
+                    </span>
+                  ) : (
+                    <span className="font-mono text-[10px] text-gray-400 bg-gray-100 rounded px-1.5 py-0.5">
+                      {c.invoiceNos[0] ?? "N/A"}
+                    </span>
+                  )}
                   {(c.chequeStatus === "Pending" || c.chequeStatus === "Deposited") && (
                     <div className="flex gap-1">
                       {c.chequeStatus === "Pending" && (
