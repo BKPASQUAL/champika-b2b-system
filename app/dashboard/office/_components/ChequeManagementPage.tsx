@@ -371,6 +371,12 @@ export function ChequeManagementPage({
     () => toast.error("Failed to load payments")
   );
 
+  useEffect(() => {
+    const handler = () => refetch();
+    window.addEventListener("b2b:payment-mutated", handler);
+    return () => window.removeEventListener("b2b:payment-mutated", handler);
+  }, [refetch]);
+
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");

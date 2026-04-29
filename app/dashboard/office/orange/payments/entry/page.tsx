@@ -52,6 +52,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
+import { invalidatePaymentCaches } from "@/hooks/useCachedFetch";
 
 // ─── Local Helpers ─────────────────────────────────────────────────────────────
 const formatCurrency = (amount: number) =>
@@ -217,7 +218,7 @@ export default function OrangePaymentEntryPage() {
         });
         if (res.ok) successCount++; else { console.error(await res.json()); failCount++; }
       }
-      if (successCount > 0) { toast.success(`${successCount} invoice${successCount > 1 ? "s" : ""} settled!`); resetForm(); }
+      if (successCount > 0) { toast.success(`${successCount} invoice${successCount > 1 ? "s" : ""} settled!`); resetForm(); invalidatePaymentCaches(); }
       if (failCount > 0) toast.error(`${failCount} payment(s) failed.`);
     } catch { toast.error("An unexpected error occurred"); } finally { setIsSubmitting(false); }
   };

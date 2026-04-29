@@ -292,6 +292,11 @@ export default function OrangePaymentsPage() {
     refetchAccounts();
   };
 
+  useEffect(() => {
+    window.addEventListener("b2b:payment-mutated", fetchData);
+    return () => window.removeEventListener("b2b:payment-mutated", fetchData);
+  }, []);
+
   const unpaidOrders: Order[] = useMemo(
     () =>
       ordersRaw

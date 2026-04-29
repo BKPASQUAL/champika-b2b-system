@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -61,6 +61,12 @@ export default function WiremanPaymentsPage() {
   } = useCachedFetch<any[]>(`/api/invoices?businessId=${currentBusinessId}`, []);
 
   const loading = l1 || l2;
+
+  useEffect(() => {
+    const handler = () => fetchPayments();
+    window.addEventListener("b2b:payment-mutated", handler);
+    return () => window.removeEventListener("b2b:payment-mutated", handler);
+  }, [fetchPayments]);
 
   const payments: Payment[] = useMemo(
     () =>

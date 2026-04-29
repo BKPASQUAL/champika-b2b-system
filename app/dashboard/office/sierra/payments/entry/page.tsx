@@ -52,6 +52,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
+import { invalidatePaymentCaches } from "@/hooks/useCachedFetch";
 
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat("en-LK", { style: "currency", currency: "LKR", minimumFractionDigits: 2 }).format(amount);
@@ -212,7 +213,7 @@ export default function SierraPaymentEntryPage() {
         });
         if (res.ok) successCount++; else failCount++;
       }
-      if (successCount > 0) { toast.success(`${successCount} invoice${successCount > 1 ? "s" : ""} settled!`); resetForm(); }
+      if (successCount > 0) { toast.success(`${successCount} invoice${successCount > 1 ? "s" : ""} settled!`); resetForm(); invalidatePaymentCaches(); }
       if (failCount > 0) toast.error(`${failCount} payment(s) failed.`);
     } catch { toast.error("An unexpected error occurred"); } finally { setIsSubmitting(false); }
   };

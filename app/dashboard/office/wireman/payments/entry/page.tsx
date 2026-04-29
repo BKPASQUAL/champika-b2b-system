@@ -52,6 +52,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
+import { invalidatePaymentCaches } from "@/hooks/useCachedFetch";
 
 // ─── Local Helpers ────────────────────────────────────────────────────────────
 
@@ -462,6 +463,7 @@ export default function WiremanPaymentEntryPage() {
           `${successCount} invoice${successCount > 1 ? "s" : ""} settled successfully!`
         );
         resetForm();
+        invalidatePaymentCaches();
         // Re-fetch customer list to reflect updated data
         if (businessId) {
           const invRes = await fetch(`/api/invoices?businessId=${businessId}`);

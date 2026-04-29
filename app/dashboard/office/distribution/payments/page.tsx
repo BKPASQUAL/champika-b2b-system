@@ -225,6 +225,12 @@ export default function DistributionPaymentsPage() {
 
   const loading = l1 || l2 || l3 || l4;
 
+  useEffect(() => {
+    const handler = () => { refetchPayments(); refetchOrders(); };
+    window.addEventListener("b2b:payment-mutated", handler);
+    return () => window.removeEventListener("b2b:payment-mutated", handler);
+  }, [refetchPayments, refetchOrders]);
+
   const unpaidOrders = useMemo<Order[]>(
     () =>
       ordersRaw
