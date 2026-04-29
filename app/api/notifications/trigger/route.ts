@@ -5,13 +5,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import webpush from "web-push";
 
-webpush.setVapidDetails(
-  process.env.VAPID_SUBJECT ?? "mailto:admin@example.com",
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "",
-  process.env.VAPID_PRIVATE_KEY ?? ""
-);
-
 const today = () => new Date().toISOString().split("T")[0];
+
+function initVapid() {
+  webpush.setVapidDetails(
+    process.env.VAPID_SUBJECT ?? "mailto:admin@example.com",
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "",
+    process.env.VAPID_PRIVATE_KEY ?? ""
+  );
+}
 
 async function getDueCustomerCheques(businessId: string): Promise<number> {
   const { data } = await supabaseAdmin
@@ -45,6 +47,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  initVapid();
   try {
     const { data: subscriptions, error } = await supabaseAdmin
       .from("push_subscriptions")

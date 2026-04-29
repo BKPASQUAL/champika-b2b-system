@@ -9,18 +9,14 @@ export function usePushNotifications(businessId: string) {
   const [status, setStatus] = useState<PushStatus>("loading");
   const [subscription, setSubscription] = useState<PushSubscription | null>(null);
 
-  const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-
-  // Convert VAPID base64 public key to Uint8Array
-  const urlBase64ToUint8Array = (base64String: string): Uint8Array => {
-    const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-    const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-    const rawData = atob(base64);
-    return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
-  };
+  const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
 
   const checkStatus = useCallback(async () => {
-    if (typeof window === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+    if (
+      typeof window === "undefined" ||
+      !("serviceWorker" in navigator) ||
+      !("PushManager" in window)
+    ) {
       setStatus("unsupported");
       return;
     }
@@ -37,7 +33,7 @@ export function usePushNotifications(businessId: string) {
         setSubscription(existing);
         setStatus("subscribed");
       } else {
-        setStatus(Notification.permission === "granted" ? "default" : "default");
+        setStatus("default");
       }
     } catch {
       setStatus("default");
@@ -63,9 +59,10 @@ export function usePushNotifications(businessId: string) {
       }
 
       const reg = await navigator.serviceWorker.ready;
+      // Modern browsers accept the base64url string directly — no Uint8Array conversion needed
       const pushSub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+        applicationServerKey: vapidKey,
       });
 
       await fetch("/api/notifications/subscribe", {
