@@ -572,9 +572,9 @@ export default function CreateSierraPurchasePage() {
   };
 
   const filteredProducts = products.filter((p) => {
-    const searchLower = searchTerm.toLowerCase();
+    if (items.some((i) => i.productId === p.id)) return false;
 
-    // Show all if search is empty and focused, or filter by name/sku/companyCode/supplier
+    const searchLower = searchTerm.toLowerCase();
     if (searchTerm === "") return true;
 
     return (

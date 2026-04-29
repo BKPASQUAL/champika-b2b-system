@@ -393,7 +393,9 @@ export default function CreateSierraInvoicePage() {
   const extraDiscountAmount = (subtotal * parseNumber(extraDiscount)) / 100;
   const grandTotal = subtotal - extraDiscountAmount;
 
-  const availableProducts = products;
+  const availableProducts = products.filter(
+    (p) => !items.some((i) => i.productId === p.id),
+  );
 
   const currentLiveQty = parseNumber(currentItem.quantity);
   const currentLiveDiscountAmt =
