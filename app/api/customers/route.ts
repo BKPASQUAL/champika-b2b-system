@@ -83,16 +83,31 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const val = customerSchema.parse(body);
 
+    // Duplicate shop name check within the same business
+    const { data: existingShops } = await supabaseAdmin
+      .from("customers")
+      .select("id")
+      .ilike("shop_name", val.shopName.trim())
+      .eq("business_id", val.businessId)
+      .limit(1);
+
+    if (existingShops && existingShops.length > 0) {
+      return NextResponse.json(
+        { error: "A customer with this shop name already exists in this business." },
+        { status: 409 }
+      );
+    }
+
     // Duplicate phone check within the same business (only when phone is provided)
     if (val.phone) {
-      const { data: existing } = await supabaseAdmin
+      const { data: existingPhones } = await supabaseAdmin
         .from("customers")
         .select("id")
         .eq("phone", val.phone)
         .eq("business_id", val.businessId)
-        .maybeSingle();
+        .limit(1);
 
-      if (existing) {
+      if (existingPhones && existingPhones.length > 0) {
         return NextResponse.json(
           { error: "A customer with this phone number already exists in this business." },
           { status: 409 }

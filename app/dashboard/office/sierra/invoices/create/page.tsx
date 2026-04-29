@@ -338,8 +338,8 @@ export default function CreateSierraInvoicePage() {
   };
 
   const handleCreateCustomer = async () => {
-    if (!customerFormData.shopName || !customerFormData.phone) {
-      toast.error("Shop name and phone are required");
+    if (!customerFormData.shopName) {
+      toast.error("Shop name is required");
       return;
     }
     try {

@@ -128,8 +128,8 @@ export default function AgencyCustomersPage() {
   };
 
   const handleSaveCustomer = async () => {
-    if (!formData.shopName || !formData.phone || !formData.route) {
-      toast.error("Please fill required fields (Shop, Phone, Route)");
+    if (!formData.shopName || !formData.route) {
+      toast.error("Please fill required fields (Shop Name, Route)");
       return;
     }
 

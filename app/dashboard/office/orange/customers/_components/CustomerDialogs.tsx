@@ -108,7 +108,7 @@ export function CustomerDialogs({
 
             {/* Phone */}
             <div className="space-y-2">
-              <Label>Phone Number *</Label>
+              <Label>Phone Number (Optional)</Label>
               <Input
                 value={formData.phone}
                 onChange={(e) =>

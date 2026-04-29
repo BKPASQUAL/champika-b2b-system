@@ -6,7 +6,7 @@ import { z } from "zod";
 const customerSchema = z.object({
   shopName: z.string().min(2, "Shop name is required"),
   ownerName: z.string().optional(),
-  phone: z.string().min(9, "Valid phone number is required"),
+  phone: z.string().optional().or(z.literal("")),
   email: z.string().email().optional().or(z.literal("")),
   address: z.string().optional(),
   route: z.string().min(1, "Route is required"),
@@ -24,6 +24,22 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
     const val = customerSchema.parse(body);
+
+    // Duplicate shop name check (excluding this customer)
+    const { data: existingShops } = await supabaseAdmin
+      .from("customers")
+      .select("id")
+      .ilike("shop_name", val.shopName.trim())
+      .eq("business_id", val.businessId)
+      .neq("id", id)
+      .limit(1);
+
+    if (existingShops && existingShops.length > 0) {
+      return NextResponse.json(
+        { error: "A customer with this shop name already exists in this business." },
+        { status: 409 }
+      );
+    }
 
     const { error } = await supabaseAdmin
       .from("customers")
