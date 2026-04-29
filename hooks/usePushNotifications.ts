@@ -4,51 +4,33 @@
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 
-export type PushStatus = "unsupported" | "denied" | "default" | "subscribed" | "loading" | "no-sw";
+export type PushStatus =
+  | "unsupported"
+  | "denied"
+  | "default"
+  | "subscribed"
+  | "loading"
+  | "no-sw"
+  | "localhost";
 
-// Gets an active SW registration — tries existing registrations first,
-// then falls back to registering /sw.js explicitly (needed on iOS PWA first open).
-async function getActiveSW(): Promise<ServiceWorkerRegistration | null> {
-  try {
-    // 1. Check if a registration already exists and is active
-    const registrations = await navigator.serviceWorker.getRegistrations();
-    for (const reg of registrations) {
-      if (reg.active) return reg;
-    }
+function isLocalhost(): boolean {
+  if (typeof window === "undefined") return false;
+  const h = window.location.hostname;
+  return h === "localhost" || h === "127.0.0.1" || h.startsWith("192.168.") || h.startsWith("10.");
+}
 
-    // 2. Try registering /sw.js explicitly (iOS PWA sometimes needs this)
-    let reg: ServiceWorkerRegistration;
-    try {
-      reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
-    } catch {
-      // /sw.js may not exist (dev mode) — fall through
-      return null;
-    }
-
-    // 3. If already active, return immediately
-    if (reg.active) return reg;
-
-    // 4. Wait up to 12 seconds for the SW to finish installing and activate
-    return await new Promise<ServiceWorkerRegistration | null>((resolve) => {
-      const timeout = setTimeout(() => resolve(null), 12_000);
-
-      const sw = reg.installing ?? reg.waiting;
-      if (!sw) { clearTimeout(timeout); resolve(null); return; }
-
-      sw.addEventListener("statechange", () => {
-        if (sw.state === "activated") {
-          clearTimeout(timeout);
-          resolve(reg);
-        }
-      });
-    });
-  } catch {
-    return null;
-  }
+// Wait for an active SW registration up to `ms` milliseconds.
+// Uses navigator.serviceWorker.ready which resolves once any SW is active.
+function waitForSW(ms = 12_000): Promise<ServiceWorkerRegistration | null> {
+  return Promise.race([
+    navigator.serviceWorker.ready.catch(() => null),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
+  ]);
 }
 
 export function usePushNotifications(businessId: string) {
   const [status, setStatus] = useState<PushStatus>("loading");
+  const [swError, setSwError] = useState<string>("");
   const [subscription, setSubscription] = useState<PushSubscription | null>(null);
 
   const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
@@ -64,14 +46,21 @@ export function usePushNotifications(businessId: string) {
       return;
     }
 
+    // Running on local dev server — SW is disabled
+    if (isLocalhost()) {
+      setStatus("localhost");
+      return;
+    }
+
     if (Notification.permission === "denied") {
       setStatus("denied");
       return;
     }
 
     try {
-      const reg = await getActiveSW();
+      const reg = await waitForSW(12_000);
       if (!reg) {
+        setSwError("Service worker did not become active within 12 s");
         setStatus("no-sw");
         return;
       }
@@ -82,8 +71,9 @@ export function usePushNotifications(businessId: string) {
       } else {
         setStatus("default");
       }
-    } catch {
-      setStatus("default");
+    } catch (e: any) {
+      setSwError(e?.message ?? "Unknown SW error");
+      setStatus("no-sw");
     }
   }, []);
 
@@ -93,7 +83,7 @@ export function usePushNotifications(businessId: string) {
 
   const subscribe = useCallback(async (): Promise<boolean> => {
     if (!vapidKey) {
-      toast.error("Push not configured — VAPID keys not set on this server.");
+      toast.error("VAPID public key not set — add it to Vercel environment variables.");
       return false;
     }
 
@@ -102,7 +92,7 @@ export function usePushNotifications(businessId: string) {
       const permission = await Notification.requestPermission();
       if (permission === "denied") {
         setStatus("denied");
-        toast.error("Notifications blocked. Allow them in Settings → Safari → this site → Notifications.");
+        toast.error("Notifications blocked. Go to Settings → Safari → this site → allow Notifications.");
         return false;
       }
       if (permission !== "granted") {
@@ -110,10 +100,10 @@ export function usePushNotifications(businessId: string) {
         return false;
       }
 
-      const reg = await getActiveSW();
+      const reg = await waitForSW(12_000);
       if (!reg) {
         setStatus("no-sw");
-        toast.error("Service worker not ready. Close and re-open the app from your Home Screen, then try again.");
+        toast.error("Service worker not ready. Close the app fully, reopen from Home Screen, and try again.");
         return false;
       }
 
@@ -128,15 +118,18 @@ export function usePushNotifications(businessId: string) {
         body: JSON.stringify({ subscription: pushSub.toJSON(), businessId }),
       });
 
-      if (!res.ok) throw new Error("Server failed to save subscription");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? `Server error ${res.status}`);
+      }
 
       setSubscription(pushSub);
       setStatus("subscribed");
-      toast.success("Push notifications enabled!");
+      toast.success("Push notifications enabled on this device!");
       return true;
     } catch (err: any) {
       console.error("Push subscribe error:", err);
-      toast.error(err?.message ?? "Could not enable push notifications. Try again.");
+      toast.error(err?.message ?? "Could not enable push notifications.");
       setStatus("default");
       return false;
     }
@@ -155,12 +148,11 @@ export function usePushNotifications(businessId: string) {
       setStatus("default");
       toast.success("Push notifications disabled.");
       return true;
-    } catch (err) {
-      console.error("Push unsubscribe error:", err);
+    } catch {
       toast.error("Could not disable. Try again.");
       return false;
     }
   }, [subscription]);
 
-  return { status, subscribe, unsubscribe };
+  return { status, swError, subscribe, unsubscribe };
 }

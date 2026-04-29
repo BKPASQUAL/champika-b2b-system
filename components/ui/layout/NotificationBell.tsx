@@ -38,7 +38,7 @@ export function NotificationBell({
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const { status: pushStatus, subscribe, unsubscribe } = usePushNotifications(businessId);
+  const { status: pushStatus, swError, subscribe, unsubscribe } = usePushNotifications(businessId);
 
   const today = new Date().toISOString().split("T")[0];
 
@@ -322,13 +322,16 @@ export function NotificationBell({
                       <span className="text-[11px] font-semibold text-green-700">Push notifications enabled</span></>
                     ) : pushStatus === "denied" ? (
                       <><span className="h-2 w-2 rounded-full bg-red-400 shrink-0" />
-                      <span className="text-[11px] font-medium text-red-600">Blocked in browser settings</span></>
+                      <span className="text-[11px] font-medium text-red-600">Blocked in settings</span></>
                     ) : pushStatus === "loading" ? (
                       <><span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
                       <span className="text-[11px] font-medium text-gray-500">Checking…</span></>
+                    ) : pushStatus === "localhost" ? (
+                      <><span className="h-2 w-2 rounded-full bg-gray-400 shrink-0" />
+                      <span className="text-[11px] font-medium text-gray-500">Dev mode — not available</span></>
                     ) : pushStatus === "no-sw" ? (
                       <><span className="h-2 w-2 rounded-full bg-orange-400 shrink-0" />
-                      <span className="text-[11px] font-medium text-orange-700">Not available here</span></>
+                      <span className="text-[11px] font-medium text-orange-700">Service worker not ready</span></>
                     ) : (
                       <><span className="h-2 w-2 rounded-full bg-gray-300 shrink-0" />
                       <span className="text-[11px] font-medium text-gray-500">Not yet enabled</span></>
@@ -354,15 +357,21 @@ export function NotificationBell({
                   ) : null}
                 </div>
 
-                {/* Contextual hint */}
+                {/* Contextual hints */}
+                {pushStatus === "localhost" && (
+                  <p className="text-[10px] text-gray-500 leading-snug">
+                    Push only works on the deployed site. Open the Vercel URL on your phone, add to Home Screen, then enable.
+                  </p>
+                )}
                 {pushStatus === "no-sw" && (
                   <p className="text-[10px] text-orange-600 leading-snug">
-                    Close this app completely and re-open it from your Home Screen icon, then try again.
+                    Close the app fully, reopen from Home Screen, and try again.
+                    {swError ? ` (${swError})` : ""}
                   </p>
                 )}
                 {pushStatus === "denied" && (
                   <p className="text-[10px] text-red-500 leading-snug">
-                    Go to your browser / phone settings, find this site, and allow notifications.
+                    iPhone: Settings → Safari → Advanced → Website Data, or Settings → Notifications → Safari.
                   </p>
                 )}
               </div>
