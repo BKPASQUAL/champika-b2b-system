@@ -310,31 +310,61 @@ export function NotificationBell({
             </div>
           )}
 
-          {/* Footer — push notification toggle + hint */}
-          <div className="px-4 py-2.5 border-t border-gray-100 bg-gray-50 flex flex-col gap-1.5">
+          {/* Footer — push notification status + toggle */}
+          <div className="px-4 py-3 border-t border-gray-100 bg-gray-50 flex flex-col gap-2">
             {pushStatus !== "unsupported" && (
-              <button
-                onClick={() => pushStatus === "subscribed" ? unsubscribe() : subscribe()}
-                disabled={pushStatus === "loading" || pushStatus === "denied"}
-                className={cn(
-                  "w-full flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-[11px] font-medium transition-colors",
-                  pushStatus === "subscribed"
-                    ? "bg-green-50 text-green-700 hover:bg-red-50 hover:text-red-700 border border-green-200 hover:border-red-200"
-                    : pushStatus === "denied"
-                    ? "bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200"
-                    : "bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200"
-                )}
-              >
+              <div className="flex items-center justify-between gap-2">
+                {/* Status label */}
+                <div className="flex items-center gap-1.5">
+                  {pushStatus === "subscribed" ? (
+                    <>
+                      <span className="h-2 w-2 rounded-full bg-green-500 shrink-0" />
+                      <span className="text-[11px] font-semibold text-green-700">
+                        Push notifications enabled
+                      </span>
+                    </>
+                  ) : pushStatus === "denied" ? (
+                    <>
+                      <span className="h-2 w-2 rounded-full bg-gray-400 shrink-0" />
+                      <span className="text-[11px] font-medium text-gray-500">
+                        Blocked in browser settings
+                      </span>
+                    </>
+                  ) : pushStatus === "loading" ? (
+                    <>
+                      <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
+                      <span className="text-[11px] font-medium text-gray-500">
+                        Checking status…
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="h-2 w-2 rounded-full bg-gray-300 shrink-0" />
+                      <span className="text-[11px] font-medium text-gray-500">
+                        Not yet enabled
+                      </span>
+                    </>
+                  )}
+                </div>
+
+                {/* Action button */}
                 {pushStatus === "subscribed" ? (
-                  <><BellRing className="h-3 w-3" /> Push alerts on — click to disable</>
-                ) : pushStatus === "denied" ? (
-                  <><BellOff className="h-3 w-3" /> Push blocked in browser settings</>
-                ) : pushStatus === "loading" ? (
-                  <><Bell className="h-3 w-3" /> Checking…</>
-                ) : (
-                  <><Bell className="h-3 w-3" /> Enable push alerts on this device</>
-                )}
-              </button>
+                  <button
+                    onClick={() => unsubscribe()}
+                    className="text-[11px] font-medium text-red-600 hover:text-red-700 hover:underline shrink-0"
+                  >
+                    Disable
+                  </button>
+                ) : pushStatus === "default" ? (
+                  <button
+                    onClick={() => subscribe()}
+                    className="shrink-0 flex items-center gap-1 text-[11px] font-semibold text-white bg-blue-600 hover:bg-blue-700 px-2.5 py-1 rounded-md transition-colors"
+                  >
+                    <BellRing className="h-3 w-3" />
+                    Enable
+                  </button>
+                ) : null}
+              </div>
             )}
             {total > 0 && (
               <p className="text-[10px] text-muted-foreground text-center">
