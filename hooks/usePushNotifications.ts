@@ -2,11 +2,12 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { toast } from "sonner";
 
-export type PushStatus = "unsupported" | "denied" | "default" | "subscribed" | "loading";
+export type PushStatus = "unsupported" | "denied" | "default" | "subscribed" | "loading" | "no-sw";
 
-// Resolves to the SW registration, or null if none is active within the timeout
-function swReady(ms = 3000): Promise<ServiceWorkerRegistration | null> {
+// Resolves to the active SW registration, or null if none becomes active within ms
+function swReady(ms = 4000): Promise<ServiceWorkerRegistration | null> {
   return Promise.race([
     navigator.serviceWorker.ready,
     new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
@@ -36,10 +37,10 @@ export function usePushNotifications(businessId: string) {
     }
 
     try {
-      const reg = await swReady();
+      const reg = await swReady(3000);
       if (!reg) {
-        // SW not active (dev mode or not yet installed) — show button but not subscribed
-        setStatus("default");
+        // SW not active — dev mode or PWA not installed
+        setStatus("no-sw");
         return;
       }
       const existing = await reg.pushManager.getSubscription();
@@ -60,22 +61,27 @@ export function usePushNotifications(businessId: string) {
 
   const subscribe = useCallback(async (): Promise<boolean> => {
     if (!vapidKey) {
-      console.warn("NEXT_PUBLIC_VAPID_PUBLIC_KEY not set — push not configured yet");
+      toast.error("Push not configured — NEXT_PUBLIC_VAPID_PUBLIC_KEY is missing in .env.local");
       return false;
     }
 
     setStatus("loading");
     try {
       const permission = await Notification.requestPermission();
-      if (permission !== "granted") {
+      if (permission === "denied") {
         setStatus("denied");
+        toast.error("Notifications blocked. Allow them in your browser / phone settings and try again.");
+        return false;
+      }
+      if (permission !== "granted") {
+        setStatus("default");
         return false;
       }
 
-      const reg = await swReady(8000);
+      const reg = await swReady(6000);
       if (!reg) {
-        console.warn("Service worker not active — open the installed PWA to enable push");
-        setStatus("default");
+        setStatus("no-sw");
+        toast.error("Push only works on the installed PWA. Install the app on your phone first, then enable from there.");
         return false;
       }
 
@@ -84,17 +90,23 @@ export function usePushNotifications(businessId: string) {
         applicationServerKey: vapidKey,
       });
 
-      await fetch("/api/notifications/subscribe", {
+      const res = await fetch("/api/notifications/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ subscription: pushSub.toJSON(), businessId }),
       });
 
+      if (!res.ok) {
+        throw new Error("Failed to save subscription on server");
+      }
+
       setSubscription(pushSub);
       setStatus("subscribed");
+      toast.success("Push notifications enabled on this device!");
       return true;
-    } catch (err) {
+    } catch (err: any) {
       console.error("Push subscribe error:", err);
+      toast.error(err?.message ?? "Could not enable push notifications. Try again.");
       setStatus("default");
       return false;
     }
@@ -111,9 +123,11 @@ export function usePushNotifications(businessId: string) {
       await subscription.unsubscribe();
       setSubscription(null);
       setStatus("default");
+      toast.success("Push notifications disabled for this device.");
       return true;
     } catch (err) {
       console.error("Push unsubscribe error:", err);
+      toast.error("Could not disable push notifications. Try again.");
       return false;
     }
   }, [subscription]);

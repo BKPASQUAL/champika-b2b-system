@@ -5,7 +5,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, Banknote, ArrowUpCircle, Clock, CheckCircle2, X, BellRing, BellOff } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { usePushNotifications, type PushStatus } from "@/hooks/usePushNotifications";
 
 interface NotificationItem {
   id: string;
@@ -313,57 +313,58 @@ export function NotificationBell({
           {/* Footer — push notification status + toggle */}
           <div className="px-4 py-3 border-t border-gray-100 bg-gray-50 flex flex-col gap-2">
             {pushStatus !== "unsupported" && (
-              <div className="flex items-center justify-between gap-2">
-                {/* Status label */}
-                <div className="flex items-center gap-1.5">
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  {/* Status dot + label */}
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {pushStatus === "subscribed" ? (
+                      <><span className="h-2 w-2 rounded-full bg-green-500 shrink-0" />
+                      <span className="text-[11px] font-semibold text-green-700">Push notifications enabled</span></>
+                    ) : pushStatus === "denied" ? (
+                      <><span className="h-2 w-2 rounded-full bg-red-400 shrink-0" />
+                      <span className="text-[11px] font-medium text-red-600">Blocked in browser settings</span></>
+                    ) : pushStatus === "loading" ? (
+                      <><span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
+                      <span className="text-[11px] font-medium text-gray-500">Checking…</span></>
+                    ) : pushStatus === "no-sw" ? (
+                      <><span className="h-2 w-2 rounded-full bg-orange-400 shrink-0" />
+                      <span className="text-[11px] font-medium text-orange-700">Not available here</span></>
+                    ) : (
+                      <><span className="h-2 w-2 rounded-full bg-gray-300 shrink-0" />
+                      <span className="text-[11px] font-medium text-gray-500">Not yet enabled</span></>
+                    )}
+                  </div>
+
+                  {/* Action button */}
                   {pushStatus === "subscribed" ? (
-                    <>
-                      <span className="h-2 w-2 rounded-full bg-green-500 shrink-0" />
-                      <span className="text-[11px] font-semibold text-green-700">
-                        Push notifications enabled
-                      </span>
-                    </>
-                  ) : pushStatus === "denied" ? (
-                    <>
-                      <span className="h-2 w-2 rounded-full bg-gray-400 shrink-0" />
-                      <span className="text-[11px] font-medium text-gray-500">
-                        Blocked in browser settings
-                      </span>
-                    </>
-                  ) : pushStatus === "loading" ? (
-                    <>
-                      <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
-                      <span className="text-[11px] font-medium text-gray-500">
-                        Checking status…
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="h-2 w-2 rounded-full bg-gray-300 shrink-0" />
-                      <span className="text-[11px] font-medium text-gray-500">
-                        Not yet enabled
-                      </span>
-                    </>
-                  )}
+                    <button
+                      onClick={() => unsubscribe()}
+                      className="text-[11px] font-medium text-red-600 hover:text-red-700 hover:underline shrink-0"
+                    >
+                      Disable
+                    </button>
+                  ) : pushStatus === "default" ? (
+                    <button
+                      onClick={() => subscribe()}
+                      className="shrink-0 flex items-center gap-1 text-[11px] font-semibold text-white bg-blue-600 hover:bg-blue-700 px-2.5 py-1 rounded-md transition-colors"
+                    >
+                      <BellRing className="h-3 w-3" />
+                      Enable
+                    </button>
+                  ) : null}
                 </div>
 
-                {/* Action button */}
-                {pushStatus === "subscribed" ? (
-                  <button
-                    onClick={() => unsubscribe()}
-                    className="text-[11px] font-medium text-red-600 hover:text-red-700 hover:underline shrink-0"
-                  >
-                    Disable
-                  </button>
-                ) : pushStatus === "default" ? (
-                  <button
-                    onClick={() => subscribe()}
-                    className="shrink-0 flex items-center gap-1 text-[11px] font-semibold text-white bg-blue-600 hover:bg-blue-700 px-2.5 py-1 rounded-md transition-colors"
-                  >
-                    <BellRing className="h-3 w-3" />
-                    Enable
-                  </button>
-                ) : null}
+                {/* Contextual hint */}
+                {pushStatus === "no-sw" && (
+                  <p className="text-[10px] text-orange-600 leading-snug">
+                    Install this app on your phone (Add to Home Screen), then open it and enable push from there.
+                  </p>
+                )}
+                {pushStatus === "denied" && (
+                  <p className="text-[10px] text-red-500 leading-snug">
+                    Go to your browser / phone settings, find this site, and allow notifications.
+                  </p>
+                )}
               </div>
             )}
             {total > 0 && (
