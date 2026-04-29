@@ -31,6 +31,7 @@ import {
   HardDrive,
   ClipboardList,
   CalendarDays,
+  PenLine,
 } from "lucide-react";
 
 export type UserRole = "admin" | "office" | "rep" | "delivery";
@@ -200,6 +201,11 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           name: "Cheque Calendar",
           href: "/dashboard/admin/calendar",
           icon: CalendarDays,
+        },
+        {
+          name: "Cheque Writer",
+          href: "/dashboard/admin/cheques/write",
+          icon: PenLine,
         },
         {
           name: "Expenses",

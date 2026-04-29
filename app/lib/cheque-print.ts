@@ -8,20 +8,44 @@
  * All positions are in millimetres from top-left corner.
  */
 
-// ─── Amount to Words ──────────────────────────────────────────────────────────
+// ─── Amount to Words (Sri Lanka cheque-English standard) ─────────────────────
 
 const ones = [
   "", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
   "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen",
   "Seventeen", "Eighteen", "Nineteen",
 ];
-const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+const tensWords = [
+  "", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety",
+];
 
+// 1–99: compounds 21–99 are hyphenated (Twenty-One, Forty-Five, Ninety-Nine)
+function wordifyTens(n: number): string {
+  if (n < 20) return ones[n];
+  const o = n % 10;
+  return o ? `${tensWords[Math.floor(n / 10)]}-${ones[o]}` : tensWords[Math.floor(n / 10)];
+}
+
+// 1–999: "One Hundred and Twenty-Five", "Three Hundred"
 function wordifyHundreds(n: number): string {
   if (n === 0) return "";
-  if (n < 20) return ones[n];
-  if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 ? " " + ones[n % 10] : "");
-  return ones[Math.floor(n / 100)] + " Hundred" + (n % 100 ? " " + wordifyHundreds(n % 100) : "");
+  if (n < 100) return wordifyTens(n);
+  const rem = n % 100;
+  return rem
+    ? `${ones[Math.floor(n / 100)]} Hundred and ${wordifyTens(rem)}`
+    : `${ones[Math.floor(n / 100)]} Hundred`;
+}
+
+// 1–99,999: inserts "and" before a sub-100 remainder after thousands
+// e.g. 1050 → "One Thousand and Fifty", 1250 → "One Thousand Two Hundred and Fifty"
+function wordifyBelowLakh(n: number): string {
+  if (n === 0) return "";
+  if (n < 1000) return wordifyHundreds(n);
+  const th = Math.floor(n / 1000);
+  const rem = n % 1000;
+  const base = `${wordifyHundreds(th)} Thousand`;
+  if (rem === 0) return base;
+  return rem < 100 ? `${base} and ${wordifyHundreds(rem)}` : `${base} ${wordifyHundreds(rem)}`;
 }
 
 export function amountToWords(amount: number): string {
@@ -31,31 +55,33 @@ export function amountToWords(amount: number): string {
 
   if (rupees === 0 && cents === 0) return "Zero Only";
 
-  let words = "";
+  const groups: string[] = [];
 
   if (rupees >= 10_000_000) {
-    words += wordifyHundreds(Math.floor(rupees / 10_000_000)) + " Crore ";
-    const rem = rupees % 10_000_000;
-    if (rem > 0) words += wordifyHundreds(Math.floor(rem / 100_000)) + " Lakh " + wordifyHundreds(rem % 100_000) + " ";
+    groups.push(`${wordifyHundreds(Math.floor(rupees / 10_000_000))} Crore`);
+    const rem1 = rupees % 10_000_000;
+    if (rem1 >= 100_000) {
+      groups.push(`${wordifyHundreds(Math.floor(rem1 / 100_000))} Lakh`);
+      const rem2 = rem1 % 100_000;
+      if (rem2 > 0) groups.push(wordifyBelowLakh(rem2));
+    } else if (rem1 > 0) {
+      groups.push(wordifyBelowLakh(rem1));
+    }
   } else if (rupees >= 100_000) {
-    words += wordifyHundreds(Math.floor(rupees / 100_000)) + " Lakh ";
+    groups.push(`${wordifyHundreds(Math.floor(rupees / 100_000))} Lakh`);
     const rem = rupees % 100_000;
-    if (rem > 0) words += wordifyHundreds(Math.floor(rem / 1000)) + " Thousand " + wordifyHundreds(rem % 1000) + " ";
-  } else if (rupees >= 1000) {
-    words += wordifyHundreds(Math.floor(rupees / 1000)) + " Thousand ";
-    const rem = rupees % 1000;
-    if (rem > 0) words += wordifyHundreds(rem) + " ";
+    if (rem > 0) groups.push(wordifyBelowLakh(rem));
   } else if (rupees > 0) {
-    words += wordifyHundreds(rupees) + " ";
+    groups.push(wordifyBelowLakh(rupees));
   }
 
-  words = words.trim();
+  let result = groups.join(" ");
 
   if (cents > 0) {
-    words += ` and ${wordifyHundreds(cents)} Cents`;
+    result += ` and Cents ${wordifyTens(cents)}`;
   }
 
-  return words + " Only";
+  return result.trim() + " Only";
 }
 
 // ─── Cheque Print Templates ───────────────────────────────────────────────────

@@ -5,6 +5,14 @@ import { useState, useEffect, useCallback } from "react";
 
 export type PushStatus = "unsupported" | "denied" | "default" | "subscribed" | "loading";
 
+// Resolves to the SW registration, or null if none is active within the timeout
+function swReady(ms = 3000): Promise<ServiceWorkerRegistration | null> {
+  return Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
+  ]);
+}
+
 export function usePushNotifications(businessId: string) {
   const [status, setStatus] = useState<PushStatus>("loading");
   const [subscription, setSubscription] = useState<PushSubscription | null>(null);
@@ -15,7 +23,8 @@ export function usePushNotifications(businessId: string) {
     if (
       typeof window === "undefined" ||
       !("serviceWorker" in navigator) ||
-      !("PushManager" in window)
+      !("PushManager" in window) ||
+      !("Notification" in window)
     ) {
       setStatus("unsupported");
       return;
@@ -27,7 +36,12 @@ export function usePushNotifications(businessId: string) {
     }
 
     try {
-      const reg = await navigator.serviceWorker.ready;
+      const reg = await swReady();
+      if (!reg) {
+        // SW not active (dev mode or not yet installed) — show button but not subscribed
+        setStatus("default");
+        return;
+      }
       const existing = await reg.pushManager.getSubscription();
       if (existing) {
         setSubscription(existing);
@@ -46,7 +60,7 @@ export function usePushNotifications(businessId: string) {
 
   const subscribe = useCallback(async (): Promise<boolean> => {
     if (!vapidKey) {
-      console.warn("NEXT_PUBLIC_VAPID_PUBLIC_KEY not set");
+      console.warn("NEXT_PUBLIC_VAPID_PUBLIC_KEY not set — push not configured yet");
       return false;
     }
 
@@ -58,8 +72,13 @@ export function usePushNotifications(businessId: string) {
         return false;
       }
 
-      const reg = await navigator.serviceWorker.ready;
-      // Modern browsers accept the base64url string directly — no Uint8Array conversion needed
+      const reg = await swReady(8000);
+      if (!reg) {
+        console.warn("Service worker not active — open the installed PWA to enable push");
+        setStatus("default");
+        return false;
+      }
+
       const pushSub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: vapidKey,
