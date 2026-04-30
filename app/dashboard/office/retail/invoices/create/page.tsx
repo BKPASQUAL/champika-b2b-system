@@ -204,8 +204,8 @@ export default function CreateRetailInvoicePage() {
 
         const retailCustomers = customersData.filter((c: any) => {
           return (
-            c.business_id === resolvedBusinessId ||
-            c.businessId === resolvedBusinessId
+            c.business_id === BUSINESS_IDS.CHAMPIKA_RETAIL ||
+            c.businessId === BUSINESS_IDS.CHAMPIKA_RETAIL
           );
         });
 
