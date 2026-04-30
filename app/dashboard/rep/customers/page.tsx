@@ -40,6 +40,7 @@ import {
   Wallet,
   Filter,
   Plus,
+  Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { TablePagination } from "@/components/ui/TablePagination";
@@ -70,6 +71,7 @@ const emptyForm = {
   address: "",
   route: "General",
   creditLimit: 0,
+  status: "Active" as CustomerStatus,
 };
 
 export default function RepCustomersPage() {
@@ -87,11 +89,27 @@ export default function RepCustomersPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Add Customer Dialog
+  // Add / Edit Customer Dialog
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [saving, setSaving] = useState(false);
   const [routeOptions, setRouteOptions] = useState<{ id: string; name: string }[]>([]);
   const [formData, setFormData] = useState(emptyForm);
+
+  const openEdit = (customer: Customer) => {
+    setEditingCustomer(customer);
+    setFormData({
+      shopName: customer.shopName,
+      ownerName: customer.ownerName,
+      phone: customer.phone,
+      email: customer.email,
+      address: customer.address,
+      route: customer.route || "General",
+      creditLimit: customer.creditLimit,
+      status: customer.status,
+    });
+    setIsAddOpen(true);
+  };
 
   const fetchMyCustomers = async () => {
     try {
@@ -155,7 +173,13 @@ export default function RepCustomersPage() {
       .catch(console.error);
   }, [isAddOpen]);
 
-  const handleAddCustomer = async () => {
+  const closeDialog = () => {
+    setIsAddOpen(false);
+    setEditingCustomer(null);
+    setFormData(emptyForm);
+  };
+
+  const handleSaveCustomer = async () => {
     if (!formData.shopName.trim()) {
       toast.error("Shop name is required.");
       return;
@@ -166,26 +190,30 @@ export default function RepCustomersPage() {
     }
     try {
       setSaving(true);
-      const res = await fetch("/api/customers", {
-        method: "POST",
+      const isEdit = !!editingCustomer;
+      const url = isEdit
+        ? `/api/customers/${editingCustomer.id}`
+        : "/api/customers";
+      const res = await fetch(url, {
+        method: isEdit ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...formData,
+          status: isEdit ? formData.status : "Active",
           businessId,
-          assignedRepId: repId,
+          ...(isEdit ? {} : { assignedRepId: repId }),
         }),
       });
       const json = await res.json();
       if (!res.ok) {
-        toast.error(json.error || "Failed to create customer.");
+        toast.error(json.error || `Failed to ${isEdit ? "update" : "create"} customer.`);
         return;
       }
-      toast.success("Customer created successfully.");
-      setIsAddOpen(false);
-      setFormData(emptyForm);
+      toast.success(`Customer ${isEdit ? "updated" : "created"} successfully.`);
+      closeDialog();
       fetchMyCustomers();
     } catch {
-      toast.error("Failed to create customer.");
+      toast.error("Something went wrong.");
     } finally {
       setSaving(false);
     }
@@ -389,7 +417,7 @@ export default function RepCustomersPage() {
                     </Badge>
                   </div>
 
-                  {/* Bottom row: phone / route / outstanding */}
+                  {/* Bottom row: phone / route / outstanding / edit */}
                   <div className="flex items-center justify-between gap-2 pt-1 border-t">
                     <div className="flex flex-col gap-0.5 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">
@@ -399,19 +427,29 @@ export default function RepCustomersPage() {
                         <MapPin className="h-3 w-3" /> {customer.route || "—"}
                       </span>
                     </div>
-                    <div className="flex flex-col items-end gap-0.5">
-                      <span
-                        className={`text-sm font-semibold ${
-                          customer.outstandingBalance > 0
-                            ? "text-red-600"
-                            : "text-gray-600"
-                        }`}
+                    <div className="flex items-center gap-2">
+                      <div className="flex flex-col items-end gap-0.5">
+                        <span
+                          className={`text-sm font-semibold ${
+                            customer.outstandingBalance > 0
+                              ? "text-red-600"
+                              : "text-gray-600"
+                          }`}
+                        >
+                          LKR {customer.outstandingBalance.toLocaleString()}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">
+                          Limit: {customer.creditLimit.toLocaleString()}
+                        </span>
+                      </div>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 shrink-0"
+                        onClick={() => openEdit(customer)}
                       >
-                        LKR {customer.outstandingBalance.toLocaleString()}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">
-                        Limit: {customer.creditLimit.toLocaleString()}
-                      </span>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -428,6 +466,7 @@ export default function RepCustomersPage() {
                   <TableHead>Route</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Outstanding (LKR)</TableHead>
+                  <TableHead className="w-10"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -498,6 +537,16 @@ export default function RepCustomersPage() {
                           </span>
                         </div>
                       </TableCell>
+                      <TableCell>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8"
+                          onClick={() => openEdit(customer)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))
                 )}
@@ -516,23 +565,21 @@ export default function RepCustomersPage() {
         </CardContent>
       </Card>
 
-      {/* Add New Customer Dialog */}
-      <Dialog
-        open={isAddOpen}
-        onOpenChange={(open) => {
-          setIsAddOpen(open);
-          if (!open) setFormData(emptyForm);
-        }}
-      >
+      {/* Add / Edit Customer Dialog */}
+      <Dialog open={isAddOpen} onOpenChange={(open) => { if (!open) closeDialog(); }}>
         <DialogContent
           className="max-w-lg max-h-[90vh] overflow-y-auto"
           onInteractOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}
         >
           <DialogHeader>
-            <DialogTitle>Add New Customer</DialogTitle>
+            <DialogTitle>
+              {editingCustomer ? "Edit Customer" : "Add New Customer"}
+            </DialogTitle>
             <DialogDescription>
-              Enter the new customer&apos;s details. They will be assigned to you automatically.
+              {editingCustomer
+                ? "Update the customer's details below."
+                : "Enter the new customer's details. They will be assigned to you automatically."}
             </DialogDescription>
           </DialogHeader>
 
@@ -643,19 +690,37 @@ export default function RepCustomersPage() {
                 }
               />
             </div>
+
+            {/* Status — only shown when editing */}
+            {editingCustomer && (
+              <div className="col-span-2 space-y-2">
+                <Label>Status</Label>
+                <Select
+                  value={formData.status}
+                  onValueChange={(val) =>
+                    setFormData({ ...formData, status: val as CustomerStatus })
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Active">Active</SelectItem>
+                    <SelectItem value="Inactive">Inactive</SelectItem>
+                    <SelectItem value="Blocked">Blocked</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
 
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsAddOpen(false)}
-              disabled={saving}
-            >
+            <Button variant="outline" onClick={closeDialog} disabled={saving}>
               Cancel
             </Button>
-            <Button onClick={handleAddCustomer} disabled={saving}>
+            <Button onClick={handleSaveCustomer} disabled={saving}>
               {saving && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
-              Add Customer
+              {editingCustomer ? "Update Customer" : "Add Customer"}
             </Button>
           </DialogFooter>
         </DialogContent>
