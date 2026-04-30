@@ -20,6 +20,7 @@ import {
   Wallet,
   CalendarDays,
   ScrollText,
+  Printer,
 } from "lucide-react";
 
 interface DistNavItem {
@@ -164,6 +165,12 @@ export const distributionNavItems: DistNavSection[] = [
         href: "/dashboard/office/distribution/calendar",
         icon: CalendarDays,
         description: "View customer & supplier cheques by date",
+      },
+      {
+        name: "Cheque Report",
+        href: "/dashboard/office/distribution/cheques/report",
+        icon: Printer,
+        description: "Generate cheque date reports",
       },
     ],
   },

@@ -179,7 +179,7 @@ function buildPanAsiaHTML(data: ChequeData): string {
   @page { size: 178mm 90mm; margin: 0; }
   html, body { margin: 0; padding: 0; background: transparent; }
   .page {
-    width: 178mm;
+    width: 174mm;
     height: 90mm;
     overflow: hidden;
     position: relative;

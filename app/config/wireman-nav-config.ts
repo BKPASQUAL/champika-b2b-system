@@ -15,6 +15,7 @@ import {
   ClipboardCheck,
   CalendarDays,
   ScrollText,
+  Printer,
 } from "lucide-react";
 
 interface WiremanNavItem {
@@ -136,6 +137,12 @@ export const wiremanOfficeNavItems: WiremanNavSection[] = [
         href: "/dashboard/office/wireman/calendar",
         icon: CalendarDays,
         description: "View customer & supplier cheques by date",
+      },
+      {
+        name: "Cheque Report",
+        href: "/dashboard/office/wireman/cheques/report",
+        icon: Printer,
+        description: "Generate cheque date reports",
       },
     ],
   },

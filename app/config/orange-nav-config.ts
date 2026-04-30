@@ -19,6 +19,7 @@ import {
   ClipboardCheck,
   CalendarDays,
   ScrollText,
+  Printer,
 } from "lucide-react";
 
 interface OrangeNavItem {
@@ -134,6 +135,12 @@ export const orangeOfficeNavItems: OrangeNavSection[] = [
         href: "/dashboard/office/orange/calendar",
         icon: CalendarDays,
         description: "View customer & supplier cheques by date",
+      },
+      {
+        name: "Cheque Report",
+        href: "/dashboard/office/orange/cheques/report",
+        icon: Printer,
+        description: "Generate cheque date reports",
       },
     ],
   },

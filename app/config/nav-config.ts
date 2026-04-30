@@ -18,6 +18,7 @@ import {
   ClipboardCheck,
   Receipt,
   Banknote,
+  Printer,
   AlertCircle,
   Factory,
   ScrollText,
@@ -211,6 +212,11 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           name: "Cheque Writer",
           href: "/dashboard/admin/cheques/write",
           icon: PenLine,
+        },
+        {
+          name: "Cheque Report",
+          href: "/dashboard/admin/cheques/report",
+          icon: Printer,
         },
         {
           name: "Expenses",
