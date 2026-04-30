@@ -100,7 +100,7 @@ export default function SierraPaymentEntryPage() {
 
   useEffect(() => {
     const user = getUserBusinessContext();
-    setBusinessId(user?.businessId ?? BUSINESS_IDS.SIERRA_AGENCY);
+    setBusinessId(BUSINESS_IDS.SIERRA_AGENCY);
   }, []);
 
   useEffect(() => {

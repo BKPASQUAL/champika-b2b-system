@@ -59,7 +59,7 @@ export default function DistributionPurchasesPage() {
     data: rawPurchases = [],
     loading,
     refetch: fetchPurchases,
-  } = useCachedFetch<any[]>("/api/purchases", [], () => toast.error("Error loading purchases"));
+  } = useCachedFetch<any[]>(`/api/purchases?businessId=${BUSINESS_IDS.CHAMPIKA_DISTRIBUTION}`, [], () => toast.error("Error loading purchases"));
 
   const purchases: Purchase[] = useMemo(
     () =>

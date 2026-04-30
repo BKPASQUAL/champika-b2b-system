@@ -101,7 +101,7 @@ export default function DistributionPaymentEntryPage() {
 
   useEffect(() => {
     const user = getUserBusinessContext();
-    setBusinessId(user?.businessId ?? BUSINESS_IDS.CHAMPIKA_DISTRIBUTION);
+    setBusinessId(BUSINESS_IDS.CHAMPIKA_DISTRIBUTION);
   }, []);
 
   useEffect(() => {

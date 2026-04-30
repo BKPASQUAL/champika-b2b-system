@@ -48,10 +48,7 @@ export default function SierraDashboardPage() {
     const user = getUserBusinessContext();
     return user?.businessName ?? "Sierra Agency";
   });
-  const [businessId] = useState(() => {
-    const user = getUserBusinessContext();
-    return user?.businessId ?? BUSINESS_IDS.SIERRA_AGENCY;
-  });
+  const [businessId] = useState(BUSINESS_IDS.SIERRA_AGENCY);
 
   const { data: invoices = [], loading: l1, refetch: refetchInvoices } =
     useCachedFetch<any[]>(`/api/invoices?businessId=${businessId}`, [], () => toast.error("Failed to load invoices"));

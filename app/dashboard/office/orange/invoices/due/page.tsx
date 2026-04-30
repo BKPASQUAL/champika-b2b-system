@@ -55,10 +55,7 @@ interface OverdueInvoice {
 
 export default function OrangeDueAlertsPage() {
   const router = useRouter();
-  const [currentBusinessId] = useState<string>(() => {
-    const user = getUserBusinessContext();
-    return user?.businessId ?? BUSINESS_IDS.ORANGE_AGENCY;
-  });
+  const [currentBusinessId] = useState<string>(BUSINESS_IDS.ORANGE_AGENCY);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");

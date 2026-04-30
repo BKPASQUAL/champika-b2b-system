@@ -171,15 +171,15 @@ export default function EditRetailInvoicePage({
           return;
         }
 
-        setBusinessId(user.businessId ?? BUSINESS_IDS.CHAMPIKA_RETAIL);
+        setBusinessId(BUSINESS_IDS.CHAMPIKA_RETAIL);
         setBusinessName(user.businessName ?? BUSINESS_NAMES[BUSINESS_IDS.CHAMPIKA_RETAIL]);
         setUserId(user.id);
 
         // 2. Fetch Data (Invoice, Customers, Products)
         const [invRes, custRes, prodRes] = await Promise.all([
           fetch(`/api/invoices/${id}`),
-          fetch("/api/customers?status=Active"),
-          fetch(`/api/rep/stock?userId=${user.id}`), // Fetch user's stock
+          fetch(`/api/customers?businessId=${BUSINESS_IDS.CHAMPIKA_RETAIL}&status=Active`),
+          fetch(`/api/rep/stock?userId=${user.id}`),
         ]);
 
         if (!invRes.ok) throw new Error("Failed to load invoice");
@@ -189,9 +189,7 @@ export default function EditRetailInvoicePage({
         const productsData = await prodRes.json();
 
         // 3. Setup Customers
-        const retailCustomers = customersData.filter((c: any) => 
-          c.business_id === user.businessId || c.businessId === user.businessId
-        );
+        const retailCustomers = customersData;
         
         // Find Guest Customer (Logic from Create Page)
         const guest = retailCustomers.find((c: any) => {

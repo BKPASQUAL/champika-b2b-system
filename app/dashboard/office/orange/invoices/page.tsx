@@ -30,7 +30,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 import { Invoice, SortField, SortOrder } from "./types";
@@ -66,10 +65,7 @@ function getSearchTerms(query: string): string[] {
 
 export default function InvoicesPage() {
   const router = useRouter();
-  const [currentBusinessId] = useState<string>(() => {
-    const user = getUserBusinessContext();
-    return user?.businessId ?? BUSINESS_IDS.ORANGE_AGENCY;
-  });
+  const [currentBusinessId] = useState<string>(BUSINESS_IDS.ORANGE_AGENCY);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");

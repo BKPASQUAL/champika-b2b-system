@@ -60,10 +60,7 @@ interface OverdueInvoice {
 
 export default function WiremanDueAlertsPage() {
   const router = useRouter();
-  const [currentBusinessId] = useState<string>(() => {
-    const user = getUserBusinessContext();
-    return user?.businessId ?? BUSINESS_IDS.WIREMAN_AGENCY;
-  });
+  const [currentBusinessId] = useState<string>(BUSINESS_IDS.WIREMAN_AGENCY);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");

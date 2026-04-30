@@ -82,7 +82,7 @@ export default function OrangeSuppliersPage() {
     data: rawSuppliers = [],
     loading,
     refetch: fetchSuppliers,
-  } = useCachedFetch<Supplier[]>("/api/suppliers", [], () => toast.error("Error loading suppliers"));
+  } = useCachedFetch<Supplier[]>(`/api/suppliers?businessId=${BUSINESS_IDS.ORANGE_AGENCY}`, [], () => toast.error("Error loading suppliers"));
 
   const { data: categoryOptions = [] } = useCachedFetch<{ id: string; name: string }[]>(
     "/api/settings/categories?type=supplier", []

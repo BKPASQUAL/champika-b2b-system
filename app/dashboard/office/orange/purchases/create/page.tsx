@@ -192,7 +192,7 @@ export default function CreateOrangePurchasePage() {
       toast.error("Session not found. Please log in again.");
       router.push("/login");
     } else {
-      setCurrentBusinessId(user.businessId ?? BUSINESS_IDS.ORANGE_AGENCY);
+      setCurrentBusinessId(BUSINESS_IDS.ORANGE_AGENCY);
       setCurrentBusinessName(user.businessName ?? "Orange Agency");
     }
   }, [router]);

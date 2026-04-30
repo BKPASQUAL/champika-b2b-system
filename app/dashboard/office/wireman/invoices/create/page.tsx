@@ -332,12 +332,11 @@ export default function CreateWiremanInvoicePage() {
           return;
         }
 
-        const resolvedBusinessId = user.businessId ?? BUSINESS_IDS.WIREMAN_AGENCY;
-        setBusinessId(resolvedBusinessId);
+        setBusinessId(BUSINESS_IDS.WIREMAN_AGENCY);
         setCurrentUser({ id: user.id, name: user.name, email: user.email });
 
         const customersRes = await fetch(
-          `/api/customers?businessId=${resolvedBusinessId}`,
+          `/api/customers?businessId=${BUSINESS_IDS.WIREMAN_AGENCY}`,
         );
         const customersData = await customersRes.json();
         setCustomers(

@@ -51,10 +51,7 @@ function getSearchTerms(query: string): string[] {
 
 export default function WiremanPurchasesPage() {
   const router = useRouter();
-  const [currentBusinessId] = useState<string>(() => {
-    const user = getUserBusinessContext();
-    return user?.businessId ?? BUSINESS_IDS.WIREMAN_AGENCY;
-  });
+  const [currentBusinessId] = useState<string>(BUSINESS_IDS.WIREMAN_AGENCY);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");

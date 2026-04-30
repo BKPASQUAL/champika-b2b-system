@@ -42,7 +42,7 @@ function getSearchTerms(query: string): string[] {
 }
 
 export default function SierraProductsPage() {
-  const SIERRA_SUPPLIER_NAME = "Sierra";
+  const SIERRA_SUPPLIER_NAME = "Sierra Cables Plc";
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");

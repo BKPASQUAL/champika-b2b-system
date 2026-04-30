@@ -21,7 +21,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2, CreditCard, Banknote, Building2 } from "lucide-react";
 import { toast } from "sonner";
-import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 interface RecordPaymentDialogProps {
   isOpen: boolean;
@@ -62,12 +62,9 @@ export function RecordPaymentDialog({
 
       const fetchAccounts = async () => {
         try {
-          const user = getUserBusinessContext();
-          const businessId = user?.businessId;
-
           // Fetch accounts linked to this business
           const res = await fetch(
-            `/api/finance/accounts?businessId=${businessId}`
+            `/api/finance/accounts?businessId=${BUSINESS_IDS.WIREMAN_AGENCY}`
           );
           if (res.ok) {
             const data = await res.json();

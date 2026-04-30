@@ -27,10 +27,7 @@ import { CreatePaymentDialog } from "./_components/CreatePaymentDialog";
 
 export default function SierraPaymentsPage() {
   const router = useRouter();
-  const [currentBusinessId] = useState<string>(() => {
-    const user = getUserBusinessContext();
-    return user?.businessId ?? BUSINESS_IDS.SIERRA_AGENCY;
-  });
+  const [currentBusinessId] = useState<string>(BUSINESS_IDS.SIERRA_AGENCY);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");

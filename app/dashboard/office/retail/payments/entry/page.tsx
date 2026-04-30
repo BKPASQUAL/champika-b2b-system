@@ -101,7 +101,7 @@ export default function RetailPaymentEntryPage() {
 
   useEffect(() => {
     const user = getUserBusinessContext();
-    setBusinessId(user?.businessId ?? BUSINESS_IDS.CHAMPIKA_RETAIL);
+    setBusinessId(BUSINESS_IDS.CHAMPIKA_RETAIL);
   }, []);
 
   useEffect(() => {

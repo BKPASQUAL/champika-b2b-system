@@ -161,13 +161,12 @@ export default function CreateInvoicePage() {
           return;
         }
 
-        const resolvedBusinessId = user.businessId ?? BUSINESS_IDS.ORANGE_AGENCY;
-        setBusinessId(resolvedBusinessId);
+        setBusinessId(BUSINESS_IDS.ORANGE_AGENCY);
         setCurrentUser({ id: user.id, name: user.name, email: user.email });
 
         // 2. Fetch Customers (Filtered by Business)
         const customersRes = await fetch(
-          `/api/customers?businessId=${resolvedBusinessId}`
+          `/api/customers?businessId=${BUSINESS_IDS.ORANGE_AGENCY}`
         );
         const customersData = await customersRes.json();
         setCustomers(

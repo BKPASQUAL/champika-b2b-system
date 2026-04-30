@@ -27,7 +27,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
-import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 // Import local components and types
@@ -36,11 +35,7 @@ import { CustomerTable } from "./_components/CustomerTable";
 import { CustomerDialogs } from "./_components/CustomerDialogs";
 
 export default function AgencyCustomersPage() {
-  // Initialize business ID synchronously from localStorage
-  const [currentBusinessId] = useState<string>(() => {
-    const user = getUserBusinessContext();
-    return user?.businessId ?? BUSINESS_IDS.ORANGE_AGENCY;
-  });
+  const [currentBusinessId] = useState<string>(BUSINESS_IDS.ORANGE_AGENCY);
 
   const {
     data: customers = [],

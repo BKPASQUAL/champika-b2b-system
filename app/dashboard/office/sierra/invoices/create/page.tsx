@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { invalidatePaymentCaches } from "@/hooks/useCachedFetch";
+import { invalidatePaymentCaches, invalidateCache } from "@/hooks/useCachedFetch";
 import {
   ArrowLeft,
   Plus,
@@ -156,12 +156,11 @@ export default function CreateSierraInvoicePage() {
           return;
         }
 
-        const resolvedBusinessId = user.businessId ?? BUSINESS_IDS.SIERRA_AGENCY;
-        setBusinessId(resolvedBusinessId);
+        setBusinessId(BUSINESS_IDS.SIERRA_AGENCY);
         setCurrentUser({ id: user.id, name: user.name, email: user.email });
 
         const customersRes = await fetch(
-          `/api/customers?businessId=${resolvedBusinessId}`,
+          `/api/customers?businessId=${BUSINESS_IDS.SIERRA_AGENCY}`,
         );
         const customersData = await customersRes.json();
         setCustomers(
@@ -368,9 +367,10 @@ export default function CreateSierraInvoicePage() {
         businessId: BUSINESS_IDS.SIERRA_AGENCY,
       });
 
+      invalidateCache("/api/customers");
       // Refresh customers and auto-select the new one
       const customersRes = await fetch(
-        `/api/customers?businessId=${businessId ?? BUSINESS_IDS.SIERRA_AGENCY}`,
+        `/api/customers?businessId=${BUSINESS_IDS.SIERRA_AGENCY}`,
       );
       const customersData = await customersRes.json();
       const mapped = customersData.map((c: any) => ({ id: c.id, name: c.shopName }));

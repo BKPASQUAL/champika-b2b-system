@@ -230,10 +230,7 @@ interface Order {
 }
 
 export default function OrangePaymentsPage() {
-  const [currentBusinessId] = useState<string>(() => {
-    const user = getUserBusinessContext();
-    return user?.businessId ?? BUSINESS_IDS.ORANGE_AGENCY;
-  });
+  const [currentBusinessId] = useState<string>(BUSINESS_IDS.ORANGE_AGENCY);
 
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);

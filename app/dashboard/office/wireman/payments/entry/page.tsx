@@ -164,7 +164,7 @@ export default function WiremanPaymentEntryPage() {
     const user = getUserBusinessContext();
     // Office users have their businessId set; admins do not —
     // fall back to this portal's fixed business ID so the page loads for both.
-    setBusinessId(user?.businessId ?? BUSINESS_IDS.WIREMAN_AGENCY);
+    setBusinessId(BUSINESS_IDS.WIREMAN_AGENCY);
   }, []);
 
   // ── Data fetching ──────────────────────────────────────────────────────────

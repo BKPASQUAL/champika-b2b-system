@@ -106,7 +106,7 @@ export default function OrangePaymentEntryPage() {
 
   useEffect(() => {
     const user = getUserBusinessContext();
-    setBusinessId(user?.businessId ?? BUSINESS_IDS.ORANGE_AGENCY);
+    setBusinessId(BUSINESS_IDS.ORANGE_AGENCY);
   }, []);
 
   useEffect(() => {

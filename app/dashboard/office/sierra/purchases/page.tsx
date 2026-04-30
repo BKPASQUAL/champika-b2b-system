@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/select";
 import { Search, Filter, RefreshCw, Factory, Plus } from "lucide-react";
 import { toast } from "sonner";
-import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 import { Purchase, SortField, SortOrder } from "./types";
@@ -51,10 +50,7 @@ function getSearchTerms(query: string): string[] {
 
 export default function SierraPurchasesPage() {
   const router = useRouter();
-  const [currentBusinessId] = useState<string>(() => {
-    const user = getUserBusinessContext();
-    return user?.businessId ?? BUSINESS_IDS.SIERRA_AGENCY;
-  });
+  const [currentBusinessId] = useState<string>(BUSINESS_IDS.SIERRA_AGENCY);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");

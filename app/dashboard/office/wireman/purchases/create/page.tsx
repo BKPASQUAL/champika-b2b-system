@@ -192,7 +192,7 @@ export default function CreateWiremanPurchasePage() {
       toast.error("Session not found. Please log in again.");
       router.push("/login");
     } else {
-      setCurrentBusinessId(user.businessId ?? BUSINESS_IDS.WIREMAN_AGENCY);
+      setCurrentBusinessId(BUSINESS_IDS.WIREMAN_AGENCY);
       setCurrentBusinessName(user.businessName ?? "Wireman Agency");
     }
   }, [router]);

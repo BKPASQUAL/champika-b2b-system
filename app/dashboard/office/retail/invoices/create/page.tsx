@@ -189,16 +189,15 @@ export default function CreateRetailInvoicePage() {
           return;
         }
 
-        const resolvedBusinessId = user.businessId ?? BUSINESS_IDS.CHAMPIKA_RETAIL;
         const resolvedBusinessName = user.businessName ?? BUSINESS_NAMES[BUSINESS_IDS.CHAMPIKA_RETAIL];
 
-        setBusinessId(resolvedBusinessId);
+        setBusinessId(BUSINESS_IDS.CHAMPIKA_RETAIL);
         setBusinessName(resolvedBusinessName);
         setUserId(user.id);
         setUserName(user.name ?? null);
         setUserEmail(user.email ?? null);
 
-        const customersRes = await fetch("/api/customers");
+        const customersRes = await fetch(`/api/customers?businessId=${BUSINESS_IDS.CHAMPIKA_RETAIL}`);
         const customersData = await customersRes.json();
 
         setAllCustomers(customersData);

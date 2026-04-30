@@ -58,19 +58,13 @@ export default function RetailCustomersPage() {
   const fetchCustomers = useCallback(async () => {
     const user = getUserBusinessContext();
     if (!user) return;
-    const resolvedBusinessId = user.businessId ?? BUSINESS_IDS.CHAMPIKA_RETAIL;
-
     try {
       setLoading(true);
-      const res = await fetch("/api/customers");
+      const res = await fetch(`/api/customers?businessId=${BUSINESS_IDS.CHAMPIKA_RETAIL}`);
       if (!res.ok) throw new Error("Failed to fetch customers");
       const data = await res.json();
 
-      // Filter strictly for the current business
-      const retailCustomers = data.filter(
-        (c: any) =>
-          c.business_id === resolvedBusinessId || c.businessId === resolvedBusinessId
-      );
+      const retailCustomers = data;
 
       setCustomers(retailCustomers);
     } catch (error) {
@@ -86,7 +80,7 @@ export default function RetailCustomersPage() {
       router.push("/login");
       return;
     }
-    setBusinessId(user.businessId ?? BUSINESS_IDS.CHAMPIKA_RETAIL);
+    setBusinessId(BUSINESS_IDS.CHAMPIKA_RETAIL);
     setBusinessName(user.businessName || "");
     fetchCustomers();
   }, [router, fetchCustomers]);

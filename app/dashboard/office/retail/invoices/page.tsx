@@ -75,7 +75,7 @@ export default function RetailInvoicesPage() {
   const fetchInvoices = useCallback(async () => {
     try {
       setIsLoading(true);
-      const response = await fetch("/api/invoices");
+      const response = await fetch(`/api/invoices?businessId=${BUSINESS_IDS.CHAMPIKA_RETAIL}`);
       if (!response.ok) throw new Error("Failed to fetch invoices");
 
       const data = await response.json();
@@ -91,7 +91,7 @@ export default function RetailInvoicesPage() {
     const user = getUserBusinessContext();
     if (user) {
       setBusinessName(user.businessName ?? BUSINESS_NAMES[BUSINESS_IDS.CHAMPIKA_RETAIL]);
-      setCurrentBusinessId(user.businessId ?? BUSINESS_IDS.CHAMPIKA_RETAIL);
+      setCurrentBusinessId(BUSINESS_IDS.CHAMPIKA_RETAIL);
     }
     fetchInvoices();
   }, [fetchInvoices]);

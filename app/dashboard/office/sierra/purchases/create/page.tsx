@@ -105,7 +105,7 @@ export default function CreateSierraPurchasePage() {
     modelType: "",
     subModel: "",
     sizeSpec: "",
-    supplier: "Sierra", // Default to Sierra
+    supplier: "Sierra Cables Plc",
     stock: "0",
     minStock: "0",
     mrp: "",
@@ -197,7 +197,7 @@ export default function CreateSierraPurchasePage() {
       toast.error("Session not found. Please log in again.");
       router.push("/login");
     } else {
-      setCurrentBusinessId(user.businessId ?? BUSINESS_IDS.SIERRA_AGENCY);
+      setCurrentBusinessId(BUSINESS_IDS.SIERRA_AGENCY);
       setCurrentBusinessName(user.businessName ?? "Sierra Agency");
     }
   }, [router]);
@@ -473,7 +473,7 @@ export default function CreateSierraPurchasePage() {
     setSubmittingProduct(true);
     const payload = {
       ...formData,
-      supplier: suppliers.find(s => s.id === supplierId)?.name || "Sierra", 
+      supplier: suppliers.find(s => s.id === supplierId)?.name || "Sierra Cables Plc",
       stock: Number(formData.stock) || 0,
       minStock: Number(formData.minStock) || 0,
       mrp: Number(formData.mrp) || 0,
@@ -506,7 +506,7 @@ export default function CreateSierraPurchasePage() {
         modelType: "",
         subModel: "",
         sizeSpec: "",
-        supplier: "Sierra",
+        supplier: "Sierra Cables Plc",
         stock: "0",
         minStock: "0",
         mrp: "",
@@ -562,8 +562,9 @@ export default function CreateSierraPurchasePage() {
         duePayment: 0,
         businessId: BUSINESS_IDS.SIERRA_AGENCY,
       });
+      invalidateCache("/api/suppliers");
       // Refresh the setup and auto-select
-      await loadData(); 
+      await loadData();
     } catch (error: any) {
       toast.error(error.message);
     } finally {
