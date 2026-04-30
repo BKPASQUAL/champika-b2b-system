@@ -111,16 +111,14 @@ function buildPrintContent(rows: ChequeRow[]) {
     )
     .join("");
 
-  // Scoped styles using the data attribute selector so they don't leak into the page
   return `
     <style>
-      [data-cheque-print] * { box-sizing: border-box; margin: 0; padding: 0; }
-      [data-cheque-print] { font-family: Arial, sans-serif; font-size: 11px; color: #111; background: #fff; padding: 24px; }
-      [data-cheque-print] table { width: 100%; border-collapse: collapse; margin-top: 4px; }
-      [data-cheque-print] th { background: #e8e8e8; font-weight: bold; padding: 5px 6px; border: 1px solid #bbb; text-align: left; font-size: 10px; }
-      [data-cheque-print] td { padding: 4px 6px; border: 1px solid #ddd; font-size: 10px; vertical-align: middle; }
-      [data-cheque-print] tr:nth-child(even) td { background: #f9f9f9; }
-      [data-cheque-print] .total-row td { font-weight: bold; background: #e8e8e8; border-top: 2px solid #888; }
+      body { font-family: Arial, sans-serif; font-size: 11px; color: #111; background: #fff; padding: 24px; margin: 0; }
+      table { width: 100%; border-collapse: collapse; }
+      th { background: #e8e8e8; font-weight: bold; padding: 5px 6px; border: 1px solid #bbb; text-align: left; font-size: 10px; }
+      td { padding: 4px 6px; border: 1px solid #ddd; font-size: 10px; vertical-align: middle; }
+      tr:nth-child(even) td { background: #f9f9f9; }
+      .total-row td { font-weight: bold; background: #e8e8e8; border-top: 2px solid #888; }
     </style>
     <table>
       <thead>
@@ -268,34 +266,27 @@ export function ChequeReportPage({
   const isDirty =
     search !== "" || dateFrom !== todayStr || dateTo !== "" || statusFilter !== "All";
 
-  // ─── Same-window print ─────────────────────────────────────────────────────
+  // ─── iframe print ─────────────────────────────────────────────────────────
   const handlePrint = useCallback(() => {
     const rowsToPrint = filteredRows.filter((r) => selectedIds.has(r.id));
     if (rowsToPrint.length === 0) return;
 
-    const content = buildPrintContent(rowsToPrint);
+    const html = `<!DOCTYPE html><html><head><title>Cheque Report</title></head><body>${buildPrintContent(rowsToPrint)}</body></html>`;
 
-    // Inject print styles: hide everything on the page, show only our print div
-    const printStyle = document.createElement("style");
-    printStyle.textContent = `@media print { body > *:not([data-cheque-print]) { display: none !important; } [data-cheque-print] { display: block !important; } }`;
-    document.head.appendChild(printStyle);
-
-    // Inject print content as a direct body child
-    const printDiv = document.createElement("div");
-    printDiv.setAttribute("data-cheque-print", "");
-    printDiv.innerHTML = content;
-    document.body.appendChild(printDiv);
-
-    window.print();
-
-    // Clean up after print dialog closes
-    const cleanup = () => {
-      printStyle.remove();
-      printDiv.remove();
-      window.removeEventListener("afterprint", cleanup);
-    };
-    window.addEventListener("afterprint", cleanup);
-  }, [filteredRows, selectedIds, portalName, dateFrom, dateTo, statusFilter]);
+    const iframe = document.createElement("iframe");
+    Object.assign(iframe.style, { position: "fixed", right: "0", bottom: "0", width: "0", height: "0", border: "0" });
+    document.body.appendChild(iframe);
+    const doc = iframe.contentWindow?.document;
+    if (!doc) return;
+    doc.open();
+    doc.write(html);
+    doc.close();
+    setTimeout(() => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      setTimeout(() => document.body.removeChild(iframe), 2000);
+    }, 500);
+  }, [filteredRows, selectedIds]);
 
   return (
     <div className="space-y-5">
