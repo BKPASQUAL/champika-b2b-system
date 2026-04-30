@@ -54,6 +54,7 @@ export function UserDialogs({
   businesses,
 }: UserDialogsProps) {
   const isOffice = formData.role === "office";
+  const isRepOrDelivery = formData.role === "rep" || formData.role === "delivery";
 
   // Toggle a business in the accessible list
   const toggleBusiness = (id: string) => {
@@ -131,8 +132,10 @@ export function UserDialogs({
                     setFormData({
                       ...formData,
                       role: val as UserRole,
-                      // clear business data when switching away from office
-                      businessId: val === "office" ? formData.businessId : "",
+                      businessId:
+                        val === "office" || val === "rep" || val === "delivery"
+                          ? formData.businessId
+                          : "",
                       accessibleBusinessIds:
                         val === "office"
                           ? formData.accessibleBusinessIds
@@ -245,6 +248,33 @@ export function UserDialogs({
                       portal on login.
                     </p>
                   )}
+              </div>
+            )}
+
+            {/* ── Business (rep / delivery only) ───────────────────────── */}
+            {isRepOrDelivery && (
+              <div className="grid gap-2">
+                <div className="flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-muted-foreground" />
+                  <Label>Business *</Label>
+                </div>
+                <Select
+                  value={formData.businessId || ""}
+                  onValueChange={(val) =>
+                    setFormData({ ...formData, businessId: val })
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select business" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {businesses.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             )}
 

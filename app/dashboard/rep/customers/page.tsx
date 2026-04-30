@@ -105,13 +105,16 @@ export default function RepCustomersPage() {
 
       const userObj = JSON.parse(storedUser);
       let rid = userObj.id;
-      const bid = userObj.businessId;
+      let bid = userObj.businessId;
 
-      if (!rid) {
+      if (!rid || !bid) {
         const userRes = await fetch("/api/users");
         const users = await userRes.json();
         const me = users.find((u: any) => u.email === userObj.email);
-        if (me) rid = me.id;
+        if (me) {
+          if (!rid) rid = me.id;
+          if (!bid) bid = me.businessId;
+        }
       }
 
       if (!rid) {
@@ -521,7 +524,11 @@ export default function RepCustomersPage() {
           if (!open) setFormData(emptyForm);
         }}
       >
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent
+          className="max-w-lg max-h-[90vh] overflow-y-auto"
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
           <DialogHeader>
             <DialogTitle>Add New Customer</DialogTitle>
             <DialogDescription>
