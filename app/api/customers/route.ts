@@ -13,6 +13,7 @@ const customerSchema = z.object({
   status: z.enum(["Active", "Inactive", "Blocked"]).default("Active"),
   creditLimit: z.number().min(0).default(0),
   businessId: z.string().min(1, "Business is required"),
+  assignedRepId: z.string().uuid().optional(),
 });
 
 // GET: Fetch customers
@@ -25,11 +26,26 @@ export async function GET(request: NextRequest) {
     let query;
 
     if (repId) {
-      // Rep View: Filter by assigned orders
+      // Rep View: customers with rep's orders OR directly assigned to rep
+      const { data: repOrders } = await supabaseAdmin
+        .from("orders")
+        .select("customer_id")
+        .eq("sales_rep_id", repId)
+        .not("customer_id", "is", null);
+
+      const orderCustomerIds = [
+        ...new Set((repOrders || []).map((o: any) => o.customer_id).filter(Boolean)),
+      ];
+
+      let orFilter = `assigned_rep_id.eq.${repId}`;
+      if (orderCustomerIds.length > 0) {
+        orFilter += `,id.in.(${orderCustomerIds.join(",")})`;
+      }
+
       query = supabaseAdmin
         .from("customers")
-        .select("*, businesses(name), orders!inner(sales_rep_id)")
-        .eq("orders.sales_rep_id", repId)
+        .select("*, businesses(name)")
+        .or(orFilter)
         .order("created_at", { ascending: false });
     } else if (businessId) {
       // Business View: Filter by specific business
@@ -128,11 +144,34 @@ export async function POST(request: NextRequest) {
         credit_limit: val.creditLimit,
         business_id: val.businessId,
         outstanding_balance: 0,
+        assigned_rep_id: val.assignedRepId || null,
       })
       .select()
       .single();
 
     if (error) throw error;
+
+    // Log activity record for customer creation
+    if (data && val.assignedRepId) {
+      const { data: profile } = await supabaseAdmin
+        .from("profiles")
+        .select("full_name, email")
+        .eq("id", val.assignedRepId)
+        .single();
+
+      await supabaseAdmin.from("activity_records").insert({
+        portal: "rep",
+        business_id: val.businessId,
+        action_type: "Created",
+        record_type: "Customer",
+        entity_type: "Customer",
+        entity_id: data.id,
+        entity_no: data.shop_name,
+        performed_by_id: val.assignedRepId,
+        performed_by_name: profile?.full_name || null,
+        performed_by_email: profile?.email || null,
+      });
+    }
 
     return NextResponse.json(
       { message: "Customer created successfully", data },

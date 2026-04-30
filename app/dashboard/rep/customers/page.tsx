@@ -23,6 +23,15 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import {
   Search,
   Users,
   MapPin,
@@ -30,6 +39,7 @@ import {
   Loader2,
   Wallet,
   Filter,
+  Plus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { TablePagination } from "@/components/ui/TablePagination";
@@ -52,9 +62,21 @@ interface Customer {
   lastOrderDate: string;
 }
 
+const emptyForm = {
+  shopName: "",
+  ownerName: "",
+  phone: "",
+  email: "",
+  address: "",
+  route: "General",
+  creditLimit: 0,
+};
+
 export default function RepCustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
+  const [repId, setRepId] = useState<string | null>(null);
+  const [businessId, setBusinessId] = useState<string | null>(null);
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState("");
@@ -65,51 +87,106 @@ export default function RepCustomersPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  useEffect(() => {
-    const fetchMyCustomers = async () => {
-      try {
-        setLoading(true);
+  // Add Customer Dialog
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [routeOptions, setRouteOptions] = useState<{ id: string; name: string }[]>([]);
+  const [formData, setFormData] = useState(emptyForm);
 
-        const storedUser = localStorage.getItem("currentUser");
-        if (!storedUser) {
-          toast.error("User session not found. Please login again.");
-          return;
-        }
+  const fetchMyCustomers = async () => {
+    try {
+      setLoading(true);
 
-        const userObj = JSON.parse(storedUser);
-        let repId = userObj.id;
-
-        if (!repId) {
-          const userRes = await fetch("/api/users");
-          const users = await userRes.json();
-          const me = users.find((u: any) => u.email === userObj.email);
-          if (me) repId = me.id;
-        }
-
-        if (!repId) {
-          toast.error("Could not identify sales representative account.");
-          return;
-        }
-
-        const res = await fetch(`/api/customers?repId=${repId}`);
-        if (!res.ok) throw new Error("Failed to load customers");
-
-        const data = await res.json();
-        setCustomers(data);
-      } catch (error) {
-        console.error(error);
-        toast.error("Failed to load customers");
-      } finally {
-        setLoading(false);
+      const storedUser = localStorage.getItem("currentUser");
+      if (!storedUser) {
+        toast.error("User session not found. Please login again.");
+        return;
       }
-    };
 
+      const userObj = JSON.parse(storedUser);
+      let rid = userObj.id;
+      const bid = userObj.businessId;
+
+      if (!rid) {
+        const userRes = await fetch("/api/users");
+        const users = await userRes.json();
+        const me = users.find((u: any) => u.email === userObj.email);
+        if (me) rid = me.id;
+      }
+
+      if (!rid) {
+        toast.error("Could not identify sales representative account.");
+        return;
+      }
+
+      setRepId(rid);
+      setBusinessId(bid);
+
+      const res = await fetch(`/api/customers?repId=${rid}`);
+      if (!res.ok) throw new Error("Failed to load customers");
+
+      const data = await res.json();
+      setCustomers(data);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to load customers");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchMyCustomers();
   }, []);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, statusFilter, routeFilter]);
+
+  // Fetch routes when dialog opens
+  useEffect(() => {
+    if (!isAddOpen) return;
+    fetch("/api/settings/categories?type=route")
+      .then((r) => r.json())
+      .then(setRouteOptions)
+      .catch(console.error);
+  }, [isAddOpen]);
+
+  const handleAddCustomer = async () => {
+    if (!formData.shopName.trim()) {
+      toast.error("Shop name is required.");
+      return;
+    }
+    if (!businessId) {
+      toast.error("Business context not found.");
+      return;
+    }
+    try {
+      setSaving(true);
+      const res = await fetch("/api/customers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...formData,
+          businessId,
+          assignedRepId: repId,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error(json.error || "Failed to create customer.");
+        return;
+      }
+      toast.success("Customer created successfully.");
+      setIsAddOpen(false);
+      setFormData(emptyForm);
+      fetchMyCustomers();
+    } catch {
+      toast.error("Failed to create customer.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   // --- Calculations for Cards ---
   const totalCustomers = customers.length;
@@ -168,11 +245,17 @@ export default function RepCustomersPage() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">My Customers</h1>
-        <p className="text-sm text-muted-foreground">
-          Manage your customer base and view credit details.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">My Customers</h1>
+          <p className="text-sm text-muted-foreground">
+            Manage your customer base and view credit details.
+          </p>
+        </div>
+        <Button onClick={() => setIsAddOpen(true)} className="shrink-0">
+          <Plus className="h-4 w-4 mr-1.5" />
+          Add Customer
+        </Button>
       </div>
 
       {/* KPI Cards — always 2 columns, even on mobile */}
@@ -429,6 +512,147 @@ export default function RepCustomersPage() {
           />
         </CardContent>
       </Card>
+
+      {/* Add New Customer Dialog */}
+      <Dialog
+        open={isAddOpen}
+        onOpenChange={(open) => {
+          setIsAddOpen(open);
+          if (!open) setFormData(emptyForm);
+        }}
+      >
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Add New Customer</DialogTitle>
+            <DialogDescription>
+              Enter the new customer&apos;s details. They will be assigned to you automatically.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-2 gap-4 py-2">
+            {/* Shop Name */}
+            <div className="col-span-2 space-y-2">
+              <Label>
+                Shop Name <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                value={formData.shopName}
+                onChange={(e) =>
+                  setFormData({ ...formData, shopName: e.target.value })
+                }
+                placeholder="e.g. Perera Traders - Galle"
+              />
+            </div>
+
+            {/* Owner Name */}
+            <div className="space-y-2">
+              <Label>Owner / Contact Person</Label>
+              <Input
+                value={formData.ownerName}
+                onChange={(e) =>
+                  setFormData({ ...formData, ownerName: e.target.value })
+                }
+                placeholder="e.g. Mr. Perera"
+              />
+            </div>
+
+            {/* Phone */}
+            <div className="space-y-2">
+              <Label>
+                Phone Number <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                value={formData.phone}
+                onChange={(e) =>
+                  setFormData({ ...formData, phone: e.target.value })
+                }
+                placeholder="077xxxxxxx"
+              />
+            </div>
+
+            {/* Email */}
+            <div className="col-span-2 space-y-2">
+              <Label>Email (Optional)</Label>
+              <Input
+                value={formData.email}
+                onChange={(e) =>
+                  setFormData({ ...formData, email: e.target.value })
+                }
+                placeholder="email@example.com"
+              />
+            </div>
+
+            {/* Address */}
+            <div className="col-span-2 space-y-2">
+              <Label>Address</Label>
+              <Input
+                value={formData.address}
+                onChange={(e) =>
+                  setFormData({ ...formData, address: e.target.value })
+                }
+                placeholder="Full street address"
+              />
+            </div>
+
+            {/* Route */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1.5">
+                <MapPin className="w-3 h-3" /> Route / Area
+              </Label>
+              <Select
+                value={formData.route}
+                onValueChange={(val) =>
+                  setFormData({ ...formData, route: val })
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select Route" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="General">General</SelectItem>
+                  {routeOptions
+                    .filter((r) => r.name !== "General")
+                    .map((r) => (
+                      <SelectItem key={r.id} value={r.name}>
+                        {r.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Credit Limit */}
+            <div className="space-y-2">
+              <Label>Credit Limit (LKR)</Label>
+              <Input
+                type="number"
+                min="0"
+                value={formData.creditLimit}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    creditLimit: parseFloat(e.target.value) || 0,
+                  })
+                }
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsAddOpen(false)}
+              disabled={saving}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleAddCustomer} disabled={saving}>
+              {saving && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
+              Add Customer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
