@@ -93,23 +93,8 @@ const THEME: Record<ThemeColor, { header: string; iconWrap: string }> = {
 
 // ─── Print content (injected into same window) ────────────────────────────────
 
-function buildPrintContent(
-  rows: ChequeRow[],
-  portalName: string,
-  dateFrom: string,
-  dateTo: string,
-  statusFilter: string,
-) {
-  const today = new Date().toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+function buildPrintContent(rows: ChequeRow[]) {
   const total = rows.reduce((s, r) => s + r.amount, 0);
-  const rangeLabel =
-    dateFrom || dateTo
-      ? `${dateFrom ? formatDate(dateFrom) : "Beginning"} – ${dateTo ? formatDate(dateTo) : "Future"}`
-      : "All dates";
 
   const rowsHtml = rows
     .map(
@@ -131,23 +116,12 @@ function buildPrintContent(
     <style>
       [data-cheque-print] * { box-sizing: border-box; margin: 0; padding: 0; }
       [data-cheque-print] { font-family: Arial, sans-serif; font-size: 11px; color: #111; background: #fff; padding: 24px; }
-      [data-cheque-print] h1 { font-size: 18px; font-weight: bold; margin-bottom: 3px; }
-      [data-cheque-print] .subtitle { font-size: 12px; color: #555; margin-bottom: 4px; }
-      [data-cheque-print] .meta { font-size: 10px; color: #777; margin-bottom: 14px; border-bottom: 1px solid #ccc; padding-bottom: 8px; }
       [data-cheque-print] table { width: 100%; border-collapse: collapse; margin-top: 4px; }
       [data-cheque-print] th { background: #e8e8e8; font-weight: bold; padding: 5px 6px; border: 1px solid #bbb; text-align: left; font-size: 10px; }
       [data-cheque-print] td { padding: 4px 6px; border: 1px solid #ddd; font-size: 10px; vertical-align: middle; }
       [data-cheque-print] tr:nth-child(even) td { background: #f9f9f9; }
       [data-cheque-print] .total-row td { font-weight: bold; background: #e8e8e8; border-top: 2px solid #888; }
     </style>
-    <h1>Cheque Report</h1>
-    <div class="subtitle">${portalName}</div>
-    <div class="meta">
-      Period: ${rangeLabel} &nbsp;|&nbsp;
-      Status: ${statusFilter} &nbsp;|&nbsp;
-      Cheques: ${rows.length} &nbsp;|&nbsp;
-      Generated: ${today}
-    </div>
     <table>
       <thead>
         <tr>
@@ -299,7 +273,7 @@ export function ChequeReportPage({
     const rowsToPrint = filteredRows.filter((r) => selectedIds.has(r.id));
     if (rowsToPrint.length === 0) return;
 
-    const content = buildPrintContent(rowsToPrint, portalName, dateFrom, dateTo, statusFilter);
+    const content = buildPrintContent(rowsToPrint);
 
     // Inject print styles: hide everything on the page, show only our print div
     const printStyle = document.createElement("style");
