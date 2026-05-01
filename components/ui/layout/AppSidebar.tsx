@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { LogOut, Store, Warehouse, Globe, Zap, Mountain, ChevronDown, Check, LayoutDashboard } from "lucide-react";
+import { LogOut, Settings, Store, Warehouse, Globe, Zap, Mountain, ChevronDown, Check, LayoutDashboard } from "lucide-react";
 import { roleNavItems, UserRole } from "@/app/config/nav-config";
 import { retailOfficeNavItems } from "@/app/config/retail-nav-config";
 import { distributionNavItems } from "@/app/config/distribution-nav-config";
@@ -35,6 +35,7 @@ import {
   BUSINESS_NAMES,
   BUSINESS_ROUTES,
 } from "@/app/config/business-constants";
+import { AccountSettingsDialog } from "@/components/AccountSettingsDialog";
 
 interface AppSidebarProps {
   role: UserRole;
@@ -136,6 +137,7 @@ export function AppSidebar({
 
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  const [showAccountSettings, setShowAccountSettings] = useState(false);
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -330,6 +332,24 @@ export function AppSidebar({
               </div>
             </div>
           ))}
+
+          {/* Account Settings nav item */}
+          <div className="border-t pt-3 mt-1">
+            <h3 className="mb-2 px-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Account
+            </h3>
+            <div className="space-y-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAccountSettings(true)}
+                className="w-full justify-start gap-3 h-10 px-3 hover:bg-accent"
+              >
+                <Settings className="h-4 w-4 shrink-0" />
+                <span className="truncate">Account Settings</span>
+              </Button>
+            </div>
+          </div>
         </div>
       </nav>
 
@@ -375,6 +395,11 @@ export function AppSidebar({
           {isLoggingOut ? "Logging out..." : "Logout"}
         </Button>
       </div>
+
+      <AccountSettingsDialog
+        open={showAccountSettings}
+        onOpenChange={setShowAccountSettings}
+      />
 
       {/* Logout confirmation dialog */}
       <AlertDialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog}>

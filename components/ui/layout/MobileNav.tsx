@@ -6,7 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Menu, Store, Warehouse, Globe, Zap, Mountain,
-  LogOut, ChevronDown, Check, LayoutDashboard, X,
+  LogOut, Settings, ChevronDown, Check, LayoutDashboard, X,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -36,6 +36,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { BUSINESS_IDS, BUSINESS_NAMES, BUSINESS_ROUTES } from "@/app/config/business-constants";
+import { AccountSettingsDialog } from "@/components/AccountSettingsDialog";
 
 
 interface MobileNavProps {
@@ -146,6 +147,7 @@ export function MobileNav({
 
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  const [showAccountSettings, setShowAccountSettings] = useState(false);
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -303,6 +305,20 @@ export function MobileNav({
                   </div>
                 </div>
               ))}
+
+              {/* Account Settings nav item */}
+              <div className="border-t pt-4">
+                <p className="mb-1.5 px-3 text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
+                  Account
+                </p>
+                <button
+                  onClick={() => { setIsOpen(false); setShowAccountSettings(true); }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
+                >
+                  <Settings className="h-4 w-4 shrink-0" />
+                  <span>Account Settings</span>
+                </button>
+              </div>
             </div>
           </nav>
 
@@ -337,6 +353,11 @@ export function MobileNav({
           </div>
         </SheetContent>
       </Sheet>
+
+      <AccountSettingsDialog
+        open={showAccountSettings}
+        onOpenChange={setShowAccountSettings}
+      />
 
       {/* Logout dialog — outside Sheet */}
       <AlertDialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog}>

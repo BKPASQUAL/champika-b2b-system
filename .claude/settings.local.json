@@ -15,7 +15,9 @@
       "Bash(npx tsc:*)",
       "Bash(xargs grep:*)",
       "Bash(grep -E \"^/c.*:$|^[a-z]\")",
-      "Bash(xargs cat *)"
+      "Bash(xargs cat *)",
+      "Read(//c/Users/USER/AppData/Local/Temp/claude/c--Projects-champika-b2b-system/c7548856-5bb0-4440-8aa8-ab9439695a64/tasks/**)",
+      "Bash(grep -E \"\\\\.tsx?$\")"
     ],
     "additionalDirectories": [
       "c:\\Projects\\champika-b2b-system\\app\\api\\payments\\[id]"
