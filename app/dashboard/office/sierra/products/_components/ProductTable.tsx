@@ -114,7 +114,7 @@ export function ProductTable({
         ) : (
           <div className="divide-y">
             {products.map((product) => (
-              <div key={product.id} className={`p-4 flex gap-3 hover:bg-red-50/10 transition-colors ${selectedIds.has(product.id) ? "bg-purple-50/40" : ""}`}>
+              <div key={product.id} className={`p-4 flex gap-3 hover:bg-red-50/10 transition-colors ${selectedIds.has(product.id) ? "bg-purple-50/40" : ""} ${!product.isActive ? "opacity-50 bg-muted/20" : ""}`}>
                 {/* Checkbox */}
                 <div className="flex items-start pt-1 shrink-0">
                   <Checkbox
@@ -144,6 +144,11 @@ export function ProductTable({
                   {/* Name + badges */}
                   <div className="flex flex-wrap items-start gap-1.5 mb-1">
                     <span className="font-semibold text-sm leading-tight">{product.name}</span>
+                    {!product.isActive && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-200 text-gray-600 whitespace-nowrap">
+                        Inactive
+                      </span>
+                    )}
                     {product.stock === 0 ? (
                       <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 whitespace-nowrap">
                         <XCircle className="w-3 h-3 mr-0.5" /> Out of Stock
@@ -332,7 +337,7 @@ export function ProductTable({
               products.map((product) => (
                 <TableRow
                   key={product.id}
-                  className={`hover:bg-red-50/10 transition-colors ${selectedIds.has(product.id) ? "bg-purple-50/40" : ""}`}
+                  className={`hover:bg-red-50/10 transition-colors ${selectedIds.has(product.id) ? "bg-purple-50/40" : ""} ${!product.isActive ? "opacity-50 bg-muted/20" : ""}`}
                 >
                   {/* Checkbox Column */}
                   <TableCell className="pl-4">
@@ -345,14 +350,15 @@ export function ProductTable({
                   {/* Product Details Column */}
                   <TableCell className="font-medium">
                     <div className="flex flex-col gap-1">
-                      {/* ✅ Name Row: Name First, Then Alert Badge */}
                       <div className="flex items-center gap-2 flex-wrap">
-                        {/* Product Name */}
                         <span className="text-sm text-foreground">
                           {product.name}
                         </span>
-
-                        {/* Stock Alert Badge (After Name) */}
+                        {!product.isActive && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-200 text-gray-600 whitespace-nowrap">
+                            Inactive
+                          </span>
+                        )}
                         {product.stock === 0 ? (
                           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 whitespace-nowrap">
                             <XCircle className="w-3 h-3 mr-1" />
