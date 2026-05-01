@@ -91,11 +91,15 @@ export async function POST(request: NextRequest) {
 
       const { id: _, created_at: __, ...sourceProductDataWithoutId } = sourceP;
 
-      const newCostPrice = sourceP.cost_price 
+      const newCostPrice = sourceP.cost_price
         ? parseFloat(((sourceP.cost_price * sourceQuantity) / targetQuantity).toFixed(2))
         : 0;
-      
-      const newMrp = sourceP.mrp 
+
+      const newActualCostPrice = sourceP.actual_cost_price
+        ? parseFloat(((sourceP.actual_cost_price * sourceQuantity) / targetQuantity).toFixed(2))
+        : newCostPrice;
+
+      const newMrp = sourceP.mrp
         ? parseFloat(((sourceP.mrp * sourceQuantity) / targetQuantity).toFixed(2))
         : newProductDetails.sellingPrice;
 
@@ -111,6 +115,7 @@ export async function POST(request: NextRequest) {
           retail_only: true,
           company_code: null,
           cost_price: newCostPrice,
+          actual_cost_price: newActualCostPrice,
           mrp: newMrp,
           stock_quantity: 0,
         })

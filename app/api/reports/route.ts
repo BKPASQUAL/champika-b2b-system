@@ -152,10 +152,11 @@ export async function GET(request: Request) {
 
           // --- CHANGED LOGIC START ---
           // Use Historical Cost if available (for past orders), otherwise use current product cost
+          // Use != null so that a stored value of 0 doesn't fall through to the product fallback
           const costPrice =
-            Number(item.actual_unit_cost) ||
-            Number(item.product?.cost_price) ||
-            0;
+            item.actual_unit_cost != null
+              ? Number(item.actual_unit_cost)
+              : Number(item.product?.cost_price) || 0;
 
           const sellingPrice = Number(item.unit_price) || 0;
           const itemRevenue = Number(item.total_price) || qty * sellingPrice;

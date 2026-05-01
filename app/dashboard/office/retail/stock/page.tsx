@@ -18,6 +18,9 @@ import {
   ShoppingBag,
   ToggleLeft,
   ToggleRight,
+  Split,
+  X,
+  ArrowUpDown,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -65,8 +68,27 @@ export default function RetailStockPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [retailOnlyFilter, setRetailOnlyFilter] = useState(false);
+  const [dividedOnlyFilter, setDividedOnlyFilter] = useState(false);
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
+
+  const hasActiveFilters =
+    searchQuery !== "" ||
+    categoryFilter !== "all" ||
+    retailOnlyFilter ||
+    dividedOnlyFilter ||
+    sortField !== "name" ||
+    sortOrder !== "asc";
+
+  const clearFilters = () => {
+    setSearchQuery("");
+    setCategoryFilter("all");
+    setRetailOnlyFilter(false);
+    setDividedOnlyFilter(false);
+    setSortField("name");
+    setSortOrder("asc");
+    setCurrentPage(1);
+  };
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -114,8 +136,9 @@ export default function RetailStockPage() {
     const matchesCategory =
       categoryFilter === "all" || item.category === categoryFilter;
     const matchesRetailOnly = !retailOnlyFilter || item.retail_only === true;
+    const matchesDivided = !dividedOnlyFilter || item.retail_only === true;
 
-    return matchesSearch && matchesCategory && matchesRetailOnly;
+    return matchesSearch && matchesCategory && matchesRetailOnly && matchesDivided;
   });
 
   // 2. Sort
@@ -351,63 +374,118 @@ export default function RetailStockPage() {
       {/* Filters & Table */}
       <Card>
         <CardHeader>
-          <div className="flex flex-col md:flex-row gap-3 items-start md:items-center">
-            {/* Search */}
-            <div className="flex-1 relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by Product Name or SKU..."
-                className="pl-9"
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setCurrentPage(1);
-                }}
-              />
+          <div className="flex flex-col gap-3">
+            {/* Row 1: Search + Category + Sort */}
+            <div className="flex flex-col md:flex-row gap-3 items-start md:items-center">
+              {/* Search */}
+              <div className="flex-1 relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by Product Name or SKU..."
+                  className="pl-9"
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                />
+              </div>
+
+              {/* Category filter */}
+              <div className="w-full md:w-[200px]">
+                <Select
+                  value={categoryFilter}
+                  onValueChange={(val) => {
+                    setCategoryFilter(val);
+                    setCurrentPage(1);
+                  }}
+                >
+                  <SelectTrigger>
+                    <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
+                    <SelectValue placeholder="Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {categories.map(
+                      (cat) =>
+                        cat !== "all" && (
+                          <SelectItem key={cat} value={cat}>
+                            {cat}
+                          </SelectItem>
+                        )
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Sort dropdown */}
+              <div className="w-full md:w-[200px]">
+                <Select
+                  value={`${sortField}-${sortOrder}`}
+                  onValueChange={(val) => {
+                    const [field, order] = val.split("-") as [SortField, SortOrder];
+                    setSortField(field);
+                    setSortOrder(order);
+                    setCurrentPage(1);
+                  }}
+                >
+                  <SelectTrigger>
+                    <ArrowUpDown className="w-4 h-4 mr-2 text-muted-foreground" />
+                    <SelectValue placeholder="Sort by" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="name-asc">Name A → Z</SelectItem>
+                    <SelectItem value="name-desc">Name Z → A</SelectItem>
+                    <SelectItem value="stock_quantity-desc">Stock High → Low</SelectItem>
+                    <SelectItem value="stock_quantity-asc">Stock Low → High</SelectItem>
+                    <SelectItem value="selling_price-desc">Price High → Low</SelectItem>
+                    <SelectItem value="selling_price-asc">Price Low → High</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
-            {/* Category filter */}
-            <div className="w-full md:w-[200px]">
-              <Select
-                value={categoryFilter}
-                onValueChange={(val) => {
-                  setCategoryFilter(val);
-                  setCurrentPage(1);
-                }}
+            {/* Row 2: Toggles + Clear */}
+            <div className="flex flex-wrap gap-2 items-center">
+              {/* Retail Only toggle */}
+              <button
+                onClick={() => { setRetailOnlyFilter(!retailOnlyFilter); setCurrentPage(1); }}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium transition-all whitespace-nowrap ${
+                  retailOnlyFilter
+                    ? "bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100"
+                    : "bg-muted border-border text-muted-foreground hover:bg-muted/80"
+                }`}
               >
-                <SelectTrigger>
-                  <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
-                  <SelectValue placeholder="Category" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
-                  {categories.map(
-                    (cat) =>
-                      cat !== "all" && (
-                        <SelectItem key={cat} value={cat}>
-                          {cat}
-                        </SelectItem>
-                      )
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
+                {retailOnlyFilter ? <ToggleRight className="w-4 h-4 text-purple-600" /> : <ToggleLeft className="w-4 h-4" />}
+                <ShoppingBag className="w-3.5 h-3.5" />
+                Retail Only
+              </button>
 
-            {/* Retail Only toggle */}
-            <button
-              onClick={() => { setRetailOnlyFilter(!retailOnlyFilter); setCurrentPage(1); }}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-all whitespace-nowrap ${
-                retailOnlyFilter
-                  ? "bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100"
-                  : "bg-muted border-border text-muted-foreground hover:bg-muted/80"
-              }`}
-            >
-              {retailOnlyFilter
-                ? <ToggleRight className="w-5 h-5 text-purple-600" />
-                : <ToggleLeft className="w-5 h-5" />}
-              <ShoppingBag className="w-4 h-4" />
-              {retailOnlyFilter ? "Retail Only" : "All Stock"}
-            </button>
+              {/* Divided Items Only toggle */}
+              <button
+                onClick={() => { setDividedOnlyFilter(!dividedOnlyFilter); setCurrentPage(1); }}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium transition-all whitespace-nowrap ${
+                  dividedOnlyFilter
+                    ? "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
+                    : "bg-muted border-border text-muted-foreground hover:bg-muted/80"
+                }`}
+              >
+                {dividedOnlyFilter ? <ToggleRight className="w-4 h-4 text-blue-600" /> : <ToggleLeft className="w-4 h-4" />}
+                <Split className="w-3.5 h-3.5" />
+                Divided Items Only
+              </button>
+
+              {/* Clear Filters */}
+              {hasActiveFilters && (
+                <button
+                  onClick={clearFilters}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-600 text-sm font-medium hover:bg-red-100 transition-all whitespace-nowrap ml-auto"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  Clear Filters
+                </button>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent>

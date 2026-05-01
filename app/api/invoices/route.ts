@@ -152,7 +152,8 @@ export async function GET(request: NextRequest) {
 
       items.forEach((item: any) => {
         const revenue = item.total_price || 0;
-        const cost = (item.quantity || 0) * (item.actual_unit_cost || 0);
+        const unitCost = item.actual_unit_cost != null ? Number(item.actual_unit_cost) : 0;
+        const cost = (item.quantity || 0) * unitCost;
         totalProfit += revenue - cost;
       });
 
