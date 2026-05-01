@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Product, SortField, SortOrder } from "../types";
 import { TablePagination } from "@/components/ui/TablePagination";
 
@@ -38,6 +39,11 @@ interface ProductTableProps {
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
+  selectedIds: Set<string>;
+  onSelectionChange: (ids: Set<string>) => void;
+  showPagination?: boolean;
+  allFilteredCount?: number;
+  onSelectAll?: () => void;
 }
 
 export function ProductTable({
@@ -51,9 +57,35 @@ export function ProductTable({
   currentPage,
   totalPages,
   onPageChange,
+  selectedIds,
+  onSelectionChange,
+  showPagination = true,
+  allFilteredCount = 0,
+  onSelectAll,
 }: ProductTableProps) {
   const router = useRouter();
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+
+  const pageIds = products.map((p) => p.id);
+  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
+  const somePageSelected = pageIds.some((id) => selectedIds.has(id));
+
+  const toggleAll = () => {
+    const next = new Set(selectedIds);
+    if (allPageSelected) {
+      pageIds.forEach((id) => next.delete(id));
+    } else {
+      pageIds.forEach((id) => next.add(id));
+    }
+    onSelectionChange(next);
+  };
+
+  const toggleOne = (id: string) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onSelectionChange(next);
+  };
 
   const getSortIcon = (field: SortField) => {
     if (sortField !== field)
@@ -82,7 +114,14 @@ export function ProductTable({
         ) : (
           <div className="divide-y">
             {products.map((product) => (
-              <div key={product.id} className="p-4 flex gap-3 hover:bg-red-50/10 transition-colors">
+              <div key={product.id} className={`p-4 flex gap-3 hover:bg-red-50/10 transition-colors ${selectedIds.has(product.id) ? "bg-purple-50/40" : ""}`}>
+                {/* Checkbox */}
+                <div className="flex items-start pt-1 shrink-0">
+                  <Checkbox
+                    checked={selectedIds.has(product.id)}
+                    onCheckedChange={() => toggleOne(product.id)}
+                  />
+                </div>
                 {/* Image */}
                 <div className="shrink-0">
                   {product.images?.[0] ? (
@@ -188,8 +227,15 @@ export function ProductTable({
         <Table>
           <TableHeader className="bg-red-50/50">
             <TableRow>
+              <TableHead className="pl-4 w-10">
+                <Checkbox
+                  checked={allPageSelected}
+                  ref={(el) => { if (el) (el as any).indeterminate = somePageSelected && !allPageSelected; }}
+                  onCheckedChange={toggleAll}
+                />
+              </TableHead>
               <TableHead
-                className="cursor-pointer hover:bg-red-100/50 pl-4 w-[450px]"
+                className="cursor-pointer hover:bg-red-100/50 w-[420px]"
                 onClick={() => onSort("name")}
               >
                 <div className="flex items-center text-red-900">
@@ -251,10 +297,32 @@ export function ProductTable({
             </TableRow>
           </TableHeader>
           <TableBody>
+            {/* ── Select-all banner ── */}
+            {allPageSelected && allFilteredCount > products.length && !showPagination === false && (
+              <TableRow className="bg-purple-50 hover:bg-purple-50">
+                <TableCell colSpan={11} className="py-2 text-center text-sm text-purple-800">
+                  All <strong>{products.length}</strong> products on this page are selected.{" "}
+                  <button
+                    className="font-semibold underline hover:text-purple-900"
+                    onClick={onSelectAll}
+                  >
+                    Select all {allFilteredCount} products
+                  </button>
+                </TableCell>
+              </TableRow>
+            )}
+            {selectedIds.size === allFilteredCount && allFilteredCount > 0 && !showPagination && (
+              <TableRow className="bg-purple-100 hover:bg-purple-100">
+                <TableCell colSpan={11} className="py-2 text-center text-sm text-purple-800 font-medium">
+                  All <strong>{allFilteredCount}</strong> products are selected.
+                </TableCell>
+              </TableRow>
+            )}
+
             {products.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={10}
+                  colSpan={11}
                   className="text-center py-8 text-muted-foreground"
                 >
                   No Sierra products found matching your criteria.
@@ -264,10 +332,18 @@ export function ProductTable({
               products.map((product) => (
                 <TableRow
                   key={product.id}
-                  className="hover:bg-red-50/10 transition-colors"
+                  className={`hover:bg-red-50/10 transition-colors ${selectedIds.has(product.id) ? "bg-purple-50/40" : ""}`}
                 >
+                  {/* Checkbox Column */}
+                  <TableCell className="pl-4">
+                    <Checkbox
+                      checked={selectedIds.has(product.id)}
+                      onCheckedChange={() => toggleOne(product.id)}
+                    />
+                  </TableCell>
+
                   {/* Product Details Column */}
-                  <TableCell className="font-medium pl-4">
+                  <TableCell className="font-medium">
                     <div className="flex flex-col gap-1">
                       {/* ✅ Name Row: Name First, Then Alert Badge */}
                       <div className="flex items-center gap-2 flex-wrap">
@@ -395,7 +471,7 @@ export function ProductTable({
         </Table>
       </div>
 
-      {!loading && products.length > 0 && (
+      {!loading && products.length > 0 && showPagination && (
         <TablePagination
           currentPage={currentPage}
           totalPages={totalPages}

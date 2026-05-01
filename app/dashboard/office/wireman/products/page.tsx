@@ -14,6 +14,8 @@ import { ProductHeader } from "./_components/ProductHeader";
 import { ProductFilters } from "./_components/ProductFilters";
 import { ProductTable } from "./_components/ProductTable";
 import { ProductDialogs } from "./_components/ProductDialogs";
+import { SelectionDiscountDialog } from "@/components/SelectionDiscountDialog";
+import { useDiscountFeature } from "@/hooks/useDiscountFeature";
 
 const NUMBER_WORDS: Record<string, string> = {
   "0": "zero", "1": "one", "2": "two", "3": "three", "4": "four",
@@ -43,6 +45,7 @@ function getSearchTerms(query: string): string[] {
 
 export default function WiremanProductsPage() {
   const WIREMAN_SUPPLIER_NAME = "Wireman ( Orel Corporation)";
+  const { enabled: discountEnabled } = useDiscountFeature("wireman");
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -58,7 +61,12 @@ export default function WiremanProductsPage() {
   // Dialogs
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDiscountDialogOpen, setIsDiscountDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+
+  // Row selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectAllMode, setSelectAllMode] = useState(false);
 
   // Form Data
   const [formData, setFormData] = useState<ProductFormData>({
@@ -147,10 +155,11 @@ export default function WiremanProductsPage() {
     currentPage * itemsPerPage,
   );
 
-  useEffect(
-    () => setCurrentPage(1),
-    [searchQuery, categoryFilter, stockFilter],
-  );
+  useEffect(() => {
+    setCurrentPage(1);
+    setSelectedIds(new Set());
+    setSelectAllMode(false);
+  }, [searchQuery, categoryFilter, stockFilter]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) setSortOrder(sortOrder === "asc" ? "desc" : "asc");
@@ -305,6 +314,42 @@ export default function WiremanProductsPage() {
       />
       <ProductStats products={products} />
 
+      {/* ── Selection Action Bar ── */}
+      {discountEnabled && selectedIds.size > 0 && (
+        <div className="flex items-center justify-between rounded-lg border border-purple-200 bg-purple-50 px-4 py-3">
+          <span className="text-sm font-medium text-purple-800">
+            {selectAllMode
+              ? `All ${sortedProducts.length} products selected`
+              : `${selectedIds.size} product${selectedIds.size !== 1 ? "s" : ""} selected`}
+          </span>
+          <div className="flex items-center gap-2">
+            {!selectAllMode && selectedIds.size < sortedProducts.length && (
+              <button
+                className="text-xs text-purple-700 font-medium underline hover:text-purple-900"
+                onClick={() => {
+                  setSelectedIds(new Set(sortedProducts.map((p) => p.id)));
+                  setSelectAllMode(true);
+                }}
+              >
+                Select all {sortedProducts.length} products
+              </button>
+            )}
+            <button
+              className="text-xs text-purple-600 underline hover:text-purple-800"
+              onClick={() => { setSelectedIds(new Set()); setSelectAllMode(false); }}
+            >
+              Clear selection
+            </button>
+            <button
+              className="inline-flex items-center gap-1.5 rounded-md bg-purple-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-purple-700 transition-colors"
+              onClick={() => setIsDiscountDialogOpen(true)}
+            >
+              Apply Discount
+            </button>
+          </div>
+        </div>
+      )}
+
       <Card className="border-red-100">
         <CardHeader>
           <ProductFilters
@@ -322,11 +367,22 @@ export default function WiremanProductsPage() {
         </CardHeader>
         <CardContent className="p-0">
           <ProductTable
-            products={paginatedProducts}
+            products={selectAllMode ? sortedProducts : paginatedProducts}
             loading={loading}
             sortField={sortField}
             sortOrder={sortOrder}
             onSort={handleSort}
+            selectedIds={discountEnabled ? selectedIds : new Set<string>()}
+            onSelectionChange={(ids) => {
+              setSelectedIds(ids);
+              if (ids.size === 0) setSelectAllMode(false);
+            }}
+            showPagination={!selectAllMode}
+            allFilteredCount={sortedProducts.length}
+            onSelectAll={() => {
+              setSelectedIds(new Set(sortedProducts.map((p) => p.id)));
+              setSelectAllMode(true);
+            }}
             onEdit={(p) => {
               setFormData({
                 sku: p.sku,
@@ -375,6 +431,18 @@ export default function WiremanProductsPage() {
         onDeleteConfirm={handleDeleteConfirm}
         categories={categories}
       />
+
+      <SelectionDiscountDialog
+        open={isDiscountDialogOpen}
+        onOpenChange={setIsDiscountDialogOpen}
+        selectedIds={Array.from(selectedIds)}
+        onSuccess={() => {
+          setSelectedIds(new Set());
+          setSelectAllMode(false);
+          fetchData();
+        }}
+      />
+
     </div>
   );
 }

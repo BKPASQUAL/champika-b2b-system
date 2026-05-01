@@ -386,15 +386,45 @@ function OperationsSettings() {
   const [savingStock, setSavingStock] = useState(false);
   const [savingCustomer, setSavingCustomer] = useState(false);
 
+  const [discountPortals, setDiscountPortals] = useState({
+    wireman: false, sierra: false, orange: false, distribution: false,
+  });
+  const [savingDiscount, setSavingDiscount] = useState<string | null>(null);
+
   useEffect(() => {
     Promise.all([
       fetch("/api/settings/invoice-override").then((r) => r.json()).catch(() => ({ enabled: false })),
       fetch("/api/settings/rep-customer-creation").then((r) => r.json()).catch(() => ({ enabled: false })),
-    ]).then(([stock, cust]) => {
+      fetch("/api/settings/discount-feature").then((r) => r.json()).catch(() => ({})),
+    ]).then(([stock, cust, disc]) => {
       setStockOverride(stock.enabled ?? false);
       setRepCustomerCreate(cust.enabled ?? false);
+      setDiscountPortals((prev) => ({ ...prev, ...disc }));
     }).finally(() => setLoading(false));
   }, []);
+
+  const handleDiscountToggle = async (portal: string, value: boolean) => {
+    setSavingDiscount(portal);
+    try {
+      const res = await fetch("/api/settings/discount-feature", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [portal]: value }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to save");
+      setDiscountPortals((prev) => ({ ...prev, [portal]: value }));
+      toast.success(
+        value
+          ? `Discount feature enabled for ${portal.charAt(0).toUpperCase() + portal.slice(1)}`
+          : `Discount feature disabled for ${portal.charAt(0).toUpperCase() + portal.slice(1)}`
+      );
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save setting");
+    } finally {
+      setSavingDiscount(null);
+    }
+  };
 
   const handleStockToggle = async (value: boolean) => {
     setSavingStock(true);
@@ -537,6 +567,54 @@ function OperationsSettings() {
             />
           </div>
         </div>
+      </div>
+
+      {/* ── Discount Feature per Portal ── */}
+      <Separator />
+      <div className="space-y-3">
+        <div>
+          <p className="text-sm font-semibold text-gray-800">Product Discount Feature</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Allow staff to select products and apply chained discounts from MRP per portal.
+            Hidden from the portal when disabled.
+          </p>
+        </div>
+        {(["wireman", "sierra", "orange", "distribution"] as const).map((portal) => {
+          const active = discountPortals[portal];
+          const saving = savingDiscount === portal;
+          const label = portal.charAt(0).toUpperCase() + portal.slice(1);
+          return (
+            <div
+              key={portal}
+              className={cn(
+                "rounded-xl border-2 p-4 transition-colors",
+                active ? "border-purple-300 bg-purple-50" : "border-gray-100 bg-white"
+              )}
+            >
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-gray-800">{label} Agency</p>
+                    {active && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 text-xs font-semibold">
+                        ACTIVE
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {active ? "Discount feature visible in product catalog" : "Feature hidden from product catalog"}
+                  </p>
+                </div>
+                <Switch
+                  checked={active}
+                  onCheckedChange={(v) => handleDiscountToggle(portal, v)}
+                  disabled={loading || saving}
+                  className="shrink-0 data-[state=checked]:bg-purple-600"
+                />
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-lg p-3 text-sm text-blue-700">

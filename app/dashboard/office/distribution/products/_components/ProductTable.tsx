@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Eye,
   Edit,
@@ -39,6 +40,11 @@ interface ProductTableProps {
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
+  selectedIds: Set<string>;
+  onSelectionChange: (ids: Set<string>) => void;
+  showPagination?: boolean;
+  allFilteredCount?: number;
+  onSelectAll?: () => void;
 }
 
 export function ProductTable({
@@ -51,9 +57,35 @@ export function ProductTable({
   currentPage,
   totalPages,
   onPageChange,
+  selectedIds,
+  onSelectionChange,
+  showPagination = true,
+  allFilteredCount = 0,
+  onSelectAll,
 }: ProductTableProps) {
   const router = useRouter();
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+
+  const pageIds = products.map((p) => p.id);
+  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
+  const somePageSelected = pageIds.some((id) => selectedIds.has(id));
+
+  const toggleAll = () => {
+    const next = new Set(selectedIds);
+    if (allPageSelected) {
+      pageIds.forEach((id) => next.delete(id));
+    } else {
+      pageIds.forEach((id) => next.add(id));
+    }
+    onSelectionChange(next);
+  };
+
+  const toggleOne = (id: string) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onSelectionChange(next);
+  };
   const [packSizes, setPackSizes] = useState<{ id: string; name: string; description?: string }[]>([]);
 
   useEffect(() => {
@@ -95,6 +127,13 @@ export function ProductTable({
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="pl-4 w-10">
+                <Checkbox
+                  checked={allPageSelected}
+                  ref={(el) => { if (el) (el as any).indeterminate = somePageSelected && !allPageSelected; }}
+                  onCheckedChange={toggleAll}
+                />
+              </TableHead>
               <TableHead className="w-14" />
               <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => onSort("name")}>
                 <div className="flex items-center">Product Name {getSortIcon("name")}</div>
@@ -121,6 +160,28 @@ export function ProductTable({
             </TableRow>
           </TableHeader>
           <TableBody>
+            {/* ── Select-all banner ── */}
+            {allPageSelected && allFilteredCount > products.length && showPagination && (
+              <TableRow className="bg-purple-50 hover:bg-purple-50">
+                <TableCell colSpan={12} className="py-2 text-center text-sm text-purple-800">
+                  All <strong>{products.length}</strong> products on this page are selected.{" "}
+                  <button
+                    className="font-semibold underline hover:text-purple-900"
+                    onClick={onSelectAll}
+                  >
+                    Select all {allFilteredCount} products
+                  </button>
+                </TableCell>
+              </TableRow>
+            )}
+            {selectedIds.size === allFilteredCount && allFilteredCount > 0 && !showPagination && (
+              <TableRow className="bg-purple-100 hover:bg-purple-100">
+                <TableCell colSpan={12} className="py-2 text-center text-sm text-purple-800 font-medium">
+                  All <strong>{allFilteredCount}</strong> products are selected.
+                </TableCell>
+              </TableRow>
+            )}
+
             {products.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">
@@ -132,7 +193,13 @@ export function ProductTable({
                 const packQty = getPackQuantity(product.unitOfMeasure);
                 const isMultiPack = packQty > 1;
                 return (
-                  <TableRow key={product.id} className={!product.isActive ? "opacity-60 bg-muted/20" : ""}>
+                  <TableRow key={product.id} className={`${!product.isActive ? "opacity-60 bg-muted/20" : ""} ${selectedIds.has(product.id) ? "bg-purple-50/40" : ""}`}>
+                    <TableCell className="pl-4">
+                      <Checkbox
+                        checked={selectedIds.has(product.id)}
+                        onCheckedChange={() => toggleOne(product.id)}
+                      />
+                    </TableCell>
                     <TableCell className="w-14 px-3 py-2 align-middle">
                       {product.images?.[0] ? (
                         <button onClick={() => setLightboxImage(product.images[0])} className="focus:outline-none">
@@ -245,9 +312,17 @@ export function ProductTable({
               const packQty = getPackQuantity(product.unitOfMeasure);
               const isMultiPack = packQty > 1;
               return (
-                <div key={product.id} className={`p-4 flex gap-3 ${!product.isActive ? "opacity-60 bg-muted/20" : ""}`}>
+                <div key={product.id} className={`p-4 flex gap-3 ${!product.isActive ? "opacity-60 bg-muted/20" : ""} ${selectedIds.has(product.id) ? "bg-purple-50/40" : ""}`}>
+                  {/* Checkbox */}
+                  <div className="flex items-start pt-1 shrink-0">
+                    <Checkbox
+                      checked={selectedIds.has(product.id)}
+                      onCheckedChange={() => toggleOne(product.id)}
+                    />
+                  </div>
                   {/* Image */}
-                  <div className="flex-shrink-0">
+                  <div className="shrink-0">
+
                     {product.images?.[0] ? (
                       <button onClick={() => setLightboxImage(product.images[0])} className="focus:outline-none">
                         <img
@@ -355,13 +430,13 @@ export function ProductTable({
       </div>
 
       {/* ── PAGINATION ── */}
-      {!loading && products.length > 0 && (
-      <TablePagination
-        currentPage={currentPage}
-        totalPages={totalPages}
-        onPageChange={onPageChange}
-      />
-    )}
+      {!loading && products.length > 0 && showPagination && (
+        <TablePagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={onPageChange}
+        />
+      )}
 
       {/* ── IMAGE LIGHTBOX ── */}
       {lightboxImage && (

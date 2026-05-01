@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Eye,
   Edit,
@@ -40,6 +41,11 @@ interface ProductTableProps {
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
+  selectedIds: Set<string>;
+  onSelectionChange: (ids: Set<string>) => void;
+  showPagination?: boolean;
+  allFilteredCount?: number;
+  onSelectAll?: () => void;
 }
 
 export function ProductTable({
@@ -53,8 +59,34 @@ export function ProductTable({
   currentPage,
   totalPages,
   onPageChange,
+  selectedIds,
+  onSelectionChange,
+  showPagination = true,
+  allFilteredCount = 0,
+  onSelectAll,
 }: ProductTableProps) {
   const router = useRouter();
+
+  const pageIds = products.map((p) => p.id);
+  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
+  const somePageSelected = pageIds.some((id) => selectedIds.has(id));
+
+  const toggleAll = () => {
+    const next = new Set(selectedIds);
+    if (allPageSelected) {
+      pageIds.forEach((id) => next.delete(id));
+    } else {
+      pageIds.forEach((id) => next.add(id));
+    }
+    onSelectionChange(next);
+  };
+
+  const toggleOne = (id: string) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onSelectionChange(next);
+  };
 
   const [packSizes, setPackSizes] = useState<
     { id: string; name: string; description?: string }[]
@@ -92,6 +124,14 @@ export function ProductTable({
     );
   }
 
+  const pagination = showPagination ? (
+    <TablePagination
+      currentPage={currentPage}
+      totalPages={totalPages}
+      onPageChange={onPageChange}
+    />
+  ) : null;
+
   if (products.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
@@ -100,15 +140,6 @@ export function ProductTable({
       </div>
     );
   }
-
-
-  const pagination = (
-    <TablePagination
-      currentPage={currentPage}
-      totalPages={totalPages}
-      onPageChange={onPageChange}
-    />
-  );
 
   return (
     <>
@@ -124,23 +155,30 @@ export function ProductTable({
                 key={product.id}
                 className={`rounded-xl border bg-white shadow-sm overflow-hidden flex flex-col ${
                   !product.isActive ? "opacity-60" : ""
-                }`}
+                } ${selectedIds.has(product.id) ? "ring-1 ring-purple-300" : ""}`}
               >
                 {/* Card Header */}
                 <div className="bg-orange-50/60 px-4 py-3 border-b flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm text-foreground leading-snug line-clamp-2">
-                      {product.name}
-                    </p>
-                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
-                      <span className="text-[11px] text-muted-foreground font-mono">
-                        SKU: {product.sku}
-                      </span>
-                      {product.companyCode && (
+                  <div className="flex items-start gap-2 flex-1 min-w-0">
+                    <Checkbox
+                      checked={selectedIds.has(product.id)}
+                      onCheckedChange={() => toggleOne(product.id)}
+                      className="mt-0.5 shrink-0"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm text-foreground leading-snug line-clamp-2">
+                        {product.name}
+                      </p>
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
                         <span className="text-[11px] text-muted-foreground font-mono">
-                          CC: {product.companyCode}
+                          SKU: {product.sku}
                         </span>
-                      )}
+                        {product.companyCode && (
+                          <span className="text-[11px] text-muted-foreground font-mono">
+                            CC: {product.companyCode}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -299,6 +337,13 @@ export function ProductTable({
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="pl-4 w-10">
+                  <Checkbox
+                    checked={allPageSelected}
+                    ref={(el) => { if (el) (el as any).indeterminate = somePageSelected && !allPageSelected; }}
+                    onCheckedChange={toggleAll}
+                  />
+                </TableHead>
                 <TableHead
                   className="cursor-pointer hover:bg-muted/50"
                   onClick={() => onSort("name")}
@@ -354,6 +399,28 @@ export function ProductTable({
               </TableRow>
             </TableHeader>
             <TableBody>
+              {/* ── Select-all banner ── */}
+              {allPageSelected && allFilteredCount > products.length && showPagination && (
+                <TableRow className="bg-purple-50 hover:bg-purple-50">
+                  <TableCell colSpan={11} className="py-2 text-center text-sm text-purple-800">
+                    All <strong>{products.length}</strong> products on this page are selected.{" "}
+                    <button
+                      className="font-semibold underline hover:text-purple-900"
+                      onClick={onSelectAll}
+                    >
+                      Select all {allFilteredCount} products
+                    </button>
+                  </TableCell>
+                </TableRow>
+              )}
+              {selectedIds.size === allFilteredCount && allFilteredCount > 0 && !showPagination && (
+                <TableRow className="bg-purple-100 hover:bg-purple-100">
+                  <TableCell colSpan={11} className="py-2 text-center text-sm text-purple-800 font-medium">
+                    All <strong>{allFilteredCount}</strong> products are selected.
+                  </TableCell>
+                </TableRow>
+              )}
+
               {products.map((product) => {
                 const packQty = getPackQuantity(product.unitOfMeasure);
                 const isMultiPack = packQty > 1;
@@ -361,8 +428,14 @@ export function ProductTable({
                 return (
                   <TableRow
                     key={product.id}
-                    className={!product.isActive ? "opacity-60 bg-muted/20" : ""}
+                    className={`${!product.isActive ? "opacity-60 bg-muted/20" : ""} ${selectedIds.has(product.id) ? "bg-purple-50/40" : ""}`}
                   >
+                    <TableCell className="pl-4">
+                      <Checkbox
+                        checked={selectedIds.has(product.id)}
+                        onCheckedChange={() => toggleOne(product.id)}
+                      />
+                    </TableCell>
                     <TableCell className="font-medium align-top">
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-2">
