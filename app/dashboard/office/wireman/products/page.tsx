@@ -99,7 +99,7 @@ export default function WiremanProductsPage() {
   const loading = l1 || l2;
 
   const products = useMemo(
-    () => allProductsRaw.filter((p) => (p.supplier || "").toLowerCase().includes("wireman")),
+    () => allProductsRaw.filter((p) => (p.supplier || "").toLowerCase().includes("wireman") && !p.retailOnly),
     [allProductsRaw]
   );
 

@@ -118,6 +118,8 @@ export default function CreatePurchasePage() {
     images: [],
     unitOfMeasure: "Pcs",
     isActive: true,
+    retailOnly: false,
+    retailPrice: "",
   });
   const [submittingProduct, setSubmittingProduct] = useState(false);
   const [categories, setCategories] = useState<{ id: string; name: string; parent_id?: string }[]>([]);
@@ -464,6 +466,8 @@ export default function CreatePurchasePage() {
         images: [],
         unitOfMeasure: "Pcs",
         isActive: true,
+        retailOnly: false,
+        retailPrice: "",
       });
       await loadData();
     } catch (error: any) {

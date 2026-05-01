@@ -26,6 +26,8 @@ export interface Product {
   commissionType?: string;
   commissionValue?: number;
   isActive: boolean;
+  retailOnly?: boolean;
+  retailPrice?: number;
   companyCode?: string;
   // ✅ Added Price History
   priceHistory?: {
@@ -70,5 +72,7 @@ export interface ProductFormData {
   images: string[];
   unitOfMeasure: string;
   isActive: boolean;
+  retailOnly: boolean;
+  retailPrice: number | string;
   companyCode?: string;
 }

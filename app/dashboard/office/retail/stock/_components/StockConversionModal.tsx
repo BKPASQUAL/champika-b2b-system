@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, ArrowRight } from "lucide-react";
+import { Loader2, ArrowRight, ShoppingBag } from "lucide-react";
 import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import { RetailStockItem } from "./StockTable";
 
@@ -41,7 +41,8 @@ export function StockConversionModal({
 }: StockConversionModalProps) {
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [targetProducts, setTargetProducts] = useState<{id: string, name: string, info: string}[]>([]);
+  const [targetProducts, setTargetProducts] = useState<{id: string, name: string, info: string, retailOnly: boolean}[]>([]);
+  const [retailOnlyFilter, setRetailOnlyFilter] = useState(true);
   
   // Form State
   const [targetProductId, setTargetProductId] = useState("");
@@ -53,7 +54,16 @@ export function StockConversionModal({
   const [newProductName, setNewProductName] = useState("");
   const [newUnit, setNewUnit] = useState("");
   const [newPrice, setNewPrice] = useState<number | "">("");
+  const [newRetailPrice, setNewRetailPrice] = useState<number | "">("");
   const [packSizes, setPackSizes] = useState<{id: string, name: string}[]>([]);
+
+  // Auto-calculate new product price from conversion ratio
+  useEffect(() => {
+    if (createNew && sourceItem && sourceQty && targetQty && Number(targetQty) > 0) {
+      const calculated = (sourceItem.selling_price * Number(sourceQty)) / Number(targetQty);
+      setNewPrice(Math.round(calculated * 100) / 100);
+    }
+  }, [createNew, sourceQty, targetQty, sourceItem]);
 
   // Fetch target products
   useEffect(() => {
@@ -68,7 +78,8 @@ export function StockConversionModal({
           const formatted = data.map((p: any) => ({
             id: p.id,
             name: p.name,
-            info: `SKU: ${p.sku} | Unit: ${p.unit_of_measure}`,
+            info: `SKU: ${p.sku} | Unit: ${p.unitOfMeasure || p.unit_of_measure}${p.retailOnly ? " | Retail Only" : ""}`,
+            retailOnly: p.retailOnly ?? false,
           }));
           setTargetProducts(formatted);
         } catch (error) {
@@ -97,6 +108,12 @@ export function StockConversionModal({
       setTargetProductId("");
       setSourceQty(1);
       setTargetQty("");
+      setRetailOnlyFilter(true);
+      setNewProductName("");
+      setNewUnit("");
+      setNewPrice("");
+      setNewRetailPrice("");
+      setCreateNew(false);
     }
   }, [isOpen]);
 
@@ -150,7 +167,8 @@ export function StockConversionModal({
           newProductDetails: createNew ? {
             name: newProductName,
             unitOfMeasure: newUnit,
-            sellingPrice: Number(newPrice)
+            sellingPrice: Number(newPrice),
+            retailPrice: newRetailPrice !== "" ? Number(newRetailPrice) : null,
           } : undefined
         }),
       });
@@ -221,12 +239,36 @@ export function StockConversionModal({
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Loading products...
                   </div>
                 ) : (
-                  <SearchableDropdown
-                    options={targetProducts.filter(p => p.id !== sourceItem.id)}
-                    value={targetProductId}
-                    onChange={setTargetProductId}
-                    placeholder="Search sub-product to add stock to..."
-                  />
+                  <div className="space-y-2">
+                    {/* Retail Only filter toggle */}
+                    <button
+                      type="button"
+                      onClick={() => { setRetailOnlyFilter(!retailOnlyFilter); setTargetProductId(""); }}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-medium transition-all w-full justify-center ${
+                        retailOnlyFilter
+                          ? "bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100"
+                          : "bg-muted border-border text-muted-foreground hover:bg-muted/80"
+                      }`}
+                    >
+                      <ShoppingBag className="w-3.5 h-3.5" />
+                      {retailOnlyFilter ? "Showing Retail Only products" : "Showing all products"}
+                      <span className="ml-auto text-[10px] opacity-60">click to toggle</span>
+                    </button>
+                    <SearchableDropdown
+                      options={targetProducts.filter(p =>
+                        p.id !== sourceItem.id &&
+                        (!retailOnlyFilter || p.retailOnly)
+                      )}
+                      value={targetProductId}
+                      onChange={setTargetProductId}
+                      placeholder={retailOnlyFilter ? "Search retail-only products..." : "Search all products..."}
+                    />
+                    {retailOnlyFilter && targetProducts.filter(p => p.id !== sourceItem.id && p.retailOnly).length === 0 && (
+                      <p className="text-xs text-muted-foreground text-center py-1">
+                        No retail-only products found. Toggle to show all products.
+                      </p>
+                    )}
+                  </div>
                 )
               ) : (
                 <div className="p-3 border border-blue-200 rounded-md space-y-3 bg-blue-50/30">
@@ -257,7 +299,20 @@ export function StockConversionModal({
                     <div className="space-y-1">
                       <Label className="text-xs">Selling Price (LKR)</Label>
                       <Input type="number" min="0" value={newPrice} onChange={e => setNewPrice(e.target.value === "" ? "" : Number(e.target.value))} />
+                      <p className="text-[10px] text-blue-500">Auto-calculated from qty ratio. Editable.</p>
                     </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-purple-700">Retail Price (LKR)</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={newRetailPrice}
+                      onChange={e => setNewRetailPrice(e.target.value === "" ? "" : Number(e.target.value))}
+                      placeholder="e.g. 350.00 — shown in retail walk-in sales"
+                      className="border-purple-200 focus-visible:ring-purple-400"
+                    />
+                    <p className="text-[10px] text-purple-600">This price will be used in the retail portal for this product.</p>
                   </div>
                 </div>
               )}

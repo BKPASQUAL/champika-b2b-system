@@ -87,7 +87,7 @@ export default function RepProductsPage() {
         const res = await fetch("/api/products");
         if (!res.ok) throw new Error("Failed to load products");
         const data = await res.json();
-        const b2bData = data.filter((p: any) => p.subCategory !== "Retail Exclusive");
+        const b2bData = data.filter((p: any) => p.subCategory !== "Retail Exclusive" && !p.retailOnly);
         setProducts(b2bData);
       } catch (error) {
         toast.error("Could not load product catalog");

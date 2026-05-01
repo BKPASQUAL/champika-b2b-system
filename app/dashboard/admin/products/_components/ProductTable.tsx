@@ -24,6 +24,7 @@ import {
   Loader2,
   Percent,
   X,
+  ShoppingBag,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Product, SortField, SortOrder } from "../types";
@@ -164,8 +165,13 @@ export function ProductTable({
                     )}
                   </TableCell>
                   <TableCell className="font-medium">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       {product.name}
+                      {product.retailOnly && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+                          <ShoppingBag className="w-3 h-3 mr-1" /> Retail Only
+                        </span>
+                      )}
                       {product.stock === 0 ? (
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
                           <AlertTriangle className="w-3 h-3 mr-1" /> Out of Stock
@@ -261,6 +267,11 @@ export function ProductTable({
                   {/* Name + stock badge */}
                   <div className="flex flex-wrap items-start gap-1.5 mb-1">
                     <span className="font-semibold text-sm leading-tight">{product.name}</span>
+                    {product.retailOnly && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-purple-100 text-purple-700 whitespace-nowrap">
+                        <ShoppingBag className="w-3 h-3 mr-0.5" /> Retail Only
+                      </span>
+                    )}
                     {product.stock === 0 ? (
                       <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-red-100 text-red-700 whitespace-nowrap">
                         <AlertTriangle className="w-3 h-3 mr-0.5" /> Out of Stock

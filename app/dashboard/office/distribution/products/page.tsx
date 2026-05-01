@@ -136,7 +136,7 @@ export default function ProductsPage() {
     else if (stockFilter === "in-stock")
       matchesStock = product.stock >= product.minStock;
 
-    return matchesSearch && matchesCategory && matchesSupplier && matchesStock;
+    return matchesSearch && matchesCategory && matchesSupplier && matchesStock && !product.retailOnly;
   });
 
   // Sort Logic

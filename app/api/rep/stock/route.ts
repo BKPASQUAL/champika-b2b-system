@@ -42,6 +42,7 @@ export async function GET(request: NextRequest) {
           sku,
           name,
           selling_price,
+          retail_price,
           mrp,
           unit_of_measure,
           category,
@@ -49,7 +50,8 @@ export async function GET(request: NextRequest) {
           brand,
           is_active,
           supplier_name,
-          company_code
+          company_code,
+          retail_only
         )
       `
       )
@@ -92,12 +94,14 @@ export async function GET(request: NextRequest) {
           sku: p.sku,
           name: p.name,
           selling_price: p.selling_price,
+          retail_price: p.retail_price ?? null,
+          retail_only: p.retail_only ?? false,
           mrp: p.mrp,
           stock_quantity: item.quantity,
           unit_of_measure: p.unit_of_measure || "unit",
           category: p.category,
           subCategory: p.sub_category,
-          supplier: p.supplier_name, // Return supplier info
+          supplier: p.supplier_name,
           company_code: p.company_code,
         });
       }

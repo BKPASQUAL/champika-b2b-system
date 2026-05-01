@@ -99,7 +99,7 @@ export default function SierraProductsPage() {
   const loading = l1 || l2;
 
   const products = useMemo(
-    () => allProductsRaw.filter((p) => (p.supplier || "").toLowerCase().includes("sierra")),
+    () => allProductsRaw.filter((p) => (p.supplier || "").toLowerCase().includes("sierra") && !p.retailOnly),
     [allProductsRaw]
   );
 

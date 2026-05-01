@@ -22,6 +22,8 @@ const productSchema = z.object({
   images: z.array(z.string()).optional(),
   unitOfMeasure: z.string().optional(),
   isActive: z.boolean().optional(),
+  retailOnly: z.boolean().optional(),
+  retailPrice: z.number().min(0).optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -82,6 +84,8 @@ export async function GET(request: NextRequest) {
         commissionType: p.commission_type || "percentage",
         commissionValue: p.commission_value || 0,
         isActive: p.is_active ?? true,
+        retailOnly: p.retail_only ?? false,
+        retailPrice: p.retail_price ?? null,
         discountPercent:
           p.mrp > 0 ? ((p.mrp - (p.selling_price || 0)) / p.mrp) * 100 : 0,
         totalValue: realStock * (p.selling_price || 0),
@@ -213,6 +217,8 @@ export async function POST(request: NextRequest) {
         commission_type: "percentage",
         commission_value: commissionRate,
         is_active: val.isActive ?? true,
+        retail_only: val.retailOnly ?? false,
+        retail_price: val.retailPrice || null,
       })
       .select()
       .single();

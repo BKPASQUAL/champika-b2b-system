@@ -22,6 +22,8 @@ const updateSchema = z.object({
   unitOfMeasure: z.string().optional(),
   images: z.array(z.string()).optional(),
   isActive: z.boolean().optional(),
+  retailOnly: z.boolean().optional(),
+  retailPrice: z.number().min(0).optional().nullable(),
 });
 
 export async function PATCH(
@@ -136,6 +138,8 @@ export async function PATCH(
     if (val.unitOfMeasure) dbUpdates.unit_of_measure = val.unitOfMeasure;
     if (val.images) dbUpdates.images = val.images;
     if (val.isActive !== undefined) dbUpdates.is_active = val.isActive;
+    if (val.retailOnly !== undefined) dbUpdates.retail_only = val.retailOnly;
+    if (val.retailPrice !== undefined) dbUpdates.retail_price = val.retailPrice || null;
 
     // Commission Recalculation
     if (val.supplier || val.category) {

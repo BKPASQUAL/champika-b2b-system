@@ -247,17 +247,31 @@ export function ProductDialogs({
                 </DialogDescription>
               </div>
 
-              <div className="flex items-center space-x-2 border p-2 rounded-lg bg-muted/50">
-                <Switch
-                  id="active-mode"
-                  checked={formData.isActive}
-                  onCheckedChange={(val) =>
-                    setFormData({ ...formData, isActive: val })
-                  }
-                />
-                <Label htmlFor="active-mode" className="cursor-pointer text-xs">
-                  {formData.isActive ? "Active" : "Inactive"}
-                </Label>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center space-x-2 border p-2 rounded-lg bg-muted/50">
+                  <Switch
+                    id="active-mode"
+                    checked={formData.isActive}
+                    onCheckedChange={(val) =>
+                      setFormData({ ...formData, isActive: val })
+                    }
+                  />
+                  <Label htmlFor="active-mode" className="cursor-pointer text-xs">
+                    {formData.isActive ? "Active" : "Inactive"}
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2 border p-2 rounded-lg bg-purple-50 border-purple-200">
+                  <Switch
+                    id="retail-only-mode"
+                    checked={formData.retailOnly}
+                    onCheckedChange={(val) =>
+                      setFormData({ ...formData, retailOnly: val })
+                    }
+                  />
+                  <Label htmlFor="retail-only-mode" className="cursor-pointer text-xs text-purple-700">
+                    Retail Only
+                  </Label>
+                </div>
               </div>
             </div>
           </DialogHeader>
@@ -628,6 +642,35 @@ export function ProductDialogs({
                     Per Pcs: {(Number(formData.costPrice) / packQuantity).toFixed(2)}
                   </p>
                 )}
+              </div>
+            </div>
+
+            {/* Retail Portal Pricing - always visible */}
+            <div className="col-span-2 border border-purple-200 rounded-lg p-4 bg-purple-50/50">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-xs font-semibold text-purple-700 uppercase tracking-wide">Retail Portal Pricing</span>
+                {!formData.retailOnly && (
+                  <span className="text-[10px] text-muted-foreground">(optional — only used if product is marked Retail Only)</span>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label className="text-purple-700">Retail Price (LKR)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={formData.retailPrice}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      retailPrice: parseFloat(e.target.value) || "",
+                    })
+                  }
+                  placeholder="e.g. 350.00 — leave empty to use selling price"
+                  className="border-purple-200 focus-visible:ring-purple-400"
+                />
+                <p className="text-[10px] text-purple-600">
+                  When set, this price is used in the retail walk-in sales portal instead of the regular selling price.
+                </p>
               </div>
             </div>
 

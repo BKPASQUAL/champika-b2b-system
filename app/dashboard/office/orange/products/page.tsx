@@ -125,7 +125,7 @@ export default function OrangeProductsPage() {
   const loading = l1 || l2;
 
   const products = useMemo(
-    () => allProductsRaw.filter((p) => p.supplier?.toLowerCase().includes("orange")),
+    () => allProductsRaw.filter((p) => p.supplier?.toLowerCase().includes("orange") && !p.retailOnly),
     [allProductsRaw]
   );
 

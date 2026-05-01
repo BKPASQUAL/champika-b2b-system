@@ -17,10 +17,13 @@
       "Bash(grep -E \"^/c.*:$|^[a-z]\")",
       "Bash(xargs cat *)",
       "Read(//c/Users/USER/AppData/Local/Temp/claude/c--Projects-champika-b2b-system/c7548856-5bb0-4440-8aa8-ab9439695a64/tasks/**)",
-      "Bash(grep -E \"\\\\.tsx?$\")"
+      "Bash(grep -E \"\\\\.tsx?$\")",
+      "Bash(Remove-Item -Recurse -Force .next -ErrorAction SilentlyContinue)",
+      "PowerShell(npm run build 2>&1)"
     ],
     "additionalDirectories": [
-      "c:\\Projects\\champika-b2b-system\\app\\api\\payments\\[id]"
+      "c:\\Projects\\champika-b2b-system\\app\\api\\payments\\[id]",
+      "c:\\Projects\\champika-b2b-system\\.next"
     ]
   }
 }

@@ -26,6 +26,7 @@ export interface Product {
   commissionType?: string;
   commissionValue?: number;
   isActive: boolean;
+  retailOnly?: boolean;
   companyCode?: string; // Added companyCode
 }
 

@@ -15,6 +15,9 @@ import {
   Download,
   FileText,
   FileSpreadsheet,
+  ShoppingBag,
+  ToggleLeft,
+  ToggleRight,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -61,6 +64,7 @@ export default function RetailStockPage() {
   // Filters & Sorting
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [retailOnlyFilter, setRetailOnlyFilter] = useState(false);
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
 
@@ -109,8 +113,9 @@ export default function RetailStockPage() {
       item.sku.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory =
       categoryFilter === "all" || item.category === categoryFilter;
+    const matchesRetailOnly = !retailOnlyFilter || item.retail_only === true;
 
-    return matchesSearch && matchesCategory;
+    return matchesSearch && matchesCategory && matchesRetailOnly;
   });
 
   // 2. Sort
@@ -346,19 +351,22 @@ export default function RetailStockPage() {
       {/* Filters & Table */}
       <Card>
         <CardHeader>
-          <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex flex-col md:flex-row gap-3 items-start md:items-center">
+            {/* Search */}
             <div className="flex-1 relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search by Product Name or SKU..."
-                className="pl-9 w-1/3"
+                className="pl-9"
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
-                  setCurrentPage(1); // Reset page on search
+                  setCurrentPage(1);
                 }}
               />
             </div>
+
+            {/* Category filter */}
             <div className="w-full md:w-[200px]">
               <Select
                 value={categoryFilter}
@@ -384,6 +392,22 @@ export default function RetailStockPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Retail Only toggle */}
+            <button
+              onClick={() => { setRetailOnlyFilter(!retailOnlyFilter); setCurrentPage(1); }}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-all whitespace-nowrap ${
+                retailOnlyFilter
+                  ? "bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100"
+                  : "bg-muted border-border text-muted-foreground hover:bg-muted/80"
+              }`}
+            >
+              {retailOnlyFilter
+                ? <ToggleRight className="w-5 h-5 text-purple-600" />
+                : <ToggleLeft className="w-5 h-5" />}
+              <ShoppingBag className="w-4 h-4" />
+              {retailOnlyFilter ? "Retail Only" : "All Stock"}
+            </button>
           </div>
         </CardHeader>
         <CardContent>

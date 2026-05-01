@@ -106,6 +106,8 @@ export default function ProductsPage() {
     images: [],
     unitOfMeasure: "Pcs",
     isActive: true,
+    retailOnly: false,
+    retailPrice: "",
     companyCode: "",
   });
 
@@ -190,6 +192,7 @@ export default function ProductsPage() {
       mrp: Number(formData.mrp) || 0,
       sellingPrice: Number(formData.sellingPrice) || 0,
       costPrice: Number(formData.costPrice) || 0,
+      retailPrice: formData.retailPrice !== "" ? Number(formData.retailPrice) : null,
       companyCode: formData.companyCode || "",
     };
 
@@ -271,6 +274,8 @@ export default function ProductsPage() {
       images: [],
       unitOfMeasure: "Pcs",
       isActive: true,
+      retailOnly: false,
+      retailPrice: "",
       companyCode: "",
     });
     setSelectedProduct(null);
@@ -382,6 +387,8 @@ export default function ProductsPage() {
                 images: p.images || [],
                 unitOfMeasure: p.unitOfMeasure || "Pcs",
                 isActive: p.isActive,
+                retailOnly: p.retailOnly ?? false,
+                retailPrice: p.retailPrice ?? "",
                 companyCode: p.companyCode || "",
               });
               setSelectedProduct(p);

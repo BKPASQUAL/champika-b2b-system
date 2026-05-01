@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
+import { triggerAgencyBillsForInvoice } from "@/app/lib/inter-branch-billing";
 
 export async function POST(request: NextRequest) {
   try {
@@ -105,10 +107,12 @@ export async function POST(request: NextRequest) {
           name: newProductDetails.name.trim(),
           unit_of_measure: newProductDetails.unitOfMeasure,
           selling_price: newProductDetails.sellingPrice,
+          retail_price: newProductDetails.retailPrice ?? null,
+          retail_only: true,
           company_code: null,
           cost_price: newCostPrice,
           mrp: newMrp,
-          stock_quantity: 0, 
+          stock_quantity: 0,
         })
         .select("id")
         .single();
@@ -159,6 +163,84 @@ export async function POST(request: NextRequest) {
         await supabaseAdmin.from("product_stocks").update({ quantity: sourceStock.quantity }).eq("id", sourceStock.id);
         throw insertTargetError;
       }
+    }
+
+    // Inter-branch billing: record the conversion as an internal order so the
+    // agency's monthly bill includes the consumed source stock at cost price.
+    try {
+      const { data: sourceProduct } = await supabaseAdmin
+        .from("products")
+        .select("supplier_name, cost_price")
+        .eq("id", sourceProductId)
+        .single();
+
+      if (sourceProduct?.supplier_name) {
+        // Find or auto-create an internal customer in CHAMPIKA_RETAIL for conversions
+        const { data: existingCustomer } = await supabaseAdmin
+          .from("customers")
+          .select("id")
+          .eq("business_id", BUSINESS_IDS.CHAMPIKA_RETAIL)
+          .ilike("shop_name", "%Internal - Stock Conversion%")
+          .maybeSingle();
+
+        let internalCustomerId = existingCustomer?.id;
+
+        if (!internalCustomerId) {
+          const { data: created } = await supabaseAdmin
+            .from("customers")
+            .insert({
+              shop_name: "Internal - Stock Conversion",
+              owner_name: "Champika Hardware",
+              phone: "",
+              address: "Internal",
+              route: "Internal",
+              status: "Active",
+              credit_limit: 99999999,
+              outstanding_balance: 0,
+              business_id: BUSINESS_IDS.CHAMPIKA_RETAIL,
+            })
+            .select("id")
+            .single();
+          internalCustomerId = created?.id;
+        }
+
+        if (internalCustomerId) {
+          const costPrice = Number(sourceProduct.cost_price) || 0;
+          const totalCost = costPrice * sourceQuantity;
+          const today = new Date().toISOString().split("T")[0];
+
+          const { data: convOrder } = await supabaseAdmin
+            .from("orders")
+            .insert({
+              order_id: `SC-${Date.now()}`,
+              customer_id: internalCustomerId,
+              business_id: BUSINESS_IDS.CHAMPIKA_RETAIL,
+              total_amount: totalCost,
+              status: "Delivered",
+              notes: `Stock Conversion: ${sourceQuantity}x [${sourceProductId}] → ${targetQuantity}x [${finalTargetProductId}]`,
+              order_date: today,
+            })
+            .select("id")
+            .single();
+
+          if (convOrder) {
+            await supabaseAdmin.from("order_items").insert({
+              order_id: convOrder.id,
+              product_id: sourceProductId,
+              quantity: sourceQuantity,
+              unit_price: costPrice,
+              total_price: totalCost,
+              free_quantity: 0,
+              commission_earned: 0,
+            });
+
+            await triggerAgencyBillsForInvoice(BUSINESS_IDS.CHAMPIKA_RETAIL, [sourceProductId]);
+          }
+        }
+      }
+    } catch (billingError) {
+      console.error("[StockConversion] Inter-branch billing trigger failed:", billingError);
+      // Non-critical — don't fail the conversion itself
     }
 
     // Optional: Log activity

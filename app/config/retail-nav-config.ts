@@ -20,6 +20,7 @@ import {
   PackageCheck,
   ClipboardCheck,
   Banknote,
+  BookOpen,
 } from "lucide-react";
 
 interface RetailNavItem {
@@ -91,6 +92,12 @@ export const retailOfficeNavItems: RetailNavSection[] = [
   {
     title: "Inventory",
     items: [
+      {
+        name: "Product Catalog",
+        href: "/dashboard/office/retail/products",
+        icon: BookOpen,
+        description: "View retail products and pricing",
+      },
       {
         name: "Retail Stock",
         href: "/dashboard/office/retail/stock",

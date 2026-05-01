@@ -65,6 +65,7 @@ interface Product {
   sku: string;
   name: string;
   selling_price: number;
+  retail_price?: number | null;
   mrp: number;
   stock_quantity: number;
   unit_of_measure: string;
@@ -236,6 +237,7 @@ export default function CreateRetailInvoicePage() {
               sku: p.sku,
               name: p.name,
               selling_price: p.selling_price || 0,
+              retail_price: p.retail_price ?? null,
               mrp: p.mrp || 0,
               stock_quantity: p.stock_quantity || 0,
               unit_of_measure: p.unit_of_measure || "unit",
@@ -276,7 +278,7 @@ export default function CreateRetailInvoicePage() {
       freeQuantity: "", // Start empty
       unit: product.unit_of_measure,
       mrp: product.mrp,
-      unitPrice: product.selling_price,
+      unitPrice: product.retail_price ?? product.selling_price,
       discountPercent: "", // Start empty
       stockAvailable: product.stock_quantity,
     });
@@ -744,9 +746,11 @@ export default function CreateRetailInvoicePage() {
                                     {product.name}
                                   </div>
                                   <div className="text-xs text-muted-foreground">
-                                    {product.sku} • Stock:{" "}
-                                    {product.stock_quantity} • LKR{" "}
-                                    {product.selling_price}
+                                    {product.sku} • Stock: {product.stock_quantity} • LKR{" "}
+                                    {product.retail_price ?? product.selling_price}
+                                    {product.retail_price && (
+                                      <span className="ml-1 text-purple-600">(Retail)</span>
+                                    )}
                                   </div>
                                 </div>
                               </CommandItem>

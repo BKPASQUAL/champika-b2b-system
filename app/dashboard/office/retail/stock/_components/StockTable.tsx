@@ -20,6 +20,7 @@ import {
   Layers,
   AlertTriangle,
   Split,
+  ShoppingBag,
 } from "lucide-react";
 
 // Define the type here or import it if you have a shared types file
@@ -28,6 +29,8 @@ export interface RetailStockItem {
   sku: string;
   name: string;
   selling_price: number;
+  retail_price?: number | null;
+  retail_only?: boolean;
   mrp: number;
   stock_quantity: number;
   unit_of_measure: string;
@@ -135,10 +138,17 @@ export function StockTable({
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex flex-col">
-                        <span className="font-medium text-sm text-gray-900 group-hover:text-blue-700 transition-colors">
-                          {item.name}
-                        </span>
-                        <div className="text-xs text-muted-foreground flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-medium text-sm text-gray-900 group-hover:text-blue-700 transition-colors">
+                            {item.name}
+                          </span>
+                          {item.retail_only && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-purple-100 text-purple-700">
+                              <ShoppingBag className="w-2.5 h-2.5 mr-0.5" /> Retail
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
                           <span className="font-mono bg-muted px-1 rounded">
                             {item.sku}
                           </span>
@@ -153,11 +163,19 @@ export function StockTable({
                   </TableCell>
 
                   {/* Price */}
-                  <TableCell className="text-right font-medium">
-                    {item.selling_price.toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
+                  <TableCell className="text-right">
+                    {item.retail_price ? (
+                      <div>
+                        <div className="font-semibold text-purple-700">
+                          {Number(item.retail_price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground">Retail Price</div>
+                      </div>
+                    ) : (
+                      <div className="font-medium">
+                        {item.selling_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                    )}
                   </TableCell>
 
                   {/* Stock Quantity */}
