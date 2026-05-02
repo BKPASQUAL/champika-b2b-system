@@ -19,7 +19,8 @@
       "Read(//c/Users/USER/AppData/Local/Temp/claude/c--Projects-champika-b2b-system/c7548856-5bb0-4440-8aa8-ab9439695a64/tasks/**)",
       "Bash(grep -E \"\\\\.tsx?$\")",
       "Bash(Remove-Item -Recurse -Force .next -ErrorAction SilentlyContinue)",
-      "PowerShell(npm run build 2>&1)"
+      "PowerShell(npm run build 2>&1)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Projects\\\\champika-b2b-system\" -Directory | Select-Object -First 20 | ForEach-Object { $_.Name })"
     ],
     "additionalDirectories": [
       "c:\\Projects\\champika-b2b-system\\app\\api\\payments\\[id]",

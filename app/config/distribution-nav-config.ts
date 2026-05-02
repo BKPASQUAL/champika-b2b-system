@@ -21,6 +21,7 @@ import {
   CalendarDays,
   ScrollText,
   Printer,
+  Tags,
 } from "lucide-react";
 
 interface DistNavItem {
@@ -138,6 +139,12 @@ export const distributionNavItems: DistNavSection[] = [
         name: "Product Catalog",
         href: "/dashboard/office/distribution/products",
         icon: Package,
+      },
+      {
+        name: "Bulk Price Update",
+        href: "/dashboard/office/distribution/products/bulk-price",
+        icon: Tags,
+        description: "Edit MRP, cost & selling prices in bulk",
       },
       {
         name: "Stock Control",

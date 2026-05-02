@@ -778,6 +778,10 @@ export default function ProductDetailsPage({
                                     </div>
                                   ))}
                                 </div>
+                              ) : h.source === "bulk" ? (
+                                <Badge variant="outline" className="border-blue-200 text-blue-700 bg-blue-50 text-[10px] px-1.5 py-0 h-4">
+                                  Bulk Price Update
+                                </Badge>
                               ) : (
                                 <span className="text-xs text-muted-foreground italic">Manual Update</span>
                               )}
