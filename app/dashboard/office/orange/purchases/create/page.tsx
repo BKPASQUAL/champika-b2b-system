@@ -104,7 +104,7 @@ export default function CreateOrangePurchasePage() {
     modelType: "",
     subModel: "",
     sizeSpec: "",
-    supplier: "Orange Agency",
+    supplier: "Orange (Orel Corporation)",
     stock: "0",
     minStock: "0",
     mrp: "",
@@ -445,7 +445,7 @@ export default function CreateOrangePurchasePage() {
     setSubmittingProduct(true);
     const payload = {
       ...formData,
-      supplier: suppliers.find((s) => s.id === supplierId)?.name || "Orange Agency",
+      supplier: suppliers.find((s) => s.id === supplierId)?.name || "Orange (Orel Corporation)",
       stock: Number(formData.stock) || 0,
       minStock: Number(formData.minStock) || 0,
       mrp: Number(formData.mrp) || 0,
@@ -475,7 +475,7 @@ export default function CreateOrangePurchasePage() {
         modelType: "",
         subModel: "",
         sizeSpec: "",
-        supplier: "Orange Agency",
+        supplier: "Orange (Orel Corporation)",
         stock: "0",
         minStock: "0",
         mrp: "",

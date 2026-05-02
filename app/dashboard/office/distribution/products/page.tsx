@@ -102,8 +102,13 @@ export default function ProductsPage() {
 
   const loading = l1 || l2 || l3 || l4;
 
+  const FIXED_SUPPLIERS = [{ id: "orange-orel", name: "Orange (Orel Corporation)" }];
+
   const suppliers = useMemo(
-    () => [...rawSuppliers, ...settingSuppliers].filter((v, i, a) => a.findIndex(t => t.name === v.name) === i),
+    () =>
+      [...FIXED_SUPPLIERS, ...rawSuppliers, ...settingSuppliers].filter(
+        (v, i, a) => a.findIndex((t) => t.name === v.name) === i
+      ),
     [rawSuppliers, settingSuppliers]
   );
 

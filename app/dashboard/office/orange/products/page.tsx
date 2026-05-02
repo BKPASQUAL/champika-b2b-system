@@ -94,7 +94,7 @@ export default function OrangeProductsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectAllMode, setSelectAllMode] = useState(false);
 
-  // Form Data - Force Supplier to Orange Agency
+  // Form Data - Force Supplier to Orange (Orel Corporation)
   const [formData, setFormData] = useState<ProductFormData>({
     sku: "",
     companyCode: "",
@@ -106,7 +106,7 @@ export default function OrangeProductsPage() {
     modelType: "",
     subModel: "",
     sizeSpec: "",
-    supplier: "Orange Agency",
+    supplier: "Orange (Orel Corporation)",
     stock: "",
     minStock: "",
     mrp: "",
@@ -204,7 +204,7 @@ export default function OrangeProductsPage() {
 
     const payload = {
       ...formData,
-      supplier: "Orange Agency", // Ensure it's always Orange
+      supplier: "Orange (Orel Corporation)",
       stock: Number(formData.stock) || 0,
       minStock: Number(formData.minStock) || 0,
       mrp: Number(formData.mrp) || 0,
@@ -266,7 +266,7 @@ export default function OrangeProductsPage() {
       modelType: "",
       subModel: "",
       sizeSpec: "",
-      supplier: "Orange Agency",
+      supplier: "Orange (Orel Corporation)",
       stock: "",
       minStock: "",
       mrp: "",
@@ -413,7 +413,7 @@ export default function OrangeProductsPage() {
                 modelType: p.modelType || "",
                 subModel: p.subModel || "",
                 sizeSpec: p.sizeSpec || "",
-                supplier: "Orange Agency",
+                supplier: "Orange (Orel Corporation)",
                 stock: p.stock,
                 minStock: p.minStock,
                 mrp: p.mrp,
