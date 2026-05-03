@@ -16,6 +16,7 @@ import {
   CalendarDays,
   ScrollText,
   Printer,
+  ArrowRightLeft,
 } from "lucide-react";
 
 interface SierraNavItem {
@@ -137,6 +138,12 @@ export const sierraOfficeNavItems: SierraNavSection[] = [
         href: "/dashboard/office/sierra/cheques/report",
         icon: Printer,
         description: "Generate cheque date reports",
+      },
+      {
+        name: "Transaction History",
+        href: "/dashboard/office/sierra/transactions",
+        icon: ArrowRightLeft,
+        description: "All Sales, Purchases & Returns",
       },
     ],
   },

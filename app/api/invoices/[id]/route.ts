@@ -25,10 +25,10 @@ const updateInvoiceSchema = z.object({
   orderStatus: z.string(),
   items: z.array(invoiceItemSchema).min(1),
   grandTotal: z.number(),
-  // ✅ Extra Discount Fields
   extraDiscountPercent: z.number().default(0),
   extraDiscountAmount: z.number().default(0),
   notes: z.string().optional(),
+  manual_invoice_no: z.string().optional(),
   userId: z.string().optional(),
   isDraft: z.boolean().optional(),
   changeReason: z.string().optional(),
@@ -262,9 +262,23 @@ export async function PATCH(
         .eq("id", currentInvoice.customer_id);
     }
 
-    // B. Revert Stock (Global Only)
+    // B. Revert Stock (Global + Location)
     if (currentItems) {
+      // Fetch the original rep's assigned locations so we can restore location stock
+      const originalRepId = (currentInvoice.orders as any)?.sales_rep_id;
+      let originalLocationIds: string[] = [];
+      if (originalRepId) {
+        const { data: origAssignments } = await supabaseAdmin
+          .from("location_assignments")
+          .select("location_id")
+          .eq("user_id", originalRepId);
+        originalLocationIds = origAssignments?.map((a: any) => a.location_id) ?? [];
+      }
+
       for (const item of currentItems) {
+        const totalQty = item.quantity + (item.free_quantity || 0);
+
+        // Restore global stock
         const { data: prod } = await supabaseAdmin
           .from("products")
           .select("stock_quantity")
@@ -274,13 +288,30 @@ export async function PATCH(
         if (prod) {
           await supabaseAdmin
             .from("products")
-            .update({
-              stock_quantity:
-                prod.stock_quantity + item.quantity + item.free_quantity,
-            })
+            .update({ stock_quantity: prod.stock_quantity + totalQty })
             .eq("id", item.product_id);
         }
+
+        // Restore location stock — add quantity back to the location that had the most stock
+        // (mirrors the "highest stock first" deduction used during invoice creation/edit)
+        if (originalLocationIds.length > 0) {
+          const { data: locationStocks } = await supabaseAdmin
+            .from("product_stocks")
+            .select("id, quantity")
+            .eq("product_id", item.product_id)
+            .in("location_id", originalLocationIds)
+            .order("quantity", { ascending: false });
+
+          if (locationStocks && locationStocks.length > 0) {
+            // Restore all to the highest-stocked location (the one that was deducted first)
+            await supabaseAdmin
+              .from("product_stocks")
+              .update({ quantity: locationStocks[0].quantity + totalQty })
+              .eq("id", locationStocks[0].id);
+          }
+        }
       }
+
       // C. Delete Old Items
       await supabaseAdmin
         .from("order_items")
@@ -312,6 +343,7 @@ export async function PATCH(
       .update({
         customer_id: val.customerId,
         total_amount: val.grandTotal,
+        ...(val.manual_invoice_no !== undefined && { manual_invoice_no: val.manual_invoice_no }),
       })
       .eq("id", id);
 
@@ -415,6 +447,22 @@ export async function PATCH(
             (currentCustomer.outstanding_balance || 0) + val.grandTotal,
         })
         .eq("id", val.customerId);
+    }
+
+    // Log invoice edit as a Sales transaction so it appears in Transaction History
+    const invoiceNo = currentInvoice.invoice_no || id;
+    const businessId = currentInvoice.business_id ?? null;
+    if (businessId) {
+      await supabaseAdmin.from("account_transactions").insert({
+        transaction_no: `TXN-EDIT-${Date.now()}`,
+        transaction_type: "Sales",
+        from_account_id: null,
+        to_account_id: null,
+        amount: val.grandTotal,
+        description: `Invoice Updated: ${invoiceNo}`,
+        transaction_date: val.invoiceDate,
+        business_id: businessId,
+      });
     }
 
     return NextResponse.json({ message: "Invoice updated successfully" });

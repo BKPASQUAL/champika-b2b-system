@@ -105,6 +105,7 @@ export const generateInvoiceHTML = async (
               ${qrDataUrl ? `<td style="vertical-align:top;padding-right:10px;"><img src="${qrDataUrl}" style="width:70px;height:70px;display:block;" /></td>` : ""}
               <td style="vertical-align:top;text-align:right;">
                 <div style="font-size:18px;font-weight:700;color:#000;letter-spacing:0.5px;">${invoice.invoiceNo || "-"}</div>
+                ${invoice.manualInvoiceNo ? `<div style="font-size:12px;font-weight:600;color:#444;margin-top:2px;">Book No: ${invoice.manualInvoiceNo}</div>` : ""}
                 <div style="font-size:11px;color:#333;margin-top:2px;line-height:1.5;">
                   ${formatDate(invoice.date || invoice.createdAt)}<br>${salesRep}
                 </div>

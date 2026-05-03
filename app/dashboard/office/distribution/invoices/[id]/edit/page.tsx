@@ -60,6 +60,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 
 // --- Interfaces ---
 interface InvoiceHistory {
@@ -110,6 +111,7 @@ export default function DistributionEditInvoicePage({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
 
   // Data State
   const [products, setProducts] = useState<any[]>([]);
@@ -162,9 +164,10 @@ export default function DistributionEditInvoicePage({
     "Cancelled",
   ];
   const isStatusLocked = lockedStatuses.includes(orderStatus);
+  const isAdmin = currentUserRole === "admin";
 
-  // Allows editing if status is NOT locked OR if we are coming from reconciliation
-  const isReadOnly = isStatusLocked && !isFromReconciliation;
+  // Allows editing if status is NOT locked OR if we are coming from reconciliation OR if user is admin
+  const isReadOnly = isStatusLocked && !isFromReconciliation && !isAdmin;
 
   const handleBack = () => {
     if (returnTo) {
@@ -179,6 +182,9 @@ export default function DistributionEditInvoicePage({
   useEffect(() => {
     const fetchData = async () => {
       try {
+        const user = getUserBusinessContext();
+        if (user) setCurrentUserRole(user.role);
+
         const [prodRes, custRes, usersRes, invRes, retRes] = await Promise.all([
           fetch("/api/products"),
           fetch("/api/customers"),
