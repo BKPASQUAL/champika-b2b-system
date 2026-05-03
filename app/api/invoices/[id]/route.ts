@@ -117,6 +117,7 @@ export async function GET(
       id: invoice.id,
       orderId: invoice.order_id,
       invoiceNo: invoice.invoice_no,
+      manualInvoiceNo: invoice.manual_invoice_no || "",
       date: invoice.orders?.order_date
         ? new Date(invoice.orders.order_date).toISOString().split("T")[0]
         : invoice.created_at.split("T")[0],
@@ -347,7 +348,37 @@ export async function PATCH(
       })
       .eq("id", id);
 
-    // Insert New Items
+    // Build historical cost map from old items (preserves original cost for unchanged products)
+    const oldCostMap: Record<string, number> = {};
+    if (currentItems) {
+      for (const ci of currentItems) {
+        if (ci.actual_unit_cost != null && !oldCostMap[ci.product_id]) {
+          oldCostMap[ci.product_id] = Number(ci.actual_unit_cost);
+        }
+      }
+    }
+
+    // Fetch current cost for any newly added products not in the old items
+    const newProductIds = val.items
+      .map((i) => i.productId)
+      .filter((pid) => oldCostMap[pid] == null);
+
+    const freshCostMap: Record<string, number> = {};
+    if (newProductIds.length > 0) {
+      const { data: productCosts } = await supabaseAdmin
+        .from("products")
+        .select("id, actual_cost_price, cost_price")
+        .in("id", newProductIds);
+
+      if (productCosts) {
+        for (const p of productCosts) {
+          freshCostMap[p.id] =
+            Number(p.actual_cost_price) || Number(p.cost_price) || 0;
+        }
+      }
+    }
+
+    // Insert New Items (with actual_unit_cost preserved/fetched)
     const newItemsData = val.items.map((item) => ({
       order_id: currentInvoice.order_id,
       product_id: item.productId,
@@ -356,9 +387,10 @@ export async function PATCH(
       unit_price: item.unitPrice,
       total_price: item.total,
       commission_earned: 0,
-      // ✅ Update Item Discount
       discount_percent: item.discountPercent,
       discount_amount: item.discountAmount,
+      actual_unit_cost:
+        oldCostMap[item.productId] ?? freshCostMap[item.productId] ?? 0,
     }));
 
     const { error: insertError } = await supabaseAdmin

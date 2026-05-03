@@ -29,6 +29,8 @@ import {
   Info,
   ToggleRight,
   AlertTriangle,
+  Wrench,
+  CheckCircle2,
 } from "lucide-react";
 
 // ── Navigation items ──────────────────────────────────────────────────────────
@@ -378,6 +380,71 @@ function SecuritySettings() {
   );
 }
 
+// ── Fix Item Costs Action ─────────────────────────────────────────────────────
+function FixItemCostsAction() {
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<{ fixed: number; skipped: number; total: number } | null>(null);
+
+  const handleFix = async () => {
+    setRunning(true);
+    setResult(null);
+    try {
+      const res = await fetch("/api/admin/fix-item-costs", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      setResult({ fixed: data.fixed ?? 0, skipped: data.skipped ?? 0, total: data.total ?? 0 });
+      toast.success(data.message || "Done");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to run fix");
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border-2 border-yellow-200 bg-yellow-50 p-5 space-y-3">
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-1 flex-1">
+          <div className="flex items-center gap-2">
+            <Wrench className="h-4 w-4 text-yellow-700" />
+            <p className="text-sm font-semibold text-gray-800">
+              Fix Invoice Item Costs (One-Time Repair)
+            </p>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Some invoices that were edited before a bug-fix may have cost = 0 in
+            reports. This will backfill the correct product cost for all affected
+            order items so profit calculations show the right values.
+          </p>
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="shrink-0 border-yellow-400 text-yellow-800 hover:bg-yellow-100"
+          onClick={handleFix}
+          disabled={running}
+        >
+          {running ? (
+            <><span className="animate-spin mr-1.5">⟳</span> Running…</>
+          ) : (
+            <><Wrench className="h-3.5 w-3.5 mr-1.5" /> Run Fix</>
+          )}
+        </Button>
+      </div>
+      {result && (
+        <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2 text-sm text-green-800">
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
+          <span>
+            Fixed <strong>{result.fixed}</strong> items out of{" "}
+            <strong>{result.total}</strong> affected
+            {result.skipped > 0 && ` (${result.skipped} skipped — product cost unavailable)`}.
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Operations Section ────────────────────────────────────────────────────────
 function OperationsSettings() {
   const [stockOverride, setStockOverride] = useState(false);
@@ -616,6 +683,10 @@ function OperationsSettings() {
           );
         })}
       </div>
+
+      {/* Data Maintenance */}
+      <Separator />
+      <FixItemCostsAction />
 
       <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-lg p-3 text-sm text-blue-700">
         <Info className="h-4 w-4 mt-0.5 shrink-0" />

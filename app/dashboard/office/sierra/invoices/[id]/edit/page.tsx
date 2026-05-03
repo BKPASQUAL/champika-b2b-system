@@ -207,7 +207,7 @@ export default function SierraEditInvoicePage({
         setCustomerId(invoice.customerId || "");
         setInvoiceDate(invoice.date || new Date().toISOString().split("T")[0]);
         setInvoiceNumber(invoice.invoiceNo || "");
-        setManualInvoiceNo(invoice.manualInvoiceNo || invoice.invoice_no || "");
+        setManualInvoiceNo(invoice.manualInvoiceNo || "");
         setOrderStatus(invoice.orderStatus || "Delivered");
         const repId = invoice.salesRepId || user.id;
         setSalesRepId(repId);
