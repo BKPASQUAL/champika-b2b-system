@@ -45,12 +45,13 @@ export async function GET(request: NextRequest) {
       stocksQuery = stocksQuery.in("location_id", []);
     }
 
-    // ✅ Apply Wireman Filter to Stocks
-    // This ensures calculated stats (Total Value, etc.) only count Wireman items
+    // ✅ Apply supplier filter to Stocks so stats only count the agency's own items
     if (businessId === BUSINESS_IDS.WIREMAN_AGENCY) {
       stocksQuery = stocksQuery.ilike("products.supplier_name", "%Wireman%");
     } else if (businessId === BUSINESS_IDS.SIERRA_AGENCY) {
       stocksQuery = stocksQuery.ilike("products.supplier_name", "%Sierra%");
+    } else if (businessId === BUSINESS_IDS.ORANGE_AGENCY) {
+      stocksQuery = stocksQuery.ilike("products.supplier_name", "%Orange%");
     }
 
     const { data: stocks, error: stockError } = await stocksQuery;
@@ -64,12 +65,13 @@ export async function GET(request: NextRequest) {
       )
       .order("name");
 
-    // ✅ Apply Wireman Filter to Master Product List
-    // This ensures the main inventory table only shows Wireman items
+    // ✅ Apply supplier filter to Master Product List so only the agency's own items show
     if (businessId === BUSINESS_IDS.WIREMAN_AGENCY) {
       productsQuery = productsQuery.ilike("supplier_name", "%Wireman%");
     } else if (businessId === BUSINESS_IDS.SIERRA_AGENCY) {
       productsQuery = productsQuery.ilike("supplier_name", "%Sierra%");
+    } else if (businessId === BUSINESS_IDS.ORANGE_AGENCY) {
+      productsQuery = productsQuery.ilike("supplier_name", "%Orange%");
     }
 
     const { data: products, error: prodError } = await productsQuery;

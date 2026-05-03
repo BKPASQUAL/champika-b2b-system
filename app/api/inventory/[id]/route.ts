@@ -44,11 +44,13 @@ export async function GET(
       .eq("location_id", id)
       .or("quantity.gt.0,damaged_quantity.gt.0"); // Fetch if EITHER good OR damaged stock exists
 
-    // ✅ Apply Wireman or Sierra Filter if requested
+    // ✅ Apply agency supplier filter if requested
     if (businessId === BUSINESS_IDS.WIREMAN_AGENCY) {
       query = query.ilike("products.supplier_name", "%Wireman%");
     } else if (businessId === BUSINESS_IDS.SIERRA_AGENCY) {
       query = query.ilike("products.supplier_name", "%Sierra%");
+    } else if (businessId === BUSINESS_IDS.ORANGE_AGENCY) {
+      query = query.ilike("products.supplier_name", "%Orange%");
     }
 
     const { data: stocks, error: stockError } = await query;

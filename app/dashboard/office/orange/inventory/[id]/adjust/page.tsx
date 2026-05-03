@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 // Types
 interface Product {
@@ -78,29 +79,34 @@ export default function StockAdjustmentPage() {
     const initData = async () => {
       try {
         setLoading(true);
-        // Fetch all active products
-        const productsRes = await fetch("/api/products?active=true");
+
+        // Fetch Master Product List (Filtered for Orange)
+        const productsRes = await fetch(
+          `/api/inventory?businessId=${BUSINESS_IDS.ORANGE_AGENCY}`,
+        );
         const productsData = await productsRes.json();
 
-        // Fetch current location stock & details
-        const stockRes = await fetch(`/api/inventory/${locationId}`);
+        // Fetch Current Location Stock (Filtered for Orange)
+        const stockRes = await fetch(
+          `/api/inventory/${locationId}?businessId=${BUSINESS_IDS.ORANGE_AGENCY}`,
+        );
         const stockData = await stockRes.json();
 
-        // ✅ Set Location Name
         if (stockData.location) {
           setLocationName(stockData.location.name);
         }
 
-        // Map stock for easy lookup: { productId: quantity }
         const stockMap: Record<string, number> = {};
         if (stockData.stocks) {
           stockData.stocks.forEach((s: any) => {
-            // Note: In the inventory API, s.id is actually the product ID because of mapping
             stockMap[s.id] = s.quantity;
           });
         }
 
-        setAllProducts(productsData);
+        if (productsData.products) {
+          setAllProducts(productsData.products);
+        }
+
         setLocationStocks(stockMap);
       } catch (error) {
         console.error(error);
@@ -165,7 +171,7 @@ export default function StockAdjustmentPage() {
 
     setSubmitting(true);
     try {
-      const payload = pendingAdjustments.map((item) => ({
+      const itemsPayload = pendingAdjustments.map((item) => ({
         productId: item.productId,
         newQuantity: item.newStock,
       }));
@@ -175,17 +181,20 @@ export default function StockAdjustmentPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           locationId,
-          items: payload,
+          items: itemsPayload,
+          reason: "Manual Stock Adjustment (Orange Portal)",
+          businessId: BUSINESS_IDS.ORANGE_AGENCY,
         }),
       });
 
-      if (!res.ok) throw new Error("Update failed");
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Update failed");
 
       toast.success("Stock adjustments saved successfully!");
-      // Redirect to Orange Inventory Page
       router.push(`/dashboard/office/orange/inventory/${locationId}`);
-    } catch (error) {
-      toast.error("Failed to save adjustments");
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error.message || "Failed to save adjustments");
     } finally {
       setSubmitting(false);
     }
@@ -231,7 +240,7 @@ export default function StockAdjustmentPage() {
           <CardHeader>
             <CardTitle className="text-lg">Add Adjustment</CardTitle>
             <CardDescription>
-              Select product and enter real count.
+              Select product (Orange Only) and enter count.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
