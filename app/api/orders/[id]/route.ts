@@ -68,6 +68,7 @@ export async function GET(
       status: order.status,
       paymentStatus: order.invoices?.[0]?.status || "Unpaid",
       salesRep: order.profiles?.full_name || "Unknown",
+      salesRepId: order.sales_rep_id,
       customerId: order.customer_id,
 
       // Customer Details
@@ -106,7 +107,103 @@ export async function GET(
   }
 }
 
-// PATCH: Approve, Reject, or EDIT Order Items
+// ── Stock helpers ──────────────────────────────────────────────────────────
+
+/** Restore qty back to global + location stocks for a rep */
+async function restoreStock(
+  productId: string,
+  qty: number,
+  locationIds: string[]
+) {
+  // 1. Global stock
+  const { data: prod } = await supabaseAdmin
+    .from("products")
+    .select("stock_quantity")
+    .eq("id", productId)
+    .single();
+
+  if (prod) {
+    await supabaseAdmin
+      .from("products")
+      .update({ stock_quantity: prod.stock_quantity + qty })
+      .eq("id", productId);
+  }
+
+  // 2. Location stock – add back to the location that currently has the most
+  if (locationIds.length > 0) {
+    const { data: locStocks } = await supabaseAdmin
+      .from("product_stocks")
+      .select("id, quantity")
+      .eq("product_id", productId)
+      .in("location_id", locationIds)
+      .order("quantity", { ascending: false });
+
+    if (locStocks && locStocks.length > 0) {
+      await supabaseAdmin
+        .from("product_stocks")
+        .update({ quantity: locStocks[0].quantity + qty })
+        .eq("id", locStocks[0].id);
+    }
+  }
+}
+
+/** Deduct qty from global + location stocks for a rep (highest-stock-first) */
+async function deductStock(
+  productId: string,
+  qty: number,
+  locationIds: string[]
+) {
+  // 1. Global stock
+  const { data: prod } = await supabaseAdmin
+    .from("products")
+    .select("stock_quantity")
+    .eq("id", productId)
+    .single();
+
+  if (prod) {
+    await supabaseAdmin
+      .from("products")
+      .update({ stock_quantity: Math.max(0, prod.stock_quantity - qty) })
+      .eq("id", productId);
+  }
+
+  // 2. Location stock – waterfall from highest to lowest
+  if (locationIds.length > 0) {
+    let remaining = qty;
+
+    const { data: locStocks } = await supabaseAdmin
+      .from("product_stocks")
+      .select("id, quantity")
+      .eq("product_id", productId)
+      .in("location_id", locationIds)
+      .gt("quantity", 0)
+      .order("quantity", { ascending: false });
+
+    if (locStocks) {
+      for (const ls of locStocks) {
+        if (remaining <= 0) break;
+        const deduct = Math.min(ls.quantity, remaining);
+        await supabaseAdmin
+          .from("product_stocks")
+          .update({ quantity: ls.quantity - deduct })
+          .eq("id", ls.id);
+        remaining -= deduct;
+      }
+    }
+  }
+}
+
+/** Get assigned location IDs for a sales rep */
+async function getRepLocationIds(repId: string): Promise<string[]> {
+  if (!repId) return [];
+  const { data } = await supabaseAdmin
+    .from("location_assignments")
+    .select("location_id")
+    .eq("user_id", repId);
+  return data?.map((a: any) => a.location_id) ?? [];
+}
+
+// ── PATCH: Approve, Reject, or EDIT Order Items ─────────────────────────────
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -119,72 +216,103 @@ export async function PATCH(
 
     // --- SCENARIO 1: UPDATE ORDER ITEMS (EDIT MODE) ---
     if (action === "update_items" && items) {
-      // 1. Fetch current order data
+      const { newItems = [], deletedItemIds = [], orderDate } = body;
+
+      // 1. Fetch current order (need sales_rep_id + customer_id + old total)
       const { data: currentOrder } = await supabaseAdmin
         .from("orders")
-        .select("total_amount, customer_id")
+        .select("total_amount, customer_id, sales_rep_id")
         .eq("id", id)
         .single();
 
-      // 2. Fetch existing items
-      const { data: existingItems } = await supabaseAdmin
-        .from("order_items")
-        .select("id, product_id, quantity, free_quantity")
-        .eq("order_id", id);
+      if (!currentOrder) throw new Error("Order data validation failed");
 
-      if (!existingItems || !currentOrder) {
-        throw new Error("Order data validation failed");
+      const locationIds = await getRepLocationIds(currentOrder.sales_rep_id);
+
+      // 2. Delete removed items → restore global + location stock
+      for (const deletedId of deletedItemIds) {
+        const { data: deletedItem } = await supabaseAdmin
+          .from("order_items")
+          .select("product_id, quantity, free_quantity")
+          .eq("id", deletedId)
+          .single();
+
+        if (deletedItem) {
+          const restoreQty =
+            deletedItem.quantity + (deletedItem.free_quantity || 0);
+          await restoreStock(deletedItem.product_id, restoreQty, locationIds);
+          await supabaseAdmin
+            .from("order_items")
+            .delete()
+            .eq("id", deletedId);
+        }
       }
 
-      // 3. Process each item update
-      for (const newItem of items) {
-        const oldItem = existingItems.find((i) => i.id === newItem.id);
+      // 3. Update existing items → adjust stock by diff
+      for (const updItem of items) {
+        const { data: oldItem } = await supabaseAdmin
+          .from("order_items")
+          .select("product_id, quantity, free_quantity")
+          .eq("id", updItem.id)
+          .single();
 
         if (oldItem) {
-          const oldTotalQty = oldItem.quantity + oldItem.free_quantity;
-          const newTotalQty = Number(newItem.qty) + Number(newItem.free);
-          const diff = newTotalQty - oldTotalQty;
+          const oldQty = oldItem.quantity + (oldItem.free_quantity || 0);
+          const newQty = Number(updItem.qty) + Number(updItem.free || 0);
+          const diff = newQty - oldQty; // positive = more stock needed, negative = stock freed
 
-          if (diff !== 0) {
-            const { data: product } = await supabaseAdmin
-              .from("products")
-              .select("stock_quantity")
-              .eq("id", oldItem.product_id)
-              .single();
-
-            if (product) {
-              await supabaseAdmin
-                .from("products")
-                .update({ stock_quantity: product.stock_quantity - diff })
-                .eq("id", oldItem.product_id);
-            }
+          if (diff > 0) {
+            await deductStock(oldItem.product_id, diff, locationIds);
+          } else if (diff < 0) {
+            await restoreStock(oldItem.product_id, Math.abs(diff), locationIds);
           }
 
           await supabaseAdmin
             .from("order_items")
             .update({
-              quantity: newItem.qty,
-              free_quantity: newItem.free,
-              unit_price: newItem.price,
-              total_price: newItem.total,
+              quantity: updItem.qty,
+              free_quantity: updItem.free || 0,
+              unit_price: updItem.price,
+              total_price: updItem.total,
+              discount_percent: updItem.discountPercent || 0,
+              discount_amount: updItem.discountAmount || 0,
             })
-            .eq("id", newItem.id);
+            .eq("id", updItem.id);
         }
       }
 
-      // 4. Update Order Total
+      // 4. Insert new items → deduct global + location stock
+      for (const ni of newItems) {
+        await supabaseAdmin.from("order_items").insert({
+          order_id: id,
+          product_id: ni.productId,
+          quantity: ni.qty,
+          free_quantity: ni.free || 0,
+          unit_price: ni.price,
+          total_price: ni.total,
+          discount_percent: ni.discountPercent || 0,
+          discount_amount: ni.discountAmount || 0,
+        });
+
+        await deductStock(ni.productId, ni.qty + (ni.free || 0), locationIds);
+      }
+
+      // 5. Update order total + date
       await supabaseAdmin
         .from("orders")
-        .update({ total_amount: totalAmount })
+        .update({
+          total_amount: totalAmount,
+          ...(orderDate ? { order_date: orderDate } : {}),
+        })
         .eq("id", id);
 
-      // 5. Update Invoice Total (if exists)
+      // 6. Update invoice total
       await supabaseAdmin
         .from("invoices")
         .update({ total_amount: totalAmount })
         .eq("order_id", id);
 
-      // 6. Update Customer Balance
+      // 7. Update customer outstanding balance
       const totalDiff = totalAmount - currentOrder.total_amount;
       if (totalDiff !== 0) {
         const { data: customer } = await supabaseAdmin
@@ -208,17 +336,19 @@ export async function PATCH(
       });
     }
 
-    // --- SCENARIO 2: STATUS UPDATE (APPROVE/REJECT) ---
+    // --- SCENARIO 2: STATUS UPDATE (APPROVE/REJECT/CANCEL) ---
     if (status) {
       const { data: currentOrder, error: fetchError } = await supabaseAdmin
         .from("orders")
-        .select("status")
+        .select("status, sales_rep_id")
         .eq("id", id)
         .single();
 
       if (fetchError) throw fetchError;
 
       if (status === "Cancelled" && currentOrder.status !== "Cancelled") {
+        const locationIds = await getRepLocationIds(currentOrder.sales_rep_id);
+
         const { data: orderItems, error: itemsError } = await supabaseAdmin
           .from("order_items")
           .select("product_id, quantity, free_quantity")
@@ -228,23 +358,9 @@ export async function PATCH(
 
         if (orderItems) {
           for (const item of orderItems) {
-            const { data: product, error: prodError } = await supabaseAdmin
-              .from("products")
-              .select("stock_quantity")
-              .eq("id", item.product_id)
-              .single();
-
-            if (!prodError && product) {
-              const currentStock = Number(product.stock_quantity) || 0;
-              const restoreQty =
-                (Number(item.quantity) || 0) +
-                (Number(item.free_quantity) || 0);
-
-              await supabaseAdmin
-                .from("products")
-                .update({ stock_quantity: currentStock + restoreQty })
-                .eq("id", item.product_id);
-            }
+            const restoreQty =
+              (Number(item.quantity) || 0) + (Number(item.free_quantity) || 0);
+            await restoreStock(item.product_id, restoreQty, locationIds);
           }
         }
       }
