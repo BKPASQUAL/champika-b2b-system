@@ -441,7 +441,7 @@ export default function DistributionProfitPage() {
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                       <YAxis tickFormatter={fmtK} tick={{ fontSize: 11 }} />
-                      <Tooltip formatter={(v: number) => fmt(v)} />
+                      <Tooltip formatter={(v: number | undefined) => fmt(v ?? 0)} />
                       <Legend />
                       <Area
                         type="monotone"
@@ -629,7 +629,7 @@ export default function DistributionProfitPage() {
                           width={90}
                           tick={{ fontSize: 11 }}
                         />
-                        <Tooltip formatter={(v: number) => fmt(v)} />
+                        <Tooltip formatter={(v: number | undefined) => fmt(v ?? 0)} />
                         <Legend />
                         <Bar
                           dataKey="revenue"
@@ -662,9 +662,9 @@ export default function DistributionProfitPage() {
                           cx="50%"
                           cy="50%"
                           outerRadius={100}
-                          label={({ name, percent }) =>
-                            percent > 0.06
-                              ? `${name.split(" ")[0]} ${(percent * 100).toFixed(0)}%`
+                          label={({ name, percent }: { name?: string; percent?: number }) =>
+                            (percent ?? 0) > 0.06
+                              ? `${(name ?? "").split(" ")[0]} ${((percent ?? 0) * 100).toFixed(0)}%`
                               : ""
                           }
                         >
@@ -675,7 +675,7 @@ export default function DistributionProfitPage() {
                             />
                           ))}
                         </Pie>
-                        <Tooltip formatter={(v: number) => fmt(v)} />
+                        <Tooltip formatter={(v: number | undefined) => fmt(v ?? 0)} />
                         <Legend />
                       </PieChart>
                     </ResponsiveContainer>
@@ -783,7 +783,7 @@ export default function DistributionProfitPage() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="loadId" tick={{ fontSize: 10 }} />
                         <YAxis tickFormatter={fmtK} tick={{ fontSize: 10 }} />
-                        <Tooltip formatter={(v: number) => fmt(v)} />
+                        <Tooltip formatter={(v: number | undefined) => fmt(v ?? 0)} />
                         <Legend />
                         <Bar
                           dataKey="revenue"
@@ -903,7 +903,7 @@ export default function DistributionProfitPage() {
                           width={110}
                           tick={{ fontSize: 10 }}
                         />
-                        <Tooltip formatter={(v: number) => fmt(v)} />
+                        <Tooltip formatter={(v: number | undefined) => fmt(v ?? 0)} />
                         <Legend />
                         <Bar
                           dataKey="revenue"
@@ -936,9 +936,9 @@ export default function DistributionProfitPage() {
                           cx="50%"
                           cy="50%"
                           outerRadius={100}
-                          label={({ percent }) =>
-                            percent > 0.05
-                              ? `${(percent * 100).toFixed(0)}%`
+                          label={({ percent }: { percent?: number }) =>
+                            (percent ?? 0) > 0.05
+                              ? `${((percent ?? 0) * 100).toFixed(0)}%`
                               : ""
                           }
                         >
@@ -946,7 +946,7 @@ export default function DistributionProfitPage() {
                             <Cell key={i} fill={COLORS[i % COLORS.length]} />
                           ))}
                         </Pie>
-                        <Tooltip formatter={(v: number) => fmt(v)} />
+                        <Tooltip formatter={(v: number | undefined) => fmt(v ?? 0)} />
                         <Legend />
                       </PieChart>
                     </ResponsiveContainer>
@@ -1051,7 +1051,7 @@ export default function DistributionProfitPage() {
                           width={110}
                           tick={{ fontSize: 10 }}
                         />
-                        <Tooltip formatter={(v: number) => fmt(v)} />
+                        <Tooltip formatter={(v: number | undefined) => fmt(v ?? 0)} />
                         <Legend />
                         <Bar
                           dataKey="revenue"
@@ -1084,9 +1084,9 @@ export default function DistributionProfitPage() {
                           cx="50%"
                           cy="50%"
                           outerRadius={100}
-                          label={({ percent }) =>
-                            percent > 0.05
-                              ? `${(percent * 100).toFixed(0)}%`
+                          label={({ percent }: { percent?: number }) =>
+                            (percent ?? 0) > 0.05
+                              ? `${((percent ?? 0) * 100).toFixed(0)}%`
                               : ""
                           }
                         >
@@ -1094,7 +1094,7 @@ export default function DistributionProfitPage() {
                             <Cell key={i} fill={COLORS[i % COLORS.length]} />
                           ))}
                         </Pie>
-                        <Tooltip formatter={(v: number) => fmt(v)} />
+                        <Tooltip formatter={(v: number | undefined) => fmt(v ?? 0)} />
                         <Legend />
                       </PieChart>
                     </ResponsiveContainer>
