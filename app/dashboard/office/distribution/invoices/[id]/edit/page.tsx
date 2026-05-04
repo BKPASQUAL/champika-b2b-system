@@ -128,6 +128,7 @@ export default function DistributionEditInvoicePage({
   const [loading, setLoading] = useState(true);
   const [stockLoading, setStockLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [outOfStockOverride, setOutOfStockOverride] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
 
@@ -193,12 +194,18 @@ export default function DistributionEditInvoicePage({
         const user = getUserBusinessContext();
         if (user) setCurrentUserRole(user.role);
 
-        const [custRes, usersRes, invRes, retRes] = await Promise.all([
+        const [custRes, usersRes, invRes, retRes, overrideRes] = await Promise.all([
           fetch(`/api/customers?businessId=${distributionBusinessId}`),
           fetch("/api/users"),
           fetch(`/api/invoices/${id}`),
           fetch(`/api/invoices/${id}/returns`),
+          fetch("/api/settings/invoice-override").catch(() => null),
         ]);
+
+        if (overrideRes?.ok) {
+          const overrideData = await overrideRes.json();
+          setOutOfStockOverride(overrideData.enabled ?? false);
+        }
 
         const custData = await custRes.json();
         setCustomers(custData.map((c: any) => ({ id: c.id, name: c.shopName })));
@@ -261,22 +268,23 @@ export default function DistributionEditInvoicePage({
 
       setStockLoading(true);
       try {
-        const res = await fetch(
-          `/api/rep/stock?userId=${salesRepId}&businessId=${distributionBusinessId}`
-        );
+        const stockUrl = `/api/rep/stock?userId=${salesRepId}&businessId=${distributionBusinessId}${outOfStockOverride ? "&includeOutOfStock=true" : ""}`;
+        const res = await fetch(stockUrl);
         if (!res.ok) throw new Error("Failed to load stock");
 
         const productsData = await res.json();
         setProducts(
-          productsData.map((p: any) => ({
-            id: p.id,
-            sku: p.sku || "N/A",
-            name: p.name,
-            selling_price: p.sellingPrice || p.selling_price || 0,
-            mrp: p.mrp || 0,
-            stock_quantity: p.stock || p.stock_quantity || 0,
-            unit_of_measure: p.unit || p.unit_of_measure || "unit",
-          }))
+          productsData
+            .filter((p: any) => p.subCategory !== "Retail Exclusive" && !p.retail_only)
+            .map((p: any) => ({
+              id: p.id,
+              sku: p.sku || "N/A",
+              name: p.name,
+              selling_price: p.sellingPrice || p.selling_price || 0,
+              mrp: p.mrp || 0,
+              stock_quantity: p.stock || p.stock_quantity || 0,
+              unit_of_measure: p.unit || p.unit_of_measure || "unit",
+            }))
         );
       } catch (error) {
         console.error("Error fetching stock:", error);
@@ -288,7 +296,7 @@ export default function DistributionEditInvoicePage({
     };
 
     fetchRepStock();
-  }, [salesRepId, distributionBusinessId]);
+  }, [salesRepId, distributionBusinessId, outOfStockOverride]);
 
   // --- Product Selection ---
   const handleProductSelect = (productId: string) => {
@@ -344,7 +352,7 @@ export default function DistributionEditInvoicePage({
       toast.error("Quantity must be greater than 0");
       return;
     }
-    if (qty + free > currentItem.stockAvailable) {
+    if (!outOfStockOverride && qty + free > currentItem.stockAvailable) {
       toast.error(`Insufficient stock! Available: ${currentItem.stockAvailable}`);
       return;
     }
@@ -626,6 +634,16 @@ export default function DistributionEditInvoicePage({
           )}
         </div>
       </div>
+
+      {/* Out-of-stock override banner */}
+      {outOfStockOverride && !isReadOnly && (
+        <div className="flex items-start gap-2 bg-orange-50 border border-orange-300 rounded-lg px-4 py-3 text-sm text-orange-800">
+          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-orange-500" />
+          <span>
+            <strong>Out-of-stock override is active:</strong> Products with 0 stock are visible and can be added to the invoice.
+          </span>
+        </div>
+      )}
 
       {/* Read Only Warning */}
       {isReadOnly && (
@@ -940,8 +958,12 @@ export default function DistributionEditInvoicePage({
                     value={currentItem.stockAvailable || "-"}
                     disabled
                     className={
-                      currentItem.stockAvailable > 0 && currentItem.stockAvailable < 10
+                      !outOfStockOverride &&
+                      currentItem.stockAvailable > 0 &&
+                      currentItem.stockAvailable < 10
                         ? "text-destructive font-bold bg-muted"
+                        : currentItem.stockAvailable === 0 && outOfStockOverride
+                        ? "text-orange-600 font-bold bg-muted"
                         : "bg-muted"
                     }
                   />

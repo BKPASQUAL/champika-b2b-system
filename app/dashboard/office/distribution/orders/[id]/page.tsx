@@ -119,6 +119,7 @@ export default function ViewOrderPage({
   // Product Add Form
   const [products, setProducts] = useState<Product[]>([]);
   const [stockLoading, setStockLoading] = useState(false);
+  const [outOfStockOverride, setOutOfStockOverride] = useState(false);
   const [productOpen, setProductOpen] = useState(false);
   const [currentItem, setCurrentItem] = useState({
     productId: "",
@@ -198,21 +199,31 @@ export default function ViewOrderPage({
     const fetchRepStock = async () => {
       setStockLoading(true);
       try {
-        const res = await fetch(
-          `/api/rep/stock?userId=${order.salesRepId}&businessId=${distributionBusinessId}`
-        );
+        // Fetch override setting alongside stock
+        const overrideRes = await fetch("/api/settings/invoice-override").catch(() => null);
+        let overrideEnabled = false;
+        if (overrideRes?.ok) {
+          const od = await overrideRes.json();
+          overrideEnabled = od.enabled ?? false;
+          setOutOfStockOverride(overrideEnabled);
+        }
+
+        const stockUrl = `/api/rep/stock?userId=${order.salesRepId}&businessId=${distributionBusinessId}${overrideEnabled ? "&includeOutOfStock=true" : ""}`;
+        const res = await fetch(stockUrl);
         if (!res.ok) throw new Error();
         const data = await res.json();
         setProducts(
-          data.map((p: any) => ({
-            id: p.id,
-            sku: p.sku || "N/A",
-            name: p.name,
-            selling_price: p.sellingPrice || p.selling_price || 0,
-            mrp: p.mrp || 0,
-            stock_quantity: p.stock || p.stock_quantity || 0,
-            unit_of_measure: p.unit || p.unit_of_measure || "unit",
-          }))
+          data
+            .filter((p: any) => p.subCategory !== "Retail Exclusive" && !p.retail_only)
+            .map((p: any) => ({
+              id: p.id,
+              sku: p.sku || "N/A",
+              name: p.name,
+              selling_price: p.sellingPrice || p.selling_price || 0,
+              mrp: p.mrp || 0,
+              stock_quantity: p.stock || p.stock_quantity || 0,
+              unit_of_measure: p.unit || p.unit_of_measure || "unit",
+            }))
         );
       } catch {
         toast.error("Failed to load product stock");
@@ -300,7 +311,7 @@ export default function ViewOrderPage({
       toast.error("Quantity must be greater than 0");
       return;
     }
-    if (qty + free > currentItem.stockAvailable) {
+    if (!outOfStockOverride && qty + free > currentItem.stockAvailable) {
       toast.error(`Insufficient stock! Available: ${currentItem.stockAvailable}`);
       return;
     }
@@ -588,6 +599,15 @@ export default function ViewOrderPage({
         </div>
       </div>
 
+      {isEditing && outOfStockOverride && (
+        <div className="flex items-start gap-2 bg-orange-50 border border-orange-300 rounded-lg px-4 py-3 text-sm text-orange-800">
+          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-orange-500" />
+          <span>
+            <strong>Out-of-stock override is active:</strong> Products with 0 stock are visible and can be added to the order.
+          </span>
+        </div>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-3">
         {/* LEFT COLUMN */}
         <div className="lg:col-span-2 space-y-6">
@@ -809,9 +829,12 @@ export default function ViewOrderPage({
                       value={currentItem.stockAvailable || "-"}
                       disabled
                       className={
+                        !outOfStockOverride &&
                         currentItem.stockAvailable > 0 &&
                         currentItem.stockAvailable < 10
                           ? "text-destructive font-bold bg-muted"
+                          : currentItem.stockAvailable === 0 && outOfStockOverride
+                          ? "text-orange-600 font-bold bg-muted"
                           : "bg-muted"
                       }
                     />
