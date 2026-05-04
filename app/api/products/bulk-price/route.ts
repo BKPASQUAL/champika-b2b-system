@@ -58,6 +58,7 @@ export async function POST(request: NextRequest) {
         mrp: update.mrp,
         selling_price: update.sellingPrice,
         cost_price: update.costPrice,
+        actual_cost_price: update.costPrice,
         updated_at: now,
       };
 

@@ -445,6 +445,69 @@ function FixItemCostsAction() {
   );
 }
 
+// ── Sync Sierra Actual Costs Action ──────────────────────────────────────────
+function SyncSierraCostsAction() {
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<{ synced: number; total: number; alreadyInSync: number } | null>(null);
+
+  const handleSync = async () => {
+    setRunning(true);
+    setResult(null);
+    try {
+      const res = await fetch("/api/admin/sync-sierra-costs", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      setResult({ synced: data.synced ?? 0, total: data.total ?? 0, alreadyInSync: data.alreadyInSync ?? 0 });
+      toast.success(data.message || "Sync complete");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to run sync");
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border-2 border-blue-200 bg-blue-50 p-5 space-y-3">
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-1 flex-1">
+          <div className="flex items-center gap-2">
+            <Database className="h-4 w-4 text-blue-700" />
+            <p className="text-sm font-semibold text-gray-800">
+              Sync Sierra Actual Cost Price (One-Time)
+            </p>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Sets <strong>actual cost = cost price</strong> for all Sierra Cables Plc products where they are out of sync or missing.
+            After this sync, actual cost will auto-update whenever a product cost is edited or a new purchase is recorded.
+          </p>
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="shrink-0 border-blue-400 text-blue-800 hover:bg-blue-100"
+          onClick={handleSync}
+          disabled={running}
+        >
+          {running ? (
+            <><span className="animate-spin mr-1.5">⟳</span> Syncing…</>
+          ) : (
+            <><Database className="h-3.5 w-3.5 mr-1.5" /> Run Sync</>
+          )}
+        </Button>
+      </div>
+      {result && (
+        <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2 text-sm text-green-800">
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
+          <span>
+            Synced <strong>{result.synced}</strong> product{result.synced !== 1 ? "s" : ""} out of <strong>{result.total}</strong> Sierra products
+            {result.alreadyInSync > 0 && ` (${result.alreadyInSync} were already in sync)`}.
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Operations Section ────────────────────────────────────────────────────────
 function OperationsSettings() {
   const [stockOverride, setStockOverride] = useState(false);
@@ -687,6 +750,7 @@ function OperationsSettings() {
       {/* Data Maintenance */}
       <Separator />
       <FixItemCostsAction />
+      <SyncSierraCostsAction />
 
       <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-lg p-3 text-sm text-blue-700">
         <Info className="h-4 w-4 mt-0.5 shrink-0" />

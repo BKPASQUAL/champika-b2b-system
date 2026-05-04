@@ -134,7 +134,10 @@ export async function PATCH(
     if (val.mrp !== undefined) dbUpdates.mrp = val.mrp;
     if (val.sellingPrice !== undefined)
       dbUpdates.selling_price = val.sellingPrice;
-    if (val.costPrice !== undefined) dbUpdates.cost_price = val.costPrice;
+    if (val.costPrice !== undefined) {
+      dbUpdates.cost_price = val.costPrice;
+      dbUpdates.actual_cost_price = val.costPrice;
+    }
     if (val.unitOfMeasure) dbUpdates.unit_of_measure = val.unitOfMeasure;
     if (val.images) dbUpdates.images = val.images;
     if (val.isActive !== undefined) dbUpdates.is_active = val.isActive;
