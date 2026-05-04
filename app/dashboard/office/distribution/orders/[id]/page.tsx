@@ -20,6 +20,7 @@ import {
   Package,
   Check,
   ChevronsUpDown,
+  ArrowRightLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,6 +55,21 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -67,6 +83,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
+import { printOrder } from "@/app/lib/order-html";
 
 interface Product {
   id: string;
@@ -138,6 +155,8 @@ export default function ViewOrderPage({
   const [showApproveDialog, setShowApproveDialog] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [showSaveConfirmDialog, setShowSaveConfirmDialog] = useState(false);
+  const [showMoveStageDialog, setShowMoveStageDialog] = useState(false);
+  const [targetStage, setTargetStage] = useState("");
 
   // --- Fetch Order ---
   const fetchOrderDetails = async () => {
@@ -465,6 +484,27 @@ export default function ViewOrderPage({
     }
   };
 
+  const executeMoveToStage = async () => {
+    if (!targetStage) return;
+    setProcessing(true);
+    try {
+      const res = await fetch(`/api/orders/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: targetStage }),
+      });
+      if (!res.ok) throw new Error("Failed to move order");
+      toast.success(`Order moved to ${targetStage}.`);
+      await fetchOrderDetails();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to update status");
+    } finally {
+      setProcessing(false);
+      setShowMoveStageDialog(false);
+      setTargetStage("");
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center py-16">
@@ -560,10 +600,21 @@ export default function ViewOrderPage({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => window.print()}
+                onClick={() => printOrder(order, items)}
               >
                 <Printer className="w-4 h-4 mr-2" /> Print
               </Button>
+              {!["Cancelled", "Completed", "Delivered"].includes(order.status) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowMoveStageDialog(true)}
+                  disabled={processing}
+                  className="bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 hover:text-purple-800"
+                >
+                  <ArrowRightLeft className="w-4 h-4 mr-2" /> Move Stage
+                </Button>
+              )}
               {order.status === "Pending" && (
                 <>
                   <Button
@@ -1301,6 +1352,56 @@ export default function ViewOrderPage({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Move to Stage Dialog */}
+      {order && (
+        <Dialog open={showMoveStageDialog} onOpenChange={(open) => { setShowMoveStageDialog(open); if (!open) setTargetStage(""); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Move Order to Stage</DialogTitle>
+              <DialogDescription>
+                Select a stage to move order #{order.orderId} to. Current status:{" "}
+                <strong>{order.status}</strong>
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-2">
+              <Label className="mb-2 block">Target Stage</Label>
+              <Select value={targetStage} onValueChange={setTargetStage}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select a stage..." />
+                </SelectTrigger>
+                <SelectContent className="w-full">
+                  {(["Processing", "Checking", "Loading"] as const)
+                    .filter((s) => s !== order.status)
+                    .map((s) => (
+                      <SelectItem key={s} value={s}>{s}</SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => { setShowMoveStageDialog(false); setTargetStage(""); }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={executeMoveToStage}
+                disabled={!targetStage || processing}
+                className="bg-purple-600 hover:bg-purple-700 text-white"
+              >
+                {processing ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <ArrowRightLeft className="w-4 h-4 mr-2" />
+                )}
+                Move to {targetStage || "Stage"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Save Confirmation Dialog */}
       <AlertDialog

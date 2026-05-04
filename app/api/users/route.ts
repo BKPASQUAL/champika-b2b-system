@@ -6,9 +6,10 @@ import { ZodError } from "zod";
 // GET: Fetch users (optionally filtered by role) with Business info
 export async function GET(request: NextRequest) {
   try {
-    // 1. Extract 'role' from query params (e.g., /api/users?role=rep)
+    // 1. Extract role filter(s) — supports ?role=rep or ?roles=rep,delivery
     const { searchParams } = new URL(request.url);
     const role = searchParams.get("role");
+    const roles = searchParams.get("roles");
 
     // 2. Build the base query
     let query = supabaseAdmin
@@ -23,8 +24,11 @@ export async function GET(request: NextRequest) {
       )
       .order("created_at", { ascending: false });
 
-    // 3. Apply role filter if provided
-    if (role) {
+    // 3. Apply role filter(s) if provided
+    if (roles) {
+      const roleList = roles.split(",").map((r) => r.trim()).filter(Boolean);
+      if (roleList.length > 0) query = query.in("role", roleList);
+    } else if (role) {
       query = query.eq("role", role);
     }
 

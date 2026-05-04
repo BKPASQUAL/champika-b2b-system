@@ -23,12 +23,19 @@ import {
 import { Truck, Users, Calendar, UserCircle } from "lucide-react";
 import { toast } from "sonner";
 
+interface Person {
+  id: string;
+  fullName: string;
+  role: string;
+}
+
 interface LoadingSheetDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   selectedCount: number;
   onConfirm: (data: any) => void;
 }
+
 
 export function LoadingSheetDialog({
   isOpen,
@@ -37,9 +44,7 @@ export function LoadingSheetDialog({
   onConfirm,
 }: LoadingSheetDialogProps) {
   const [lorries, setLorries] = useState<{ id: string; name: string }[]>([]);
-  const [users, setUsers] = useState<
-    { id: string; fullName: string; role: string }[]
-  >([]);
+  const [persons, setPersons] = useState<Person[]>([]);
   const [loadingData, setLoadingData] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -54,15 +59,13 @@ export function LoadingSheetDialog({
       const loadData = async () => {
         setLoadingData(true);
         try {
-          // You can also filter these by businessId if needed in the future
           const [lorryRes, userRes] = await Promise.all([
             fetch("/api/settings/categories?type=lorry"),
-            fetch("/api/users"),
+            fetch("/api/users?roles=rep,delivery"),
           ]);
-
           if (lorryRes.ok) setLorries(await lorryRes.json());
-          if (userRes.ok) setUsers(await userRes.json());
-        } catch (error) {
+          if (userRes.ok) setPersons(await userRes.json());
+        } catch {
           toast.error("Failed to load data");
         } finally {
           setLoadingData(false);
@@ -82,18 +85,22 @@ export function LoadingSheetDialog({
       return;
     }
 
-    const selectedHelper = users.find((u) => u.id === formData.helperId);
+    const selectedHelper = persons.find((u) => u.id === formData.helperId);
 
-    const payload = {
+    onConfirm({
       lorryNumber: formData.lorryNumber,
       driverId: formData.driverId,
       helperName: selectedHelper ? selectedHelper.fullName : "",
       date: formData.date,
-    };
-
-    onConfirm(payload);
+    });
     onOpenChange(false);
   };
+
+  // Sort: drivers first, then reps
+  const sorted = [...persons].sort((a, b) => {
+    if (a.role === b.role) return a.fullName.localeCompare(b.fullName);
+    return a.role === "delivery" ? -1 : 1;
+  });
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -101,12 +108,13 @@ export function LoadingSheetDialog({
         <DialogHeader>
           <DialogTitle>Create Loading Sheet</DialogTitle>
           <DialogDescription>
-            Assign <strong>{selectedCount}</strong> distribution orders to a
-            vehicle.
+            Assign <strong>{selectedCount}</strong> order
+            {selectedCount !== 1 ? "s" : ""} to a delivery vehicle.
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-4">
+          {/* Date */}
           <div className="grid gap-2">
             <Label>Loading Date</Label>
             <div className="relative">
@@ -122,6 +130,7 @@ export function LoadingSheetDialog({
             </div>
           </div>
 
+          {/* Lorry */}
           <div className="grid gap-2">
             <Label>Select Lorry</Label>
             <Select
@@ -146,6 +155,7 @@ export function LoadingSheetDialog({
             </Select>
           </div>
 
+          {/* Responsible Person + Helper */}
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label>Responsible Person</Label>
@@ -157,10 +167,12 @@ export function LoadingSheetDialog({
               >
                 <SelectTrigger className="w-full pl-9 relative">
                   <UserCircle className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <SelectValue placeholder="Select Person" />
+                  <SelectValue
+                    placeholder={loadingData ? "Loading..." : "Select Person"}
+                  />
                 </SelectTrigger>
-                <SelectContent>
-                  {users.map((u) => (
+                <SelectContent className="w-full">
+                  {sorted.map((u) => (
                     <SelectItem key={u.id} value={u.id}>
                       {u.fullName}
                     </SelectItem>
@@ -181,13 +193,18 @@ export function LoadingSheetDialog({
                   <Users className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                   <SelectValue placeholder="Select Helper" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="w-full">
                   <SelectItem value="none">None</SelectItem>
-                  {users.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>
-                      {u.fullName}
-                    </SelectItem>
-                  ))}
+                  {sorted
+                    .filter((u) => u.id !== formData.driverId)
+                    .map((u) => (
+                      <SelectItem key={u.id} value={u.id}>
+                        <span className="flex items-center">
+                          {u.fullName}
+                          {roleBadge(u.role)}
+                        </span>
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
