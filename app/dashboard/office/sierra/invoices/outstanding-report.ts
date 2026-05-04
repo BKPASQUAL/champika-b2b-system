@@ -29,8 +29,8 @@ const COLOR = {
   mutedText:    [120, 120, 120] as [number, number, number],
 };
 
-const M = 15;
-const START_Y = 46;
+const M = 8;
+const START_Y = 44;
 
 function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -90,7 +90,7 @@ function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
           fontStyle: "bold",
           halign: "left",
           fontSize: 8.5,
-          cellPadding: { top: 2, bottom: 2, left: 2, right: 2 },
+          cellPadding: { top: 1.5, bottom: 1.5, left: 2, right: 2 },
         },
       },
     ]);
@@ -105,7 +105,7 @@ function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
 
       tableData.push([
         new Date(inv.date).toLocaleDateString("en-GB"),
-        inv.invoiceNo,
+        inv.manualInvoiceNo || "",
         daysOverdue,
         fmt(inv.totalAmount),
         fmt(inv.paidAmount),
@@ -137,13 +137,13 @@ function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
       fillColor: COLOR.headerBg,
       textColor: COLOR.headerText,
       fontStyle: "bold",
-      fontSize: 9,
+      fontSize: 8.5,
       halign: "center",
-      cellPadding: { top: 3, bottom: 3, left: 2, right: 2 },
+      cellPadding: { top: 2.5, bottom: 2.5, left: 1.5, right: 1.5 },
     },
     styles: {
-      fontSize: 8.5,
-      cellPadding: { top: 2, bottom: 2, left: 2, right: 2 },
+      fontSize: 8,
+      cellPadding: { top: 1.5, bottom: 1.5, left: 1.5, right: 1.5 },
       lineColor: COLOR.divider,
       lineWidth: 0.1,
       textColor: COLOR.bodyText,
@@ -151,12 +151,12 @@ function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
     },
     columnStyles: {
       0: { halign: "left",   cellWidth: 24 },
-      1: { halign: "center", cellWidth: 24 },
+      1: { halign: "center", cellWidth: 26 },
       2: { halign: "center", cellWidth: 18 },
-      3: { halign: "right",  cellWidth: 34 },
-      4: { halign: "right",  cellWidth: 28 },
-      5: { halign: "right",  cellWidth: 30, fontStyle: "bold" },
-      6: { halign: "center", cellWidth: 22 },
+      3: { halign: "right",  cellWidth: 36 },
+      4: { halign: "right",  cellWidth: 30 },
+      5: { halign: "right",  cellWidth: 34, fontStyle: "bold" },
+      6: { halign: "center", cellWidth: 26 },
     },
     didParseCell(data) {
       const raw = data.row.raw as any[];

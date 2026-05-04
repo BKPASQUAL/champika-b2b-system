@@ -13,6 +13,7 @@ export type OrderStatus =
 export interface Invoice {
   id: string;
   invoiceNo: string;
+  manualInvoiceNo?: string | null;
   date: string;
   customerId: string;
   customerName: string;
