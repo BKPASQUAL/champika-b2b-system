@@ -236,7 +236,7 @@ export default function ViewOrderPage({
       if (!res.ok) throw new Error("Failed to cancel order");
 
       toast.success("Order Cancelled.");
-      router.push("/dashboard/admin/orders/pending");
+      router.push("/dashboard/office/distribution/orders/pending");
     } catch (error: any) {
       toast.error(error.message || "Failed to cancel order");
     } finally {
