@@ -280,7 +280,7 @@ export function MobileNav({
                     </p>
                   )}
                   <div className="space-y-0.5">
-                    {section.items.map((item) => {
+                    {section.items.filter((item: any) => !item.adminOnly || isAdmin).map((item) => {
                       const Icon = item.icon;
                       const isActive = pathname === item.href;
                       return (

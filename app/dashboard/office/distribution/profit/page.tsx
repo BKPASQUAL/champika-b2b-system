@@ -58,6 +58,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
+import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -176,6 +177,12 @@ export default function DistributionProfitPage() {
   const [period, setPeriod] = useState("this-year");
   const [activeTab, setActiveTab] = useState("overview");
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const user = getUserBusinessContext();
+    setIsAdmin(user?.role === "admin");
+  }, []);
 
   const [overview, setOverview] = useState<any>(null);
   const [monthly, setMonthly] = useState<any[]>([]);
@@ -259,6 +266,28 @@ export default function DistributionProfitPage() {
       setLoading(false);
     }
   };
+
+  if (isAdmin === null) {
+    return (
+      <div className="flex justify-center items-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
+        <div className="h-16 w-16 rounded-full bg-red-100 flex items-center justify-center">
+          <BarChart3 className="h-8 w-8 text-red-500" />
+        </div>
+        <h2 className="text-xl font-bold text-slate-800">Access Restricted</h2>
+        <p className="text-muted-foreground max-w-sm text-sm">
+          Profit Analytics is only available to administrators. Contact your admin if you need access.
+        </p>
+      </div>
+    );
+  }
 
   const periodLabel: Record<string, string> = {
     today: "Today",

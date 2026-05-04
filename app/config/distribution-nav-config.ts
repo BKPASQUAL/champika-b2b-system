@@ -30,6 +30,7 @@ interface DistNavItem {
   href: string;
   icon: LucideIcon;
   description?: string;
+  adminOnly?: boolean;
 }
 
 interface DistNavSection {
@@ -217,6 +218,7 @@ export const distributionNavItems: DistNavSection[] = [
         href: "/dashboard/office/distribution/profit",
         icon: TrendingUp,
         description: "Revenue, profit, rep performance & top customers",
+        adminOnly: true,
       },
     ],
   },
