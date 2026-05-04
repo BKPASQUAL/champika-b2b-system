@@ -199,10 +199,7 @@ export function LoadingSheetDialog({
                     .filter((u) => u.id !== formData.driverId)
                     .map((u) => (
                       <SelectItem key={u.id} value={u.id}>
-                        <span className="flex items-center">
-                          {u.fullName}
-                          {roleBadge(u.role)}
-                        </span>
+                        {u.fullName}
                       </SelectItem>
                     ))}
                 </SelectContent>
