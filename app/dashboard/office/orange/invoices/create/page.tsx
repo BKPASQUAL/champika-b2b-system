@@ -100,7 +100,8 @@ export default function CreateInvoicePage() {
   const [invoiceDate, setInvoiceDate] = useState(
     new Date().toISOString().split("T")[0]
   );
-  const [invoiceNumber, setInvoiceNumber] = useState("INV-NEW");
+  const [manualInvoiceNo, setManualInvoiceNo] = useState("");
+  const [noManualRef, setNoManualRef] = useState(false);
 
   // Hardcoded / Auto-assigned States
   const salesRepId = currentUser?.id || "";
@@ -316,6 +317,10 @@ export default function CreateInvoicePage() {
       toast.error("Please add items to the invoice.");
       return;
     }
+    if (!noManualRef && !manualInvoiceNo.trim()) {
+      toast.error("Enter a manual invoice number, or tick 'No manual ref'.");
+      return;
+    }
     if (!businessId) {
       toast.error("Business context missing.");
       return;
@@ -325,9 +330,9 @@ export default function CreateInvoicePage() {
 
     const invoiceData = {
       customerId,
-      salesRepId, // Automatically set to current user
+      salesRepId,
       items,
-      invoiceNumber,
+      manual_invoice_no: noManualRef ? "" : manualInvoiceNo,
       invoiceDate,
       subTotal: subtotal,
       extraDiscountPercent: extraDiscount,
@@ -496,7 +501,39 @@ export default function CreateInvoicePage() {
                   />
                 </div>
               </div>
+              {/* Manual Invoice No */}
               <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="font-semibold text-red-600">
+                      Manual Invoice No <span>*</span>
+                    </Label>
+                    <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={noManualRef}
+                        onChange={(e) => {
+                          setNoManualRef(e.target.checked);
+                          if (e.target.checked) setManualInvoiceNo("");
+                        }}
+                        className="rounded"
+                      />
+                      No manual ref
+                    </label>
+                  </div>
+                  {!noManualRef ? (
+                    <Input
+                      value={manualInvoiceNo}
+                      onChange={(e) => setManualInvoiceNo(e.target.value)}
+                      placeholder="Enter manual invoice number"
+                      className="border-red-300 focus:border-red-500"
+                    />
+                  ) : (
+                    <div className="h-9 flex items-center text-xs text-muted-foreground italic px-3 border rounded-md bg-muted">
+                      No manual ref
+                    </div>
+                  )}
+                </div>
                 <div className="space-y-2">
                   <Label>Sales Rep (Current User)</Label>
                   <Input
@@ -505,6 +542,8 @@ export default function CreateInvoicePage() {
                     className="bg-muted"
                   />
                 </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Order Status</Label>
                   <Input

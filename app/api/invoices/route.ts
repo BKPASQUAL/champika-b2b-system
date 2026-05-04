@@ -195,6 +195,21 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const val = invoiceSchema.parse(body);
 
+    // Duplicate manual invoice number check
+    if (val.manual_invoice_no) {
+      const { data: dup } = await supabaseAdmin
+        .from("invoices")
+        .select("invoice_no")
+        .eq("manual_invoice_no", val.manual_invoice_no)
+        .maybeSingle();
+      if (dup) {
+        return NextResponse.json(
+          { error: `Manual invoice number "${val.manual_invoice_no}" is already used by invoice ${dup.invoice_no}. Please use a unique reference number.` },
+          { status: 409 }
+        );
+      }
+    }
+
     // -------------------------------------------------------------
     // 1. Resolve business_id first — needed to determine invoice prefix.
     //    If not sent (e.g. rep portal), look it up from the customer.

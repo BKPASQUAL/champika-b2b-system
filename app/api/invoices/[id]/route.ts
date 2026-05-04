@@ -201,6 +201,22 @@ export async function PATCH(
     const body = await request.json();
     const val = updateInvoiceSchema.parse(body);
 
+    // Duplicate manual invoice number check (exclude current invoice)
+    if (val.manual_invoice_no) {
+      const { data: dup } = await supabaseAdmin
+        .from("invoices")
+        .select("invoice_no")
+        .eq("manual_invoice_no", val.manual_invoice_no)
+        .neq("id", id)
+        .maybeSingle();
+      if (dup) {
+        return NextResponse.json(
+          { error: `Manual invoice number "${val.manual_invoice_no}" is already used by invoice ${dup.invoice_no}. Please use a unique reference number.` },
+          { status: 409 }
+        );
+      }
+    }
+
     // 1. Fetch Current Invoice State (Snapshot for History)
     const { data: currentInvoice, error: invError } = await supabaseAdmin
       .from("invoices")
