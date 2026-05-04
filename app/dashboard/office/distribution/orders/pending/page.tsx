@@ -26,6 +26,8 @@ import {
   AlertCircle,
   Download,
   ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import {
   Table,
@@ -36,7 +38,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Order } from "../types";
+import { Order, SortField, SortOrder } from "../types";
 import { downloadLoadingSummary } from "../loading/print-loading-summary";
 
 export default function DistributionPendingOrdersPage() {
@@ -50,7 +52,24 @@ export default function DistributionPendingOrdersPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [selectedRep, setSelectedRep] = useState<string>("all");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [sortField, setSortField] = useState<SortField>("date");
+  const [sortDirection, setSortDirection] = useState<SortOrder>("desc");
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDirection("desc");
+    }
+  };
+
+  const getSortIcon = (field: SortField) => {
+    if (sortField !== field) return <ArrowUpDown className="h-3.5 w-3.5 ml-1 opacity-40" />;
+    return sortDirection === "asc"
+      ? <ArrowUp className="h-3.5 w-3.5 ml-1" />
+      : <ArrowDown className="h-3.5 w-3.5 ml-1" />;
+  };
 
   // Unique sales reps derived from loaded orders
   const salesReps = useMemo(() => {
@@ -75,11 +94,26 @@ export default function DistributionPendingOrdersPage() {
         return textMatch && repMatch;
       })
       .sort((a, b) => {
-        const dateA = new Date(a.date).getTime();
-        const dateB = new Date(b.date).getTime();
-        return sortOrder === "asc" ? dateA - dateB : dateB - dateA;
+        let cmp = 0;
+        switch (sortField) {
+          case "date":
+            cmp = new Date(a.date).getTime() - new Date(b.date).getTime();
+            break;
+          case "invoiceNo":
+            cmp = ((a as any).invoiceNo || "").localeCompare((b as any).invoiceNo || "");
+            break;
+          case "customerName":
+            cmp = a.shopName.localeCompare(b.shopName);
+            break;
+          case "totalAmount":
+            cmp = a.totalAmount - b.totalAmount;
+            break;
+          default:
+            cmp = new Date(a.date).getTime() - new Date(b.date).getTime();
+        }
+        return sortDirection === "asc" ? cmp : -cmp;
       });
-  }, [orders, searchQuery, selectedRep, sortOrder]);
+  }, [orders, searchQuery, selectedRep, sortField, sortDirection]);
 
   const toggleSelect = (id: string) =>
     setSelectedOrders((prev) =>
@@ -156,15 +190,30 @@ export default function DistributionPendingOrdersPage() {
                 ))}
               </SelectContent>
             </Select>
-            {/* Sort by Date */}
+            {/* Sort Field */}
+            <Select value={sortField} onValueChange={(v) => setSortField(v as SortField)}>
+              <SelectTrigger className="w-full sm:w-40 bg-white border-slate-200">
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="date">Date</SelectItem>
+                <SelectItem value="invoiceNo">Invoice No</SelectItem>
+                <SelectItem value="customerName">Shop Name</SelectItem>
+                <SelectItem value="totalAmount">Total Amount</SelectItem>
+              </SelectContent>
+            </Select>
+            {/* Sort Direction */}
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setSortOrder((s) => (s === "asc" ? "desc" : "asc"))}
+              onClick={() => setSortDirection((d) => (d === "asc" ? "desc" : "asc"))}
               className="bg-white border-slate-200 gap-1.5 shrink-0"
             >
-              <ArrowUpDown className="h-3.5 w-3.5" />
-              {sortOrder === "desc" ? "Newest first" : "Oldest first"}
+              {sortDirection === "desc" ? (
+                <><ArrowDown className="h-3.5 w-3.5" /> Desc</>
+              ) : (
+                <><ArrowUp className="h-3.5 w-3.5" /> Asc</>
+              )}
             </Button>
           </div>
         </CardHeader>
@@ -286,12 +335,32 @@ export default function DistributionPendingOrdersPage() {
                       onCheckedChange={toggleSelectAll}
                     />
                   </TableHead>
-                  <TableHead className="w-[100px]">Date</TableHead>
-                  <TableHead>Invoice No</TableHead>
-                  <TableHead>Customer / Shop</TableHead>
+                  <TableHead
+                    className="w-[100px] cursor-pointer hover:bg-slate-100 select-none"
+                    onClick={() => handleSort("date")}
+                  >
+                    <div className="flex items-center">Date {getSortIcon("date")}</div>
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer hover:bg-slate-100 select-none"
+                    onClick={() => handleSort("invoiceNo")}
+                  >
+                    <div className="flex items-center">Invoice No {getSortIcon("invoiceNo")}</div>
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer hover:bg-slate-100 select-none"
+                    onClick={() => handleSort("customerName")}
+                  >
+                    <div className="flex items-center">Customer / Shop {getSortIcon("customerName")}</div>
+                  </TableHead>
                   <TableHead>Sales Rep</TableHead>
                   <TableHead className="text-right">Items</TableHead>
-                  <TableHead className="text-right">Total Amount</TableHead>
+                  <TableHead
+                    className="text-right cursor-pointer hover:bg-slate-100 select-none"
+                    onClick={() => handleSort("totalAmount")}
+                  >
+                    <div className="flex items-center justify-end">Total Amount {getSortIcon("totalAmount")}</div>
+                  </TableHead>
                   <TableHead className="text-center">Status</TableHead>
                   <TableHead className="text-right">Action</TableHead>
                 </TableRow>

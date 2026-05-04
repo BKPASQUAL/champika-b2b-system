@@ -7,6 +7,19 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status");
     const businessId = searchParams.get("businessId"); // Get businessId from params
 
+    const sortByParam = searchParams.get("sortBy") || "created_at";
+    const sortOrderParam = searchParams.get("sortOrder") || "desc";
+    const ascending = sortOrderParam === "asc";
+
+    const DB_SORT_COLUMN: Record<string, string> = {
+      date: "order_date",
+      invoiceNo: "invoice_no",
+      totalAmount: "total_amount",
+      status: "status",
+      created_at: "created_at",
+    };
+    const dbSortColumn = DB_SORT_COLUMN[sortByParam] ?? "created_at";
+
     let query = supabaseAdmin
       .from("orders")
       .select(
@@ -31,7 +44,7 @@ export async function GET(request: NextRequest) {
         )
       `
       )
-      .order("created_at", { ascending: false });
+      .order(dbSortColumn, { ascending });
 
     // Apply Status Filter if provided
     if (status) {
