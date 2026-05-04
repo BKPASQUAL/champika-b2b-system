@@ -22,6 +22,7 @@ import {
   ScrollText,
   Printer,
   Tags,
+  TrendingUp,
 } from "lucide-react";
 
 interface DistNavItem {
@@ -205,6 +206,17 @@ export const distributionNavItems: DistNavSection[] = [
         name: "Targets & Settings",
         href: "/dashboard/office/distribution/settings/targets",
         icon: FileText,
+      },
+    ],
+  },
+  {
+    title: "Analytics",
+    items: [
+      {
+        name: "Profit Analytics",
+        href: "/dashboard/office/distribution/profit",
+        icon: TrendingUp,
+        description: "Revenue, profit, rep performance & top customers",
       },
     ],
   },

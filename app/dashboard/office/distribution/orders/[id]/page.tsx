@@ -90,6 +90,7 @@ interface Product {
   sku: string;
   name: string;
   selling_price: number;
+  cost_price: number;
   mrp: number;
   stock_quantity: number;
   unit_of_measure: string;
@@ -103,6 +104,7 @@ interface OrderItem {
   unit: string;
   price: number;
   sellingPrice: number;
+  costPrice: number;
   qty: number;
   free: number;
   discountPercent: number;
@@ -146,6 +148,7 @@ export default function ViewOrderPage({
     unit: "",
     mrp: 0,
     unitPrice: 0,
+    costPrice: 0,
     discountPercent: "",
     stockAvailable: 0,
   });
@@ -193,6 +196,7 @@ export default function ViewOrderPage({
         return {
           ...item,
           sellingPrice: item.sellingPrice ?? item.price,
+          costPrice: item.costPrice ?? 0,
           discountPercent: parseFloat(discountPercent.toFixed(2)),
           discountAmount,
         };
@@ -239,6 +243,7 @@ export default function ViewOrderPage({
               sku: p.sku || "N/A",
               name: p.name,
               selling_price: p.sellingPrice || p.selling_price || 0,
+              cost_price: p.costPrice || p.cost_price || 0,
               mrp: p.mrp || 0,
               stock_quantity: p.stock || p.stock_quantity || 0,
               unit_of_measure: p.unit || p.unit_of_measure || "unit",
@@ -267,6 +272,7 @@ export default function ViewOrderPage({
       unit: product.unit_of_measure,
       mrp: product.mrp,
       unitPrice: product.selling_price,
+      costPrice: product.cost_price,
       discountPercent: "",
       stockAvailable: product.stock_quantity,
     });
@@ -290,6 +296,7 @@ export default function ViewOrderPage({
       unit: "",
       mrp: 0,
       unitPrice: 0,
+      costPrice: 0,
       discountPercent: "",
       stockAvailable: 0,
     });
@@ -307,6 +314,7 @@ export default function ViewOrderPage({
       unit: item.unit,
       mrp: product?.mrp || 0,
       unitPrice: item.price,
+      costPrice: item.costPrice ?? product?.cost_price ?? 0,
       discountPercent: String(item.discountPercent),
       stockAvailable: currentDbStock + item.qty + item.free,
     });
@@ -352,6 +360,7 @@ export default function ViewOrderPage({
                 free,
                 price: currentItem.unitPrice,
                 sellingPrice: product?.selling_price ?? i.sellingPrice,
+                costPrice: currentItem.costPrice ?? i.costPrice,
                 discountPercent: discPerc,
                 discountAmount,
                 total,
@@ -371,6 +380,7 @@ export default function ViewOrderPage({
         unit: currentItem.unit,
         price: currentItem.unitPrice,
         sellingPrice: product?.selling_price || currentItem.unitPrice,
+        costPrice: currentItem.costPrice,
         qty,
         free,
         discountPercent: discPerc,
@@ -524,6 +534,14 @@ export default function ViewOrderPage({
   const extraDiscountAmount = Math.max(0, subtotal - finalGrandTotal);
   const extraDiscountPercent =
     subtotal > 0 ? (extraDiscountAmount / subtotal) * 100 : 0;
+
+  // Cost & profit calculations
+  const totalCost = items.reduce(
+    (acc, item) => acc + (item.costPrice ?? 0) * (item.qty + item.free),
+    0
+  );
+  const grossProfit = finalGrandTotal - totalCost;
+  const grossMargin = finalGrandTotal > 0 ? (grossProfit / finalGrandTotal) * 100 : 0;
 
   // Products already in the order (exclude from add dropdown)
   const availableProducts = products.filter(
@@ -892,8 +910,8 @@ export default function ViewOrderPage({
                   </div>
                 </div>
 
-                {/* MRP / Unit Price / Discount / Total */}
-                <div className="grid grid-cols-4 gap-4">
+                {/* MRP / Unit Price / Cost / Discount / Total / Profit */}
+                <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label>MRP</Label>
                     <Input
@@ -927,6 +945,16 @@ export default function ViewOrderPage({
                     />
                   </div>
                   <div className="space-y-2">
+                    <Label className="text-orange-600">Cost Price</Label>
+                    <Input
+                      value={currentItem.costPrice || "—"}
+                      disabled
+                      className="bg-orange-50 text-orange-700 font-medium"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
                     <Label>Discount %</Label>
                     <Input
                       type="number"
@@ -951,6 +979,33 @@ export default function ViewOrderPage({
                       disabled
                       className="font-bold bg-muted"
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-green-600">Est. Profit</Label>
+                    {(() => {
+                      const qty = parseFloat(currentItem.quantity) || 0;
+                      const free = parseFloat(currentItem.freeQuantity) || 0;
+                      const profit = currentItem.costPrice > 0
+                        ? currentTotal - currentItem.costPrice * (qty + free)
+                        : null;
+                      const margin = profit !== null && currentTotal > 0
+                        ? (profit / currentTotal) * 100
+                        : null;
+                      return (
+                        <Input
+                          value={
+                            profit !== null
+                              ? `${profit.toFixed(2)} (${margin?.toFixed(1)}%)`
+                              : "—"
+                          }
+                          disabled
+                          className={`font-bold ${
+                            profit === null ? "bg-muted" :
+                            profit >= 0 ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+                          }`}
+                        />
+                      );
+                    })()}
                   </div>
                 </div>
 
@@ -1008,6 +1063,8 @@ export default function ViewOrderPage({
                       </TableHead>
                       <TableHead className="text-center w-24">Disc%</TableHead>
                       <TableHead className="text-right w-28">Total</TableHead>
+                      <TableHead className="text-right w-28 text-orange-600">Cost</TableHead>
+                      <TableHead className="text-right w-28 text-green-600">Profit</TableHead>
                       {isEditing && (
                         <TableHead className="w-12"></TableHead>
                       )}
@@ -1017,7 +1074,7 @@ export default function ViewOrderPage({
                     {items.length === 0 ? (
                       <TableRow>
                         <TableCell
-                          colSpan={isEditing ? 8 : 7}
+                          colSpan={isEditing ? 10 : 9}
                           className="text-center py-8 text-muted-foreground"
                         >
                           <Package className="w-8 h-8 mx-auto mb-2 opacity-50" />
@@ -1104,6 +1161,24 @@ export default function ViewOrderPage({
                             </TableCell>
                             <TableCell className="text-right font-bold text-sm">
                               {item.total.toLocaleString()}
+                            </TableCell>
+                            <TableCell className="text-right text-sm text-orange-600 tabular-nums">
+                              {item.costPrice > 0
+                                ? ((item.costPrice * (item.qty + item.free))).toLocaleString()
+                                : <span className="text-muted-foreground text-xs">—</span>}
+                            </TableCell>
+                            <TableCell className="text-right text-sm tabular-nums">
+                              {item.costPrice > 0 ? (() => {
+                                const itemCost = item.costPrice * (item.qty + item.free);
+                                const profit = item.total - itemCost;
+                                const margin = item.total > 0 ? (profit / item.total) * 100 : 0;
+                                return (
+                                  <div className={profit >= 0 ? "text-green-700" : "text-red-600"}>
+                                    <div className="font-semibold">{profit.toLocaleString()}</div>
+                                    <div className="text-[10px] opacity-70">{margin.toFixed(1)}%</div>
+                                  </div>
+                                );
+                              })() : <span className="text-muted-foreground text-xs">—</span>}
                             </TableCell>
                             {isEditing && (
                               <TableCell>
@@ -1200,6 +1275,38 @@ export default function ViewOrderPage({
                   </span>
                 </div>
               </div>
+
+              {totalCost > 0 && (
+                <div className="mt-4 pt-4 border-t space-y-2.5">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Cost & Profit
+                  </p>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Total Cost</span>
+                    <span className="font-medium text-orange-600">
+                      LKR {totalCost.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Gross Profit</span>
+                    <span className={`font-bold ${grossProfit >= 0 ? "text-green-700" : "text-red-600"}`}>
+                      LKR {grossProfit.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Profit Margin</span>
+                    <span className={`font-semibold text-sm px-2 py-0.5 rounded-full ${
+                      grossMargin >= 20 ? "bg-green-100 text-green-800" :
+                      grossMargin >= 10 ? "bg-yellow-100 text-yellow-800" :
+                      grossMargin >= 0  ? "bg-orange-100 text-orange-800" :
+                                          "bg-red-100 text-red-800"
+                    }`}>
+                      {grossMargin.toFixed(1)}%
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {!isEditing && (
                 <Button
                   className="w-full mt-4"

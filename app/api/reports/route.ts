@@ -16,8 +16,11 @@ export async function GET(request: Request) {
 
     const fromDate = searchParams.get("from") || firstDay;
     const toDate = searchParams.get("to") || lastDay;
+    const businessId = searchParams.get("businessId") || null;
 
-    // 2. Fetch Loading Sheets (Deliveries)
+    // 2. Fetch Loading Sheets (Deliveries) — not filtered by businessId since
+    //    loading_sheets has no business_id column; delivery profit is derived
+    //    from the orders that ARE filtered by businessId below.
     const { data: loadingSheets, error: loadsError } = await supabaseAdmin
       .from("loading_sheets")
       .select(
@@ -32,8 +35,7 @@ export async function GET(request: Request) {
     if (loadsError) throw loadsError;
 
     // 3. Fetch Orders (Revenue & COGS)
-    // ✅ ADDED: actual_unit_cost to selection for historical profit accuracy
-    const { data: orders, error: ordersError } = await supabaseAdmin
+    let ordersQuery = supabaseAdmin
       .from("orders")
       .select(
         `
@@ -48,17 +50,27 @@ export async function GET(request: Request) {
       )
       .gte("created_at", fromDate)
       .lte("created_at", toDate)
-      .in("status", ["Delivered"]); // ✅ FIXED: Removed "Completed" to prevent DB error
+      .in("status", ["Delivered"]);
 
+    if (businessId) {
+      ordersQuery = ordersQuery.eq("business_id", businessId);
+    }
+
+    const { data: orders, error: ordersError } = await ordersQuery;
     if (ordersError) throw ordersError;
 
     // 4. Fetch Expenses
-    const { data: expenses, error: expensesError } = await supabaseAdmin
+    let expensesQuery = supabaseAdmin
       .from("expenses")
       .select("id, amount, category, expense_date, business_id, load_id")
       .gte("expense_date", fromDate)
       .lte("expense_date", toDate);
 
+    if (businessId) {
+      expensesQuery = expensesQuery.eq("business_id", businessId);
+    }
+
+    const { data: expenses, error: expensesError } = await expensesQuery;
     if (expensesError) throw expensesError;
 
     // 5. Fetch Business Losses (Damaged Items marked as Loss)
@@ -150,12 +162,12 @@ export async function GET(request: Request) {
           const freeQty = Number(item.free_quantity) || 0;
           const totalQty = qty + freeQty;
 
-          // --- CHANGED LOGIC START ---
-          // Use Historical Cost if available (for past orders), otherwise use current product cost
-          // Use != null so that a stored value of 0 doesn't fall through to the product fallback
+          // Use actual_unit_cost when it is a positive value (historically recorded).
+          // A stored 0 means it was never filled in, so fall back to the product's current cost_price.
+          const actualCost = Number(item.actual_unit_cost);
           const costPrice =
-            item.actual_unit_cost != null
-              ? Number(item.actual_unit_cost)
+            actualCost > 0
+              ? actualCost
               : Number(item.product?.cost_price) || 0;
 
           const sellingPrice = Number(item.unit_price) || 0;

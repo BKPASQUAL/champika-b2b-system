@@ -42,6 +42,7 @@ export async function GET(request: NextRequest) {
           sku,
           name,
           selling_price,
+          cost_price,
           retail_price,
           mrp,
           unit_of_measure,

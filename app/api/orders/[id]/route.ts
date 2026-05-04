@@ -36,12 +36,14 @@ export async function GET(
           free_quantity,
           unit_price,
           total_price,
+          actual_unit_cost,
           products (
             sku,
             name,
             unit_of_measure,
             images,
-            selling_price
+            selling_price,
+            cost_price
           )
         )
       `
@@ -90,6 +92,9 @@ export async function GET(
         image: item.products?.images?.[0] || null,
         price: item.unit_price,
         sellingPrice: item.products?.selling_price ?? item.unit_price,
+        costPrice: Number(item.actual_unit_cost) > 0
+          ? Number(item.actual_unit_cost)
+          : Number(item.products?.cost_price) || 0,
         qty: item.quantity,
         free: item.free_quantity,
         disc: 0,
