@@ -25,6 +25,7 @@ import {
   FileText,
   AlertCircle,
   Download,
+  Printer,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
@@ -40,6 +41,7 @@ import {
 import { toast } from "sonner";
 import { Order, SortField, SortOrder } from "../types";
 import { downloadLoadingSummary } from "../loading/print-loading-summary";
+import { printBulkInvoices } from "@/app/lib/invoice-print";
 
 export default function DistributionPendingOrdersPage() {
   const router = useRouter();
@@ -146,19 +148,38 @@ export default function DistributionPendingOrdersPage() {
           </p>
         </div>
         {selectedOrders.length > 0 && (
-          <Button
-            variant="outline"
-            onClick={() =>
-              downloadLoadingSummary(selectedOrders, {
-                title: "PENDING ORDERS — ITEMS SUMMARY REPORT",
-                filePrefix: "Pending_Summary",
-              })
-            }
-            className="animate-in fade-in zoom-in duration-300 bg-white border-slate-200"
-          >
-            <Download className="w-4 h-4 mr-2" />
-            Download Summary ({selectedOrders.length})
-          </Button>
+          <div className="flex gap-2 animate-in fade-in zoom-in duration-300">
+            <Button
+              variant="outline"
+              onClick={() => {
+                const invoiceIds = filteredOrders
+                  .filter((o) => selectedOrders.includes(o.id) && o.invoiceId)
+                  .map((o) => o.invoiceId as string);
+                if (invoiceIds.length === 0) {
+                  toast.error("No invoices found for the selected orders.");
+                  return;
+                }
+                printBulkInvoices(invoiceIds, "distribution");
+              }}
+              className="bg-white border-slate-200"
+            >
+              <Printer className="w-4 h-4 mr-2" />
+              Print Invoices ({selectedOrders.length})
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() =>
+                downloadLoadingSummary(selectedOrders, {
+                  title: "PENDING ORDERS — ITEMS SUMMARY REPORT",
+                  filePrefix: "Pending_Summary",
+                })
+              }
+              className="bg-white border-slate-200"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Download Summary ({selectedOrders.length})
+            </Button>
+          </div>
         )}
       </div>
 

@@ -13,7 +13,8 @@ export type OrderStatus =
 export interface Order {
   id: string;
   orderId: string;
-  invoiceNo?: string; // Added to fix 'Property invoiceNo does not exist'
+  invoiceNo?: string;
+  invoiceId?: string;
   date: string;
   customerName: string;
   shopName: string;

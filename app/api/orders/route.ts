@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
           full_name
         ),
         invoices (
+          id,
           status,
           invoice_no,
           paid_amount,
@@ -79,7 +80,8 @@ export async function GET(request: NextRequest) {
       return {
         id: order.id,
         orderId: order.order_id,
-        invoiceNo: invoiceNumber, // Mapped Invoice Number
+        invoiceNo: invoiceNumber,
+        invoiceId: order.invoices?.[0]?.id || null,
         customerId: order.customer_id,
         customerName: order.customers?.owner_name || "Unknown",
         shopName: order.customers?.shop_name || "Unknown Shop",
