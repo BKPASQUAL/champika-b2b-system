@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { UserRole } from "@/app/config/nav-config";
 import { AppSidebar } from "@/components/ui/layout/AppSidebar";
 import { MobileNav } from "@/components/ui/layout/MobileNav";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
-import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Loader2, Plus } from "lucide-react";
 
 export default function RepDashboardLayout({
   children,
@@ -50,9 +52,15 @@ export default function RepDashboardLayout({
       {/* Main Content Wrapper */}
       <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         {/* Mobile Header (Visible only on small screens) */}
-        <header className="lg:hidden h-16 bg-white border-b flex items-center px-4 shrink-0 z-30">
+        <header className="lg:hidden h-16 bg-white border-b flex items-center px-4 shrink-0 z-30 gap-3">
           <MobileNav role={userRole} />
-          <span className="ml-4 font-bold text-gray-700">Champika HW</span>
+          <span className="font-bold text-gray-700 flex-1 truncate">Champika HW</span>
+          <Link href="/dashboard/rep/orders/create">
+            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white gap-1.5 shrink-0">
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Create Invoice</span>
+            </Button>
+          </Link>
         </header>
 
         {/* Desktop Header (Visible only on large screens) */}
@@ -61,6 +69,12 @@ export default function RepDashboardLayout({
             Sales Representative Portal
           </h1>
           <div className="flex items-center gap-4">
+            <Link href="/dashboard/rep/orders/create">
+              <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white gap-1.5">
+                <Plus className="h-4 w-4" />
+                Create Invoice
+              </Button>
+            </Link>
             <div className="flex items-center gap-2">
               <div className="text-right hidden sm:block">
                 <p className="text-sm font-medium text-gray-700">
