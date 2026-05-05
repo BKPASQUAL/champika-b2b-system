@@ -258,9 +258,37 @@ export default function DistributionEditInvoicePage({
     fetchInitialData();
   }, [id]);
 
-  // --- 2. Fetch Rep Stock When Rep Changes ---
+  // --- 2. Fetch Products: all items when override ON, rep stock when override OFF ---
   useEffect(() => {
-    const fetchRepStock = async () => {
+    const fetchProducts = async () => {
+      if (outOfStockOverride) {
+        setStockLoading(true);
+        try {
+          const res = await fetch("/api/products?active=true");
+          if (!res.ok) throw new Error("Failed to load products");
+          const data = await res.json();
+          setProducts(
+            data
+              .filter((p: any) => p.subCategory !== "Retail Exclusive" && !p.retailOnly)
+              .map((p: any) => ({
+                id: p.id,
+                sku: p.sku || "N/A",
+                name: p.name,
+                selling_price: p.sellingPrice || 0,
+                mrp: p.mrp || 0,
+                stock_quantity: p.stock || 0,
+                unit_of_measure: p.unitOfMeasure || "unit",
+              }))
+          );
+        } catch (error) {
+          toast.error("Failed to load products");
+          setProducts([]);
+        } finally {
+          setStockLoading(false);
+        }
+        return;
+      }
+
       if (!salesRepId) {
         setProducts([]);
         return;
@@ -268,13 +296,11 @@ export default function DistributionEditInvoicePage({
 
       setStockLoading(true);
       try {
-        const stockUrl = `/api/rep/stock?userId=${salesRepId}&businessId=${distributionBusinessId}${outOfStockOverride ? "&includeOutOfStock=true" : ""}`;
-        const res = await fetch(stockUrl);
+        const res = await fetch(`/api/rep/stock?userId=${salesRepId}&businessId=${distributionBusinessId}`);
         if (!res.ok) throw new Error("Failed to load stock");
-
-        const productsData = await res.json();
+        const data = await res.json();
         setProducts(
-          productsData
+          data
             .filter((p: any) => p.subCategory !== "Retail Exclusive" && !p.retail_only)
             .map((p: any) => ({
               id: p.id,
@@ -287,7 +313,6 @@ export default function DistributionEditInvoicePage({
             }))
         );
       } catch (error) {
-        console.error("Error fetching stock:", error);
         toast.error("Failed to load products for this representative");
         setProducts([]);
       } finally {
@@ -295,8 +320,8 @@ export default function DistributionEditInvoicePage({
       }
     };
 
-    fetchRepStock();
-  }, [salesRepId, distributionBusinessId, outOfStockOverride]);
+    fetchProducts();
+  }, [salesRepId, outOfStockOverride, distributionBusinessId]);
 
   // --- Product Selection ---
   const handleProductSelect = (productId: string) => {
@@ -861,15 +886,15 @@ export default function DistributionEditInvoicePage({
                         role="combobox"
                         aria-expanded={productOpen}
                         className="w-full justify-between"
-                        disabled={!salesRepId || stockLoading || isReadOnly || !!editingItemId}
+                        disabled={(!salesRepId && !outOfStockOverride) || stockLoading || isReadOnly || !!editingItemId}
                       >
                         {currentItem.productId
                           ? products.find((p) => p.id === currentItem.productId)?.name
-                          : salesRepId
-                          ? stockLoading
-                            ? "Loading stock..."
-                            : "Select Product"
-                          : "Select Representative First"}
+                          : stockLoading
+                          ? "Loading products..."
+                          : (!salesRepId && !outOfStockOverride)
+                          ? "Select Representative First"
+                          : "Select Product"}
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
                     </PopoverTrigger>
@@ -881,9 +906,9 @@ export default function DistributionEditInvoicePage({
                         <CommandInput placeholder="Search product..." />
                         <CommandList>
                           <CommandEmpty>
-                            {salesRepId
-                              ? "No products found in this rep's stock."
-                              : "Please select a representative."}
+                            {(!salesRepId && !outOfStockOverride)
+                              ? "Please select a representative."
+                              : "No products found."}
                           </CommandEmpty>
                           <CommandGroup>
                             {availableProducts.map((product) => (

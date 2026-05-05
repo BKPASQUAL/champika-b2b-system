@@ -206,26 +206,44 @@ export default function CreateOrderPage() {
         setCanCreateCustomer(customerCreateData.enabled ?? false);
         setRoutes(routesData.filter((r: any) => r.name));
 
-        // 3. Fetch Products (Specific to Rep's Location)
-        const stockUrl = overrideEnabled
-          ? `/api/rep/stock?userId=${userId}&includeOutOfStock=true`
-          : `/api/rep/stock?userId=${userId}`;
-        const productsRes = await fetch(stockUrl);
-        if (!productsRes.ok) throw new Error("Failed to load rep stock");
-        const productsData = await productsRes.json();
-
-        const b2bProducts = productsData.filter((p: any) => p.subCategory !== "Retail Exclusive");
-        setProducts(
-          b2bProducts.map((p: any) => ({
-            id: p.id,
-            sku: p.sku,
-            name: p.name,
-            selling_price: p.selling_price,
-            mrp: p.mrp,
-            stock_quantity: p.stock_quantity,
-            unit_of_measure: p.unit_of_measure || "unit",
-          }))
-        );
+        // 3. Fetch Products
+        // Override ON: all active products (incl. 0-stock items with no location row)
+        // Override OFF: only items stocked at rep's assigned location
+        if (overrideEnabled) {
+          const productsRes = await fetch("/api/products?active=true");
+          if (!productsRes.ok) throw new Error("Failed to load products");
+          const productsData = await productsRes.json();
+          setProducts(
+            productsData
+              .filter((p: any) => p.subCategory !== "Retail Exclusive" && !p.retailOnly)
+              .map((p: any) => ({
+                id: p.id,
+                sku: p.sku || "N/A",
+                name: p.name,
+                selling_price: p.sellingPrice || 0,
+                mrp: p.mrp || 0,
+                stock_quantity: p.stock || 0,
+                unit_of_measure: p.unitOfMeasure || "unit",
+              }))
+          );
+        } else {
+          const productsRes = await fetch(`/api/rep/stock?userId=${userId}`);
+          if (!productsRes.ok) throw new Error("Failed to load rep stock");
+          const productsData = await productsRes.json();
+          setProducts(
+            productsData
+              .filter((p: any) => p.subCategory !== "Retail Exclusive")
+              .map((p: any) => ({
+                id: p.id,
+                sku: p.sku,
+                name: p.name,
+                selling_price: p.selling_price,
+                mrp: p.mrp,
+                stock_quantity: p.stock_quantity,
+                unit_of_measure: p.unit_of_measure || "unit",
+              }))
+          );
+        }
 
         // 4. Fetch Customers — filtered to rep's own business
         const customersUrl = bizId

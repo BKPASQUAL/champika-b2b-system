@@ -222,7 +222,7 @@ export default function ViewOrderPage({
     const fetchRepStock = async () => {
       setStockLoading(true);
       try {
-        // Fetch override setting alongside stock
+        // Fetch override setting
         const overrideRes = await fetch("/api/settings/invoice-override").catch(() => null);
         let overrideEnabled = false;
         if (overrideRes?.ok) {
@@ -231,24 +231,45 @@ export default function ViewOrderPage({
           setOutOfStockOverride(overrideEnabled);
         }
 
-        const stockUrl = `/api/rep/stock?userId=${order.salesRepId}&businessId=${distributionBusinessId}${overrideEnabled ? "&includeOutOfStock=true" : ""}`;
-        const res = await fetch(stockUrl);
-        if (!res.ok) throw new Error();
-        const data = await res.json();
-        setProducts(
-          data
-            .filter((p: any) => p.subCategory !== "Retail Exclusive" && !p.retail_only)
-            .map((p: any) => ({
-              id: p.id,
-              sku: p.sku || "N/A",
-              name: p.name,
-              selling_price: p.sellingPrice || p.selling_price || 0,
-              cost_price: p.costPrice || p.cost_price || 0,
-              mrp: p.mrp || 0,
-              stock_quantity: p.stock || p.stock_quantity || 0,
-              unit_of_measure: p.unit || p.unit_of_measure || "unit",
-            }))
-        );
+        // Override ON: all active products (incl. 0-stock items with no location row)
+        // Override OFF: only items stocked at rep's assigned location
+        if (overrideEnabled) {
+          const res = await fetch("/api/products?active=true");
+          if (!res.ok) throw new Error();
+          const data = await res.json();
+          setProducts(
+            data
+              .filter((p: any) => p.subCategory !== "Retail Exclusive" && !p.retailOnly)
+              .map((p: any) => ({
+                id: p.id,
+                sku: p.sku || "N/A",
+                name: p.name,
+                selling_price: p.sellingPrice || 0,
+                cost_price: p.costPrice || 0,
+                mrp: p.mrp || 0,
+                stock_quantity: p.stock || 0,
+                unit_of_measure: p.unitOfMeasure || "unit",
+              }))
+          );
+        } else {
+          const res = await fetch(`/api/rep/stock?userId=${order.salesRepId}&businessId=${distributionBusinessId}`);
+          if (!res.ok) throw new Error();
+          const data = await res.json();
+          setProducts(
+            data
+              .filter((p: any) => p.subCategory !== "Retail Exclusive" && !p.retail_only)
+              .map((p: any) => ({
+                id: p.id,
+                sku: p.sku || "N/A",
+                name: p.name,
+                selling_price: p.sellingPrice || p.selling_price || 0,
+                cost_price: p.costPrice || p.cost_price || 0,
+                mrp: p.mrp || 0,
+                stock_quantity: p.stock || p.stock_quantity || 0,
+                unit_of_measure: p.unit || p.unit_of_measure || "unit",
+              }))
+          );
+        }
       } catch {
         toast.error("Failed to load product stock");
         setProducts([]);
