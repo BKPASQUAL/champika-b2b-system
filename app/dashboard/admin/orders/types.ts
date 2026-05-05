@@ -15,7 +15,8 @@ export type PaymentStatus = "Paid" | "Unpaid" | "Partial";
 export interface Order {
   id: string;
   orderId: string;
-  invoiceNo?: string; // Added Invoice No
+  invoiceNo?: string;
+  invoiceId?: string;
   customerName: string;
   shopName: string;
   date: string;
