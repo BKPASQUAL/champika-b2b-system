@@ -326,7 +326,7 @@ export default function ProductsPage() {
         }}
         onExportExcel={generateExcel}
         onExportPDF={generatePDF}
-        onPriceListReport={() => printPriceListReport(sortedProducts)}
+        onPriceListReport={() => printPriceListReport(sortedProducts.filter((p) => p.isActive !== false))}
       />
       <ProductStats products={products} />
 
