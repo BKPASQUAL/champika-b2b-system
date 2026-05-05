@@ -227,6 +227,14 @@ export default function DistributionProfitPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [period]);
 
+  // Auto-refresh when new payments or invoices are recorded
+  useEffect(() => {
+    const handler = () => fetchProfit();
+    window.addEventListener("b2b:payment-mutated", handler);
+    return () => window.removeEventListener("b2b:payment-mutated", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period]);
+
   const fetchProfit = async () => {
     setLoading(true);
     try {

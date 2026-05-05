@@ -1,8 +1,8 @@
 // app/dashboard/admin/finance/accounts/page.tsx
 "use client";
 
-import React, { useState, useCallback } from "react";
-import { useCachedFetch } from "@/hooks/useCachedFetch";
+import React, { useState, useCallback, useEffect } from "react";
+import { useCachedFetch, invalidateFinanceCaches } from "@/hooks/useCachedFetch";
 import {
   Plus,
   Landmark,
@@ -208,6 +208,17 @@ export default function FinanceAccountsPage() {
     refetchBankCodes();
   }, [refetchAccounts, refetchBankCodes]);
 
+  // Auto-refresh balances when cheques are deposited/cleared or transfers happen
+  useEffect(() => {
+    const handler = () => refetchAccounts();
+    window.addEventListener("b2b:finance-mutated", handler);
+    window.addEventListener("b2b:payment-mutated", handler);
+    return () => {
+      window.removeEventListener("b2b:finance-mutated", handler);
+      window.removeEventListener("b2b:payment-mutated", handler);
+    };
+  }, [refetchAccounts]);
+
   // --- Actions ---
   const handleAddAccount = async () => {
     if (!newAccount.name) {
@@ -344,6 +355,7 @@ export default function FinanceAccountsPage() {
 
       toast.success("Transfer successful!");
       setIsTransferOpen(false);
+      invalidateFinanceCaches();
       fetchData();
       setTransferData({
         fromId: "",

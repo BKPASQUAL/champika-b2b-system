@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { useCachedFetch } from "@/hooks/useCachedFetch";
+import { useCachedFetch, invalidatePaymentCaches, invalidateFinanceCaches } from "@/hooks/useCachedFetch";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -160,6 +160,8 @@ export default function InvoicesPage() {
         return;
       }
       toast.success("Invoice deleted successfully");
+      invalidatePaymentCaches();
+      invalidateFinanceCaches();
       fetchInvoices();
     } catch {
       toast.error("Failed to delete invoice");

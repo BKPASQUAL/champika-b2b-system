@@ -99,7 +99,7 @@ export function InvoiceTable({
   onPageChange,
 }: InvoiceTableProps) {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmDeleteInvoice, setConfirmDeleteInvoice] = useState<Invoice | null>(null);
 
   const handleDownload = async (id: string) => {
     setDownloadingId(id);
@@ -247,7 +247,7 @@ export function InvoiceTable({
                       <Button
                         variant="ghost"
                         size="icon-sm"
-                        onClick={() => setConfirmDeleteId(invoice.id)}
+                        onClick={() => setConfirmDeleteInvoice(invoice)}
                         title="Delete Invoice"
                       >
                         <Trash2 className="w-4 h-4 text-red-500" />
@@ -263,19 +263,53 @@ export function InvoiceTable({
       </div>
 
       {/* ── Delete confirmation dialog ── */}
-      <AlertDialog open={!!confirmDeleteId} onOpenChange={(open) => !open && setConfirmDeleteId(null)}>
-        <AlertDialogContent>
+      <AlertDialog open={!!confirmDeleteInvoice} onOpenChange={(open) => !open && setConfirmDeleteInvoice(null)}>
+        <AlertDialogContent className="max-w-md">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-red-600">Delete Invoice?</AlertDialogTitle>
             <AlertDialogDescription asChild>
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <p>This action cannot be undone. Deleting this invoice will:</p>
-                <ul className="list-disc list-inside space-y-1 text-xs">
-                  <li>Restore product stock quantities</li>
-                  <li>Reduce the customer&apos;s outstanding balance</li>
-                  <li>Remove all payment records</li>
-                  <li>Delete the associated order permanently</li>
-                </ul>
+              <div className="space-y-3 text-sm">
+                {confirmDeleteInvoice && (
+                  <div className="rounded-lg border bg-muted/40 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono font-bold text-gray-900">{confirmDeleteInvoice.invoiceNo}</span>
+                      {renderPaymentBadge(confirmDeleteInvoice.status)}
+                    </div>
+                    <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
+                      <User className="w-3 h-3 shrink-0" />
+                      <span className="font-medium text-gray-700">{confirmDeleteInvoice.customerName}</span>
+                      <span className="mx-1">·</span>
+                      <span>{confirmDeleteInvoice.salesRepName}</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 pt-1 border-t border-border/50">
+                      <div className="text-center">
+                        <p className="text-[10px] text-muted-foreground">Date</p>
+                        <p className="text-xs font-semibold">
+                          {new Date(confirmDeleteInvoice.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" })}
+                        </p>
+                      </div>
+                      <div className="text-center border-x border-border/50">
+                        <p className="text-[10px] text-muted-foreground">Total</p>
+                        <p className="text-xs font-bold text-primary">LKR {confirmDeleteInvoice.totalAmount.toLocaleString()}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[10px] text-muted-foreground">Due</p>
+                        <p className={`text-xs font-bold ${confirmDeleteInvoice.dueAmount > 0 ? "text-red-600" : "text-muted-foreground"}`}>
+                          LKR {confirmDeleteInvoice.dueAmount.toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div className="space-y-1.5 text-muted-foreground">
+                  <p className="font-medium text-gray-700">This action cannot be undone. It will:</p>
+                  <ul className="list-disc list-inside space-y-0.5 text-xs">
+                    <li>Restore product stock quantities</li>
+                    <li>Reduce the customer&apos;s outstanding balance</li>
+                    <li>Remove all payment records</li>
+                    <li>Delete the associated order permanently</li>
+                  </ul>
+                </div>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -284,10 +318,10 @@ export function InvoiceTable({
             <AlertDialogAction
               className="bg-red-600 hover:bg-red-700 text-white"
               onClick={() => {
-                if (confirmDeleteId && onDelete) {
-                  onDelete(confirmDeleteId);
+                if (confirmDeleteInvoice && onDelete) {
+                  onDelete(confirmDeleteInvoice.id);
                 }
-                setConfirmDeleteId(null);
+                setConfirmDeleteInvoice(null);
               }}
             >
               Delete Invoice
@@ -405,7 +439,7 @@ export function InvoiceTable({
                           <Button
                             variant="ghost"
                             size="icon-sm"
-                            onClick={() => setConfirmDeleteId(invoice.id)}
+                            onClick={() => setConfirmDeleteInvoice(invoice)}
                             title="Delete Invoice"
                           >
                             <Trash2 className="w-4 h-4 text-red-500" />

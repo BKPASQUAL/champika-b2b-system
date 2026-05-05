@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
-import { useCachedFetch, invalidatePaymentCaches } from "@/hooks/useCachedFetch";
+import { useCachedFetch, invalidatePaymentCaches, invalidateFinanceCaches } from "@/hooks/useCachedFetch";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -642,6 +642,7 @@ export function ChequeManagementPage({
       );
       toast.success(`Cheque marked as ${status}`);
       invalidatePaymentCaches();
+      invalidateFinanceCaches();
       refetch();
     } catch {
       toast.error("Failed to update status");
@@ -696,6 +697,7 @@ export function ChequeManagementPage({
       setSelectedPendingKeys(new Set());
       setIsBulkDepositOpen(false);
       invalidatePaymentCaches();
+      invalidateFinanceCaches();
       refetch();
     } catch {
       toast.error("Failed to deposit some cheques");
@@ -724,6 +726,7 @@ export function ChequeManagementPage({
       setSelectedDepositedKeys(new Set());
       setIsBulkPassOpen(false);
       invalidatePaymentCaches();
+      invalidateFinanceCaches();
       refetch();
     } catch {
       toast.error("Failed to clear some cheques");

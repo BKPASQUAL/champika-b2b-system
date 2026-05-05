@@ -67,3 +67,13 @@ export function invalidatePaymentCaches(): void {
     window.dispatchEvent(new CustomEvent("b2b:payment-mutated"));
   }
 }
+
+/**
+ * Broadcasts a window event so finance pages (bank accounts, balances) can
+ * immediately re-fetch after a cheque deposit/clearance or bank transfer.
+ */
+export function invalidateFinanceCaches(): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("b2b:finance-mutated"));
+  }
+}

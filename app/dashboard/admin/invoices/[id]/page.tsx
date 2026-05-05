@@ -25,6 +25,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { invalidatePaymentCaches, invalidateFinanceCaches } from "@/hooks/useCachedFetch";
 import {
   Card,
   CardContent,
@@ -137,6 +138,8 @@ export default function ViewInvoicePage({
         throw new Error(err.error || "Failed to delete invoice");
       }
       toast.success("Invoice deleted successfully");
+      invalidatePaymentCaches();
+      invalidateFinanceCaches();
       router.push("/dashboard/admin/invoices");
     } catch (error: any) {
       toast.error(error.message || "Failed to delete invoice");
