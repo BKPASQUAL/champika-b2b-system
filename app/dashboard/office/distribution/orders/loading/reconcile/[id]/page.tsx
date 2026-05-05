@@ -1,4 +1,3 @@
-// app/dashboard/office/distribution/orders/loading/reconcile/[id]/page.tsx
 "use client";
 
 import React, { useState, useEffect, use } from "react";
@@ -29,6 +28,17 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Separator } from "@/components/ui/separator";
+import {
   ArrowLeft,
   Loader2,
   CheckCircle2,
@@ -39,13 +49,16 @@ import {
   Plus,
   Receipt,
   Trash2,
+  Truck,
+  Package,
+  TrendingDown,
+  ClipboardList,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-
-// Import Shared Expense Components (Reusing Admin Components)
 import { ExpenseFormDialog } from "@/app/dashboard/admin/expenses/_components/ExpenseDialogs";
 import { ExpenseFormData } from "@/app/dashboard/admin/expenses/types";
+import { cn } from "@/lib/utils";
 
 interface OrderItem {
   id: string;
@@ -74,6 +87,39 @@ interface ReconcileState {
   };
 }
 
+function KpiCard({
+  label,
+  value,
+  sub,
+  icon: Icon,
+  highlight,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  icon: (props: { className?: string }) => React.ReactNode;
+  highlight?: boolean;
+}) {
+  return (
+    <Card className={cn("border", highlight && "border-black bg-black text-white")}>
+      <CardContent className="p-4 flex items-center gap-3">
+        <div className={cn("p-2 rounded-lg shrink-0", highlight ? "bg-white/10" : "bg-slate-100")}>
+          <Icon className={cn("w-5 h-5", highlight ? "text-white" : "text-slate-600")} />
+        </div>
+        <div className="min-w-0">
+          <p className={cn("text-xs font-medium truncate", highlight ? "text-white/70" : "text-muted-foreground")}>
+            {label}
+          </p>
+          <p className={cn("text-base font-bold leading-tight", highlight ? "text-white" : "")}>{value}</p>
+          {sub && (
+            <p className={cn("text-xs truncate", highlight ? "text-white/60" : "text-muted-foreground")}>{sub}</p>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function OfficeReconcileLoadPage({
   params,
 }: {
@@ -87,70 +133,46 @@ export default function OfficeReconcileLoadPage({
   const [loadDetails, setLoadDetails] = useState<any>(null);
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [loadExpenses, setLoadExpenses] = useState<ExpenseItem[]>([]);
-  const [currentUser, setCurrentUser] = useState<{
-    id: string;
-    name: string;
-  } | null>(null);
-
-  // Dialog State
+  const [currentUser, setCurrentUser] = useState<{ id: string; name: string } | null>(null);
   const [isExpenseDialogOpen, setIsExpenseDialogOpen] = useState(false);
-
-  // State to track status/notes
+  const [expenseToDelete, setExpenseToDelete] = useState<string | null>(null);
   const [reconcileData, setReconcileData] = useState<ReconcileState>({});
 
   const fetchData = async () => {
     try {
-      // 1. Load User
       if (typeof window !== "undefined") {
         const stored = localStorage.getItem("currentUser");
         if (stored) {
           try {
-            const parsedUser = JSON.parse(stored);
-            if (parsedUser && parsedUser.id) {
-              setCurrentUser(parsedUser);
-            }
-          } catch (e) {
-            console.error("Error parsing user session");
-          }
+            const parsed = JSON.parse(stored);
+            if (parsed?.id) setCurrentUser(parsed);
+          } catch {}
         }
       }
 
-      // 2. Load Sheet Details
       const res = await fetch(`/api/orders/loading/history/${id}`);
-      if (!res.ok) throw new Error("Failed to load data");
+      if (!res.ok) throw new Error();
       const data = await res.json();
       setLoadDetails(data);
 
-      // 3. Load Expenses for this Load
       const expRes = await fetch("/api/expenses");
       if (expRes.ok) {
         const allExpenses = await expRes.json();
-        // Filter expenses strictly for this loadId
-        const linkedExpenses = allExpenses.filter((e: any) => e.loadId === id);
-        setLoadExpenses(linkedExpenses);
+        setLoadExpenses(allExpenses.filter((e: any) => e.loadId === id));
       }
 
-      // 4. Fetch History for Differences
       const ordersWithHistory = await Promise.all(
         data.orders.map(async (o: any) => {
           let originalAmount = o.totalAmount;
-
           if (o.invoiceId) {
             try {
-              const histRes = await fetch(
-                `/api/invoices/${o.invoiceId}/history`
-              );
+              const histRes = await fetch(`/api/invoices/${o.invoiceId}/history`);
               if (histRes.ok) {
                 const history = await histRes.json();
-                if (history.length > 0) {
-                  originalAmount = history[history.length - 1].previousTotal;
-                }
+                if (history.length > 0) originalAmount = history[history.length - 1].previousTotal;
               }
-            } catch (err) {
-              console.error("Failed to load history for", o.invoiceId);
-            }
+            } catch {}
           }
-
           return {
             id: o.id,
             orderId: o.orderId,
@@ -158,7 +180,7 @@ export default function OfficeReconcileLoadPage({
             invoiceNo: o.invoiceNo || "N/A",
             customer: o.customer.shopName,
             currentAmount: o.totalAmount,
-            originalAmount: originalAmount,
+            originalAmount,
             status: o.status,
             paymentStatus: "Credit",
           };
@@ -166,24 +188,19 @@ export default function OfficeReconcileLoadPage({
       );
 
       setOrders(ordersWithHistory);
-
-      // Initialize Reconcile State if empty
       setReconcileData((prev) => {
         if (Object.keys(prev).length > 0) return prev;
-        const initialState: ReconcileState = {};
+        const init: ReconcileState = {};
         ordersWithHistory.forEach((o: OrderItem) => {
-          initialState[o.id] = {
-            status:
-              o.status === "In Transit" || o.status === "Loading"
-                ? "Delivered"
-                : o.status,
+          init[o.id] = {
+            status: o.status === "In Transit" || o.status === "Loading" ? "Delivered" : o.status,
             paymentStatus: "Credit",
             notes: "",
           };
         });
-        return initialState;
+        return init;
       });
-    } catch (error) {
+    } catch {
       toast.error("Failed to load delivery sheet");
     } finally {
       setLoading(false);
@@ -197,74 +214,54 @@ export default function OfficeReconcileLoadPage({
 
   const updateOrderState = (orderId: string, field: string, value: any) => {
     if (loadDetails?.status === "Completed") return;
-
     setReconcileData((prev) => ({
       ...prev,
-      [orderId]: {
-        ...prev[orderId],
-        [field]: value,
-      },
+      [orderId]: { ...prev[orderId], [field]: value },
     }));
   };
 
-  // ✅ Updated to point to OFFICE route
   const handleEditInvoice = (invoiceId: string | null) => {
     if (loadDetails?.status === "Completed") {
-      toast.info("Load is completed. Invoices cannot be edited from here.");
+      toast.info("Load is completed. Invoices cannot be edited.");
       return;
     }
-    if (!invoiceId) {
-      toast.error("Invoice not found");
-      return;
-    }
+    if (!invoiceId) { toast.error("Invoice not found"); return; }
     router.push(
       `/dashboard/office/distribution/invoices/${invoiceId}/edit?returnTo=/dashboard/office/distribution/orders/loading/reconcile/${id}`
     );
   };
 
-  // --- Expense Handlers ---
-  const handleAddExpense = () => {
-    setIsExpenseDialogOpen(true);
-  };
-
   const handleSubmitExpense = async (data: ExpenseFormData) => {
     try {
-      const payload = { ...data, loadId: id };
       const res = await fetch("/api/expenses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...data, loadId: id }),
       });
-
-      if (!res.ok) throw new Error("Failed to add expense");
-      toast.success("Expense added to load");
+      if (!res.ok) throw new Error();
+      toast.success("Expense added");
       fetchData();
-    } catch (error) {
-      console.error(error);
+    } catch {
       toast.error("Failed to save expense");
     }
   };
 
-  const handleDeleteExpense = async (expenseId: string) => {
-    if (!confirm("Remove this expense from the load?")) return;
+  const confirmDeleteExpense = async () => {
+    if (!expenseToDelete) return;
     try {
-      const res = await fetch(`/api/expenses/${expenseId}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) throw new Error("Failed");
+      const res = await fetch(`/api/expenses/${expenseToDelete}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
       toast.success("Expense removed");
       fetchData();
-    } catch (error) {
+    } catch {
       toast.error("Could not delete expense");
+    } finally {
+      setExpenseToDelete(null);
     }
   };
 
   const handleFinalize = async () => {
-    if (!currentUser?.id) {
-      toast.error("You must be logged in to reconcile.");
-      return;
-    }
-
+    if (!currentUser?.id) { toast.error("You must be logged in to reconcile."); return; }
     setSubmitting(true);
     try {
       const payload = {
@@ -277,94 +274,472 @@ export default function OfficeReconcileLoadPage({
         })),
         closeLoad: true,
       };
-
       const res = await fetch("/api/orders/loading/reconcile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-
-      if (!res.ok) throw new Error("Failed to save reconciliation");
-
+      if (!res.ok) throw new Error();
       toast.success("Load Reconciled & Closed Successfully!");
-      // ✅ Updated redirect
       router.push("/dashboard/office/distribution/orders/loading/history");
-    } catch (error) {
+    } catch {
       toast.error("Failed to finalize reconciliation");
     } finally {
       setSubmitting(false);
     }
   };
 
+  // Derived values
+  const isCompleted = loadDetails?.status === "Completed";
+  const isUserMissing = !currentUser?.id;
+  const totalDispatchedValue = orders.reduce((sum, o) => sum + o.originalAmount, 0);
+  const totalFinalValue = orders.reduce((sum, o) => sum + o.currentAmount, 0);
+  const totalExpenses = loadExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const valueDiff = totalFinalValue - totalDispatchedValue;
+
+  const deliveredCount = Object.values(reconcileData).filter((s) => s.status === "Delivered").length;
+  const returnedCount = Object.values(reconcileData).filter((s) => s.status === "Returned").length;
+  const partialCount = Object.values(reconcileData).filter((s) => s.status === "Partial").length;
+  const pendingCount = Object.values(reconcileData).filter((s) => s.status === "Pending").length;
+  const rescheduleCount = Object.values(reconcileData).filter((s) => s.status === "Loading").length;
+  const cancelledCount = Object.values(reconcileData).filter((s) => s.status === "Cancelled").length;
+
+  const deliveredValue = orders.reduce((sum, o) => {
+    const s = reconcileData[o.id]?.status;
+    return s === "Delivered" || s === "Partial" ? sum + o.currentAmount : sum;
+  }, 0);
+
+
   if (loading) {
     return (
-      <div className="flex justify-center items-center py-16">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="space-y-6 pb-20">
+        <div className="flex items-center gap-4">
+          <div className="h-9 w-9 rounded-md bg-gray-100 animate-pulse" />
+          <div className="space-y-2">
+            <div className="h-6 w-56 bg-gray-100 rounded animate-pulse" />
+            <div className="h-4 w-40 bg-gray-100 rounded animate-pulse" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-20 bg-gray-100 rounded-lg animate-pulse" />
+          ))}
+        </div>
+        <div className="h-96 bg-gray-100 rounded-lg animate-pulse" />
       </div>
     );
   }
 
-  const isCompleted = loadDetails?.status === "Completed";
-  const isUserMissing = !currentUser?.id;
-
-  // Stats Calculations
-  const totalDispatchedValue = orders.reduce(
-    (sum, order) => sum + order.originalAmount,
-    0
-  );
-  const totalFinalValue = orders.reduce(
-    (sum, order) => sum + order.currentAmount,
-    0
-  );
-  const totalExpenses = loadExpenses.reduce((sum, e) => sum + e.amount, 0);
-  const expectedCash = totalFinalValue - totalExpenses;
-
   return (
-    <div className="space-y-6 pb-20">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.back()}>
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">
-              Reconcile Delivery (Office)
-            </h1>
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mt-1 text-muted-foreground text-sm">
-              <span>{loadDetails?.loadId}</span>
-              <span className="hidden sm:inline">•</span>
-              <span>{loadDetails?.lorryNumber}</span>
-              <span className="hidden sm:inline">•</span>
-              {currentUser ? (
-                <span className="flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full text-xs font-medium border border-blue-100">
-                  <User className="w-3 h-3" />
-                  Reconciling as: <strong>{currentUser.name}</strong>
+    <>
+      <div className="space-y-5 pb-24">
+
+        {/* ── Page Header ── */}
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="mt-0.5 shrink-0"
+              onClick={() => router.back()}
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-2xl font-bold tracking-tight">Reconcile Delivery</h1>
+                <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
+                  Office
+                </Badge>
+                {isCompleted && (
+                  <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100">
+                    <CheckCircle2 className="w-3 h-3 mr-1" /> Completed
+                  </Badge>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2">
+                <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
+                  <ClipboardList className="w-3.5 h-3.5 text-muted-foreground" />
+                  {loadDetails?.loadId}
                 </span>
-              ) : (
-                <span className="flex items-center gap-1 bg-red-50 text-red-700 px-2 py-0.5 rounded-full text-xs font-medium border border-red-100">
-                  <User className="w-3 h-3" /> Not Logged In
+                <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <Truck className="w-3.5 h-3.5" />
+                  {loadDetails?.lorryNumber}
                 </span>
-              )}
+                <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <Package className="w-3.5 h-3.5" />
+                  {orders.length} orders
+                </span>
+                {currentUser ? (
+                  <span className="flex items-center gap-1.5 bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full text-xs font-medium border border-blue-100">
+                    <User className="w-3 h-3" />
+                    Reconciling as <strong className="ml-0.5">{currentUser.name}</strong>
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1.5 bg-red-50 text-red-700 px-2.5 py-1 rounded-full text-xs font-medium border border-red-100">
+                    <AlertCircle className="w-3 h-3" /> Not Logged In
+                  </span>
+                )}
+              </div>
             </div>
+          </div>
+
+          {/* Desktop action button */}
+          <div className="hidden md:block shrink-0">
+            {isCompleted ? (
+              <Button
+                size="lg"
+                variant="outline"
+                disabled
+                className="bg-green-50 text-green-700 border-green-200 opacity-100"
+              >
+                <CheckCircle2 className="w-4 h-4 mr-2" /> Load Completed
+              </Button>
+            ) : (
+              <Button
+                size="lg"
+                className="bg-black hover:bg-gray-800 text-white shadow-md"
+                onClick={handleFinalize}
+                disabled={submitting || isUserMissing}
+              >
+                {submitting ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Lock className="w-4 h-4 mr-2" />
+                )}
+                Finalize & Close Load
+              </Button>
+            )}
           </div>
         </div>
 
-        {/* Action Button */}
-        {isCompleted ? (
+        {/* ── Auth Alert ── */}
+        {isUserMissing && !isCompleted && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Session Required</AlertTitle>
+            <AlertDescription>
+              No valid session found. Please log out and log in again before reconciling.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* ── KPI Cards ── */}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <KpiCard
+            label="Final Order Value"
+            value={`LKR ${totalFinalValue.toLocaleString()}`}
+            sub={
+              valueDiff !== 0
+                ? `${valueDiff > 0 ? "+" : ""}${valueDiff.toLocaleString()} vs dispatched`
+                : `Dispatched: ${totalDispatchedValue.toLocaleString()}`
+            }
+            icon={Package}
+          />
+          <KpiCard
+            label="Total Expenses"
+            value={`LKR ${totalExpenses.toLocaleString()}`}
+            sub="Fuel, meals & misc"
+            icon={TrendingDown}
+          />
+          <KpiCard
+            label="Delivered Value"
+            value={`LKR ${deliveredValue.toLocaleString()}`}
+            sub={`${deliveredCount + partialCount} of ${orders.length} orders delivered`}
+            icon={CheckCircle2}
+            highlight
+          />
+        </div>
+
+        {/* ── Order Status Strip ── */}
+        <div className="flex flex-wrap gap-2 items-center">
+          <span className="text-sm text-muted-foreground font-medium">Status:</span>
+          {deliveredCount > 0 && (
+            <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100">
+              {deliveredCount} Delivered
+            </Badge>
+          )}
+          {partialCount > 0 && (
+            <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100">
+              {partialCount} Partial
+            </Badge>
+          )}
+          {returnedCount > 0 && (
+            <Badge className="bg-red-100 text-red-700 border-red-200 hover:bg-red-100">
+              {returnedCount} Returned
+            </Badge>
+          )}
+          {rescheduleCount > 0 && (
+            <Badge className="bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100">
+              {rescheduleCount} Reschedule
+            </Badge>
+          )}
+          {pendingCount > 0 && (
+            <Badge className="bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-100">
+              {pendingCount} Pending
+            </Badge>
+          )}
+          {cancelledCount > 0 && (
+            <Badge className="bg-rose-100 text-rose-700 border-rose-200 hover:bg-rose-100">
+              {cancelledCount} Cancelled
+            </Badge>
+          )}
+        </div>
+
+        {/* ── Main Two-Column Layout ── */}
+        <div className="grid gap-5 md:grid-cols-3">
+
+          {/* Left: Expenses */}
+          <div className="md:col-span-1">
+            <Card className="md:sticky md:top-4">
+              <CardHeader className="flex flex-row items-center justify-between pb-3">
+                <div>
+                  <CardTitle className="text-base">Load Expenses</CardTitle>
+                  <CardDescription className="text-xs mt-0.5">
+                    Fuel, meals &amp; miscellaneous
+                  </CardDescription>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setIsExpenseDialogOpen(true)}
+                  disabled={isCompleted}
+                  className="shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5 mr-1" /> Add
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {loadExpenses.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-center border-2 border-dashed rounded-lg">
+                    <Receipt className="w-7 h-7 text-muted-foreground/40 mb-2" />
+                    <p className="text-sm font-medium text-muted-foreground">No expenses yet</p>
+                    <p className="text-xs text-muted-foreground/60 mt-0.5">
+                      Add fuel, tolls, meals, etc.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {loadExpenses.map((exp) => (
+                      <div
+                        key={exp.id}
+                        className="flex items-center gap-2 p-2.5 rounded-lg border bg-white hover:bg-slate-50 transition-colors group"
+                      >
+                        <div className="p-1.5 bg-red-50 text-red-600 rounded-md shrink-0">
+                          <Receipt className="w-3.5 h-3.5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold">{exp.category}</p>
+                          <p
+                            className="text-xs text-muted-foreground truncate"
+                            title={exp.description}
+                          >
+                            {exp.description || "—"}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="font-mono text-sm font-bold">
+                            {exp.amount.toLocaleString()}
+                          </span>
+                          {!isCompleted && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-red-600 transition-opacity"
+                              onClick={() => setExpenseToDelete(exp.id)}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+
+                    <Separator className="my-2" />
+                    <div className="flex justify-between items-center px-1">
+                      <span className="text-sm font-semibold">Total</span>
+                      <span className="font-mono text-sm font-bold text-red-600">
+                        LKR {totalExpenses.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Right: Order Table */}
+          <div className="md:col-span-2">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle>Order Reconciliation</CardTitle>
+                <CardDescription>
+                  {isCompleted
+                    ? "This load has been closed. Records are locked."
+                    : "Set delivery status and payment method for each invoice."}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-slate-50 hover:bg-slate-50">
+                        <TableHead className="pl-4 min-w-[110px]">Invoice</TableHead>
+                        <TableHead className="min-w-[130px]">Customer</TableHead>
+                        <TableHead className="min-w-[150px]">Delivery Status</TableHead>
+                        <TableHead className="text-right min-w-[90px]">Amount (LKR)</TableHead>
+                        <TableHead className="text-right w-[65px]">Diff</TableHead>
+                        <TableHead className="min-w-[130px]">Notes</TableHead>
+                        <TableHead className="text-center w-12">Edit</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {orders.map((order, idx) => {
+                        const state = reconcileData[order.id] || {};
+                        const currentStatus = state.status || "Delivered";
+                        const diff = order.currentAmount - order.originalAmount;
+                        const isCancelled = currentStatus === "Cancelled";
+
+                        return (
+                          <TableRow
+                            key={order.id}
+                            className={cn(
+                              "transition-colors",
+                              isCancelled
+                                ? "bg-rose-50/40 opacity-70"
+                                : idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"
+                            )}
+                          >
+                            {/* Invoice Number — primary identifier */}
+                            <TableCell className="pl-4">
+                              <div className="text-sm font-bold font-mono tracking-wide">
+                                {order.invoiceNo}
+                              </div>
+                              <div className="text-xs text-muted-foreground mt-0.5">
+                                {order.orderId}
+                              </div>
+                            </TableCell>
+
+                            <TableCell>
+                              <span
+                                className="text-sm block max-w-[140px] truncate"
+                                title={order.customer}
+                              >
+                                {order.customer}
+                              </span>
+                            </TableCell>
+
+                            {/* Delivery Status */}
+                            <TableCell>
+                              {isCompleted ? (
+                                <span
+                                  className={cn(
+                                    "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border",
+                                    currentStatus === "Delivered" && "bg-green-100 text-green-700 border-green-200",
+                                    currentStatus === "Partial" && "bg-amber-100 text-amber-700 border-amber-200",
+                                    currentStatus === "Returned" && "bg-red-100 text-red-700 border-red-200",
+                                    currentStatus === "Loading" && "bg-blue-100 text-blue-700 border-blue-200",
+                                    currentStatus === "Pending" && "bg-gray-100 text-gray-600 border-gray-200",
+                                    currentStatus === "Cancelled" && "bg-rose-100 text-rose-700 border-rose-200",
+                                  )}
+                                >
+                                  {currentStatus === "Loading" ? "Reschedule" : currentStatus}
+                                </span>
+                              ) : (
+                                <Select
+                                  value={currentStatus}
+                                  onValueChange={(val) => updateOrderState(order.id, "status", val)}
+                                >
+                                  <SelectTrigger
+                                    className={cn(
+                                      "w-full h-8 text-xs font-medium border",
+                                      currentStatus === "Delivered" && "border-green-200 bg-green-50 text-green-700",
+                                      currentStatus === "Partial" && "border-amber-200 bg-amber-50 text-amber-700",
+                                      currentStatus === "Returned" && "border-red-200 bg-red-50 text-red-700",
+                                      currentStatus === "Loading" && "border-blue-200 bg-blue-50 text-blue-700",
+                                      currentStatus === "Pending" && "border-gray-200 bg-gray-50 text-gray-600",
+                                      currentStatus === "Cancelled" && "border-rose-200 bg-rose-50 text-rose-700",
+                                    )}
+                                  >
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="Delivered">Delivered</SelectItem>
+                                    <SelectItem value="Partial">Partial</SelectItem>
+                                    <SelectItem value="Returned">Returned</SelectItem>
+                                    <SelectItem value="Loading">Reschedule</SelectItem>
+                                    <SelectItem value="Pending">Pending</SelectItem>
+                                    <SelectItem value="Cancelled">Cancelled</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              )}
+                            </TableCell>
+
+                            <TableCell className="text-right">
+                              <span className="font-mono text-sm font-bold">
+                                {order.currentAmount.toLocaleString()}
+                              </span>
+                            </TableCell>
+
+                            <TableCell className="text-right">
+                              {diff !== 0 ? (
+                                <span
+                                  className={cn(
+                                    "text-xs font-mono font-bold",
+                                    diff > 0 ? "text-green-600" : "text-red-600"
+                                  )}
+                                >
+                                  {diff > 0 ? "+" : ""}
+                                  {diff.toLocaleString()}
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground text-sm">—</span>
+                              )}
+                            </TableCell>
+
+                            <TableCell>
+                              <Input
+                                disabled={isCompleted || isCancelled}
+                                placeholder="Add note..."
+                                value={state.notes || ""}
+                                onChange={(e) =>
+                                  updateOrderState(order.id, "notes", e.target.value)
+                                }
+                                className="h-8 text-xs bg-white border-slate-200 focus:border-slate-400 disabled:cursor-not-allowed"
+                              />
+                            </TableCell>
+
+                            <TableCell className="text-center">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                disabled={isCompleted || isCancelled}
+                                onClick={() => handleEditInvoice(order.invoiceId)}
+                                className="h-8 w-8 p-0 text-blue-600 hover:bg-blue-50 disabled:opacity-30"
+                                title={isCancelled ? "Order cancelled" : "Edit Invoice"}
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Sticky Mobile Footer ── */}
+      {!isCompleted && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 md:hidden bg-white border-t shadow-lg px-4 py-3">
           <Button
             size="lg"
-            variant="outline"
-            disabled
-            className="bg-green-50 text-green-700 border-green-200 opacity-100"
-          >
-            <CheckCircle2 className="w-5 h-5 mr-2" />
-            Load Completed
-          </Button>
-        ) : (
-          <Button
-            size="lg"
-            className="bg-black hover:bg-gray-800 text-white shadow-md"
+            className="w-full bg-black hover:bg-gray-800 text-white"
             onClick={handleFinalize}
             disabled={submitting || isUserMissing}
           >
@@ -373,254 +748,12 @@ export default function OfficeReconcileLoadPage({
             ) : (
               <Lock className="w-4 h-4 mr-2" />
             )}
-            Finalize & Close Load
+            Finalize &amp; Close Load
           </Button>
-        )}
-      </div>
-
-      {isUserMissing && !isCompleted && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Action Required</AlertTitle>
-          <AlertDescription>
-            You are not logged in with a valid session ID. Please log out and
-            log in again.
-          </AlertDescription>
-        </Alert>
+        </div>
       )}
 
-      <div className="grid gap-6 md:grid-cols-3">
-        {/* Left Column: Stats & Expenses */}
-        <div className="space-y-6 md:col-span-1">
-          <Card className="bg-slate-50 border-slate-200">
-            <CardHeader className="pb-3">
-              <CardTitle>Financial Summary</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-muted-foreground">Original Value</span>
-                <span>{totalDispatchedValue.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-muted-foreground">Final Order Value</span>
-                <span className="font-semibold">
-                  {totalFinalValue.toLocaleString()}
-                </span>
-              </div>
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-muted-foreground">Expenses</span>
-                <span className="text-red-600">
-                  - {totalExpenses.toLocaleString()}
-                </span>
-              </div>
-              <div className="border-t pt-3 mt-2 flex justify-between items-center">
-                <span className="font-bold">Net Cash Expected</span>
-                <Badge
-                  variant="outline"
-                  className="text-lg px-3 py-1 bg-white border-slate-300"
-                >
-                  LKR {expectedCash.toLocaleString()}
-                </Badge>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <div className="space-y-1">
-                <CardTitle className="text-base">Load Expenses</CardTitle>
-                <CardDescription>Fuel, meals, etc.</CardDescription>
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleAddExpense}
-                disabled={isCompleted}
-              >
-                <Plus className="w-4 h-4 mr-1" /> Add
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {loadExpenses.length === 0 ? (
-                <div className="text-center py-6 text-sm text-muted-foreground border-2 border-dashed rounded-md">
-                  No expenses added
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {loadExpenses.map((exp) => (
-                    <div
-                      key={exp.id}
-                      className="flex justify-between items-center p-2 rounded-md bg-white border hover:bg-slate-50 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-red-50 text-red-600 rounded-full">
-                          <Receipt className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium">{exp.category}</p>
-                          <p
-                            className="text-xs text-muted-foreground truncate max-w-[120px]"
-                            title={exp.description}
-                          >
-                            {exp.description}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="font-mono text-sm font-semibold">
-                          {exp.amount.toLocaleString()}
-                        </span>
-                        {!isCompleted && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 text-muted-foreground hover:text-red-600"
-                            onClick={() => handleDeleteExpense(exp.id)}
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  <div className="pt-2 text-right text-sm font-medium text-muted-foreground border-t">
-                    Total: LKR {totalExpenses.toLocaleString()}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Right Column: Order Table */}
-        <div className="md:col-span-2">
-          <Card className="h-full">
-            <CardHeader>
-              <CardTitle>Order Reconciliation</CardTitle>
-              <CardDescription>
-                {isCompleted
-                  ? "Load completed. Records locked."
-                  : "Update statuses and edit amounts if necessary."}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-slate-50">
-                      <TableHead className="w-[100px]">Order</TableHead>
-                      <TableHead>Customer</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Final</TableHead>
-                      <TableHead className="text-right">Diff</TableHead>
-                      <TableHead className="w-[150px]">Notes</TableHead>
-                      <TableHead className="text-right">Edit</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {orders.map((order) => {
-                      const state = reconcileData[order.id] || {};
-                      const diff = order.currentAmount - order.originalAmount;
-                      return (
-                        <TableRow key={order.id}>
-                          <TableCell className="font-medium">
-                            <div className="text-sm">{order.orderId}</div>
-                            <div className="text-xs text-muted-foreground font-mono">
-                              {order.invoiceNo}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <span
-                              className="text-sm truncate block max-w-[120px]"
-                              title={order.customer}
-                            >
-                              {order.customer}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <Select
-                              disabled={isCompleted}
-                              value={state.status || "Delivered"}
-                              onValueChange={(val) =>
-                                updateOrderState(order.id, "status", val)
-                              }
-                            >
-                              <SelectTrigger className="w-full h-8 text-xs">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Delivered">
-                                  Delivered
-                                </SelectItem>
-                                <SelectItem value="Partial">Partial</SelectItem>
-                                <SelectItem value="Returned">
-                                  Returned
-                                </SelectItem>
-                                <SelectItem value="Loading">
-                                  Reschedule
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <span className="font-bold font-mono text-sm">
-                              {order.currentAmount.toLocaleString()}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {diff !== 0 ? (
-                              <span
-                                className={`text-xs font-mono font-bold ${
-                                  diff > 0 ? "text-green-600" : "text-red-600"
-                                }`}
-                              >
-                                {diff > 0 ? "+" : ""}
-                                {diff.toLocaleString()}
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground text-xs">
-                                -
-                              </span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              disabled={isCompleted}
-                              placeholder="Note..."
-                              value={state.notes || ""}
-                              onChange={(e) =>
-                                updateOrderState(
-                                  order.id,
-                                  "notes",
-                                  e.target.value
-                                )
-                              }
-                              className="w-full h-8 text-xs bg-white"
-                            />
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              disabled={isCompleted}
-                              onClick={() => handleEditInvoice(order.invoiceId)}
-                              className="h-8 w-8 p-0 text-blue-600 hover:bg-blue-50"
-                            >
-                              <Edit3 className="w-4 h-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      {/* Expense Dialog (reused from Admin) */}
+      {/* ── Expense Add Dialog ── */}
       <ExpenseFormDialog
         open={isExpenseDialogOpen}
         onOpenChange={setIsExpenseDialogOpen}
@@ -638,6 +771,30 @@ export default function OfficeReconcileLoadPage({
           } as any
         }
       />
-    </div>
+
+      {/* ── Delete Expense Confirm ── */}
+      <AlertDialog
+        open={!!expenseToDelete}
+        onOpenChange={(open) => !open && setExpenseToDelete(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Expense</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove this expense from the load? This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={confirmDeleteExpense}
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

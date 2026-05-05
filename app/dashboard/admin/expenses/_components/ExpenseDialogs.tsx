@@ -181,7 +181,7 @@ export function ExpenseFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px] overflow-visible">
+      <DialogContent className="w-full max-w-[calc(100%-2rem)] overflow-visible">
         <DialogHeader>
           <DialogTitle>
             {initialData?.id ? "Edit Expense" : "Add New Expense"}
@@ -233,7 +233,7 @@ export function ExpenseFormDialog({
                   setFormData({ ...formData, category: val as ExpenseCategory })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -294,7 +294,7 @@ export function ExpenseFormDialog({
                   )}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-[450px] p-0">
+              <PopoverContent className="w-full p-0" align="start">
                 <Command>
                   <CommandInput placeholder="Search load ID..." />
                   <CommandList>
@@ -375,7 +375,7 @@ export function ExpenseFormDialog({
                   setFormData({ ...formData, paymentMethod: val })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
