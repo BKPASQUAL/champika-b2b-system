@@ -83,6 +83,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
+import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { printOrder } from "@/app/lib/order-html";
 
 interface Product {
@@ -128,6 +129,7 @@ export default function ViewOrderPage({
   const [processing, setProcessing] = useState(false);
   const [unpaidInvoices, setUnpaidInvoices] = useState<any[]>([]);
   const [invoicesLoaded, setInvoicesLoaded] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Edit Mode
   const [isEditing, setIsEditing] = useState(false);
@@ -165,6 +167,8 @@ export default function ViewOrderPage({
   const fetchOrderDetails = async () => {
     try {
       setLoading(true);
+      const user = getUserBusinessContext();
+      setIsAdmin(user?.role === "admin");
       const res = await fetch(`/api/orders/${id}`);
       if (!res.ok) throw new Error("Failed to load order");
 
@@ -932,7 +936,7 @@ export default function ViewOrderPage({
                 </div>
 
                 {/* MRP / Unit Price / Cost / Discount / Total / Profit */}
-                <div className="grid grid-cols-3 gap-4">
+                <div className={`grid gap-4 ${isAdmin ? "grid-cols-3" : "grid-cols-2"}`}>
                   <div className="space-y-2">
                     <Label>MRP</Label>
                     <Input
@@ -965,16 +969,18 @@ export default function ViewOrderPage({
                       disabled={!currentItem.productId}
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-orange-600">Cost Price</Label>
-                    <Input
-                      value={currentItem.costPrice || "—"}
-                      disabled
-                      className="bg-orange-50 text-orange-700 font-medium"
-                    />
-                  </div>
+                  {isAdmin && (
+                    <div className="space-y-2">
+                      <Label className="text-orange-600">Cost Price</Label>
+                      <Input
+                        value={currentItem.costPrice || "—"}
+                        disabled
+                        className="bg-orange-50 text-orange-700 font-medium"
+                      />
+                    </div>
+                  )}
                 </div>
-                <div className="grid grid-cols-3 gap-4">
+                <div className={`grid gap-4 ${isAdmin ? "grid-cols-3" : "grid-cols-2"}`}>
                   <div className="space-y-2">
                     <Label>Discount %</Label>
                     <Input
@@ -1001,33 +1007,35 @@ export default function ViewOrderPage({
                       className="font-bold bg-muted"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-green-600">Est. Profit</Label>
-                    {(() => {
-                      const qty = parseFloat(currentItem.quantity) || 0;
-                      const free = parseFloat(currentItem.freeQuantity) || 0;
-                      const profit = currentItem.costPrice > 0
-                        ? currentTotal - currentItem.costPrice * (qty + free)
-                        : null;
-                      const margin = profit !== null && currentTotal > 0
-                        ? (profit / currentTotal) * 100
-                        : null;
-                      return (
-                        <Input
-                          value={
-                            profit !== null
-                              ? `${profit.toFixed(2)} (${margin?.toFixed(1)}%)`
-                              : "—"
-                          }
-                          disabled
-                          className={`font-bold ${
-                            profit === null ? "bg-muted" :
-                            profit >= 0 ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
-                          }`}
-                        />
-                      );
-                    })()}
-                  </div>
+                  {isAdmin && (
+                    <div className="space-y-2">
+                      <Label className="text-green-600">Est. Profit</Label>
+                      {(() => {
+                        const qty = parseFloat(currentItem.quantity) || 0;
+                        const free = parseFloat(currentItem.freeQuantity) || 0;
+                        const profit = currentItem.costPrice > 0
+                          ? currentTotal - currentItem.costPrice * (qty + free)
+                          : null;
+                        const margin = profit !== null && currentTotal > 0
+                          ? (profit / currentTotal) * 100
+                          : null;
+                        return (
+                          <Input
+                            value={
+                              profit !== null
+                                ? `${profit.toFixed(2)} (${margin?.toFixed(1)}%)`
+                                : "—"
+                            }
+                            disabled
+                            className={`font-bold ${
+                              profit === null ? "bg-muted" :
+                              profit >= 0 ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+                            }`}
+                          />
+                        );
+                      })()}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex gap-2">
@@ -1084,8 +1092,8 @@ export default function ViewOrderPage({
                       </TableHead>
                       <TableHead className="text-center w-24">Disc%</TableHead>
                       <TableHead className="text-right w-28">Total</TableHead>
-                      <TableHead className="text-right w-28 text-orange-600">Cost</TableHead>
-                      <TableHead className="text-right w-28 text-green-600">Profit</TableHead>
+                      {isAdmin && <TableHead className="text-right w-28 text-orange-600">Cost</TableHead>}
+                      {isAdmin && <TableHead className="text-right w-28 text-green-600">Profit</TableHead>}
                       {isEditing && (
                         <TableHead className="w-12"></TableHead>
                       )}
@@ -1095,7 +1103,9 @@ export default function ViewOrderPage({
                     {items.length === 0 ? (
                       <TableRow>
                         <TableCell
-                          colSpan={isEditing ? 10 : 9}
+                          colSpan={
+                            (isAdmin ? 9 : 7) + (isEditing ? 1 : 0)
+                          }
                           className="text-center py-8 text-muted-foreground"
                         >
                           <Package className="w-8 h-8 mx-auto mb-2 opacity-50" />
@@ -1183,24 +1193,28 @@ export default function ViewOrderPage({
                             <TableCell className="text-right font-bold text-sm">
                               {item.total.toLocaleString()}
                             </TableCell>
-                            <TableCell className="text-right text-sm text-orange-600 tabular-nums">
-                              {item.costPrice > 0
-                                ? ((item.costPrice * (item.qty + item.free))).toLocaleString()
-                                : <span className="text-muted-foreground text-xs">—</span>}
-                            </TableCell>
-                            <TableCell className="text-right text-sm tabular-nums">
-                              {item.costPrice > 0 ? (() => {
-                                const itemCost = item.costPrice * (item.qty + item.free);
-                                const profit = item.total - itemCost;
-                                const margin = item.total > 0 ? (profit / item.total) * 100 : 0;
-                                return (
-                                  <div className={profit >= 0 ? "text-green-700" : "text-red-600"}>
-                                    <div className="font-semibold">{profit.toLocaleString()}</div>
-                                    <div className="text-[10px] opacity-70">{margin.toFixed(1)}%</div>
-                                  </div>
-                                );
-                              })() : <span className="text-muted-foreground text-xs">—</span>}
-                            </TableCell>
+                            {isAdmin && (
+                              <TableCell className="text-right text-sm text-orange-600 tabular-nums">
+                                {item.costPrice > 0
+                                  ? ((item.costPrice * (item.qty + item.free))).toLocaleString()
+                                  : <span className="text-muted-foreground text-xs">—</span>}
+                              </TableCell>
+                            )}
+                            {isAdmin && (
+                              <TableCell className="text-right text-sm tabular-nums">
+                                {item.costPrice > 0 ? (() => {
+                                  const itemCost = item.costPrice * (item.qty + item.free);
+                                  const profit = item.total - itemCost;
+                                  const margin = item.total > 0 ? (profit / item.total) * 100 : 0;
+                                  return (
+                                    <div className={profit >= 0 ? "text-green-700" : "text-red-600"}>
+                                      <div className="font-semibold">{profit.toLocaleString()}</div>
+                                      <div className="text-[10px] opacity-70">{margin.toFixed(1)}%</div>
+                                    </div>
+                                  );
+                                })() : <span className="text-muted-foreground text-xs">—</span>}
+                              </TableCell>
+                            )}
                             {isEditing && (
                               <TableCell>
                                 <div className="flex gap-1 justify-end">
@@ -1297,7 +1311,7 @@ export default function ViewOrderPage({
                 </div>
               </div>
 
-              {totalCost > 0 && (
+              {isAdmin && totalCost > 0 && (
                 <div className="mt-4 pt-4 border-t space-y-2.5">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                     Cost & Profit
