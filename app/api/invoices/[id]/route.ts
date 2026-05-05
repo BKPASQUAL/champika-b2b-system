@@ -519,3 +519,114 @@ export async function PATCH(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+
+  try {
+    // 1. Load invoice + order details
+    const { data: invoice, error: invError } = await supabaseAdmin
+      .from("invoices")
+      .select("id, order_id, customer_id, total_amount, paid_amount")
+      .eq("id", id)
+      .single();
+
+    if (invError || !invoice) {
+      return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+    }
+
+    // 2. Load order items to restore stock
+    const { data: orderItems } = await supabaseAdmin
+      .from("order_items")
+      .select("product_id, quantity, free_quantity")
+      .eq("order_id", invoice.order_id);
+
+    // 3. Load rep's location assignments so we can restore location stock
+    const { data: order } = await supabaseAdmin
+      .from("orders")
+      .select("sales_rep_id")
+      .eq("id", invoice.order_id)
+      .single();
+
+    let locationIds: string[] = [];
+    if (order?.sales_rep_id) {
+      const { data: assignments } = await supabaseAdmin
+        .from("location_assignments")
+        .select("location_id")
+        .eq("user_id", order.sales_rep_id);
+      locationIds = assignments?.map((a: any) => a.location_id) ?? [];
+    }
+
+    // 4. Restore stock for each item
+    if (orderItems && orderItems.length > 0) {
+      for (const item of orderItems) {
+        const totalQty = (item.quantity || 0) + (item.free_quantity || 0);
+
+        // Restore global stock
+        const { data: prod } = await supabaseAdmin
+          .from("products")
+          .select("stock_quantity")
+          .eq("id", item.product_id)
+          .single();
+
+        if (prod) {
+          await supabaseAdmin
+            .from("products")
+            .update({ stock_quantity: prod.stock_quantity + totalQty })
+            .eq("id", item.product_id);
+        }
+
+        // Restore location stock
+        if (locationIds.length > 0) {
+          const { data: locStocks } = await supabaseAdmin
+            .from("product_stocks")
+            .select("id, quantity")
+            .eq("product_id", item.product_id)
+            .in("location_id", locationIds)
+            .order("quantity", { ascending: false });
+
+          if (locStocks && locStocks.length > 0) {
+            await supabaseAdmin
+              .from("product_stocks")
+              .update({ quantity: locStocks[0].quantity + totalQty })
+              .eq("id", locStocks[0].id);
+          }
+        }
+      }
+    }
+
+    // 5. Reduce customer outstanding balance by the invoice total
+    const { data: customer } = await supabaseAdmin
+      .from("customers")
+      .select("outstanding_balance")
+      .eq("id", invoice.customer_id)
+      .single();
+
+    if (customer) {
+      await supabaseAdmin
+        .from("customers")
+        .update({
+          outstanding_balance: Math.max(
+            0,
+            (customer.outstanding_balance || 0) - (invoice.total_amount || 0)
+          ),
+        })
+        .eq("id", invoice.customer_id);
+    }
+
+    // 6. Delete related records in order (child tables first)
+    await supabaseAdmin.from("payments").delete().eq("invoice_id", id);
+    await supabaseAdmin.from("invoice_history").delete().eq("invoice_id", id);
+    await supabaseAdmin.from("order_items").delete().eq("order_id", invoice.order_id);
+    await supabaseAdmin.from("invoices").delete().eq("id", id);
+    await supabaseAdmin.from("orders").delete().eq("id", invoice.order_id);
+
+    return NextResponse.json({ message: "Invoice deleted successfully" });
+  } catch (error: any) {
+    console.error("Delete Error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}

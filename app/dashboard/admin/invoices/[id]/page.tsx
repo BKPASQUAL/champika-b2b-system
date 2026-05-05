@@ -22,6 +22,7 @@ import {
   Percent,
   MessageCircle,
   Share2,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -57,6 +58,16 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { WhatsAppShareDialog } from "@/components/ui/WhatsAppShareDialog";
 import { DocumentAttachments } from "@/components/ui/DocumentAttachments";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 // --- Interfaces ---
 interface InvoiceHistory {
@@ -112,6 +123,28 @@ export default function ViewInvoicePage({
   // Returns State
   const [returnsLoading, setReturnsLoading] = useState(true);
   const [returns, setReturns] = useState<ReturnRecord[]>([]);
+
+  // Delete State
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/invoices/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to delete invoice");
+      }
+      toast.success("Invoice deleted successfully");
+      router.push("/dashboard/admin/invoices");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to delete invoice");
+    } finally {
+      setDeleting(false);
+      setShowDeleteDialog(false);
+    }
+  };
 
   // WhatsApp State
   const [whatsappOpen, setWhatsappOpen] = useState(false);
@@ -315,6 +348,17 @@ Thank you for your business! 🙏`;
           </div>
 
           <div className="flex items-center gap-2 ml-11 md:ml-0">
+            {/* Delete Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowDeleteDialog(true)}
+              className="bg-background text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete
+            </Button>
+
             {/* History Sheet */}
             <Sheet>
               <SheetTrigger asChild>
@@ -1034,6 +1078,54 @@ Thank you for your business! 🙏`;
           entityId={id}
         />
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="h-5 w-5" />
+              Delete Invoice {invoice?.invoiceNo}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <span className="block">
+                This will permanently delete the invoice and its associated order.
+              </span>
+              <span className="block font-medium text-slate-700">
+                The following will also be reversed:
+              </span>
+              <ul className="list-disc list-inside text-sm space-y-1 text-slate-600">
+                <li>All stock deducted by this invoice will be restored</li>
+                <li>Customer outstanding balance will be reduced</li>
+                <li>All payment records for this invoice will be removed</li>
+              </ul>
+              <span className="block pt-1 font-semibold text-red-600">
+                This action cannot be undone.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleting}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              {deleting ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Deleting…
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <Trash2 className="h-4 w-4" />
+                  Yes, Delete Invoice
+                </span>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -22,7 +22,18 @@ import {
   Building2,
   Calendar,
   FileText,
+  Trash2,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Invoice,
   SortField,
@@ -43,6 +54,7 @@ interface InvoiceTableProps {
   onSort: (field: SortField) => void;
   onEdit: (id: string) => void;
   onView: (id: string) => void;
+  onDelete?: (id: string) => void;
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
@@ -81,11 +93,13 @@ export function InvoiceTable({
   onSort,
   onEdit,
   onView,
+  onDelete,
   currentPage,
   totalPages,
   onPageChange,
 }: InvoiceTableProps) {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const handleDownload = async (id: string) => {
     setDownloadingId(id);
@@ -229,6 +243,16 @@ export function InvoiceTable({
                         ? <Loader2 className="w-4 h-4 animate-spin" />
                         : <Printer className="w-4 h-4 text-muted-foreground" />}
                     </Button>
+                    {onDelete && (
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => setConfirmDeleteId(invoice.id)}
+                        title="Delete Invoice"
+                      >
+                        <Trash2 className="w-4 h-4 text-red-500" />
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -237,6 +261,40 @@ export function InvoiceTable({
         )}
         {pagination}
       </div>
+
+      {/* ── Delete confirmation dialog ── */}
+      <AlertDialog open={!!confirmDeleteId} onOpenChange={(open) => !open && setConfirmDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-red-600">Delete Invoice?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p>This action cannot be undone. Deleting this invoice will:</p>
+                <ul className="list-disc list-inside space-y-1 text-xs">
+                  <li>Restore product stock quantities</li>
+                  <li>Reduce the customer&apos;s outstanding balance</li>
+                  <li>Remove all payment records</li>
+                  <li>Delete the associated order permanently</li>
+                </ul>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => {
+                if (confirmDeleteId && onDelete) {
+                  onDelete(confirmDeleteId);
+                }
+                setConfirmDeleteId(null);
+              }}
+            >
+              Delete Invoice
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── Desktop table (hidden below md) ── */}
       <div className="hidden md:block overflow-x-auto rounded-md border">
@@ -343,6 +401,16 @@ export function InvoiceTable({
                             ? <Loader2 className="w-4 h-4 animate-spin" />
                             : <Printer className="w-4 h-4 text-muted-foreground" />}
                         </Button>
+                        {onDelete && (
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => setConfirmDeleteId(invoice.id)}
+                            title="Delete Invoice"
+                          >
+                            <Trash2 className="w-4 h-4 text-red-500" />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

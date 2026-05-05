@@ -150,6 +150,21 @@ export default function InvoicesPage() {
   const handleView = (id: string) => {
     router.push(`/dashboard/admin/invoices/${id}`);
   };
+
+  const handleDelete = async (id: string) => {
+    try {
+      const res = await fetch(`/api/invoices/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || "Failed to delete invoice");
+        return;
+      }
+      toast.success("Invoice deleted successfully");
+      fetchInvoices();
+    } catch {
+      toast.error("Failed to delete invoice");
+    }
+  };
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, statusFilter, repFilter]);
@@ -265,7 +280,8 @@ export default function InvoicesPage() {
             sortOrder={sortOrder}
             onSort={handleSort}
             onEdit={handleEdit}
-            onView={handleView} // ✅ Pass the function
+            onView={handleView}
+            onDelete={handleDelete}
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={setCurrentPage}
