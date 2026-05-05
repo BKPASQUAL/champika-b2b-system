@@ -15,16 +15,11 @@ const generatePDFContent = async (loadId: string) => {
   const pageHeight = doc.internal.pageSize.height;
   const margin = 10;
 
-  // --- Header ---
-  doc.setFontSize(16);
-  doc.setFont("helvetica", "bold");
-  doc.text("DELIVERY DISPATCH NOTE", pageWidth / 2, 15, { align: "center" });
-
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
 
   // Top Info Grid
-  let startY = 25;
+  let startY = 15;
   doc.setFont("helvetica", "bold");
   doc.text(`Load Ref: ${data.loadId}`, margin, startY);
   doc.text(
@@ -37,14 +32,14 @@ const generatePDFContent = async (loadId: string) => {
   startY += 5;
   doc.setFont("helvetica", "normal");
   doc.text(`Lorry No: ${data.lorryNumber}`, margin, startY);
-  doc.text(`Driver: ${data.driverName}`, pageWidth - margin, startY, {
+  doc.text(`${data.driverName}`, pageWidth - margin, startY, {
     align: "right",
   });
 
   // --- Table ---
   const tableColumn = [
     "#",
-    "Order #",
+    "Invoice #",
     "Shop Details",
     "Address",
     "Amount",
@@ -52,7 +47,7 @@ const generatePDFContent = async (loadId: string) => {
   ];
   const tableRows = data.orders.map((order: any, index: number) => [
     index + 1,
-    order.orderId,
+    order.invoiceNo,
     `${order.customer.shopName}\n${order.customer.phone || ""}`,
     order.customer.address || "-",
     order.totalAmount.toLocaleString("en-LK", { minimumFractionDigits: 2 }),
@@ -66,7 +61,8 @@ const generatePDFContent = async (loadId: string) => {
     theme: "grid",
     styles: {
       fontSize: 8,
-      cellPadding: 1.5,
+      cellPadding: 3,
+      minCellHeight: 16,
       lineColor: [150, 150, 150],
       lineWidth: 0.1,
       valign: "middle",
@@ -86,7 +82,7 @@ const generatePDFContent = async (loadId: string) => {
       2: { cellWidth: 45 },
       3: { cellWidth: 45 },
       4: { cellWidth: 25, halign: "right" },
-      5: { cellWidth: "auto", minCellHeight: 15 },
+      5: { cellWidth: "auto", minCellHeight: 22 },
     },
   });
 
@@ -112,33 +108,27 @@ const generatePDFContent = async (loadId: string) => {
     { align: "right" }
   );
 
-  // Signatures Grid (3 Columns)
-  currentY += 15;
-  const colWidth = (pageWidth - margin * 2) / 3;
+  // Signatures (2 Columns)
+  currentY += 20;
+  const sigLineWidth = 60;
+  const colWidth = (pageWidth - margin * 2) / 2;
 
   doc.setLineWidth(0.2);
   doc.setDrawColor(0, 0, 0);
   doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
 
-  let xPos = margin;
+  // 1. Authorized Dispatcher
+  doc.line(margin, currentY, margin + sigLineWidth, currentY);
+  doc.text("Authorized Dispatcher", margin, currentY + 4);
 
-  // 1. Dispatcher
-  doc.line(xPos, currentY, xPos + colWidth - 5, currentY);
-  doc.text("Authorized Dispatcher", xPos, currentY + 4);
-
-  // 2. Driver
-  xPos += colWidth;
-  doc.line(xPos, currentY, xPos + colWidth - 5, currentY);
-  doc.text("Responsible Person (Driver)", xPos, currentY + 4);
+  // 2. Responsible Person (Driver)
+  const xPos2 = margin + colWidth;
+  doc.line(xPos2, currentY, xPos2 + sigLineWidth, currentY);
+  doc.text("Responsible Person", xPos2, currentY + 4);
   doc.setFont("helvetica", "bold");
-  doc.text(`(${data.driverName})`, xPos, currentY + 8);
+  doc.text(`(${data.driverName})`, xPos2, currentY + 8);
   doc.setFont("helvetica", "normal");
-
-  // 3. Sales Rep
-  xPos += colWidth;
-  doc.line(xPos, currentY, xPos + colWidth - 5, currentY);
-  doc.text("Sales Representative", xPos, currentY + 4);
 
   return { doc, loadId: data.loadId };
 };
