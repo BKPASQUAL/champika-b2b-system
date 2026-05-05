@@ -18,6 +18,8 @@ import {
   ShoppingCart,
   FileText,
   BadgeCheck,
+  Clock,
+  RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,6 +69,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useFormDraft } from "@/hooks/useFormDraft";
 
 // --- Types ---
 
@@ -110,6 +113,10 @@ export default function CreateOrderPage() {
   const [outOfStockOverride, setOutOfStockOverride] = useState(false);
   const [canCreateCustomer, setCanCreateCustomer] = useState(false);
   const [userBusinessId, setUserBusinessId] = useState<string | null>(null);
+
+  // Draft restore state
+  const [draftRestoreOpen, setDraftRestoreOpen] = useState(false);
+  const [draftAge, setDraftAge] = useState("");
 
   // New Customer Dialog
   const [newCustomerOpen, setNewCustomerOpen] = useState(false);
@@ -161,6 +168,42 @@ export default function CreateOrderPage() {
   });
 
   const qtyInputRef = useRef<HTMLInputElement>(null);
+
+  // --- Draft Auto-Save ---
+  const hasDraftInput = items.length > 0 || customerId !== null;
+  const { clearDraft, loadDraft } = useFormDraft(
+    "invoice_draft_rep",
+    { customerId, orderDate, items, extraDiscount },
+    !loading && hasDraftInput
+  );
+
+  // Check for saved draft once initial data finishes loading
+  useEffect(() => {
+    if (loading || customers.length === 0) return;
+    const draft = loadDraft();
+    if (!draft) return;
+    if (!draft.items?.length && !draft.customerId) return;
+
+    const mins = Math.floor((Date.now() - draft._savedAt) / 60000);
+    setDraftAge(mins < 1 ? "just now" : `${mins} minute${mins !== 1 ? "s" : ""} ago`);
+    setDraftRestoreOpen(true);
+  }, [loading, customers.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleRestoreDraft = () => {
+    const draft = loadDraft();
+    if (!draft) return;
+    if (draft.customerId !== undefined) setCustomerId(draft.customerId);
+    if (draft.orderDate) setOrderDate(draft.orderDate);
+    if (draft.items?.length) setItems(draft.items);
+    if (draft.extraDiscount !== undefined) setExtraDiscount(draft.extraDiscount);
+    setDraftRestoreOpen(false);
+    toast.success("Draft restored successfully");
+  };
+
+  const handleDiscardDraft = () => {
+    clearDraft();
+    setDraftRestoreOpen(false);
+  };
 
   // --- Fetch Data on Mount ---
   useEffect(() => {
@@ -470,6 +513,7 @@ export default function CreateOrderPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to place order");
 
+      clearDraft();
       setSubmitStep(3);
       await new Promise((r) => setTimeout(r, 1200));
       router.push(`/dashboard/rep/invoices/${data.data.id}`);
@@ -620,6 +664,31 @@ export default function CreateOrderPage() {
   return (
     <div className="space-y-4 mx-auto pb-28 lg:pb-6">
 
+      {/* Draft Restore Dialog */}
+      <Dialog open={draftRestoreOpen} onOpenChange={setDraftRestoreOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RotateCcw className="h-5 w-5 text-primary" />
+              Unsaved Draft Found
+            </DialogTitle>
+            <DialogDescription>
+              You have an unsaved order draft from <strong>{draftAge}</strong>.
+              Would you like to restore it and continue where you left off?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={handleDiscardDraft}>
+              Discard Draft
+            </Button>
+            <Button onClick={handleRestoreDraft}>
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Restore Draft
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Out-of-stock override banner */}
       {outOfStockOverride && (
         <div className="flex items-start gap-2 bg-orange-50 border border-orange-300 rounded-xl px-4 py-3 text-sm text-orange-800">
@@ -649,6 +718,12 @@ export default function CreateOrderPage() {
             Create a new order for your customer
           </p>
         </div>
+        {hasDraftInput && (
+          <span className="hidden sm:flex items-center gap-1.5 text-xs text-muted-foreground bg-muted px-2.5 py-1 rounded-full shrink-0">
+            <Clock className="h-3 w-3" />
+            Draft auto-saving
+          </span>
+        )}
         {/* Desktop Place Order button — hidden on mobile (uses sticky bar below) */}
         <Button
           onClick={handleSaveOrder}

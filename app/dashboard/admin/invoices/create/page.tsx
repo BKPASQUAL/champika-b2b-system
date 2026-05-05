@@ -12,6 +12,8 @@ import {
   Loader2,
   Check,
   ChevronsUpDown,
+  Clock,
+  RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,8 +53,17 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useFormDraft } from "@/hooks/useFormDraft";
 
 // --- Types ---
 
@@ -113,6 +124,10 @@ export default function CreateInvoicePage() {
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [extraDiscount, setExtraDiscount] = useState<number>(0);
 
+  // Draft restore state
+  const [draftRestoreOpen, setDraftRestoreOpen] = useState(false);
+  const [draftAge, setDraftAge] = useState("");
+
   // Popover States
   const [customerOpen, setCustomerOpen] = useState(false);
   const [salesRepOpen, setSalesRepOpen] = useState(false);
@@ -152,6 +167,44 @@ export default function CreateInvoicePage() {
     window.addEventListener("keydown", handleGlobalKeyDown);
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   }, []);
+
+  // --- Draft Auto-Save ---
+  const hasDraftInput = items.length > 0 || customerId !== null || salesRepId !== "";
+  const { clearDraft, loadDraft } = useFormDraft(
+    "invoice_draft_admin",
+    { customerId, invoiceDate, salesRepId, orderStatus, items, extraDiscount },
+    !loading && hasDraftInput
+  );
+
+  // Check for saved draft once initial data finishes loading
+  useEffect(() => {
+    if (loading || customers.length === 0) return;
+    const draft = loadDraft();
+    if (!draft) return;
+    if (!draft.items?.length && !draft.customerId && !draft.salesRepId) return;
+
+    const mins = Math.floor((Date.now() - draft._savedAt) / 60000);
+    setDraftAge(mins < 1 ? "just now" : `${mins} minute${mins !== 1 ? "s" : ""} ago`);
+    setDraftRestoreOpen(true);
+  }, [loading, customers.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleRestoreDraft = () => {
+    const draft = loadDraft();
+    if (!draft) return;
+    if (draft.customerId !== undefined) setCustomerId(draft.customerId);
+    if (draft.invoiceDate) setInvoiceDate(draft.invoiceDate);
+    if (draft.salesRepId) setSalesRepId(draft.salesRepId);
+    if (draft.orderStatus) setOrderStatus(draft.orderStatus);
+    if (draft.items?.length) setItems(draft.items);
+    if (draft.extraDiscount !== undefined) setExtraDiscount(draft.extraDiscount);
+    setDraftRestoreOpen(false);
+    toast.success("Draft restored successfully");
+  };
+
+  const handleDiscardDraft = () => {
+    clearDraft();
+    setDraftRestoreOpen(false);
+  };
 
   // --- 1. Fetch Initial Data (Customers & Reps Only) ---
   useEffect(() => {
@@ -362,6 +415,7 @@ export default function CreateInvoicePage() {
         throw new Error(data.error || "Failed to create invoice");
       }
 
+      clearDraft();
       toast.success("Invoice Created Successfully!");
       router.push("/dashboard/admin/invoices");
     } catch (error: any) {
@@ -405,6 +459,31 @@ export default function CreateInvoicePage() {
 
   return (
     <div className="space-y-4 mx-auto">
+      {/* Draft Restore Dialog */}
+      <Dialog open={draftRestoreOpen} onOpenChange={setDraftRestoreOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RotateCcw className="h-5 w-5 text-primary" />
+              Unsaved Draft Found
+            </DialogTitle>
+            <DialogDescription>
+              You have an unsaved invoice draft from <strong>{draftAge}</strong>.
+              Would you like to restore it and continue where you left off?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={handleDiscardDraft}>
+              Discard Draft
+            </Button>
+            <Button onClick={handleRestoreDraft}>
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Restore Draft
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="flex items-center gap-4">
         <Button
           variant="ghost"
@@ -421,6 +500,12 @@ export default function CreateInvoicePage() {
             Create a new bill for a customer
           </p>
         </div>
+        {hasDraftInput && (
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted px-2.5 py-1 rounded-full">
+            <Clock className="h-3 w-3" />
+            Draft auto-saving
+          </span>
+        )}
         <Button
           onClick={handleSaveInvoice}
           disabled={items.length === 0 || loading}
