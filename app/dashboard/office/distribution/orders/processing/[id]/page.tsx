@@ -18,8 +18,10 @@ import {
   Save,
   X,
   Trash2,
-  FileText, // Imported FileText icon for Invoice
+  FileText,
+  Printer,
 } from "lucide-react";
+import { printOrder } from "@/app/lib/order-html";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -287,7 +289,14 @@ export default function ProcessOrderPage({
         </div>
 
         {/* Header Actions & Stats */}
-        <div className="flex flex-col sm:flex-row gap-4 w-full xl:w-auto">
+        <div className="flex flex-col sm:flex-row gap-4 w-full xl:w-auto items-start sm:items-center">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => printOrder(order, items)}
+          >
+            <Printer className="w-4 h-4 mr-2" /> Print
+          </Button>
           {/* Stats Grid - Updated for 4 Columns */}
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-lg border border-slate-100 flex-1">
             {/* Invoice No (Added) */}

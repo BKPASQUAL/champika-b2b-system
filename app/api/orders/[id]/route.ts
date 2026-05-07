@@ -26,6 +26,7 @@ export async function GET(
           full_name
         ),
         invoices (
+          id,
           invoice_no,
           status
         ),
@@ -65,7 +66,8 @@ export async function GET(
     const response = {
       id: order.id,
       orderId: order.order_id,
-      invoiceNo: invoiceNumber, // <--- Using the resolved invoice number
+      invoiceNo: invoiceNumber,
+      invoiceId: order.invoices?.[0]?.id || null,
       date: order.order_date,
       status: order.status,
       paymentStatus: order.invoices?.[0]?.status || "Unpaid",
