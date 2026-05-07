@@ -99,14 +99,6 @@ const generatePDFContent = async (loadId: string) => {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
   doc.text(`Total Orders: ${data.totalOrders}`, margin, currentY);
-  doc.text(
-    `Total Value: LKR ${data.totalAmount.toLocaleString("en-LK", {
-      minimumFractionDigits: 2,
-    })}`,
-    pageWidth - margin,
-    currentY,
-    { align: "right" }
-  );
 
   // Signatures (2 Columns)
   currentY += 20;
