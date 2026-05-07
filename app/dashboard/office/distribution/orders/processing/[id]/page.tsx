@@ -273,94 +273,67 @@ export default function ProcessOrderPage({
   if (!order) return null;
 
   return (
-    <div className="">
+    <div className="pb-24 lg:pb-0">
       {/* --- Header Section --- */}
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b pb-3">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.back()}>
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b pb-3">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" className="shrink-0" onClick={() => router.back()}>
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-3 flex-wrap">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2 flex-wrap">
               Packing Order
-              <Badge className="bg-blue-600 hover:bg-blue-700 text-sm px-2.5">
+              <Badge className="bg-blue-600 hover:bg-blue-700 text-xs px-2">
                 {order.invoiceNo}
               </Badge>
             </h1>
-            <p className="text-muted-foreground text-sm mt-1">
+            <p className="text-muted-foreground text-xs sm:text-sm mt-0.5 hidden sm:block">
               Verify items and quantities before marking as ready for QC.
             </p>
           </div>
         </div>
 
         {/* Header Actions & Stats */}
-        <div className="flex flex-col sm:flex-row gap-4 w-full xl:w-auto items-start sm:items-center">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => printOrder(order, items)}
-          >
-            <Printer className="w-4 h-4 mr-2" /> Print
+        <div className="flex items-center gap-2 lg:w-auto">
+          <Button variant="outline" size="sm" className="shrink-0" onClick={() => printOrder(order, items)}>
+            <Printer className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">Print</span>
           </Button>
-          {/* Stats Grid - Updated for 4 Columns */}
-          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-lg border border-slate-100 flex-1">
-            {/* Invoice No (Added) */}
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-white rounded-md border shadow-sm text-slate-500">
-                <FileText className="w-4 h-4" />
+          <div className="grid grid-cols-4 gap-1 sm:gap-3 bg-slate-50 px-2 py-2 sm:p-3 rounded-lg border border-slate-100 flex-1 min-w-0">
+            <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+              <div className="hidden sm:flex p-1.5 bg-white rounded-md border shadow-sm text-slate-500 shrink-0">
+                <FileText className="w-3.5 h-3.5" />
               </div>
-              <div className="flex flex-col">
-                <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
-                  Invoice No
-                </span>
-                <span className="font-semibold text-sm text-slate-900">
-                  {order.invoiceNo || "N/A"}
-                </span>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[9px] sm:text-xs text-muted-foreground uppercase tracking-wide truncate">Invoice</span>
+                <span className="font-semibold text-[10px] sm:text-sm text-slate-900 truncate">{order.invoiceNo || "N/A"}</span>
               </div>
             </div>
-
-            {/* Date */}
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-white rounded-md border shadow-sm text-slate-500">
-                <Calendar className="w-4 h-4" />
+            <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+              <div className="hidden sm:flex p-1.5 bg-white rounded-md border shadow-sm text-slate-500 shrink-0">
+                <Calendar className="w-3.5 h-3.5" />
               </div>
-              <div className="flex flex-col">
-                <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
-                  Date
-                </span>
-                <span className="font-semibold text-sm text-slate-900">
-                  {new Date(order.date).toLocaleDateString()}
-                </span>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[9px] sm:text-xs text-muted-foreground uppercase tracking-wide">Date</span>
+                <span className="font-semibold text-[10px] sm:text-sm text-slate-900">{new Date(order.date).toLocaleDateString()}</span>
               </div>
             </div>
-
-            {/* Sales Rep */}
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-white rounded-md border shadow-sm text-slate-500">
-                <Briefcase className="w-4 h-4" />
+            <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+              <div className="hidden sm:flex p-1.5 bg-white rounded-md border shadow-sm text-slate-500 shrink-0">
+                <Briefcase className="w-3.5 h-3.5" />
               </div>
-              <div className="flex flex-col">
-                <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
-                  Sales Rep
-                </span>
-                <span className="font-semibold text-sm text-slate-900">
-                  {order.salesRep}
-                </span>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[9px] sm:text-xs text-muted-foreground uppercase tracking-wide">Rep</span>
+                <span className="font-semibold text-[10px] sm:text-sm text-slate-900 truncate">{order.salesRep}</span>
               </div>
             </div>
-
-            {/* Total Qty */}
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-white rounded-md border shadow-sm text-slate-500">
-                <Package className="w-4 h-4" />
+            <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+              <div className="hidden sm:flex p-1.5 bg-white rounded-md border shadow-sm text-slate-500 shrink-0">
+                <Package className="w-3.5 h-3.5" />
               </div>
-              <div className="flex flex-col">
-                <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
-                  Total Qty
-                </span>
-                <span className="font-bold text-lg leading-none text-primary">
-                  {totalQuantity}
-                </span>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[9px] sm:text-xs text-muted-foreground uppercase tracking-wide">Qty</span>
+                <span className="font-bold text-sm sm:text-lg leading-none text-primary">{totalQuantity}</span>
               </div>
             </div>
           </div>
@@ -458,13 +431,13 @@ export default function ProcessOrderPage({
                           />
                         )}
                       </TableHead>
-                      <TableHead className="min-w-[200px]">
+                      <TableHead>
                         Product Details
                       </TableHead>
-                      <TableHead className="text-center w-[120px]">
-                        Quantity
+                      <TableHead className="text-center w-20 sm:w-[120px]">
+                        Qty
                       </TableHead>
-                      <TableHead className="text-center w-[100px]">
+                      <TableHead className="text-center w-[60px] sm:w-[100px]">
                         Free
                       </TableHead>
                       {isEditing && (
@@ -503,9 +476,9 @@ export default function ProcessOrderPage({
                             )}
                           </TableCell>
                           <TableCell>
-                            <div className="flex items-start gap-4 py-1">
+                            <div className="flex items-start gap-2 sm:gap-4 py-1">
                               {/* IMAGE RENDERING */}
-                              <div className="h-12 w-12 rounded-md border bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
+                              <div className="h-9 w-9 sm:h-12 sm:w-12 rounded-md border bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
                                 {item.image ? (
                                   // eslint-disable-next-line @next/next/no-img-element
                                   <img
@@ -525,7 +498,7 @@ export default function ProcessOrderPage({
                               <div className="flex flex-col gap-0.5 min-w-0">
                                 <span
                                   className={cn(
-                                    "font-semibold text-sm transition-all truncate",
+                                    "font-semibold text-xs sm:text-sm transition-all truncate",
                                     isChecked && !isEditing
                                       ? "text-slate-500 line-through decoration-slate-400"
                                       : "text-slate-900"
@@ -689,7 +662,7 @@ export default function ProcessOrderPage({
 
           <Card
             className={cn(
-              "lg:sticky lg:top-6 shadow-md border-primary/20 bg-primary/5",
+              "hidden lg:block lg:sticky lg:top-6 shadow-md border-primary/20 bg-primary/5",
               isEditing && "opacity-50 pointer-events-none"
             )}
           >
@@ -772,6 +745,31 @@ export default function ProcessOrderPage({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* --- Mobile Sticky Action Bar --- */}
+      <div className="lg:hidden fixed bottom-0 inset-x-0 z-20 bg-background border-t shadow-lg px-4 py-3">
+        {isEditing ? (
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={cancelEditing} disabled={processing}>
+              <X className="w-4 h-4 mr-2" /> Cancel
+            </Button>
+            <Button className="flex-1 bg-green-600 hover:bg-green-700" onClick={() => setIsSaveConfirmOpen(true)} disabled={processing}>
+              {processing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+              Save Changes
+            </Button>
+          </div>
+        ) : (
+          <Button
+            size="lg"
+            className="w-full h-11 font-semibold"
+            onClick={handleCompleteProcessing}
+            disabled={processing}
+          >
+            {processing ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <CheckCircle2 className="w-5 h-5 mr-2" />}
+            Complete Packing
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
