@@ -35,7 +35,6 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -118,11 +117,7 @@ export interface SupplierPaymentsPageProps {
 
 export function SupplierPaymentsPage({ defaultBusinessId, routePrefix }: SupplierPaymentsPageProps) {
   const router = useRouter();
-  const [currentBusinessId] = useState<string | null>(() => {
-    if (!defaultBusinessId) return null;   // admin — no filter
-    const user = getUserBusinessContext();
-    return user?.businessId ?? defaultBusinessId;
-  });
+  const currentBusinessId = defaultBusinessId ?? null;
 
   const bq = currentBusinessId ? `?businessId=${currentBusinessId}` : "";
 
