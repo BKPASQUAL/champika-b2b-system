@@ -84,6 +84,7 @@ export default function ProcessOrderPage({
 
   // --- Edit Mode State ---
   const [isEditing, setIsEditing] = useState(false);
+  const [deletedItemIds, setDeletedItemIds] = useState<string[]>([]);
 
   // State to track checked items for packing
   const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
@@ -161,6 +162,7 @@ export default function ProcessOrderPage({
 
   const handleRemoveItem = (itemId: string) => {
     setItems((prev) => prev.filter((i) => i.id !== itemId));
+    setDeletedItemIds((prev) => [...prev, itemId]);
     // Also remove from checked items if present
     const newChecked = { ...checkedItems };
     delete newChecked[itemId];
@@ -182,6 +184,7 @@ export default function ProcessOrderPage({
         body: JSON.stringify({
           action: "update_items",
           items: items,
+          deletedItemIds: deletedItemIds,
           totalAmount: newTotalAmount,
         }),
       });
@@ -192,6 +195,7 @@ export default function ProcessOrderPage({
 
       toast.success("Order, Stocks & Bill Updated Successfully!");
       setIsEditing(false);
+      setDeletedItemIds([]);
       fetchOrder(); // Refresh to get exact server state
     } catch (error: any) {
       toast.error(error.message || "Failed to save changes");
@@ -202,6 +206,7 @@ export default function ProcessOrderPage({
 
   const cancelEditing = () => {
     setIsEditing(false);
+    setDeletedItemIds([]);
     fetchOrder(); // Revert changes
   };
 

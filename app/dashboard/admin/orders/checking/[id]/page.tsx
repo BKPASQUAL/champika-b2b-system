@@ -83,6 +83,7 @@ export default function CheckOrderPage({
 
   // --- Edit Mode State ---
   const [isEditing, setIsEditing] = useState(false);
+  const [deletedItemIds, setDeletedItemIds] = useState<string[]>([]);
 
   // State to track checked items for QC
   const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
@@ -160,6 +161,7 @@ export default function CheckOrderPage({
 
   const handleRemoveItem = (itemId: string) => {
     setItems((prev) => prev.filter((i) => i.id !== itemId));
+    setDeletedItemIds((prev) => [...prev, itemId]);
     const newChecked = { ...checkedItems };
     delete newChecked[itemId];
     setCheckedItems(newChecked);
@@ -180,6 +182,7 @@ export default function CheckOrderPage({
         body: JSON.stringify({
           action: "update_items",
           items: items,
+          deletedItemIds: deletedItemIds,
           totalAmount: newTotalAmount,
         }),
       });
@@ -188,6 +191,7 @@ export default function CheckOrderPage({
 
       toast.success("Order Updated Successfully!");
       setIsEditing(false);
+      setDeletedItemIds([]);
       fetchOrder();
     } catch (error: any) {
       toast.error(error.message || "Failed to save changes");
@@ -198,6 +202,7 @@ export default function CheckOrderPage({
 
   const cancelEditing = () => {
     setIsEditing(false);
+    setDeletedItemIds([]);
     fetchOrder();
   };
 
