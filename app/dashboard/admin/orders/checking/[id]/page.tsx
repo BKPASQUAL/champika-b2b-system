@@ -521,28 +521,39 @@ export default function CheckOrderPage({
                                 >
                                   {item.name}
                                 </span>
-                                <span className="text-xs text-muted-foreground font-mono bg-slate-100 px-1.5 py-0.5 rounded w-fit">
-                                  {item.sku}
-                                </span>
+                                <div className="flex items-center gap-1 flex-wrap">
+                                  <span className="text-xs text-muted-foreground font-mono bg-slate-100 px-1.5 py-0.5 rounded">
+                                    {item.sku}
+                                  </span>
+                                  <span className="text-xs text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                                    {item.unit}
+                                  </span>
+                                  <span className="text-xs text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
+                                    Rs. {item.price.toFixed(2)}
+                                  </span>
+                                </div>
                               </div>
                             </div>
                           </TableCell>
                           <TableCell className="text-center">
                             {isEditing ? (
-                              <Input
-                                type="number"
-                                min="1"
-                                className="w-20 text-center h-8 mx-auto"
-                                value={item.qty}
-                                onChange={(e) =>
-                                  handleItemChange(
-                                    item.id,
-                                    "qty",
-                                    e.target.value
-                                  )
-                                }
-                                onClick={(e) => e.stopPropagation()}
-                              />
+                              <div className="flex items-center gap-1 justify-center">
+                                <Input
+                                  type="number"
+                                  min="1"
+                                  className="w-20 text-center h-8"
+                                  value={item.qty}
+                                  onChange={(e) =>
+                                    handleItemChange(
+                                      item.id,
+                                      "qty",
+                                      e.target.value
+                                    )
+                                  }
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                                <span className="text-xs text-muted-foreground shrink-0">{item.unit}</span>
+                              </div>
                             ) : (
                               <div
                                 className={cn(
@@ -552,26 +563,29 @@ export default function CheckOrderPage({
                                     : "text-slate-900"
                                 )}
                               >
-                                {item.qty}
+                                {item.qty}{" "}
+                                <span className="text-xs font-normal text-muted-foreground ml-1">({item.unit})</span>
                               </div>
                             )}
                           </TableCell>
                           <TableCell className="text-center">
                             {isEditing ? (
-                              <Input
-                                type="number"
-                                min="0"
-                                className="w-16 text-center h-8 mx-auto border-green-200 focus:border-green-500"
-                                value={item.free}
-                                onChange={(e) =>
-                                  handleItemChange(
-                                    item.id,
-                                    "free",
-                                    e.target.value
-                                  )
-                                }
-                                onClick={(e) => e.stopPropagation()}
-                              />
+                              <div className="flex items-center gap-1 justify-center">
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  className="w-16 text-center h-8 border-green-200 focus:border-green-500"
+                                  value={item.free}
+                                  onChange={(e) =>
+                                    handleItemChange(
+                                      item.id,
+                                      "free",
+                                      e.target.value
+                                    )
+                                  }
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                              </div>
                             ) : item.free > 0 ? (
                               <Badge
                                 variant="secondary"
