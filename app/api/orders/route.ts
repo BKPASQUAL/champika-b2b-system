@@ -93,6 +93,8 @@ export async function GET(request: NextRequest) {
         status: order.status,
         paymentStatus: paymentStatus,
         salesRep: repName,
+        lockedBy: order.locked_by ?? null,
+        lockedAt: order.locked_at ?? null,
       };
     });
 

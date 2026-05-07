@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, use } from "react";
+import { useOrderLock } from "@/hooks/useOrderLock";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -77,6 +78,8 @@ export default function CheckOrderPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+
+  useOrderLock(id);
 
   const [order, setOrder] = useState<any>(null);
   const [items, setItems] = useState<OrderItem[]>([]);

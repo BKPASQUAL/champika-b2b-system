@@ -22,6 +22,8 @@ export interface Order {
   itemCount: number;
   totalAmount: number;
   status: OrderStatus;
+  lockedBy?: string | null;
+  lockedAt?: string | null;
 }
 
 export type SortField =

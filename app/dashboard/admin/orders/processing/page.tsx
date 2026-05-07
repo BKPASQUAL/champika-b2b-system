@@ -25,6 +25,7 @@ import {
   User,
   Calendar,
   FileText,
+  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -34,6 +35,11 @@ export default function ProcessingOrdersPage() {
   const router = useRouter();
 
   const [searchQuery, setSearchQuery] = useState("");
+
+  const LOCK_EXPIRE_MS = 30 * 60 * 1000;
+  const isOrderLocked = (order: Order) =>
+    !!order.lockedBy && !!order.lockedAt &&
+    Date.now() - new Date(order.lockedAt).getTime() < LOCK_EXPIRE_MS;
 
   const {
     data: orders = [],
@@ -108,11 +114,13 @@ export default function ProcessingOrdersPage() {
                 <div
                   key={order.id}
                   className="bg-white border rounded-xl p-4 shadow-sm flex flex-col gap-3 active:scale-[0.99] transition-transform"
-                  onClick={() =>
-                    router.push(
-                      `/dashboard/admin/orders/processing/${order.id}`
-                    )
-                  }
+                  onClick={() => {
+                    if (isOrderLocked(order)) {
+                      toast.info(`In use by ${order.lockedBy}`);
+                      return;
+                    }
+                    router.push(`/dashboard/admin/orders/processing/${order.id}`);
+                  }}
                 >
                   {/* Row 1: Invoice No, Date, Status */}
                   <div className="flex items-center justify-between">
@@ -167,12 +175,19 @@ export default function ProcessingOrdersPage() {
                   </div>
 
                   {/* Row 4: Action Button */}
-                  <Button
-                    size="sm"
-                    className="w-full mt-1 bg-indigo-600 hover:bg-indigo-700 text-white h-9"
-                  >
-                    Process Order <ArrowRight className="ml-2 h-3 w-3" />
-                  </Button>
+                  {isOrderLocked(order) ? (
+                    <div className="flex items-center justify-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg h-9 w-full">
+                      <Lock className="h-3.5 w-3.5" />
+                      <span>In Use by {order.lockedBy}</span>
+                    </div>
+                  ) : (
+                    <Button
+                      size="sm"
+                      className="w-full mt-1 bg-indigo-600 hover:bg-indigo-700 text-white h-9"
+                    >
+                      Process Order <ArrowRight className="ml-2 h-3 w-3" />
+                    </Button>
+                  )}
                 </div>
               ))
             )}
@@ -252,14 +267,11 @@ export default function ProcessingOrdersPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          {/* View Details (General View) */}
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() =>
-                              router.push(
-                                `/dashboard/admin/orders/${order.id}`
-                              )
+                              router.push(`/dashboard/admin/orders/${order.id}`)
                             }
                             title="View Details"
                             className="h-8 w-8"
@@ -267,18 +279,24 @@ export default function ProcessingOrdersPage() {
                             <Eye className="h-4 w-4 text-muted-foreground" />
                           </Button>
 
-                          {/* Process Order (Navigate to Packing Page) */}
-                          <Button
-                            size="sm"
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white h-8 text-xs"
-                            onClick={() =>
-                              router.push(
-                                `/dashboard/admin/orders/processing/${order.id}`
-                              )
-                            }
-                          >
-                            Process <ArrowRight className="ml-1 h-3 w-3" />
-                          </Button>
+                          {isOrderLocked(order) ? (
+                            <div className="flex items-center gap-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded h-8">
+                              <Lock className="h-3 w-3" />
+                              <span>{order.lockedBy}</span>
+                            </div>
+                          ) : (
+                            <Button
+                              size="sm"
+                              className="bg-indigo-600 hover:bg-indigo-700 text-white h-8 text-xs"
+                              onClick={() =>
+                                router.push(
+                                  `/dashboard/admin/orders/processing/${order.id}`
+                                )
+                              }
+                            >
+                              Process <ArrowRight className="ml-1 h-3 w-3" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

@@ -25,6 +25,8 @@ export interface Order {
   status: OrderStatus;
   paymentStatus: PaymentStatus;
   salesRep: string;
+  lockedBy?: string | null;
+  lockedAt?: string | null;
 }
 
 export type SortField =

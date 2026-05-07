@@ -18,6 +18,7 @@ import {
   Calendar,
   FileText,
   AlertCircle,
+  Lock,
 } from "lucide-react";
 import {
   Table,
@@ -40,6 +41,11 @@ export default function DistributionProcessingOrdersPage() {
     () => toast.error("Failed to load orders")
   );
   const [searchQuery, setSearchQuery] = useState("");
+
+  const LOCK_EXPIRE_MS = 30 * 60 * 1000;
+  const isOrderLocked = (order: Order) =>
+    !!order.lockedBy && !!order.lockedAt &&
+    Date.now() - new Date(order.lockedAt).getTime() < LOCK_EXPIRE_MS;
 
   // --- 2. Filter Logic ---
   const filteredOrders = orders.filter((order) => {
@@ -112,11 +118,15 @@ export default function DistributionProcessingOrdersPage() {
                 <div
                   key={order.id}
                   className="bg-white border rounded-xl p-4 shadow-sm flex flex-col gap-3 active:scale-[0.99] transition-transform"
-                  onClick={() =>
+                  onClick={() => {
+                    if (isOrderLocked(order)) {
+                      toast.info(`In use by ${order.lockedBy}`);
+                      return;
+                    }
                     router.push(
                       `/dashboard/office/distribution/orders/processing/${order.id}`
-                    )
-                  }
+                    );
+                  }}
                 >
                   {/* Row 1: Invoice No, Date, Status */}
                   <div className="flex items-center justify-between">
@@ -171,12 +181,19 @@ export default function DistributionProcessingOrdersPage() {
                   </div>
 
                   {/* Row 4: Action Button */}
-                  <Button
-                    size="sm"
-                    className="w-full mt-1 bg-blue-600 hover:bg-blue-700 text-white h-9"
-                  >
-                    Pack Order <ArrowRight className="ml-2 h-3 w-3" />
-                  </Button>
+                  {isOrderLocked(order) ? (
+                    <div className="flex items-center justify-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg h-9 w-full">
+                      <Lock className="h-3.5 w-3.5" />
+                      <span>In Use by {order.lockedBy}</span>
+                    </div>
+                  ) : (
+                    <Button
+                      size="sm"
+                      className="w-full mt-1 bg-blue-600 hover:bg-blue-700 text-white h-9"
+                    >
+                      Pack Order <ArrowRight className="ml-2 h-3 w-3" />
+                    </Button>
+                  )}
                 </div>
               ))
             )}
@@ -255,17 +272,24 @@ export default function DistributionProcessingOrdersPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          className="bg-blue-600 hover:bg-blue-700 text-white h-8 text-xs"
-                          onClick={() =>
-                            router.push(
-                              `/dashboard/office/distribution/orders/processing/${order.id}`
-                            )
-                          }
-                        >
-                          Pack <ArrowRight className="ml-1 h-3 w-3" />
-                        </Button>
+                        {isOrderLocked(order) ? (
+                          <div className="flex items-center justify-end gap-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded h-8">
+                            <Lock className="h-3 w-3" />
+                            <span>{order.lockedBy}</span>
+                          </div>
+                        ) : (
+                          <Button
+                            size="sm"
+                            className="bg-blue-600 hover:bg-blue-700 text-white h-8 text-xs"
+                            onClick={() =>
+                              router.push(
+                                `/dashboard/office/distribution/orders/processing/${order.id}`
+                              )
+                            }
+                          >
+                            Pack <ArrowRight className="ml-1 h-3 w-3" />
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))

@@ -20,7 +20,10 @@
       "Bash(grep -E \"\\\\.tsx?$\")",
       "Bash(Remove-Item -Recurse -Force .next -ErrorAction SilentlyContinue)",
       "PowerShell(npm run build 2>&1)",
-      "PowerShell(Get-ChildItem -Path \"c:\\\\Projects\\\\champika-b2b-system\" -Directory | Select-Object -First 20 | ForEach-Object { $_.Name })"
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Projects\\\\champika-b2b-system\" -Directory | Select-Object -First 20 | ForEach-Object { $_.Name })",
+      "Bash(New-Item -ItemType Directory -Force -Path \"c:\\\\Projects\\\\champika-b2b-system\\\\app\\\\api\\\\orders\\\\[id]\\\\lock\")",
+      "Bash(Out-Null)",
+      "Bash(Write-Output \"done\")"
     ],
     "additionalDirectories": [
       "c:\\Projects\\champika-b2b-system\\app\\api\\payments\\[id]",
