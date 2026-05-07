@@ -120,7 +120,6 @@ export const generateInvoiceHTML = async (
 
     <div style="margin-bottom:12px;">
       <div style="font-size:13px;font-weight:700;color:#000;">${shopName}</div>
-      ${customerName !== shopName ? `<div style="font-size:12px;color:#333;">${customerName}</div>` : ""}
       ${address ? `<div style="font-size:12px;color:#333;">${address}${route ? ", " + route : ""}</div>` : ""}
       ${phone ? `<div style="font-size:12px;color:#333;">${phone}</div>` : ""}
     </div>
