@@ -89,7 +89,7 @@ export const generateInvoiceHTML = async (
     .join("");
 
   return `
-  <div class="invoice-page" style="page-break-after:always;width:100%;min-height:277mm;padding:28px 32px 36px;background:#fff;font-family:${FONT_STACK};color:#111;box-sizing:border-box;display:flex;flex-direction:column;">
+  <div class="invoice-page" style="page-break-after:always;width:100%;min-height:277mm;padding:20px 14px 28px;background:#fff;font-family:${FONT_STACK};color:#111;box-sizing:border-box;display:flex;flex-direction:column;">
 
     <table style="width:100%;border-collapse:collapse;margin-bottom:0;">
       <tr>
@@ -199,7 +199,7 @@ export const getDocumentWrapper = (content: string, title: string) => `
         @page { size: A4 portrait; margin: 0; }
         html, body { width: 210mm; margin: 0; padding: 0; }
         body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        .invoice-page { page-break-after: always; width: 210mm !important; padding: 5mm 8mm !important; }
+        .invoice-page { page-break-after: always; width: 210mm !important; padding: 5mm 3mm !important; }
         .invoice-page:last-child { page-break-after: auto; }
       }
     </style>
