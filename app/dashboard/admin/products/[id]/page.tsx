@@ -66,6 +66,8 @@ interface Transaction {
   freeQuantity?: number;
   currentStock?: number;
   customer?: string;
+  repName?: string;
+  businessName?: string;
   reference: string;
   notes: string;
   buyingPrice: number;
@@ -250,7 +252,7 @@ export default function ProductDetailsPage({
             <CardHeader>
               <CardTitle>Transaction History</CardTitle>
               <CardDescription>
-                All transactions (Sales, Purchases, Returns)
+                All transactions across all agencies &amp; divisions — Sales, Purchases, Returns &amp; Adjustments
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -290,6 +292,12 @@ export default function ProductDetailsPage({
                       {transaction.customer && transaction.customer !== "-" && (
                         <div className="flex items-center gap-1 text-xs text-muted-foreground truncate">
                           <User className="h-3 w-3 shrink-0" />{transaction.customer}
+                        </div>
+                      )}
+                      {transaction.businessName && (
+                        <div className="text-[11px] text-muted-foreground font-medium">
+                          {transaction.businessName}
+                          {transaction.repName && transaction.repName !== "-" && ` · ${transaction.repName}`}
                         </div>
                       )}
                       {(transaction.buyingPrice > 0 || transaction.sellingPrice > 0) && (
@@ -333,6 +341,9 @@ export default function ProductDetailsPage({
                     <TableHead className="w-[150px] text-center">
                       Party
                     </TableHead>
+                    <TableHead className="w-[130px] text-center">
+                      Business
+                    </TableHead>
                     <TableHead className="w-[100px] text-center">
                       Buy Price
                     </TableHead>
@@ -349,7 +360,7 @@ export default function ProductDetailsPage({
                   {paginatedTransactions.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={9}
+                        colSpan={10}
                         className="text-center h-24 text-muted-foreground"
                       >
                         No transactions found.
@@ -447,6 +458,15 @@ export default function ProductDetailsPage({
                               {transaction.customer || "-"}
                             </span>
                           </div>
+                        </TableCell>
+
+                        <TableCell className="text-center">
+                          <span className="text-xs font-medium text-muted-foreground truncate max-w-[120px] block" title={transaction.businessName}>
+                            {transaction.businessName || "-"}
+                          </span>
+                          {transaction.repName && transaction.repName !== "-" && (
+                            <span className="text-[10px] text-muted-foreground block">{transaction.repName}</span>
+                          )}
                         </TableCell>
 
                         <TableCell className="text-center font-mono text-xs">

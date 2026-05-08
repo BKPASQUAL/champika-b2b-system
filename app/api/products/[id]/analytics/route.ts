@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { getBusinessName } from "@/app/config/business-constants";
 
 export const dynamic = "force-dynamic";
 
@@ -105,8 +106,9 @@ export async function GET(
         type: "SALE",
         quantity: -qty,
         freeQuantity: freeQty,
-        realChange: realChange, // For calculation
+        realChange: realChange,
         customer: item.order.customer?.shop_name || "Unknown",
+        repName: item.order.rep?.full_name || "-",
         reference: item.order.order_id,
         location: item.order.load?.lorry_number || "Direct / Main",
         status: item.order.status,
@@ -114,6 +116,7 @@ export async function GET(
         buyingPrice: Number(item.actual_unit_cost) || 0,
         sellingPrice: Number(item.unit_price) || 0,
         businessId: item.order.business_id,
+        businessName: getBusinessName(item.order.business_id),
       });
     });
 
@@ -132,16 +135,17 @@ export async function GET(
         type: isFree ? "FREE ISSUE" : "PURCHASE",
         quantity: qty,
         freeQuantity: freeQty,
-        realChange: realChange, // For calculation
-        customer: `${item.purchase?.supplier?.name || "Unknown"}`,
-        reference:
-          item.purchase?.invoice_no || item.purchase?.purchase_id || "-",
+        realChange: realChange,
+        customer: item.purchase?.supplier?.name || "Unknown",
+        repName: "-",
+        reference: item.purchase?.invoice_no || item.purchase?.purchase_id || "-",
         location: "Main Warehouse",
         status: item.purchase?.status || "Completed",
         notes: isFree ? "Free Issue" : "-",
         buyingPrice: Number(item.unit_cost) || 0,
         sellingPrice: Number(item.selling_price) || 0,
         businessId: item.purchase.business_id,
+        businessName: getBusinessName(item.purchase.business_id),
       });
     });
 
@@ -162,12 +166,14 @@ export async function GET(
         freeQuantity: 0,
         realChange: realChange,
         customer: item.customer?.shop_name || "N/A",
+        repName: "-",
         reference: item.reason || "-",
         location: item.location?.name || "Unknown",
         notes: item.reason || "-",
         buyingPrice: 0,
         sellingPrice: 0,
         businessId: item.business_id,
+        businessName: getBusinessName(item.business_id),
       });
     });
 
@@ -187,12 +193,14 @@ export async function GET(
           freeQuantity: 0,
           realChange: diff,
           customer: "Stock Update",
+          repName: "-",
           reference: "Manual",
           location: "Warehouse",
           notes: log.new_data?.reason || "Stock Correction",
           buyingPrice: 0,
           sellingPrice: 0,
           businessId: log.new_data?.businessId,
+          businessName: getBusinessName(log.new_data?.businessId),
         });
       }
     });
@@ -240,8 +248,8 @@ export async function GET(
           date.getMonth() + 1,
         ).padStart(2, "0")}`;
 
-        const businessName = "Wireman Agency"; // Or map appropriately
-        const repName = "Direct Sales"; // Or map from tx
+        const businessName = tx.businessName || "Unknown";
+        const repName = tx.repName && tx.repName !== "-" ? tx.repName : "Direct Sales";
 
         // Revenue based on what was actually sold (excluding free qty from revenue calculation usually, depends on business logic)
         const soldQty = Math.abs(tx.quantity);

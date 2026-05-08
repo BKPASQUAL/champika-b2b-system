@@ -67,11 +67,13 @@ interface Transaction {
   freeQuantity?: number;
   currentStock?: number;
   customer?: string;
+  repName?: string;
+  businessName?: string;
+  businessId?: string;
   reference: string;
   notes: string;
   buyingPrice: number;
   sellingPrice: number;
-  businessId?: string; // ✅ Added Business ID
 }
 
 export default function WiremanProductDetailsPage({
@@ -395,15 +397,17 @@ export default function WiremanProductDetailsPage({
                           {transaction.date}
                         </TableCell>
 
-                        {/* ✅ Branch Column Display */}
                         <TableCell className="text-center">
                           <Badge
                             variant="outline"
                             className={`whitespace-nowrap ${getBranchBadgeColor(transaction.businessId)}`}
                           >
                             <Store className="w-3 h-3 mr-1" />
-                            {getBranchName(transaction.businessId)}
+                            {transaction.businessName || getBranchName(transaction.businessId)}
                           </Badge>
+                          {transaction.repName && transaction.repName !== "-" && (
+                            <div className="text-[10px] text-muted-foreground mt-0.5">{transaction.repName}</div>
+                          )}
                         </TableCell>
 
                         <TableCell className="text-center">

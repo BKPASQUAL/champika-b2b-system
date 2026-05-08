@@ -58,15 +58,17 @@ import { BUSINESS_IDS } from "@/app/config/business-constants";
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8"];
 const ITEMS_PER_PAGE = 10;
 
-// ✅ Updated Transaction Interface (Matches Admin)
 interface Transaction {
   id: string;
   date: string;
   type: "SALE" | "PURCHASE" | "RETURN" | "DAMAGE" | "ADJUSTMENT" | "FREE ISSUE";
   quantity: number;
   freeQuantity?: number;
-  currentStock?: number; // ✅ Added Stock Balance
+  currentStock?: number;
   customer?: string;
+  repName?: string;
+  businessName?: string;
+  businessId?: string;
   reference: string;
   notes: string;
   buyingPrice: number;
@@ -105,11 +107,7 @@ export default function SierraProductDetailsPage({
         const prodData = await prodRes.json();
         setProduct(prodData);
 
-        // 2. Fetch Analytics (Filtered by Business ID)
-        // This relies on the API update we made earlier to calculate stock globally first, then filter
-        const analyticsRes = await fetch(
-          `/api/products/${id}/analytics?businessId=${BUSINESS_IDS.SIERRA_AGENCY}`,
-        );
+        const analyticsRes = await fetch(`/api/products/${id}/analytics`);
 
         if (!analyticsRes.ok) throw new Error("Failed to fetch analytics");
         const analyticsData = await analyticsRes.json();
@@ -310,6 +308,12 @@ export default function SierraProductDetailsPage({
                           <User className="h-3 w-3 shrink-0" />{transaction.customer}
                         </div>
                       )}
+                      {transaction.businessName && (
+                        <div className="text-[11px] text-muted-foreground font-medium">
+                          {transaction.businessName}
+                          {transaction.repName && transaction.repName !== "-" && ` · ${transaction.repName}`}
+                        </div>
+                      )}
                       {(transaction.buyingPrice > 0 || transaction.sellingPrice > 0) && (
                         <div className="flex gap-3 text-xs">
                           {transaction.buyingPrice > 0 && (
@@ -334,11 +338,13 @@ export default function SierraProductDetailsPage({
               <Table className="w-full">
                 <TableHeader>
                   <TableRow>
-                    {/* Centered Headers & Adjusted Widths */}
                     <TableHead className="w-[100px] text-center">
                       Date
                     </TableHead>
                     <TableHead className="w-[120px] text-center">
+                      Business
+                    </TableHead>
+                    <TableHead className="w-[100px] text-center">
                       Type
                     </TableHead>
                     <TableHead className="w-[80px] text-center">
@@ -367,7 +373,7 @@ export default function SierraProductDetailsPage({
                   {paginatedTransactions.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={9}
+                        colSpan={10}
                         className="text-center h-24 text-muted-foreground"
                       >
                         No transactions found.
@@ -376,9 +382,16 @@ export default function SierraProductDetailsPage({
                   ) : (
                     paginatedTransactions.map((transaction) => (
                       <TableRow key={transaction.id}>
-                        {/* Centered Cells */}
                         <TableCell className="text-muted-foreground whitespace-nowrap text-center">
                           {transaction.date}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <span className="text-xs font-medium text-muted-foreground block truncate max-w-[110px]" title={transaction.businessName}>
+                            {transaction.businessName || "-"}
+                          </span>
+                          {transaction.repName && transaction.repName !== "-" && (
+                            <span className="text-[10px] text-muted-foreground block">{transaction.repName}</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-center">
                           <div className="flex justify-center">

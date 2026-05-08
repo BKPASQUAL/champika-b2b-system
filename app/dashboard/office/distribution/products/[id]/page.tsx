@@ -84,6 +84,8 @@ interface Transaction {
   notes?: string;
   quantity: number;
   customer?: string;
+  repName?: string;
+  businessName?: string;
   location: string;
   stockAfter?: number;
 }
@@ -327,6 +329,12 @@ export default function ProductDetailsPage({
                               <User className="h-3 w-3 shrink-0" />{transaction.customer}
                             </div>
                           )}
+                          {transaction.businessName && (
+                            <div className="text-[11px] text-muted-foreground font-medium">
+                              {transaction.businessName}
+                              {transaction.repName && transaction.repName !== "-" && ` · ${transaction.repName}`}
+                            </div>
+                          )}
                           {((transaction.buyingPrice ?? 0) > 0 || (transaction.sellingPrice ?? 0) > 0) && (
                             <div className="flex gap-3 text-xs">
                               {(transaction.buyingPrice ?? 0) > 0 && (
@@ -359,15 +367,16 @@ export default function ProductDetailsPage({
                         <TableHead className="w-[15%] text-right bg-muted/20">
                           Balance
                         </TableHead>
-                        <TableHead className="w-[20%] pl-6">Party</TableHead>
-                        <TableHead className="w-[25%]">Location</TableHead>
+                        <TableHead className="w-[18%] pl-6">Party</TableHead>
+                        <TableHead className="w-[18%]">Business</TableHead>
+                        <TableHead className="w-[18%]">Location</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {paginatedTransactions.length === 0 ? (
                         <TableRow>
                           <TableCell
-                            colSpan={6}
+                            colSpan={7}
                             className="text-center h-24 text-muted-foreground"
                           >
                             No transactions found.
@@ -437,6 +446,14 @@ export default function ProductDetailsPage({
                                   {transaction.customer || "-"}
                                 </span>
                               </div>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-xs font-medium text-muted-foreground block truncate max-w-[140px]" title={transaction.businessName}>
+                                {transaction.businessName || "-"}
+                              </span>
+                              {transaction.repName && transaction.repName !== "-" && (
+                                <span className="text-[10px] text-muted-foreground block">{transaction.repName}</span>
+                              )}
                             </TableCell>
                             <TableCell className="font-medium text-slate-700">
                               <div className="flex items-center gap-2">
