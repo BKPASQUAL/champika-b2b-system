@@ -483,16 +483,21 @@ export async function POST(request: NextRequest) {
           .eq("id", item.productId);
       }
 
-      // Location Stock
-      if (assignedLocationIds.length > 0) {
+      // Location Stock — deduct from assigned locations, or all locations if none assigned
+      {
         let remainingToDeduct = totalQty;
-        const { data: locationStocks } = await supabaseAdmin
+        let stockQuery = supabaseAdmin
           .from("product_stocks")
-          .select("id, location_id, quantity")
+          .select("id, quantity")
           .eq("product_id", item.productId)
-          .in("location_id", assignedLocationIds)
           .gt("quantity", 0)
           .order("quantity", { ascending: false });
+
+        if (assignedLocationIds.length > 0) {
+          stockQuery = stockQuery.in("location_id", assignedLocationIds);
+        }
+
+        const { data: locationStocks } = await stockQuery;
 
         if (locationStocks) {
           for (const stockRec of locationStocks) {
