@@ -1,6 +1,13 @@
 // app/api/orders/loading/reconcile/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { triggerAgencyBillsForInvoice } from "@/app/lib/inter-branch-billing";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
+
+const CHAMPIKA_BUSINESS_IDS = [
+  BUSINESS_IDS.CHAMPIKA_RETAIL,
+  BUSINESS_IDS.CHAMPIKA_DISTRIBUTION,
+];
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,12 +24,34 @@ export async function POST(request: NextRequest) {
       const { orderId, status, finalAmount, paymentStatus } = update;
 
       // A. Update Order Status
+      const finalStatus = status === "Returned" ? "Cancelled" : status;
       await supabaseAdmin
         .from("orders")
-        .update({
-          status: status === "Returned" ? "Cancelled" : status,
-        })
+        .update({ status: finalStatus })
         .eq("id", orderId);
+
+      // Trigger inter-branch bill when an order is marked Delivered
+      if (finalStatus === "Delivered") {
+        try {
+          const { data: ord } = await supabaseAdmin
+            .from("orders")
+            .select("business_id")
+            .eq("id", orderId)
+            .single();
+
+          if (ord && CHAMPIKA_BUSINESS_IDS.includes(ord.business_id)) {
+            const { data: orderItems } = await supabaseAdmin
+              .from("order_items")
+              .select("product_id")
+              .eq("order_id", orderId);
+
+            const productIds = (orderItems || []).map((i: any) => i.product_id);
+            await triggerAgencyBillsForInvoice(ord.business_id, productIds);
+          }
+        } catch (err) {
+          console.error("Inter-branch billing failed (non-critical):", err);
+        }
+      }
 
       // B. Handle Invoice Updates
       const { data: invoice } = await supabaseAdmin

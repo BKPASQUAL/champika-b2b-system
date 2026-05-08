@@ -108,7 +108,7 @@ export async function generateInterBranchBill(params: {
     `,
     )
     .eq("orders.business_id", targetBusinessId)
-    .neq("orders.status", "Cancelled")
+    .eq("orders.status", "Delivered")
     .ilike("products.supplier_name", `%${agencyName}%`)
     .gte("orders.order_date", startDate)
     .lte("orders.order_date", endDate);

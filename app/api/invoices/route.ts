@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
 import { BUSINESS_IDS, BUSINESS_NAMES } from "@/app/config/business-constants";
-import { triggerAgencyBillsForInvoice } from "@/app/lib/inter-branch-billing";
 
 // --- Validation Schemas ---
 
@@ -512,25 +511,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 10. Auto-trigger inter-branch agency bills
-    // resolvedBusinessId is already correctly set (from val.businessId or customer lookup).
-    // If it's a Champika business, scan the invoice items for agency supplier products
-    // and create/update the monthly bill in each matching agency portal.
-    const champikaBusinessIds: string[] = [
-      BUSINESS_IDS.CHAMPIKA_RETAIL,
-      BUSINESS_IDS.CHAMPIKA_DISTRIBUTION,
-    ];
-
-    if (resolvedBusinessId && champikaBusinessIds.includes(resolvedBusinessId)) {
-      const productIds = val.items.map((i) => i.productId);
-      try {
-        await triggerAgencyBillsForInvoice(resolvedBusinessId, productIds);
-      } catch (err) {
-        console.error("Inter-branch auto-billing failed (non-critical):", err);
-      }
-    }
-
-    // 11. Save Activity Record (non-critical — never fail the whole request)
+    // 10. Save Activity Record (non-critical — never fail the whole request)
     let activityRecordId: string | null = null;
     try {
       const businessName = resolvedBusinessId
