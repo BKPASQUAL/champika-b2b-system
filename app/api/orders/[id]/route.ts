@@ -379,9 +379,12 @@ export async function PATCH(
         }
       }
 
+      const updatePayload: Record<string, any> = { status };
+      if (status === "Pending") updatePayload.load_id = null;
+
       const { error } = await supabaseAdmin
         .from("orders")
-        .update({ status })
+        .update(updatePayload)
         .eq("id", id);
 
       if (error) throw error;
