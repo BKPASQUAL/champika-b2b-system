@@ -23,6 +23,7 @@ import {
   Printer,
   Tags,
   TrendingUp,
+  CheckCircle2,
 } from "lucide-react";
 
 interface DistNavItem {
@@ -62,22 +63,27 @@ export const distributionNavItems: DistNavSection[] = [
         icon: Clock,
       },
       {
-        name: "2. Processing",
+        name: "2. Approved",
+        href: "/dashboard/office/distribution/orders/approved",
+        icon: CheckCircle2,
+      },
+      {
+        name: "3. Processing",
         href: "/dashboard/office/distribution/orders/processing",
         icon: Loader2,
       },
       {
-        name: "3. Checking",
+        name: "4. Checking",
         href: "/dashboard/office/distribution/orders/checking",
         icon: ClipboardCheck,
       },
       {
-        name: "4. Loading",
+        name: "5. Loading",
         href: "/dashboard/office/distribution/orders/loading",
         icon: Box,
       },
       {
-        name: "5. Dispatched",
+        name: "6. Dispatched",
         href: "/dashboard/office/distribution/orders/loading/active",
         icon: Send,
       },

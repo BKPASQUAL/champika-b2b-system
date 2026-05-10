@@ -31,14 +31,22 @@ import {
   Package,
   Calendar,
   RefreshCw,
-  Printer, // Icon for Print
-  Download, // Icon for Download
+  Printer,
+  Download,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { downloadLoadingSheet, printLoadingSheet } from "./print-loading-sheet";
-// Import both print functions
 
+interface OrderRow {
+  id: string;
+  orderId: string;
+  invoiceNo: string | null;
+  totalAmount: number;
+}
 
 interface LoadingHistory {
   id: string;
@@ -50,7 +58,7 @@ interface LoadingHistory {
   status: string;
   totalOrders: number;
   totalAmount: number;
-  orderIds: string[];
+  orders: OrderRow[];
   createdAt: string;
 }
 
@@ -61,6 +69,7 @@ export default function DeliveryHistoryPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [printingId, setPrintingId] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   const {
     data: history = [],
@@ -70,49 +79,44 @@ export default function DeliveryHistoryPage() {
     toast.error("Failed to load delivery history")
   );
 
-  // Handle Print (Direct)
   const handlePrint = async (e: React.MouseEvent, loadId: string) => {
-    e.stopPropagation(); // Prevent row click
+    e.stopPropagation();
     if (printingId || downloadingId) return;
-
     setPrintingId(loadId);
     await printLoadingSheet(loadId);
     setPrintingId(null);
   };
 
-  // Handle Download (File)
   const handleDownload = async (e: React.MouseEvent, loadId: string) => {
-    e.stopPropagation(); // Prevent row click
+    e.stopPropagation();
     if (printingId || downloadingId) return;
-
     setDownloadingId(loadId);
     await downloadLoadingSheet(loadId);
     setDownloadingId(null);
   };
 
-  // Filter logic
+  const toggleExpand = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
   const filteredHistory = history.filter((load) => {
     const matchesSearch =
-      load.loadId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      load.lorryNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      load.driverName.toLowerCase().includes(searchQuery.toLowerCase());
-
-    const matchesStatus =
-      statusFilter === "all" || load.status === statusFilter;
-
+      (load.loadId ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (load.lorryNumber ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (load.driverName ?? "").toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = statusFilter === "all" || load.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
-  // Calculate stats
   const totalLoads = history.length;
-  const inTransitCount = history.filter(
-    (l) => l.status === "In Transit"
-  ).length;
+  const inTransitCount = history.filter((l) => l.status === "In Transit").length;
   const completedCount = history.filter((l) => l.status === "Completed").length;
-  const totalOrdersDelivered = history.reduce(
-    (sum, load) => sum + load.totalOrders,
-    0
-  );
+  const totalOrdersDelivered = history.reduce((sum, load) => sum + load.totalOrders, 0);
 
   return (
     <div className="space-y-6">
@@ -122,19 +126,10 @@ export default function DeliveryHistoryPage() {
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <div className="flex-1">
-          <h1 className="text-3xl font-bold tracking-tight">
-            Loading Deliveries
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            History of dispatched delivery loads.
-          </p>
+          <h1 className="text-3xl font-bold tracking-tight">Loading Deliveries</h1>
+          <p className="text-muted-foreground mt-1">History of dispatched delivery loads.</p>
         </div>
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={fetchHistory}
-          title="Refresh"
-        >
+        <Button variant="outline" size="icon" onClick={fetchHistory} title="Refresh">
           <RefreshCw className={loading ? "animate-spin" : ""} />
         </Button>
       </div>
@@ -148,42 +143,29 @@ export default function DeliveryHistoryPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalLoads}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              All time deliveries
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">All time deliveries</p>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">In Transit</CardTitle>
             <Truck className="w-4 h-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
-              {inTransitCount}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Currently delivering
-            </p>
+            <div className="text-2xl font-bold text-blue-600">{inTransitCount}</div>
+            <p className="text-xs text-muted-foreground mt-1">Currently delivering</p>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Completed</CardTitle>
             <Package className="w-4 h-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {completedCount}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Successfully delivered
-            </p>
+            <div className="text-2xl font-bold text-green-600">{completedCount}</div>
+            <p className="text-xs text-muted-foreground mt-1">Successfully delivered</p>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
@@ -191,14 +173,12 @@ export default function DeliveryHistoryPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalOrdersDelivered}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Orders delivered
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">Orders delivered</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Filters */}
+      {/* Table Card */}
       <Card>
         <CardHeader className="pb-4">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -232,6 +212,7 @@ export default function DeliveryHistoryPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-8" />
                   <TableHead>Load ID</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Vehicle</TableHead>
@@ -245,7 +226,7 @@ export default function DeliveryHistoryPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-16">
+                    <TableCell colSpan={9} className="text-center py-16">
                       <div className="flex justify-center items-center">
                         <Loader2 className="h-8 w-8 animate-spin text-primary" />
                       </div>
@@ -253,142 +234,100 @@ export default function DeliveryHistoryPage() {
                   </TableRow>
                 ) : filteredHistory.length === 0 ? (
                   <TableRow>
-                    <TableCell
-                      colSpan={8}
-                      className="text-center py-12 text-muted-foreground"
-                    >
+                    <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
                       <div className="flex flex-col items-center gap-2">
                         <Truck className="h-12 w-12 text-muted-foreground/30" />
                         <p className="font-medium">No delivery history found</p>
-                        <p className="text-sm">
-                          Deliveries will appear here once loading sheets are
-                          created
-                        </p>
+                        <p className="text-sm">Deliveries will appear here once loading sheets are created</p>
                       </div>
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredHistory.map((load) => (
-                    <TableRow
-                      key={load.id}
-                      className="hover:bg-muted/50 cursor-pointer group"
-                      onClick={() =>
-                        router.push(
-                          `/dashboard/admin/orders/loading/history/${load.id}`
-                        )
-                      }
-                    >
-                      <TableCell className="font-medium font-mono">
-                        {load.loadId}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Calendar className="w-4 h-4 text-muted-foreground" />
-                          {new Date(load.loadingDate).toLocaleDateString(
-                            "en-US",
-                            {
-                              year: "numeric",
-                              month: "short",
-                              day: "numeric",
-                            }
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Truck className="w-4 h-4 text-muted-foreground" />
-                          <span className="font-medium">
-                            {load.lorryNumber}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary">
-                            {load.driverName.charAt(0).toUpperCase()}
-                          </div>
-                          <div className="flex flex-col">
-                            <span className="text-sm font-medium">
-                              {load.driverName}
-                            </span>
-                            {load.helperName && (
-                              <span className="text-xs text-muted-foreground">
-                                + {load.helperName}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="outline" className="font-semibold">
-                          {load.totalOrders}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right font-semibold">
-                        Rs. {load.totalAmount.toLocaleString()}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge
-                          variant={
-                            load.status === "Completed"
-                              ? "default"
-                              : "secondary"
-                          }
-                          className={
-                            load.status === "Completed"
-                              ? "bg-green-600 hover:bg-green-700"
-                              : "bg-blue-600 hover:bg-blue-700 text-white"
-                          }
+                  filteredHistory.map((load) => {
+                    const isExpanded = expandedIds.has(load.id);
+                    return (
+                      <React.Fragment key={load.id}>
+                        <TableRow
+                          className="hover:bg-muted/50 cursor-pointer group"
+                          onClick={() => router.push(`/dashboard/admin/orders/loading/history/${load.id}`)}
                         >
-                          {load.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end items-center gap-1">
-                          {/* Print Button */}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                            onClick={(e) => handlePrint(e, load.id)}
-                            disabled={
-                              printingId === load.id ||
-                              downloadingId === load.id
+                          <TableCell onClick={(e) => toggleExpand(e, load.id)} className="pl-3">
+                            {isExpanded
+                              ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                              : <ChevronDown className="w-4 h-4 text-muted-foreground" />
                             }
-                            title="Print Sheet"
-                          >
-                            {printingId === load.id ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <Printer className="w-4 h-4" />
-                            )}
-                          </Button>
+                          </TableCell>
+                          <TableCell className="font-medium font-mono">{load.loadId}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Calendar className="w-4 h-4 text-muted-foreground" />
+                              {new Date(load.loadingDate).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Truck className="w-4 h-4 text-muted-foreground" />
+                              <span className="font-medium">{load.lorryNumber}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary">
+                                {(load.driverName ?? "?").charAt(0).toUpperCase()}
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="text-sm font-medium">{load.driverName}</span>
+                                {load.helperName && <span className="text-xs text-muted-foreground">+ {load.helperName}</span>}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="outline" className="font-semibold">{load.totalOrders}</Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-semibold">
+                            Rs. {load.totalAmount.toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge className={load.status === "Completed" ? "bg-green-600 hover:bg-green-700" : "bg-blue-600 hover:bg-blue-700 text-white"}>
+                              {load.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end items-center gap-1">
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                onClick={(e) => handlePrint(e, load.id)} disabled={printingId === load.id || downloadingId === load.id} title="Print Sheet">
+                                {printingId === load.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                                onClick={(e) => handleDownload(e, load.id)} disabled={printingId === load.id || downloadingId === load.id} title="Download PDF">
+                                {downloadingId === load.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                              </Button>
+                              <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-muted-foreground transition-colors ml-1" />
+                            </div>
+                          </TableCell>
+                        </TableRow>
 
-                          {/* Download Button */}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-                            onClick={(e) => handleDownload(e, load.id)}
-                            disabled={
-                              printingId === load.id ||
-                              downloadingId === load.id
-                            }
-                            title="Download PDF"
-                          >
-                            {downloadingId === load.id ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <Download className="w-4 h-4" />
-                            )}
-                          </Button>
-
-                          {/* View Indicator */}
-                          <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-muted-foreground transition-colors ml-1" />
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                        {isExpanded && (
+                          <TableRow className="bg-slate-50 hover:bg-slate-50">
+                            <TableCell colSpan={9} className="py-3 px-6">
+                              <div className="flex flex-wrap gap-1.5">
+                                {load.orders.length === 0 ? (
+                                  <span className="text-xs text-muted-foreground">No orders</span>
+                                ) : (
+                                  load.orders.map((o) => (
+                                    <span key={o.id} className="flex items-center gap-1 text-xs font-mono bg-white border border-slate-200 text-slate-700 px-2 py-0.5 rounded">
+                                      <FileText className="h-3 w-3 text-indigo-400" />
+                                      {o.invoiceNo || o.orderId}
+                                    </span>
+                                  ))
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </React.Fragment>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>

@@ -33,6 +33,7 @@ import {
   ClipboardList,
   CalendarDays,
   PenLine,
+  CheckCircle2,
 } from "lucide-react";
 
 export type UserRole = "admin" | "office" | "rep" | "delivery";
@@ -67,22 +68,27 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           icon: Clock,
         },
         {
-          name: "2. Processing",
+          name: "2. Approved",
+          href: "/dashboard/admin/orders/approved",
+          icon: CheckCircle2,
+        },
+        {
+          name: "3. Processing",
           href: "/dashboard/admin/orders/processing",
           icon: Loader2,
         },
         {
-          name: "3. Checking",
+          name: "4. Checking",
           href: "/dashboard/admin/orders/checking",
           icon: ClipboardCheck,
         },
         {
-          name: "4. Loading",
+          name: "5. Loading",
           href: "/dashboard/admin/orders/loading",
           icon: Box,
         },
         {
-          name: "5. Dispatched",
+          name: "6. Dispatched",
           href: "/dashboard/admin/orders/loading/active",
           icon: Send,
         },
@@ -279,22 +285,27 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           icon: Clock,
         },
         {
-          name: "2. Processing",
+          name: "2. Approved",
+          href: "/dashboard/office/orders/approved",
+          icon: CheckCircle2,
+        },
+        {
+          name: "3. Processing",
           href: "/dashboard/office/orders/processing",
           icon: Loader2,
         },
         {
-          name: "3. Checking",
+          name: "4. Checking",
           href: "/dashboard/office/orders/checking",
           icon: ClipboardCheck,
         },
         {
-          name: "4. Loading",
+          name: "5. Loading",
           href: "/dashboard/office/orders/loading",
           icon: Box,
         },
         {
-          name: "5. Dispatched",
+          name: "6. Dispatched",
           href: "/dashboard/office/orders/loading/active",
           icon: Send,
         },

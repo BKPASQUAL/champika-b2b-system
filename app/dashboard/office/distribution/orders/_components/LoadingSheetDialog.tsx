@@ -34,6 +34,7 @@ interface LoadingSheetDialogProps {
   onOpenChange: (open: boolean) => void;
   selectedCount: number;
   onConfirm: (data: any) => void;
+  preselectedLorry?: string;
 }
 
 
@@ -42,6 +43,7 @@ export function LoadingSheetDialog({
   onOpenChange,
   selectedCount,
   onConfirm,
+  preselectedLorry = "",
 }: LoadingSheetDialogProps) {
   const [lorries, setLorries] = useState<{ id: string; name: string }[]>([]);
   const [persons, setPersons] = useState<Person[]>([]);
@@ -56,6 +58,12 @@ export function LoadingSheetDialog({
 
   useEffect(() => {
     if (isOpen) {
+      setFormData({
+        lorryNumber: preselectedLorry,
+        driverId: "",
+        helperId: "",
+        date: new Date().toISOString().split("T")[0],
+      });
       const loadData = async () => {
         setLoadingData(true);
         try {
@@ -73,7 +81,7 @@ export function LoadingSheetDialog({
       };
       loadData();
     }
-  }, [isOpen]);
+  }, [isOpen, preselectedLorry]);
 
   const handleSubmit = () => {
     if (!formData.lorryNumber) {

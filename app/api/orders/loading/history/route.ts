@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
         orders!inner (
           id,
           order_id,
+          invoice_no,
           total_amount,
           business_id
         )
@@ -57,7 +58,12 @@ export async function GET(request: NextRequest) {
           (sum: number, order: any) => sum + (order.total_amount || 0),
           0
         ) || 0,
-      orderIds: sheet.orders?.map((o: any) => o.order_id) || [],
+      orders: sheet.orders?.map((o: any) => ({
+        id: o.id,
+        orderId: o.order_id,
+        invoiceNo: o.invoice_no || null,
+        totalAmount: o.total_amount || 0,
+      })) || [],
       createdAt: sheet.created_at,
     }));
 

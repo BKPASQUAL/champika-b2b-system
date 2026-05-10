@@ -1,7 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
-import { useCachedFetch } from "@/hooks/useCachedFetch";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,43 +19,101 @@ import {
   Filter,
   ArrowRight,
   Loader2,
-  PackageCheck,
-  Eye,
+  Package,
   User,
   Calendar,
   FileText,
   Lock,
+  Truck,
 } from "lucide-react";
 import { toast } from "sonner";
-
 import { Order } from "../types";
+
+interface LorryGroup {
+  id: string;
+  loadId: string;
+  lorryNumber: string;
+  driverId: string;
+  driverName: string;
+  helperName: string;
+  orders: { id: string }[];
+  totalAmount: number;
+}
+
+
+const LOCK_EXPIRE_MS = 30 * 60 * 1000;
 
 export default function ProcessingOrdersPage() {
   const router = useRouter();
 
-  const [searchQuery, setSearchQuery] = useState("");
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [groups, setGroups] = useState<LorryGroup[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const LOCK_EXPIRE_MS = 30 * 60 * 1000;
+  const [searchQuery, setSearchQuery] = useState("");
+  const [lorryFilter, setLorryFilter] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return sessionStorage.getItem("processing_lorryFilter") ?? "all";
+    }
+    return "all";
+  });
+
+  // ── Fetch ──────────────────────────────────────────────────────────────────
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [ordersRes, groupsRes] = await Promise.all([
+        fetch("/api/orders?status=Processing"),
+        fetch("/api/loading-groups"),
+      ]);
+      if (ordersRes.ok) setOrders(await ordersRes.json());
+      if (groupsRes.ok) setGroups(await groupsRes.json());
+    } catch {
+      toast.error("Failed to load orders");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  // ── Computed ───────────────────────────────────────────────────────────────
+
   const isOrderLocked = (order: Order) =>
     !!order.lockedBy && !!order.lockedAt &&
     Date.now() - new Date(order.lockedAt).getTime() < LOCK_EXPIRE_MS;
 
-  const {
-    data: orders = [],
-    loading,
-  } = useCachedFetch<Order[]>("/api/orders?status=Processing", [], () =>
-    toast.error("Failed to load orders")
-  );
+  const lorryMap = useMemo(() => {
+    const m: Record<string, LorryGroup> = {};
+    for (const g of groups) for (const o of g.orders) m[o.id] = g;
+    return m;
+  }, [groups]);
 
-  // --- 2. Filter Logic ---
-  const filteredOrders = orders.filter(
-    (order) =>
-      (order.invoiceNo &&
-        order.invoiceNo.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      order.orderId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.shopName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.customerName.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const lorryNumbers = useMemo(() => {
+    const seen = new Set<string>();
+    for (const o of orders) {
+      const ln = lorryMap[o.id]?.lorryNumber;
+      if (ln) seen.add(ln);
+    }
+    return [...seen].sort();
+  }, [orders, lorryMap]);
+
+  const filteredOrders = useMemo(() => {
+    const q = searchQuery.toLowerCase();
+    return orders.filter((order) => {
+      if (lorryFilter !== "all" && lorryMap[order.id]?.lorryNumber !== lorryFilter) return false;
+      return (
+        !q ||
+        (order.invoiceNo && order.invoiceNo.toLowerCase().includes(q)) ||
+        order.orderId.toLowerCase().includes(q) ||
+        order.shopName.toLowerCase().includes(q) ||
+        order.customerName.toLowerCase().includes(q)
+      );
+    });
+  }, [orders, searchQuery, lorryFilter, lorryMap]);
+
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   if (loading) {
     return (
@@ -71,9 +128,7 @@ export default function ProcessingOrdersPage() {
       {/* Header Section */}
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            Processing Orders
-          </h1>
+          <h1 className="text-2xl font-bold tracking-tight">Processing Orders</h1>
           <p className="text-muted-foreground text-sm">
             Orders currently being picked and packed.
           </p>
@@ -82,7 +137,8 @@ export default function ProcessingOrdersPage() {
 
       {/* Main Content Card */}
       <Card className="border-0 sm:border shadow-none sm:shadow-sm bg-transparent sm:bg-card">
-        <CardHeader className="px-0 sm:px-6 pb-2 pt-2">
+        <CardHeader className="px-0 sm:px-6 pb-2 pt-2 space-y-2">
+          {/* Search + Filter */}
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -97,6 +153,36 @@ export default function ProcessingOrdersPage() {
               <Filter className="h-4 w-4" />
             </Button>
           </div>
+
+          {/* Lorry filter pills */}
+          {lorryNumbers.length > 0 && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <button
+                onClick={() => { setLorryFilter("all"); sessionStorage.setItem("processing_lorryFilter", "all"); }}
+                className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
+                  lorryFilter === "all"
+                    ? "bg-slate-800 text-white border-slate-800"
+                    : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
+                }`}
+              >
+                All
+              </button>
+              {lorryNumbers.map((ln) => (
+                <button
+                  key={ln}
+                  onClick={() => { const next = lorryFilter === ln ? "all" : ln; setLorryFilter(next); sessionStorage.setItem("processing_lorryFilter", next); }}
+                  className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-all ${
+                    lorryFilter === ln
+                      ? "bg-teal-600 text-white border-teal-600"
+                      : "bg-white text-teal-700 border-teal-200 hover:border-teal-400 hover:bg-teal-50"
+                  }`}
+                >
+                  <Truck className="h-3 w-3" />
+                  {ln}
+                </button>
+              ))}
+            </div>
+          )}
         </CardHeader>
 
         <CardContent className="px-0 sm:px-6 pt-0">
@@ -105,91 +191,92 @@ export default function ProcessingOrdersPage() {
             {filteredOrders.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground bg-slate-50 rounded-lg border border-dashed">
                 <div className="flex flex-col items-center justify-center">
-                  <PackageCheck className="h-10 w-10 text-muted-foreground/20 mb-3" />
+                  <Package className="h-10 w-10 text-muted-foreground/20 mb-3" />
                   <p>No orders in processing.</p>
                 </div>
               </div>
             ) : (
-              filteredOrders.map((order) => (
-                <div
-                  key={order.id}
-                  className="bg-white border rounded-xl p-4 shadow-sm flex flex-col gap-3 active:scale-[0.99] transition-transform"
-                  onClick={() => {
-                    if (isOrderLocked(order)) {
-                      toast.info(`In use by ${order.lockedBy}`);
-                      return;
-                    }
-                    router.push(`/dashboard/admin/orders/processing/${order.id}`);
-                  }}
-                >
-                  {/* Row 1: Invoice No, Date, Status */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-1 font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded text-xs">
-                        <FileText className="h-3 w-3" />
-                        {order.invoiceNo || "N/A"}
+              filteredOrders.map((order) => {
+                const lorryGroup = lorryMap[order.id];
+                const locked = isOrderLocked(order);
+                return (
+                  <div
+                    key={order.id}
+                    className="bg-white border rounded-xl p-4 shadow-sm flex flex-col gap-3 active:scale-[0.99] transition-transform"
+                  >
+                    {/* Row 1: Invoice + Status */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded text-xs">
+                          <FileText className="h-3 w-3" />
+                          {order.invoiceNo || "N/A"}
+                        </div>
+                        <span className="text-[10px] text-muted-foreground font-mono">
+                          ({order.orderId})
+                        </span>
                       </div>
-                      <div className="flex items-center text-xs text-muted-foreground">
-                        <Calendar className="mr-1 h-3 w-3" />
-                        {new Date(order.date).toLocaleDateString()}
+                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 shrink-0">
+                        Processing
+                      </Badge>
+                    </div>
+
+                    {/* Row 2: Shop & Sales Rep */}
+                    <div
+                      className="flex justify-between items-start gap-2 cursor-pointer"
+                      onClick={() => {
+                        if (locked) { toast.info(`In use by ${order.lockedBy}`); return; }
+                        router.push(`/dashboard/admin/orders/processing/${order.id}`);
+                      }}
+                    >
+                      <div className="flex flex-col min-w-0">
+                        <p className="text-sm font-bold text-slate-900 truncate">{order.shopName}</p>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Calendar className="h-3 w-3" />
+                          {new Date(order.date).toLocaleDateString()}
+                        </div>
+                        {lorryGroup && (
+                          <div className="flex items-center gap-1 mt-1">
+                            <Truck className="h-3 w-3 text-teal-600" />
+                            <span className="text-xs font-medium text-teal-700">{lorryGroup.lorryNumber}</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0 bg-slate-50 border border-slate-100 text-slate-600 px-2 py-1 rounded text-xs font-medium">
+                        <User className="h-3 w-3" />
+                        <span>{order.salesRep}</span>
                       </div>
                     </div>
-                    <Badge
-                      variant="outline"
-                      className="bg-blue-50 text-blue-700 border-blue-200 shrink-0"
-                    >
-                      Processing
-                    </Badge>
-                  </div>
 
-                  {/* Row 2: Shop & Sales Rep */}
-                  <div className="flex justify-between items-start gap-2">
-                    <div className="flex flex-col min-w-0">
-                      <p className="text-sm font-bold text-slate-900 truncate">
-                        {order.shopName}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {order.customerName}
-                      </p>
+                    {/* Row 3: Totals */}
+                    <div className="grid grid-cols-2 gap-2 text-sm border-t pt-2 mt-1">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Items</p>
+                        <p className="font-medium">{order.itemCount}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground">Total Amount</p>
+                        <p className="font-bold text-slate-900">LKR {order.totalAmount.toLocaleString()}</p>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0 bg-slate-50 border border-slate-100 text-slate-600 px-2 py-1 rounded text-xs font-medium">
-                      <User className="h-3 w-3" />
-                      <span>{order.salesRep}</span>
-                    </div>
-                  </div>
 
-                  {/* Row 3: Totals */}
-                  <div className="grid grid-cols-2 gap-2 text-sm border-t pt-2 mt-1">
-                    <div>
-                      <p className="text-xs text-muted-foreground">Items</p>
-                      <p className="font-medium">{order.itemCount}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-muted-foreground">
-                        Total Amount
-                      </p>
-                      <p className="font-bold text-slate-900">
-                        LKR {order.totalAmount.toLocaleString()}
-                      </p>
-                    </div>
+                    {/* Row 4: Action */}
+                    {locked ? (
+                      <div className="flex items-center justify-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg h-9 w-full">
+                        <Lock className="h-3.5 w-3.5" />
+                        <span>In Use by {order.lockedBy}</span>
+                      </div>
+                    ) : (
+                      <Button
+                        size="sm"
+                        className="w-full mt-1 bg-blue-600 hover:bg-blue-700 text-white h-9"
+                        onClick={() => router.push(`/dashboard/admin/orders/processing/${order.id}`)}
+                      >
+                        Pack Order <ArrowRight className="ml-2 h-3 w-3" />
+                      </Button>
+                    )}
                   </div>
-
-                  {/* Row 4: Action Button */}
-                  {isOrderLocked(order) ? (
-                    <div className="flex items-center justify-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg h-9 w-full">
-                      <Lock className="h-3.5 w-3.5" />
-                      <span>In Use by {order.lockedBy}</span>
-                    </div>
-                  ) : (
-                    <Button
-                      size="sm"
-                      className="w-full mt-1 bg-indigo-600 hover:bg-indigo-700 text-white h-9"
-                    >
-                      Process Order <ArrowRight className="ml-2 h-3 w-3" />
-                    </Button>
-                  )}
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 
@@ -201,6 +288,7 @@ export default function ProcessingOrdersPage() {
                   <TableHead className="w-[100px]">Date</TableHead>
                   <TableHead>Invoice No</TableHead>
                   <TableHead>Customer / Shop</TableHead>
+                  <TableHead>Lorry</TableHead>
                   <TableHead>Sales Rep</TableHead>
                   <TableHead className="text-right">Items</TableHead>
                   <TableHead className="text-right">Total Amount</TableHead>
@@ -211,102 +299,85 @@ export default function ProcessingOrdersPage() {
               <TableBody>
                 {filteredOrders.length === 0 ? (
                   <TableRow>
-                    <TableCell
-                      colSpan={8}
-                      className="text-center py-12 text-muted-foreground"
-                    >
+                    <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
                       <div className="flex flex-col items-center justify-center">
-                        <PackageCheck className="h-12 w-12 text-muted-foreground/20 mb-4" />
-                        <p>No orders in processing.</p>
+                        <Package className="h-12 w-12 text-muted-foreground/20 mb-4" />
+                        <p>No processing orders found.</p>
                       </div>
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredOrders.map((order) => (
-                    <TableRow key={order.id} className="hover:bg-slate-50">
-                      <TableCell className="whitespace-nowrap text-muted-foreground text-xs">
-                        {new Date(order.date).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-medium font-mono text-blue-700 text-xs flex items-center gap-1">
-                            <FileText className="h-3 w-3" />
-                            {order.invoiceNo || "N/A"}
-                          </span>
-                          <span className="text-[10px] text-muted-foreground font-mono">
-                            {order.orderId}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-medium text-sm text-slate-900">
-                            {order.shopName}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {order.customerName}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {order.salesRep}
-                      </TableCell>
-                      <TableCell className="text-right text-sm">
-                        {order.itemCount}
-                      </TableCell>
-                      <TableCell className="text-right font-semibold text-sm">
-                        LKR {order.totalAmount.toLocaleString()}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge
-                          variant="outline"
-                          className="bg-blue-50 text-blue-700 border-blue-200"
-                        >
-                          Processing
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() =>
-                              router.push(`/dashboard/admin/orders/${order.id}`)
-                            }
-                            title="View Details"
-                            className="h-8 w-8"
-                          >
-                            <Eye className="h-4 w-4 text-muted-foreground" />
-                          </Button>
-
-                          {isOrderLocked(order) ? (
-                            <div className="flex items-center gap-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded h-8">
+                  filteredOrders.map((order) => {
+                    const lorryGroup = lorryMap[order.id];
+                    const locked = isOrderLocked(order);
+                    return (
+                      <TableRow key={order.id} className="hover:bg-slate-50">
+                        <TableCell className="whitespace-nowrap text-muted-foreground text-xs">
+                          {new Date(order.date).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span className="font-medium font-mono text-blue-700 text-xs flex items-center gap-1">
+                              <FileText className="h-3 w-3" />
+                              {order.invoiceNo || "N/A"}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground font-mono">
+                              {order.orderId}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span className="font-medium text-sm text-slate-900">{order.shopName}</span>
+                            <span className="text-xs text-muted-foreground">{order.customerName}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {lorryGroup ? (
+                            <div className="flex items-center gap-1.5">
+                              <Truck className="h-3.5 w-3.5 text-teal-600 shrink-0" />
+                              <span className="text-xs font-semibold text-teal-700">{lorryGroup.lorryNumber}</span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm">{order.salesRep}</TableCell>
+                        <TableCell className="text-right text-sm">{order.itemCount}</TableCell>
+                        <TableCell className="text-right font-semibold text-sm">
+                          LKR {order.totalAmount.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                            Processing
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {locked ? (
+                            <div className="flex items-center justify-end gap-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded h-8">
                               <Lock className="h-3 w-3" />
                               <span>{order.lockedBy}</span>
                             </div>
                           ) : (
                             <Button
                               size="sm"
-                              className="bg-indigo-600 hover:bg-indigo-700 text-white h-8 text-xs"
-                              onClick={() =>
-                                router.push(
-                                  `/dashboard/admin/orders/processing/${order.id}`
-                                )
-                              }
+                              className="bg-blue-600 hover:bg-blue-700 text-white h-8 text-xs"
+                              onClick={() => router.push(`/dashboard/admin/orders/processing/${order.id}`)}
                             >
-                              Process <ArrowRight className="ml-1 h-3 w-3" />
+                              Pack <ArrowRight className="ml-1 h-3 w-3" />
                             </Button>
                           )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
           </div>
         </CardContent>
       </Card>
+
     </div>
   );
 }

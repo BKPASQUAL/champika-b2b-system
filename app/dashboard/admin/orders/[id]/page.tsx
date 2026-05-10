@@ -478,11 +478,11 @@ export default function ViewOrderPage({
       const res = await fetch(`/api/orders/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "Processing" }),
+        body: JSON.stringify({ status: "Approved" }),
       });
       if (!res.ok) throw new Error("Failed to approve order");
-      toast.success("Order Approved! Moved to Processing.");
-      router.push("/dashboard/admin/orders/pending");
+      toast.success("Order Approved!");
+      router.push("/dashboard/admin/orders/approved");
     } catch (error: any) {
       toast.error(error.message || "Failed to update status");
     } finally {
@@ -1400,7 +1400,7 @@ export default function ViewOrderPage({
             <AlertDialogTitle>Approve Order</AlertDialogTitle>
             <AlertDialogDescription>
               Confirm approval of order #{order.orderId}? This will move it to{" "}
-              <strong>Processing</strong> status.
+              <strong>Approved</strong> status.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
