@@ -10,7 +10,7 @@ export async function DELETE(
   try {
     const { error } = await supabaseAdmin
       .from("orders")
-      .update({ load_id: null })
+      .update({ load_id: null, status: "Pending" })
       .eq("id", orderId)
       .eq("load_id", id);
 
