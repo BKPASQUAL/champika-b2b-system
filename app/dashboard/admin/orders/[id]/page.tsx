@@ -482,7 +482,7 @@ export default function ViewOrderPage({
       });
       if (!res.ok) throw new Error("Failed to approve order");
       toast.success("Order Approved!");
-      router.push("/dashboard/admin/orders/approved");
+      router.push("/dashboard/admin/orders/pending");
     } catch (error: any) {
       toast.error(error.message || "Failed to update status");
     } finally {
