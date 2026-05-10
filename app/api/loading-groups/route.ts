@@ -48,7 +48,13 @@ export async function GET(request: NextRequest) {
 
       if (ordErr) throw ordErr;
 
-      for (const o of orders ?? []) {
+      // Auto-clear load_id for any orders that drifted back to Pending
+      const staleIds = (orders ?? []).filter((o: any) => o.status === "Pending").map((o: any) => o.id);
+      if (staleIds.length > 0) {
+        await supabaseAdmin.from("orders").update({ load_id: null }).in("id", staleIds);
+      }
+
+      for (const o of (orders ?? []).filter((o: any) => o.status !== "Pending")) {
         const key = o.load_id;
         if (!ordersMap[key]) ordersMap[key] = [];
         ordersMap[key].push({
