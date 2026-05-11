@@ -25,7 +25,9 @@
       "Bash(Out-Null)",
       "Bash(Write-Output \"done\")",
       "Bash(xargs wc -l)",
-      "PowerShell(Get-Content \"c:\\\\Projects\\\\champika-b2b-system\\\\app\\\\dashboard\\\\admin\\\\orders\\\\approved\\\\page.tsx\" | ForEach-Object { $_ -replace '/dashboard/admin/orders/', '/dashboard/office/distribution/orders/' } | Set-Content \"c:\\\\Projects\\\\champika-b2b-system\\\\app\\\\dashboard\\\\office\\\\distribution\\\\orders\\\\approved\\\\page.tsx\" -Encoding utf8)"
+      "PowerShell(Get-Content \"c:\\\\Projects\\\\champika-b2b-system\\\\app\\\\dashboard\\\\admin\\\\orders\\\\approved\\\\page.tsx\" | ForEach-Object { $_ -replace '/dashboard/admin/orders/', '/dashboard/office/distribution/orders/' } | Set-Content \"c:\\\\Projects\\\\champika-b2b-system\\\\app\\\\dashboard\\\\office\\\\distribution\\\\orders\\\\approved\\\\page.tsx\" -Encoding utf8)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Projects\\\\champika-b2b-system\" -Directory)",
+      "Bash(Select-Object Name)"
     ],
     "additionalDirectories": [
       "c:\\Projects\\champika-b2b-system\\app\\api\\payments\\[id]",

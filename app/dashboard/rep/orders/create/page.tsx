@@ -170,7 +170,7 @@ export default function CreateOrderPage() {
   const qtyInputRef = useRef<HTMLInputElement>(null);
 
   // --- Draft Auto-Save ---
-  const hasDraftInput = items.length > 0 || customerId !== null;
+  const hasDraftInput = (items.length > 0 || customerId !== null) && !submitting;
   const { clearDraft, loadDraft } = useFormDraft(
     "invoice_draft_rep",
     { customerId, orderDate, items, extraDiscount },
