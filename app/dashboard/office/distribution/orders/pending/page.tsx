@@ -186,56 +186,71 @@ export default function DistributionPendingOrdersPage() {
       {/* Main Content Card */}
       <Card className="border-0 sm:border shadow-none sm:shadow-sm bg-transparent sm:bg-card">
         <CardHeader className="px-0 sm:px-6 pb-2 pt-2">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search Invoice, Order ID or Shop..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 bg-white border-slate-200"
-              />
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search Invoice, Order ID or Shop..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 bg-white border-slate-200"
+                />
+              </div>
+              {/* Sort Field */}
+              <Select value={sortField} onValueChange={(v) => setSortField(v as SortField)}>
+                <SelectTrigger className="w-full sm:w-40 bg-white border-slate-200">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="date">Date</SelectItem>
+                  <SelectItem value="invoiceNo">Invoice No</SelectItem>
+                  <SelectItem value="customerName">Shop Name</SelectItem>
+                  <SelectItem value="totalAmount">Total Amount</SelectItem>
+                </SelectContent>
+              </Select>
+              {/* Sort Direction */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSortDirection((d) => (d === "asc" ? "desc" : "asc"))}
+                className="bg-white border-slate-200 gap-1.5 shrink-0"
+              >
+                {sortDirection === "desc" ? (
+                  <><ArrowDown className="h-3.5 w-3.5" /> Desc</>
+                ) : (
+                  <><ArrowUp className="h-3.5 w-3.5" /> Asc</>
+                )}
+              </Button>
             </div>
-            {/* Sales Rep Filter */}
-            <Select value={selectedRep} onValueChange={setSelectedRep}>
-              <SelectTrigger className="w-full sm:w-[200px] bg-white border-slate-200">
-                <User className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
-                <SelectValue placeholder="All Sales Reps" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Sales Reps</SelectItem>
-                {salesReps.map((rep) => (
-                  <SelectItem key={rep} value={rep}>
-                    {rep}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {/* Sort Field */}
-            <Select value={sortField} onValueChange={(v) => setSortField(v as SortField)}>
-              <SelectTrigger className="w-full sm:w-40 bg-white border-slate-200">
-                <SelectValue placeholder="Sort by" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="date">Date</SelectItem>
-                <SelectItem value="invoiceNo">Invoice No</SelectItem>
-                <SelectItem value="customerName">Shop Name</SelectItem>
-                <SelectItem value="totalAmount">Total Amount</SelectItem>
-              </SelectContent>
-            </Select>
-            {/* Sort Direction */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSortDirection((d) => (d === "asc" ? "desc" : "asc"))}
-              className="bg-white border-slate-200 gap-1.5 shrink-0"
-            >
-              {sortDirection === "desc" ? (
-                <><ArrowDown className="h-3.5 w-3.5" /> Desc</>
-              ) : (
-                <><ArrowUp className="h-3.5 w-3.5" /> Asc</>
-              )}
-            </Button>
+
+            {/* Sales Rep filter pills */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <button
+                onClick={() => setSelectedRep("all")}
+                className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
+                  selectedRep === "all"
+                    ? "bg-slate-800 text-white border-slate-800"
+                    : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
+                }`}
+              >
+                All
+              </button>
+              {salesReps.map((rep) => (
+                <button
+                  key={rep}
+                  onClick={() => setSelectedRep(selectedRep === rep ? "all" : rep)}
+                  className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-all ${
+                    selectedRep === rep
+                      ? "bg-orange-600 text-white border-orange-600"
+                      : "bg-white text-orange-700 border-orange-200 hover:border-orange-400 hover:bg-orange-50"
+                  }`}
+                >
+                  <User className="h-3 w-3" />
+                  {rep}
+                </button>
+              ))}
+            </div>
           </div>
         </CardHeader>
 
