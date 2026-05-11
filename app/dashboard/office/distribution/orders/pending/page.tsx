@@ -29,6 +29,7 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  MapPin,
 } from "lucide-react";
 import {
   Table,
@@ -116,6 +117,17 @@ export default function DistributionPendingOrdersPage() {
         return sortDirection === "asc" ? cmp : -cmp;
       });
   }, [orders, searchQuery, selectedRep, sortField, sortDirection]);
+
+  // Group already-sorted filteredOrders by route, routes sorted alphabetically
+  const groupedOrders = useMemo(() => {
+    const groups: Record<string, Order[]> = {};
+    filteredOrders.forEach((order) => {
+      const key = order.route || "General";
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(order);
+    });
+    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+  }, [filteredOrders]);
 
   const toggleSelect = (id: string) =>
     setSelectedOrders((prev) =>
@@ -256,7 +268,7 @@ export default function DistributionPendingOrdersPage() {
 
         <CardContent className="px-0 sm:px-6 pt-0">
           {/* --- MOBILE VIEW --- */}
-          <div className="grid grid-cols-1 gap-3 md:hidden">
+          <div className="flex flex-col gap-3 md:hidden">
             {filteredOrders.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground bg-slate-50 rounded-lg border border-dashed">
                 <div className="flex flex-col items-center justify-center">
@@ -265,95 +277,105 @@ export default function DistributionPendingOrdersPage() {
                 </div>
               </div>
             ) : (
-              filteredOrders.map((order) => {
-                const isSelected = selectedOrders.includes(order.id);
-                return (
-                  <div
-                    key={order.id}
-                    className={`bg-white border rounded-xl p-4 shadow-sm flex flex-col gap-3 transition-all duration-200 ${
-                      isSelected
-                        ? "border-yellow-400 ring-1 ring-yellow-400 bg-yellow-50/10"
-                        : "border-slate-200"
-                    }`}
-                  >
-                    {/* Row 1: Checkbox, Invoice, Status */}
-                    <div className="flex items-start gap-3">
-                      <Checkbox
-                        checked={isSelected}
-                        onCheckedChange={() => toggleSelect(order.id)}
-                        className="mt-1"
-                      />
-                      <div
-                        className="flex-1 min-w-0 cursor-pointer"
-                        onClick={() =>
-                          router.push(
-                            `/dashboard/office/distribution/orders/${order.id}`
-                          )
-                        }
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <div className="flex items-center gap-2">
-                            <div className="flex items-center gap-1 font-mono font-bold text-yellow-700 bg-yellow-50 px-2 py-0.5 rounded text-xs">
-                              <FileText className="h-3 w-3" />
-                              {(order as any).invoiceNo || "N/A"}
-                            </div>
-                            <span className="text-[10px] text-muted-foreground font-mono">
-                              ({order.orderId})
-                            </span>
-                          </div>
-                          <Badge
-                            variant="outline"
-                            className="bg-yellow-50 text-yellow-700 border-yellow-200 shrink-0"
-                          >
-                            Pending
-                          </Badge>
-                        </div>
-
-                        <div className="flex justify-between items-start gap-2 mt-1">
-                          <div className="flex flex-col min-w-0">
-                            <p className="text-sm font-bold text-slate-900 truncate">
-                              {order.shopName}
-                            </p>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <Calendar className="h-3 w-3" />
-                              {new Date(order.date).toLocaleDateString()}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0 bg-slate-50 border border-slate-100 text-slate-600 px-2 py-1 rounded text-xs font-medium">
-                            <User className="h-3 w-3" />
-                            <span>{order.salesRep}</span>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2 text-sm border-t pt-2 mt-2">
-                          <div>
-                            <p className="text-xs text-muted-foreground">Items</p>
-                            <p className="font-medium">{order.itemCount}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-xs text-muted-foreground">Total Amount</p>
-                            <p className="font-bold text-slate-900">
-                              LKR {order.totalAmount.toLocaleString()}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <Button
-                      size="sm"
-                      className="w-full mt-1 bg-yellow-600 hover:bg-yellow-700 text-white h-9"
-                      onClick={() =>
-                        router.push(
-                          `/dashboard/office/distribution/orders/${order.id}`
-                        )
-                      }
-                    >
-                      Process Order <ArrowRight className="ml-2 h-3 w-3" />
-                    </Button>
+              groupedOrders.map(([routeName, routeOrders]) => (
+                <React.Fragment key={routeName}>
+                  {/* Route group header */}
+                  <div className="flex items-center gap-2 px-1 pt-1">
+                    <MapPin className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                    <span className="text-xs font-bold text-blue-800 uppercase tracking-wide">{routeName}</span>
+                    <span className="text-xs text-blue-500 ml-auto">{routeOrders.length} order{routeOrders.length !== 1 ? "s" : ""}</span>
                   </div>
-                );
-              })
+
+                  {routeOrders.map((order) => {
+                    const isSelected = selectedOrders.includes(order.id);
+                    return (
+                      <div
+                        key={order.id}
+                        className={`bg-white border rounded-xl p-4 shadow-sm flex flex-col gap-3 transition-all duration-200 ${
+                          isSelected
+                            ? "border-yellow-400 ring-1 ring-yellow-400 bg-yellow-50/10"
+                            : "border-slate-200"
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleSelect(order.id)}
+                            className="mt-1"
+                          />
+                          <div
+                            className="flex-1 min-w-0 cursor-pointer"
+                            onClick={() =>
+                              router.push(
+                                `/dashboard/office/distribution/orders/${order.id}`
+                              )
+                            }
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-1 font-mono font-bold text-yellow-700 bg-yellow-50 px-2 py-0.5 rounded text-xs">
+                                  <FileText className="h-3 w-3" />
+                                  {order.invoiceNo || "N/A"}
+                                </div>
+                                <span className="text-[10px] text-muted-foreground font-mono">
+                                  ({order.orderId})
+                                </span>
+                              </div>
+                              <Badge
+                                variant="outline"
+                                className="bg-yellow-50 text-yellow-700 border-yellow-200 shrink-0"
+                              >
+                                Pending
+                              </Badge>
+                            </div>
+
+                            <div className="flex justify-between items-start gap-2 mt-1">
+                              <div className="flex flex-col min-w-0">
+                                <p className="text-sm font-bold text-slate-900 truncate">
+                                  {order.shopName}
+                                </p>
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                  <Calendar className="h-3 w-3" />
+                                  {new Date(order.date).toLocaleDateString()}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0 bg-slate-50 border border-slate-100 text-slate-600 px-2 py-1 rounded text-xs font-medium">
+                                <User className="h-3 w-3" />
+                                <span>{order.salesRep}</span>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 text-sm border-t pt-2 mt-2">
+                              <div>
+                                <p className="text-xs text-muted-foreground">Items</p>
+                                <p className="font-medium">{order.itemCount}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-xs text-muted-foreground">Total Amount</p>
+                                <p className="font-bold text-slate-900">
+                                  LKR {order.totalAmount.toLocaleString()}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <Button
+                          size="sm"
+                          className="w-full mt-1 bg-yellow-600 hover:bg-yellow-700 text-white h-9"
+                          onClick={() =>
+                            router.push(
+                              `/dashboard/office/distribution/orders/${order.id}`
+                            )
+                          }
+                        >
+                          Process Order <ArrowRight className="ml-2 h-3 w-3" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </React.Fragment>
+              ))
             )}
           </div>
 
@@ -415,72 +437,91 @@ export default function DistributionPendingOrdersPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredOrders.map((order) => (
-                    <TableRow
-                      key={order.id}
-                      className={`hover:bg-slate-50 ${
-                        selectedOrders.includes(order.id) ? "bg-yellow-50/30" : ""
-                      }`}
-                    >
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
-                          checked={selectedOrders.includes(order.id)}
-                          onCheckedChange={() => toggleSelect(order.id)}
-                        />
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-muted-foreground text-xs">
-                        {new Date(order.date).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-medium font-mono text-yellow-700 text-xs flex items-center gap-1">
-                            <FileText className="h-3 w-3" />
-                            {(order as any).invoiceNo || "N/A"}
-                          </span>
-                          <span className="text-[10px] text-muted-foreground font-mono">
-                            {order.orderId}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-medium text-sm text-slate-900">
-                            {order.shopName}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {order.customerName}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm">{order.salesRep}</TableCell>
-                      <TableCell className="text-right text-sm">
-                        {order.itemCount}
-                      </TableCell>
-                      <TableCell className="text-right font-semibold text-sm">
-                        LKR {order.totalAmount.toLocaleString()}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge
-                          variant="outline"
-                          className="bg-yellow-50 text-yellow-700 border-yellow-200"
+                  groupedOrders.map(([routeName, routeOrders]) => (
+                    <React.Fragment key={routeName}>
+                      {/* Route divider row */}
+                      <TableRow className="bg-blue-50 hover:bg-blue-50 border-t-2 border-blue-100">
+                        <TableCell colSpan={9} className="py-2 px-4">
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                            <span className="text-xs font-bold text-blue-800 uppercase tracking-wide">
+                              {routeName}
+                            </span>
+                            <span className="text-xs text-blue-500 font-normal">
+                              — {routeOrders.length} order{routeOrders.length !== 1 ? "s" : ""}
+                            </span>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+
+                      {routeOrders.map((order) => (
+                        <TableRow
+                          key={order.id}
+                          className={`hover:bg-slate-50 ${
+                            selectedOrders.includes(order.id) ? "bg-yellow-50/30" : ""
+                          }`}
                         >
-                          Pending
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          className="bg-yellow-600 hover:bg-yellow-700 text-white h-8 text-xs"
-                          onClick={() =>
-                            router.push(
-                              `/dashboard/office/distribution/orders/${order.id}`
-                            )
-                          }
-                        >
-                          Process <ArrowRight className="ml-1 h-3 w-3" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            <Checkbox
+                              checked={selectedOrders.includes(order.id)}
+                              onCheckedChange={() => toggleSelect(order.id)}
+                            />
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-muted-foreground text-xs">
+                            {new Date(order.date).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span className="font-medium font-mono text-yellow-700 text-xs flex items-center gap-1">
+                                <FileText className="h-3 w-3" />
+                                {order.invoiceNo || "N/A"}
+                              </span>
+                              <span className="text-[10px] text-muted-foreground font-mono">
+                                {order.orderId}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span className="font-medium text-sm text-slate-900">
+                                {order.shopName}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {order.customerName}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm">{order.salesRep}</TableCell>
+                          <TableCell className="text-right text-sm">
+                            {order.itemCount}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold text-sm">
+                            LKR {order.totalAmount.toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge
+                              variant="outline"
+                              className="bg-yellow-50 text-yellow-700 border-yellow-200"
+                            >
+                              Pending
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              size="sm"
+                              className="bg-yellow-600 hover:bg-yellow-700 text-white h-8 text-xs"
+                              onClick={() =>
+                                router.push(
+                                  `/dashboard/office/distribution/orders/${order.id}`
+                                )
+                              }
+                            >
+                              Process <ArrowRight className="ml-1 h-3 w-3" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </React.Fragment>
                   ))
                 )}
               </TableBody>

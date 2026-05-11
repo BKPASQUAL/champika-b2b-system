@@ -19,6 +19,7 @@ export interface Order {
   customerName: string;
   shopName: string;
   salesRep: string;
+  route: string;
   itemCount: number;
   totalAmount: number;
   status: OrderStatus;

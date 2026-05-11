@@ -27,7 +27,8 @@ export async function GET(request: NextRequest) {
         *,
         customers (
           shop_name,
-          owner_name
+          owner_name,
+          route
         ),
         profiles!orders_sales_rep_id_fkey (
           full_name
@@ -85,6 +86,7 @@ export async function GET(request: NextRequest) {
         customerId: order.customer_id,
         customerName: order.customers?.owner_name || "Unknown",
         shopName: order.customers?.shop_name || "Unknown Shop",
+        route: order.customers?.route || "General",
         date: order.order_date,
         totalAmount: invoiceTotalAmount,
         paidAmount: invoicePaidAmount,
