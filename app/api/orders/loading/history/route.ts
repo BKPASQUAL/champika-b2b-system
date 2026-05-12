@@ -31,7 +31,6 @@ export async function GET(request: NextRequest) {
         )
       `
       )
-      .order("loading_date", { ascending: false })
       .order("created_at", { ascending: false });
 
     // ✅ Filter by Business ID (via the inner join on orders)
