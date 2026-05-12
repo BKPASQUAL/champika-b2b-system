@@ -45,6 +45,7 @@ interface OrderTableProps {
 
 const STATUS_STYLES: Record<OrderStatus, { badge: string; border: string }> = {
   Pending:    { badge: "bg-yellow-100 text-yellow-700 border-yellow-200",  border: "border-l-yellow-400" },
+  Approved:   { badge: "bg-teal-100 text-teal-700 border-teal-200",        border: "border-l-teal-400" },
   Processing: { badge: "bg-blue-100 text-blue-700 border-blue-200",        border: "border-l-blue-400" },
   Checking:   { badge: "bg-purple-100 text-purple-700 border-purple-200",  border: "border-l-purple-400" },
   Loading:    { badge: "bg-indigo-100 text-indigo-700 border-indigo-200",  border: "border-l-indigo-400" },
