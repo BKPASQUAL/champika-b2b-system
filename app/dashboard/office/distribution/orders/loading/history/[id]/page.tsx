@@ -136,6 +136,9 @@ export default function DistributionLoadingSheetDetailPage({
 
   const [stageMoveBusy, setStageMoveBusy] = useState(false);
 
+  const [printInvoicesOpen, setPrintInvoicesOpen] = useState(false);
+  const [selectedPrintIds, setSelectedPrintIds] = useState<string[]>([]);
+
   const fetchDetails = async () => {
     try {
       setLoading(true);
@@ -375,8 +378,16 @@ export default function DistributionLoadingSheetDetailPage({
           <Button variant="outline" onClick={openEdit}>
             <Edit className="w-4 h-4 mr-2" /> Edit
           </Button>
-          <Button variant="secondary" onClick={handlePrintAllInvoices} disabled={printingInvoices} className="bg-purple-100 text-purple-700 hover:bg-purple-200 border border-purple-200">
-            {printingInvoices ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileText className="w-4 h-4 mr-2" />}
+          <Button
+            variant="secondary"
+            onClick={() => {
+              const allIds = loadingSheet.orders.map((o) => o.invoiceId).filter((x): x is string => !!x);
+              setSelectedPrintIds(allIds);
+              setPrintInvoicesOpen(true);
+            }}
+            className="bg-purple-100 text-purple-700 hover:bg-purple-200 border border-purple-200"
+          >
+            <FileText className="w-4 h-4 mr-2" />
             Print Invoices
           </Button>
           <Button variant="outline" onClick={handleDownload} disabled={downloading}>
@@ -598,6 +609,85 @@ export default function DistributionLoadingSheetDetailPage({
             <Button variant="outline" onClick={() => setChangeLorryOpen(false)}>Cancel</Button>
             <Button onClick={handleChangeLorry} disabled={changeLorryBusy || !newLorry || newLorry === loadingSheet.lorryNumber} className="bg-teal-600 hover:bg-teal-700 text-white">
               {changeLorryBusy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Print Invoices Selection Dialog */}
+      <Dialog open={printInvoicesOpen} onOpenChange={setPrintInvoicesOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-purple-600" />
+              Print Invoices
+            </DialogTitle>
+            <DialogDescription>
+              Select which invoices to print. {selectedPrintIds.length} of {loadingSheet.orders.filter((o) => o.invoiceId).length} selected.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Select All / Deselect All */}
+          <div className="flex items-center justify-between border-b pb-2">
+            <span className="text-sm font-medium text-muted-foreground">Invoices</span>
+            <button
+              className="text-xs text-purple-600 hover:underline font-medium"
+              onClick={() => {
+                const allIds = loadingSheet.orders.map((o) => o.invoiceId).filter((x): x is string => !!x);
+                setSelectedPrintIds(selectedPrintIds.length === allIds.length ? [] : allIds);
+              }}
+            >
+              {selectedPrintIds.length === loadingSheet.orders.filter((o) => o.invoiceId).length ? "Deselect All" : "Select All"}
+            </button>
+          </div>
+
+          <div className="space-y-1.5 max-h-72 overflow-y-auto">
+            {loadingSheet.orders.map((order) => {
+              if (!order.invoiceId) return null;
+              const checked = selectedPrintIds.includes(order.invoiceId);
+              return (
+                <div
+                  key={order.id}
+                  onClick={() =>
+                    setSelectedPrintIds((prev) =>
+                      prev.includes(order.invoiceId!)
+                        ? prev.filter((x) => x !== order.invoiceId)
+                        : [...prev, order.invoiceId!]
+                    )
+                  }
+                  className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 cursor-pointer transition-colors ${
+                    checked ? "border-purple-400 bg-purple-50/40" : "border-slate-200 hover:border-purple-200 hover:bg-slate-50"
+                  }`}
+                >
+                  <Checkbox checked={checked} onCheckedChange={() => {}} onClick={(e) => e.stopPropagation()} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold font-mono">{order.invoiceNo}</p>
+                    <p className="text-xs text-muted-foreground truncate">{order.customer.shopName}</p>
+                  </div>
+                  <span className="text-xs font-mono font-bold shrink-0">
+                    {order.totalAmount.toLocaleString()}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPrintInvoicesOpen(false)}>Cancel</Button>
+            <Button
+              disabled={selectedPrintIds.length === 0 || printingInvoices}
+              onClick={async () => {
+                setPrintingInvoices(true);
+                await printBulkInvoices(selectedPrintIds);
+                setPrintingInvoices(false);
+                setPrintInvoicesOpen(false);
+              }}
+              className="bg-purple-600 hover:bg-purple-700 text-white"
+            >
+              {printingInvoices
+                ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                : <Printer className="w-4 h-4 mr-2" />}
+              Print {selectedPrintIds.length > 0 ? `(${selectedPrintIds.length})` : ""}
             </Button>
           </DialogFooter>
         </DialogContent>
