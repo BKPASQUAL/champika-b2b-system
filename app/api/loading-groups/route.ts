@@ -6,7 +6,10 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const businessId = searchParams.get("businessId");
 
-    let query = supabaseAdmin
+    const RE_DISPATCH_STATUSES = ["Processing", "Checking", "Loading"];
+
+    // Fetch Draft sheets (for active loading groups)
+    let draftQuery = supabaseAdmin
       .from("loading_sheets")
       .select(`
         id,
@@ -22,16 +25,42 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false });
 
     if (businessId) {
-      query = query.eq("business_id", businessId);
+      draftQuery = draftQuery.eq("business_id", businessId);
     }
 
-    const { data: groups, error } = await query;
+    const { data: draftGroups, error } = await draftQuery;
     if (error) throw error;
 
-    const groupIds = (groups ?? []).map((g: any) => g.id);
+    // Also fetch Completed sheets that still have re-dispatch orders (lorry memory)
+    let completedQuery = supabaseAdmin
+      .from("loading_sheets")
+      .select(`
+        id,
+        load_id,
+        lorry_number,
+        driver_id,
+        helper_name,
+        loading_date,
+        status,
+        profiles!loading_sheets_driver_id_fkey (full_name)
+      `)
+      .filter("status::text", "eq", "Completed")
+      .order("created_at", { ascending: false });
+
+    if (businessId) {
+      completedQuery = completedQuery.eq("business_id", businessId);
+    }
+
+    const { data: completedGroups } = await completedQuery;
+
+    const groups = draftGroups ?? [];
+    const allGroupIds = [
+      ...(draftGroups ?? []).map((g: any) => g.id),
+      ...(completedGroups ?? []).map((g: any) => g.id),
+    ];
 
     let ordersMap: Record<string, any[]> = {};
-    if (groupIds.length > 0) {
+    if (allGroupIds.length > 0) {
       const { data: orders, error: ordErr } = await supabaseAdmin
         .from("orders")
         .select(`
@@ -44,7 +73,7 @@ export async function GET(request: NextRequest) {
           customers (shop_name),
           invoices (invoice_no)
         `)
-        .in("load_id", groupIds);
+        .in("load_id", allGroupIds);
 
       if (ordErr) throw ordErr;
 
@@ -68,19 +97,39 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const result = (groups ?? []).map((g: any) => ({
-      id: g.id,
-      loadId: g.load_id,
-      lorryNumber: g.lorry_number,
-      driverId: g.driver_id,
-      driverName: g.profiles?.full_name || "Unknown",
-      helperName: g.helper_name || "",
-      orders: ordersMap[g.id] ?? [],
-      totalAmount: (ordersMap[g.id] ?? []).reduce(
-        (sum: number, o: any) => sum + (o.totalAmount || 0),
-        0
-      ),
-    }));
+    // Build result from Draft groups (shown as active loading groups)
+    // Also add completed groups that still have re-dispatch orders (for lorry memory in lorryMap)
+    const completedWithReDispatch = (completedGroups ?? []).filter(
+      (g: any) => (ordersMap[g.id] ?? []).some((o: any) => RE_DISPATCH_STATUSES.includes(o.status))
+    );
+
+    const result = [
+      ...(groups ?? []).map((g: any) => ({
+        id: g.id,
+        loadId: g.load_id,
+        lorryNumber: g.lorry_number,
+        driverId: g.driver_id,
+        driverName: g.profiles?.full_name || "Unknown",
+        helperName: g.helper_name || "",
+        orders: ordersMap[g.id] ?? [],
+        totalAmount: (ordersMap[g.id] ?? []).reduce(
+          (sum: number, o: any) => sum + (o.totalAmount || 0),
+          0
+        ),
+      })),
+      ...completedWithReDispatch.map((g: any) => ({
+        id: g.id,
+        loadId: g.load_id,
+        lorryNumber: g.lorry_number,
+        driverId: g.driver_id,
+        driverName: g.profiles?.full_name || "Unknown",
+        helperName: g.helper_name || "",
+        orders: (ordersMap[g.id] ?? []).filter((o: any) => RE_DISPATCH_STATUSES.includes(o.status)),
+        totalAmount: (ordersMap[g.id] ?? [])
+          .filter((o: any) => RE_DISPATCH_STATUSES.includes(o.status))
+          .reduce((sum: number, o: any) => sum + (o.totalAmount || 0), 0),
+      })),
+    ];
 
     return NextResponse.json(result);
   } catch (error: any) {

@@ -24,6 +24,8 @@ export async function POST(request: NextRequest) {
       const { orderId, status, finalAmount, paymentStatus } = update;
 
       // A. Update Order Status
+      // Processing, Checking, Loading keep load_id so the lorry is remembered.
+      // All other statuses also keep load_id to preserve history linkage.
       const finalStatus = status === "Returned" ? "Cancelled" : status;
       await supabaseAdmin
         .from("orders")

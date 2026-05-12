@@ -297,16 +297,16 @@ export default function OfficeReconcileLoadPage({
   const totalExpenses = loadExpenses.reduce((sum, e) => sum + e.amount, 0);
   const valueDiff = totalFinalValue - totalDispatchedValue;
 
-  const deliveredCount = Object.values(reconcileData).filter((s) => s.status === "Delivered").length;
-  const returnedCount = Object.values(reconcileData).filter((s) => s.status === "Returned").length;
-  const partialCount = Object.values(reconcileData).filter((s) => s.status === "Partial").length;
   const pendingCount = Object.values(reconcileData).filter((s) => s.status === "Pending").length;
-  const rescheduleCount = Object.values(reconcileData).filter((s) => s.status === "Loading").length;
-  const cancelledCount = Object.values(reconcileData).filter((s) => s.status === "Cancelled").length;
+  const approvedCount = Object.values(reconcileData).filter((s) => s.status === "Approved").length;
+  const processingCount = Object.values(reconcileData).filter((s) => s.status === "Processing").length;
+  const checkingCount = Object.values(reconcileData).filter((s) => s.status === "Checking").length;
+  const loadingCount = Object.values(reconcileData).filter((s) => s.status === "Loading").length;
+  const deliveredCount = Object.values(reconcileData).filter((s) => s.status === "Delivered").length;
 
   const deliveredValue = orders.reduce((sum, o) => {
     const s = reconcileData[o.id]?.status;
-    return s === "Delivered" || s === "Partial" ? sum + o.currentAmount : sum;
+    return s === "Delivered" ? sum + o.currentAmount : sum;
   }, 0);
 
 
@@ -446,7 +446,7 @@ export default function OfficeReconcileLoadPage({
           <KpiCard
             label="Delivered Value"
             value={`LKR ${deliveredValue.toLocaleString()}`}
-            sub={`${deliveredCount + partialCount} of ${orders.length} orders delivered`}
+            sub={`${deliveredCount} of ${orders.length} orders delivered`}
             icon={CheckCircle2}
             highlight
           />
@@ -455,34 +455,34 @@ export default function OfficeReconcileLoadPage({
         {/* ── Order Status Strip ── */}
         <div className="flex flex-wrap gap-2 items-center">
           <span className="text-sm text-muted-foreground font-medium">Status:</span>
-          {deliveredCount > 0 && (
-            <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100">
-              {deliveredCount} Delivered
-            </Badge>
-          )}
-          {partialCount > 0 && (
-            <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100">
-              {partialCount} Partial
-            </Badge>
-          )}
-          {returnedCount > 0 && (
-            <Badge className="bg-red-100 text-red-700 border-red-200 hover:bg-red-100">
-              {returnedCount} Returned
-            </Badge>
-          )}
-          {rescheduleCount > 0 && (
-            <Badge className="bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100">
-              {rescheduleCount} Reschedule
-            </Badge>
-          )}
           {pendingCount > 0 && (
             <Badge className="bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-100">
               {pendingCount} Pending
             </Badge>
           )}
-          {cancelledCount > 0 && (
-            <Badge className="bg-rose-100 text-rose-700 border-rose-200 hover:bg-rose-100">
-              {cancelledCount} Cancelled
+          {approvedCount > 0 && (
+            <Badge className="bg-purple-100 text-purple-700 border-purple-200 hover:bg-purple-100">
+              {approvedCount} Approved
+            </Badge>
+          )}
+          {processingCount > 0 && (
+            <Badge className="bg-indigo-100 text-indigo-700 border-indigo-200 hover:bg-indigo-100">
+              {processingCount} Processing
+            </Badge>
+          )}
+          {checkingCount > 0 && (
+            <Badge className="bg-cyan-100 text-cyan-700 border-cyan-200 hover:bg-cyan-100">
+              {checkingCount} Checking
+            </Badge>
+          )}
+          {loadingCount > 0 && (
+            <Badge className="bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100">
+              {loadingCount} Loading
+            </Badge>
+          )}
+          {deliveredCount > 0 && (
+            <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100">
+              {deliveredCount} Delivered
             </Badge>
           )}
         </div>
@@ -636,15 +636,15 @@ export default function OfficeReconcileLoadPage({
                                 <span
                                   className={cn(
                                     "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border",
-                                    currentStatus === "Delivered" && "bg-green-100 text-green-700 border-green-200",
-                                    currentStatus === "Partial" && "bg-amber-100 text-amber-700 border-amber-200",
-                                    currentStatus === "Returned" && "bg-red-100 text-red-700 border-red-200",
-                                    currentStatus === "Loading" && "bg-blue-100 text-blue-700 border-blue-200",
                                     currentStatus === "Pending" && "bg-gray-100 text-gray-600 border-gray-200",
-                                    currentStatus === "Cancelled" && "bg-rose-100 text-rose-700 border-rose-200",
+                                    currentStatus === "Approved" && "bg-purple-100 text-purple-700 border-purple-200",
+                                    currentStatus === "Processing" && "bg-indigo-100 text-indigo-700 border-indigo-200",
+                                    currentStatus === "Checking" && "bg-cyan-100 text-cyan-700 border-cyan-200",
+                                    currentStatus === "Loading" && "bg-blue-100 text-blue-700 border-blue-200",
+                                    currentStatus === "Delivered" && "bg-green-100 text-green-700 border-green-200",
                                   )}
                                 >
-                                  {currentStatus === "Loading" ? "Reschedule" : currentStatus}
+                                  {currentStatus}
                                 </span>
                               ) : (
                                 <Select
@@ -654,23 +654,23 @@ export default function OfficeReconcileLoadPage({
                                   <SelectTrigger
                                     className={cn(
                                       "w-full h-8 text-xs font-medium border",
-                                      currentStatus === "Delivered" && "border-green-200 bg-green-50 text-green-700",
-                                      currentStatus === "Partial" && "border-amber-200 bg-amber-50 text-amber-700",
-                                      currentStatus === "Returned" && "border-red-200 bg-red-50 text-red-700",
-                                      currentStatus === "Loading" && "border-blue-200 bg-blue-50 text-blue-700",
                                       currentStatus === "Pending" && "border-gray-200 bg-gray-50 text-gray-600",
-                                      currentStatus === "Cancelled" && "border-rose-200 bg-rose-50 text-rose-700",
+                                      currentStatus === "Approved" && "border-purple-200 bg-purple-50 text-purple-700",
+                                      currentStatus === "Processing" && "border-indigo-200 bg-indigo-50 text-indigo-700",
+                                      currentStatus === "Checking" && "border-cyan-200 bg-cyan-50 text-cyan-700",
+                                      currentStatus === "Loading" && "border-blue-200 bg-blue-50 text-blue-700",
+                                      currentStatus === "Delivered" && "border-green-200 bg-green-50 text-green-700",
                                     )}
                                   >
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="Delivered">Delivered</SelectItem>
-                                    <SelectItem value="Partial">Partial</SelectItem>
-                                    <SelectItem value="Returned">Returned</SelectItem>
-                                    <SelectItem value="Loading">Reschedule</SelectItem>
                                     <SelectItem value="Pending">Pending</SelectItem>
-                                    <SelectItem value="Cancelled">Cancelled</SelectItem>
+                                    <SelectItem value="Approved">Approved</SelectItem>
+                                    <SelectItem value="Processing">Processing</SelectItem>
+                                    <SelectItem value="Checking">Checking</SelectItem>
+                                    <SelectItem value="Loading">Loading</SelectItem>
+                                    <SelectItem value="Delivered">Delivered</SelectItem>
                                   </SelectContent>
                                 </Select>
                               )}
