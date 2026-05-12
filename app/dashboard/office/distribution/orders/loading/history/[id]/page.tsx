@@ -336,6 +336,8 @@ export default function DistributionLoadingSheetDetailPage({
 
   if (!loadingSheet) return <div>Not found</div>;
 
+  const isCompleted = loadingSheet.status === "Completed";
+
   const totalSentValue = loadingSheet.orders.reduce((sum, o) => sum + (o.originalAmount || o.totalAmount || 0), 0);
   const totalFinalValue = loadingSheet.orders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
   const totalDiff = totalFinalValue - totalSentValue;
@@ -372,12 +374,16 @@ export default function DistributionLoadingSheetDetailPage({
               Reopen
             </Button>
           )}
-          <Button variant="outline" onClick={openChangeLorry} className="gap-2">
-            <Truck className="w-4 h-4" /> Change Lorry
-          </Button>
-          <Button variant="outline" onClick={openEdit}>
-            <Edit className="w-4 h-4 mr-2" /> Edit
-          </Button>
+          {!isCompleted && (
+            <Button variant="outline" onClick={openChangeLorry} className="gap-2">
+              <Truck className="w-4 h-4" /> Change Lorry
+            </Button>
+          )}
+          {!isCompleted && (
+            <Button variant="outline" onClick={openEdit}>
+              <Edit className="w-4 h-4 mr-2" /> Edit
+            </Button>
+          )}
           <Button
             variant="secondary"
             onClick={() => {
@@ -446,9 +452,11 @@ export default function DistributionLoadingSheetDetailPage({
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Order Details ({loadingSheet.orders.length})</CardTitle>
-          <Button size="sm" variant="outline" onClick={openAddDialog} className="gap-1.5">
-            <Plus className="h-4 w-4" /> Add Orders
-          </Button>
+          {!isCompleted && (
+            <Button size="sm" variant="outline" onClick={openAddDialog} className="gap-1.5">
+              <Plus className="h-4 w-4" /> Add Orders
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -486,14 +494,16 @@ export default function DistributionLoadingSheetDetailPage({
                         {diff > 0 ? "+" : ""}{diff !== 0 ? diff.toLocaleString() : "-"}
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="ghost" size="icon"
-                          className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-50"
-                          onClick={() => { setRemoveTarget({ id: order.id, shopName: order.customer.shopName, invoiceNo: order.invoiceNo }); setRemoveStage("Loading"); }}
-                          disabled={removingOrderId === order.id}
-                        >
-                          {removingOrderId === order.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
-                        </Button>
+                        {!isCompleted && (
+                          <Button
+                            variant="ghost" size="icon"
+                            className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-50"
+                            onClick={() => { setRemoveTarget({ id: order.id, shopName: order.customer.shopName, invoiceNo: order.invoiceNo }); setRemoveStage("Loading"); }}
+                            disabled={removingOrderId === order.id}
+                          >
+                            {removingOrderId === order.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   );
