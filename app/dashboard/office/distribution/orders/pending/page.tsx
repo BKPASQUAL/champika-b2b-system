@@ -1,7 +1,7 @@
 // app/dashboard/office/distribution/orders/pending/page.tsx
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -54,7 +54,16 @@ export default function DistributionPendingOrdersPage() {
   );
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
-  const [selectedRep, setSelectedRep] = useState<string>("all");
+  const [selectedRep, setSelectedRep] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("dist_pending_selectedRep") ?? "all";
+    }
+    return "all";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("dist_pending_selectedRep", selectedRep);
+  }, [selectedRep]);
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortDirection, setSortDirection] = useState<SortOrder>("desc");
 
@@ -363,6 +372,7 @@ export default function DistributionPendingOrdersPage() {
                         <Button
                           size="sm"
                           className="w-full mt-1 bg-yellow-600 hover:bg-yellow-700 text-white h-9"
+                          disabled={selectedOrders.length > 0 && !selectedOrders.includes(order.id)}
                           onClick={() =>
                             router.push(
                               `/dashboard/office/distribution/orders/${order.id}`
@@ -510,6 +520,7 @@ export default function DistributionPendingOrdersPage() {
                             <Button
                               size="sm"
                               className="bg-yellow-600 hover:bg-yellow-700 text-white h-8 text-xs"
+                              disabled={selectedOrders.length > 0 && !selectedOrders.includes(order.id)}
                               onClick={() =>
                                 router.push(
                                   `/dashboard/office/distribution/orders/${order.id}`
