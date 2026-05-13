@@ -36,6 +36,7 @@ interface ProductTableProps {
   onSort: (field: SortField) => void;
   onEdit: (product: Product) => void;
   onDelete: (product: Product) => void;
+  showCost: boolean;
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
@@ -54,6 +55,7 @@ export function ProductTable({
   onSort,
   onEdit,
   onDelete,
+  showCost,
   currentPage,
   totalPages,
   onPageChange,
@@ -181,7 +183,13 @@ export function ProductTable({
                   </div>
 
                   {/* Price grid */}
-                  <div className="grid grid-cols-3 gap-1 mb-2 text-xs">
+                  <div className={`grid ${showCost ? "grid-cols-4" : "grid-cols-3"} gap-1 mb-2 text-xs`}>
+                    {showCost && (
+                      <div className="bg-blue-50 rounded p-1.5 text-center">
+                        <div className="text-muted-foreground text-[10px] mb-0.5">Cost</div>
+                        <div className="text-blue-600 font-medium">{product.costPrice > 0 ? `LKR ${product.costPrice.toLocaleString()}` : "-"}</div>
+                      </div>
+                    )}
                     <div className="bg-muted/50 rounded p-1.5 text-center">
                       <div className="text-muted-foreground text-[10px] mb-0.5">MRP</div>
                       <div className="font-medium">{product.mrp > 0 ? `LKR ${product.mrp.toLocaleString()}` : "-"}</div>
@@ -275,6 +283,10 @@ export function ProductTable({
                 </div>
               </TableHead>
 
+              {showCost && (
+                <TableHead className="text-right text-red-900">Cost Price</TableHead>
+              )}
+
               <TableHead
                 className="text-right cursor-pointer hover:bg-red-100/50"
                 onClick={() => onSort("mrp")}
@@ -305,7 +317,7 @@ export function ProductTable({
             {/* ── Select-all banner ── */}
             {allPageSelected && allFilteredCount > products.length && showPagination && (
               <TableRow className="bg-purple-50 hover:bg-purple-50">
-                <TableCell colSpan={10} className="py-2 text-center text-sm text-purple-800">
+                <TableCell colSpan={showCost ? 11 : 10} className="py-2 text-center text-sm text-purple-800">
                   All <strong>{products.length}</strong> products on this page are selected.{" "}
                   <button
                     className="font-semibold underline hover:text-purple-900"
@@ -318,7 +330,7 @@ export function ProductTable({
             )}
             {selectedIds.size === allFilteredCount && allFilteredCount > 0 && !showPagination && (
               <TableRow className="bg-purple-100 hover:bg-purple-100">
-                <TableCell colSpan={10} className="py-2 text-center text-sm text-purple-800 font-medium">
+                <TableCell colSpan={showCost ? 11 : 10} className="py-2 text-center text-sm text-purple-800 font-medium">
                   All <strong>{allFilteredCount}</strong> products are selected.
                 </TableCell>
               </TableRow>
@@ -327,7 +339,7 @@ export function ProductTable({
             {products.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={10}
+                  colSpan={showCost ? 11 : 10}
                   className="text-center py-8 text-muted-foreground"
                 >
                   No Wireman products found matching your criteria.
@@ -421,6 +433,13 @@ export function ProductTable({
                       </span>
                     </span>
                   </TableCell>
+
+                  {/* Cost Price Column */}
+                  {showCost && (
+                    <TableCell className="text-right font-medium text-sm text-blue-600">
+                      {product.costPrice > 0 ? `LKR ${product.costPrice.toLocaleString()}` : "-"}
+                    </TableCell>
+                  )}
 
                   {/* MRP Column */}
                   <TableCell className="text-right font-medium text-sm text-muted-foreground">

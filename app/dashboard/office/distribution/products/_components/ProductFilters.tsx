@@ -1,5 +1,7 @@
-// app/dashboard/admin/products/_components/ProductFilters.tsx
+// app/dashboard/office/distribution/products/_components/ProductFilters.tsx
+"use client";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -7,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search } from "lucide-react";
+import { Search, Eye, EyeOff } from "lucide-react";
 
 interface ProductFiltersProps {
   searchQuery: string;
@@ -20,6 +22,8 @@ interface ProductFiltersProps {
   setStockFilter: (val: string) => void;
   categories: string[];
   suppliers: string[];
+  showCost: boolean;
+  onToggleCost: () => void;
 }
 
 export function ProductFilters({
@@ -33,6 +37,8 @@ export function ProductFilters({
   setStockFilter,
   categories,
   suppliers,
+  showCost,
+  onToggleCost,
 }: ProductFiltersProps) {
   return (
     <>
@@ -83,6 +89,10 @@ export function ProductFilters({
               <SelectItem value="out-of-stock">Out of Stock</SelectItem>
             </SelectContent>
           </Select>
+          <Button variant="outline" size="sm" onClick={onToggleCost} className="gap-1.5 text-xs h-9 col-span-2">
+            {showCost ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            {showCost ? "Hide Cost" : "Show Cost"}
+          </Button>
         </div>
       </div>
 
@@ -132,6 +142,10 @@ export function ProductFilters({
             <SelectItem value="out-of-stock">Out of Stock</SelectItem>
           </SelectContent>
         </Select>
+        <Button variant="outline" size="sm" onClick={onToggleCost} className="gap-1.5 text-xs h-9 shrink-0">
+          {showCost ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+          {showCost ? "Hide Cost" : "Show Cost"}
+        </Button>
       </div>
     </>
   );

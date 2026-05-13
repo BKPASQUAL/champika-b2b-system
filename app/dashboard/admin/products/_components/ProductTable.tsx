@@ -38,6 +38,7 @@ interface ProductTableProps {
   onSort: (field: SortField) => void;
   onEdit: (product: Product) => void;
   onDelete: (product: Product) => void;
+  showCost: boolean;
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
@@ -51,6 +52,7 @@ export function ProductTable({
   onSort,
   onEdit,
   onDelete,
+  showCost,
   currentPage,
   totalPages,
   onPageChange,
@@ -119,7 +121,7 @@ export function ProductTable({
                   Stock {getSortIcon("stock")}
                 </div>
               </TableHead>
-              <TableHead className="text-right">Cost Price</TableHead>
+              {showCost && <TableHead className="text-right">Cost Price</TableHead>}
               <TableHead
                 className="text-right cursor-pointer hover:bg-muted/50"
                 onClick={() => onSort("sellingPrice")}
@@ -142,7 +144,7 @@ export function ProductTable({
           <TableBody>
             {products.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={showCost ? 11 : 10} className="text-center py-8 text-muted-foreground">
                   No products found
                 </TableCell>
               </TableRow>
@@ -208,9 +210,11 @@ export function ProductTable({
                       {product.stock} {product.unitOfMeasure}
                     </span>
                   </TableCell>
-                  <TableCell className="text-right text-blue-600">
-                    LKR {product.costPrice.toLocaleString()}
-                  </TableCell>
+                  {showCost && (
+                    <TableCell className="text-right text-blue-600">
+                      LKR {product.costPrice.toLocaleString()}
+                    </TableCell>
+                  )}
                   <TableCell className="text-right text-green-600 font-medium">
                     LKR {product.sellingPrice.toLocaleString()}
                   </TableCell>
@@ -302,11 +306,13 @@ export function ProductTable({
                   </div>
 
                   {/* Prices grid */}
-                  <div className="grid grid-cols-3 gap-1 mb-2 text-xs">
-                    <div className="bg-muted/50 rounded p-1.5 text-center">
-                      <div className="text-muted-foreground text-[10px] mb-0.5">Cost</div>
-                      <div className="text-blue-600 font-medium">LKR {product.costPrice.toLocaleString()}</div>
-                    </div>
+                  <div className={`grid ${showCost ? "grid-cols-3" : "grid-cols-2"} gap-1 mb-2 text-xs`}>
+                    {showCost && (
+                      <div className="bg-muted/50 rounded p-1.5 text-center">
+                        <div className="text-muted-foreground text-[10px] mb-0.5">Cost</div>
+                        <div className="text-blue-600 font-medium">LKR {product.costPrice.toLocaleString()}</div>
+                      </div>
+                    )}
                     <div className="bg-muted/50 rounded p-1.5 text-center">
                       <div className="text-muted-foreground text-[10px] mb-0.5">Selling</div>
                       <div className="text-green-600 font-semibold">LKR {product.sellingPrice.toLocaleString()}</div>

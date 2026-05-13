@@ -2,6 +2,7 @@
 "use client";
 
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -9,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search } from "lucide-react";
+import { Search, Eye, EyeOff } from "lucide-react";
 
 interface ProductFiltersProps {
   searchQuery: string;
@@ -19,6 +20,8 @@ interface ProductFiltersProps {
   stockFilter: string;
   setStockFilter: (val: string) => void;
   categories: string[];
+  showCost: boolean;
+  onToggleCost: () => void;
 }
 
 export function ProductFilters({
@@ -29,6 +32,8 @@ export function ProductFilters({
   stockFilter,
   setStockFilter,
   categories,
+  showCost,
+  onToggleCost,
 }: ProductFiltersProps) {
   return (
     <div className="flex flex-col md:flex-row gap-4 p-4">
@@ -66,6 +71,10 @@ export function ProductFilters({
             <SelectItem value="out-of-stock">Out of Stock</SelectItem>
           </SelectContent>
         </Select>
+        <Button variant="outline" size="sm" onClick={onToggleCost} className="gap-1.5 text-xs h-9 shrink-0">
+          {showCost ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+          {showCost ? "Hide Cost" : "Show Cost"}
+        </Button>
       </div>
     </div>
   );

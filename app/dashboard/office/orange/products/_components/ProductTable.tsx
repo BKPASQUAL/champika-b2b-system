@@ -38,6 +38,7 @@ interface ProductTableProps {
   onSort: (field: SortField) => void;
   onEdit: (product: Product) => void;
   onDelete: (product: Product) => void;
+  showCost: boolean;
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
@@ -56,6 +57,7 @@ export function ProductTable({
   onSort,
   onEdit,
   onDelete,
+  showCost,
   currentPage,
   totalPages,
   onPageChange,
@@ -230,20 +232,22 @@ export function ProductTable({
                   </div>
 
                   {/* Price Grid */}
-                  <div className="grid grid-cols-3 gap-2 text-center">
-                    <div className="bg-slate-50 rounded-lg px-2 py-2">
-                      <p className="text-[10px] text-muted-foreground mb-0.5">Cost</p>
-                      <p className="text-xs font-semibold text-blue-600">
-                        {product.costPrice > 0
-                          ? `LKR ${product.costPrice.toLocaleString()}`
-                          : "-"}
-                      </p>
-                      {isMultiPack && product.costPrice > 0 && (
-                        <p className="text-[9px] text-muted-foreground">
-                          Pcs: {(product.costPrice / packQty).toFixed(2)}
+                  <div className={`grid ${showCost ? "grid-cols-3" : "grid-cols-2"} gap-2 text-center`}>
+                    {showCost && (
+                      <div className="bg-slate-50 rounded-lg px-2 py-2">
+                        <p className="text-[10px] text-muted-foreground mb-0.5">Cost</p>
+                        <p className="text-xs font-semibold text-blue-600">
+                          {product.costPrice > 0
+                            ? `LKR ${product.costPrice.toLocaleString()}`
+                            : "-"}
                         </p>
-                      )}
-                    </div>
+                        {isMultiPack && product.costPrice > 0 && (
+                          <p className="text-[9px] text-muted-foreground">
+                            Pcs: {(product.costPrice / packQty).toFixed(2)}
+                          </p>
+                        )}
+                      </div>
+                    )}
                     <div className="bg-green-50 rounded-lg px-2 py-2">
                       <p className="text-[10px] text-muted-foreground mb-0.5">Price</p>
                       <p className="text-xs font-semibold text-green-600">
@@ -378,7 +382,7 @@ export function ProductTable({
                     Stock {getSortIcon("stock")}
                   </div>
                 </TableHead>
-                <TableHead className="text-right">Cost Price</TableHead>
+                {showCost && <TableHead className="text-right">Cost Price</TableHead>}
                 <TableHead
                   className="text-right cursor-pointer hover:bg-muted/50"
                   onClick={() => onSort("sellingPrice")}
@@ -402,7 +406,7 @@ export function ProductTable({
               {/* ── Select-all banner ── */}
               {allPageSelected && allFilteredCount > products.length && showPagination && (
                 <TableRow className="bg-purple-50 hover:bg-purple-50">
-                  <TableCell colSpan={11} className="py-2 text-center text-sm text-purple-800">
+                  <TableCell colSpan={showCost ? 11 : 10} className="py-2 text-center text-sm text-purple-800">
                     All <strong>{products.length}</strong> products on this page are selected.{" "}
                     <button
                       className="font-semibold underline hover:text-purple-900"
@@ -415,7 +419,7 @@ export function ProductTable({
               )}
               {selectedIds.size === allFilteredCount && allFilteredCount > 0 && !showPagination && (
                 <TableRow className="bg-purple-100 hover:bg-purple-100">
-                  <TableCell colSpan={11} className="py-2 text-center text-sm text-purple-800 font-medium">
+                  <TableCell colSpan={showCost ? 11 : 10} className="py-2 text-center text-sm text-purple-800 font-medium">
                     All <strong>{allFilteredCount}</strong> products are selected.
                   </TableCell>
                 </TableRow>
@@ -504,16 +508,18 @@ export function ProductTable({
                         {product.stock} {product.unitOfMeasure}
                       </span>
                     </TableCell>
-                    <TableCell className="text-right">
-                      <div className="text-blue-600">
-                        LKR {product.costPrice.toLocaleString()}
-                      </div>
-                      {isMultiPack && product.costPrice > 0 && (
-                        <div className="text-[10px] text-muted-foreground">
-                          Pcs: {(product.costPrice / packQty).toFixed(2)}
+                    {showCost && (
+                      <TableCell className="text-right">
+                        <div className="text-blue-600">
+                          LKR {product.costPrice.toLocaleString()}
                         </div>
-                      )}
-                    </TableCell>
+                        {isMultiPack && product.costPrice > 0 && (
+                          <div className="text-[10px] text-muted-foreground">
+                            Pcs: {(product.costPrice / packQty).toFixed(2)}
+                          </div>
+                        )}
+                      </TableCell>
+                    )}
                     <TableCell className="text-right">
                       <div className="text-green-600 font-medium">
                         LKR {product.sellingPrice.toLocaleString()}

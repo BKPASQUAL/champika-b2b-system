@@ -51,6 +51,7 @@ export default function WiremanProductsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [stockFilter, setStockFilter] = useState("all");
+  const [showCost, setShowCost] = useState(false);
 
   // Sorting & Pagination
   const [sortField, setSortField] = useState<SortField>("name");
@@ -363,12 +364,15 @@ export default function WiremanProductsPage() {
               "all",
               ...Array.from(new Set(categories.map((c) => c.name))),
             ]}
+            showCost={showCost}
+            onToggleCost={() => setShowCost((v) => !v)}
           />
         </CardHeader>
         <CardContent className="p-0">
           <ProductTable
             products={selectAllMode ? sortedProducts : paginatedProducts}
             loading={loading}
+            showCost={showCost}
             sortField={sortField}
             sortOrder={sortOrder}
             onSort={handleSort}

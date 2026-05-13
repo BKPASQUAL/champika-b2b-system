@@ -76,6 +76,7 @@ export default function ProductsPage() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [supplierFilter, setSupplierFilter] = useState("all");
   const [stockFilter, setStockFilter] = useState("all");
+  const [showCost, setShowCost] = useState(false);
 
   // Sorting & Pagination
   const [sortField, setSortField] = useState<SortField>("name");
@@ -360,12 +361,15 @@ export default function ProductsPage() {
               "all",
               ...Array.from(new Set(suppliers.map((s) => s.name))),
             ]}
+            showCost={showCost}
+            onToggleCost={() => setShowCost((v) => !v)}
           />
         </CardHeader>
         <CardContent className="p-0">
           <ProductTable
             products={paginatedProducts}
             loading={loading}
+            showCost={showCost}
             sortField={sortField}
             sortOrder={sortOrder}
             onSort={handleSort}
