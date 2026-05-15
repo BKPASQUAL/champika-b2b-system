@@ -45,6 +45,7 @@ import {
   Printer,
   RefreshCw,
   PackageCheck,
+  ClipboardCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Order, OrderStatus } from "../types";
@@ -94,6 +95,9 @@ export default function DistributionProcessingOrdersPage() {
   const [assignLorryOpen, setAssignLorryOpen] = useState(false);
   const [pickedLorry, setPickedLorry] = useState("");
   const [assigningLorry, setAssigningLorry] = useState(false);
+
+  const [moveAllCheckingOpen, setMoveAllCheckingOpen] = useState(false);
+  const [movingAllChecking, setMovingAllChecking] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -192,6 +196,35 @@ export default function DistributionProcessingOrdersPage() {
     if (failCount > 0) toast.error(`${failCount} order${failCount !== 1 ? "s" : ""} failed to update`);
     fetchData();
   };
+
+  const handleMoveAllToChecking = async () => {
+    setMovingAllChecking(true);
+    let successCount = 0;
+    let failCount = 0;
+    await Promise.all(
+      selectedOrders.map(async (id) => {
+        try {
+          const res = await fetch(`/api/orders/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "Checking" }),
+          });
+          if (res.ok) successCount++;
+          else failCount++;
+        } catch {
+          failCount++;
+        }
+      })
+    );
+    setMovingAllChecking(false);
+
+    setMoveAllCheckingOpen(false);
+    setSelectedOrders([]);
+    if (successCount > 0) toast.success(`${successCount} order${successCount !== 1 ? "s" : ""} moved to Checking`);
+    if (failCount > 0) toast.error(`${failCount} order${failCount !== 1 ? "s" : ""} failed to update`);
+    fetchData();
+  };
+
 
   const handleConfirmAssignLorry = async () => {
     if (!pickedLorry) { toast.error("Please select a lorry."); return; }
@@ -296,6 +329,13 @@ export default function DistributionProcessingOrdersPage() {
             >
               <RefreshCw className="w-4 h-4 mr-2" />
               Change Status ({selectedOrders.length})
+            </Button>
+            <Button
+              onClick={() => setMoveAllCheckingOpen(true)}
+              className="bg-purple-600 hover:bg-purple-700 text-white"
+            >
+              <ClipboardCheck className="w-4 h-4 mr-2" />
+              Move to Checking ({selectedOrders.length})
             </Button>
           </div>
         )}
@@ -636,6 +676,37 @@ export default function DistributionProcessingOrdersPage() {
                 <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Assigning...</>
               ) : (
                 "Assign Lorry"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Move All to Checking Dialog */}
+      <Dialog open={moveAllCheckingOpen} onOpenChange={setMoveAllCheckingOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ClipboardCheck className="h-5 w-5 text-purple-600" />
+              Move All to Checking
+            </DialogTitle>
+            <DialogDescription>
+              This will move {selectedOrders.length} selected order{selectedOrders.length !== 1 ? "s" : ""} to <strong>Checking</strong> status. Continue?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMoveAllCheckingOpen(false)} disabled={movingAllChecking}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleMoveAllToChecking}
+              disabled={movingAllChecking}
+              className="bg-purple-600 hover:bg-purple-700 text-white"
+            >
+              {movingAllChecking ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Moving...</>
+              ) : (
+                "Confirm"
               )}
             </Button>
           </DialogFooter>
