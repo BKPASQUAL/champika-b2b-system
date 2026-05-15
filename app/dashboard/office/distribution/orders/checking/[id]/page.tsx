@@ -85,6 +85,11 @@ export default function CheckOrderPage({
   const [items, setItems] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [lastCheckedInvoice, setLastCheckedInvoice] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLastCheckedInvoice(localStorage.getItem("checking_last_invoice"));
+  }, []);
 
   // --- Edit Mode State ---
   const [isEditing, setIsEditing] = useState(false);
@@ -227,17 +232,15 @@ export default function CheckOrderPage({
     }
 
     if (!areAllItemsChecked) {
-      setConfirmContent({
-        title: "Incomplete QC",
-        description: `You have only verified ${checkedCount}/${totalItems} items. Are you sure you want to proceed anyway?`,
-      });
-    } else {
-      setConfirmContent({
-        title: "Pass Quality Control",
-        description:
-          "Are you sure you want to mark this order as Verified and move it to the Loading stage?",
-      });
+      toast.error(`Please verify all items first. ${checkedCount}/${totalItems} checked.`);
+      return;
     }
+
+    setConfirmContent({
+      title: "Pass Quality Control",
+      description:
+        "Are you sure you want to mark this order as Verified and move it to the Loading stage?",
+    });
     setIsConfirmOpen(true);
   };
 
@@ -254,6 +257,9 @@ export default function CheckOrderPage({
 
       if (!res.ok) throw new Error("Failed to update order");
 
+      if (order?.invoiceNo) {
+        localStorage.setItem("checking_last_invoice", order.invoiceNo);
+      }
       toast.success("QC Passed! Order moved to Loading.");
       router.push("/dashboard/office/distribution/orders/checking");
     } catch (error) {
@@ -288,9 +294,18 @@ export default function CheckOrderPage({
                 {order.orderId}
               </Badge>
             </h1>
-            <p className="text-muted-foreground text-xs sm:text-sm mt-0.5 hidden sm:block">
-              Perform quality control checks before loading.
-            </p>
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
+              <span className="flex items-center gap-1.5 font-mono font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2.5 py-0.5 rounded text-sm">
+                <FileText className="h-3.5 w-3.5" />
+                {order.invoiceNo || "N/A"}
+              </span>
+              {lastCheckedInvoice && lastCheckedInvoice !== order.invoiceNo && (
+                <span className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded font-medium">
+                  <CheckCircle2 className="h-3 w-3" />
+                  Last checked: <span className="font-mono font-bold">{lastCheckedInvoice}</span>
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -678,7 +693,7 @@ export default function CheckOrderPage({
                 size="lg"
                 className="w-full h-12 text-base font-semibold shadow-lg bg-purple-600 hover:bg-purple-700 text-white"
                 onClick={handleCompleteChecking}
-                disabled={processing || isEditing}
+                disabled={processing || isEditing || !areAllItemsChecked}
               >
                 {processing ? (
                   <Loader2 className="w-5 h-5 mr-2 animate-spin" />
@@ -766,7 +781,7 @@ export default function CheckOrderPage({
             size="lg"
             className="w-full h-11 font-semibold bg-purple-600 hover:bg-purple-700 text-white"
             onClick={handleCompleteChecking}
-            disabled={processing}
+            disabled={processing || !areAllItemsChecked}
           >
             {processing ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <ShieldCheck className="w-5 h-5 mr-2" />}
             Pass Quality Control
