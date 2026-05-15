@@ -39,12 +39,12 @@ export async function GET(request: Request) {
       .from("orders")
       .select(
         `
-        id, order_id, total_amount, status, created_at, sales_rep_id, load_id,
+        id, order_id, status, created_at, sales_rep_id, load_id,
         customer:customers (id, shop_name, owner_name, business_id, business:businesses(id, name)),
         rep:profiles!orders_sales_rep_id_fkey (id, full_name),
         items:order_items (
-          id, quantity, free_quantity, unit_price, total_price, actual_unit_cost,
-          product:products (id, name, cost_price, category)
+          id, quantity,
+          product:products (id, name, cost_price, selling_price, category)
         )
       `,
       )
@@ -150,7 +150,7 @@ export async function GET(request: Request) {
 
     // 7. Process Orders
     orders?.forEach((order: any) => {
-      const orderRevenue = Number(order.total_amount) || 0;
+      let orderRevenue = 0;
       let orderCost = 0;
 
       const orderDate = new Date(order.created_at);
@@ -159,24 +159,13 @@ export async function GET(request: Request) {
       if (order.items) {
         order.items.forEach((item: any) => {
           const qty = Number(item.quantity) || 0;
-          const freeQty = Number(item.free_quantity) || 0;
-          const totalQty = qty + freeQty;
+          const costPrice = Number(item.product?.cost_price) || 0;
+          const stdSellingPrice = Number(item.product?.selling_price) || 0;
 
-          // Use actual_unit_cost when it is a positive value (historically recorded).
-          // A stored 0 means it was never filled in, so fall back to the product's current cost_price.
-          const actualCost = Number(item.actual_unit_cost);
-          const costPrice =
-            actualCost > 0
-              ? actualCost
-              : Number(item.product?.cost_price) || 0;
+          const itemRevenue = qty * stdSellingPrice;
+          const itemCost = qty * costPrice;
 
-          const sellingPrice = Number(item.unit_price) || 0;
-          const itemRevenue = Number(item.total_price) || qty * sellingPrice;
-
-          // Cost is calculated on TOTAL units (Bought + Free)
-          const itemCost = totalQty * costPrice;
-          // --- CHANGED LOGIC END ---
-
+          orderRevenue += itemRevenue;
           orderCost += itemCost;
 
           if (item.product?.id) {
@@ -192,7 +181,7 @@ export async function GET(request: Request) {
                 loss: 0,
               };
 
-            productsMap[pId].sold += totalQty;
+            productsMap[pId].sold += qty;
             productsMap[pId].revenue += itemRevenue;
             productsMap[pId].cost += itemCost;
           }

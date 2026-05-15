@@ -94,9 +94,20 @@ const fmtK = (n: number) => {
 const fmtDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-LK", { day: "numeric", month: "short" });
 
+const CURRENT_YEAR = new Date().getFullYear();
+const SELECTABLE_YEARS = Array.from({ length: 4 }, (_, i) => CURRENT_YEAR - i);
+
 const getDateRange = (period: string) => {
   const now = new Date();
   let from: Date, to: Date;
+
+  if (/^\d{4}$/.test(period)) {
+    const y = parseInt(period, 10);
+    from = new Date(y, 0, 1);
+    to = new Date(y, 11, 31, 23, 59, 59, 999);
+    return { from: from.toISOString(), to: to.toISOString() };
+  }
+
   switch (period) {
     case "today":
       from = new Date(now);
@@ -297,12 +308,15 @@ export default function DistributionProfitPage() {
     );
   }
 
-  const periodLabel: Record<string, string> = {
-    today: "Today",
-    "this-week": "This Week",
-    "this-month": "This Month",
-    "last-month": "Last Month",
-    "this-year": "This Year",
+  const getPeriodLabel = (p: string) => {
+    const map: Record<string, string> = {
+      today: "Today",
+      "this-week": "This Week",
+      "this-month": "This Month",
+      "last-month": "Last Month",
+      "this-year": "This Year",
+    };
+    return map[p] ?? p;
   };
 
   return (
@@ -315,7 +329,7 @@ export default function DistributionProfitPage() {
           </h1>
           <p className="text-slate-500 mt-1 text-sm flex items-center gap-2">
             <BarChart3 className="h-4 w-4" />
-            Distribution profitability · {periodLabel[period]}
+            Distribution profitability · {getPeriodLabel(period)}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -329,6 +343,11 @@ export default function DistributionProfitPage() {
               <SelectItem value="this-month">This Month</SelectItem>
               <SelectItem value="last-month">Last Month</SelectItem>
               <SelectItem value="this-year">This Year</SelectItem>
+              {SELECTABLE_YEARS.map((y) => (
+                <SelectItem key={y} value={String(y)}>
+                  {y}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Button
@@ -697,7 +716,7 @@ export default function DistributionProfitPage() {
                     Sales Rep Performance Detail
                   </CardTitle>
                   <CardDescription>
-                    Ranked by revenue · {periodLabel[period]}
+                    Ranked by revenue · {getPeriodLabel(period)}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="overflow-x-auto">
@@ -822,7 +841,7 @@ export default function DistributionProfitPage() {
                   <CardTitle className="text-base">Delivery Runs Detail</CardTitle>
                   <CardDescription>
                     {deliveries.length} delivery run
-                    {deliveries.length !== 1 ? "s" : ""} · {periodLabel[period]}
+                    {deliveries.length !== 1 ? "s" : ""} · {getPeriodLabel(period)}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="overflow-x-auto">
