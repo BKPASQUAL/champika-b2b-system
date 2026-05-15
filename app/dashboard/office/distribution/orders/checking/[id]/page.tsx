@@ -647,6 +647,10 @@ export default function CheckOrderPage({
                 <span className="text-sm text-muted-foreground">
                   {order.customer?.name}
                 </span>
+                <span className="flex items-center gap-1.5 font-mono font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded text-xs w-fit mt-1">
+                  <FileText className="h-3 w-3" />
+                  {order.invoiceNo || "N/A"}
+                </span>
               </div>
               <Separator />
               <div className="space-y-3 text-sm">
