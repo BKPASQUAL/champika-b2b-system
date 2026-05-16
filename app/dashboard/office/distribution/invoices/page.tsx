@@ -24,6 +24,7 @@ import {
   Filter,
   AlertCircle,
   Printer,
+  Receipt,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -236,6 +237,16 @@ export default function DistributionInvoicesPage() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          <Button
+            variant="outline"
+            onClick={() =>
+              router.push("/dashboard/office/distribution/invoices/direct-bill")
+            }
+            className="border-green-300 text-green-700 hover:bg-green-50 hover:text-green-800"
+          >
+            <Receipt className="w-4 h-4 mr-2" /> Direct Bill
+          </Button>
 
           <Button
             onClick={() =>
