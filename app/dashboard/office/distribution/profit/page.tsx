@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Card,
   CardContent,
@@ -53,8 +53,13 @@ import {
   BarChart3,
   ShoppingBag,
   RefreshCw,
+  Search,
+  ChevronUp,
+  ChevronDown,
+  ArrowUpDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
@@ -201,6 +206,81 @@ export default function DistributionProfitPage() {
   const [customers, setCustomers] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [deliveries, setDeliveries] = useState<any[]>([]);
+
+  // All distribution invoices for the Invoices tab
+  const { data: allInvoices = [] } = useCachedFetch<any[]>(
+    `/api/invoices?businessId=${DIST_ID}`,
+    [],
+    () => {}
+  );
+
+  // Filter invoices by selected period
+  const periodInvoices = useMemo(() => {
+    const { from, to } = getDateRange(period);
+    const fromTime = new Date(from).getTime();
+    const toTime = new Date(to).getTime();
+    return (allInvoices as any[]).filter((inv: any) => {
+      const d = new Date(inv.date).getTime();
+      return d >= fromTime && d <= toTime;
+    }).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [allInvoices, period]);
+
+  const invoiceSummary = useMemo(() => {
+    const totalRevenue = periodInvoices.reduce((s: number, inv: any) => s + (Number(inv.totalAmount) || 0), 0);
+    const totalProfit = periodInvoices.reduce((s: number, inv: any) => s + (Number(inv.profit) || 0), 0);
+    const totalCost = totalRevenue - totalProfit;
+    const margin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+    return { count: periodInvoices.length, totalRevenue, totalProfit, totalCost, margin };
+  }, [periodInvoices]);
+
+  // Invoice tab search + sort
+  const [invSearch, setInvSearch] = useState("");
+  const [invSortField, setInvSortField] = useState<"date" | "invoiceNo" | "customerName" | "salesRepName" | "totalAmount" | "profit" | "margin">("date");
+  const [invSortDir, setInvSortDir] = useState<"asc" | "desc">("desc");
+
+  const handleInvSort = (field: typeof invSortField) => {
+    if (invSortField === field) {
+      setInvSortDir(invSortDir === "asc" ? "desc" : "asc");
+    } else {
+      setInvSortField(field);
+      setInvSortDir(field === "date" ? "desc" : "desc");
+    }
+  };
+
+  const displayInvoices = useMemo(() => {
+    const q = invSearch.toLowerCase();
+    const filtered = q
+      ? periodInvoices.filter((inv: any) =>
+          (inv.invoiceNo || "").toLowerCase().includes(q) ||
+          (inv.manualInvoiceNo || "").toLowerCase().includes(q) ||
+          (inv.customerName || "").toLowerCase().includes(q) ||
+          (inv.salesRepName || "").toLowerCase().includes(q)
+        )
+      : periodInvoices;
+
+    return [...filtered].sort((a: any, b: any) => {
+      let aVal: any, bVal: any;
+      if (invSortField === "margin") {
+        const aR = Number(a.totalAmount) || 0;
+        const bR = Number(b.totalAmount) || 0;
+        aVal = aR > 0 ? (Number(a.profit) / aR) * 100 : 0;
+        bVal = bR > 0 ? (Number(b.profit) / bR) * 100 : 0;
+      } else if (invSortField === "date") {
+        aVal = new Date(a.date).getTime();
+        bVal = new Date(b.date).getTime();
+      } else {
+        aVal = invSortField === "totalAmount" || invSortField === "profit"
+          ? Number(a[invSortField]) || 0
+          : (a[invSortField] || "").toLowerCase();
+        bVal = invSortField === "totalAmount" || invSortField === "profit"
+          ? Number(b[invSortField]) || 0
+          : (b[invSortField] || "").toLowerCase();
+      }
+      if (aVal < bVal) return invSortDir === "asc" ? -1 : 1;
+      if (aVal > bVal) return invSortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [periodInvoices, invSearch, invSortField, invSortDir]);
 
   // Live pending counts — scoped to distribution business only
   const { data: allOrders = [] } = useCachedFetch<any[]>(
@@ -441,6 +521,12 @@ export default function DistributionProfitPage() {
                 Top Products
                 <Badge className="ml-1.5 text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0">
                   {products.length}
+                </Badge>
+              </TabsTrigger>
+              <TabsTrigger value="invoices">
+                Invoices
+                <Badge className="ml-1.5 text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0">
+                  {periodInvoices.length}
                 </Badge>
               </TabsTrigger>
             </TabsList>
@@ -1204,6 +1290,179 @@ export default function DistributionProfitPage() {
                             </TableCell>
                           </TableRow>
                         ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </TabsContent>
+            {/* ── Invoices Tab ── */}
+            <TabsContent value="invoices" className="space-y-5 mt-5">
+              {/* Summary KPIs */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <KpiCard
+                  label="Total Invoices"
+                  value={invoiceSummary.count.toString()}
+                  sub={`${getPeriodLabel(period)}`}
+                  color="blue"
+                  icon={<FileText className="h-4 w-4" />}
+                />
+                <KpiCard
+                  label="Total Revenue"
+                  value={fmt(invoiceSummary.totalRevenue)}
+                  sub="Invoice revenue"
+                  color="blue"
+                  icon={<DollarSign className="h-4 w-4" />}
+                />
+                <KpiCard
+                  label="Total Profit"
+                  value={fmt(invoiceSummary.totalProfit)}
+                  sub={`${invoiceSummary.margin.toFixed(1)}% margin`}
+                  color={invoiceSummary.totalProfit >= 0 ? "green" : "red"}
+                  icon={<TrendingUp className="h-4 w-4" />}
+                />
+                <KpiCard
+                  label="Total Cost"
+                  value={fmt(invoiceSummary.totalCost)}
+                  sub="Cost of goods sold"
+                  color="orange"
+                  icon={<TrendingDown className="h-4 w-4" />}
+                />
+              </div>
+
+              {/* Invoice Table */}
+              <Card>
+                <CardHeader>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <CardTitle className="text-base">Invoice Profit Detail</CardTitle>
+                      <CardDescription>
+                        {displayInvoices.length}{invSearch ? ` of ${periodInvoices.length}` : ""} invoice{periodInvoices.length !== 1 ? "s" : ""} · {getPeriodLabel(period)}
+                      </CardDescription>
+                    </div>
+                    <div className="relative w-full sm:w-64">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                      <Input
+                        placeholder="Search invoice, customer, rep…"
+                        value={invSearch}
+                        onChange={(e) => setInvSearch(e.target.value)}
+                        className="pl-8 h-8 text-sm"
+                      />
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-8">#</TableHead>
+                        {(
+                          [
+                            { key: "invoiceNo", label: "Invoice No", align: "left" },
+                            { key: "date", label: "Date", align: "left" },
+                            { key: "customerName", label: "Customer", align: "left" },
+                            { key: "salesRepName", label: "Sales Rep", align: "left" },
+                            { key: "totalAmount", label: "Revenue", align: "right" },
+                            { key: "profit", label: "Cost", align: "right", noSort: true },
+                            { key: "profit", label: "Profit", align: "right" },
+                            { key: "margin", label: "Margin", align: "right" },
+                          ] as { key: typeof invSortField; label: string; align: string; noSort?: boolean }[]
+                        ).map(({ key, label, align, noSort }) => (
+                          <TableHead
+                            key={`${key}-${label}`}
+                            className={`${align === "right" ? "text-right" : ""} ${!noSort ? "cursor-pointer select-none hover:text-foreground" : ""}`}
+                            onClick={noSort ? undefined : () => handleInvSort(key)}
+                          >
+                            <span className={`inline-flex items-center gap-1 ${align === "right" ? "justify-end w-full" : ""}`}>
+                              {label}
+                              {!noSort && (
+                                invSortField === key
+                                  ? invSortDir === "asc"
+                                    ? <ChevronUp className="h-3 w-3" />
+                                    : <ChevronDown className="h-3 w-3" />
+                                  : <ArrowUpDown className="h-3 w-3 opacity-40" />
+                              )}
+                            </span>
+                          </TableHead>
+                        ))}
+                        <TableHead>Order Status</TableHead>
+                        <TableHead>Payment</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {displayInvoices.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={11} className="text-center text-muted-foreground py-10">
+                            {invSearch ? "No invoices match your search" : "No invoices for this period"}
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        displayInvoices.map((inv: any, i: number) => {
+                          const revenue = Number(inv.totalAmount) || 0;
+                          const profit = Number(inv.profit) || 0;
+                          const cost = revenue - profit;
+                          const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
+                          return (
+                            <TableRow key={inv.id}>
+                              <TableCell className="text-muted-foreground font-medium w-8 text-xs">
+                                {i + 1}
+                              </TableCell>
+                              <TableCell className="font-mono text-xs font-semibold text-blue-700">
+                                {inv.invoiceNo}
+                                {inv.manualInvoiceNo && (
+                                  <div className="text-[10px] text-slate-400 font-normal">
+                                    {inv.manualInvoiceNo}
+                                  </div>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-xs text-slate-600 whitespace-nowrap">
+                                {fmtDate(inv.date)}
+                              </TableCell>
+                              <TableCell className="font-medium text-sm max-w-[150px] truncate">
+                                {inv.customerName}
+                              </TableCell>
+                              <TableCell className="text-sm text-slate-600">
+                                {inv.salesRepName}
+                              </TableCell>
+                              <TableCell className="text-right font-mono tabular-nums text-sm">
+                                {fmt(revenue)}
+                              </TableCell>
+                              <TableCell className="text-right font-mono tabular-nums text-sm text-orange-600">
+                                {fmt(cost)}
+                              </TableCell>
+                              <TableCell className={`text-right font-mono tabular-nums text-sm font-semibold ${profit >= 0 ? "text-green-700" : "text-red-600"}`}>
+                                {fmt(profit)}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <MarginBadge margin={margin} />
+                              </TableCell>
+                              <TableCell>
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                                  inv.orderStatus === "Delivered" || inv.orderStatus === "Completed"
+                                    ? "bg-green-100 text-green-800"
+                                    : inv.orderStatus === "Cancelled"
+                                    ? "bg-red-100 text-red-700"
+                                    : "bg-slate-100 text-slate-600"
+                                }`}>
+                                  {inv.orderStatus}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                                  inv.status === "Paid"
+                                    ? "bg-green-100 text-green-800"
+                                    : inv.status === "Partial"
+                                    ? "bg-yellow-100 text-yellow-800"
+                                    : inv.status === "Overdue"
+                                    ? "bg-red-100 text-red-700"
+                                    : "bg-slate-100 text-slate-600"
+                                }`}>
+                                  {inv.status}
+                                </span>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
                       )}
                     </TableBody>
                   </Table>
