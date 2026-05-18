@@ -17,6 +17,7 @@ export interface Invoice {
   invoiceNo: string;
   manualInvoiceNo?: string | null;
   date: string;
+  createdAt?: string;
   customerId: string;
   customerName: string;
   salesRepName: string;
@@ -27,12 +28,12 @@ export interface Invoice {
   orderStatus: OrderStatus;
   itemsCount?: number;
   businessId?: string;
-  // ✅ NEW FIELD
   profit: number;
 }
 
 export type SortField =
   | "date"
+  | "createdAt"
   | "invoiceNo"
   | "customerName"
   | "salesRepName"

@@ -115,6 +115,10 @@ export default function RetailInvoicesPage() {
       filtered = filtered.filter((inv) => inv.status === statusFilter);
     }
 
+    filtered = [...filtered].sort((a, b) =>
+      new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+    );
+
     setFilteredInvoices(filtered);
     setCurrentPage(1);
   }, [searchQuery, statusFilter, invoices, currentBusinessId]);

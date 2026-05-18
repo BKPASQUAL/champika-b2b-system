@@ -42,7 +42,7 @@ export default function InvoicesPage() {
   const [repFilter, setRepFilter] = useState("all");
 
   // Sort & Pagination
-  const [sortField, setSortField] = useState<SortField>("date");
+  const [sortField, setSortField] = useState<SortField>("createdAt");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -67,6 +67,7 @@ export default function InvoicesPage() {
           (inv.createdAt
             ? inv.createdAt.split("T")[0]
             : new Date().toISOString().split("T")[0]),
+        createdAt: inv.createdAt || "",
         customerId: inv.customerId,
         customerName: inv.customerName || "Unknown Customer",
         salesRepName: inv.salesRepName || "Unknown",
@@ -111,7 +112,7 @@ export default function InvoicesPage() {
     let aVal: any = a[sortField];
     let bVal: any = b[sortField];
 
-    if (sortField === "date") {
+    if (sortField === "date" || sortField === "createdAt") {
       return sortOrder === "asc"
         ? new Date(aVal).getTime() - new Date(bVal).getTime()
         : new Date(bVal).getTime() - new Date(aVal).getTime();

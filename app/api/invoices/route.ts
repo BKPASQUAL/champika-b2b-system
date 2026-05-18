@@ -240,22 +240,23 @@ export async function POST(request: NextRequest) {
       ? (INVOICE_PREFIXES[resolvedBusinessId] ?? "INV")
       : "INV";
 
-    const { data: lastInvoice } = await supabaseAdmin
-      .from("invoices")
-      .select("invoice_no")
-      .ilike("invoice_no", `${prefix}-%`)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const getNextInvoiceNo = async (): Promise<string> => {
+      const { data: existing } = await supabaseAdmin
+        .from("invoices")
+        .select("invoice_no")
+        .ilike("invoice_no", `${prefix}-%`);
+      const maxSeq = Math.max(
+        0,
+        ...(existing ?? []).map((inv: any) => {
+          const parts = (inv.invoice_no as string).split("-");
+          const n = parseInt(parts[parts.length - 1], 10);
+          return isNaN(n) ? 0 : n;
+        })
+      );
+      return `${prefix}-${String(maxSeq + 1).padStart(4, "0")}`;
+    };
 
-    let nextSeq = 1;
-    if (lastInvoice?.invoice_no) {
-      const parts = lastInvoice.invoice_no.split("-");
-      const lastNum = parseInt(parts[parts.length - 1], 10);
-      if (!isNaN(lastNum)) nextSeq = lastNum + 1;
-    }
-
-    const invoiceNo = `${prefix}-${String(nextSeq).padStart(4, "0")}`;
+    let invoiceNo = await getNextInvoiceNo();
     // -------------------------------------------------------------
 
     // 3. Calculate Dates
@@ -367,22 +368,32 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 6. Create Invoice Record
-    const { data: invoiceData, error: invoiceError } = await supabaseAdmin
-      .from("invoices")
-      .insert({
-        invoice_no: invoiceNo,
-        manual_invoice_no: val.manual_invoice_no || null,
-        order_id: orderData.id,
-        customer_id: val.customerId,
-        total_amount: val.grandTotal,
-        paid_amount: val.paidAmount,
-        status: val.paymentStatus,
-        due_date: dueDate,
-        created_at: new Date(),
-      })
-      .select()
-      .single();
+    // 6. Create Invoice Record (retry up to 5 times on duplicate invoice_no)
+    let invoiceData: any = null;
+    let invoiceError: any = null;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      if (attempt > 0) {
+        invoiceNo = await getNextInvoiceNo();
+      }
+      const result = await supabaseAdmin
+        .from("invoices")
+        .insert({
+          invoice_no: invoiceNo,
+          manual_invoice_no: val.manual_invoice_no || null,
+          order_id: orderData.id,
+          customer_id: val.customerId,
+          total_amount: val.grandTotal,
+          paid_amount: val.paidAmount,
+          status: val.paymentStatus,
+          due_date: dueDate,
+          created_at: new Date(),
+        })
+        .select()
+        .single();
+      invoiceData = result.data;
+      invoiceError = result.error;
+      if (!invoiceError || invoiceError.code !== "23505") break;
+    }
 
     if (invoiceError) throw invoiceError;
 

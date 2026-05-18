@@ -14,6 +14,7 @@ export interface Invoice {
   id: string;
   invoiceNo: string;
   date: string;
+  createdAt?: string;
   customerId: string;
   customerName: string;
   salesRepName: string;
@@ -28,6 +29,7 @@ export interface Invoice {
 
 export type SortField =
   | "date"
+  | "createdAt"
   | "invoiceNo"
   | "customerName"
   | "salesRepName"
