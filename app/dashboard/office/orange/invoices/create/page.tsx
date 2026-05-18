@@ -91,7 +91,7 @@ export default function CreateInvoicePage() {
 
   // Data State
   const [products, setProducts] = useState<Product[]>([]);
-  const [customers, setCustomers] = useState<{ id: string; name: string }[]>(
+  const [customers, setCustomers] = useState<{ id: string; name: string; phone?: string; ownerName?: string; }[]>(
     []
   );
 

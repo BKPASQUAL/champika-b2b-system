@@ -113,10 +113,10 @@ export default function EditInvoicePage({
 
   // Data State
   const [products, setProducts] = useState<any[]>([]);
-  const [customers, setCustomers] = useState<{ id: string; name: string }[]>(
+  const [customers, setCustomers] = useState<{ id: string; name: string; phone?: string; ownerName?: string; }[]>(
     []
   );
-  const [reps, setReps] = useState<{ id: string; name: string }[]>([]);
+  const [reps, setReps] = useState<{ id: string; name: string; phone?: string; ownerName?: string; }[]>([]);
   const [historyLogs, setHistoryLogs] = useState<InvoiceHistory[]>([]);
   const [returns, setReturns] = useState<ReturnRecord[]>([]); // Added returns state
 

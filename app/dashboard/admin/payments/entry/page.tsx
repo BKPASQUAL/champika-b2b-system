@@ -75,6 +75,8 @@ interface Customer {
   id: string;
   name: string;
   shopName?: string;
+  phone?: string;
+  ownerName?: string;
 }
 
 interface Bank {

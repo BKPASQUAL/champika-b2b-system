@@ -93,7 +93,7 @@ export default function DirectBillPage() {
   const [currentUserName, setCurrentUserName] = useState<string>("");
 
   const [products, setProducts] = useState<Product[]>([]);
-  const [customers, setCustomers] = useState<{ id: string; name: string }[]>([]);
+  const [customers, setCustomers] = useState<{ id: string; name: string; phone?: string; ownerName?: string; }[]>([]);
 
   // Form State
   const [customerId, setCustomerId] = useState<string | null>(null);

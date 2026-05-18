@@ -77,6 +77,8 @@ interface Customer {
   shop_name: string;
   owner_name: string;
   business_id: string | null;
+  phone?: string;
+  ownerName?: string;
 }
 
 interface InvoiceItem {

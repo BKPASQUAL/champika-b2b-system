@@ -134,8 +134,8 @@ export default function DistributionEditInvoicePage({
 
   // Data State
   const [products, setProducts] = useState<Product[]>([]);
-  const [customers, setCustomers] = useState<{ id: string; name: string }[]>([]);
-  const [reps, setReps] = useState<{ id: string; name: string }[]>([]);
+  const [customers, setCustomers] = useState<{ id: string; name: string; phone?: string; ownerName?: string; }[]>([]);
+  const [reps, setReps] = useState<{ id: string; name: string; phone?: string; ownerName?: string; }[]>([]);
   const [historyLogs, setHistoryLogs] = useState<InvoiceHistory[]>([]);
   const [returns, setReturns] = useState<ReturnRecord[]>([]);
 

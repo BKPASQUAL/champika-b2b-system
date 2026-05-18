@@ -91,7 +91,7 @@ export default function CreateDistributionPurchasePage() {
   // --- Inline Product Creation State ---
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [categories, setCategories] = useState<{ id: string; name: string; parent_id?: string }[]>([]);
-  const [supplierCategories, setSupplierCategories] = useState<{ id: string; name: string }[]>([]);
+  const [supplierCategories, setSupplierCategories] = useState<{ id: string; name: string; phone?: string; ownerName?: string; }[]>([]);
   const [submittingProduct, setSubmittingProduct] = useState(false);
 
   const [formData, setFormData] = useState<ProductFormData>({

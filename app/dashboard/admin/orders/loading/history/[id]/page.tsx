@@ -136,7 +136,7 @@ export default function LoadingSheetDetailPage({
     loadingDate: "",
     status: "",
   });
-  const [lorries, setLorries] = useState<{ id: string; name: string }[]>([]);
+  const [lorries, setLorries] = useState<{ id: string; name: string; phone?: string; ownerName?: string; }[]>([]);
   const [users, setUsers] = useState<{ id: string; fullName: string; role: string }[]>([]);
 
   const fetchDetails = async () => {

@@ -93,7 +93,7 @@ export default function RepCustomersPage() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [saving, setSaving] = useState(false);
-  const [routeOptions, setRouteOptions] = useState<{ id: string; name: string }[]>([]);
+  const [routeOptions, setRouteOptions] = useState<{ id: string; name: string; phone?: string; ownerName?: string; }[]>([]);
   const [formData, setFormData] = useState(emptyForm);
 
   const openEdit = (customer: Customer) => {

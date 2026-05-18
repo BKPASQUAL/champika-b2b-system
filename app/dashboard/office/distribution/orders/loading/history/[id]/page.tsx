@@ -125,7 +125,7 @@ export default function DistributionLoadingSheetDetailPage({
   const [addSearch, setAddSearch] = useState("");
 
   const [changeLorryOpen, setChangeLorryOpen] = useState(false);
-  const [lorries, setLorries] = useState<{ id: string; name: string }[]>([]);
+  const [lorries, setLorries] = useState<{ id: string; name: string; phone?: string; ownerName?: string; }[]>([]);
   const [newLorry, setNewLorry] = useState("");
   const [changeLorryBusy, setChangeLorryBusy] = useState(false);
 

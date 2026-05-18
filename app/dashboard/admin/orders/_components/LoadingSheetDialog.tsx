@@ -44,7 +44,7 @@ export function LoadingSheetDialog({
   onConfirm,
   preselectedLorry = "",
 }: LoadingSheetDialogProps) {
-  const [lorries, setLorries] = useState<{ id: string; name: string }[]>([]);
+  const [lorries, setLorries] = useState<{ id: string; name: string; phone?: string; ownerName?: string; }[]>([]);
   const [persons, setPersons] = useState<Person[]>([]);
   const [loadingData, setLoadingData] = useState(false);
 

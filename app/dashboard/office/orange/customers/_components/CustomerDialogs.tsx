@@ -45,7 +45,7 @@ export function CustomerDialogs({
   setIsDeleteDialogOpen,
   onDeleteConfirm,
 }: CustomerDialogsProps) {
-  const [routes, setRoutes] = useState<{ id: string; name: string }[]>([]);
+  const [routes, setRoutes] = useState<{ id: string; name: string; phone?: string; ownerName?: string; }[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {

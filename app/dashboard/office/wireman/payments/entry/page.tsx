@@ -69,6 +69,8 @@ const formatCurrency = (amount: number) => {
 interface Customer {
   id: string;
   name: string;
+  phone?: string;
+  ownerName?: string;
 }
 
 interface Bank {

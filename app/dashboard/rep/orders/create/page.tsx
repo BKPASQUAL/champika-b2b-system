@@ -121,7 +121,7 @@ export default function CreateOrderPage() {
   // New Customer Dialog
   const [newCustomerOpen, setNewCustomerOpen] = useState(false);
   const [creatingCustomer, setCreatingCustomer] = useState(false);
-  const [routes, setRoutes] = useState<{ id: string; name: string }[]>([]);
+  const [routes, setRoutes] = useState<{ id: string; name: string; phone?: string; ownerName?: string; }[]>([]);
   const [newCustomer, setNewCustomer] = useState({
     shopName: "",
     ownerName: "",
@@ -135,7 +135,7 @@ export default function CreateOrderPage() {
 
   // Data State
   const [products, setProducts] = useState<Product[]>([]);
-  const [customers, setCustomers] = useState<{ id: string; name: string }[]>([]);
+  const [customers, setCustomers] = useState<{ id: string; name: string; phone?: string; ownerName?: string; }[]>([]);
 
   // User State
   const [currentUser, setCurrentUser] = useState<UserData | null>(null);

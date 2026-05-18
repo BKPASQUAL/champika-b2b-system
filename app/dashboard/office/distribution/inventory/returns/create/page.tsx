@@ -59,6 +59,8 @@ interface Customer {
   id: string;
   shopName: string;
   businessId: string;
+  phone?: string;
+  ownerName?: string;
 }
 interface Location {
   id: string;

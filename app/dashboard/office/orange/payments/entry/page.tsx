@@ -63,7 +63,9 @@ const formatCurrency = (amount: number) =>
   }).format(amount);
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
-interface Customer { id: string; name: string; }
+interface Customer { id: string; name: string;   phone?: string;
+  ownerName?: string;
+}
 interface Bank { id: string; bank_code: string; bank_name: string; }
 interface CompanyAccount { id: string; account_name: string; account_type: string; account_number?: string | null; }
 interface PendingInvoice { id: string; invoiceNo: string; date: string; totalAmount: number; paidAmount: number; balance: number; }

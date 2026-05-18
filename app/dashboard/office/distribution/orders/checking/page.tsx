@@ -72,7 +72,7 @@ export default function DistributionCheckingOrdersPage() {
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [groups, setGroups] = useState<LorryGroup[]>([]);
-  const [lorries, setLorries] = useState<{ id: string; name: string }[]>([]);
+  const [lorries, setLorries] = useState<{ id: string; name: string; phone?: string; ownerName?: string; }[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [searchQuery, setSearchQuery] = useState("");
