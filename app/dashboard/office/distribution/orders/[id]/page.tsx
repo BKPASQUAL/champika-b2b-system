@@ -302,7 +302,7 @@ export default function ViewOrderPage({
       stockAvailable: product.stock_quantity,
     });
     setProductOpen(false);
-    setTimeout(() => qtyInputRef.current?.focus(), 100);
+    setTimeout(() => qtyInputRef.current?.focus({ preventScroll: true }), 100);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -848,7 +848,7 @@ export default function ViewOrderPage({
                             {availableProducts.map((product) => (
                               <CommandItem
                                 key={product.id}
-                                value={product.name}
+                                value={`${product.name} ${product.sku}`}
                                 onSelect={() => handleProductSelect(product.id)}
                               >
                                 <Check

@@ -178,7 +178,7 @@ export default function OrangeEditInvoicePage({
         const custData = await custRes.json();
         const retData = await retRes.json();
 
-        setCustomers(custData.map((c: any) => ({ id: c.id, name: c.shopName })));
+        setCustomers(custData.map((c: any) => ({ id: c.id, name: c.shopName, phone: c.phone || "", ownerName: c.ownerName || "" })));
         setReturns(retData);
 
         setCustomerId(invoice.customerId || null);
@@ -282,7 +282,7 @@ export default function OrangeEditInvoicePage({
     });
 
     setProductOpen(false);
-    if (!editingItemId) setTimeout(() => { qtyInputRef.current?.focus(); }, 100);
+    if (!editingItemId) setTimeout(() => { qtyInputRef.current?.focus({ preventScroll: true }); }, 100);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -500,7 +500,7 @@ export default function OrangeEditInvoicePage({
                           <CommandEmpty>No customer found.</CommandEmpty>
                           <CommandGroup>
                             {customers.map((customer) => (
-                              <CommandItem key={customer.id} value={customer.name} onSelect={() => { setCustomerId(customer.id); setCustomerOpen(false); }}>
+                              <CommandItem key={customer.id} value={`${customer.name} ${customer.phone || ""} ${customer.ownerName || ""}`} onSelect={() => { setCustomerId(customer.id); setCustomerOpen(false); }}>
                                 <Check className={cn("mr-2 h-4 w-4", customerId === customer.id ? "opacity-100" : "opacity-0")} />
                                 {customer.name}
                               </CommandItem>
@@ -557,7 +557,7 @@ export default function OrangeEditInvoicePage({
                           <CommandEmpty>No products found in stock.</CommandEmpty>
                           <CommandGroup>
                             {availableProducts.map((product) => (
-                              <CommandItem key={product.id} value={product.name} onSelect={() => { handleProductSelect(product.id); setProductOpen(false); }}>
+                              <CommandItem key={product.id} value={`${product.name} ${product.sku}`} onSelect={() => { handleProductSelect(product.id); setProductOpen(false); }}>
                                 <Check className={cn("mr-2 h-4 w-4", currentItem.productId === product.id ? "opacity-100" : "opacity-0")} />
                                 <div className="flex-1">
                                   <div className="font-medium">{product.name}</div>

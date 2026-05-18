@@ -217,9 +217,7 @@ export default function CreateInvoicePage() {
         setCustomers(
           customersData.map((c: any) => ({
             id: c.id,
-            name: c.shopName,
-            businessId: c.businessId || c.business_id,
-          }))
+            name: c.shopName, phone: c.phone || "", ownerName: c.ownerName || "", businessId: c.businessId || c.business_id, }))
         );
 
         // Fetch Sales Reps
@@ -301,7 +299,7 @@ export default function CreateInvoicePage() {
     });
 
     setTimeout(() => {
-      qtyInputRef.current?.focus();
+      qtyInputRef.current?.focus({ preventScroll: true });
     }, 100);
   };
 
@@ -560,7 +558,7 @@ export default function CreateInvoicePage() {
                             {customers.map((customer) => (
                               <CommandItem
                                 key={customer.id}
-                                value={customer.name}
+                                value={`${customer.name} ${customer.phone || ""} ${customer.ownerName || ""}`}
                                 onSelect={() => {
                                   setCustomerId(customer.id);
                                   setCustomerOpen(false);
@@ -752,7 +750,7 @@ export default function CreateInvoicePage() {
                             {availableProducts.map((product) => (
                               <CommandItem
                                 key={product.id}
-                                value={product.name}
+                                value={`${product.name} ${product.sku}`}
                                 onSelect={() => {
                                   handleProductSelect(product.id);
                                   setProductOpen(false);

@@ -155,7 +155,7 @@ export default function DirectBillPage() {
       try {
         const res = await fetch(`/api/customers?businessId=${distributionBusinessId}`);
         const data = await res.json();
-        setCustomers(data.map((c: any) => ({ id: c.id, name: c.shopName })));
+        setCustomers(data.map((c: any) => ({ id: c.id, name: c.shopName, phone: c.phone || "", ownerName: c.ownerName || "" })));
       } catch {
         toast.error("Failed to load customers");
       } finally {
@@ -211,7 +211,7 @@ export default function DirectBillPage() {
       discountPercent: "",
       stockAvailable: product.stock_quantity,
     });
-    setTimeout(() => qtyInputRef.current?.focus(), 100);
+    setTimeout(() => qtyInputRef.current?.focus({ preventScroll: true }), 100);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -428,7 +428,7 @@ export default function DirectBillPage() {
                             {customers.map((customer) => (
                               <CommandItem
                                 key={customer.id}
-                                value={customer.name}
+                                value={`${customer.name} ${customer.phone || ""} ${customer.ownerName || ""}`}
                                 onSelect={() => {
                                   setCustomerId(customer.id);
                                   setCustomerOpen(false);
@@ -528,7 +528,7 @@ export default function DirectBillPage() {
                             {availableProducts.map((product) => (
                               <CommandItem
                                 key={product.id}
-                                value={product.name}
+                                value={`${product.name} ${product.sku}`}
                                 onSelect={() => {
                                   handleProductSelect(product.id);
                                   setProductOpen(false);

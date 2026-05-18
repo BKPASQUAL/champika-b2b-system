@@ -174,7 +174,7 @@ function SearchableDropdown({
               setIsOpen(true);
               setTimeout(() => {
                 if (inputRefToUse.current) {
-                  inputRefToUse.current.focus();
+                  inputRefToUse.current.focus({ preventScroll: true });
                 }
               }, 0);
             }
@@ -343,8 +343,7 @@ export default function CreateWiremanInvoicePage() {
         setCustomers(
           customersData.map((c: any) => ({
             id: c.id,
-            name: c.shopName,
-          })),
+            name: c.shopName, phone: c.phone || "", ownerName: c.ownerName || "" })),
         );
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -416,7 +415,7 @@ export default function CreateWiremanInvoicePage() {
   const onProductDropdownSelect = () => {
     // Auto-focus quantity input after selection
     setTimeout(() => {
-      qtyInputRef.current?.focus();
+      qtyInputRef.current?.focus({ preventScroll: true });
     }, 100);
   };
 
@@ -429,7 +428,7 @@ export default function CreateWiremanInvoicePage() {
         // Look for the input element inside the searchable dropdown that has the placeholder text for products
         const searchInput = document.querySelector('input[placeholder="Search Product..."]') as HTMLInputElement;
         if (searchInput) {
-          searchInput.focus();
+          searchInput.focus({ preventScroll: true });
         } else {
             // click the dropdown trigger to open it
             const triggers = document.querySelectorAll('.ring-offset-background');

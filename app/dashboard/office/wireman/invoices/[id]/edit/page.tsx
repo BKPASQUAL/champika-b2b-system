@@ -174,7 +174,7 @@ function SearchableDropdown({
         onClick={() => {
           if (!disabled) {
             setIsOpen(true);
-            setTimeout(() => { if (inputRefToUse.current) inputRefToUse.current.focus(); }, 0);
+            setTimeout(() => { if (inputRefToUse.current) inputRefToUse.current.focus({ preventScroll: true }); }, 0);
           }
         }}
       >
@@ -314,7 +314,7 @@ export default function WiremanEditInvoicePage({
         const custData = await custRes.json();
         const retData = await retRes.json();
 
-        setCustomers(custData.map((c: any) => ({ id: c.id, name: c.shopName })));
+        setCustomers(custData.map((c: any) => ({ id: c.id, name: c.shopName, phone: c.phone || "", ownerName: c.ownerName || "" })));
         setReturns(retData);
 
         setCustomerId(invoice.customerId || "");
@@ -381,7 +381,7 @@ export default function WiremanEditInvoicePage({
       if (e.shiftKey && (e.key === "f" || e.key === "F")) {
         e.preventDefault();
         const searchInput = document.querySelector('input[placeholder="Search Product..."]') as HTMLInputElement;
-        if (searchInput) searchInput.focus();
+        if (searchInput) searchInput.focus({ preventScroll: true });
       }
     };
     window.addEventListener("keydown", handleGlobalKeyDown);
@@ -415,7 +415,7 @@ export default function WiremanEditInvoicePage({
   };
 
   const onProductDropdownSelect = () => {
-    setTimeout(() => { qtyInputRef.current?.focus(); }, 100);
+    setTimeout(() => { qtyInputRef.current?.focus({ preventScroll: true }); }, 100);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {

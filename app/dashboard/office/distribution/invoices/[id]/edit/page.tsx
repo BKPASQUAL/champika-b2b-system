@@ -208,7 +208,7 @@ export default function DistributionEditInvoicePage({
         }
 
         const custData = await custRes.json();
-        setCustomers(custData.map((c: any) => ({ id: c.id, name: c.shopName })));
+        setCustomers(custData.map((c: any) => ({ id: c.id, name: c.shopName, phone: c.phone || "", ownerName: c.ownerName || "" })));
 
         const usersData = await usersRes.json();
         setReps(
@@ -351,7 +351,7 @@ export default function DistributionEditInvoicePage({
     });
 
     setProductOpen(false);
-    setTimeout(() => qtyInputRef.current?.focus(), 100);
+    setTimeout(() => qtyInputRef.current?.focus({ preventScroll: true }), 100);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -736,7 +736,7 @@ export default function DistributionEditInvoicePage({
                             {customers.map((customer) => (
                               <CommandItem
                                 key={customer.id}
-                                value={customer.name}
+                                value={`${customer.name} ${customer.phone || ""} ${customer.ownerName || ""}`}
                                 onSelect={() => {
                                   setCustomerId(customer.id);
                                   setCustomerOpen(false);
@@ -914,7 +914,7 @@ export default function DistributionEditInvoicePage({
                             {availableProducts.map((product) => (
                               <CommandItem
                                 key={product.id}
-                                value={product.name}
+                                value={`${product.name} ${product.sku}`}
                                 onSelect={() => handleProductSelect(product.id)}
                               >
                                 <Check

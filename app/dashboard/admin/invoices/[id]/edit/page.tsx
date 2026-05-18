@@ -198,7 +198,7 @@ export default function EditInvoicePage({
 
         const custData = await custRes.json();
         setCustomers(
-          custData.map((c: any) => ({ id: c.id, name: c.shopName }))
+          custData.map((c: any) => ({ id: c.id, name: c.shopName, phone: c.phone || "", ownerName: c.ownerName || "" }))
         );
 
         const usersData = await usersRes.json();
@@ -666,7 +666,7 @@ export default function EditInvoicePage({
                             {customers.map((customer) => (
                               <CommandItem
                                 key={customer.id}
-                                value={customer.name}
+                                value={`${customer.name} ${customer.phone || ""} ${customer.ownerName || ""}`}
                                 onSelect={() => {
                                   setCustomerId(customer.id);
                                   setCustomerOpen(false);

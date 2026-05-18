@@ -295,7 +295,7 @@ export default function CreateOrderPage() {
         const customersRes = await fetch(customersUrl);
         const customersData = await customersRes.json();
         setCustomers(
-          customersData.map((c: any) => ({ id: c.id, name: c.shopName }))
+          customersData.map((c: any) => ({ id: c.id, name: c.shopName, phone: c.phone || "", ownerName: c.ownerName || "" }))
         );
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -326,7 +326,7 @@ export default function CreateOrderPage() {
     });
 
     setProductOpen(false);
-    setTimeout(() => qtyInputRef.current?.focus(), 100);
+    setTimeout(() => qtyInputRef.current?.focus({ preventScroll: true }), 100);
   };
 
   // Enter key to add item quickly
@@ -794,7 +794,7 @@ export default function CreateOrderPage() {
                             {customers.map((customer) => (
                               <CommandItem
                                 key={customer.id}
-                                value={customer.name}
+                                value={`${customer.name} ${customer.phone || ""} ${customer.ownerName || ""}`}
                                 onSelect={() => {
                                   setCustomerId(customer.id);
                                   setCustomerOpen(false);
@@ -900,7 +900,7 @@ export default function CreateOrderPage() {
                           {availableProducts.map((product) => (
                             <CommandItem
                               key={product.id}
-                              value={product.name}
+                              value={`${product.name} ${product.sku}`}
                               onSelect={() => handleProductSelect(product.id)}
                             >
                               <Check

@@ -19,6 +19,15 @@ function Command({
 }: React.ComponentProps<typeof CommandPrimitive>) {
   return (
     <CommandPrimitive
+      filter={props.filter ?? ((value, search) => {
+        if (!search) return 1;
+        const searchWords = search.toLowerCase().trim().split(/\s+/);
+        const valueLower = value.toLowerCase();
+        for (const word of searchWords) {
+          if (!valueLower.includes(word)) return 0;
+        }
+        return 1;
+      })}
       data-slot="command"
       className={cn(
         "bg-popover text-popover-foreground flex h-full w-full flex-col overflow-hidden rounded-md",

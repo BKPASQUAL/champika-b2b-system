@@ -272,7 +272,7 @@ export default function CreateSierraPurchasePage() {
       // Shift + F to focus search
       if (e.shiftKey && (e.key === "f" || e.key === "F")) {
         e.preventDefault();
-        searchInputRef.current?.focus();
+        searchInputRef.current?.focus({ preventScroll: true });
       }
     };
     window.addEventListener("keydown", handleGlobalKeyDown);
@@ -302,7 +302,7 @@ export default function CreateSierraPurchasePage() {
 
     // Auto-focus quantity input for fast data entry
     setTimeout(() => {
-      qtyInputRef.current?.focus();
+      qtyInputRef.current?.focus({ preventScroll: true });
     }, 100);
   };
 

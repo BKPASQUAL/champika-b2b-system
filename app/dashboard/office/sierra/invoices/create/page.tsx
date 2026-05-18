@@ -167,8 +167,7 @@ export default function CreateSierraInvoicePage() {
         setCustomers(
           customersData.map((c: any) => ({
             id: c.id,
-            name: c.shopName,
-          })),
+            name: c.shopName, phone: c.phone || "", ownerName: c.ownerName || "" })),
         );
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -240,7 +239,7 @@ export default function CreateSierraInvoicePage() {
   const onProductDropdownSelect = () => {
     // Auto-focus quantity input after selection
     setTimeout(() => {
-      qtyInputRef.current?.focus();
+      qtyInputRef.current?.focus({ preventScroll: true });
     }, 100);
   };
 
@@ -253,7 +252,7 @@ export default function CreateSierraInvoicePage() {
         // Look for the input element inside the searchable dropdown that has the placeholder text for products
         const searchInput = document.querySelector('input[placeholder="Search Product..."]') as HTMLInputElement;
         if (searchInput) {
-          searchInput.focus();
+          searchInput.focus({ preventScroll: true });
         } else {
             // click the dropdown trigger to open it
             const triggers = document.querySelectorAll('.ring-offset-background');
@@ -374,7 +373,7 @@ export default function CreateSierraInvoicePage() {
         `/api/customers?businessId=${BUSINESS_IDS.SIERRA_AGENCY}`,
       );
       const customersData = await customersRes.json();
-      const mapped = customersData.map((c: any) => ({ id: c.id, name: c.shopName }));
+      const mapped = customersData.map((c: any) => ({ id: c.id, name: c.shopName, phone: c.phone || "", ownerName: c.ownerName || "" }));
       setCustomers(mapped);
       if (data.id) setCustomerId(data.id);
     } catch (error: any) {

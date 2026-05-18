@@ -589,7 +589,7 @@ export default function CreateRetailInvoicePage() {
                             {customers.map((customer) => (
                               <CommandItem
                                 key={customer.id}
-                                value={customer.name}
+                                value={`${customer.name} ${customer.phone || ""} ${customer.ownerName || ""}`}
                                 onSelect={() => {
                                   setCustomerId(customer.id);
                                   setCustomerOpen(false);
@@ -727,7 +727,7 @@ export default function CreateRetailInvoicePage() {
                             {availableProducts.map((product) => (
                               <CommandItem
                                 key={product.id}
-                                value={product.name}
+                                value={`${product.name} ${product.sku}`}
                                 onSelect={() => {
                                   handleProductSelect(product.id);
                                   setProductOpen(false);

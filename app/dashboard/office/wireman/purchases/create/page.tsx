@@ -261,7 +261,7 @@ export default function CreateWiremanPurchasePage() {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if (e.shiftKey && (e.key === "f" || e.key === "F")) {
         e.preventDefault();
-        searchInputRef.current?.focus();
+        searchInputRef.current?.focus({ preventScroll: true });
       }
     };
     window.addEventListener("keydown", handleGlobalKeyDown);
@@ -289,7 +289,7 @@ export default function CreateWiremanPurchasePage() {
     setIsDropdownOpen(false);
     setHighlightedIndex(-1);
     setTimeout(() => {
-      qtyInputRef.current?.focus();
+      qtyInputRef.current?.focus({ preventScroll: true });
     }, 100);
   };
 
@@ -537,13 +537,16 @@ export default function CreateWiremanPurchasePage() {
 
   const filteredProducts = products.filter((p) => {
     if (searchTerm === "") return true;
-    const s = searchTerm.toLowerCase();
-    return (
-      p.name.toLowerCase().includes(s) ||
-      p.sku.toLowerCase().includes(s) ||
-      (p.companyCode && p.companyCode.toLowerCase().includes(s)) ||
-      (p.supplier && p.supplier.toLowerCase().includes(s))
-    );
+    const searchWords = searchTerm.toLowerCase().trim().split(/\s+/);
+    for (const word of searchWords) {
+      const pName = p.name ? p.name.toLowerCase() : "";
+      const pSku = p.sku ? p.sku.toLowerCase() : "";
+      const pCode = p.companyCode ? p.companyCode.toLowerCase() : "";
+      if (!pName.includes(word) && !pSku.includes(word) && !pCode.includes(word)) {
+        return false;
+      }
+    }
+    return true;
   });
 
   const currentLineDiscountAmount =

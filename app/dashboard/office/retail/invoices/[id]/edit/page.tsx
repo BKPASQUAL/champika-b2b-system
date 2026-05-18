@@ -544,7 +544,7 @@ export default function EditRetailInvoicePage({
                             {customers.map((customer) => (
                               <CommandItem
                                 key={customer.id}
-                                value={customer.name}
+                                value={`${customer.name} ${customer.phone || ""} ${customer.ownerName || ""}`}
                                 onSelect={() => {
                                   setCustomerId(customer.id);
                                   setCustomerOpen(false);
@@ -615,7 +615,7 @@ export default function EditRetailInvoicePage({
                         <CommandEmpty>No products found.</CommandEmpty>
                         <CommandGroup>
                           {availableProducts.map((product) => (
-                            <CommandItem key={product.id} value={product.name} onSelect={() => { handleProductSelect(product.id); setProductOpen(false); }}>
+                            <CommandItem key={product.id} value={`${product.name} ${product.sku}`} onSelect={() => { handleProductSelect(product.id); setProductOpen(false); }}>
                               <Check className={cn("mr-2 h-4 w-4", currentItem.productId === product.id ? "opacity-100" : "opacity-0")} />
                               <div className="flex-1">
                                 <div className="font-medium">{product.name}</div>

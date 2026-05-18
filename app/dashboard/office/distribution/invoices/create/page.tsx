@@ -170,8 +170,7 @@ export default function CreateDistributionInvoicePage() {
         setCustomers(
           customersData.map((c: any) => ({
             id: c.id,
-            name: c.shopName,
-          }))
+            name: c.shopName, phone: c.phone || "", ownerName: c.ownerName || "" }))
         );
 
         // Fetch Sales Reps
@@ -285,7 +284,7 @@ export default function CreateDistributionInvoicePage() {
     });
 
     setTimeout(() => {
-      qtyInputRef.current?.focus();
+      qtyInputRef.current?.focus({ preventScroll: true });
     }, 100);
   };
 
@@ -542,7 +541,7 @@ export default function CreateDistributionInvoicePage() {
                             {customers.map((customer) => (
                               <CommandItem
                                 key={customer.id}
-                                value={customer.name}
+                                value={`${customer.name} ${customer.phone || ""} ${customer.ownerName || ""}`}
                                 onSelect={() => {
                                   setCustomerId(customer.id);
                                   setCustomerOpen(false);
@@ -731,7 +730,7 @@ export default function CreateDistributionInvoicePage() {
                             {availableProducts.map((product) => (
                               <CommandItem
                                 key={product.id}
-                                value={product.name}
+                                value={`${product.name} ${product.sku}`}
                                 onSelect={() => {
                                   handleProductSelect(product.id);
                                   setProductOpen(false);

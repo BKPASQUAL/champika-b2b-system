@@ -201,7 +201,7 @@ export default function SierraEditInvoicePage({
         const custData = await custRes.json();
         const retData = await retRes.json();
 
-        setCustomers(custData.map((c: any) => ({ id: c.id, name: c.shopName })));
+        setCustomers(custData.map((c: any) => ({ id: c.id, name: c.shopName, phone: c.phone || "", ownerName: c.ownerName || "" })));
         setReturns(retData);
 
         setCustomerId(invoice.customerId || "");
@@ -273,7 +273,7 @@ export default function SierraEditInvoicePage({
       if (e.shiftKey && (e.key === "f" || e.key === "F")) {
         e.preventDefault();
         const searchInput = document.querySelector('input[placeholder="Search Product..."]') as HTMLInputElement;
-        if (searchInput) searchInput.focus();
+        if (searchInput) searchInput.focus({ preventScroll: true });
       }
     };
     window.addEventListener("keydown", handleGlobalKeyDown);
@@ -319,7 +319,7 @@ export default function SierraEditInvoicePage({
   };
 
   const onProductDropdownSelect = () => {
-    setTimeout(() => { qtyInputRef.current?.focus(); }, 100);
+    setTimeout(() => { qtyInputRef.current?.focus({ preventScroll: true }); }, 100);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -436,7 +436,7 @@ export default function SierraEditInvoicePage({
 
       const custRes = await fetch(`/api/customers?businessId=${BUSINESS_IDS.SIERRA_AGENCY}`);
       const custData = await custRes.json();
-      const mapped = custData.map((c: any) => ({ id: c.id, name: c.shopName }));
+      const mapped = custData.map((c: any) => ({ id: c.id, name: c.shopName, phone: c.phone || "", ownerName: c.ownerName || "" }));
       setCustomers(mapped);
       if (data.id) setCustomerId(data.id);
     } catch (error: any) {
