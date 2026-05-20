@@ -17,6 +17,7 @@ import {
   ScrollText,
   Printer,
   ArrowRightLeft,
+  TrendingUp,
 } from "lucide-react";
 
 interface SierraNavItem {
@@ -24,6 +25,7 @@ interface SierraNavItem {
   href: string;
   icon: LucideIcon;
   description?: string;
+  adminOnly?: boolean;
 }
 
 interface SierraNavSection {
@@ -144,6 +146,18 @@ export const sierraOfficeNavItems: SierraNavSection[] = [
         href: "/dashboard/office/sierra/transactions",
         icon: ArrowRightLeft,
         description: "All Sales, Purchases & Returns",
+      },
+    ],
+  },
+  {
+    title: "Analytics",
+    items: [
+      {
+        name: "Profit Analytics",
+        href: "/dashboard/office/sierra/profit",
+        icon: TrendingUp,
+        description: "Revenue, profit & customer insights",
+        adminOnly: true,
       },
     ],
   },

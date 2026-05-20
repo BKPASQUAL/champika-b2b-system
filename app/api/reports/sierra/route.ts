@@ -21,9 +21,9 @@ export async function GET(request: NextRequest) {
     const { data: invoices, error: invErr } = await supabaseAdmin
       .from("invoices")
       .select(
-        `id, total_amount, due_amount, status, invoice_no, created_at,
+        `id, total_amount, due_amount, status, invoice_no, manual_invoice_no, created_at,
          customers (shop_name),
-         orders!inner (order_date, business_id)`
+         orders!inner (order_id, order_date, business_id)`
       )
       .eq("orders.business_id", SIERRA_ID)
       .gte("created_at", fromDate)
@@ -296,18 +296,40 @@ export async function GET(request: NextRequest) {
       else marginDistribution.low++;
     });
 
+    // ── Process: Per-order profit map (from order_items) ─────────────────────
+    const orderProfitMap: Record<string, { revenue: number; cost: number }> = {};
+    (orderItems || []).forEach((item: any) => {
+      const oid = item.order?.order_id;
+      if (!oid) return;
+      const qty = Number(item.quantity) || 0;
+      const rev = qty * (Number(item.unit_price) || 0);
+      const cost = qty * (Number(item.actual_unit_cost) || 0);
+      if (!orderProfitMap[oid]) orderProfitMap[oid] = { revenue: 0, cost: 0 };
+      orderProfitMap[oid].revenue += rev;
+      orderProfitMap[oid].cost += cost;
+    });
+
     // ── Process: Orders list ──────────────────────────────────────────────────
-    const orders = (invoices || []).map((inv: any) => ({
-      id: inv.id,
-      invoiceNo: inv.invoice_no,
-      date: inv.orders?.order_date
-        ? new Date(inv.orders.order_date).toISOString().split("T")[0]
-        : inv.created_at?.split("T")[0] || null,
-      customer: inv.customers?.shop_name || "Unknown",
-      amount: Number(inv.total_amount) || 0,
-      dueAmount: Number(inv.due_amount) || 0,
-      paymentStatus: inv.status || "Unpaid",
-    }));
+    const orders = (invoices || []).map((inv: any) => {
+      const oid = inv.orders?.order_id;
+      const profitEntry = oid ? orderProfitMap[oid] : null;
+      const profit = profitEntry ? profitEntry.revenue - profitEntry.cost : null;
+      const revenue = profitEntry ? profitEntry.revenue : null;
+      return {
+        id: inv.id,
+        invoiceNo: inv.invoice_no,
+        manualInvoiceNo: inv.manual_invoice_no || null,
+        date: inv.orders?.order_date
+          ? new Date(inv.orders.order_date).toISOString().split("T")[0]
+          : inv.created_at?.split("T")[0] || null,
+        customer: inv.customers?.shop_name || "Unknown",
+        amount: Number(inv.total_amount) || 0,
+        dueAmount: Number(inv.due_amount) || 0,
+        paymentStatus: inv.status || "Unpaid",
+        profit,
+        profitMargin: revenue && revenue > 0 ? ((profit ?? 0) / revenue) * 100 : null,
+      };
+    });
 
     // ── Process: Due Invoices ─────────────────────────────────────────────────
     const dueInvoices = orders
