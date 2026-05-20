@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -155,6 +156,7 @@ const colorVariants: Record<string, { border: string; iconBg: string; iconText: 
 // ── Page Component ────────────────────────────────────────────────────────────
 
 export default function SierraProfitPage() {
+  const router = useRouter();
   const [period, setPeriod] = useState("this-year");
   const [activeTab, setActiveTab] = useState("overview");
   const [loading, setLoading] = useState(true);
@@ -482,7 +484,10 @@ export default function SierraProfitPage() {
               </div>
 
               {/* Pending snapshot */}
-              <Card className="border-red-200 bg-red-50/30">
+              <Card
+                className="border-red-200 bg-red-50/30 cursor-pointer hover:shadow-md transition-shadow"
+                onClick={() => router.push("/dashboard/office/sierra/invoices/due")}
+              >
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2 text-red-800">
                     <AlertCircle className="h-4 w-4" />
@@ -590,7 +595,11 @@ export default function SierraProfitPage() {
                         </TableRow>
                       ) : (
                         customers.map((c, i) => (
-                          <TableRow key={c.name}>
+                          <TableRow
+                            key={c.name}
+                            className="cursor-pointer hover:bg-muted/50"
+                            onClick={() => router.push("/dashboard/office/sierra/customers")}
+                          >
                             <TableCell className="text-muted-foreground font-medium">
                               {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}
                             </TableCell>
@@ -704,12 +713,16 @@ export default function SierraProfitPage() {
                           const avgCost = p.qtySold > 0 ? p.cost / p.qtySold : 0;
                           const profitUnit = avgSelling - avgCost;
                           return (
-                            <TableRow key={p.id}>
+                            <TableRow
+                              key={p.id}
+                              className="cursor-pointer hover:bg-muted/50"
+                              onClick={() => router.push(`/dashboard/office/sierra/products/${p.id}`)}
+                            >
                               <TableCell className="text-muted-foreground font-medium">
                                 {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}
                               </TableCell>
                               <TableCell>
-                                <div className="font-medium max-w-[160px] truncate">{p.name}</div>
+                                <div className="font-medium max-w-40 truncate">{p.name}</div>
                                 <div className="text-xs text-muted-foreground font-mono">{p.sku}</div>
                               </TableCell>
                               <TableCell className="text-right tabular-nums">{p.qtySold}</TableCell>
@@ -841,7 +854,11 @@ export default function SierraProfitPage() {
                         </TableRow>
                       ) : (
                         displayOrders.map((o: any, i: number) => (
-                          <TableRow key={o.id}>
+                          <TableRow
+                            key={o.id}
+                            className="cursor-pointer hover:bg-muted/50"
+                            onClick={() => router.push(`/dashboard/office/sierra/invoices/${o.id}`)}
+                          >
                             <TableCell className="text-muted-foreground text-xs w-8">
                               {(invPage - 1) * PAGE_SIZE + i + 1}
                             </TableCell>

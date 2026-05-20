@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
       .from("invoices")
       .select(
         `id, total_amount, due_amount, status, invoice_no, manual_invoice_no, created_at,
-         customers (shop_name),
+         customers (id, shop_name),
          orders!inner (order_id, order_date, business_id)`
       )
       .eq("orders.business_id", SIERRA_ID)
@@ -243,7 +243,7 @@ export async function GET(request: NextRequest) {
       const name = inv.customers?.shop_name || "Unknown";
       const amount = Number(inv.total_amount) || 0;
       if (!customerMap[name]) {
-        customerMap[name] = { name, billCount: 0, totalSales: 0, dueAmount: 0 };
+        customerMap[name] = { id: inv.customers?.id || null, name, billCount: 0, totalSales: 0, dueAmount: 0 };
       }
       customerMap[name].billCount += 1;
       customerMap[name].totalSales += amount;
