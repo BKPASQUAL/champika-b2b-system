@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -37,6 +37,7 @@ import {
   AlertCircle,
   BarChart3,
   FileText,
+  Package,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -306,7 +307,7 @@ export default function SierraReportPage() {
           {/* ── Tabs ──────────────────────────────────────────────────────────── */}
           <Tabs defaultValue="company" className="space-y-4">
             <div className="overflow-x-auto pb-1">
-              <TabsList className="inline-flex w-auto min-w-full sm:min-w-0 sm:w-full sm:grid sm:grid-cols-7">
+              <TabsList className="inline-flex w-auto min-w-full sm:min-w-0 sm:w-full sm:grid sm:grid-cols-8">
                 <TabsTrigger value="company" className="flex items-center gap-1.5 text-xs sm:text-sm">
                   <Building2 className="h-3.5 w-3.5 hidden sm:block" />Company
                 </TabsTrigger>
@@ -324,6 +325,9 @@ export default function SierraReportPage() {
                 </TabsTrigger>
                 <TabsTrigger value="due" className="flex items-center gap-1.5 text-xs sm:text-sm">
                   <AlertCircle className="h-3.5 w-3.5 hidden sm:block" />Due
+                </TabsTrigger>
+                <TabsTrigger value="stock-costs" className="flex items-center gap-1.5 text-xs sm:text-sm">
+                  <Package className="h-3.5 w-3.5 hidden sm:block" />Stock Costs
                 </TabsTrigger>
                 <TabsTrigger value="summary" className="flex items-center gap-1.5 text-xs sm:text-sm">
                   <BarChart3 className="h-3.5 w-3.5 hidden sm:block" />Summary
@@ -582,62 +586,127 @@ export default function SierraReportPage() {
               {/* Product Profitability Table */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Product Profitability</CardTitle>
+                  <CardTitle className="text-base">Product Profitability — Selling vs Cost</CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    Avg selling price, avg cost (FIFO), and profit per unit sold in the selected period.
+                  </p>
                 </CardHeader>
                 <CardContent className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>SKU</TableHead>
-                        <TableHead>Product Name</TableHead>
-                        <TableHead className="text-center">Sold Qty</TableHead>
-                        <TableHead className="text-right">Revenue</TableHead>
-                        <TableHead className="text-right">Cost</TableHead>
-                        <TableHead className="text-right">Profit</TableHead>
+                        <TableHead>Product</TableHead>
+                        <TableHead className="text-center">Qty Sold</TableHead>
+                        <TableHead className="text-right">Avg Selling Price</TableHead>
+                        <TableHead className="text-right">Avg Cost Price</TableHead>
+                        <TableHead className="text-right">Profit / Unit</TableHead>
+                        <TableHead className="text-right">Total Revenue</TableHead>
+                        <TableHead className="text-right">Total Profit</TableHead>
                         <TableHead className="text-right">Margin</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {(data?.products ?? []).length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
+                          <TableCell colSpan={8} className="text-center py-10 text-muted-foreground">
                             No product data for the selected period.
                           </TableCell>
                         </TableRow>
                       ) : (
-                        (data?.products ?? []).map((p: any) => (
-                          <TableRow key={p.id}>
-                            <TableCell className="text-xs text-muted-foreground font-mono">{p.sku}</TableCell>
-                            <TableCell className="max-w-[200px] truncate font-medium" title={p.name}>{p.name}</TableCell>
-                            <TableCell className="text-center">{p.qtySold}</TableCell>
-                            <TableCell className="text-right font-bold">LKR {fmt(p.revenue)}</TableCell>
-                            <TableCell className="text-right text-muted-foreground">LKR {fmt(p.cost)}</TableCell>
-                            <TableCell className={`text-right font-bold ${p.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
-                              LKR {fmt(p.profit)}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Badge
-                                variant="outline"
-                                className={
-                                  p.margin >= 30
-                                    ? "text-green-700 border-green-200 bg-green-50"
-                                    : p.margin >= 20
-                                    ? "text-blue-700 border-blue-200 bg-blue-50"
-                                    : p.margin >= 10
-                                    ? "text-amber-700 border-amber-200 bg-amber-50"
-                                    : "text-red-700 border-red-200 bg-red-50"
-                                }
-                              >
-                                {p.margin.toFixed(1)}%
-                              </Badge>
-                            </TableCell>
-                          </TableRow>
-                        ))
+                        (data?.products ?? []).map((p: any) => {
+                          const avgSellingPrice = p.qtySold > 0 ? p.revenue / p.qtySold : 0;
+                          const avgCostPrice = p.qtySold > 0 ? p.cost / p.qtySold : 0;
+                          const profitPerUnit = avgSellingPrice - avgCostPrice;
+                          return (
+                            <TableRow key={p.id}>
+                              <TableCell>
+                                <div className="font-medium leading-tight max-w-[180px] truncate" title={p.name}>{p.name}</div>
+                                <div className="text-xs text-muted-foreground font-mono">{p.sku}</div>
+                              </TableCell>
+                              <TableCell className="text-center font-mono">{p.qtySold}</TableCell>
+                              {/* Avg Selling Price */}
+                              <TableCell className="text-right font-mono text-blue-700 font-semibold">
+                                LKR {fmt(avgSellingPrice)}
+                              </TableCell>
+                              {/* Avg Cost Price */}
+                              <TableCell className="text-right font-mono text-slate-500">
+                                LKR {fmt(avgCostPrice)}
+                              </TableCell>
+                              {/* Profit per unit */}
+                              <TableCell className={`text-right font-mono font-bold ${profitPerUnit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                                LKR {fmt(profitPerUnit)}
+                              </TableCell>
+                              {/* Total Revenue */}
+                              <TableCell className="text-right font-mono">
+                                LKR {fmt(p.revenue)}
+                              </TableCell>
+                              {/* Total Profit */}
+                              <TableCell className={`text-right font-bold font-mono ${p.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                                LKR {fmt(p.profit)}
+                              </TableCell>
+                              {/* Margin badge */}
+                              <TableCell className="text-right">
+                                <Badge
+                                  variant="outline"
+                                  className={
+                                    p.margin >= 30
+                                      ? "text-green-700 border-green-200 bg-green-50"
+                                      : p.margin >= 20
+                                      ? "text-blue-700 border-blue-200 bg-blue-50"
+                                      : p.margin >= 10
+                                      ? "text-amber-700 border-amber-200 bg-amber-50"
+                                      : "text-red-700 border-red-200 bg-red-50"
+                                  }
+                                >
+                                  {p.margin.toFixed(1)}%
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
                       )}
                     </TableBody>
                   </Table>
                 </CardContent>
               </Card>
+
+              {/* Per-Unit Profit Summary Bar */}
+              {(data?.products ?? []).length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Selling vs Cost — Per Unit Visual</CardTitle>
+                    <p className="text-xs text-muted-foreground">Selling price (blue) vs cost price (red) per product. Gap = profit per unit.</p>
+                  </CardHeader>
+                  <CardContent className="overflow-x-auto">
+                    <ResponsiveContainer width="100%" height={Math.max(200, (data?.products ?? []).length * 45)}>
+                      <ComposedChart
+                        layout="vertical"
+                        data={(data?.products ?? []).slice(0, 15).map((p: any) => ({
+                          name: p.name.length > 22 ? p.name.slice(0, 22) + "…" : p.name,
+                          sellingPrice: p.qtySold > 0 ? Math.round(p.revenue / p.qtySold * 100) / 100 : 0,
+                          costPrice: p.qtySold > 0 ? Math.round(p.cost / p.qtySold * 100) / 100 : 0,
+                          profitPerUnit: p.qtySold > 0 ? Math.round((p.revenue - p.cost) / p.qtySold * 100) / 100 : 0,
+                        }))}
+                        margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                        <XAxis type="number" tickFormatter={(v) => `${v}`} />
+                        <YAxis type="category" dataKey="name" width={160} tick={{ fontSize: 11 }} />
+                        <Tooltip
+                          formatter={(value: any, name: string) => [
+                            `LKR ${fmt(Number(value))}`,
+                            name === "sellingPrice" ? "Avg Selling Price" : name === "costPrice" ? "Avg Cost Price" : "Profit / Unit",
+                          ]}
+                        />
+                        <Legend formatter={(v) => v === "sellingPrice" ? "Avg Selling Price" : v === "costPrice" ? "Avg Cost Price" : "Profit / Unit"} />
+                        <Bar dataKey="sellingPrice" fill="#3b82f6" name="sellingPrice" radius={[0, 3, 3, 0]} />
+                        <Bar dataKey="costPrice" fill="#ef4444" name="costPrice" radius={[0, 3, 3, 0]} />
+                        <Line dataKey="profitPerUnit" stroke="#22c55e" strokeWidth={2} dot={{ r: 4 }} name="profitPerUnit" type="monotone" />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              )}
             </TabsContent>
 
             {/* ── Orders Tab ──────────────────────────────────────────────── */}
@@ -949,6 +1018,92 @@ export default function SierraReportPage() {
                   </CardContent>
                 </Card>
               </div>
+            </TabsContent>
+
+            {/* ── Stock Costs Tab: FIFO Cost Layer Breakdown ───────────────── */}
+            <TabsContent value="stock-costs" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Package className="h-4 w-4 text-purple-600" />
+                    Sierra Stock — Cost Layer Breakdown (FIFO)
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    Current Sierra stock split by purchase batch. Old cost applies until that batch is sold out, then the next cost tier kicks in.
+                  </p>
+                </CardHeader>
+                <CardContent className="overflow-x-auto">
+                  {(!data?.costLayers || data.costLayers.length === 0) ? (
+                    <div className="py-10 text-center text-muted-foreground text-sm">
+                      No Sierra stock with cost layers found. Stock will appear here after purchases are recorded.
+                    </div>
+                  ) : (
+                    <>
+                      {/* Summary row */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                        {[
+                          { label: "Products with Stock", value: data.costLayers.length.toString() },
+                          { label: "Mixed-Cost Products", value: data.costLayers.filter((p: any) => p.hasMultipleCostLevels).length.toString(), highlight: true },
+                          { label: "Total Stock Cost", value: `LKR ${fmt(data.costLayers.reduce((s: number, p: any) => s + p.totals.costValue, 0))}` },
+                          { label: "Potential Profit", value: `LKR ${fmt(data.costLayers.reduce((s: number, p: any) => s + p.totals.potentialProfit, 0))}`, green: true },
+                        ].map((item) => (
+                          <div key={item.label} className="rounded-lg border p-3 bg-slate-50">
+                            <p className="text-xs text-muted-foreground">{item.label}</p>
+                            <p className={`text-lg font-bold mt-0.5 ${item.green ? "text-green-600" : item.highlight ? "text-amber-600" : ""}`}>{item.value}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Product</TableHead>
+                            <TableHead className="text-right">Stock</TableHead>
+                            <TableHead className="text-right">Selling Price</TableHead>
+                            <TableHead className="text-right">Cost Layers</TableHead>
+                            <TableHead className="text-right">Cost Value</TableHead>
+                            <TableHead className="text-right">Potential Profit</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {data.costLayers.map((product: any) => (
+                            <React.Fragment key={product.productId}>
+                              <TableRow className={product.hasMultipleCostLevels ? "bg-amber-50/60" : ""}>
+                                <TableCell className="font-medium">
+                                  <div className="flex items-center gap-2">
+                                    <span>{product.productName}</span>
+                                    {product.hasMultipleCostLevels && (
+                                      <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-xs px-1.5">Mixed Cost</Badge>
+                                    )}
+                                  </div>
+                                  <span className="text-xs text-muted-foreground">{product.sku}</span>
+                                </TableCell>
+                                <TableCell className="text-right font-mono">{product.totalStock}</TableCell>
+                                <TableCell className="text-right font-mono">LKR {fmt(product.sellingPrice)}</TableCell>
+                                <TableCell className="text-right">{product.layers.length}</TableCell>
+                                <TableCell className="text-right font-mono">LKR {fmt(product.totals.costValue)}</TableCell>
+                                <TableCell className="text-right font-mono text-green-700 font-semibold">LKR {fmt(product.totals.potentialProfit)}</TableCell>
+                              </TableRow>
+                              {product.hasMultipleCostLevels && product.layers.map((layer: any, idx: number) => (
+                                <TableRow key={`${product.productId}-layer-${idx}`} className="text-xs bg-amber-50/30">
+                                  <TableCell className="pl-8 text-muted-foreground" colSpan={1}>
+                                    {idx === 0 ? "↳ Old cost — sells first" : `↳ New cost (Batch ${layer.layerIndex})`}
+                                  </TableCell>
+                                  <TableCell className="text-right text-muted-foreground font-mono">{layer.remainingQuantity} units</TableCell>
+                                  <TableCell />
+                                  <TableCell className="text-right text-muted-foreground font-mono">@ LKR {fmt(layer.costPrice)}</TableCell>
+                                  <TableCell className="text-right text-muted-foreground font-mono">LKR {fmt(layer.costValue)}</TableCell>
+                                  <TableCell className="text-right font-mono text-green-600">LKR {fmt(layer.potentialProfit)}</TableCell>
+                                </TableRow>
+                              ))}
+                            </React.Fragment>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
             </TabsContent>
           </Tabs>
         </>

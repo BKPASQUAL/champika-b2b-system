@@ -73,7 +73,7 @@ export async function PATCH(
     const { data: currentProduct, error: fetchError } = await supabaseAdmin
       .from("products")
       .select(
-        "price_history, cost_price, selling_price, mrp, supplier_name, category",
+        "price_history, cost_price, selling_price, mrp, supplier_name, category, stock_quantity",
       )
       .eq("id", id)
       .single();
@@ -134,6 +134,10 @@ export async function PATCH(
     if (val.mrp !== undefined) dbUpdates.mrp = val.mrp;
     if (val.sellingPrice !== undefined)
       dbUpdates.selling_price = val.sellingPrice;
+    const costPriceChanged =
+      val.costPrice !== undefined &&
+      val.costPrice !== Number(currentProduct.cost_price);
+
     if (val.costPrice !== undefined) {
       dbUpdates.cost_price = val.costPrice;
       dbUpdates.actual_cost_price = val.costPrice;
@@ -176,6 +180,57 @@ export async function PATCH(
       .eq("id", id);
 
     if (error) throw error;
+
+    // When cost price is manually changed, leave existing cost layers untouched.
+    // FIFO will consume old-cost stock first at the old cost price.
+    // New purchases will add new layers at the new cost price.
+    // Only seed an initial layer if no layers exist yet (first-time setup).
+    if (costPriceChanged) {
+      const { data: existingLayers } = await supabaseAdmin
+        .from("product_cost_layers")
+        .select("id")
+        .eq("product_id", id)
+        .gt("remaining_quantity", 0)
+        .limit(1);
+
+      if (!existingLayers || existingLayers.length === 0) {
+        const stockQty =
+          val.stock !== undefined
+            ? val.stock
+            : Number(currentProduct.stock_quantity || 0);
+        if (stockQty > 0) {
+          await supabaseAdmin.from("product_cost_layers").insert({
+            product_id: id,
+            purchase_id: null,
+            cost_price: val.costPrice,
+            original_quantity: stockQty,
+            remaining_quantity: stockQty,
+          });
+        }
+      }
+    }
+
+    // If stock is manually set (without a cost change), ensure a layer exists
+    if (!costPriceChanged && val.stock !== undefined && val.stock > 0) {
+      const { count } = await supabaseAdmin
+        .from("product_cost_layers")
+        .select("id", { count: "exact", head: true })
+        .eq("product_id", id)
+        .gt("remaining_quantity", 0);
+
+      if (!count || count === 0) {
+        const costToUse = Number(currentProduct.cost_price) || 0;
+        if (costToUse > 0) {
+          await supabaseAdmin.from("product_cost_layers").insert({
+            product_id: id,
+            purchase_id: null,
+            cost_price: costToUse,
+            original_quantity: val.stock,
+            remaining_quantity: val.stock,
+          });
+        }
+      }
+    }
 
     return NextResponse.json({ message: "Product updated" });
   } catch (error: any) {

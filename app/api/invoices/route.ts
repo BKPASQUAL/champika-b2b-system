@@ -295,14 +295,38 @@ export async function POST(request: NextRequest) {
 
     // --- 4. Prepare Order Items & Calculate Commissions ---
 
-    const productIds = val.items.map((i) => i.productId);
+    const productIds = [...new Set(val.items.map((i) => i.productId))];
 
-    const { data: products } = await supabaseAdmin
-      .from("products")
-      .select(
-        "id, commission_type, commission_value, cost_price, actual_cost_price",
-      )
-      .in("id", productIds);
+    const [productsRes, costLayersRes] = await Promise.all([
+      supabaseAdmin
+        .from("products")
+        .select("id, commission_type, commission_value, cost_price, actual_cost_price")
+        .in("id", productIds),
+      // Fetch FIFO cost layers oldest-first for all products in this invoice
+      supabaseAdmin
+        .from("product_cost_layers")
+        .select("id, product_id, cost_price, remaining_quantity")
+        .in("product_id", productIds)
+        .gt("remaining_quantity", 0)
+        .order("created_at", { ascending: true }),
+    ]);
+
+    const products = productsRes.data;
+
+    // Build mutable in-memory FIFO layer queue per product
+    type CostLayer = { id: string; cost_price: number; remaining_quantity: number };
+    const layerMap: Record<string, CostLayer[]> = {};
+    (costLayersRes.data || []).forEach((layer: any) => {
+      if (!layerMap[layer.product_id]) layerMap[layer.product_id] = [];
+      layerMap[layer.product_id].push({
+        id: layer.id,
+        cost_price: Number(layer.cost_price),
+        remaining_quantity: Number(layer.remaining_quantity),
+      });
+    });
+
+    // Track final remaining quantities for each consumed layer
+    const layerFinalQty: Map<string, number> = new Map();
 
     let totalCommissionForOrder = 0;
     const grossSubtotal = val.items.reduce((sum, item) => sum + item.total, 0);
@@ -332,9 +356,36 @@ export async function POST(request: NextRequest) {
           ? (item.total / grossSubtotal) * globalDiscountAmount
           : 0;
       const netLineTotal = item.total - discountShare;
-      const actualUnitPrice = netLineTotal / totalQty;
-      const historicalCost =
-        product?.actual_cost_price || product?.cost_price || 0;
+      const actualUnitPrice = totalQty > 0 ? netLineTotal / totalQty : 0;
+
+      // FIFO Cost Calculation: consume oldest cost layers first
+      const layers = layerMap[item.productId] || [];
+      let fifoCost = 0;
+
+      if (layers.length > 0) {
+        let needed = totalQty;
+        let totalCostForItem = 0;
+
+        for (const layer of layers) {
+          if (needed <= 0) break;
+          const consume = Math.min(needed, layer.remaining_quantity);
+          totalCostForItem += consume * layer.cost_price;
+          layer.remaining_quantity -= consume;
+          // Record the updated remaining qty for this layer
+          layerFinalQty.set(layer.id, layer.remaining_quantity);
+          needed -= consume;
+        }
+
+        // If more qty sold than layers cover, use the last layer's cost
+        if (needed > 0 && layers.length > 0) {
+          totalCostForItem += needed * layers[layers.length - 1].cost_price;
+        }
+
+        fifoCost = totalQty > 0 ? totalCostForItem / totalQty : 0;
+      } else {
+        // No cost layers yet — fall back to current product cost
+        fifoCost = Number(product?.actual_cost_price || product?.cost_price || 0);
+      }
 
       return {
         order_id: orderData.id,
@@ -343,7 +394,7 @@ export async function POST(request: NextRequest) {
         free_quantity: item.freeQuantity,
         unit_price: item.unitPrice,
         actual_unit_price: actualUnitPrice,
-        actual_unit_cost: historicalCost,
+        actual_unit_cost: fifoCost,
         total_price: item.total,
         commission_earned: commissionEarned,
         discount_percent: item.discountPercent,
@@ -356,6 +407,18 @@ export async function POST(request: NextRequest) {
       .insert(orderItems);
 
     if (itemsError) throw itemsError;
+
+    // Update FIFO cost layer remaining quantities
+    if (layerFinalQty.size > 0) {
+      await Promise.all(
+        Array.from(layerFinalQty.entries()).map(([layerId, newQty]) =>
+          supabaseAdmin
+            .from("product_cost_layers")
+            .update({ remaining_quantity: Math.max(0, newQty) })
+            .eq("id", layerId),
+        ),
+      );
+    }
 
     // --- 5. Record Total Rep Commission ---
     if (totalCommissionForOrder > 0) {

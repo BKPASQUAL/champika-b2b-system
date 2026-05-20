@@ -28,7 +28,11 @@
       "PowerShell(Get-Content \"c:\\\\Projects\\\\champika-b2b-system\\\\app\\\\dashboard\\\\admin\\\\orders\\\\approved\\\\page.tsx\" | ForEach-Object { $_ -replace '/dashboard/admin/orders/', '/dashboard/office/distribution/orders/' } | Set-Content \"c:\\\\Projects\\\\champika-b2b-system\\\\app\\\\dashboard\\\\office\\\\distribution\\\\orders\\\\approved\\\\page.tsx\" -Encoding utf8)",
       "Bash(Get-ChildItem -Path \"c:\\\\Projects\\\\champika-b2b-system\" -Directory)",
       "Bash(Select-Object Name)",
-      "Bash(npx next *)"
+      "Bash(npx next *)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Projects\\\\champika-b2b-system\" -Directory | ForEach-Object { $_.FullName })",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Projects\\\\champika-b2b-system\\\\supabase\" -File | ForEach-Object { $_.FullName })",
+      "Bash(git -C \"c:/Projects/champika-b2b-system\" diff --stat)",
+      "Bash(git -C \"c:/Projects/champika-b2b-system\" status --short)"
     ],
     "additionalDirectories": [
       "c:\\Projects\\champika-b2b-system\\app\\api\\payments\\[id]",

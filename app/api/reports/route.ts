@@ -43,7 +43,7 @@ export async function GET(request: Request) {
         customer:customers (id, shop_name, owner_name, business_id, business:businesses(id, name)),
         rep:profiles!orders_sales_rep_id_fkey (id, full_name),
         items:order_items (
-          id, quantity,
+          id, quantity, total_price, actual_unit_cost,
           product:products (id, name, cost_price, selling_price, category)
         )
       `,
@@ -159,11 +159,9 @@ export async function GET(request: Request) {
       if (order.items) {
         order.items.forEach((item: any) => {
           const qty = Number(item.quantity) || 0;
-          const costPrice = Number(item.product?.cost_price) || 0;
-          const stdSellingPrice = Number(item.product?.selling_price) || 0;
-
-          const itemRevenue = qty * stdSellingPrice;
-          const itemCost = qty * costPrice;
+          // Use actual recorded cost (FIFO) and actual invoice revenue
+          const itemCost = qty * (Number(item.actual_unit_cost) || 0);
+          const itemRevenue = Number(item.total_price) || 0;
 
           orderRevenue += itemRevenue;
           orderCost += itemCost;

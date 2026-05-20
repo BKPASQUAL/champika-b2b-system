@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
     (orderItems || []).forEach((item: any) => {
       const qty = Number(item.quantity) || 0;
       const unitPrice = Number(item.unit_price) || 0;
-      const unitCost = Number(item.actual_unit_cost) || Number(item.product.cost_price) || 0;
+      const unitCost = Number(item.actual_unit_cost) || 0;
       totalRevenue += qty * unitPrice;
       totalCost += qty * unitCost;
     });
@@ -140,7 +140,7 @@ export async function GET(request: NextRequest) {
     (orderItems || []).forEach((item: any) => {
       const qty = Number(item.quantity) || 0;
       const unitPrice = Number(item.unit_price) || 0;
-      const unitCost = Number(item.actual_unit_cost) || Number(item.product.cost_price) || 0;
+      const unitCost = Number(item.actual_unit_cost) || 0;
       const revenue = qty * unitPrice;
       const profit = revenue - qty * unitCost;
       const rawDate = item.order.order_date || item.order.created_at.split("T")[0];
@@ -166,7 +166,7 @@ export async function GET(request: NextRequest) {
     (orderItems || []).forEach((item: any) => {
       const qty = Number(item.quantity) || 0;
       const unitPrice = Number(item.unit_price) || 0;
-      const unitCost = Number(item.actual_unit_cost) || Number(item.product.cost_price) || 0;
+      const unitCost = Number(item.actual_unit_cost) || 0;
       const revenue = qty * unitPrice;
       const cost = qty * unitCost;
       const pid = item.product.id;
@@ -201,7 +201,7 @@ export async function GET(request: NextRequest) {
     (orderItems || []).forEach((item: any) => {
       const qty = Number(item.quantity) || 0;
       const unitPrice = Number(item.unit_price) || 0;
-      const unitCost = Number(item.actual_unit_cost) || Number(item.product.cost_price) || 0;
+      const unitCost = Number(item.actual_unit_cost) || 0;
       const revenue = qty * unitPrice;
       const profit = revenue - qty * unitCost;
       const name = item.order.customer?.shop_name || "Unknown";
@@ -226,7 +226,7 @@ export async function GET(request: NextRequest) {
     (orderItems || []).forEach((item: any) => {
       const qty = Number(item.quantity) || 0;
       const unitPrice = Number(item.unit_price) || 0;
-      const unitCost = Number(item.actual_unit_cost) || Number(item.product.cost_price) || 0;
+      const unitCost = Number(item.actual_unit_cost) || 0;
       const oid = item.order.order_id;
       if (!orderMarginMap[oid]) orderMarginMap[oid] = { revenue: 0, cost: 0 };
       orderMarginMap[oid].revenue += qty * unitPrice;

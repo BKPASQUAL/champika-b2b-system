@@ -4,12 +4,17 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 export async function GET() {
   try {
     // Run all queries in parallel for performance
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const thirtyDaysAgoISO = thirtyDaysAgo.toISOString();
+
     const [
       invoicesRes,
       ordersRes,
       suppliersRes,
       chequesRes,
       recentInvoicesRes,
+      profitItemsRes,
     ] = await Promise.all([
       // All invoices — for revenue, due, overdue stats
       supabaseAdmin
@@ -49,6 +54,13 @@ export async function GET() {
         )
         .order("created_at", { ascending: false })
         .limit(8),
+
+      // Last 30 days delivered order items for profit calculation
+      supabaseAdmin
+        .from("order_items")
+        .select("quantity, total_price, actual_unit_cost, order:orders!inner(status, created_at)")
+        .eq("order.status", "Delivered")
+        .gte("order.created_at", thirtyDaysAgoISO),
     ]);
 
     // --- KPI Calculations ---
@@ -57,6 +69,7 @@ export async function GET() {
     const suppliers = suppliersRes.data ?? [];
     const pendingCheques = chequesRes.data ?? [];
     const recentInvoices = recentInvoicesRes.data ?? [];
+    const profitItems = profitItemsRes.data ?? [];
 
     const totalRevenue = invoices.reduce(
       (sum: number, inv: any) => sum + (inv.total_amount ?? 0),
@@ -74,11 +87,25 @@ export async function GET() {
     );
 
     // 30-day revenue
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const last30DaysRevenue = invoices
       .filter((inv: any) => new Date(inv.created_at) >= thirtyDaysAgo)
       .reduce((sum: number, inv: any) => sum + (inv.total_amount ?? 0), 0);
+
+    // 30-day profit using FIFO actual_unit_cost
+    let last30DaysRevenueSales = 0;
+    let last30DaysCOGS = 0;
+    profitItems.forEach((item: any) => {
+      const qty = Number(item.quantity) || 0;
+      const revenue = Number(item.total_price) || 0;
+      const cost = qty * (Number(item.actual_unit_cost) || 0);
+      last30DaysRevenueSales += revenue;
+      last30DaysCOGS += cost;
+    });
+    const last30DaysProfit = last30DaysRevenueSales - last30DaysCOGS;
+    const last30DaysProfitMargin =
+      last30DaysRevenueSales > 0
+        ? (last30DaysProfit / last30DaysRevenueSales) * 100
+        : 0;
 
     const pendingOrders = orders.filter((o: any) => o.status === "Pending");
     const activeSuppliers = suppliers.filter((s: any) => s.status === "Active");
@@ -131,6 +158,8 @@ export async function GET() {
       kpis: {
         totalRevenue,
         last30DaysRevenue,
+        last30DaysProfit,
+        last30DaysProfitMargin,
         totalDue,
         totalInvoices: invoices.length,
         overdueCount: overdueInvoices.length,

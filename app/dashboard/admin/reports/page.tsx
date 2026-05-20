@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -90,6 +90,8 @@ export default function AdminReportsPage() {
   const [orderData, setOrderData] = useState<any[]>([]);
   const [deliveryData, setDeliveryData] = useState<any[]>([]);
   const [revenueTrend, setRevenueTrend] = useState<any[]>([]);
+  const [costLayersData, setCostLayersData] = useState<any>(null);
+  const [costLayersLoading, setCostLayersLoading] = useState(false);
 
   // Pagination Logic
   const totalOrderPages = Math.ceil(orderData.length / ITEMS_PER_PAGE);
@@ -156,6 +158,26 @@ export default function AdminReportsPage() {
     setOrderPage(1);
     setDeliveryPage(1);
   }, [timePeriod]);
+
+  const fetchCostLayers = async () => {
+    setCostLayersLoading(true);
+    try {
+      const res = await fetch("/api/inventory/cost-layers");
+      if (!res.ok) throw new Error("Failed to fetch cost layers");
+      const data = await res.json();
+      setCostLayersData(data);
+    } catch (err) {
+      toast.error("Failed to load inventory cost data");
+    } finally {
+      setCostLayersLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "cost-layers" && !costLayersData) {
+      fetchCostLayers();
+    }
+  }, [activeTab]);
 
   const fetchReports = async () => {
     setLoading(true);
@@ -302,7 +324,7 @@ export default function AdminReportsPage() {
         onValueChange={setActiveTab}
         className="space-y-6"
       >
-        <TabsList className="grid w-full grid-cols-2 lg:grid-cols-9">
+        <TabsList className="grid w-full grid-cols-2 lg:grid-cols-10">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="monthly">Monthly</TabsTrigger>
           <TabsTrigger value="expenses">Expenses</TabsTrigger>
@@ -312,6 +334,7 @@ export default function AdminReportsPage() {
           <TabsTrigger value="product">Product</TabsTrigger>
           <TabsTrigger value="representative">Sales Rep</TabsTrigger>
           <TabsTrigger value="order">Orders</TabsTrigger>
+          <TabsTrigger value="cost-layers">Stock Costs</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
@@ -1389,6 +1412,162 @@ export default function AdminReportsPage() {
               />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ── Stock Costs (FIFO Cost Layers) Tab ───────────────────────────── */}
+        <TabsContent value="cost-layers" className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold">Inventory Cost Layers (FIFO)</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Current stock broken down by purchase cost batches. Old cost applies until that batch is sold, then the new cost kicks in.
+              </p>
+            </div>
+            <Button onClick={fetchCostLayers} variant="outline" disabled={costLayersLoading}>
+              {costLayersLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <BarChart3 className="h-4 w-4 mr-2" />}
+              Refresh
+            </Button>
+          </div>
+
+          {costLayersLoading && (
+            <div className="flex items-center justify-center h-32">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          )}
+
+          {!costLayersLoading && costLayersData && (
+            <>
+              {/* Summary Cards */}
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-xs font-medium text-muted-foreground">Total Stock Cost Value</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-xl font-bold">
+                      LKR {Number(costLayersData.summary?.totalCostValue || 0).toLocaleString("en-LK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-xs font-medium text-muted-foreground">Total Selling Value</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-xl font-bold">
+                      LKR {Number(costLayersData.summary?.totalSellingValue || 0).toLocaleString("en-LK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-xs font-medium text-muted-foreground">Potential Profit on Stock</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-xl font-bold text-green-600">
+                      LKR {Number(costLayersData.summary?.totalPotentialProfit || 0).toLocaleString("en-LK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-xs font-medium text-muted-foreground">Products with Mixed Costs</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-xl font-bold text-amber-600">
+                      {costLayersData.summary?.productsWithMultipleLevels || 0}
+                    </div>
+                    <p className="text-xs text-muted-foreground">of {costLayersData.summary?.totalProducts || 0} products</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Products Table */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Product Cost Breakdown</CardTitle>
+                  <p className="text-xs text-muted-foreground">Products with multiple cost layers are highlighted. Old batches sell first (FIFO).</p>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Product</TableHead>
+                        <TableHead>SKU</TableHead>
+                        <TableHead className="text-right">Total Stock</TableHead>
+                        <TableHead className="text-right">Selling Price</TableHead>
+                        <TableHead className="text-right">Cost Layers</TableHead>
+                        <TableHead className="text-right">Stock Cost Value</TableHead>
+                        <TableHead className="text-right">Potential Profit</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(costLayersData.products || []).map((product: any) => (
+                        <React.Fragment key={product.productId}>
+                          <TableRow
+                            className={product.hasMultipleCostLevels ? "bg-amber-50 border-b-0" : ""}
+                          >
+                            <TableCell className="font-medium">
+                              <div className="flex items-center gap-2">
+                                {product.productName}
+                                {product.hasMultipleCostLevels && (
+                                  <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-xs">Mixed Cost</Badge>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-muted-foreground text-xs">{product.sku || "—"}</TableCell>
+                            <TableCell className="text-right font-mono">{product.totalStock}</TableCell>
+                            <TableCell className="text-right font-mono">
+                              LKR {Number(product.sellingPrice).toLocaleString("en-LK", { minimumFractionDigits: 2 })}
+                            </TableCell>
+                            <TableCell className="text-right">{product.layers.length}</TableCell>
+                            <TableCell className="text-right font-mono">
+                              LKR {Number(product.totals.costValue).toLocaleString("en-LK", { minimumFractionDigits: 2 })}
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-green-700">
+                              LKR {Number(product.totals.potentialProfit).toLocaleString("en-LK", { minimumFractionDigits: 2 })}
+                            </TableCell>
+                          </TableRow>
+                          {/* Show cost layer breakdown for mixed-cost products */}
+                          {product.hasMultipleCostLevels && product.layers.map((layer: any, idx: number) => (
+                            <TableRow key={`${product.productId}-layer-${idx}`} className="bg-amber-50/50 text-xs">
+                              <TableCell className="pl-8 text-muted-foreground" colSpan={2}>
+                                {idx === 0 ? "↳ Old cost (sells first)" : `↳ New cost (Layer ${layer.layerIndex})`}
+                              </TableCell>
+                              <TableCell className="text-right font-mono text-muted-foreground">{layer.remainingQuantity} units</TableCell>
+                              <TableCell />
+                              <TableCell className="text-right font-mono text-muted-foreground">
+                                @ LKR {Number(layer.costPrice).toLocaleString("en-LK", { minimumFractionDigits: 2 })} / unit
+                              </TableCell>
+                              <TableCell className="text-right font-mono text-muted-foreground">
+                                LKR {Number(layer.costValue).toLocaleString("en-LK", { minimumFractionDigits: 2 })}
+                              </TableCell>
+                              <TableCell className="text-right font-mono text-green-600">
+                                LKR {Number(layer.potentialProfit).toLocaleString("en-LK", { minimumFractionDigits: 2 })}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </React.Fragment>
+                      ))}
+                      {(!costLayersData.products || costLayersData.products.length === 0) && (
+                        <TableRow>
+                          <TableCell colSpan={7} className="text-center text-muted-foreground h-24">
+                            No stock with cost layers found.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {!costLayersLoading && !costLayersData && (
+            <div className="flex items-center justify-center h-32 text-muted-foreground">
+              Click Refresh to load inventory cost data.
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>

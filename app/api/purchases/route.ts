@@ -246,6 +246,15 @@ export async function POST(request: NextRequest) {
           quantity: totalQty,
         });
       }
+
+      // Create FIFO cost layer for this batch of stock
+      await supabaseAdmin.from("product_cost_layers").insert({
+        product_id: item.productId,
+        purchase_id: purchase.id,
+        cost_price: processedItem.actual_unit_cost,
+        original_quantity: totalQty,
+        remaining_quantity: totalQty,
+      });
     }
 
     return NextResponse.json(

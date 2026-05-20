@@ -72,6 +72,61 @@ export async function GET(request: NextRequest) {
 
     if (itemErr) throw new Error(`Order items query failed: ${itemErr.message}`);
 
+    // ── 5. Cost Layers for Sierra products (FIFO stock breakdown) ────────────
+    // Query cost layers directly joined to products — no is_active / stock_quantity
+    // restriction so all batches with remaining stock appear.
+    let costLayers: any[] = [];
+    const { data: rawLayers } = await supabaseAdmin
+      .from("product_cost_layers")
+      .select(`
+        id, product_id, cost_price, original_quantity, remaining_quantity, created_at,
+        product:products!inner (id, name, sku, stock_quantity, selling_price, supplier_name)
+      `)
+      .ilike("product.supplier_name", "%Sierra%")
+      .gt("remaining_quantity", 0)
+      .order("created_at", { ascending: true });
+
+    if (rawLayers && rawLayers.length > 0) {
+      // Group layers by product
+      const layersByProduct: Record<string, any[]> = {};
+      const productMeta: Record<string, any> = {};
+
+      rawLayers.forEach((layer: any) => {
+        const pid = layer.product_id;
+        if (!layersByProduct[pid]) layersByProduct[pid] = [];
+        layersByProduct[pid].push(layer);
+        if (!productMeta[pid]) productMeta[pid] = layer.product;
+      });
+
+      costLayers = Object.entries(layersByProduct).map(([pid, layers]) => {
+        const product = productMeta[pid];
+        const sellingPrice = Number(product?.selling_price) || 0;
+        const layerDetails = layers.map((layer: any, idx: number) => ({
+          layerIndex: idx + 1,
+          costPrice: Number(layer.cost_price),
+          remainingQuantity: Number(layer.remaining_quantity),
+          originalQuantity: Number(layer.original_quantity),
+          costValue: Number(layer.remaining_quantity) * Number(layer.cost_price),
+          sellingValue: Number(layer.remaining_quantity) * sellingPrice,
+          potentialProfit: Number(layer.remaining_quantity) * (sellingPrice - Number(layer.cost_price)),
+          purchaseDate: layer.created_at,
+        }));
+        const totalCostValue = layerDetails.reduce((s: number, l: any) => s + l.costValue, 0);
+        const totalSellValue = layerDetails.reduce((s: number, l: any) => s + l.sellingValue, 0);
+        return {
+          productId: pid,
+          productName: product?.name || "Unknown",
+          sku: product?.sku || "",
+          totalStock: Number(product?.stock_quantity || 0),
+          sellingPrice,
+          hasMultipleCostLevels: layerDetails.length > 1 &&
+            layerDetails.some((l: any) => l.costPrice !== layerDetails[0].costPrice),
+          layers: layerDetails,
+          totals: { costValue: totalCostValue, sellingValue: totalSellValue, potentialProfit: totalSellValue - totalCostValue },
+        };
+      });
+    }
+
     // ── Process: Overview KPIs ────────────────────────────────────────────────
     const totalSales = (invoices || []).reduce(
       (s, inv: any) => s + (Number(inv.total_amount) || 0),
@@ -86,7 +141,7 @@ export async function GET(request: NextRequest) {
     (orderItems || []).forEach((item: any) => {
       const qty = Number(item.quantity) || 0;
       const unitPrice = Number(item.unit_price) || 0;
-      const unitCost = Number(item.actual_unit_cost) || Number(item.product.cost_price) || 0;
+      const unitCost = Number(item.actual_unit_cost) || 0;
       totalRevenue += qty * unitPrice;
       totalCost += qty * unitCost;
     });
@@ -140,7 +195,7 @@ export async function GET(request: NextRequest) {
     (orderItems || []).forEach((item: any) => {
       const qty = Number(item.quantity) || 0;
       const unitPrice = Number(item.unit_price) || 0;
-      const unitCost = Number(item.actual_unit_cost) || Number(item.product.cost_price) || 0;
+      const unitCost = Number(item.actual_unit_cost) || 0;
       const revenue = qty * unitPrice;
       const profit = revenue - qty * unitCost;
       const rawDate = item.order.order_date || item.order.created_at.split("T")[0];
@@ -166,7 +221,7 @@ export async function GET(request: NextRequest) {
     (orderItems || []).forEach((item: any) => {
       const qty = Number(item.quantity) || 0;
       const unitPrice = Number(item.unit_price) || 0;
-      const unitCost = Number(item.actual_unit_cost) || Number(item.product.cost_price) || 0;
+      const unitCost = Number(item.actual_unit_cost) || 0;
       const revenue = qty * unitPrice;
       const cost = qty * unitCost;
       const pid = item.product.id;
@@ -201,7 +256,7 @@ export async function GET(request: NextRequest) {
     (orderItems || []).forEach((item: any) => {
       const qty = Number(item.quantity) || 0;
       const unitPrice = Number(item.unit_price) || 0;
-      const unitCost = Number(item.actual_unit_cost) || Number(item.product.cost_price) || 0;
+      const unitCost = Number(item.actual_unit_cost) || 0;
       const revenue = qty * unitPrice;
       const profit = revenue - qty * unitCost;
       const name = item.order.customer?.shop_name || "Unknown";
@@ -226,7 +281,7 @@ export async function GET(request: NextRequest) {
     (orderItems || []).forEach((item: any) => {
       const qty = Number(item.quantity) || 0;
       const unitPrice = Number(item.unit_price) || 0;
-      const unitCost = Number(item.actual_unit_cost) || Number(item.product.cost_price) || 0;
+      const unitCost = Number(item.actual_unit_cost) || 0;
       const oid = item.order.order_id;
       if (!orderMarginMap[oid]) orderMarginMap[oid] = { revenue: 0, cost: 0 };
       orderMarginMap[oid].revenue += qty * unitPrice;
@@ -288,6 +343,7 @@ export async function GET(request: NextRequest) {
       orders,
       dueInvoices,
       expenses: expenseList,
+      costLayers,
     });
   } catch (error: any) {
     console.error("Sierra report error:", error.message);
