@@ -414,7 +414,7 @@ export default function SierraProfitPage() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                         <YAxis tickFormatter={fmtK} tick={{ fontSize: 11 }} />
-                        <Tooltip formatter={(v: number) => fmt(v)} />
+                        <Tooltip formatter={(v: number | undefined) => fmt(Number(v) || 0)} />
                         <Legend />
                         <Area
                           type="monotone"
@@ -533,7 +533,7 @@ export default function SierraProfitPage() {
                           tick={{ fontSize: 10 }}
                           tickFormatter={(v: string) => v.length > 14 ? v.slice(0, 14) + "…" : v}
                         />
-                        <Tooltip formatter={(v: number) => fmt(v)} />
+                        <Tooltip formatter={(v: number | undefined) => fmt(Number(v) || 0)} />
                         <Bar dataKey="totalSales" name="Revenue" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
@@ -562,7 +562,7 @@ export default function SierraProfitPage() {
                             <Cell key={i} fill={COLORS[i % COLORS.length]} />
                           ))}
                         </Pie>
-                        <Tooltip formatter={(v: number) => fmt(v)} />
+                        <Tooltip formatter={(v: number | undefined) => fmt(Number(v) || 0)} />
                         <Legend />
                       </PieChart>
                     </ResponsiveContainer>
@@ -639,7 +639,7 @@ export default function SierraProfitPage() {
                           tick={{ fontSize: 10 }}
                           tickFormatter={(v: string) => v.length > 14 ? v.slice(0, 14) + "…" : v}
                         />
-                        <Tooltip formatter={(v: number) => fmt(v)} />
+                        <Tooltip formatter={(v: number | undefined) => fmt(Number(v) || 0)} />
                         <Legend />
                         <Bar dataKey="revenue" name="Revenue" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
                         <Bar dataKey="profit" name="Profit" fill="#22c55e" radius={[0, 4, 4, 0]} />
@@ -670,7 +670,7 @@ export default function SierraProfitPage() {
                             <Cell key={i} fill={COLORS[i % COLORS.length]} />
                           ))}
                         </Pie>
-                        <Tooltip formatter={(v: number) => fmt(v)} />
+                        <Tooltip formatter={(v: number | undefined) => fmt(Number(v) || 0)} />
                         <Legend />
                       </PieChart>
                     </ResponsiveContainer>

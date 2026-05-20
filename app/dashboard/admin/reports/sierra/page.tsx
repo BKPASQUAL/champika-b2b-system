@@ -693,7 +693,7 @@ export default function SierraReportPage() {
                         <XAxis type="number" tickFormatter={(v) => `${v}`} />
                         <YAxis type="category" dataKey="name" width={160} tick={{ fontSize: 11 }} />
                         <Tooltip
-                          formatter={(value: any, name: string) => [
+                          formatter={(value: any, name: string | undefined) => [
                             `LKR ${fmt(Number(value))}`,
                             name === "sellingPrice" ? "Avg Selling Price" : name === "costPrice" ? "Avg Cost Price" : "Profit / Unit",
                           ]}
