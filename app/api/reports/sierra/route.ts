@@ -127,6 +127,17 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // ── Inter-branch order IDs (billed at cost → profit is always 0) ────────────
+    // Inter-branch invoices bill Champika Hardware at cost price, not for profit.
+    const interBranchOrderIds = new Set<string>(
+      (invoices || [])
+        .filter((inv: any) =>
+          (inv.customers?.shop_name || "").toLowerCase().includes("champika hardware")
+        )
+        .map((inv: any) => inv.orders?.order_id)
+        .filter(Boolean)
+    );
+
     // ── Process: Overview KPIs ────────────────────────────────────────────────
     const totalSales = (invoices || []).reduce(
       (s, inv: any) => s + (Number(inv.total_amount) || 0),
@@ -139,6 +150,7 @@ export async function GET(request: NextRequest) {
     let totalRevenue = 0;
     let totalCost = 0;
     (orderItems || []).forEach((item: any) => {
+      if (interBranchOrderIds.has(item.order?.order_id)) return;
       const qty = Number(item.quantity) || 0;
       const unitPrice = Number(item.unit_price) || 0;
       const unitCost = Number(item.actual_unit_cost) || 0;
@@ -193,6 +205,7 @@ export async function GET(request: NextRequest) {
     // ── Process: Profit Monthly Chart ─────────────────────────────────────────
     const profitMonthMap: Record<string, any> = {};
     (orderItems || []).forEach((item: any) => {
+      if (interBranchOrderIds.has(item.order?.order_id)) return;
       const qty = Number(item.quantity) || 0;
       const unitPrice = Number(item.unit_price) || 0;
       const unitCost = Number(item.actual_unit_cost) || 0;
@@ -219,6 +232,7 @@ export async function GET(request: NextRequest) {
     // ── Process: Products ─────────────────────────────────────────────────────
     const productMap: Record<string, any> = {};
     (orderItems || []).forEach((item: any) => {
+      if (interBranchOrderIds.has(item.order?.order_id)) return;
       const qty = Number(item.quantity) || 0;
       const unitPrice = Number(item.unit_price) || 0;
       const unitCost = Number(item.actual_unit_cost) || 0;
@@ -254,6 +268,7 @@ export async function GET(request: NextRequest) {
     // ── Process: Customer Profits (from order_items) ──────────────────────────
     const customerProfitMap: Record<string, any> = {};
     (orderItems || []).forEach((item: any) => {
+      if (interBranchOrderIds.has(item.order?.order_id)) return;
       const qty = Number(item.quantity) || 0;
       const unitPrice = Number(item.unit_price) || 0;
       const unitCost = Number(item.actual_unit_cost) || 0;
@@ -279,6 +294,7 @@ export async function GET(request: NextRequest) {
     // ── Process: Margin Distribution (per order) ──────────────────────────────
     const orderMarginMap: Record<string, { revenue: number; cost: number }> = {};
     (orderItems || []).forEach((item: any) => {
+      if (interBranchOrderIds.has(item.order?.order_id)) return;
       const qty = Number(item.quantity) || 0;
       const unitPrice = Number(item.unit_price) || 0;
       const unitCost = Number(item.actual_unit_cost) || 0;
@@ -301,6 +317,7 @@ export async function GET(request: NextRequest) {
     (orderItems || []).forEach((item: any) => {
       const oid = item.order?.order_id;
       if (!oid) return;
+      if (interBranchOrderIds.has(oid)) return;
       const qty = Number(item.quantity) || 0;
       const rev = qty * (Number(item.unit_price) || 0);
       const cost = qty * (Number(item.actual_unit_cost) || 0);
@@ -312,8 +329,9 @@ export async function GET(request: NextRequest) {
     // ── Process: Orders list ──────────────────────────────────────────────────
     const orders = (invoices || []).map((inv: any) => {
       const oid = inv.orders?.order_id;
-      const profitEntry = oid ? orderProfitMap[oid] : null;
-      const profit = profitEntry ? profitEntry.revenue - profitEntry.cost : null;
+      const isInterBranch = oid ? interBranchOrderIds.has(oid) : false;
+      const profitEntry = (!isInterBranch && oid) ? orderProfitMap[oid] : null;
+      const profit = isInterBranch ? 0 : (profitEntry ? profitEntry.revenue - profitEntry.cost : null);
       const revenue = profitEntry ? profitEntry.revenue : null;
       return {
         id: inv.id,
@@ -326,8 +344,9 @@ export async function GET(request: NextRequest) {
         amount: Number(inv.total_amount) || 0,
         dueAmount: Number(inv.due_amount) || 0,
         paymentStatus: inv.status || "Unpaid",
+        isInterBranch,
         profit,
-        profitMargin: revenue && revenue > 0 ? ((profit ?? 0) / revenue) * 100 : null,
+        profitMargin: isInterBranch ? 0 : (revenue && revenue > 0 ? ((profit ?? 0) / revenue) * 100 : null),
       };
     });
 

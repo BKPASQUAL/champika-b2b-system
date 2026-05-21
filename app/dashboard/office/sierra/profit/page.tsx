@@ -879,15 +879,22 @@ export default function SierraProfitPage() {
                               {o.dueAmount > 0 ? fmt(o.dueAmount) : "—"}
                             </TableCell>
                             <TableCell className={`text-right font-mono tabular-nums text-sm font-semibold ${
-                              o.profit === null ? "text-muted-foreground"
+                              o.isInterBranch ? "text-slate-400"
+                              : o.profit === null ? "text-muted-foreground"
                               : o.profit >= 0 ? "text-green-700" : "text-red-600"
                             }`}>
-                              {o.profit === null ? <span className="text-xs text-muted-foreground/50">—</span> : fmt(o.profit)}
+                              {o.isInterBranch
+                                ? <span className="text-xs">Cost Transfer</span>
+                                : o.profit === null
+                                  ? <span className="text-xs text-muted-foreground/50">—</span>
+                                  : fmt(o.profit)}
                             </TableCell>
                             <TableCell className="text-right">
-                              {o.profitMargin == null
-                                ? <span className="text-xs text-muted-foreground/50">—</span>
-                                : <MarginBadge margin={o.profitMargin} />}
+                              {o.isInterBranch
+                                ? <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-slate-100 text-slate-500">0%</span>
+                                : o.profitMargin == null
+                                  ? <span className="text-xs text-muted-foreground/50">—</span>
+                                  : <MarginBadge margin={o.profitMargin} />}
                             </TableCell>
                             <TableCell>
                               <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
