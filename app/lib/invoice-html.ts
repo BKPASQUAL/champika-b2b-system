@@ -73,57 +73,14 @@ export const generateInvoiceHTML = async (
   const extraDiscount = Math.max(0, subTotal - grandTotal);
 
 
-  const rows = items
-    .map((item: any, idx: number) => `
-    <tr style="${idx < items.length - 1 ? "border-bottom:1px solid #e8e8e8;" : ""}">
-      <td style="padding:7px 8px;font-size:11px;color:#777;text-align:center;vertical-align:middle;">${idx + 1}</td>
-      <td style="padding:7px 8px;font-size:11px;color:#555;vertical-align:middle;">${item.sku || "-"}</td>
-      <td style="padding:7px 8px;font-size:11px;color:#111;font-weight:600;vertical-align:middle;">${item.productName || item.name || "-"}</td>
-      <td style="padding:7px 8px;font-size:11px;color:#111;text-align:right;white-space:nowrap;vertical-align:middle;">LKR ${fmt(item.unitPrice || item.price)}</td>
-      <td style="padding:7px 8px;font-size:11px;font-weight:700;color:#111;text-align:center;vertical-align:middle;">${item.quantity}</td>
-      <td style="padding:7px 8px;font-size:11px;color:#555;text-align:center;vertical-align:middle;">${item.unit || "Pcs"}</td>
-      <td style="padding:7px 8px;font-size:11px;text-align:center;color:#111;vertical-align:middle;">${(item.freeQuantity || item.free || 0) > 0 ? (item.freeQuantity || item.free) : "-"}</td>
-      <td style="padding:7px 8px;font-size:11px;text-align:center;color:#777;vertical-align:middle;">${item.discountPercent > 0 ? "-" + item.discountPercent + "%" : "-"}</td>
-      <td style="padding:7px 8px;font-size:11px;font-weight:700;color:#111;text-align:right;white-space:nowrap;vertical-align:middle;">LKR ${fmt(item.total)}</td>
-    </tr>`)
-    .join("");
+  const ITEMS_PER_PAGE = 17;
+  const chunks: any[][] = [];
+  for (let i = 0; i < items.length; i += ITEMS_PER_PAGE) {
+    chunks.push(items.slice(i, i + ITEMS_PER_PAGE));
+  }
+  const totalPages = chunks.length;
 
-  return `
-  <div class="invoice-page" style="page-break-after:always;width:100%;min-height:277mm;padding:8px 20px 20px;background:#fff;font-family:${FONT_STACK};color:#111;box-sizing:border-box;display:flex;flex-direction:column;">
-
-    <table style="width:100%;border-collapse:collapse;margin-bottom:0;">
-      <tr>
-        <td style="vertical-align:top;width:60%;">
-          <div style="font-size:34px;font-weight:800;color:#000;letter-spacing:-0.3px;line-height:1.1;">CHAMPIKA HARDWARE</div>
-          <div style="font-size:10px;color:#333;margin-top:2px;line-height:1.5;">
-            ${cfg.division}<br>${cfg.address}<br>Tel: ${cfg.tel}
-          </div>
-        </td>
-        <td style="vertical-align:top;text-align:right;width:40%;">
-          <table style="margin-left:auto;border-collapse:collapse;">
-            <tr>
-              ${qrDataUrl ? `<td style="vertical-align:top;padding-right:10px;"><img src="${qrDataUrl}" style="width:70px;height:70px;display:block;" /></td>` : ""}
-              <td style="vertical-align:top;text-align:right;">
-                <div style="font-size:18px;font-weight:700;color:#000;letter-spacing:0.5px;">${invoice.invoiceNo || "-"}</div>
-                ${invoice.manualInvoiceNo ? `<div style="font-size:12px;font-weight:600;color:#444;margin-top:2px;">Book No: ${invoice.manualInvoiceNo}</div>` : ""}
-                <div style="font-size:11px;color:#333;margin-top:2px;line-height:1.5;">
-                  ${formatDate(invoice.date || invoice.createdAt)}<br>${salesRep}
-                </div>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-
-    <div style="border-top:1.5px solid #bbb;margin:10px 0 12px;"></div>
-
-    <div style="margin-bottom:12px;">
-      <div style="font-size:13px;font-weight:700;color:#000;">${shopName}</div>
-      ${address ? `<div style="font-size:12px;color:#333;">${address}${route ? ", " + route : ""}</div>` : ""}
-      ${phone ? `<div style="font-size:12px;color:#333;">${phone}</div>` : ""}
-    </div>
-
+  const makeTableHeader = () => `
     <table style="width:100%;border-collapse:collapse;margin-bottom:6px;">
       <thead>
         <tr style="border-top:2px solid #000;border-bottom:2px solid #000;background:#f0f0f0;">
@@ -137,11 +94,83 @@ export const generateInvoiceHTML = async (
           <th style="padding:7px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:center;width:7%;">Disc.</th>
           <th style="padding:7px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:right;width:12%;">Total</th>
         </tr>
-      </thead>
-      <tbody>${rows}</tbody>
+      </thead>`;
+
+  const pages = chunks.map((chunk, pageIdx) => {
+    const isFirst = pageIdx === 0;
+    const isLast  = pageIdx === totalPages - 1;
+    const pageNo  = pageIdx + 1;
+    const globalStart = pageIdx * ITEMS_PER_PAGE;
+
+    const invoiceNoDisplay = totalPages > 1
+      ? `${invoice.invoiceNo || "-"} (${pageNo}/${totalPages})`
+      : invoice.invoiceNo || "-";
+
+    const chunkRows = chunk
+      .map((item: any, idx: number) => {
+        const globalIdx = globalStart + idx;
+        return `
+        <tr style="${globalIdx < items.length - 1 ? "border-bottom:1px solid #e8e8e8;" : ""}">
+          <td style="padding:7px 8px;font-size:13px;color:#777;text-align:center;vertical-align:middle;">${globalIdx + 1}</td>
+          <td style="padding:7px 8px;font-size:13px;color:#555;vertical-align:middle;">${item.sku || "-"}</td>
+          <td style="padding:7px 8px;font-size:13px;color:#111;font-weight:500;vertical-align:middle;">${item.productName || item.name || "-"}</td>
+          <td style="padding:7px 8px;font-size:13px;color:#111;text-align:right;white-space:nowrap;vertical-align:middle;">LKR ${fmt(item.unitPrice || item.price)}</td>
+          <td style="padding:7px 8px;font-size:13px;font-weight:700;color:#111;text-align:center;vertical-align:middle;">${item.quantity}</td>
+          <td style="padding:7px 8px;font-size:13px;color:#555;text-align:center;vertical-align:middle;">${item.unit || "Pcs"}</td>
+          <td style="padding:7px 8px;font-size:13px;text-align:center;color:#111;vertical-align:middle;">${(item.freeQuantity || item.free || 0) > 0 ? (item.freeQuantity || item.free) : "-"}</td>
+          <td style="padding:7px 8px;font-size:13px;text-align:center;color:#777;vertical-align:middle;">${item.discountPercent > 0 ? "-" + item.discountPercent + "%" : "-"}</td>
+          <td style="padding:7px 8px;font-size:13px;font-weight:700;color:#111;text-align:right;white-space:nowrap;vertical-align:middle;">LKR ${fmt(item.total)}</td>
+        </tr>`;
+      })
+      .join("");
+
+    return `
+  <div class="invoice-page" style="page-break-after:always;width:100%;min-height:277mm;padding:8px 20px 20px;background:#fff;font-family:${FONT_STACK};color:#111;box-sizing:border-box;display:flex;flex-direction:column;">
+
+    <table style="width:100%;border-collapse:collapse;margin-bottom:0;">
+      <tr>
+        <td style="vertical-align:top;width:60%;">
+          <div style="font-size:34px;font-weight:800;color:#000;letter-spacing:-0.3px;line-height:1.1;">CHAMPIKA HARDWARE</div>
+          <div style="font-size:10px;color:#333;margin-top:2px;line-height:1.5;">
+            ${cfg.division}<br>${cfg.address}<br>Tel: ${cfg.tel}
+          </div>
+        </td>
+        <td style="vertical-align:top;text-align:right;width:40%;">
+          <table style="margin-left:auto;border-collapse:collapse;">
+            <tr>
+              ${isFirst && qrDataUrl ? `<td style="vertical-align:top;padding-right:10px;"><img src="${qrDataUrl}" style="width:70px;height:70px;display:block;" /></td>` : ""}
+              <td style="vertical-align:top;text-align:right;">
+                <div style="font-size:18px;font-weight:700;color:#000;letter-spacing:0.5px;">${invoiceNoDisplay}</div>
+                ${invoice.manualInvoiceNo ? `<div style="font-size:12px;font-weight:600;color:#444;margin-top:2px;">Book No: ${invoice.manualInvoiceNo}</div>` : ""}
+                <div style="font-size:11px;color:#333;margin-top:2px;line-height:1.5;">
+                  ${formatDate(invoice.date || invoice.createdAt)}<br>${salesRep}
+                </div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
     </table>
 
-<table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
+    <div style="border-top:1.5px solid #bbb;margin:10px 0 12px;"></div>
+
+    ${isFirst ? `
+    <div style="margin-bottom:12px;">
+      <div style="font-size:13px;font-weight:700;color:#000;">${shopName}</div>
+      ${customerName && customerName !== shopName ? `<div style="font-size:12px;color:#555;">${customerName}</div>` : ""}
+      ${address ? `<div style="font-size:12px;color:#333;">${address}${route ? ", " + route : ""}</div>` : ""}
+      ${phone ? `<div style="font-size:12px;color:#333;">${phone}</div>` : ""}
+    </div>` : `
+    <div style="margin-bottom:8px;">
+      <div style="font-size:12px;font-weight:600;color:#000;">${shopName}${customerName && customerName !== shopName ? ` — ${customerName}` : ""}</div>
+    </div>`}
+
+    ${makeTableHeader()}
+      <tbody>${chunkRows}</tbody>
+    </table>
+
+    ${isLast ? `
+    <table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
       <tr>
         <td style="width:55%;">
           ${notes ? `<div style="font-size:11px;color:#555;line-height:1.5;">${notes}</div>` : ""}
@@ -176,7 +205,10 @@ export const generateInvoiceHTML = async (
           <div style="font-size:11px;color:#333;font-weight:600;margin-top:3px;">Customer Signature &amp; Stamp</div>
         </td>
       </tr>
-    </table>
+    </table>` : `
+    <div style="margin-top:12px;text-align:right;font-size:11px;color:#777;font-style:italic;">
+      Continued on next page (${pageNo}/${totalPages})…
+    </div>`}
 
     <div style="flex:1;"></div>
 
@@ -184,6 +216,9 @@ export const generateInvoiceHTML = async (
       Thank you for your business!
     </div>
   </div>`;
+  }).join("");
+
+  return pages;
 };
 
 export const getDocumentWrapper = (content: string, title: string) => `
