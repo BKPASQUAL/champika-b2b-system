@@ -7,7 +7,7 @@ import { BUSINESS_NAMES } from "@/app/config/business-constants";
 // ✅ Updated: Added .nullable() to optional fields to allow null values from frontend
 const paymentSchema = z.object({
   orderId: z.string().min(1, "Order ID is required"),
-  amount: z.number().min(0.01, "Amount must be greater than 0"),
+  amount: z.number().min(0.001, "Amount must be greater than 0"),
   date: z.string(),
   method: z.enum(["cash", "bank", "cheque", "credit"]),
   notes: z.string().optional().nullable(),

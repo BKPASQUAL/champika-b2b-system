@@ -62,7 +62,7 @@ interface Customer { id: string; name: string;   phone?: string;
 }
 interface Bank { id: string; bank_code: string; bank_name: string; }
 interface CompanyAccount { id: string; account_name: string; account_type: string; account_number?: string | null; }
-interface PendingInvoice { id: string; invoiceNo: string; date: string; totalAmount: number; paidAmount: number; balance: number; }
+interface PendingInvoice { id: string; invoiceNo: string; manualInvoiceNo?: string; date: string; totalAmount: number; paidAmount: number; balance: number; }
 interface InvoiceSettlement { invoiceId: string; selected: boolean; settleAmount: number; }
 type PaymentMethod = "cash" | "bank" | "cheque";
 
@@ -153,7 +153,7 @@ export default function SierraPaymentEntryPage() {
         const data = await res.json();
         const filtered: PendingInvoice[] = data
           .filter((inv: any) => inv.customerId === customerId && inv.status !== "Paid" && (inv.dueAmount ?? 0) > 0)
-          .map((inv: any) => ({ id: inv.orderId || inv.id, invoiceNo: inv.invoiceNo, date: inv.date || (inv.createdAt?.split("T")[0] ?? ""), totalAmount: inv.totalAmount ?? 0, paidAmount: inv.paidAmount ?? 0, balance: inv.dueAmount ?? 0 }));
+          .map((inv: any) => ({ id: inv.orderId || inv.id, invoiceNo: inv.invoiceNo, manualInvoiceNo: inv.manualInvoiceNo || undefined, date: inv.date || (inv.createdAt?.split("T")[0] ?? ""), totalAmount: inv.totalAmount ?? 0, paidAmount: inv.paidAmount ?? 0, balance: inv.dueAmount ?? 0 }));
         setPendingInvoices(filtered);
         const map: Record<string, InvoiceSettlement> = {};
         filtered.forEach((inv) => { map[inv.id] = { invoiceId: inv.id, selected: false, settleAmount: 0 }; });
@@ -369,7 +369,7 @@ export default function SierraPaymentEntryPage() {
           ) : (
             <div className="hidden md:block overflow-x-auto">
               <Table>
-                <TableHeader><TableRow><TableHead className="w-10"></TableHead><TableHead>Invoice No</TableHead><TableHead>Date</TableHead><TableHead className="text-right">Total</TableHead><TableHead className="text-right">Paid</TableHead><TableHead className="text-right">Balance</TableHead><TableHead className="text-right w-40">Settle Amount</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead className="w-10"></TableHead><TableHead>Invoice No</TableHead><TableHead>Manual Ref</TableHead><TableHead>Date</TableHead><TableHead className="text-right">Total</TableHead><TableHead className="text-right">Paid</TableHead><TableHead className="text-right">Balance</TableHead><TableHead className="text-right w-40">Settle Amount</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {pendingInvoices.map((inv) => {
                     const s = settlements[inv.id]; const isSelected = s?.selected ?? false;
@@ -377,6 +377,7 @@ export default function SierraPaymentEntryPage() {
                       <TableRow key={inv.id} className={cn(isSelected && "bg-purple-50")}>
                         <TableCell><Checkbox checked={isSelected} onCheckedChange={() => toggleInvoice(inv.id, inv)} className="data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600" /></TableCell>
                         <TableCell className="font-medium font-mono text-sm">{inv.invoiceNo}</TableCell>
+                        <TableCell className="font-mono text-sm text-muted-foreground">{inv.manualInvoiceNo || "—"}</TableCell>
                         <TableCell>{inv.date ? new Date(inv.date).toLocaleDateString() : "—"}</TableCell>
                         <TableCell className="text-right">{formatCurrency(inv.totalAmount)}</TableCell>
                         <TableCell className="text-right text-muted-foreground">{formatCurrency(inv.paidAmount)}</TableCell>
