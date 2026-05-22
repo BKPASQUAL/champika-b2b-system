@@ -53,6 +53,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { printInvoice } from "../print-utils";
 import { shareInvoice } from "@/app/lib/invoice-print";
+import { CancelInvoiceButton } from "@/components/ui/CancelInvoiceButton";
 
 // --- Interfaces ---
 interface InvoiceHistory {
@@ -382,6 +383,13 @@ export default function RetailViewInvoicePage({
               )}
               {sharing ? "Sharing…" : "Share"}
             </Button>
+
+            <CancelInvoiceButton
+              id={id}
+              invoiceNo={invoice?.invoiceNo || ""}
+              orderStatus={invoice?.orderStatus || ""}
+              onSuccess={() => { fetchInvoice(true); fetchReturns(); }}
+            />
 
             <Button
               size="sm"

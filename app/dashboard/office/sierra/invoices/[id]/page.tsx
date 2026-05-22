@@ -60,6 +60,7 @@ import { downloadInvoice , printInvoice } from "../../../distribution/invoices/p
 import { shareInvoice } from "@/app/lib/invoice-print";
 import { DocumentAttachments } from "@/components/ui/DocumentAttachments";
 import { RecordPaymentDialog } from "../_components/RecordPaymentDialog";
+import { CancelInvoiceButton } from "@/components/ui/CancelInvoiceButton";
 
 // --- Interfaces ---
 interface InvoiceHistory {
@@ -401,6 +402,13 @@ export default function WiremanViewInvoicePage({
                 <Banknote className="w-4 h-4 mr-2" /> Record Payment
               </Button>
             )}
+
+            <CancelInvoiceButton
+              id={id}
+              invoiceNo={invoice?.invoiceNo || ""}
+              orderStatus={invoice?.orderStatus || ""}
+              onSuccess={() => { fetchInvoice(true); fetchReturns(); }}
+            />
 
             {/* Edit Button - Redirects to Wireman Edit Page */}
             <Button

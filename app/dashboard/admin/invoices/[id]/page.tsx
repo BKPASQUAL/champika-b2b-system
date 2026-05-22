@@ -57,6 +57,7 @@ import { printInvoice } from "../print-utils";
 import { generateInvoicePdfBlob, shareInvoice } from "@/app/lib/invoice-print";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { CancelInvoiceButton } from "@/components/ui/CancelInvoiceButton";
 import { WhatsAppShareDialog } from "@/components/ui/WhatsAppShareDialog";
 import { DocumentAttachments } from "@/components/ui/DocumentAttachments";
 import {
@@ -351,6 +352,19 @@ Thank you for your business! 🙏`;
           </div>
 
           <div className="flex items-center gap-2 ml-11 md:ml-0">
+            {/* Cancel Invoice Button — admin only, hidden when already cancelled */}
+            <CancelInvoiceButton
+              id={id}
+              invoiceNo={invoice?.invoiceNo || ""}
+              orderStatus={invoice?.orderStatus || ""}
+              onSuccess={async () => {
+                invalidatePaymentCaches();
+                invalidateFinanceCaches();
+                const res = await fetch(`/api/invoices/${id}`);
+                if (res.ok) setInvoice(await res.json());
+              }}
+            />
+
             {/* Delete Button */}
             <Button
               variant="outline"

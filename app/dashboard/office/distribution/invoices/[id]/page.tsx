@@ -56,6 +56,7 @@ import {
 import { downloadInvoice, printInvoice } from "../print-utils";
 import { shareInvoice } from "@/app/lib/invoice-print";
 import { DocumentAttachments } from "@/components/ui/DocumentAttachments";
+import { CancelInvoiceButton } from "@/components/ui/CancelInvoiceButton";
 
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -387,6 +388,13 @@ export default function DistributionViewInvoicePage({
               )}
               <span className="hidden md:inline">{sharing ? "Sharing…" : "Share"}</span>
             </Button>
+
+            <CancelInvoiceButton
+              id={id}
+              invoiceNo={invoice?.invoiceNo || ""}
+              orderStatus={invoice?.orderStatus || ""}
+              onSuccess={() => { fetchInvoice(true); fetchReturns(); }}
+            />
 
             <Button
               size="sm"

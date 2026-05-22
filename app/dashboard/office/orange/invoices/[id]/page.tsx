@@ -60,6 +60,7 @@ import { cn } from "@/lib/utils";
 import { downloadInvoice } from "../../../distribution/invoices/print-utils";
 import { shareInvoice } from "@/app/lib/invoice-print";
 import { DocumentAttachments } from "@/components/ui/DocumentAttachments";
+import { CancelInvoiceButton } from "@/components/ui/CancelInvoiceButton";
 
 // --- Interfaces ---
 interface InvoiceHistory {
@@ -387,6 +388,13 @@ export default function OrangeViewInvoicePage({
               )}
               {sharing ? "Sharing…" : "Share"}
             </Button>
+
+            <CancelInvoiceButton
+              id={id}
+              invoiceNo={invoice?.invoiceNo || ""}
+              orderStatus={invoice?.orderStatus || ""}
+              onSuccess={() => { fetchInvoice(true); fetchReturns(); }}
+            />
 
             {/* Edit Button - Redirects to Orange Edit Page */}
             <Button

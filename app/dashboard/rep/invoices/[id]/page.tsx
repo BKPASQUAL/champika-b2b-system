@@ -44,6 +44,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { printInvoice, downloadInvoice, shareInvoice } from "@/app/lib/invoice-print";
+import { CancelInvoiceButton } from "@/components/ui/CancelInvoiceButton";
 
 interface PaymentRecord {
   id: string;
@@ -234,6 +235,16 @@ export default function RepInvoiceDetailPage({
               )}
               {sharing ? "Sharing…" : "Share"}
             </Button>
+
+            <CancelInvoiceButton
+              id={id}
+              invoiceNo={invoice?.invoiceNo || ""}
+              orderStatus={invoice?.orderStatus || ""}
+              onSuccess={async () => {
+                const res = await fetch(`/api/invoices/${id}`);
+                if (res.ok) setInvoice(await res.json());
+              }}
+            />
           </div>
         </div>
 
