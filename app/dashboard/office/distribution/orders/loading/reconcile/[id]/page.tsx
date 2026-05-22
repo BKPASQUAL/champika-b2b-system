@@ -59,6 +59,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ExpenseFormDialog } from "@/app/dashboard/admin/expenses/_components/ExpenseDialogs";
 import { ExpenseFormData } from "@/app/dashboard/admin/expenses/types";
 import { cn } from "@/lib/utils";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 interface OrderItem {
   id: string;
@@ -236,7 +237,7 @@ export default function OfficeReconcileLoadPage({
       const res = await fetch("/api/expenses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...data, loadId: id }),
+        body: JSON.stringify({ ...data, loadId: id, businessId: BUSINESS_IDS.CHAMPIKA_DISTRIBUTION }),
       });
       if (!res.ok) throw new Error();
       toast.success("Expense added");
