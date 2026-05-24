@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
         .from("order_items")
         .select(`
           order_id, quantity, unit_price, commission_earned,
-          product:products (supplier_name, category)
+          product:products (supplier_name, category, sub_category)
         `)
         .in("order_id", allOrderIds);
       rawOrderItems = orderItems || [];
@@ -229,7 +229,10 @@ export async function GET(request: NextRequest) {
 
     // Aggregate per-supplier AND per-category commission (NOW repMap is initialized)
     type SupplierCommEntry = { name: string; sales: number; commission: number };
-    type CategoryCommEntry = { supplier: string; category: string; sales: number; commission: number };
+    type CategoryCommEntry = {
+      supplier: string; category: string; subCategory: string | null;
+      sales: number; commission: number;
+    };
     const repSupplierMap: Record<string, Record<string, SupplierCommEntry>> = {};
     const repCategoryMap: Record<string, Record<string, CategoryCommEntry>> = {};
 
@@ -238,6 +241,7 @@ export async function GET(request: NextRequest) {
       if (!repId || !repMap[repId]) return;
       const supplier = item.product?.supplier_name || "Unknown Supplier";
       const category = item.product?.category || "Uncategorised";
+      const subCategory: string | null = item.product?.sub_category || null;
       const sales = (Number(item.quantity) || 0) * (Number(item.unit_price) || 0);
       const commission = Number(item.commission_earned) || 0;
 
@@ -249,11 +253,11 @@ export async function GET(request: NextRequest) {
       repSupplierMap[repId][supplier].sales += sales;
       repSupplierMap[repId][supplier].commission += commission;
 
-      // By supplier + category
-      const catKey = `${supplier}||${category}`;
+      // By supplier + category + sub_category
+      const catKey = `${supplier}||${category}||${subCategory ?? ""}`;
       if (!repCategoryMap[repId]) repCategoryMap[repId] = {};
       if (!repCategoryMap[repId][catKey]) {
-        repCategoryMap[repId][catKey] = { supplier, category, sales: 0, commission: 0 };
+        repCategoryMap[repId][catKey] = { supplier, category, subCategory, sales: 0, commission: 0 };
       }
       repCategoryMap[repId][catKey].sales += sales;
       repCategoryMap[repId][catKey].commission += commission;
@@ -273,7 +277,10 @@ export async function GET(request: NextRequest) {
 
       const commissionByCategory = Object.values(repCategoryMap[rep.id] || {})
         .filter((c) => c.sales > 0 || c.commission > 0)
-        .map((c) => ({ ...c, rate: c.sales > 0 ? (c.commission / c.sales) * 100 : 0 }))
+        .map((c) => ({
+          ...c,
+          rate: c.sales > 0 ? (c.commission / c.sales) * 100 : 0,
+        }))
         .sort((a, b) => b.commission - a.commission);
 
       return {

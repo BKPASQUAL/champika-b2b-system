@@ -538,35 +538,83 @@ export default function RepAnalyticsPage() {
                 </Card>
               ) : (
                 <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
-                  {commissionRules.map((rule: any) => (
-                    <Card key={rule.id} className="relative overflow-hidden bg-blue-50 border-blue-200">
-                      <CardContent className="pt-4 pb-3 px-4 space-y-2">
-                        <div className="flex items-end justify-between gap-1">
-                          <p className="text-3xl md:text-4xl font-extrabold leading-none text-blue-700">
-                            {rule.rate}%
-                          </p>
-                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded mb-0.5 bg-blue-100 text-blue-700">
-                            commission
-                          </span>
-                        </div>
-                        <div className="border-t border-blue-100 pt-2 space-y-1">
-                          <div>
-                            <p className="text-[10px] text-muted-foreground">Supplier</p>
-                            <p className="text-xs font-semibold truncate">{rule.supplier_name || "—"}</p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] text-muted-foreground">Category</p>
-                            <p className="text-xs font-medium truncate">
-                              {rule.category}
-                              {rule.sub_category && (
-                                <span className="text-muted-foreground font-normal"> / {rule.sub_category}</span>
-                              )}
+                  {commissionRules.map((rule: any) => {
+                    // Match this rule to this rep's earned data
+                    const cats: any[] = current.commissionByCategory || [];
+                    let matched: any;
+                    if (rule.category === "ALL") {
+                      // Sum all categories for this supplier
+                      const rows = cats.filter((c: any) => c.supplier === rule.supplier_name);
+                      if (rows.length > 0) {
+                        matched = rows.reduce(
+                          (acc: any, c: any) => ({
+                            sales: acc.sales + c.sales,
+                            commission: acc.commission + c.commission,
+                          }),
+                          { sales: 0, commission: 0 }
+                        );
+                      }
+                    } else {
+                      matched = cats.find(
+                        (c: any) =>
+                          c.supplier === rule.supplier_name &&
+                          c.category === rule.category &&
+                          (c.subCategory || null) === (rule.sub_category || null)
+                      );
+                    }
+                    const repSales = matched?.sales ?? 0;
+                    const repCommission = matched?.commission ?? 0;
+                    const hasData = repSales > 0 || repCommission > 0;
+
+                    return (
+                      <Card key={rule.id} className="relative overflow-hidden bg-blue-50 border-blue-200">
+                        <CardContent className="pt-4 pb-3 px-4 space-y-2">
+                          {/* Rule rate */}
+                          <div className="flex items-end justify-between gap-1">
+                            <p className="text-3xl md:text-4xl font-extrabold leading-none text-blue-700">
+                              {rule.rate}%
                             </p>
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded mb-0.5 bg-blue-100 text-blue-700">
+                              commission rate
+                            </span>
                           </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+
+                          {/* Supplier + Category */}
+                          <div className="border-t border-blue-100 pt-2 space-y-1">
+                            <div>
+                              <p className="text-[10px] text-muted-foreground">Supplier</p>
+                              <p className="text-xs font-semibold truncate">{rule.supplier_name || "—"}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-muted-foreground">Category</p>
+                              <p className="text-xs font-medium truncate">
+                                {rule.category}
+                                {rule.sub_category && (
+                                  <span className="text-muted-foreground font-normal"> / {rule.sub_category}</span>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* This rep's actual numbers for this rule */}
+                          <div className="border-t border-blue-100 pt-2 space-y-1">
+                            <div className="flex items-center justify-between">
+                              <p className="text-[10px] text-muted-foreground">Rep Sales</p>
+                              <p className="text-[11px] font-semibold">
+                                {hasData ? `LKR ${fmt(repSales)}` : <span className="text-muted-foreground">—</span>}
+                              </p>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <p className="text-[10px] text-muted-foreground">Earned</p>
+                              <p className={`text-[11px] font-bold ${hasData ? "text-blue-700" : "text-muted-foreground"}`}>
+                                {hasData ? `LKR ${fmt(repCommission)}` : "—"}
+                              </p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               )}
             </div>
