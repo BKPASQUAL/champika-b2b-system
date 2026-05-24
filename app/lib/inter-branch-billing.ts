@@ -59,12 +59,14 @@ export async function generateInterBranchBill(params: {
   customerId: string;
   customerName: string;
   targetBusinessId: string; // Champika Retail or Distribution
+  billingYear?: number;     // override billing year (defaults to current)
+  billingMonth?: number;    // override billing month 1-12 (defaults to current)
 }): Promise<void> {
-  const { agencyBusinessId, agencyName, invoicePrefix, customerId, customerName, targetBusinessId } = params;
+  const { agencyBusinessId, agencyName, invoicePrefix, customerId, customerName, targetBusinessId, billingYear, billingMonth: billingMonthParam } = params;
 
   const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
+  const year = billingYear ?? now.getFullYear();
+  const month = billingMonthParam ?? (now.getMonth() + 1);
   const monthStr = String(month).padStart(2, "0");
   const lastDay = new Date(year, month, 0).getDate();
 

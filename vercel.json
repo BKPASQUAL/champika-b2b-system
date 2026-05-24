@@ -3,6 +3,10 @@
     {
       "path": "/api/notifications/trigger",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/inter-branch-billing",
+      "schedule": "0 1 1 * *"
     }
   ]
 }
