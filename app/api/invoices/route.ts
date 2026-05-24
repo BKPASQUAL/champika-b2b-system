@@ -670,10 +670,12 @@ export async function POST(request: NextRequest) {
       (resolvedBusinessId === BUSINESS_IDS.CHAMPIKA_RETAIL ||
         resolvedBusinessId === BUSINESS_IDS.CHAMPIKA_DISTRIBUTION)
     ) {
-      const invoiceProductIds = val.items.map((i) => i.productId);
-      triggerAgencyBillsForInvoice(resolvedBusinessId, invoiceProductIds).catch(
-        (err) => console.error("[InterBranch] trigger failed (non-critical):", err),
-      );
+      try {
+        const invoiceProductIds = val.items.map((i) => i.productId);
+        await triggerAgencyBillsForInvoice(resolvedBusinessId, invoiceProductIds);
+      } catch (err) {
+        console.error("[InterBranch] trigger failed (non-critical):", err);
+      }
     }
 
     return NextResponse.json(

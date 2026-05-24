@@ -70,9 +70,14 @@ export async function generateInterBranchBill(params: {
   const monthStr = String(month).padStart(2, "0");
   const lastDay = new Date(year, month, 0).getDate();
 
-  // Use plain date strings to avoid timezone issues with date columns
   const startDate = `${year}-${monthStr}-01`;
   const endDate = `${year}-${monthStr}-${String(lastDay).padStart(2, "0")}`;
+
+  // order_date is timestamptz — use exclusive next-month start so the full last day is included
+  const nextMonthYear = month === 12 ? year + 1 : year;
+  const nextMonthNum = month === 12 ? 1 : month + 1;
+  const nextMonthStart = `${nextMonthYear}-${String(nextMonthNum).padStart(2, "0")}-01`;
+
   const fixedInvoiceNo = `${invoicePrefix}-${year}-${monthStr}`;
 
   console.log(`[InterBranch] ${agencyName} | ${customerName} | ${startDate} → ${endDate} | invoice: ${fixedInvoiceNo}`);
@@ -113,7 +118,7 @@ export async function generateInterBranchBill(params: {
     .eq("orders.status", "Delivered")
     .ilike("products.supplier_name", `%${agencyName}%`)
     .gte("orders.order_date", startDate)
-    .lte("orders.order_date", endDate);
+    .lt("orders.order_date", nextMonthStart);
 
   if (error) throw new Error(`[InterBranch] Fetch error (${agencyName}): ${error.message}`);
 
