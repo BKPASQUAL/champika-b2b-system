@@ -44,10 +44,10 @@ export async function POST(
       return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
     }
 
-    // 3. Load order to check current status and get rep ID
+    // 3. Load order to check current status, rep ID, and inter-branch flag
     const { data: order, error: orderError } = await supabaseAdmin
       .from("orders")
-      .select("status, sales_rep_id")
+      .select("status, sales_rep_id, is_inter_branch")
       .eq("id", invoice.order_id)
       .single();
 
@@ -62,55 +62,53 @@ export async function POST(
       );
     }
 
-    // 4. Load order items to restore stock
-    const { data: orderItems } = await supabaseAdmin
-      .from("order_items")
-      .select("product_id, quantity, free_quantity")
-      .eq("order_id", invoice.order_id);
+    // 4–6. Restock — skipped for inter-branch auto-bills (stock was never touched by them)
+    if (!order.is_inter_branch) {
+      const { data: orderItems } = await supabaseAdmin
+        .from("order_items")
+        .select("product_id, quantity, free_quantity")
+        .eq("order_id", invoice.order_id);
 
-    // 5. Load rep's location assignments for location stock restoration
-    let locationIds: string[] = [];
-    if (order.sales_rep_id) {
-      const { data: assignments } = await supabaseAdmin
-        .from("location_assignments")
-        .select("location_id")
-        .eq("user_id", order.sales_rep_id);
-      locationIds = assignments?.map((a: any) => a.location_id) ?? [];
-    }
+      let locationIds: string[] = [];
+      if (order.sales_rep_id) {
+        const { data: assignments } = await supabaseAdmin
+          .from("location_assignments")
+          .select("location_id")
+          .eq("user_id", order.sales_rep_id);
+        locationIds = assignments?.map((a: any) => a.location_id) ?? [];
+      }
 
-    // 6. Restock all items
-    if (orderItems && orderItems.length > 0) {
-      for (const item of orderItems) {
-        const totalQty = (item.quantity || 0) + (item.free_quantity || 0);
+      if (orderItems && orderItems.length > 0) {
+        for (const item of orderItems) {
+          const totalQty = (item.quantity || 0) + (item.free_quantity || 0);
 
-        // Restore global stock
-        const { data: prod } = await supabaseAdmin
-          .from("products")
-          .select("stock_quantity")
-          .eq("id", item.product_id)
-          .single();
-
-        if (prod) {
-          await supabaseAdmin
+          const { data: prod } = await supabaseAdmin
             .from("products")
-            .update({ stock_quantity: prod.stock_quantity + totalQty })
-            .eq("id", item.product_id);
-        }
+            .select("stock_quantity")
+            .eq("id", item.product_id)
+            .single();
 
-        // Restore location stock
-        if (locationIds.length > 0) {
-          const { data: locStocks } = await supabaseAdmin
-            .from("product_stocks")
-            .select("id, quantity")
-            .eq("product_id", item.product_id)
-            .in("location_id", locationIds)
-            .order("quantity", { ascending: false });
-
-          if (locStocks && locStocks.length > 0) {
+          if (prod) {
             await supabaseAdmin
+              .from("products")
+              .update({ stock_quantity: prod.stock_quantity + totalQty })
+              .eq("id", item.product_id);
+          }
+
+          if (locationIds.length > 0) {
+            const { data: locStocks } = await supabaseAdmin
               .from("product_stocks")
-              .update({ quantity: locStocks[0].quantity + totalQty })
-              .eq("id", locStocks[0].id);
+              .select("id, quantity")
+              .eq("product_id", item.product_id)
+              .in("location_id", locationIds)
+              .order("quantity", { ascending: false });
+
+            if (locStocks && locStocks.length > 0) {
+              await supabaseAdmin
+                .from("product_stocks")
+                .update({ quantity: locStocks[0].quantity + totalQty })
+                .eq("id", locStocks[0].id);
+            }
           }
         }
       }

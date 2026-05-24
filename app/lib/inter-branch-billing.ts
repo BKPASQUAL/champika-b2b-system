@@ -224,6 +224,7 @@ export async function generateInterBranchBill(params: {
         business_id: agencyBusinessId,
         total_amount: totalBillAmount,
         status: "Delivered",
+        is_inter_branch: true,
         notes: `Auto-generated monthly bill for ${customerName} (${agencyName} Items) - ${now.toLocaleString("default", { month: "long" })} ${year}`,
         order_date: startDate,
       })
