@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
 import { BUSINESS_IDS, BUSINESS_NAMES } from "@/app/config/business-constants";
+import { triggerAgencyBillsForInvoice } from "@/app/lib/inter-branch-billing";
 
 // --- Validation Schemas ---
 
@@ -659,6 +660,20 @@ export async function POST(request: NextRequest) {
       activityRecordId = actRec?.id ?? null;
     } catch (actErr) {
       console.error("Activity record (invoice) failed (non-critical):", actErr);
+    }
+
+    // 11. Trigger inter-branch billing for Champika Retail or Distribution invoices
+    //     that are created directly as Delivered (not via the order status-change flow).
+    if (
+      val.orderStatus === "Delivered" &&
+      resolvedBusinessId &&
+      (resolvedBusinessId === BUSINESS_IDS.CHAMPIKA_RETAIL ||
+        resolvedBusinessId === BUSINESS_IDS.CHAMPIKA_DISTRIBUTION)
+    ) {
+      const invoiceProductIds = val.items.map((i) => i.productId);
+      triggerAgencyBillsForInvoice(resolvedBusinessId, invoiceProductIds).catch(
+        (err) => console.error("[InterBranch] trigger failed (non-critical):", err),
+      );
     }
 
     return NextResponse.json(
