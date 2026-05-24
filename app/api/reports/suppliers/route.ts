@@ -35,7 +35,6 @@ export async function GET(request: NextRequest) {
         )
       `)
       .eq("order.status", "Delivered")
-      .eq("order.is_inter_branch", false)
       .gte("order.created_at", fromDate)
       .lte("order.created_at", toDate);
 
@@ -86,13 +85,19 @@ export async function GET(request: NextRequest) {
     });
 
     // 4. Aggregate sales → products + customers + invoices
-    // Double-guard: skip inter-branch items even if the query filter missed them
+    // Exclude inter-branch orders: flag check + customer name check (flag may be unset on older rows)
+    const isInterBranch = (item: any) => {
+      if (item.order?.is_inter_branch === true) return true;
+      const name = (item.order?.customer?.shop_name || "").toLowerCase();
+      return name.includes("champika hardware");
+    };
+
     (orderItems || []).forEach((item: any) => {
+      if (isInterBranch(item)) return;
       const supplier = item.product?.supplier_name || "Unknown Supplier";
       const pid = item.product?.id;
       const order = item.order;
       if (!pid || !order) return;
-      if (order.is_inter_branch === true) return;
 
       const qty = Number(item.quantity) || 0;
       const freeQty = Number(item.free_quantity) || 0;
