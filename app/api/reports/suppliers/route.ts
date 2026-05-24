@@ -86,11 +86,13 @@ export async function GET(request: NextRequest) {
     });
 
     // 4. Aggregate sales → products + customers + invoices
+    // Double-guard: skip inter-branch items even if the query filter missed them
     (orderItems || []).forEach((item: any) => {
       const supplier = item.product?.supplier_name || "Unknown Supplier";
       const pid = item.product?.id;
       const order = item.order;
       if (!pid || !order) return;
+      if (order.is_inter_branch === true) return;
 
       const qty = Number(item.quantity) || 0;
       const freeQty = Number(item.free_quantity) || 0;
