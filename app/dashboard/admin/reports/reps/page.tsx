@@ -519,35 +519,59 @@ export default function RepAnalyticsPage() {
               )}
             </div>
 
-            {/* Commission Rules Reference */}
-            {commissionRules.length > 0 && (
-              <Card>
-                <CardHeader className="pb-2 pt-4 px-4">
-                  <div className="flex items-center gap-2">
-                    <Percent className="h-4 w-4 text-muted-foreground" />
-                    <CardTitle className="text-xs text-muted-foreground font-medium">
-                      Commission Rules Reference
-                    </CardTitle>
-                    <Badge variant="secondary" className="text-[10px]">{commissionRules.length}</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="px-4 pb-4">
-                  <div className="flex flex-wrap gap-2">
-                    {commissionRules.map((rule: any) => (
-                      <div
-                        key={rule.id}
-                        className="flex items-center gap-1.5 bg-muted/40 rounded-md px-2.5 py-1.5 border text-xs"
-                      >
-                        <span className="font-medium text-muted-foreground">{rule.supplier_name}</span>
-                        <span className="text-muted-foreground/50">·</span>
-                        <span>{rule.category}{rule.sub_category ? ` / ${rule.sub_category}` : ""}</span>
-                        <RateBadge rate={rule.rate} />
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+            {/* Commission by Category tiles */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Percent className="h-4 w-4 text-primary" />
+                <h2 className="text-sm font-semibold">Commission by Category</h2>
+                {current.commissionByCategory?.length > 0 && (
+                  <Badge variant="secondary" className="text-[10px]">
+                    {current.commissionByCategory.length} categories
+                  </Badge>
+                )}
+              </div>
+              {!current.commissionByCategory?.length ? (
+                <Card>
+                  <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                    No category data for this period.
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {current.commissionByCategory.map((c: any) => (
+                    <Card key={`${c.supplier}||${c.category}`} className="relative overflow-hidden">
+                      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-indigo-400 to-emerald-400" />
+                      <CardContent className="pt-4 pb-3 px-4 space-y-2">
+                        {/* Category name */}
+                        <div>
+                          <p className="text-xs font-bold leading-tight truncate">{c.category}</p>
+                          <p className="text-[10px] text-muted-foreground truncate mt-0.5">{c.supplier}</p>
+                        </div>
+
+                        {/* Commission — big number */}
+                        <div>
+                          <p className="text-[10px] text-muted-foreground">Commission</p>
+                          <p className="text-base md:text-lg font-bold text-purple-600 leading-tight">
+                            LKR {fmt(c.commission)}
+                          </p>
+                        </div>
+
+                        <div className="border-t pt-2 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <p className="text-[10px] text-muted-foreground">Sales</p>
+                            <p className="text-[11px] font-semibold">LKR {fmt(c.sales)}</p>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <p className="text-[10px] text-muted-foreground">Rate</p>
+                            <RateBadge rate={parseFloat(c.rate.toFixed(1))} />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {/* Invoices + Commission Detail Tabs */}
             <Card>
