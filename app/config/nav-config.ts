@@ -180,6 +180,11 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           icon: Factory,
         },
         {
+          name: "Rep Analytics",
+          href: "/dashboard/admin/reports/reps",
+          icon: Users,
+        },
+        {
           name: "Wireman Agency",
           href: "/dashboard/admin/reports/wireman",
           icon: Factory,
