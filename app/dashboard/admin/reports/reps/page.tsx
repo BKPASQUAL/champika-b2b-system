@@ -538,61 +538,35 @@ export default function RepAnalyticsPage() {
                 </Card>
               ) : (
                 <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
-                  {commissionRules.map((rule: any) => {
-                    const tier =
-                      rule.rate >= 10 ? {
-                        bg: "bg-green-50 border-green-200",
-                        numColor: "text-green-700",
-                        label: "bg-green-100 text-green-700",
-                        divider: "border-green-100",
-                      } : rule.rate >= 5 ? {
-                        bg: "bg-blue-50 border-blue-200",
-                        numColor: "text-blue-700",
-                        label: "bg-blue-100 text-blue-700",
-                        divider: "border-blue-100",
-                      } : rule.rate >= 2 ? {
-                        bg: "bg-amber-50 border-amber-200",
-                        numColor: "text-amber-700",
-                        label: "bg-amber-100 text-amber-700",
-                        divider: "border-amber-100",
-                      } : {
-                        bg: "bg-gray-50 border-gray-200",
-                        numColor: "text-gray-600",
-                        label: "bg-gray-100 text-gray-600",
-                        divider: "border-gray-100",
-                      };
-                    return (
-                      <Card key={rule.id} className={`relative overflow-hidden ${tier.bg}`}>
-                        <CardContent className="pt-4 pb-3 px-4 space-y-2">
-                          {/* Rate — big focal number */}
-                          <div className="flex items-end justify-between gap-1">
-                            <p className={`text-3xl md:text-4xl font-extrabold leading-none ${tier.numColor}`}>
-                              {rule.rate}%
+                  {commissionRules.map((rule: any) => (
+                    <Card key={rule.id} className="relative overflow-hidden bg-blue-50 border-blue-200">
+                      <CardContent className="pt-4 pb-3 px-4 space-y-2">
+                        <div className="flex items-end justify-between gap-1">
+                          <p className="text-3xl md:text-4xl font-extrabold leading-none text-blue-700">
+                            {rule.rate}%
+                          </p>
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded mb-0.5 bg-blue-100 text-blue-700">
+                            commission
+                          </span>
+                        </div>
+                        <div className="border-t border-blue-100 pt-2 space-y-1">
+                          <div>
+                            <p className="text-[10px] text-muted-foreground">Supplier</p>
+                            <p className="text-xs font-semibold truncate">{rule.supplier_name || "—"}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-muted-foreground">Category</p>
+                            <p className="text-xs font-medium truncate">
+                              {rule.category}
+                              {rule.sub_category && (
+                                <span className="text-muted-foreground font-normal"> / {rule.sub_category}</span>
+                              )}
                             </p>
-                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded mb-0.5 ${tier.label}`}>
-                              commission
-                            </span>
                           </div>
-
-                          <div className={`border-t ${tier.divider} pt-2 space-y-1`}>
-                            <div>
-                              <p className="text-[10px] text-muted-foreground">Supplier</p>
-                              <p className="text-xs font-semibold truncate">{rule.supplier_name || "—"}</p>
-                            </div>
-                            <div>
-                              <p className="text-[10px] text-muted-foreground">Category</p>
-                              <p className="text-xs font-medium truncate">
-                                {rule.category}
-                                {rule.sub_category && (
-                                  <span className="text-muted-foreground font-normal"> / {rule.sub_category}</span>
-                                )}
-                              </p>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
                 </div>
               )}
             </div>
