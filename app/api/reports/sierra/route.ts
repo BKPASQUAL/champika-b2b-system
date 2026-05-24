@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
          ),
          product:products!inner (id, name, sku, supplier_name, cost_price)`
       )
-      .neq("order.status", "Cancelled")
+      .eq("order.status", "Delivered")
       .ilike("product.supplier_name", "%Sierra%")
       .gte("order.order_date", fromDate)
       .lte("order.order_date", toDate);

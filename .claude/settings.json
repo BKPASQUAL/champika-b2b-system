@@ -10,7 +10,9 @@
       "Bash(curl -s -X POST http://localhost:3000/api/orange/inter-branch/bill -H 'Content-Type: application/json' -d '{\"customerName\": \"Champika Hardware - Retail\"}')",
       "Bash(curl -s -X POST http://localhost:3000/api/wireman/inter-branch/bill -H 'Content-Type: application/json' -d '{\"customerName\": \"Champika Hardware - Distribution\"}')",
       "Bash(curl -s -X POST http://localhost:3000/api/wireman/inter-branch/bill -H 'Content-Type: application/json' -d '{\"customerName\": \"Champika Hardware - Retail\"}')",
-      "Bash(python3 -)"
+      "Bash(python3 -)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Projects\\\\champika-b2b-system\" -Recurse -Directory -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object -ExpandProperty FullName)"
     ],
     "additionalDirectories": [
       "\\tmp",

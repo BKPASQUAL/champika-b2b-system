@@ -242,7 +242,7 @@ export async function GET(
     let totalUnitsSold = 0;
 
     finalTransactions.forEach((tx: any) => {
-      if (tx.type === "SALE") {
+      if (tx.type === "SALE" && tx.status === "Delivered") {
         const date = new Date(tx.timestamp);
         const monthKey = `${date.getFullYear()}-${String(
           date.getMonth() + 1,
