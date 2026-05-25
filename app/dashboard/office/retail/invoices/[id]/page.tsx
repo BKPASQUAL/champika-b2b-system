@@ -435,24 +435,22 @@ export default function RetailViewInvoicePage({
                 </CardContent>
               </Card>
 
-              <Card className="shadow-sm">
+              <Card className="shadow-sm border-l-4 border-l-green-500">
                 <CardHeader className="pb-2">
-                  <CardDescription className="text-xs font-semibold uppercase tracking-wider">
-                    Sales Representative
+                  <CardDescription className="text-xs font-semibold uppercase tracking-wider text-green-600">
+                    Bill From
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="flex items-start gap-4">
-                  <Avatar className="h-10 w-10 border">
-                    <AvatarFallback>
-                      <User className="w-5 h-5 text-muted-foreground" />
-                    </AvatarFallback>
+                  <Avatar className="h-10 w-10 border bg-green-50 text-green-600">
+                    <AvatarFallback>CH</AvatarFallback>
                   </Avatar>
                   <div className="space-y-1">
                     <h3 className="font-semibold text-base leading-none">
-                      {invoice.salesRep}
+                      Champika Hardware - Retail
                     </h3>
                     <p className="text-xs text-muted-foreground">
-                      Authorized Agent
+                      Retail Division
                     </p>
                   </div>
                 </CardContent>

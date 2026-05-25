@@ -23,7 +23,7 @@ const invoiceItemSchema = z.object({
 
 const invoiceSchema = z.object({
   customerId: z.string().min(1, "Customer is required"),
-  salesRepId: z.string().min(1, "Sales representative is required"),
+  salesRepId: z.string().min(1).optional().nullable(),
   businessId: z.string().optional(),
   invoiceDate: z.string().optional(),
   dueDate: z.string().optional(),

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
+import { BUSINESS_NAMES, BUSINESS_IDS } from "@/app/config/business-constants";
 
 // --- Validation Schemas ---
 const invoiceItemSchema = z.object({
@@ -57,6 +58,7 @@ export async function GET(
         orders (
           id,
           sales_rep_id,
+          business_id,
           status,
           order_date,
           notes,
@@ -140,7 +142,9 @@ export async function GET(
         phone: invoice.customers?.phone || "",
         address: invoice.customers?.address || "",
       },
-      salesRep: invoice.orders?.profiles?.full_name || "Unknown",
+      salesRep: invoice.orders?.business_id === BUSINESS_IDS.CHAMPIKA_RETAIL
+        ? "Champika Hardware - Retail"
+        : invoice.orders?.profiles?.full_name || (BUSINESS_NAMES as Record<string, string>)[invoice.orders?.business_id] || "Direct Sale",
       totals: { grandTotal: invoice.total_amount },
 
       // ✅ ITEMS MAPPING (Including Full Product Details)

@@ -116,7 +116,6 @@ export default function CreateRetailInvoicePage() {
   // Business Context
   const [businessId, setBusinessId] = useState<string | null>(null);
   const [businessName, setBusinessName] = useState<string>("");
-  const [userId, setUserId] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
@@ -191,11 +190,10 @@ export default function CreateRetailInvoicePage() {
           return;
         }
 
-        const resolvedBusinessName = user.businessName ?? BUSINESS_NAMES[BUSINESS_IDS.CHAMPIKA_RETAIL];
+        const resolvedBusinessName = BUSINESS_NAMES[BUSINESS_IDS.CHAMPIKA_RETAIL];
 
         setBusinessId(BUSINESS_IDS.CHAMPIKA_RETAIL);
         setBusinessName(resolvedBusinessName);
-        setUserId(user.id);
         setUserName(user.name ?? null);
         setUserEmail(user.email ?? null);
 
@@ -227,6 +225,7 @@ export default function CreateRetailInvoicePage() {
 
         if (guest) {
           setGuestCustomerId(guest.id);
+          setCustomerId(guest.id);
         }
         // ------------------------------------------------
 
@@ -248,10 +247,10 @@ export default function CreateRetailInvoicePage() {
         );
 
         setStockLoading(true);
-        const productsRes = await fetch(`/api/rep/stock?userId=${user.id}`);
+        const productsRes = await fetch("/api/products?active=true");
 
         if (!productsRes.ok) {
-          throw new Error("Failed to fetch assigned stock");
+          throw new Error("Failed to fetch products");
         }
 
         const productsData = await productsRes.json();
@@ -260,20 +259,14 @@ export default function CreateRetailInvoicePage() {
           setProducts(
             productsData.map((p: any) => ({
               id: p.id,
-              sku: p.sku,
+              sku: p.sku || "N/A",
               name: p.name,
-              selling_price: p.selling_price || 0,
+              selling_price: p.sellingPrice || 0,
               mrp: p.mrp || 0,
-              stock_quantity: p.stock_quantity || 0,
-              unit_of_measure: p.unit_of_measure || "unit",
+              stock_quantity: p.stock || 0,
+              unit_of_measure: p.unitOfMeasure || "unit",
             }))
           );
-
-          if (productsData.length === 0) {
-            toast.warning(
-              "No stock found. Please check your Warehouse Assignments."
-            );
-          }
         } else {
           console.error("Invalid product data format", productsData);
           setProducts([]);
@@ -397,7 +390,7 @@ export default function CreateRetailInvoicePage() {
       toast.error("Please select a customer.");
       return;
     }
-    if (!businessId || !userId) {
+    if (!businessId) {
       toast.error("Session invalid. Please refresh.");
       return;
     }
@@ -410,7 +403,6 @@ export default function CreateRetailInvoicePage() {
 
     const invoiceData = {
       customerId,
-      salesRepId: userId,
       businessId: businessId,
       items,
       invoiceNumber,
@@ -613,7 +605,7 @@ export default function CreateRetailInvoicePage() {
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent
-                      className="w-[var(--radix-popover-trigger-width)] p-0"
+                      className="w-(--radix-popover-trigger-width) p-0"
                       align="start"
                     >
                       <Command>
@@ -751,7 +743,7 @@ export default function CreateRetailInvoicePage() {
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent
-                      className="w-[var(--radix-popover-trigger-width)] p-0"
+                      className="w-(--radix-popover-trigger-width) p-0"
                       align="start"
                     >
                       <Command>
@@ -759,7 +751,7 @@ export default function CreateRetailInvoicePage() {
                         <CommandList>
                           <CommandEmpty>
                             {products.length === 0
-                              ? "No assigned stock found"
+                              ? "No products found"
                               : "No products found."}
                           </CommandEmpty>
                           <CommandGroup>
@@ -798,7 +790,7 @@ export default function CreateRetailInvoicePage() {
                     </PopoverContent>
                   </Popover>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Showing products from your assigned warehouse locations.
+                    Showing all retail products.
                   </p>
                 </div>
               </div>
