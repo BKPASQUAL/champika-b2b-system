@@ -10,6 +10,10 @@ import {
   Save,
   Package,
   Loader2,
+  Check,
+  ChevronsUpDown,
+  Printer,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,12 +32,34 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
 import { CustomerDialogs } from "../../customers/_components/CustomerDialogs";
 import { CustomerFormData } from "../../customers/types";
+import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 
 // --- Types ---
 
@@ -63,8 +89,6 @@ interface InvoiceItem {
   total: number;
 }
 
-import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
-
 const parseNumber = (val: string | number) => {
   if (val === "" || val === undefined || val === null) return 0;
   return Number(val);
@@ -75,8 +99,6 @@ export default function CreateSierraInvoicePage() {
   const [loading, setLoading] = useState(true);
   const [stockLoading, setStockLoading] = useState(false);
 
-  // Input Refs for Fast Data Entry
-  const productSearchInputRef = useRef<HTMLInputElement>(null);
   const qtyInputRef = useRef<HTMLInputElement>(null);
 
   // Business Context
@@ -89,18 +111,14 @@ export default function CreateSierraInvoicePage() {
 
   // Data State
   const [products, setProducts] = useState<Product[]>([]);
-  const [customers, setCustomers] = useState<{ id: string; name: string; phone?: string; ownerName?: string; }[]>(
-    [],
-  );
+  const [customers, setCustomers] = useState<{ id: string; name: string; phone?: string; ownerName?: string }[]>([]);
 
   // Form State
   const [customerId, setCustomerId] = useState<string>("");
-  const [invoiceDate, setInvoiceDate] = useState(
-    new Date().toISOString().split("T")[0],
-  );
-  // Manual Field
+  const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split("T")[0]);
   const [manualInvoiceNo, setManualInvoiceNo] = useState("");
   const [noManualRef, setNoManualRef] = useState(false);
+  const [paymentType, setPaymentType] = useState<string>("Cash");
 
   const salesRepId = currentUser?.id || "";
   const orderStatus = "Delivered";
@@ -123,15 +141,18 @@ export default function CreateSierraInvoicePage() {
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [extraDiscount, setExtraDiscount] = useState<number | string>("");
 
+  // Popover state
+  const [productOpen, setProductOpen] = useState(false);
+
   const [currentItem, setCurrentItem] = useState<{
     productId: string;
     sku: string;
     quantity: number | string;
     freeQuantity: number | string;
     unit: string;
-    mrp: number;
-    unitPrice: number;
-    discountPercent: number;
+    mrp: number | string;
+    unitPrice: number | string;
+    discountPercent: number | string;
     stockAvailable: number;
   }>({
     productId: "",
@@ -139,9 +160,9 @@ export default function CreateSierraInvoicePage() {
     quantity: "",
     freeQuantity: "",
     unit: "",
-    mrp: 0,
-    unitPrice: 0,
-    discountPercent: 0,
+    mrp: "",
+    unitPrice: "",
+    discountPercent: "",
     stockAvailable: 0,
   });
 
@@ -160,14 +181,15 @@ export default function CreateSierraInvoicePage() {
         setBusinessId(BUSINESS_IDS.SIERRA_AGENCY);
         setCurrentUser({ id: user.id, name: user.name, email: user.email });
 
-        const customersRes = await fetch(
-          `/api/customers?businessId=${BUSINESS_IDS.SIERRA_AGENCY}`,
-        );
+        const customersRes = await fetch(`/api/customers?businessId=${BUSINESS_IDS.SIERRA_AGENCY}`);
         const customersData = await customersRes.json();
         setCustomers(
           customersData.map((c: any) => ({
             id: c.id,
-            name: c.shopName, phone: c.phone || "", ownerName: c.ownerName || "" })),
+            name: c.shopName,
+            phone: c.phone || "",
+            ownerName: c.ownerName || "",
+          })),
         );
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -187,13 +209,10 @@ export default function CreateSierraInvoicePage() {
 
       setStockLoading(true);
       try {
-        const res = await fetch(
-          `/api/rep/stock?userId=${salesRepId}&supplierLike=Sierra`,
-        );
+        const res = await fetch(`/api/rep/stock?userId=${salesRepId}&supplierLike=Sierra`);
         if (!res.ok) throw new Error("Failed to load stock");
 
         const productsData = await res.json();
-
         setProducts(
           productsData.map((p: any) => ({
             id: p.id,
@@ -231,13 +250,10 @@ export default function CreateSierraInvoicePage() {
       unit: product.unit_of_measure,
       mrp: product.mrp,
       unitPrice: product.selling_price,
-      discountPercent: 0,
+      discountPercent: "",
       stockAvailable: product.stock_quantity,
     });
-  };
 
-  const onProductDropdownSelect = () => {
-    // Auto-focus quantity input after selection
     setTimeout(() => {
       qtyInputRef.current?.focus({ preventScroll: true });
     }, 100);
@@ -246,19 +262,11 @@ export default function CreateSierraInvoicePage() {
   // --- Global Keyboard Shortcuts ---
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // Shift + F to focus product search in the dropdown
       if (e.shiftKey && (e.key === "f" || e.key === "F")) {
         e.preventDefault();
-        // Look for the input element inside the searchable dropdown that has the placeholder text for products
-        const searchInput = document.querySelector('input[placeholder="Search Product..."]') as HTMLInputElement;
-        if (searchInput) {
-          searchInput.focus({ preventScroll: true });
-        } else {
-            // click the dropdown trigger to open it
-            const triggers = document.querySelectorAll('.ring-offset-background');
-            if(triggers && triggers.length > 1) { // 2nd trigger is product search
-                (triggers[1] as HTMLElement).click();
-            }
+        const triggers = document.querySelectorAll('button[role="combobox"]');
+        if (triggers && triggers.length > 0) {
+          (triggers[0] as HTMLElement).click();
         }
       }
     };
@@ -289,17 +297,17 @@ export default function CreateSierraInvoicePage() {
 
     const totalReqQty = qty + freeQty;
     if (totalReqQty > currentItem.stockAvailable) {
-      toast.error(
-        `Insufficient stock! Available: ${currentItem.stockAvailable}`,
-      );
+      toast.error(`Insufficient stock! Available: ${currentItem.stockAvailable}`);
       return;
     }
 
     const product = products.find((p) => p.id === currentItem.productId);
     if (!product) return;
 
-    const grossTotal = currentItem.unitPrice * qty;
-    const discountAmount = (grossTotal * currentItem.discountPercent) / 100;
+    const unitPrice = parseNumber(currentItem.unitPrice);
+    const discountPercent = parseNumber(currentItem.discountPercent);
+    const grossTotal = unitPrice * qty;
+    const discountAmount = (grossTotal * discountPercent) / 100;
     const netTotal = grossTotal - discountAmount;
 
     const newItem: InvoiceItem = {
@@ -310,10 +318,10 @@ export default function CreateSierraInvoicePage() {
       unit: product.unit_of_measure,
       quantity: qty,
       freeQuantity: freeQty,
-      mrp: currentItem.mrp,
-      unitPrice: currentItem.unitPrice,
-      discountPercent: currentItem.discountPercent,
-      discountAmount: discountAmount,
+      mrp: parseNumber(currentItem.mrp),
+      unitPrice,
+      discountPercent,
+      discountAmount,
       total: netTotal,
     };
 
@@ -325,9 +333,9 @@ export default function CreateSierraInvoicePage() {
       quantity: "",
       freeQuantity: "",
       unit: "",
-      mrp: 0,
-      unitPrice: 0,
-      discountPercent: 0,
+      mrp: "",
+      unitPrice: "",
+      discountPercent: "",
       stockAvailable: 0,
     });
   };
@@ -368,12 +376,14 @@ export default function CreateSierraInvoicePage() {
       });
 
       invalidateCache("/api/customers");
-      // Refresh customers and auto-select the new one
-      const customersRes = await fetch(
-        `/api/customers?businessId=${BUSINESS_IDS.SIERRA_AGENCY}`,
-      );
+      const customersRes = await fetch(`/api/customers?businessId=${BUSINESS_IDS.SIERRA_AGENCY}`);
       const customersData = await customersRes.json();
-      const mapped = customersData.map((c: any) => ({ id: c.id, name: c.shopName, phone: c.phone || "", ownerName: c.ownerName || "" }));
+      const mapped = customersData.map((c: any) => ({
+        id: c.id,
+        name: c.shopName,
+        phone: c.phone || "",
+        ownerName: c.ownerName || "",
+      }));
       setCustomers(mapped);
       if (data.id) setCustomerId(data.id);
     } catch (error: any) {
@@ -381,7 +391,7 @@ export default function CreateSierraInvoicePage() {
     }
   };
 
-  const handleSaveInvoice = async () => {
+  const handleSaveAction = async (action: "save" | "print" | "download") => {
     if (!customerId) {
       toast.error("Please select a customer.");
       return;
@@ -413,6 +423,9 @@ export default function CreateSierraInvoicePage() {
       grandTotal: grandTotal,
       orderStatus,
       businessId,
+      paymentType,
+      paymentStatus: paymentType === "Cash" ? "Paid" : "Unpaid",
+      paidAmount: paymentType === "Cash" ? grandTotal : 0,
       performedByName: currentUser?.name ?? null,
       performedByEmail: currentUser?.email ?? null,
     };
@@ -432,7 +445,15 @@ export default function CreateSierraInvoicePage() {
 
       toast.success("Invoice Created Successfully!");
       invalidatePaymentCaches();
-      router.push("/dashboard/office/sierra/invoices");
+
+      let redirect = "/dashboard/office/sierra/invoices";
+      if (action === "print") {
+        redirect = `/dashboard/office/sierra/invoices/${data.data.id}?print=true`;
+      } else if (action === "download") {
+        redirect = `/dashboard/office/sierra/invoices/${data.data.id}?download=true`;
+      }
+
+      router.push(redirect);
     } catch (error: any) {
       toast.error(error.message || "Failed to create invoice");
     } finally {
@@ -442,26 +463,18 @@ export default function CreateSierraInvoicePage() {
 
   // Calculations
   const subtotal = items.reduce((sum, item) => sum + item.total, 0);
-  const totalItemDiscount = items.reduce(
-    (sum, item) => sum + item.discountAmount,
-    0,
-  );
-  const grossTotal = items.reduce(
-    (sum, item) => sum + item.unitPrice * item.quantity,
-    0,
-  );
+  const totalItemDiscount = items.reduce((sum, item) => sum + item.discountAmount, 0);
+  const grossTotal = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
 
   const extraDiscountAmount = (subtotal * parseNumber(extraDiscount)) / 100;
   const grandTotal = subtotal - extraDiscountAmount;
 
-  const availableProducts = products.filter(
-    (p) => !items.some((i) => i.productId === p.id),
-  );
+  const availableProducts = products.filter((p) => !items.some((i) => i.productId === p.id));
 
-  const currentLiveQty = parseNumber(currentItem.quantity);
-  const currentLiveDiscountAmt =
-    (currentItem.unitPrice * currentLiveQty * currentItem.discountPercent) /
-    100;
+  const safeUnitPrice = parseNumber(currentItem.unitPrice);
+  const safeQuantity = parseNumber(currentItem.quantity);
+  const safeDiscount = parseNumber(currentItem.discountPercent);
+  const currentDiscountAmt = (safeUnitPrice * safeQuantity * safeDiscount) / 100;
 
   if (loading && !salesRepId) {
     return (
@@ -473,34 +486,47 @@ export default function CreateSierraInvoicePage() {
 
   return (
     <div className="space-y-4 mx-auto">
-      <div className="flex items-center gap-4">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => router.push("/dashboard/office/sierra/invoices")}
-        >
-          <ArrowLeft className="w-4 h-4" />
-        </Button>
-        <div className="flex-1">
-          <h1 className="text-3xl font-bold tracking-tight">
-            New Customer Bill
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Create a bill for Sierra walk-in or agency sales
-          </p>
+      <div className="flex flex-col md:flex-row items-center gap-4">
+        <div className="flex items-center gap-4 w-full md:w-auto">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => router.push("/dashboard/office/sierra/invoices")}
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
+          <div className="flex-1">
+            <h1 className="text-3xl font-bold tracking-tight">New Customer Bill</h1>
+            <p className="text-muted-foreground mt-1">Sierra Agency - Create a new customer invoice</p>
+          </div>
         </div>
-        <Button
-          onClick={handleSaveInvoice}
-          disabled={items.length === 0 || loading}
-          className="bg-red-600 hover:bg-red-700"
-        >
-          {loading ? (
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-          ) : (
-            <Save className="w-4 h-4 mr-2" />
-          )}
-          Save Bill
-        </Button>
+
+        <div className="flex items-center gap-2 ml-auto">
+          <Button
+            variant="outline"
+            onClick={() => handleSaveAction("download")}
+            disabled={items.length === 0 || loading}
+          >
+            {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+            Save & Download
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => handleSaveAction("print")}
+            disabled={items.length === 0 || loading}
+          >
+            {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Printer className="w-4 h-4 mr-2" />}
+            Save & Print
+          </Button>
+          <Button
+            onClick={() => handleSaveAction("save")}
+            disabled={items.length === 0 || loading}
+            className="bg-red-600 hover:bg-red-700"
+          >
+            {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+            Save Invoice
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -509,13 +535,14 @@ export default function CreateSierraInvoicePage() {
           {/* 1. Invoice Details */}
           <Card>
             <CardHeader>
-              <CardTitle>Details</CardTitle>
+              <CardTitle>Invoice Details</CardTitle>
+              <CardDescription>Customer and billing information</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <Label>Customer</Label>
+                    <Label>Customer <span className="text-red-500">*</span></Label>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -534,7 +561,7 @@ export default function CreateSierraInvoicePage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Date</Label>
+                  <Label>Invoice Date</Label>
                   <Input
                     type="date"
                     value={invoiceDate}
@@ -543,7 +570,6 @@ export default function CreateSierraInvoicePage() {
                 </div>
               </div>
 
-              {/* Manual Invoice No */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -577,92 +603,110 @@ export default function CreateSierraInvoicePage() {
                   )}
                 </div>
                 <div className="space-y-2">
-                  <Label>Sales Rep (Current User)</Label>
-                  <Input
-                    value={currentUser?.name || ""}
-                    disabled
-                    className="bg-muted"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Order Status</Label>
-                  <Input
-                    value="Delivered"
-                    disabled
-                    className="bg-green-50 text-green-700 font-medium border-green-200"
-                  />
+                  <Label>Payment Type <span className="text-red-500">*</span></Label>
+                  <Select value={paymentType} onValueChange={setPaymentType}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select Payment Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Cash">💵 Cash</SelectItem>
+                      <SelectItem value="Credit">📋 Credit</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {paymentType === "Cash" ? "✓ Invoice will be marked as Paid" : "⏳ Customer can pay later"}
+                  </p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* 2. Add Items */}
+          {/* 2. Add Products */}
           <Card>
             <CardHeader>
               <CardTitle>Add Products</CardTitle>
-              <CardDescription>
-                Showing stock for your assigned location
-              </CardDescription>
+              <CardDescription>Search and add products to the invoice</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Product Selection */}
               <div className="grid grid-cols-4 gap-4">
                 <div className="col-span-4 space-y-2">
                   <Label>
                     Product{" "}
-                    {stockLoading && (
-                      <Loader2 className="inline h-3 w-3 animate-spin ml-2 text-red-600" />
-                    )}
+                    {stockLoading && <Loader2 className="inline h-3 w-3 animate-spin ml-2 text-red-600" />}
                   </Label>
-                  <SearchableDropdown
-                    options={availableProducts.map((p) => ({
-                      id: p.id,
-                      name: p.name,
-                      info: `${p.company_code ? p.company_code + " • " : ""}${p.sku} • Stock: ${p.stock_quantity}`,
-                    }))}
-                    value={currentItem.productId}
-                    onChange={handleProductSelect}
-                    placeholder="Search Product..."
-                    disabled={stockLoading}
-                    searchInputRef={productSearchInputRef}
-                    onSelectCallback={onProductDropdownSelect}
-                  />
+                  <Popover open={productOpen} onOpenChange={setProductOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={productOpen}
+                        className="w-full justify-between"
+                        disabled={stockLoading}
+                      >
+                        {currentItem.productId
+                          ? products.find((p) => p.id === currentItem.productId)?.name
+                          : stockLoading
+                          ? "Loading products..."
+                          : "Select Product"}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-(--radix-popover-trigger-width) p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Search product..." />
+                        <CommandList>
+                          <CommandEmpty>
+                            {products.length === 0 ? "No stock found" : "No products found."}
+                          </CommandEmpty>
+                          <CommandGroup>
+                            {availableProducts.map((product) => (
+                              <CommandItem
+                                key={product.id}
+                                value={`${product.name} ${product.sku} ${product.company_code || ""}`}
+                                onSelect={() => {
+                                  handleProductSelect(product.id);
+                                  setProductOpen(false);
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    currentItem.productId === product.id ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                                <div className="flex-1">
+                                  <div className="font-medium">{product.name}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {product.company_code ? `${product.company_code} • ` : ""}
+                                    {product.sku} • Stock: {product.stock_quantity} • LKR {product.selling_price}
+                                  </div>
+                                </div>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Showing Sierra products from your assigned stock.
+                  </p>
                 </div>
               </div>
 
+              {/* Quantity and Free Quantity Row */}
               <div className="grid grid-cols-4 gap-4">
-                <div className="space-y-2">
-                  <Label>Unit Price</Label>
-                  <Input
-                    type="number"
-                    value={currentItem.unitPrice || ""}
-                    onChange={(e) =>
-                      setCurrentItem({
-                        ...currentItem,
-                        unitPrice: Number(e.target.value),
-                      })
-                    }
-                    onKeyDown={handleKeyDown}
-                    placeholder="0.00"
-                  />
-                </div>
                 <div className="space-y-2">
                   <Label>Quantity</Label>
                   <Input
                     ref={qtyInputRef}
                     type="number"
                     min="1"
-                    placeholder="Qty"
                     value={currentItem.quantity}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setCurrentItem({
-                        ...currentItem,
-                        quantity: val === "" ? "" : Number(val),
-                      });
-                    }}
+                    onChange={(e) =>
+                      setCurrentItem({ ...currentItem, quantity: e.target.value === "" ? "" : Number(e.target.value) })
+                    }
                     onKeyDown={handleKeyDown}
                   />
                 </div>
@@ -671,43 +715,16 @@ export default function CreateSierraInvoicePage() {
                   <Input
                     type="number"
                     min="0"
-                    placeholder="Free"
                     value={currentItem.freeQuantity}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setCurrentItem({
-                        ...currentItem,
-                        freeQuantity: val === "" ? "" : Number(val),
-                      });
-                    }}
+                    onChange={(e) =>
+                      setCurrentItem({ ...currentItem, freeQuantity: e.target.value === "" ? "" : Number(e.target.value) })
+                    }
                     onKeyDown={handleKeyDown}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label>Unit</Label>
-                  <Input
-                    value={currentItem.unit || "-"}
-                    disabled
-                    className="bg-muted"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-4 gap-4">
-                <div className="space-y-2">
-                  <Label>MRP</Label>
-                  <Input
-                    type="number"
-                    value={currentItem.mrp || ""}
-                    onChange={(e) =>
-                      setCurrentItem({
-                        ...currentItem,
-                        mrp: Number(e.target.value),
-                      })
-                    }
-                    onKeyDown={handleKeyDown}
-                    placeholder="0.00"
-                  />
+                  <Input value={currentItem.unit || "-"} disabled className="bg-muted" />
                 </div>
                 <div className="space-y-2">
                   <Label>Stock</Label>
@@ -715,11 +732,38 @@ export default function CreateSierraInvoicePage() {
                     value={currentItem.stockAvailable || "-"}
                     disabled
                     className={
-                      currentItem.stockAvailable > 0 &&
-                      currentItem.stockAvailable < 10
+                      currentItem.stockAvailable > 0 && currentItem.stockAvailable < 10
                         ? "text-destructive font-bold bg-muted"
                         : "bg-muted"
                     }
+                  />
+                </div>
+              </div>
+
+              {/* Price Row */}
+              <div className="grid grid-cols-4 gap-4">
+                <div className="space-y-2">
+                  <Label>MRP</Label>
+                  <Input
+                    type="number"
+                    value={currentItem.mrp}
+                    onChange={(e) =>
+                      setCurrentItem({ ...currentItem, mrp: e.target.value === "" ? "" : Number(e.target.value) })
+                    }
+                    onKeyDown={handleKeyDown}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Unit Price</Label>
+                  <Input
+                    type="number"
+                    value={currentItem.unitPrice}
+                    onChange={(e) =>
+                      setCurrentItem({ ...currentItem, unitPrice: e.target.value === "" ? "" : Number(e.target.value) })
+                    }
+                    onKeyDown={handleKeyDown}
+                    placeholder="0.00"
                   />
                 </div>
                 <div className="space-y-2">
@@ -728,12 +772,9 @@ export default function CreateSierraInvoicePage() {
                     type="number"
                     min="0"
                     max="100"
-                    value={currentItem.discountPercent || ""}
+                    value={currentItem.discountPercent}
                     onChange={(e) =>
-                      setCurrentItem({
-                        ...currentItem,
-                        discountPercent: Number(e.target.value),
-                      })
+                      setCurrentItem({ ...currentItem, discountPercent: e.target.value === "" ? "" : Number(e.target.value) })
                     }
                     onKeyDown={handleKeyDown}
                     placeholder="0"
@@ -742,10 +783,7 @@ export default function CreateSierraInvoicePage() {
                 <div className="space-y-2">
                   <Label>Total</Label>
                   <Input
-                    value={(
-                      currentItem.unitPrice * currentLiveQty -
-                      currentLiveDiscountAmt
-                    ).toFixed(2)}
+                    value={(safeUnitPrice * safeQuantity - currentDiscountAmt).toFixed(2)}
                     disabled
                     className="font-bold bg-muted"
                   />
@@ -759,7 +797,7 @@ export default function CreateSierraInvoicePage() {
                 disabled={!currentItem.productId}
               >
                 <Plus className="w-4 h-4 mr-2" />
-                Add to Bill
+                Add to Invoice
               </Button>
             </CardContent>
           </Card>
@@ -767,7 +805,7 @@ export default function CreateSierraInvoicePage() {
           {/* 3. Items Table */}
           <Card>
             <CardHeader>
-              <CardTitle>Items</CardTitle>
+              <CardTitle>Invoice Items</CardTitle>
               <CardDescription>{items.length} item(s) added</CardDescription>
             </CardHeader>
             <CardContent>
@@ -779,9 +817,7 @@ export default function CreateSierraInvoicePage() {
                       <TableHead>Product</TableHead>
                       <TableHead className="text-center w-20">Qty</TableHead>
                       <TableHead className="text-center w-20">Free</TableHead>
-                      <TableHead className="text-right w-24">
-                        Unit Price
-                      </TableHead>
+                      <TableHead className="text-right w-24">Unit Price</TableHead>
                       <TableHead className="text-center w-20">Disc%</TableHead>
                       <TableHead className="text-right w-28">Total</TableHead>
                       <TableHead className="w-12"></TableHead>
@@ -790,10 +826,7 @@ export default function CreateSierraInvoicePage() {
                   <TableBody>
                     {items.length === 0 ? (
                       <TableRow>
-                        <TableCell
-                          colSpan={8}
-                          className="text-center text-muted-foreground py-8"
-                        >
+                        <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                           <Package className="w-8 h-8 mx-auto mb-2 opacity-50" />
                           No items added yet
                         </TableCell>
@@ -803,36 +836,18 @@ export default function CreateSierraInvoicePage() {
                         <TableRow key={item.id}>
                           <TableCell>{idx + 1}</TableCell>
                           <TableCell>
-                            <div className="font-medium">
-                              {item.productName}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {item.sku}
-                            </div>
+                            <div className="font-medium">{item.productName}</div>
+                            <div className="text-xs text-muted-foreground">{item.sku}</div>
                           </TableCell>
+                          <TableCell className="text-center">{item.quantity} {item.unit}</TableCell>
+                          <TableCell className="text-center">{item.freeQuantity || "-"}</TableCell>
+                          <TableCell className="text-right">{item.unitPrice.toLocaleString()}</TableCell>
                           <TableCell className="text-center">
-                            {item.quantity} {item.unit}
+                            {item.discountPercent > 0 ? `${item.discountPercent}%` : "-"}
                           </TableCell>
-                          <TableCell className="text-center">
-                            {item.freeQuantity || "-"}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {item.unitPrice.toLocaleString()}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {item.discountPercent > 0
-                              ? `${item.discountPercent}%`
-                              : "-"}
-                          </TableCell>
-                          <TableCell className="text-right font-bold">
-                            {item.total.toLocaleString()}
-                          </TableCell>
+                          <TableCell className="text-right font-bold">{item.total.toLocaleString()}</TableCell>
                           <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              onClick={() => handleRemoveItem(item.id)}
-                            >
+                            <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(item.id)}>
                               <Trash2 className="w-4 h-4 text-destructive" />
                             </Button>
                           </TableCell>
@@ -850,25 +865,24 @@ export default function CreateSierraInvoicePage() {
         <div className="lg:col-span-1">
           <Card className="sticky top-6">
             <CardHeader>
-              <CardTitle>Summary</CardTitle>
+              <CardTitle>Invoice Summary</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Customer:</span>
                   <span className="font-medium">
-                    {customers.find((c) => c.id === customerId)?.name ||
-                      "Not Selected"}
+                    {customers.find((c) => c.id === customerId)?.name || "-"}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Bill By:</span>
-                  <span className="font-medium">
-                    {currentUser?.name || "-"}
+                  <span className="text-muted-foreground">Payment:</span>
+                  <span className={cn("font-medium", paymentType === "Cash" ? "text-green-600" : "text-orange-600")}>
+                    {paymentType === "Cash" ? "💵 Cash" : "📋 Credit"}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Date:</span>
+                  <span className="text-muted-foreground">Invoice Date:</span>
                   <span className="font-medium">{invoiceDate}</span>
                 </div>
               </div>
@@ -884,9 +898,7 @@ export default function CreateSierraInvoicePage() {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Item Discounts:</span>
-                  <span className="text-destructive">
-                    - LKR {totalItemDiscount.toLocaleString()}
-                  </span>
+                  <span className="text-destructive">- LKR {totalItemDiscount.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between text-sm font-medium">
                   <span>Subtotal:</span>
@@ -911,9 +923,7 @@ export default function CreateSierraInvoicePage() {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Extra Discount:</span>
-                  <span className="text-destructive">
-                    - LKR {extraDiscountAmount.toLocaleString()}
-                  </span>
+                  <span className="text-destructive">- LKR {extraDiscountAmount.toLocaleString()}</span>
                 </div>
               </div>
 
