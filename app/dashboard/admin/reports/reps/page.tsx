@@ -116,6 +116,25 @@ function RepList({
   }
   return (
     <ul className="py-1">
+      {/* Overall option */}
+      <li>
+        <button
+          onClick={() => onSelect("__overall__")}
+          className={`w-full text-left px-4 py-3 flex items-center justify-between hover:bg-muted/50 transition-colors border-b ${
+            selected === "__overall__" ? "bg-primary/5 border-l-2 border-l-primary" : "border-gray-100"
+          }`}
+        >
+          <div className="min-w-0">
+            <p className="text-xs font-semibold truncate">All Reps — Overall</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">
+              {reps.length} reps · combined view
+            </p>
+          </div>
+          {selected === "__overall__" && (
+            <ChevronRight className="h-3 w-3 text-primary shrink-0 ml-1" />
+          )}
+        </button>
+      </li>
       {reps.map((r) => (
         <li key={r.id}>
           <button
@@ -181,8 +200,8 @@ export default function RepAnalyticsPage() {
       const data = await res.json();
       setReps(data.reps || []);
       setCommissionRules(data.commissionRules || []);
-      if (data.reps?.length > 0 && !selectedRepId) {
-        setSelectedRepId(data.reps[0].id);
+      if (!selectedRepId) {
+        setSelectedRepId("__overall__");
       }
     } catch {
       toast.error("Failed to load rep analytics");
@@ -228,6 +247,22 @@ export default function RepAnalyticsPage() {
     (invoicePage - 1) * PER_PAGE,
     invoicePage * PER_PAGE
   );
+
+  // Overall aggregation
+  const overallStats = useMemo(() => ({
+    totalSales: reps.reduce((s, r) => s + r.totalSales, 0),
+    totalCollections: reps.reduce((s, r) => s + r.totalCollections, 0),
+    totalPendingCount: reps.reduce((s, r) => s + r.pendingCount, 0),
+    totalPendingAmount: reps.reduce((s, r) => s + r.pendingAmount, 0),
+    totalCommissionEarned: reps.reduce((s, r) => s + r.commissionEarned, 0),
+    totalCommissionPending: reps.reduce((s, r) => s + r.commissionPending, 0),
+  }), [reps]);
+
+  const byMostSales = useMemo(() =>
+    [...reps].sort((a, b) => b.totalSales - a.totalSales), [reps]);
+
+  const byMostCollections = useMemo(() =>
+    [...reps].sort((a, b) => b.totalCollections - a.totalCollections), [reps]);
 
   // ── Date controls (reused in sidebar + mobile) ──────────────────────────
   const DateControls = () => (
@@ -311,6 +346,7 @@ export default function RepAnalyticsPage() {
               <SelectValue placeholder="Select rep…" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="__overall__" className="text-xs font-semibold">All Reps — Overall</SelectItem>
               {reps.map((r) => (
                 <SelectItem key={r.id} value={r.id} className="text-xs">{r.name}</SelectItem>
               ))}
@@ -345,13 +381,203 @@ export default function RepAnalyticsPage() {
 
       {/* ── Main Content ─────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 md:space-y-6">
-        {!current ? (
+        {loading && !reps.length ? (
           <div className="flex items-center justify-center h-64 text-muted-foreground">
-            {loading ? (
-              <Loader2 className="h-6 w-6 animate-spin" />
-            ) : (
-              <span className="text-sm">Select a sales rep to view analytics</span>
+            <Loader2 className="h-6 w-6 animate-spin" />
+          </div>
+        ) : selectedRepId === "__overall__" ? (
+          /* ── Overall view ─────────────────────────────────────────────── */
+          <div className="space-y-4 md:space-y-6">
+            <div>
+              <h1 className="text-xl md:text-2xl font-bold leading-tight">All Reps — Overall</h1>
+              <p className="text-xs md:text-sm text-muted-foreground mt-1">
+                {reps.length} sales reps · delivered orders only
+              </p>
+            </div>
+
+            {/* Overall KPI cards */}
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+              <Card>
+                <CardHeader className="pb-1 pt-3 px-3">
+                  <CardTitle className="text-[10px] text-muted-foreground font-medium flex items-center gap-1">
+                    <DollarSign className="h-3 w-3" /> Total Sales
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-3 pb-3">
+                  <div className="text-sm md:text-base font-bold">LKR {fmt(overallStats.totalSales)}</div>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">all reps combined</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-green-50 border-green-200">
+                <CardHeader className="pb-1 pt-3 px-3">
+                  <CardTitle className="text-[10px] text-green-700 font-medium flex items-center gap-1">
+                    <Banknote className="h-3 w-3" /> Collections
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-3 pb-3">
+                  <div className="text-sm md:text-base font-bold text-green-700">LKR {fmt(overallStats.totalCollections)}</div>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">payments received</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-amber-50 border-amber-200">
+                <CardHeader className="pb-1 pt-3 px-3">
+                  <CardTitle className="text-[10px] text-amber-700 font-medium flex items-center gap-1">
+                    <Clock className="h-3 w-3" /> Pending Orders
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-3 pb-3">
+                  <div className="text-sm md:text-base font-bold text-amber-700">{overallStats.totalPendingCount}</div>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">LKR {fmt(overallStats.totalPendingAmount)}</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-red-50 border-red-200">
+                <CardHeader className="pb-1 pt-3 px-3">
+                  <CardTitle className="text-[10px] text-red-700 font-medium flex items-center gap-1">
+                    <ShoppingCart className="h-3 w-3" /> Outstanding
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-3 pb-3">
+                  <div className="text-sm md:text-base font-bold text-red-700">
+                    LKR {fmt(overallStats.totalSales - overallStats.totalCollections)}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">uncollected</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-purple-50 border-purple-200">
+                <CardHeader className="pb-1 pt-3 px-3">
+                  <CardTitle className="text-[10px] text-purple-700 font-medium flex items-center gap-1">
+                    <Award className="h-3 w-3" /> Commission Earned
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-3 pb-3">
+                  <div className="text-sm md:text-base font-bold text-purple-700">LKR {fmt(overallStats.totalCommissionEarned)}</div>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">from paid invoices</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-sky-50 border-sky-200">
+                <CardHeader className="pb-1 pt-3 px-3">
+                  <CardTitle className="text-[10px] text-sky-700 font-medium flex items-center gap-1">
+                    <TrendingUp className="h-3 w-3" /> Commission Pending
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-3 pb-3">
+                  <div className="text-sm md:text-base font-bold text-sky-700">LKR {fmt(overallStats.totalCommissionPending)}</div>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">awaiting collection</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Rankings side by side */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Most Sales */}
+              <Card>
+                <CardHeader className="pb-3 pt-4 px-4">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-primary" /> Most Sales
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-4 space-y-2">
+                  {byMostSales.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">No data.</p>
+                  ) : byMostSales.map((rep, idx) => {
+                    const pct = byMostSales[0].totalSales > 0
+                      ? (rep.totalSales / byMostSales[0].totalSales) * 100 : 0;
+                    const medal = idx === 0 ? "bg-yellow-100 text-yellow-700"
+                      : idx === 1 ? "bg-gray-200 text-gray-600"
+                      : idx === 2 ? "bg-orange-100 text-orange-700"
+                      : "bg-muted text-muted-foreground";
+                    return (
+                      <div key={rep.id} className="flex items-center gap-3">
+                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 ${medal}`}>
+                          {idx + 1}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-xs font-medium truncate">{rep.name}</p>
+                            <p className="text-xs font-bold ml-2 shrink-0">LKR {fmt(rep.totalSales)}</p>
+                          </div>
+                          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+
+              {/* Most Collections */}
+              <Card>
+                <CardHeader className="pb-3 pt-4 px-4">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Banknote className="h-4 w-4 text-green-600" /> Most Collections
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-4 space-y-2">
+                  {byMostCollections.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">No data.</p>
+                  ) : byMostCollections.map((rep, idx) => {
+                    const pct = byMostCollections[0].totalCollections > 0
+                      ? (rep.totalCollections / byMostCollections[0].totalCollections) * 100 : 0;
+                    const medal = idx === 0 ? "bg-yellow-100 text-yellow-700"
+                      : idx === 1 ? "bg-gray-200 text-gray-600"
+                      : idx === 2 ? "bg-orange-100 text-orange-700"
+                      : "bg-muted text-muted-foreground";
+                    return (
+                      <div key={rep.id} className="flex items-center gap-3">
+                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 ${medal}`}>
+                          {idx + 1}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-xs font-medium truncate">{rep.name}</p>
+                            <p className="text-xs font-bold ml-2 shrink-0 text-green-700">LKR {fmt(rep.totalCollections)}</p>
+                          </div>
+                          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Sales per rep chart */}
+            {byMostSales.length > 0 && (
+              <Card>
+                <CardHeader className="pb-2 pt-4 px-4">
+                  <CardTitle className="text-sm">Sales vs Collections — All Reps</CardTitle>
+                </CardHeader>
+                <CardContent className="px-2 md:px-4">
+                  <ResponsiveContainer width="100%" height={Math.max(180, byMostSales.length * 42)}>
+                    <BarChart
+                      data={byMostSales.map(r => ({
+                        name: r.name.split(" ")[0],
+                        fullName: r.name,
+                        sales: r.totalSales,
+                        collections: r.totalCollections,
+                      }))}
+                      layout="vertical"
+                      barGap={2}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                      <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`} />
+                      <YAxis dataKey="name" type="category" width={72} tick={{ fontSize: 10 }} />
+                      <Tooltip formatter={(v: any) => `LKR ${fmt(v)}`} labelFormatter={(_, p) => p[0]?.payload?.fullName} />
+                      <Legend wrapperStyle={{ fontSize: 11 }} />
+                      <Bar dataKey="sales" name="Sales" fill="#6366f1" radius={[0, 3, 3, 0]} />
+                      <Bar dataKey="collections" name="Collections" fill="#22c55e" radius={[0, 3, 3, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
             )}
+          </div>
+        ) : !current ? (
+          <div className="flex items-center justify-center h-64 text-muted-foreground">
+            <span className="text-sm">Select a sales rep to view analytics</span>
           </div>
         ) : (
           <>
