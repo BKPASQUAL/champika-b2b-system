@@ -376,8 +376,8 @@ export default function SupplierAnalyticsPage() {
               </p>
             </div>
 
-            {/* KPI Cards — 2 cols on mobile, 4 on lg */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+            {/* KPI Cards — 2 cols on mobile, 5 on lg */}
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
               <Card>
                 <CardHeader className="pb-1 pt-3 px-3 md:px-4">
                   <CardTitle className="text-[10px] md:text-xs text-muted-foreground font-medium flex items-center gap-1">
@@ -398,20 +398,30 @@ export default function SupplierAnalyticsPage() {
                 </CardHeader>
                 <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
                   <div className="text-sm md:text-xl font-bold">LKR {fmt(current.totalStockCostValue)}</div>
-                  <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
-                    sell: LKR {fmt(current.totalStockSellingValue)}
-                  </p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">cost value</p>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="pb-1 pt-3 px-3 md:px-4">
                   <CardTitle className="text-[10px] md:text-xs text-muted-foreground font-medium flex items-center gap-1">
-                    <DollarSign className="h-3 w-3" /> Revenue
+                    <ShoppingBag className="h-3 w-3" /> Stock Sell Value
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
-                  <div className="text-sm md:text-xl font-bold">LKR {fmt(current.totalRevenue)}</div>
+                  <div className="text-sm md:text-xl font-bold">LKR {fmt(current.totalStockSellingValue)}</div>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">stock at sell price</p>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-blue-50 border-blue-200">
+                <CardHeader className="pb-1 pt-3 px-3 md:px-4">
+                  <CardTitle className="text-[10px] md:text-xs text-blue-700 font-medium flex items-center gap-1">
+                    <DollarSign className="h-3 w-3" /> Total Sales
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
+                  <div className="text-sm md:text-xl font-bold text-blue-700">LKR {fmt(current.totalRevenue)}</div>
                   <p className="text-[10px] text-muted-foreground mt-0.5">
                     {fmt(current.totalUnitsSold)} units sold
                   </p>
@@ -421,7 +431,7 @@ export default function SupplierAnalyticsPage() {
               <Card className={current.totalProfit >= 0 ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}>
                 <CardHeader className="pb-1 pt-3 px-3 md:px-4">
                   <CardTitle className={`text-[10px] md:text-xs font-medium flex items-center gap-1 ${current.totalProfit >= 0 ? "text-green-700" : "text-red-700"}`}>
-                    <TrendingUp className="h-3 w-3" /> Gross Profit
+                    <TrendingUp className="h-3 w-3" /> Total Profit
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
