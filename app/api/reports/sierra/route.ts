@@ -23,14 +23,18 @@ export async function GET(request: NextRequest) {
       .select(
         `id, total_amount, due_amount, status, invoice_no, manual_invoice_no, created_at,
          customers (id, shop_name),
-         orders!inner (order_id, order_date, business_id)`
+         orders!inner (order_id, order_date, status, business_id)`
       )
       .eq("orders.business_id", SIERRA_ID)
-      .gte("created_at", fromDate)
-      .lte("created_at", toDate + "T23:59:59")
+      .gte("orders.order_date", fromDate)
+      .lte("orders.order_date", toDate)
       .order("created_at", { ascending: false });
 
     if (invErr) throw new Error(`Invoices query failed: ${invErr.message}`);
+
+    const deliveredInvoices = (invoices || []).filter(
+      (inv: any) => inv.orders?.status === "Delivered" || inv.orders?.status === "Completed"
+    );
 
     // ── 2. Purchases ─────────────────────────────────────────────────────────
     const { data: purchases, error: purErr } = await supabaseAdmin
@@ -130,7 +134,7 @@ export async function GET(request: NextRequest) {
     // ── Inter-branch order IDs (billed at cost → profit is always 0) ────────────
     // Inter-branch invoices bill Champika Hardware at cost price, not for profit.
     const interBranchOrderIds = new Set<string>(
-      (invoices || [])
+      deliveredInvoices
         .filter((inv: any) =>
           (inv.customers?.shop_name || "").toLowerCase().includes("champika hardware")
         )
@@ -139,11 +143,11 @@ export async function GET(request: NextRequest) {
     );
 
     // ── Process: Overview KPIs ────────────────────────────────────────────────
-    const totalSales = (invoices || []).reduce(
-      (s, inv: any) => s + (Number(inv.total_amount) || 0),
+    const totalSales = deliveredInvoices.reduce(
+      (s: number, inv: any) => s + (Number(inv.total_amount) || 0),
       0
     );
-    const orderCount = (invoices || []).length;
+    const orderCount = deliveredInvoices.length;
     const totalExpenses = (expenses || []).reduce((s, e: any) => s + Number(e.amount || 0), 0);
     const expenseCount = (expenses || []).length;
 
@@ -163,7 +167,7 @@ export async function GET(request: NextRequest) {
     // ── Process: Monthly Distribution ─────────────────────────────────────────
     const monthMap: Record<string, { month: string; monthKey: string; billCount: number; totalSales: number; totalPurchases: number }> = {};
 
-    (invoices || []).forEach((inv: any) => {
+    deliveredInvoices.forEach((inv: any) => {
       const rawDate = inv.orders?.order_date || inv.created_at;
       if (!rawDate) return;
       const d = new Date(rawDate);
@@ -253,7 +257,7 @@ export async function GET(request: NextRequest) {
 
     // ── Process: Customers ────────────────────────────────────────────────────
     const customerMap: Record<string, any> = {};
-    (invoices || []).forEach((inv: any) => {
+    deliveredInvoices.forEach((inv: any) => {
       const name = inv.customers?.shop_name || "Unknown";
       const amount = Number(inv.total_amount) || 0;
       if (!customerMap[name]) {
@@ -327,7 +331,7 @@ export async function GET(request: NextRequest) {
     });
 
     // ── Process: Orders list ──────────────────────────────────────────────────
-    const orders = (invoices || []).map((inv: any) => {
+    const orders = deliveredInvoices.map((inv: any) => {
       const oid = inv.orders?.order_id;
       const isInterBranch = oid ? interBranchOrderIds.has(oid) : false;
       const profitEntry = (!isInterBranch && oid) ? orderProfitMap[oid] : null;
