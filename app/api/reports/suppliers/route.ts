@@ -91,10 +91,8 @@ export async function GET(request: NextRequest) {
       return name.includes("champika hardware");
     };
 
-    const COUNTED_STATUSES = ["Delivered", "Completed"];
-
     (orderItems || []).forEach((item: any) => {
-      if (!COUNTED_STATUSES.includes(item.order?.status)) return;
+      if (item.order?.status === "Cancelled") return;
       if (isInterBranch(item)) return;
       const supplier = item.product?.supplier_name || "Unknown Supplier";
       const pid = item.product?.id;
@@ -157,7 +155,7 @@ export async function GET(request: NextRequest) {
     // Count unique orders per customer per supplier
     const orderCustomerSet: Record<string, Set<string>> = {};
     (orderItems || []).forEach((item: any) => {
-      if (!COUNTED_STATUSES.includes(item.order?.status)) return;
+      if (item.order?.status === "Cancelled") return;
       const supplier = item.product?.supplier_name || "Unknown Supplier";
       const cId = item.order?.customer?.id || "unknown";
       const oid = item.order?.order_id;
