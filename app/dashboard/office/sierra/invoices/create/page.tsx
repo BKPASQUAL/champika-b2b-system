@@ -32,13 +32,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import {
   Command,
@@ -118,7 +111,7 @@ export default function CreateSierraInvoicePage() {
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split("T")[0]);
   const [manualInvoiceNo, setManualInvoiceNo] = useState("");
   const [noManualRef, setNoManualRef] = useState(false);
-  const [paymentType, setPaymentType] = useState<string>("Cash");
+  const paymentType = "Credit";
 
   const salesRepId = currentUser?.id || "";
   const orderStatus = "Delivered";
@@ -424,8 +417,8 @@ export default function CreateSierraInvoicePage() {
       orderStatus,
       businessId,
       paymentType,
-      paymentStatus: paymentType === "Cash" ? "Paid" : "Unpaid",
-      paidAmount: paymentType === "Cash" ? grandTotal : 0,
+      paymentStatus: "Unpaid",
+      paidAmount: 0,
       performedByName: currentUser?.name ?? null,
       performedByEmail: currentUser?.email ?? null,
     };
@@ -603,19 +596,9 @@ export default function CreateSierraInvoicePage() {
                   )}
                 </div>
                 <div className="space-y-2">
-                  <Label>Payment Type <span className="text-red-500">*</span></Label>
-                  <Select value={paymentType} onValueChange={setPaymentType}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select Payment Type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Cash">💵 Cash</SelectItem>
-                      <SelectItem value="Credit">📋 Credit</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    {paymentType === "Cash" ? "✓ Invoice will be marked as Paid" : "⏳ Customer can pay later"}
-                  </p>
+                  <Label>Payment Type</Label>
+                  <Input value="📋 Credit" disabled className="bg-muted" />
+                  <p className="text-xs text-muted-foreground">⏳ Invoice will be marked as Unpaid</p>
                 </div>
               </div>
             </CardContent>
@@ -877,8 +860,8 @@ export default function CreateSierraInvoicePage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Payment:</span>
-                  <span className={cn("font-medium", paymentType === "Cash" ? "text-green-600" : "text-orange-600")}>
-                    {paymentType === "Cash" ? "💵 Cash" : "📋 Credit"}
+                  <span className="font-medium text-orange-600">
+                    📋 Credit
                   </span>
                 </div>
                 <div className="flex justify-between">
