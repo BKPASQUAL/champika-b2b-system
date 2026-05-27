@@ -34,6 +34,7 @@ import {
   CalendarDays,
   PenLine,
   CheckCircle2,
+  Building2,
 } from "lucide-react";
 
 export type UserRole = "admin" | "office" | "rep" | "delivery";
@@ -193,6 +194,11 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           name: "Sierra Agency",
           href: "/dashboard/admin/reports/sierra",
           icon: Factory,
+        },
+        {
+          name: "Business Analytics",
+          href: "/dashboard/admin/reports/business",
+          icon: Building2,
         },
       ],
     },
