@@ -542,7 +542,7 @@ export default function BusinessAnalyticsPage() {
                       "Total Profit": current.totalProfit,
                       "Due Amount": current.dueAmount,
                     }]}>
-                      <CartesianGrid strokeDashboard="3 3" />
+                      <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="name" tick={{ fontSize: 10 }} />
                       <YAxis tick={{ fontSize: 9 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                       <Tooltip formatter={(v: any) => `LKR ${fmt(v)}`} />
