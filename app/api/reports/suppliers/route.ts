@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
 
     if (productsError) throw productsError;
 
-    // 2. Delivered non-inter-branch order items — includes customer + invoice info
+    // 2. Order items in date range — filter status in JS to support Delivered + Completed
     const { data: orderItems, error: itemsError } = await supabaseAdmin
       .from("order_items")
       .select(`
@@ -34,7 +34,6 @@ export async function GET(request: NextRequest) {
           invoices (invoice_no, manual_invoice_no)
         )
       `)
-      .eq("order.status", "Delivered")
       .gte("order.created_at", fromDate)
       .lte("order.created_at", toDate);
 
@@ -92,7 +91,10 @@ export async function GET(request: NextRequest) {
       return name.includes("champika hardware");
     };
 
+    const COUNTED_STATUSES = ["Delivered", "Completed"];
+
     (orderItems || []).forEach((item: any) => {
+      if (!COUNTED_STATUSES.includes(item.order?.status)) return;
       if (isInterBranch(item)) return;
       const supplier = item.product?.supplier_name || "Unknown Supplier";
       const pid = item.product?.id;
@@ -155,6 +157,7 @@ export async function GET(request: NextRequest) {
     // Count unique orders per customer per supplier
     const orderCustomerSet: Record<string, Set<string>> = {};
     (orderItems || []).forEach((item: any) => {
+      if (!COUNTED_STATUSES.includes(item.order?.status)) return;
       const supplier = item.product?.supplier_name || "Unknown Supplier";
       const cId = item.order?.customer?.id || "unknown";
       const oid = item.order?.order_id;

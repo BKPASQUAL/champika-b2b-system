@@ -73,7 +73,7 @@ export default function SierraInvoicesPage() {
   const [repFilter, setRepFilter] = useState("all");
 
   // Sort & Pagination
-  const [sortField, setSortField] = useState<SortField>("createdAt");
+  const [sortField, setSortField] = useState<SortField>("date");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;

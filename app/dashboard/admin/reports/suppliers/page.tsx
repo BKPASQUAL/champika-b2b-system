@@ -372,7 +372,7 @@ export default function SupplierAnalyticsPage() {
             <div>
               <h1 className="text-xl md:text-2xl font-bold leading-tight">{current.name}</h1>
               <p className="text-xs md:text-sm text-muted-foreground mt-1">
-                {current.productCount} products · {current.customerCount} customers · {current.invoiceCount} invoices · delivered only
+                {current.productCount} products · {current.customerCount} customers · {current.invoiceCount} invoices
               </p>
             </div>
 
