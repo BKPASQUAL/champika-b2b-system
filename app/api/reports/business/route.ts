@@ -13,23 +13,9 @@ export async function GET(request: NextRequest) {
     const fromDate = searchParams.get("from") || firstDay;
     const toDate = searchParams.get("to") || lastDay;
 
-    // 1. Order items with product info for sales/profit/product/customer aggregation
-    const { data: orderItems, error: itemsError } = await supabaseAdmin
-      .from("order_items")
-      .select(`
-        id, quantity, unit_price, actual_unit_cost, total_price,
-        product:products (id, name, sku),
-        order:orders!inner (
-          id, order_id, status, created_at, order_date, business_id,
-          customer:customers (id, shop_name)
-        )
-      `)
-      .gte("order.created_at", fromDate)
-      .lte("order.created_at", toDate);
+    const COUNTED_STATUSES = ["Delivered", "Completed"];
 
-    if (itemsError) throw itemsError;
-
-    // 2. All invoices in the period for invoice list + due amounts
+    // 1. All invoices in the period — revenue source (matches Sierra Agency page)
     const { data: allInvoices, error: allInvError } = await supabaseAdmin
       .from("invoices")
       .select(`
@@ -44,7 +30,21 @@ export async function GET(request: NextRequest) {
 
     if (allInvError) throw allInvError;
 
-    const COUNTED_STATUSES = ["Delivered", "Completed"];
+    // 2. Order items — cost + product + customer detail (filtered to invoiced orders only)
+    const { data: orderItems, error: itemsError } = await supabaseAdmin
+      .from("order_items")
+      .select(`
+        id, quantity, unit_price, actual_unit_cost, total_price,
+        product:products (id, name, sku),
+        order:orders!inner (
+          id, order_id, status, created_at, order_date, business_id,
+          customer:customers (id, shop_name)
+        )
+      `)
+      .gte("order.created_at", fromDate)
+      .lte("order.created_at", toDate);
+
+    if (itemsError) throw itemsError;
 
     type ProductEntry = {
       id: string; name: string; sku: string;
@@ -62,8 +62,10 @@ export async function GET(request: NextRequest) {
     };
     type BusinessEntry = {
       id: string; name: string;
-      totalRevenue: number; totalCost: number; totalProfit: number; totalUnits: number;
-      invoiceCountSet: Set<string>; customerCountSet: Set<string>; dueAmount: number;
+      totalRevenue: number; totalCost: number; totalUnits: number;
+      invoicedOrderIds: Set<string>;
+      customerCountSet: Set<string>;
+      dueAmount: number;
       productMap: Record<string, ProductEntry>;
       customerMap: Record<string, CustomerEntry>;
       invoiceList: InvoiceEntry[];
@@ -76,8 +78,10 @@ export async function GET(request: NextRequest) {
         businessMap[bizId] = {
           id: bizId,
           name: BUSINESS_NAMES[bizId as keyof typeof BUSINESS_NAMES] || "Unknown",
-          totalRevenue: 0, totalCost: 0, totalProfit: 0, totalUnits: 0,
-          invoiceCountSet: new Set(), customerCountSet: new Set(), dueAmount: 0,
+          totalRevenue: 0, totalCost: 0, totalUnits: 0,
+          invoicedOrderIds: new Set(),
+          customerCountSet: new Set(),
+          dueAmount: 0,
           productMap: {}, customerMap: {}, invoiceList: [],
         };
       }
@@ -85,7 +89,40 @@ export async function GET(request: NextRequest) {
 
     Object.values(BUSINESS_IDS).forEach((id) => ensureBusiness(id));
 
-    // Aggregate from order_items
+    // Pass 1 — invoices: build revenue, invoicedOrderIds, invoiceList, dueAmount
+    (allInvoices || []).forEach((inv: any) => {
+      const order = inv.order;
+      if (!order || !COUNTED_STATUSES.includes(order.status)) return;
+      const bizId = order.business_id;
+      if (!bizId) return;
+
+      ensureBusiness(bizId);
+      const biz = businessMap[bizId];
+
+      const amount = Number(inv.total_amount) || 0;
+      const due = Number(inv.due_amount) || 0;
+
+      biz.totalRevenue += amount;
+      biz.invoicedOrderIds.add(order.order_id);
+
+      if (["Unpaid", "Partial", "Overdue"].includes(inv.status)) {
+        biz.dueAmount += due;
+      }
+
+      const date = (order.order_date || order.created_at || "").split("T")[0];
+      biz.invoiceList.push({
+        invoiceId: inv.id,
+        orderId: order.order_id,
+        invoiceNo: inv.manual_invoice_no || inv.invoice_no || order.order_id,
+        customer: order.customer?.shop_name || "Unknown",
+        date,
+        amount,
+        due,
+        paymentStatus: inv.status || "Unpaid",
+      });
+    });
+
+    // Pass 2 — order items: cost + products + customers, ONLY for invoiced orders
     (orderItems || []).forEach((item: any) => {
       const order = item.order;
       if (!order || !COUNTED_STATUSES.includes(order.status)) return;
@@ -95,15 +132,15 @@ export async function GET(request: NextRequest) {
       ensureBusiness(bizId);
       const biz = businessMap[bizId];
 
+      // Only count items whose order has an invoice
+      if (!biz.invoicedOrderIds.has(order.order_id)) return;
+
       const qty = Number(item.quantity) || 0;
-      const revenue = Number(item.total_price) || 0;
+      const itemRevenue = Number(item.total_price) || 0;
       const cost = qty * (Number(item.actual_unit_cost) || 0);
 
-      biz.totalRevenue += revenue;
       biz.totalCost += cost;
-      biz.totalProfit += revenue - cost;
       biz.totalUnits += qty;
-      biz.invoiceCountSet.add(order.order_id);
       if (order.customer?.id) biz.customerCountSet.add(order.customer.id);
 
       // Products
@@ -116,9 +153,9 @@ export async function GET(request: NextRequest) {
           };
         }
         biz.productMap[pid].unitsSold += qty;
-        biz.productMap[pid].revenue += revenue;
+        biz.productMap[pid].revenue += itemRevenue;
         biz.productMap[pid].cost += cost;
-        biz.productMap[pid].profit += revenue - cost;
+        biz.productMap[pid].profit += itemRevenue - cost;
       }
 
       // Customers
@@ -130,44 +167,30 @@ export async function GET(request: NextRequest) {
           dueAmount: 0, orderSet: new Set(),
         };
       }
-      biz.customerMap[cId].revenue += revenue;
+      biz.customerMap[cId].revenue += itemRevenue;
       biz.customerMap[cId].cost += cost;
-      biz.customerMap[cId].profit += revenue - cost;
+      biz.customerMap[cId].profit += itemRevenue - cost;
       biz.customerMap[cId].orderSet.add(order.order_id);
     });
 
-    // Aggregate from allInvoices (invoice list + due amounts)
+    // Attach customer due amounts from invoice pass
     (allInvoices || []).forEach((inv: any) => {
       const order = inv.order;
       if (!order || !COUNTED_STATUSES.includes(order.status)) return;
       const bizId = order.business_id;
-      if (!bizId) return;
-
-      ensureBusiness(bizId);
+      if (!bizId || !businessMap[bizId]) return;
+      if (!["Unpaid", "Partial", "Overdue"].includes(inv.status)) return;
+      const cId = order.customer?.id || "unknown";
       const biz = businessMap[bizId];
-
-      const due = Number(inv.due_amount) || 0;
-      if (["Unpaid", "Partial", "Overdue"].includes(inv.status)) {
-        biz.dueAmount += due;
-        const cId = order.customer?.id || "unknown";
-        if (biz.customerMap[cId]) biz.customerMap[cId].dueAmount += due;
+      if (biz.customerMap[cId]) {
+        biz.customerMap[cId].dueAmount += Number(inv.due_amount) || 0;
       }
-
-      const date = (order.order_date || order.created_at || "").split("T")[0];
-      biz.invoiceList.push({
-        invoiceId: inv.id,
-        orderId: order.order_id,
-        invoiceNo: inv.manual_invoice_no || inv.invoice_no || order.order_id,
-        customer: order.customer?.shop_name || "Unknown",
-        date,
-        amount: Number(inv.total_amount) || 0,
-        due,
-        paymentStatus: inv.status || "Unpaid",
-      });
     });
 
     // Build final list
     const businesses = Object.values(businessMap).map((biz) => {
+      const totalProfit = biz.totalRevenue - biz.totalCost;
+
       const products = Object.values(biz.productMap)
         .map((p) => ({ ...p, margin: p.revenue > 0 ? (p.profit / p.revenue) * 100 : 0 }))
         .sort((a, b) => b.revenue - a.revenue);
@@ -190,19 +213,19 @@ export async function GET(request: NextRequest) {
         name: biz.name,
         totalRevenue: biz.totalRevenue,
         totalCost: biz.totalCost,
-        totalProfit: biz.totalProfit,
+        totalProfit,
         totalUnits: biz.totalUnits,
-        invoiceCount: biz.invoiceCountSet.size,
+        invoiceCount: invoices.length,
         customerCount: biz.customerCountSet.size,
         dueAmount: biz.dueAmount,
-        margin: biz.totalRevenue > 0 ? (biz.totalProfit / biz.totalRevenue) * 100 : 0,
+        margin: biz.totalRevenue > 0 ? (totalProfit / biz.totalRevenue) * 100 : 0,
         products,
         customers,
         invoices,
       };
     }).sort((a, b) => b.totalRevenue - a.totalRevenue);
 
-    // Overall aggregate with merged detail lists
+    // Overall aggregate
     const allProductsMap: Record<string, any> = {};
     const allCustomersMap: Record<string, any> = {};
     const allInvoicesList: any[] = [];
