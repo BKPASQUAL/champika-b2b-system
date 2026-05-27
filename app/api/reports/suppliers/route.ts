@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
     };
 
     (orderItems || []).forEach((item: any) => {
-      if (item.order?.status === "Cancelled") return;
+      if (item.order?.status !== "Delivered" && item.order?.status !== "Completed") return;
       if (isInterBranch(item)) return;
       const supplier = item.product?.supplier_name || "Unknown Supplier";
       const pid = item.product?.id;
@@ -155,7 +155,7 @@ export async function GET(request: NextRequest) {
     // Count unique orders per customer per supplier
     const orderCustomerSet: Record<string, Set<string>> = {};
     (orderItems || []).forEach((item: any) => {
-      if (item.order?.status === "Cancelled") return;
+      if (item.order?.status !== "Delivered" && item.order?.status !== "Completed") return;
       const supplier = item.product?.supplier_name || "Unknown Supplier";
       const cId = item.order?.customer?.id || "unknown";
       const oid = item.order?.order_id;
