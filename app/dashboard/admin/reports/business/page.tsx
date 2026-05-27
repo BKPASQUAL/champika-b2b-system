@@ -52,7 +52,9 @@ import {
   RefreshCw,
   Menu,
   Users,
-  ShoppingCart,
+  Package,
+  Receipt,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import { BUSINESS_THEMES, BUSINESS_IDS } from "@/app/config/business-constants";
@@ -93,16 +95,21 @@ function getRange(quickSelect: string, customFrom: string, customTo: string) {
   return { from: from.toISOString(), to: to.toISOString() };
 }
 
-function getBizColor(bizId: string): string {
-  const theme = BUSINESS_THEMES[bizId as keyof typeof BUSINESS_THEMES];
-  if (!theme) return "text-gray-600";
-  return theme.textClass;
-}
 function getBizBg(bizId: string): string {
   const theme = BUSINESS_THEMES[bizId as keyof typeof BUSINESS_THEMES];
-  if (!theme) return "bg-gray-100";
-  return theme.bgClass;
+  return theme?.bgClass || "bg-gray-100";
 }
+function getBizColor(bizId: string): string {
+  const theme = BUSINESS_THEMES[bizId as keyof typeof BUSINESS_THEMES];
+  return theme?.textClass || "text-gray-600";
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  Paid: "bg-green-100 text-green-700",
+  Partial: "bg-yellow-100 text-yellow-700",
+  Unpaid: "bg-red-100 text-red-700",
+  Overdue: "bg-red-200 text-red-800",
+};
 
 export default function BusinessAnalyticsPage() {
   const today = new Date().toISOString().split("T")[0];
@@ -117,6 +124,8 @@ export default function BusinessAnalyticsPage() {
   const [businesses, setBusinesses] = useState<any[]>([]);
   const [selectedId, setSelectedId] = useState<string>("overall");
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [detailTab, setDetailTab] = useState<"invoices" | "customers" | "products">("invoices");
+  const [detailSearch, setDetailSearch] = useState("");
 
   const fetchData = async () => {
     setLoading(true);
@@ -149,7 +158,6 @@ export default function BusinessAnalyticsPage() {
     return businesses.find((b) => b.id === selectedId) || null;
   }, [selectedId, overall, businesses]);
 
-  // Chart data: compare all businesses by revenue
   const revenueChartData = useMemo(
     () => businesses.map((b) => ({
       name: b.name.replace("Champika Hardware - ", "CH ").replace(" Agency", ""),
@@ -159,6 +167,56 @@ export default function BusinessAnalyticsPage() {
     })),
     [businesses]
   );
+
+  // Filtered detail lists
+  const filteredInvoices = useMemo(() => {
+    const list: any[] = current?.invoices || [];
+    if (!detailSearch) return list;
+    const q = detailSearch.toLowerCase();
+    return list.filter(
+      (i) =>
+        i.invoiceNo?.toLowerCase().includes(q) ||
+        i.customer?.toLowerCase().includes(q) ||
+        i.date?.includes(q)
+    );
+  }, [current, detailSearch]);
+
+  const filteredCustomers = useMemo(() => {
+    const list: any[] = current?.customers || [];
+    if (!detailSearch) return list;
+    const q = detailSearch.toLowerCase();
+    return list.filter((c) => c.name?.toLowerCase().includes(q));
+  }, [current, detailSearch]);
+
+  const filteredProducts = useMemo(() => {
+    const list: any[] = current?.products || [];
+    if (!detailSearch) return list;
+    const q = detailSearch.toLowerCase();
+    return list.filter(
+      (p) => p.name?.toLowerCase().includes(q) || p.sku?.toLowerCase().includes(q)
+    );
+  }, [current, detailSearch]);
+
+  // Totals for detail tabs
+  const invTotals = useMemo(() => ({
+    amount: filteredInvoices.reduce((s, i) => s + i.amount, 0),
+    due: filteredInvoices.reduce((s, i) => s + i.due, 0),
+  }), [filteredInvoices]);
+
+  const custTotals = useMemo(() => ({
+    revenue: filteredCustomers.reduce((s, c) => s + c.revenue, 0),
+    cost: filteredCustomers.reduce((s, c) => s + c.cost, 0),
+    profit: filteredCustomers.reduce((s, c) => s + c.profit, 0),
+    dueAmount: filteredCustomers.reduce((s, c) => s + c.dueAmount, 0),
+    invoiceCount: filteredCustomers.reduce((s, c) => s + c.invoiceCount, 0),
+  }), [filteredCustomers]);
+
+  const prodTotals = useMemo(() => ({
+    unitsSold: filteredProducts.reduce((s, p) => s + p.unitsSold, 0),
+    revenue: filteredProducts.reduce((s, p) => s + p.revenue, 0),
+    cost: filteredProducts.reduce((s, p) => s + p.cost, 0),
+    profit: filteredProducts.reduce((s, p) => s + p.profit, 0),
+  }), [filteredProducts]);
 
   const DateControls = () => (
     <div className="space-y-2">
@@ -190,7 +248,6 @@ export default function BusinessAnalyticsPage() {
 
   const BusinessList = () => (
     <ul className="py-1">
-      {/* Overall entry */}
       <li>
         <button
           onClick={() => { setSelectedId("overall"); setSheetOpen(false); }}
@@ -200,14 +257,11 @@ export default function BusinessAnalyticsPage() {
         >
           <div className="min-w-0">
             <p className="text-xs font-semibold">Overall</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">
-              All businesses combined
-            </p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">All businesses combined</p>
           </div>
           {selectedId === "overall" && <ChevronRight className="h-3 w-3 text-primary shrink-0 ml-1" />}
         </button>
       </li>
-
       {businesses.map((biz) => (
         <li key={biz.id}>
           <button
@@ -234,7 +288,7 @@ export default function BusinessAnalyticsPage() {
   return (
     <div className="flex flex-col lg:flex-row h-full gap-0 -m-4 md:-m-8">
 
-      {/* ── Desktop Sidebar ──────────────────────────────────────── */}
+      {/* Desktop Sidebar */}
       <aside className="hidden lg:flex w-64 shrink-0 bg-white border-r flex-col h-full overflow-hidden">
         <div className="p-4 border-b space-y-2">
           <div className="flex items-center gap-2 mb-1">
@@ -248,7 +302,7 @@ export default function BusinessAnalyticsPage() {
         </div>
       </aside>
 
-      {/* ── Mobile top bar ────────────────────────────── */}
+      {/* Mobile top bar */}
       <div className="lg:hidden bg-white border-b px-4 py-3 space-y-3 shrink-0">
         <div className="flex items-center gap-2">
           <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
@@ -270,7 +324,6 @@ export default function BusinessAnalyticsPage() {
               </div>
             </SheetContent>
           </Sheet>
-
           <Select value={selectedId} onValueChange={setSelectedId}>
             <SelectTrigger className="h-8 text-xs flex-1 min-w-0">
               <Building2 className="mr-1 h-3 w-3 shrink-0" />
@@ -283,7 +336,6 @@ export default function BusinessAnalyticsPage() {
               ))}
             </SelectContent>
           </Select>
-
           <Select value={quickSelect} onValueChange={setQuickSelect}>
             <SelectTrigger className="h-8 text-xs w-32 shrink-0">
               <Calendar className="mr-1 h-3 w-3 shrink-0" />
@@ -309,7 +361,7 @@ export default function BusinessAnalyticsPage() {
         )}
       </div>
 
-      {/* ── Main Content ───────────────────────────────────────────── */}
+      {/* Main Content */}
       <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 md:space-y-6">
         {!current ? (
           <div className="flex items-center justify-center h-64 text-muted-foreground">
@@ -331,7 +383,7 @@ export default function BusinessAnalyticsPage() {
                   {current.name}
                 </h1>
                 <p className="text-xs md:text-sm text-muted-foreground mt-1">
-                  {current.invoiceCount} invoices · {current.customerCount} customers
+                  {current.invoiceCount} invoices · {current.customerCount} customers · {current.products?.length || 0} products
                 </p>
               </div>
               {!isOverall && (
@@ -406,8 +458,8 @@ export default function BusinessAnalyticsPage() {
               </Card>
             </div>
 
-            {/* Overall: comparison charts */}
-            {isOverall && (
+            {/* Charts */}
+            {isOverall ? (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <Card>
                   <CardHeader className="pb-2 pt-4 px-4">
@@ -426,7 +478,6 @@ export default function BusinessAnalyticsPage() {
                     </ResponsiveContainer>
                   </CardContent>
                 </Card>
-
                 <Card>
                   <CardHeader className="pb-2 pt-4 px-4">
                     <CardTitle className="text-sm">Revenue Share</CardTitle>
@@ -454,10 +505,34 @@ export default function BusinessAnalyticsPage() {
                   </CardContent>
                 </Card>
               </div>
+            ) : (
+              <Card>
+                <CardHeader className="pb-2 pt-4 px-4">
+                  <CardTitle className="text-sm">{current.name} — Sales vs Due</CardTitle>
+                </CardHeader>
+                <CardContent className="px-2 md:px-4">
+                  <ResponsiveContainer width="100%" height={200}>
+                    <BarChart data={[{
+                      name: current.name.replace("Champika Hardware - ", "CH ").replace(" Agency", ""),
+                      "Total Sales": current.totalRevenue,
+                      "Total Profit": current.totalProfit,
+                      "Due Amount": current.dueAmount,
+                    }]}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                      <YAxis tick={{ fontSize: 9 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                      <Tooltip formatter={(v: any) => `LKR ${fmt(v)}`} />
+                      <Bar dataKey="Total Sales" fill="#0088FE" />
+                      <Bar dataKey="Total Profit" fill="#00C49F" />
+                      <Bar dataKey="Due Amount" fill="#FF8042" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
             )}
 
-            {/* Summary table — all businesses side by side when Overall selected */}
-            {isOverall ? (
+            {/* Business breakdown table (Overall only) */}
+            {isOverall && (
               <Card>
                 <CardHeader className="pb-3 px-4">
                   <CardTitle className="text-sm">Business Breakdown</CardTitle>
@@ -477,6 +552,24 @@ export default function BusinessAnalyticsPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
+                        {/* Totals row at top */}
+                        <TableRow className="border-b-2 font-bold bg-muted/30">
+                          <TableCell className="font-bold">Total</TableCell>
+                          <TableCell className="text-right text-blue-700 font-bold">
+                            LKR {fmt(overall?.totalRevenue || 0)}
+                          </TableCell>
+                          <TableCell className={`text-right font-bold ${(overall?.totalProfit || 0) >= 0 ? "text-green-700" : "text-red-700"}`}>
+                            LKR {fmt(overall?.totalProfit || 0)}
+                          </TableCell>
+                          <TableCell className="text-right text-xs font-bold">
+                            {overall?.margin.toFixed(1)}%
+                          </TableCell>
+                          <TableCell className="text-right text-red-600 font-bold">
+                            LKR {fmt(overall?.dueAmount || 0)}
+                          </TableCell>
+                          <TableCell className="text-right font-bold">{overall?.invoiceCount}</TableCell>
+                          <TableCell className="text-right font-bold">{overall?.customerCount}</TableCell>
+                        </TableRow>
                         {businesses.map((biz) => (
                           <TableRow
                             key={biz.id}
@@ -505,55 +598,258 @@ export default function BusinessAnalyticsPage() {
                             <TableCell className="text-right">{biz.customerCount}</TableCell>
                           </TableRow>
                         ))}
-                        {/* Totals row */}
-                        <TableRow className="border-t-2 font-bold bg-muted/20">
-                          <TableCell>Total</TableCell>
-                          <TableCell className="text-right text-blue-700">
-                            LKR {fmt(overall?.totalRevenue || 0)}
-                          </TableCell>
-                          <TableCell className={`text-right ${(overall?.totalProfit || 0) >= 0 ? "text-green-700" : "text-red-700"}`}>
-                            LKR {fmt(overall?.totalProfit || 0)}
-                          </TableCell>
-                          <TableCell className="text-right text-xs">
-                            {overall?.margin.toFixed(1)}%
-                          </TableCell>
-                          <TableCell className="text-right text-red-600">
-                            LKR {fmt(overall?.dueAmount || 0)}
-                          </TableCell>
-                          <TableCell className="text-right">{overall?.invoiceCount}</TableCell>
-                          <TableCell className="text-right">{overall?.customerCount}</TableCell>
-                        </TableRow>
                       </TableBody>
                     </Table>
                   </div>
                 </CardContent>
               </Card>
-            ) : (
-              /* Individual business: due vs sales bar chart */
-              <Card>
-                <CardHeader className="pb-2 pt-4 px-4">
-                  <CardTitle className="text-sm">{current.name} — Sales vs Due</CardTitle>
-                </CardHeader>
-                <CardContent className="px-2 md:px-4">
-                  <ResponsiveContainer width="100%" height={200}>
-                    <BarChart data={[{
-                      name: current.name.replace("Champika Hardware - ", "CH ").replace(" Agency", ""),
-                      "Total Sales": current.totalRevenue,
-                      "Total Profit": current.totalProfit,
-                      "Due Amount": current.dueAmount,
-                    }]}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                      <YAxis tick={{ fontSize: 9 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-                      <Tooltip formatter={(v: any) => `LKR ${fmt(v)}`} />
-                      <Bar dataKey="Total Sales" fill="#0088FE" />
-                      <Bar dataKey="Total Profit" fill="#00C49F" />
-                      <Bar dataKey="Due Amount" fill="#FF8042" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
             )}
+
+            {/* Detail Tabs: Invoices / Customers / Products */}
+            <Card>
+              <CardHeader className="pb-0 px-4 pt-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex gap-1 flex-wrap">
+                    <Button
+                      variant={detailTab === "invoices" ? "default" : "ghost"}
+                      size="sm"
+                      className="h-8 text-xs"
+                      onClick={() => { setDetailTab("invoices"); setDetailSearch(""); }}
+                    >
+                      <Receipt className="h-3 w-3 mr-1" />
+                      Invoices ({current.invoices?.length || 0})
+                    </Button>
+                    <Button
+                      variant={detailTab === "customers" ? "default" : "ghost"}
+                      size="sm"
+                      className="h-8 text-xs"
+                      onClick={() => { setDetailTab("customers"); setDetailSearch(""); }}
+                    >
+                      <Users className="h-3 w-3 mr-1" />
+                      Customers ({current.customers?.length || 0})
+                    </Button>
+                    <Button
+                      variant={detailTab === "products" ? "default" : "ghost"}
+                      size="sm"
+                      className="h-8 text-xs"
+                      onClick={() => { setDetailTab("products"); setDetailSearch(""); }}
+                    >
+                      <Package className="h-3 w-3 mr-1" />
+                      Products ({current.products?.length || 0})
+                    </Button>
+                  </div>
+                  <div className="relative w-full sm:w-44">
+                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                    <Input
+                      placeholder="Search..."
+                      value={detailSearch}
+                      onChange={(e) => setDetailSearch(e.target.value)}
+                      className="h-8 text-xs pl-7"
+                    />
+                  </div>
+                </div>
+              </CardHeader>
+
+              <CardContent className="px-0 pt-3">
+                <div className="overflow-x-auto">
+
+                  {/* ── Invoices Tab ── */}
+                  {detailTab === "invoices" && (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Invoice No</TableHead>
+                          <TableHead>Customer</TableHead>
+                          <TableHead className="text-right">Amount</TableHead>
+                          <TableHead className="text-right">Due</TableHead>
+                          <TableHead>Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {/* Totals row */}
+                        <TableRow className="border-b-2 bg-muted/30 font-bold">
+                          <TableCell colSpan={3} className="font-bold text-xs">
+                            Total — {filteredInvoices.length} invoices
+                          </TableCell>
+                          <TableCell className="text-right text-blue-700 font-bold">
+                            LKR {fmt(invTotals.amount)}
+                          </TableCell>
+                          <TableCell className="text-right text-red-600 font-bold">
+                            LKR {fmt(invTotals.due)}
+                          </TableCell>
+                          <TableCell />
+                        </TableRow>
+                        {filteredInvoices.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={6} className="text-center text-muted-foreground text-xs py-8">
+                              No invoices found
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          filteredInvoices.map((inv: any) => (
+                            <TableRow key={inv.invoiceId} className="text-xs">
+                              <TableCell className="text-muted-foreground whitespace-nowrap">{inv.date}</TableCell>
+                              <TableCell className="font-mono font-medium">{inv.invoiceNo}</TableCell>
+                              <TableCell>{inv.customer}</TableCell>
+                              <TableCell className="text-right font-medium">
+                                LKR {fmt(inv.amount)}
+                              </TableCell>
+                              <TableCell className={`text-right font-medium ${inv.due > 0 ? "text-red-600" : "text-muted-foreground"}`}>
+                                {inv.due > 0 ? `LKR ${fmt(inv.due)}` : "—"}
+                              </TableCell>
+                              <TableCell>
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${STATUS_COLORS[inv.paymentStatus] || "bg-gray-100 text-gray-700"}`}>
+                                  {inv.paymentStatus}
+                                </span>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  )}
+
+                  {/* ── Customers Tab ── */}
+                  {detailTab === "customers" && (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Customer</TableHead>
+                          <TableHead className="text-right">Invoices</TableHead>
+                          <TableHead className="text-right">Revenue</TableHead>
+                          <TableHead className="text-right">Cost</TableHead>
+                          <TableHead className="text-right">Profit</TableHead>
+                          <TableHead className="text-right">Margin</TableHead>
+                          <TableHead className="text-right">Due</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {/* Totals row */}
+                        <TableRow className="border-b-2 bg-muted/30 font-bold">
+                          <TableCell className="font-bold text-xs">
+                            Total — {filteredCustomers.length} customers
+                          </TableCell>
+                          <TableCell className="text-right font-bold">{custTotals.invoiceCount}</TableCell>
+                          <TableCell className="text-right text-blue-700 font-bold">
+                            LKR {fmt(custTotals.revenue)}
+                          </TableCell>
+                          <TableCell className="text-right font-bold text-muted-foreground">
+                            LKR {fmt(custTotals.cost)}
+                          </TableCell>
+                          <TableCell className={`text-right font-bold ${custTotals.profit >= 0 ? "text-green-700" : "text-red-700"}`}>
+                            LKR {fmt(custTotals.profit)}
+                          </TableCell>
+                          <TableCell className="text-right text-xs font-bold">
+                            {custTotals.revenue > 0 ? ((custTotals.profit / custTotals.revenue) * 100).toFixed(1) : "0.0"}%
+                          </TableCell>
+                          <TableCell className="text-right text-red-600 font-bold">
+                            LKR {fmt(custTotals.dueAmount)}
+                          </TableCell>
+                        </TableRow>
+                        {filteredCustomers.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={7} className="text-center text-muted-foreground text-xs py-8">
+                              No customers found
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          filteredCustomers.map((c: any) => (
+                            <TableRow key={c.id} className="text-xs">
+                              <TableCell className="font-medium">{c.name}</TableCell>
+                              <TableCell className="text-right">{c.invoiceCount}</TableCell>
+                              <TableCell className="text-right text-blue-700 font-medium">
+                                LKR {fmt(c.revenue)}
+                              </TableCell>
+                              <TableCell className="text-right text-muted-foreground">
+                                LKR {fmt(c.cost)}
+                              </TableCell>
+                              <TableCell className={`text-right font-medium ${c.profit >= 0 ? "text-green-700" : "text-red-700"}`}>
+                                LKR {fmt(c.profit)}
+                              </TableCell>
+                              <TableCell className="text-right text-muted-foreground">
+                                {c.margin.toFixed(1)}%
+                              </TableCell>
+                              <TableCell className={`text-right font-medium ${c.dueAmount > 0 ? "text-red-600" : "text-muted-foreground"}`}>
+                                {c.dueAmount > 0 ? `LKR ${fmt(c.dueAmount)}` : "—"}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  )}
+
+                  {/* ── Products Tab ── */}
+                  {detailTab === "products" && (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Product</TableHead>
+                          <TableHead>SKU</TableHead>
+                          <TableHead className="text-right">Units Sold</TableHead>
+                          <TableHead className="text-right">Revenue</TableHead>
+                          <TableHead className="text-right">Cost</TableHead>
+                          <TableHead className="text-right">Profit</TableHead>
+                          <TableHead className="text-right">Margin</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {/* Totals row */}
+                        <TableRow className="border-b-2 bg-muted/30 font-bold">
+                          <TableCell className="font-bold text-xs">
+                            Total — {filteredProducts.length} products
+                          </TableCell>
+                          <TableCell />
+                          <TableCell className="text-right font-bold">{fmt(prodTotals.unitsSold)}</TableCell>
+                          <TableCell className="text-right text-blue-700 font-bold">
+                            LKR {fmt(prodTotals.revenue)}
+                          </TableCell>
+                          <TableCell className="text-right font-bold text-muted-foreground">
+                            LKR {fmt(prodTotals.cost)}
+                          </TableCell>
+                          <TableCell className={`text-right font-bold ${prodTotals.profit >= 0 ? "text-green-700" : "text-red-700"}`}>
+                            LKR {fmt(prodTotals.profit)}
+                          </TableCell>
+                          <TableCell className="text-right text-xs font-bold">
+                            {prodTotals.revenue > 0 ? ((prodTotals.profit / prodTotals.revenue) * 100).toFixed(1) : "0.0"}%
+                          </TableCell>
+                        </TableRow>
+                        {filteredProducts.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={7} className="text-center text-muted-foreground text-xs py-8">
+                              No products found
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          filteredProducts.map((p: any) => (
+                            <TableRow key={p.id} className="text-xs">
+                              <TableCell className="font-medium max-w-[180px] truncate">{p.name}</TableCell>
+                              <TableCell className="font-mono text-muted-foreground">{p.sku || "—"}</TableCell>
+                              <TableCell className="text-right">{fmt(p.unitsSold)}</TableCell>
+                              <TableCell className="text-right text-blue-700 font-medium">
+                                LKR {fmt(p.revenue)}
+                              </TableCell>
+                              <TableCell className="text-right text-muted-foreground">
+                                LKR {fmt(p.cost)}
+                              </TableCell>
+                              <TableCell className={`text-right font-medium ${p.profit >= 0 ? "text-green-700" : "text-red-700"}`}>
+                                LKR {fmt(p.profit)}
+                              </TableCell>
+                              <TableCell className="text-right text-muted-foreground">
+                                {p.margin.toFixed(1)}%
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  )}
+
+                </div>
+              </CardContent>
+            </Card>
+
           </>
         )}
       </div>
