@@ -34,8 +34,8 @@ export async function GET(request: NextRequest) {
     const { data: orderItems, error: itemsError } = await supabaseAdmin
       .from("order_items")
       .select(`
-        id, quantity, unit_price, total_price,
-        product:products (id, name, sku, cost_price),
+        id, quantity, unit_price, actual_unit_cost, total_price,
+        product:products (id, name, sku),
         order:orders!inner (
           id, order_id, status, created_at, order_date, business_id,
           customer:customers (id, shop_name)
@@ -136,7 +136,7 @@ export async function GET(request: NextRequest) {
 
       const qty = Number(item.quantity) || 0;
       const itemRevenue = qty * (Number(item.unit_price) || 0);
-      const cost = qty * (Number(item.product?.cost_price) || 0);
+      const cost = qty * (Number(item.actual_unit_cost) || 0);
 
       biz.totalRevenue += itemRevenue;
       biz.totalCost += cost;
