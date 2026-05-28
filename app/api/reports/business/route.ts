@@ -102,6 +102,7 @@ export async function GET(request: NextRequest) {
       const amount = Number(inv.total_amount) || 0;
       const due = Number(inv.due_amount) || 0;
 
+      biz.totalRevenue += amount;
       biz.invoicedOrderIds.add(order.order_id);
 
       if (["Unpaid", "Partial", "Overdue"].includes(inv.status)) {
@@ -138,7 +139,6 @@ export async function GET(request: NextRequest) {
       const itemRevenue = Number(item.total_price) || 0;
       const cost = qty * (Number(item.actual_unit_cost) || 0);
 
-      biz.totalRevenue += itemRevenue;
       biz.totalCost += cost;
       biz.totalUnits += qty;
       if (order.customer?.id) biz.customerCountSet.add(order.customer.id);
