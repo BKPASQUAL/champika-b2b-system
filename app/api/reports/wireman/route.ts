@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
            ),
            product:products!inner (id, name, sku, supplier_name, cost_price)`
         )
-        .in("order.status", ["Delivered", "Completed"])
+        .eq("order.status", "Delivered")
         .ilike("product.supplier_name", "%Wireman%")
         .gte("order.order_date", fromDate)
         .lte("order.order_date", toDate)
