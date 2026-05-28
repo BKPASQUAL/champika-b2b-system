@@ -91,7 +91,12 @@ export async function GET(request: NextRequest) {
     }
 
     orderItems = orderItems.filter(
-      (item: any) => !(item.order?.customer?.shop_name || "").toLowerCase().includes("champika hardware")
+      (item: any) => {
+        const isInterBranch = (item.order?.customer?.shop_name || "").toLowerCase().includes("champika hardware");
+        const invoices = item.order?.invoices;
+        const hasInvoice = Array.isArray(invoices) ? invoices.length > 0 : !!invoices;
+        return hasInvoice && !isInterBranch;
+      }
     );
 
     // ── 5. Cost Layers for Sierra products (FIFO stock breakdown) ────────────

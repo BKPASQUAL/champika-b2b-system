@@ -65,6 +65,22 @@ const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8", "#82ca9d"
 const fmt = (n: number) =>
   n.toLocaleString("en-LK", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
+function getBusinessBadge(businessName: string) {
+  const name = (businessName || "").toLowerCase();
+  if (name.includes("sierra")) {
+    return "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-50";
+  } else if (name.includes("wireman")) {
+    return "bg-red-50 text-red-700 border-red-200 hover:bg-red-50";
+  } else if (name.includes("distribution")) {
+    return "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-50";
+  } else if (name.includes("retail")) {
+    return "bg-green-50 text-green-700 border-green-200 hover:bg-green-50";
+  } else if (name.includes("orange")) {
+    return "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-50";
+  }
+  return "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-50";
+}
+
 function getRange(quickSelect: string, customFrom: string, customTo: string) {
   const now = new Date();
   let from: Date, to: Date;
@@ -757,7 +773,12 @@ export default function SupplierAnalyticsPage() {
                         <div key={inv.orderId} className="p-3 space-y-2">
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
-                              <p className="font-medium text-sm">{inv.invoiceNo}</p>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <p className="font-medium text-sm">{inv.invoiceNo}</p>
+                                <Badge variant="outline" className={`text-[9px] px-1 py-0 border ${getBusinessBadge(inv.businessName)}`}>
+                                  {inv.businessName || "—"}
+                                </Badge>
+                              </div>
                               <p className="text-xs text-muted-foreground truncate">{inv.date} · {inv.customer}</p>
                             </div>
                             {inv.revenue > 0 && (
@@ -793,6 +814,7 @@ export default function SupplierAnalyticsPage() {
                             <TableHead className="min-w-[100px]">Invoice</TableHead>
                             <TableHead>Date</TableHead>
                             <TableHead>Customer</TableHead>
+                            <TableHead>Business</TableHead>
                             <TableHead className="text-right">Revenue</TableHead>
                             <TableHead className="text-right hidden md:table-cell">Cost</TableHead>
                             <TableHead className="text-right">Profit</TableHead>
@@ -807,6 +829,11 @@ export default function SupplierAnalyticsPage() {
                               </TableCell>
                               <TableCell className="text-xs text-muted-foreground">{inv.date}</TableCell>
                               <TableCell className="text-xs">{inv.customer}</TableCell>
+                              <TableCell className="text-xs">
+                                <Badge variant="outline" className={`text-[10px] font-medium border ${getBusinessBadge(inv.businessName)}`}>
+                                  {inv.businessName || "—"}
+                                </Badge>
+                              </TableCell>
                               <TableCell className="text-right text-xs">LKR {fmt(inv.revenue)}</TableCell>
                               <TableCell className="text-right text-xs hidden md:table-cell">LKR {fmt(inv.cost)}</TableCell>
                               <TableCell className={`text-right text-xs font-medium ${inv.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
@@ -823,7 +850,7 @@ export default function SupplierAnalyticsPage() {
                           ))}
                           {filteredInvoices.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={7} className="text-center h-20 text-muted-foreground text-sm">
+                              <TableCell colSpan={8} className="text-center h-20 text-muted-foreground text-sm">
                                 No invoices found.
                               </TableCell>
                             </TableRow>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { BUSINESS_NAMES } from "@/app/config/business-constants";
 
 export const dynamic = "force-dynamic";
 
@@ -12,32 +13,52 @@ export async function GET(request: NextRequest) {
     const fromDate = searchParams.get("from") || firstDay;
     const toDate = searchParams.get("to") || lastDay;
 
-    // 1. All products with current stock
-    const { data: products, error: productsError } = await supabaseAdmin
-      .from("products")
-      .select(`
-        id, name, sku, supplier_name, cost_price, selling_price, category,
-        product_stocks (quantity)
-      `);
+    // 1. All products with current stock — range-based pagination to prevent truncation
+    const products: any[] = [];
+    let productsStart = 0;
+    const productsLimit = 1000;
+    while (true) {
+      const { data: batch, error: productsError } = await supabaseAdmin
+        .from("products")
+        .select(`
+          id, name, sku, supplier_name, cost_price, selling_price, category,
+          product_stocks (quantity)
+        `)
+        .range(productsStart, productsStart + productsLimit - 1);
 
-    if (productsError) throw productsError;
+      if (productsError) throw productsError;
+      if (!batch || batch.length === 0) break;
+      products.push(...batch);
+      if (batch.length < productsLimit) break;
+      productsStart += productsLimit;
+    }
 
-    // 2. Order items in date range — filter status in JS to support Delivered + Completed
-    const { data: orderItems, error: itemsError } = await supabaseAdmin
-      .from("order_items")
-      .select(`
-        id, quantity, free_quantity, unit_price, actual_unit_cost, total_price,
-        product:products!inner (id, name, sku, supplier_name, category),
-        order:orders!inner (
-          id, order_id, status, is_inter_branch, created_at, order_date,
-          customer:customers (id, shop_name, owner_name),
-          invoices (invoice_no, manual_invoice_no)
-        )
-      `)
-      .gte("order.created_at", fromDate)
-      .lte("order.created_at", toDate);
+    // 2. Order items in date range — filter status in JS to support Delivered + Completed with pagination
+    const orderItems: any[] = [];
+    let itemsStart = 0;
+    const itemsLimit = 1000;
+    while (true) {
+      const { data: batch, error: itemsError } = await supabaseAdmin
+        .from("order_items")
+        .select(`
+          id, quantity, free_quantity, unit_price, actual_unit_cost, total_price,
+          product:products!inner (id, name, sku, supplier_name, category),
+          order:orders!inner (
+            id, order_id, status, is_inter_branch, created_at, order_date, business_id,
+            customer:customers (id, shop_name, owner_name),
+            invoices (invoice_no, manual_invoice_no)
+          )
+        `)
+        .gte("order.created_at", fromDate)
+        .lte("order.created_at", toDate)
+        .range(itemsStart, itemsStart + itemsLimit - 1);
 
-    if (itemsError) throw itemsError;
+      if (itemsError) throw new Error(`Order items query failed: ${itemsError.message}`);
+      if (!batch || batch.length === 0) break;
+      orderItems.push(...batch);
+      if (batch.length < itemsLimit) break;
+      itemsStart += itemsLimit;
+    }
 
     // 3. Supplier → products stock map
     type ProductEntry = {
@@ -51,6 +72,7 @@ export async function GET(request: NextRequest) {
     };
     type InvoiceEntry = {
       orderId: string; invoiceNo: string; customer: string; date: string;
+      businessId?: string | null; businessName?: string | null;
       revenue: number; cost: number; profit: number; margin: number;
     };
     type SupplierEntry = {
@@ -99,6 +121,11 @@ export async function GET(request: NextRequest) {
       const order = item.order;
       if (!pid || !order) return;
 
+      // Skip ghost/duplicate orders without successfully created invoices
+      const invoices = order.invoices;
+      const hasInvoice = Array.isArray(invoices) ? invoices.length > 0 : !!invoices;
+      if (!hasInvoice) return;
+
       const qty = Number(item.quantity) || 0;
       const freeQty = Number(item.free_quantity) || 0;
       const revenue = Number(item.total_price) || 0;
@@ -135,10 +162,13 @@ export async function GET(request: NextRequest) {
       const inv = Array.isArray(order.invoices) ? order.invoices[0] : order.invoices;
       const invoiceNo = inv?.manual_invoice_no || inv?.invoice_no || oid;
       const date = (order.order_date || order.created_at || "").split("T")[0];
+      const businessId = order.business_id;
+      const businessName = businessId ? (BUSINESS_NAMES[businessId as keyof typeof BUSINESS_NAMES] || "Unknown Business") : "Unknown Business";
 
       if (!supplierMap[supplier].invoices[oid]) {
         supplierMap[supplier].invoices[oid] = {
           orderId: oid, invoiceNo, customer: cName, date,
+          businessId, businessName,
           revenue: 0, cost: 0, profit: 0, margin: 0,
         };
       }
