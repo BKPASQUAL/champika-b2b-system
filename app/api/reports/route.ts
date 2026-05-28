@@ -48,8 +48,8 @@ export async function GET(request: Request) {
         )
       `,
       )
-      .gte("created_at", fromDate)
-      .lte("created_at", toDate)
+      .gte("order_date", fromDate)
+      .lte("order_date", toDate)
       .eq("status", "Delivered");
 
     if (businessId) {

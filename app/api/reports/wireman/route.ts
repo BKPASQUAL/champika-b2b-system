@@ -26,8 +26,8 @@ export async function GET(request: NextRequest) {
          orders!inner (order_date, business_id)`
       )
       .eq("orders.business_id", WIREMAN_ID)
-      .gte("created_at", fromDate)
-      .lte("created_at", toDate + "T23:59:59")
+      .gte("orders.order_date", fromDate)
+      .lte("orders.order_date", toDate)
       .order("created_at", { ascending: false });
 
     if (invErr) throw new Error(`Invoices query failed: ${invErr.message}`);

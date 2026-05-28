@@ -49,8 +49,8 @@ export async function GET(request: NextRequest) {
             invoices (invoice_no, manual_invoice_no)
           )
         `)
-        .gte("order.created_at", fromDate)
-        .lte("order.created_at", toDate)
+        .gte("order.order_date", fromDate)
+        .lte("order.order_date", toDate)
         .range(itemsStart, itemsStart + itemsLimit - 1);
 
       if (itemsError) throw new Error(`Order items query failed: ${itemsError.message}`);
