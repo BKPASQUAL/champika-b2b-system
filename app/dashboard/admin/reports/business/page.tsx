@@ -138,7 +138,7 @@ export default function BusinessAnalyticsPage() {
   const [businesses, setBusinesses] = useState<any[]>([]);
   const [selectedId, setSelectedId] = useState<string>("overall");
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [detailTab, setDetailTab] = useState<"invoices" | "customers" | "products">("invoices");
+  const [detailTab, setDetailTab] = useState<"invoices" | "customers" | "products" | "reps">("invoices");
   const [detailSearch, setDetailSearch] = useState("");
 
   const fetchData = async () => {
@@ -211,6 +211,17 @@ export default function BusinessAnalyticsPage() {
     );
   }, [current, detailSearch]);
 
+  const filteredReps = useMemo(() => {
+    const list: any[] = current?.reps || [];
+    if (!detailSearch) return list;
+    const q = detailSearch.toLowerCase();
+    return list.filter((r) => {
+      const name = r.name?.toLowerCase() || "";
+      const displayRepName = name === "champika hardware" ? "champika hardware direct" : name;
+      return displayRepName.includes(q);
+    });
+  }, [current, detailSearch]);
+
   // Totals for detail tabs
   const invTotals = useMemo(() => ({
     amount: filteredInvoices.reduce((s, i) => s + i.amount, 0),
@@ -232,6 +243,14 @@ export default function BusinessAnalyticsPage() {
     cost: filteredProducts.reduce((s, p) => s + p.cost, 0),
     profit: filteredProducts.reduce((s, p) => s + p.profit, 0),
   }), [filteredProducts]);
+
+  const repTotals = useMemo(() => ({
+    revenue: filteredReps.reduce((s, r) => s + r.revenue, 0),
+    cost: filteredReps.reduce((s, r) => s + r.cost, 0),
+    profit: filteredReps.reduce((s, r) => s + r.profit, 0),
+    dueAmount: filteredReps.reduce((s, r) => s + r.dueAmount, 0),
+    invoiceCount: filteredReps.reduce((s, r) => s + r.invoiceCount, 0),
+  }), [filteredReps]);
 
   const DateControls = () => (
     <div className="space-y-2">
@@ -652,6 +671,15 @@ export default function BusinessAnalyticsPage() {
                       <Package className="h-3 w-3 mr-1" />
                       Products ({current.products?.length || 0})
                     </Button>
+                    <Button
+                      variant={detailTab === "reps" ? "default" : "ghost"}
+                      size="sm"
+                      className="h-8 text-xs"
+                      onClick={() => { setDetailTab("reps"); setDetailSearch(""); }}
+                    >
+                      <Users className="h-3 w-3 mr-1" />
+                      Reps ({current.reps?.length || 0})
+                    </Button>
                   </div>
                   <div className="relative w-full sm:w-44">
                     <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
@@ -877,6 +905,90 @@ export default function BusinessAnalyticsPage() {
                               </TableCell>
                             </TableRow>
                           ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  )}
+
+                  {/* ── Reps Tab ── */}
+                  {detailTab === "reps" && (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Representative</TableHead>
+                          <TableHead className="text-right">Invoices</TableHead>
+                          <TableHead className="text-right">Total Sales</TableHead>
+                          <TableHead className="text-right">Cost</TableHead>
+                          <TableHead className="text-right">Profit</TableHead>
+                          <TableHead className="text-right">Margin</TableHead>
+                          <TableHead className="text-right">Due Amount</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {/* Totals row */}
+                        <TableRow className="border-b-2 bg-muted/30 font-bold">
+                          <TableCell className="font-bold text-xs">
+                            Total — {filteredReps.length} reps
+                          </TableCell>
+                          <TableCell className="text-right font-bold">{repTotals.invoiceCount}</TableCell>
+                          <TableCell className="text-right text-blue-700 font-bold">
+                            LKR {fmt(repTotals.revenue)}
+                          </TableCell>
+                          <TableCell className="text-right font-bold text-muted-foreground">
+                            LKR {fmt(repTotals.cost)}
+                          </TableCell>
+                          <TableCell className={`text-right font-bold ${repTotals.profit >= 0 ? "text-green-700" : "text-red-700"}`}>
+                            LKR {fmt(repTotals.profit)}
+                          </TableCell>
+                          <TableCell className="text-right text-xs font-bold">
+                            {repTotals.revenue > 0 ? ((repTotals.profit / repTotals.revenue) * 100).toFixed(1) : "0.0"}%
+                          </TableCell>
+                          <TableCell className="text-right text-red-600 font-bold">
+                            LKR {fmt(repTotals.dueAmount)}
+                          </TableCell>
+                        </TableRow>
+                        {filteredReps.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={7} className="text-center text-muted-foreground text-xs py-8">
+                              No representatives found
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          filteredReps.map((r: any) => {
+                            const isDirect = r.name === "Champika Hardware";
+                            return (
+                              <TableRow key={r.id} className="text-xs hover:bg-muted/30">
+                                <TableCell>
+                                  {isDirect ? (
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-semibold text-primary">Champika Hardware Direct</span>
+                                      <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[9px] px-1 py-0 h-4">
+                                        Direct Counter Sales
+                                      </Badge>
+                                    </div>
+                                  ) : (
+                                    <span className="font-medium">{r.name}</span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-right">{r.invoiceCount}</TableCell>
+                                <TableCell className="text-right text-blue-700 font-medium">
+                                  LKR {fmt(r.revenue)}
+                                </TableCell>
+                                <TableCell className="text-right text-muted-foreground">
+                                  LKR {fmt(r.cost)}
+                                </TableCell>
+                                <TableCell className={`text-right font-medium ${r.profit >= 0 ? "text-green-700" : "text-red-700"}`}>
+                                  LKR {fmt(r.profit)}
+                                </TableCell>
+                                <TableCell className="text-right text-muted-foreground">
+                                  {r.margin.toFixed(1)}%
+                                </TableCell>
+                                <TableCell className={`text-right font-medium ${r.dueAmount > 0 ? "text-red-600" : "text-muted-foreground"}`}>
+                                  {r.dueAmount > 0 ? `LKR ${fmt(r.dueAmount)}` : "—"}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })
                         )}
                       </TableBody>
                     </Table>

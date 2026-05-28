@@ -21,8 +21,9 @@ export async function GET(request: NextRequest) {
       .select(`
         id, invoice_no, manual_invoice_no, total_amount, due_amount, status,
         order:orders!inner (
-          order_id, status, created_at, order_date, business_id,
-          customer:customers (id, shop_name)
+          order_id, status, created_at, order_date, business_id, sales_rep_id,
+          customer:customers (id, shop_name),
+          rep:profiles!orders_sales_rep_id_fkey (id, full_name)
         )
       `)
       .gte("order.order_date", fromDate)
@@ -41,8 +42,9 @@ export async function GET(request: NextRequest) {
           id, quantity, unit_price, actual_unit_cost, total_price,
           product:products (id, name, sku),
           order:orders!inner (
-            id, order_id, status, created_at, order_date, business_id,
-            customer:customers (id, shop_name)
+            id, order_id, status, created_at, order_date, business_id, sales_rep_id,
+            customer:customers (id, shop_name),
+            rep:profiles!orders_sales_rep_id_fkey (id, full_name)
           )
         `)
         .gte("order.order_date", fromDate)
@@ -65,6 +67,11 @@ export async function GET(request: NextRequest) {
       revenue: number; cost: number; profit: number;
       dueAmount: number; orderSet: Set<string>;
     };
+    type RepEntry = {
+      id: string; name: string;
+      revenue: number; cost: number; profit: number;
+      dueAmount: number; invoiceCount: number;
+    };
     type InvoiceEntry = {
       invoiceId: string; orderId: string; invoiceNo: string;
       customer: string; date: string;
@@ -80,6 +87,7 @@ export async function GET(request: NextRequest) {
       dueAmount: number;
       productMap: Record<string, ProductEntry>;
       customerMap: Record<string, CustomerEntry>;
+      repMap: Record<string, RepEntry>;
       invoiceList: InvoiceEntry[];
     };
 
@@ -94,7 +102,7 @@ export async function GET(request: NextRequest) {
           invoicedOrderIds: new Set(),
           customerCountSet: new Set(),
           dueAmount: 0,
-          productMap: {}, customerMap: {}, invoiceList: [],
+          productMap: {}, customerMap: {}, repMap: {}, invoiceList: [],
         };
       }
     };
@@ -137,6 +145,25 @@ export async function GET(request: NextRequest) {
         due,
         paymentStatus: inv.status || "Unpaid",
       });
+
+      // Representatives aggregation in Pass 1
+      const repId = order.sales_rep_id || "direct";
+      const repName = order.rep?.full_name || "Direct Sales";
+      if (!biz.repMap[repId]) {
+        biz.repMap[repId] = {
+          id: repId,
+          name: repName,
+          revenue: 0,
+          cost: 0,
+          profit: 0,
+          dueAmount: 0,
+          invoiceCount: 0,
+        };
+      }
+      biz.repMap[repId].invoiceCount += 1;
+      if (["Unpaid", "Partial", "Overdue"].includes(inv.status)) {
+        biz.repMap[repId].dueAmount += due;
+      }
     });
 
     const orderProfitMap: Record<string, { revenue: number; cost: number }> = {};
@@ -197,6 +224,24 @@ export async function GET(request: NextRequest) {
       biz.customerMap[cId].cost += cost;
       biz.customerMap[cId].profit += itemRevenue - cost;
       biz.customerMap[cId].orderSet.add(order.order_id);
+
+      // Representatives aggregation in Pass 2
+      const repId = order.sales_rep_id || "direct";
+      const repName = order.rep?.full_name || "Direct Sales";
+      if (!biz.repMap[repId]) {
+        biz.repMap[repId] = {
+          id: repId,
+          name: repName,
+          revenue: 0,
+          cost: 0,
+          profit: 0,
+          dueAmount: 0,
+          invoiceCount: 0,
+        };
+      }
+      biz.repMap[repId].revenue += itemRevenue;
+      biz.repMap[repId].cost += cost;
+      biz.repMap[repId].profit += itemRevenue - cost;
     });
 
     // Attach customer due amounts from invoice pass
@@ -230,6 +275,15 @@ export async function GET(request: NextRequest) {
         }))
         .sort((a, b) => b.revenue - a.revenue);
 
+      const reps = Object.values(biz.repMap)
+        .map((r) => ({
+          id: r.id, name: r.name,
+          revenue: r.revenue, cost: r.cost, profit: r.profit,
+          dueAmount: r.dueAmount, invoiceCount: r.invoiceCount,
+          margin: r.revenue > 0 ? (r.profit / r.revenue) * 100 : 0,
+        }))
+        .sort((a, b) => b.revenue - a.revenue);
+
       const invoices = [...biz.invoiceList].map((inv: any) => {
         const profitEntry = orderProfitMap[inv.orderId];
         const profit = profitEntry ? profitEntry.revenue - profitEntry.cost : null;
@@ -256,6 +310,7 @@ export async function GET(request: NextRequest) {
         margin: biz.totalRevenue > 0 ? (totalProfit / biz.totalRevenue) * 100 : 0,
         products,
         customers,
+        reps,
         invoices,
       };
     }).sort((a, b) => b.totalRevenue - a.totalRevenue);
@@ -263,6 +318,7 @@ export async function GET(request: NextRequest) {
     // Overall aggregate
     const allProductsMap: Record<string, any> = {};
     const allCustomersMap: Record<string, any> = {};
+    const allRepsMap: Record<string, any> = {};
     const allInvoicesList: any[] = [];
 
     businesses.forEach((biz) => {
@@ -287,6 +343,17 @@ export async function GET(request: NextRequest) {
           allCustomersMap[c.id].invoiceCount += c.invoiceCount;
         }
       });
+      biz.reps.forEach((r: any) => {
+        if (!allRepsMap[r.id]) {
+          allRepsMap[r.id] = { ...r };
+        } else {
+          allRepsMap[r.id].revenue += r.revenue;
+          allRepsMap[r.id].cost += r.cost;
+          allRepsMap[r.id].profit += r.profit;
+          allRepsMap[r.id].dueAmount += r.dueAmount;
+          allRepsMap[r.id].invoiceCount += r.invoiceCount;
+        }
+      });
       allInvoicesList.push(...biz.invoices);
     });
 
@@ -296,6 +363,10 @@ export async function GET(request: NextRequest) {
 
     const overallCustomers = Object.values(allCustomersMap)
       .map((c: any) => ({ ...c, margin: c.revenue > 0 ? (c.profit / c.revenue) * 100 : 0 }))
+      .sort((a: any, b: any) => b.revenue - a.revenue);
+
+    const overallReps = Object.values(allRepsMap)
+      .map((r: any) => ({ ...r, margin: r.revenue > 0 ? (r.profit / r.revenue) * 100 : 0 }))
       .sort((a: any, b: any) => b.revenue - a.revenue);
 
     const overallInvoices = allInvoicesList.sort(
@@ -315,6 +386,7 @@ export async function GET(request: NextRequest) {
       margin: 0,
       products: overallProducts,
       customers: overallCustomers,
+      reps: overallReps,
       invoices: overallInvoices,
     };
     overall.margin = overall.totalRevenue > 0
