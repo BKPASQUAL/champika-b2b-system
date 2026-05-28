@@ -59,7 +59,7 @@ export async function GET() {
       supabaseAdmin
         .from("order_items")
         .select("quantity, total_price, actual_unit_cost, order:orders!inner(status, created_at)")
-        .eq("order.status", "Delivered")
+        .in("order.status", ["Delivered", "Completed"])
         .gte("order.created_at", thirtyDaysAgoISO),
     ]);
 

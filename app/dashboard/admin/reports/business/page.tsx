@@ -64,6 +64,20 @@ const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8"];
 const fmt = (n: number) =>
   n.toLocaleString("en-LK", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
+function MarginBadge({ margin }: { margin: number | null | undefined }) {
+  const m = Number(margin) || 0;
+  const cls =
+    m >= 20 ? "bg-green-100 text-green-800"
+    : m >= 10 ? "bg-yellow-100 text-yellow-800"
+    : m >= 0 ? "bg-orange-100 text-orange-800"
+    : "bg-red-100 text-red-800";
+  return (
+    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${cls}`}>
+      {m.toFixed(1)}%
+    </span>
+  );
+}
+
 function getRange(quickSelect: string, customFrom: string, customTo: string) {
   const now = new Date();
   let from: Date, to: Date;
@@ -201,6 +215,7 @@ export default function BusinessAnalyticsPage() {
   const invTotals = useMemo(() => ({
     amount: filteredInvoices.reduce((s, i) => s + i.amount, 0),
     due: filteredInvoices.reduce((s, i) => s + i.due, 0),
+    profit: filteredInvoices.reduce((s, i) => s + (i.profit || 0), 0),
   }), [filteredInvoices]);
 
   const custTotals = useMemo(() => ({
@@ -663,6 +678,8 @@ export default function BusinessAnalyticsPage() {
                           <TableHead>Customer</TableHead>
                           <TableHead className="text-right">Amount</TableHead>
                           <TableHead className="text-right">Due</TableHead>
+                          <TableHead className="text-right">Profit</TableHead>
+                          <TableHead className="text-right">Margin</TableHead>
                           <TableHead>Status</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -678,11 +695,17 @@ export default function BusinessAnalyticsPage() {
                           <TableCell className="text-right text-red-600 font-bold">
                             LKR {fmt(invTotals.due)}
                           </TableCell>
+                          <TableCell className={`text-right font-bold ${invTotals.profit >= 0 ? "text-green-700" : "text-red-700"}`}>
+                            LKR {fmt(invTotals.profit)}
+                          </TableCell>
+                          <TableCell className="text-right text-xs font-bold">
+                            {invTotals.amount > 0 ? ((invTotals.profit / invTotals.amount) * 100).toFixed(1) : "0.0"}%
+                          </TableCell>
                           <TableCell />
                         </TableRow>
                         {filteredInvoices.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={6} className="text-center text-muted-foreground text-xs py-8">
+                            <TableCell colSpan={8} className="text-center text-muted-foreground text-xs py-8">
                               No invoices found
                             </TableCell>
                           </TableRow>
@@ -697,6 +720,19 @@ export default function BusinessAnalyticsPage() {
                               </TableCell>
                               <TableCell className={`text-right font-medium ${inv.due > 0 ? "text-red-600" : "text-muted-foreground"}`}>
                                 {inv.due > 0 ? `LKR ${fmt(inv.due)}` : "—"}
+                              </TableCell>
+                              <TableCell className={`text-right font-mono tabular-nums font-semibold ${
+                                inv.profit === null || inv.profit === undefined ? "text-muted-foreground"
+                                : inv.profit >= 0 ? "text-green-700" : "text-red-600"
+                              }`}>
+                                {inv.profit === null || inv.profit === undefined
+                                  ? <span className="text-[10px] text-muted-foreground/50">—</span>
+                                  : `LKR ${fmt(inv.profit)}`}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {inv.profitMargin === null || inv.profitMargin === undefined
+                                  ? <span className="text-[10px] text-muted-foreground/50">—</span>
+                                  : <MarginBadge margin={inv.profitMargin} />}
                               </TableCell>
                               <TableCell>
                                 <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${STATUS_COLORS[inv.paymentStatus] || "bg-gray-100 text-gray-700"}`}>

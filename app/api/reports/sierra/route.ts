@@ -33,7 +33,11 @@ export async function GET(request: NextRequest) {
     if (invErr) throw new Error(`Invoices query failed: ${invErr.message}`);
 
     const deliveredInvoices = (invoices || []).filter(
-      (inv: any) => inv.orders?.status === "Delivered" || inv.orders?.status === "Completed"
+      (inv: any) => {
+        const isDelivered = inv.orders?.status === "Delivered" || inv.orders?.status === "Completed";
+        const isInterBranch = (inv.customers?.shop_name || "").toLowerCase().includes("champika hardware");
+        return isDelivered && !isInterBranch;
+      }
     );
 
     // ── 2. Purchases ─────────────────────────────────────────────────────────
@@ -57,24 +61,38 @@ export async function GET(request: NextRequest) {
 
     if (expErr) throw new Error(`Expenses query failed: ${expErr.message}`);
 
-    // ── 4. Order Items for Profit (Sierra products by supplier_name) ──────────
-    const { data: orderItems, error: itemErr } = await supabaseAdmin
-      .from("order_items")
-      .select(
-        `id, quantity, free_quantity, unit_price, actual_unit_cost, created_at,
-         order:orders!inner (
-           order_id, status, created_at, order_date, invoice_no,
-           customer:customers (shop_name),
-           invoices (invoice_no)
-         ),
-         product:products!inner (id, name, sku, supplier_name, cost_price)`
-      )
-      .eq("order.status", "Delivered")
-      .ilike("product.supplier_name", "%Sierra%")
-      .gte("order.order_date", fromDate)
-      .lte("order.order_date", toDate);
+    // ── 4. Order Items for Profit (Sierra products by supplier_name) with pagination ──────────
+    let orderItems: any[] = [];
+    let itemsStart = 0;
+    const itemsLimit = 1000;
+    while (true) {
+      const { data: batch, error: itemErr } = await supabaseAdmin
+        .from("order_items")
+        .select(
+          `id, quantity, free_quantity, unit_price, actual_unit_cost, created_at,
+           order:orders!inner (
+             order_id, status, created_at, order_date, invoice_no,
+             customer:customers (shop_name),
+             invoices (invoice_no)
+           ),
+           product:products!inner (id, name, sku, supplier_name, cost_price)`
+        )
+        .in("order.status", ["Delivered", "Completed"])
+        .ilike("product.supplier_name", "%Sierra%")
+        .gte("order.order_date", fromDate)
+        .lte("order.order_date", toDate)
+        .range(itemsStart, itemsStart + itemsLimit - 1);
 
-    if (itemErr) throw new Error(`Order items query failed: ${itemErr.message}`);
+      if (itemErr) throw new Error(`Order items query failed: ${itemErr.message}`);
+      if (!batch || batch.length === 0) break;
+      orderItems.push(...batch);
+      if (batch.length < itemsLimit) break;
+      itemsStart += itemsLimit;
+    }
+
+    orderItems = orderItems.filter(
+      (item: any) => !(item.order?.customer?.shop_name || "").toLowerCase().includes("champika hardware")
+    );
 
     // ── 5. Cost Layers for Sierra products (FIFO stock breakdown) ────────────
     // Query cost layers directly joined to products — no is_active / stock_quantity

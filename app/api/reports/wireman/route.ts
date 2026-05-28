@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     // ── 1. Invoices (Sales) ───────────────────────────────────────────────────
     // Note: invoices table has no 'date' or 'final_amount' columns.
     // Date comes from created_at; amount from total_amount; status from 'status'.
-    const { data: invoices, error: invErr } = await supabaseAdmin
+    const { data: rawInvoices, error: invErr } = await supabaseAdmin
       .from("invoices")
       .select(
         `id, total_amount, due_amount, status, invoice_no, created_at,
@@ -31,6 +31,10 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false });
 
     if (invErr) throw new Error(`Invoices query failed: ${invErr.message}`);
+
+    const invoices = (rawInvoices || []).filter(
+      (inv: any) => !(inv.customers?.shop_name || "").toLowerCase().includes("champika hardware")
+    );
 
     // ── 2. Purchases ─────────────────────────────────────────────────────────
     const { data: purchases, error: purErr } = await supabaseAdmin
@@ -53,24 +57,38 @@ export async function GET(request: NextRequest) {
 
     if (expErr) throw new Error(`Expenses query failed: ${expErr.message}`);
 
-    // ── 4. Order Items for Profit (Wireman products by supplier_name) ─────────
-    const { data: orderItems, error: itemErr } = await supabaseAdmin
-      .from("order_items")
-      .select(
-        `id, quantity, free_quantity, unit_price, actual_unit_cost, created_at,
-         order:orders!inner (
-           order_id, status, created_at, order_date, invoice_no,
-           customer:customers (shop_name),
-           invoices (invoice_no)
-         ),
-         product:products!inner (id, name, sku, supplier_name, cost_price)`
-      )
-      .eq("order.status", "Delivered")
-      .ilike("product.supplier_name", "%Wireman%")
-      .gte("order.order_date", fromDate)
-      .lte("order.order_date", toDate);
+    // ── 4. Order Items for Profit (Wireman products by supplier_name) with pagination ─────────
+    let orderItems: any[] = [];
+    let itemsStart = 0;
+    const itemsLimit = 1000;
+    while (true) {
+      const { data: batch, error: itemErr } = await supabaseAdmin
+        .from("order_items")
+        .select(
+          `id, quantity, free_quantity, unit_price, actual_unit_cost, created_at,
+           order:orders!inner (
+             order_id, status, created_at, order_date, invoice_no,
+             customer:customers (shop_name),
+             invoices (invoice_no)
+           ),
+           product:products!inner (id, name, sku, supplier_name, cost_price)`
+        )
+        .in("order.status", ["Delivered", "Completed"])
+        .ilike("product.supplier_name", "%Wireman%")
+        .gte("order.order_date", fromDate)
+        .lte("order.order_date", toDate)
+        .range(itemsStart, itemsStart + itemsLimit - 1);
 
-    if (itemErr) throw new Error(`Order items query failed: ${itemErr.message}`);
+      if (itemErr) throw new Error(`Order items query failed: ${itemErr.message}`);
+      if (!batch || batch.length === 0) break;
+      orderItems.push(...batch);
+      if (batch.length < itemsLimit) break;
+      itemsStart += itemsLimit;
+    }
+
+    orderItems = orderItems.filter(
+      (item: any) => !(item.order?.customer?.shop_name || "").toLowerCase().includes("champika hardware")
+    );
 
     // ── Process: Overview KPIs ────────────────────────────────────────────────
     const totalSales = (invoices || []).reduce(

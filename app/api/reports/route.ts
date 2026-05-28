@@ -50,7 +50,7 @@ export async function GET(request: Request) {
       )
       .gte("created_at", fromDate)
       .lte("created_at", toDate)
-      .in("status", ["Delivered"]);
+      .in("status", ["Delivered", "Completed"]);
 
     if (businessId) {
       ordersQuery = ordersQuery.eq("business_id", businessId);

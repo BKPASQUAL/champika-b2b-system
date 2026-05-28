@@ -30,21 +30,31 @@ export async function GET(request: NextRequest) {
 
     if (allInvError) throw allInvError;
 
-    // 2. Order items — cost + product + customer detail (filtered to invoiced orders only)
-    const { data: orderItems, error: itemsError } = await supabaseAdmin
-      .from("order_items")
-      .select(`
-        id, quantity, unit_price, actual_unit_cost, total_price,
-        product:products (id, name, sku),
-        order:orders!inner (
-          id, order_id, status, created_at, order_date, business_id,
-          customer:customers (id, shop_name)
-        )
-      `)
-      .gte("order.created_at", fromDate)
-      .lte("order.created_at", toDate);
+    // 2. Order items — cost + product + customer detail (filtered to invoiced orders only) with pagination
+    const orderItems: any[] = [];
+    let itemsStart = 0;
+    const itemsLimit = 1000;
+    while (true) {
+      const { data: batch, error: itemsError } = await supabaseAdmin
+        .from("order_items")
+        .select(`
+          id, quantity, unit_price, actual_unit_cost, total_price,
+          product:products (id, name, sku),
+          order:orders!inner (
+            id, order_id, status, created_at, order_date, business_id,
+            customer:customers (id, shop_name)
+          )
+        `)
+        .gte("order.created_at", fromDate)
+        .lte("order.created_at", toDate)
+        .range(itemsStart, itemsStart + itemsLimit - 1);
 
-    if (itemsError) throw itemsError;
+      if (itemsError) throw new Error(`Order items query failed: ${itemsError.message}`);
+      if (!batch || batch.length === 0) break;
+      orderItems.push(...batch);
+      if (batch.length < itemsLimit) break;
+      itemsStart += itemsLimit;
+    }
 
     type ProductEntry = {
       id: string; name: string; sku: string;
@@ -59,6 +69,8 @@ export async function GET(request: NextRequest) {
       invoiceId: string; orderId: string; invoiceNo: string;
       customer: string; date: string;
       amount: number; due: number; paymentStatus: string;
+      profit?: number | null;
+      profitMargin?: number | null;
     };
     type BusinessEntry = {
       id: string; name: string;
@@ -93,6 +105,11 @@ export async function GET(request: NextRequest) {
     (allInvoices || []).forEach((inv: any) => {
       const order = inv.order;
       if (!order || !COUNTED_STATUSES.includes(order.status)) return;
+
+      // Filter out inter-branch invoices
+      const shopName = (order.customer?.shop_name || "").toLowerCase();
+      if (shopName.includes("champika hardware")) return;
+
       const bizId = order.business_id;
       if (!bizId) return;
 
@@ -122,6 +139,8 @@ export async function GET(request: NextRequest) {
       });
     });
 
+    const orderProfitMap: Record<string, { revenue: number; cost: number }> = {};
+
     // Pass 2 — order items: cost + products + customers, ONLY for invoiced orders
     (orderItems || []).forEach((item: any) => {
       const order = item.order;
@@ -138,6 +157,13 @@ export async function GET(request: NextRequest) {
       const qty = Number(item.quantity) || 0;
       const itemRevenue = Number(item.total_price) || 0;
       const cost = qty * (Number(item.actual_unit_cost) || 0);
+
+      const oid = order.order_id;
+      if (!orderProfitMap[oid]) {
+        orderProfitMap[oid] = { revenue: 0, cost: 0 };
+      }
+      orderProfitMap[oid].revenue += itemRevenue;
+      orderProfitMap[oid].cost += cost;
 
       biz.totalCost += cost;
       biz.totalUnits += qty;
@@ -204,7 +230,16 @@ export async function GET(request: NextRequest) {
         }))
         .sort((a, b) => b.revenue - a.revenue);
 
-      const invoices = [...biz.invoiceList].sort(
+      const invoices = [...biz.invoiceList].map((inv: any) => {
+        const profitEntry = orderProfitMap[inv.orderId];
+        const profit = profitEntry ? profitEntry.revenue - profitEntry.cost : null;
+        const profitMargin = profitEntry && profitEntry.revenue > 0 ? ((profitEntry.revenue - profitEntry.cost) / profitEntry.revenue) * 100 : null;
+        return {
+          ...inv,
+          profit,
+          profitMargin,
+        };
+      }).sort(
         (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
       );
 
