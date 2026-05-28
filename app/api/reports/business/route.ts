@@ -135,7 +135,7 @@ export async function GET(request: NextRequest) {
       if (!biz.invoicedOrderIds.has(order.order_id)) return;
 
       const qty = Number(item.quantity) || 0;
-      const itemRevenue = qty * (Number(item.unit_price) || 0);
+      const itemRevenue = Number(item.total_price) || 0;
       const cost = qty * (Number(item.actual_unit_cost) || 0);
 
       biz.totalRevenue += itemRevenue;
