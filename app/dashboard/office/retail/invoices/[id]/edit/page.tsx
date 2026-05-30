@@ -477,7 +477,7 @@ export default function EditRetailInvoicePage({
   }
 
   return (
-    <div className="space-y-4 mx-auto">
+    <div className="space-y-4 mx-auto pb-16 lg:pb-0">
       <div className="flex flex-col md:flex-row items-center gap-4">
         <div className="flex items-center gap-4 w-full md:w-auto">
           <Button
@@ -495,11 +495,12 @@ export default function EditRetailInvoicePage({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 ml-auto">
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto md:ml-auto">
           <Button
             variant="outline"
             onClick={() => handleSaveAction("download")}
             disabled={items.length === 0 || loading}
+            className="flex-1 md:flex-initial text-xs md:text-sm px-2.5 md:px-4"
           >
             {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
             Save & Download
@@ -509,6 +510,7 @@ export default function EditRetailInvoicePage({
             variant="outline"
             onClick={() => handleSaveAction("print")}
             disabled={items.length === 0 || loading}
+            className="flex-1 md:flex-initial text-xs md:text-sm px-2.5 md:px-4"
           >
             {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Printer className="w-4 h-4 mr-2" />}
             Save & Print
@@ -517,7 +519,7 @@ export default function EditRetailInvoicePage({
           <Button
             onClick={() => handleSaveAction("save")}
             disabled={items.length === 0 || loading}
-            className="bg-green-600 hover:bg-green-700"
+            className="flex-1 md:flex-initial text-xs md:text-sm px-2.5 md:px-4 bg-green-600 hover:bg-green-700"
           >
             {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
             Update Invoice
@@ -813,7 +815,7 @@ export default function EditRetailInvoicePage({
               </div>
 
               {/* Add Form Inputs */}
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="space-y-2">
                   <Label>Quantity</Label>
                   <Input type="number" min="1" value={currentItem.quantity} onChange={(e) => setCurrentItem({ ...currentItem, quantity: e.target.value === "" ? "" : Number(e.target.value) })} />
@@ -1043,6 +1045,42 @@ export default function EditRetailInvoicePage({
               />
             </CardContent>
           </Card>
+        </div>
+      </div>
+
+      {/* Sleek Sticky Bottom Summary Bar for Mobile & Tablets */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 px-4 py-3 shadow-lg flex items-center justify-between gap-4 transition-all duration-300">
+        <div className="flex flex-col">
+          <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
+            Total ({items.length} items)
+          </span>
+          <span className="text-lg font-extrabold text-green-600">
+            LKR {grandTotal.toLocaleString()}
+          </span>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleSaveAction("print")}
+            disabled={items.length === 0 || loading}
+            className="h-10 text-xs px-2.5"
+          >
+            <Printer className="w-4 h-4" />
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => handleSaveAction("save")}
+            disabled={items.length === 0 || loading}
+            className="h-10 bg-green-600 hover:bg-green-700 font-bold px-4 text-xs"
+          >
+            {loading ? (
+              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+            ) : (
+              <Save className="w-4 h-4 mr-1" />
+            )}
+            Update Invoice
+          </Button>
         </div>
       </div>
     </div>
