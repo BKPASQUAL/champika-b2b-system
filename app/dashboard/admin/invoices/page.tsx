@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useCachedFetch, invalidatePaymentCaches, invalidateFinanceCaches } from "@/hooks/useCachedFetch";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -34,17 +34,42 @@ import { Invoice, SortField, SortOrder } from "./types";
 import { InvoiceTable } from "./_components/InvoiceTable";
 import { InvoiceStats } from "./_components/InvoiceStats";
 
+const STORAGE_KEYS = {
+  search: "admin_invoices_search",
+  status: "admin_invoices_status",
+  rep: "admin_invoices_rep",
+  sortField: "admin_invoices_sortField",
+  sortOrder: "admin_invoices_sortOrder",
+  page: "admin_invoices_page",
+};
+
+const getStoredValue = (key: string, defaultValue: string) => {
+  if (typeof window !== "undefined") {
+    const [navigation] = performance.getEntriesByType("navigation");
+    if (navigation && (navigation as PerformanceNavigationTiming).type === "reload") {
+      sessionStorage.removeItem(key);
+      return defaultValue;
+    }
+    return sessionStorage.getItem(key) || defaultValue;
+  }
+  return defaultValue;
+};
+
 export default function InvoicesPage() {
   const router = useRouter();
+  
   // Filters
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [repFilter, setRepFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState(() => getStoredValue(STORAGE_KEYS.search, ""));
+  const [statusFilter, setStatusFilter] = useState(() => getStoredValue(STORAGE_KEYS.status, "all"));
+  const [repFilter, setRepFilter] = useState(() => getStoredValue(STORAGE_KEYS.rep, "all"));
 
   // Sort & Pagination
-  const [sortField, setSortField] = useState<SortField>("createdAt");
-  const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
-  const [currentPage, setCurrentPage] = useState(1);
+  const [sortField, setSortField] = useState<SortField>(() => getStoredValue(STORAGE_KEYS.sortField, "createdAt") as SortField);
+  const [sortOrder, setSortOrder] = useState<SortOrder>(() => getStoredValue(STORAGE_KEYS.sortOrder, "desc") as SortOrder);
+  const [currentPage, setCurrentPage] = useState(() => {
+    const val = getStoredValue(STORAGE_KEYS.page, "1");
+    return parseInt(val, 10) || 1;
+  });
   const itemsPerPage = 10;
 
   const {
@@ -168,9 +193,62 @@ export default function InvoicesPage() {
       toast.error("Failed to delete invoice");
     }
   };
+  // Synchronize filters to sessionStorage
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(STORAGE_KEYS.search, searchQuery);
+    }
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(STORAGE_KEYS.status, statusFilter);
+    }
+  }, [statusFilter]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(STORAGE_KEYS.rep, repFilter);
+    }
+  }, [repFilter]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(STORAGE_KEYS.sortField, sortField);
+    }
+  }, [sortField]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(STORAGE_KEYS.sortOrder, sortOrder);
+    }
+  }, [sortOrder]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(STORAGE_KEYS.page, currentPage.toString());
+    }
+  }, [currentPage]);
+
+  const isInitialMount = useRef(true);
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
     setCurrentPage(1);
   }, [searchQuery, statusFilter, repFilter]);
+
+  const handleRefreshAll = () => {
+    setSearchQuery("");
+    setStatusFilter("all");
+    setRepFilter("all");
+    setSortField("createdAt");
+    setSortOrder("desc");
+    setCurrentPage(1);
+    Object.values(STORAGE_KEYS).forEach((k) => sessionStorage.removeItem(k));
+    fetchInvoices();
+  };
 
   return (
     <div className="space-y-6">
@@ -185,7 +263,7 @@ export default function InvoicesPage() {
           <Button
             variant="outline"
             size="icon"
-            onClick={fetchInvoices}
+            onClick={handleRefreshAll}
             disabled={loading}
             title="Refresh Data"
           >

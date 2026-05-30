@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   Receipt,
   Search,
@@ -11,6 +11,7 @@ import {
   Clock,
   Truck,
   Eye,
+  RefreshCw,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -83,46 +84,104 @@ function DueDateCell({ billingDate }: { billingDate: string }) {
   return <span className="text-xs font-medium text-blue-500">{diff}d</span>;
 }
 
+const STORAGE_KEYS = {
+  search: "rep_invoices_search",
+  status: "rep_invoices_status",
+  page: "rep_invoices_page",
+};
+
+const getStoredValue = (key: string, defaultValue: string) => {
+  if (typeof window !== "undefined") {
+    const [navigation] = performance.getEntriesByType("navigation");
+    if (navigation && (navigation as PerformanceNavigationTiming).type === "reload") {
+      sessionStorage.removeItem(key);
+      return defaultValue;
+    }
+    return sessionStorage.getItem(key) || defaultValue;
+  }
+  return defaultValue;
+};
+
 export default function RepMyInvoicesPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [currentPage, setCurrentPage] = useState(1);
+  const [search, setSearch] = useState(() => getStoredValue(STORAGE_KEYS.search, ""));
+  const [statusFilter, setStatusFilter] = useState(() => getStoredValue(STORAGE_KEYS.status, "all"));
+  const [currentPage, setCurrentPage] = useState(() => {
+    const val = getStoredValue(STORAGE_KEYS.page, "1");
+    return parseInt(val, 10) || 1;
+  });
   const ITEMS_PER_PAGE = 10;
 
-  useEffect(() => {
-    const fetchInvoices = async () => {
-      let userId = "";
-      if (typeof window !== "undefined") {
-        const storedUser = localStorage.getItem("currentUser");
-        if (storedUser) {
-          userId = JSON.parse(storedUser).id;
-        }
+  const fetchInvoices = useCallback(async () => {
+    setLoading(true);
+    let userId = "";
+    if (typeof window !== "undefined") {
+      const storedUser = localStorage.getItem("currentUser");
+      if (storedUser) {
+        userId = JSON.parse(storedUser).id;
       }
+    }
 
-      if (!userId) {
-        toast.error("User not found. Please log in again.");
-        setLoading(false);
-        return;
-      }
+    if (!userId) {
+      toast.error("User not found. Please log in again.");
+      setLoading(false);
+      return;
+    }
 
-      try {
-        const res = await fetch(`/api/invoices?repId=${userId}`);
-        if (!res.ok) throw new Error("Failed to fetch invoices");
-        const data = await res.json();
-        setInvoices(data);
-      } catch (error) {
-        console.error(error);
-        toast.error("Error loading invoices");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchInvoices();
+    try {
+      const res = await fetch(`/api/invoices?repId=${userId}`);
+      if (!res.ok) throw new Error("Failed to fetch invoices");
+      const data = await res.json();
+      setInvoices(data);
+    } catch (error) {
+      console.error(error);
+      toast.error("Error loading invoices");
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchInvoices();
+  }, [fetchInvoices]);
+
+  // Synchronize filters to sessionStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(STORAGE_KEYS.search, search);
+    }
+  }, [search]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(STORAGE_KEYS.status, statusFilter);
+    }
+  }, [statusFilter]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(STORAGE_KEYS.page, currentPage.toString());
+    }
+  }, [currentPage]);
+
+  const isInitialMount = useRef(true);
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    setCurrentPage(1);
+  }, [search, statusFilter]);
+
+  const handleRefreshAll = () => {
+    setSearch("");
+    setStatusFilter("all");
+    setCurrentPage(1);
+    Object.values(STORAGE_KEYS).forEach((k) => sessionStorage.removeItem(k));
+    fetchInvoices();
+  };
 
   const filtered = useMemo(() => {
     return invoices.filter((inv) => {
@@ -138,11 +197,6 @@ export default function RepMyInvoicesPage() {
       return matchesSearch && matchesStatus;
     });
   }, [invoices, search, statusFilter]);
-
-  // Reset to page 1 whenever filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search, statusFilter]);
 
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const paginated = filtered.slice(
@@ -165,9 +219,23 @@ export default function RepMyInvoicesPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-xl sm:text-3xl font-bold tracking-tight">My Invoices</h1>
-        <p className="text-muted-foreground text-xs sm:text-sm">All invoices created by you</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl sm:text-3xl font-bold tracking-tight">My Invoices</h1>
+          <p className="text-muted-foreground text-xs sm:text-sm">All invoices created by you</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleRefreshAll}
+            disabled={loading}
+            title="Refresh Data"
+            className="h-8 w-8 sm:h-10 sm:w-10"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}

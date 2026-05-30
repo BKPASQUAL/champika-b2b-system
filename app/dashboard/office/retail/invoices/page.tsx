@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,7 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  RefreshCw,
 } from "lucide-react";
 import {
   Table,
@@ -57,14 +58,34 @@ interface Invoice {
   manualInvoiceNo?: string;
 }
 
+const STORAGE_KEYS = {
+  search: "retail_invoices_search",
+  status: "retail_invoices_status",
+  page: "retail_invoices_page",
+};
+
+const getStoredValue = (key: string, defaultValue: string) => {
+  if (typeof window !== "undefined") {
+    const [navigation] = performance.getEntriesByType("navigation");
+    if (navigation && (navigation as PerformanceNavigationTiming).type === "reload") {
+      sessionStorage.removeItem(key);
+      return defaultValue;
+    }
+    return sessionStorage.getItem(key) || defaultValue;
+  }
+  return defaultValue;
+};
+
 export default function RetailInvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [filteredInvoices, setFilteredInvoices] = useState<Invoice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState(() => getStoredValue(STORAGE_KEYS.search, ""));
+  const [statusFilter, setStatusFilter] = useState<string>(() => getStoredValue(STORAGE_KEYS.status, "all"));
 
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(() => {
+    const val = getStoredValue(STORAGE_KEYS.page, "1");
+    return parseInt(val, 10) || 1;
+  });
   const itemsPerPage = 10;
 
   const [businessName, setBusinessName] = useState("");
@@ -96,7 +117,43 @@ export default function RetailInvoicesPage() {
     fetchInvoices();
   }, [fetchInvoices]);
 
+  // Synchronize filters to sessionStorage
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(STORAGE_KEYS.search, searchQuery);
+    }
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(STORAGE_KEYS.status, statusFilter);
+    }
+  }, [statusFilter]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(STORAGE_KEYS.page, currentPage.toString());
+    }
+  }, [currentPage]);
+
+  const isInitialMount = useRef(true);
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter]);
+
+  const handleRefreshAll = () => {
+    setSearchQuery("");
+    setStatusFilter("all");
+    setCurrentPage(1);
+    Object.values(STORAGE_KEYS).forEach((k) => sessionStorage.removeItem(k));
+    fetchInvoices();
+  };
+
+  const filteredInvoices = useMemo(() => {
     let filtered = invoices;
 
     if (currentBusinessId) {
@@ -115,12 +172,9 @@ export default function RetailInvoicesPage() {
       filtered = filtered.filter((inv) => inv.status === statusFilter);
     }
 
-    filtered = [...filtered].sort((a, b) =>
+    return [...filtered].sort((a, b) =>
       new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
     );
-
-    setFilteredInvoices(filtered);
-    setCurrentPage(1);
   }, [searchQuery, statusFilter, invoices, currentBusinessId]);
 
   const totalPages = Math.ceil(filteredInvoices.length / itemsPerPage);
@@ -223,12 +277,23 @@ export default function RetailInvoicesPage() {
           <h1 className="text-3xl font-bold text-gray-900">Retail Invoices</h1>
           <p className="text-gray-500 mt-1">{businessName}</p>
         </div>
-        <Link href="/dashboard/office/retail/invoices/create">
-          <Button className="bg-green-600 hover:bg-green-700">
-            <Plus className="h-4 w-4 mr-2" />
-            Create Invoice
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleRefreshAll}
+            disabled={isLoading}
+            title="Refresh Data"
+          >
+            <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
           </Button>
-        </Link>
+          <Link href="/dashboard/office/retail/invoices/create">
+            <Button className="bg-green-600 hover:bg-green-700">
+              <Plus className="h-4 w-4 mr-2" />
+              Create Invoice
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
