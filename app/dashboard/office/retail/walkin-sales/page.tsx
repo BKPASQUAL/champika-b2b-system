@@ -69,6 +69,8 @@ interface Product {
   mrp: number;
   stock_quantity: number;
   unit_of_measure: string;
+  supplier?: string;
+  retailOnly?: boolean;
 }
 
 interface Customer {
@@ -94,6 +96,8 @@ interface InvoiceItem {
   discountPercent: number;
   discountAmount: number;
   total: number;
+  supplier?: string;
+  retailOnly?: boolean;
 }
 
 interface CurrentItemState {
@@ -141,6 +145,9 @@ export default function CreateRetailInvoicePage() {
   // Popover States
   const [customerOpen, setCustomerOpen] = useState(false);
   const [productOpen, setProductOpen] = useState(false);
+
+  // Supplier filter state
+  const [supplierFilter, setSupplierFilter] = useState<"all" | "sierra" | "wireman" | "orange" | "retail" | "other">("all");
 
   // Current Item Being Added - Initialized with empty values
   const [currentItem, setCurrentItem] = useState<CurrentItemState>({
@@ -243,6 +250,8 @@ export default function CreateRetailInvoicePage() {
               mrp: p.mrp || 0,
               stock_quantity: p.stock_quantity || 0,
               unit_of_measure: p.unit_of_measure || "unit",
+              supplier: p.supplier || "",
+              retailOnly: p.retailOnly ?? p.retail_only ?? false,
             }))
           );
 
@@ -336,6 +345,8 @@ export default function CreateRetailInvoicePage() {
       discountPercent: discountPercent,
       discountAmount: discountAmount,
       total: netTotal,
+      supplier: product.supplier || "",
+      retailOnly: product.retailOnly || false,
     };
 
     setItems([...items, newItem]);
@@ -441,6 +452,25 @@ export default function CreateRetailInvoicePage() {
   const availableProducts = products.filter(
     (p) => !items.some((i) => i.productId === p.id)
   );
+
+  const filteredAvailableProducts = availableProducts.filter((product) => {
+    if (supplierFilter === "all") return true;
+    if (supplierFilter === "retail") return product.retailOnly === true;
+    
+    const sup = (product.supplier || "").toLowerCase();
+    if (supplierFilter === "sierra") return sup.includes("sierra") && !product.retailOnly;
+    if (supplierFilter === "wireman") return sup.includes("wireman") && !product.retailOnly;
+    if (supplierFilter === "orange") return sup.includes("orange") && !product.retailOnly;
+    if (supplierFilter === "other") {
+      return (
+        !sup.includes("sierra") &&
+        !sup.includes("wireman") &&
+        !sup.includes("orange") &&
+        !product.retailOnly
+      );
+    }
+    return true;
+  });
 
   // Helper for current item calculation
   const safeUnitPrice =
@@ -689,12 +719,91 @@ export default function CreateRetailInvoicePage() {
               {/* Product Selection */}
               <div className="grid grid-cols-4 gap-4">
                 <div className="col-span-4 space-y-2">
-                  <Label>
-                    Product{" "}
-                    {stockLoading && (
-                      <Loader2 className="inline h-3 w-3 animate-spin ml-2" />
-                    )}
-                  </Label>
+                  <div className="flex justify-between items-center">
+                    <Label className="text-sm font-medium">
+                      Product{" "}
+                      {stockLoading && (
+                        <Loader2 className="inline h-3 w-3 animate-spin ml-2" />
+                      )}
+                    </Label>
+                  </div>
+                  
+                  {/* Supplier Filter Buttons Row */}
+                  <div className="flex flex-wrap gap-2 pb-2 border-b border-slate-100">
+                    <Button
+                      type="button"
+                      variant={supplierFilter === "all" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setSupplierFilter("all")}
+                      className={cn(
+                        "h-8 text-xs font-semibold rounded-full transition-all duration-200",
+                        supplierFilter === "all" && "bg-slate-900 text-white shadow-sm"
+                      )}
+                    >
+                      🌐 All Products
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={supplierFilter === "sierra" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setSupplierFilter("sierra")}
+                      className={cn(
+                        "h-8 text-xs font-semibold rounded-full border-purple-200 text-purple-700 hover:bg-purple-50 transition-all duration-200",
+                        supplierFilter === "sierra" && "bg-purple-600 text-white border-purple-600 hover:bg-purple-700 hover:text-white shadow-sm"
+                      )}
+                    >
+                      🟣 Sierra Cables
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={supplierFilter === "wireman" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setSupplierFilter("wireman")}
+                      className={cn(
+                        "h-8 text-xs font-semibold rounded-full border-red-200 text-red-700 hover:bg-red-50 transition-all duration-200",
+                        supplierFilter === "wireman" && "bg-red-600 text-white border-red-600 hover:bg-red-700 hover:text-white shadow-sm"
+                      )}
+                    >
+                      🔴 Wireman
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={supplierFilter === "orange" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setSupplierFilter("orange")}
+                      className={cn(
+                        "h-8 text-xs font-semibold rounded-full border-orange-200 text-orange-700 hover:bg-orange-50 transition-all duration-200",
+                        supplierFilter === "orange" && "bg-orange-500 text-white border-orange-500 hover:bg-orange-600 hover:text-white shadow-sm"
+                      )}
+                    >
+                      🟠 Orange
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={supplierFilter === "retail" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setSupplierFilter("retail")}
+                      className={cn(
+                        "h-8 text-xs font-semibold rounded-full border-emerald-200 text-emerald-700 hover:bg-emerald-50 transition-all duration-200",
+                        supplierFilter === "retail" && "bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700 hover:text-white shadow-sm"
+                      )}
+                    >
+                      🛍️ Retail Only
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={supplierFilter === "other" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setSupplierFilter("other")}
+                      className={cn(
+                        "h-8 text-xs font-semibold rounded-full border-slate-200 text-slate-700 hover:bg-slate-50 transition-all duration-200",
+                        supplierFilter === "other" && "bg-slate-600 text-white border-slate-600 hover:bg-slate-700 hover:text-white shadow-sm"
+                      )}
+                    >
+                      ⚪ Other Suppliers
+                    </Button>
+                  </div>
+
                   <Popover open={productOpen} onOpenChange={setProductOpen}>
                     <PopoverTrigger asChild>
                       <Button
@@ -721,42 +830,89 @@ export default function CreateRetailInvoicePage() {
                         <CommandInput placeholder="Search product..." />
                         <CommandList>
                           <CommandEmpty>
-                            {products.length === 0
-                              ? "No assigned stock found"
+                            {filteredAvailableProducts.length === 0
+                              ? "No products found in this category"
                               : "No products found."}
                           </CommandEmpty>
                           <CommandGroup>
-                            {availableProducts.map((product) => (
-                              <CommandItem
-                                key={product.id}
-                                value={`${product.name} ${product.sku}`}
-                                onSelect={() => {
-                                  handleProductSelect(product.id);
-                                  setProductOpen(false);
-                                }}
-                              >
-                                <Check
+                            {filteredAvailableProducts.map((product) => {
+                              const isSierra = (product.supplier || "").toLowerCase().includes("sierra");
+                              const isWireman = (product.supplier || "").toLowerCase().includes("wireman");
+                              const isOrange = (product.supplier || "").toLowerCase().includes("orange");
+                              const isRetailOnly = product.retailOnly;
+                              
+                              let borderClass = "border-l-4 border-slate-300";
+                              let bgHoverClass = "hover:bg-slate-50";
+                              let supplierLabelName = "Retail/Other";
+                              let badgeColor = "bg-slate-100 text-slate-700 border-slate-200";
+                              
+                              if (isRetailOnly) {
+                                borderClass = "border-l-4 border-emerald-500";
+                                bgHoverClass = "hover:bg-emerald-50/50";
+                                supplierLabelName = "Retail Only";
+                                badgeColor = "bg-emerald-100 text-emerald-800 border-emerald-200";
+                              } else if (isSierra) {
+                                borderClass = "border-l-4 border-purple-500";
+                                bgHoverClass = "hover:bg-purple-50/50";
+                                supplierLabelName = "Sierra";
+                                badgeColor = "bg-purple-100 text-purple-700 border-purple-200";
+                              } else if (isWireman) {
+                                borderClass = "border-l-4 border-red-500";
+                                bgHoverClass = "hover:bg-red-50/50";
+                                supplierLabelName = "Wireman";
+                                badgeColor = "bg-red-100 text-red-700 border-red-200";
+                              } else if (isOrange) {
+                                borderClass = "border-l-4 border-orange-500";
+                                bgHoverClass = "hover:bg-orange-50/50";
+                                supplierLabelName = "Orange";
+                                badgeColor = "bg-orange-100 text-orange-700 border-orange-200";
+                              }
+
+                              return (
+                                <CommandItem
+                                  key={product.id}
+                                  value={`${product.name} ${product.sku} ${product.supplier || ""}`}
+                                  onSelect={() => {
+                                    handleProductSelect(product.id);
+                                    setProductOpen(false);
+                                  }}
                                   className={cn(
-                                    "mr-2 h-4 w-4",
-                                    currentItem.productId === product.id
-                                      ? "opacity-100"
-                                      : "opacity-0"
+                                    "flex items-center px-3 py-2 cursor-pointer transition-colors duration-150",
+                                    borderClass,
+                                    bgHoverClass
                                   )}
-                                />
-                                <div className="flex-1">
-                                  <div className="font-medium">
-                                    {product.name}
-                                  </div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {product.sku} • Stock: {product.stock_quantity} • LKR{" "}
-                                    {product.retail_price ?? product.selling_price}
-                                    {product.retail_price && (
-                                      <span className="ml-1 text-purple-600">(Retail)</span>
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4 shrink-0",
+                                      currentItem.productId === product.id
+                                        ? "opacity-100"
+                                        : "opacity-0"
                                     )}
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="font-semibold text-slate-900 truncate">
+                                        {product.name}
+                                      </span>
+                                      <span className={cn(
+                                        "text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0",
+                                        badgeColor
+                                      )}>
+                                        {supplierLabelName}
+                                      </span>
+                                    </div>
+                                    <div className="text-xs text-muted-foreground flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5 font-sans">
+                                      <span className="font-mono">{product.sku}</span>
+                                      <span>•</span>
+                                      <span>Stock: <strong className={cn(product.stock_quantity === 0 ? "text-red-500 font-bold" : "text-slate-700")}>{product.stock_quantity}</strong></span>
+                                      <span>•</span>
+                                      <span>LKR {(product.retail_price ?? product.selling_price).toLocaleString()}</span>
+                                    </div>
                                   </div>
-                                </div>
-                              </CommandItem>
-                            ))}
+                                </CommandItem>
+                              );
+                            })}
                           </CommandGroup>
                         </CommandList>
                       </Command>
@@ -933,45 +1089,86 @@ export default function CreateRetailInvoicePage() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      items.map((item, idx) => (
-                        <TableRow key={item.id}>
-                          <TableCell>{idx + 1}</TableCell>
-                          <TableCell>
-                            <div className="font-medium">
-                              {item.productName}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {item.sku}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {item.quantity} {item.unit}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {item.freeQuantity || "-"}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {item.unitPrice.toLocaleString()}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {item.discountPercent > 0
-                              ? `${item.discountPercent}%`
-                              : "-"}
-                          </TableCell>
-                          <TableCell className="text-right font-bold">
-                            {item.total.toLocaleString()}
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleRemoveItem(item.id)}
-                            >
-                              <Trash2 className="w-4 h-4 text-destructive" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))
+                      items.map((item, idx) => {
+                        const isSierra = (item.supplier || "").toLowerCase().includes("sierra");
+                        const isWireman = (item.supplier || "").toLowerCase().includes("wireman");
+                        const isOrange = (item.supplier || "").toLowerCase().includes("orange");
+                        const isRetailOnly = item.retailOnly;
+                        
+                        let rowBorderClass = "border-l-4 border-l-slate-300";
+                        let supplierBadge = null;
+                        
+                        if (isRetailOnly) {
+                          rowBorderClass = "border-l-4 border-l-emerald-500 bg-emerald-50/10";
+                          supplierBadge = (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-emerald-100 text-emerald-750 border-emerald-200 ml-2">
+                              Retail Only
+                            </span>
+                          );
+                        } else if (isSierra) {
+                          rowBorderClass = "border-l-4 border-l-purple-500 bg-purple-50/10";
+                          supplierBadge = (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-purple-100 text-purple-700 border-purple-200 ml-2">
+                              Sierra
+                            </span>
+                          );
+                        } else if (isWireman) {
+                          rowBorderClass = "border-l-4 border-l-red-500 bg-red-50/10";
+                          supplierBadge = (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-red-100 text-red-700 border-red-200 ml-2">
+                              Wireman
+                            </span>
+                          );
+                        } else if (isOrange) {
+                          rowBorderClass = "border-l-4 border-l-orange-500 bg-orange-50/10";
+                          supplierBadge = (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-orange-100 text-orange-700 border-orange-200 ml-2">
+                              Orange
+                            </span>
+                          );
+                        }
+                        
+                        return (
+                          <TableRow key={item.id} className={rowBorderClass}>
+                            <TableCell>{idx + 1}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center">
+                                <span className="font-medium text-slate-900">{item.productName}</span>
+                                {supplierBadge}
+                              </div>
+                              <div className="text-xs text-muted-foreground font-mono mt-0.5">
+                                {item.sku}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {item.quantity} {item.unit}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {item.freeQuantity || "-"}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {item.unitPrice.toLocaleString()}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {item.discountPercent > 0
+                                ? `${item.discountPercent}%`
+                                : "-"}
+                            </TableCell>
+                            <TableCell className="text-right font-bold">
+                              {item.total.toLocaleString()}
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleRemoveItem(item.id)}
+                              >
+                                <Trash2 className="w-4 h-4 text-destructive" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
                     )}
                   </TableBody>
                 </Table>
