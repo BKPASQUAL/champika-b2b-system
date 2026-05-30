@@ -825,6 +825,8 @@ export default function CreateRetailInvoicePage() {
                     <PopoverContent
                       className="w-[var(--radix-popover-trigger-width)] p-0"
                       align="start"
+                      side="bottom"
+                      avoidCollisions={false}
                     >
                       <Command>
                         <CommandInput placeholder="Search product..." />
