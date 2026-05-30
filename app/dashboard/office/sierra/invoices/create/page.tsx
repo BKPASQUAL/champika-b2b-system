@@ -53,6 +53,7 @@ import { BUSINESS_IDS } from "@/app/config/business-constants";
 import { CustomerDialogs } from "../../customers/_components/CustomerDialogs";
 import { CustomerFormData } from "../../customers/types";
 import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
+import { printInvoice, downloadInvoice } from "../print-utils";
 
 // --- Types ---
 
@@ -439,14 +440,13 @@ export default function CreateSierraInvoicePage() {
       toast.success("Invoice Created Successfully!");
       invalidatePaymentCaches();
 
-      let redirect = "/dashboard/office/sierra/invoices";
       if (action === "print") {
-        redirect = `/dashboard/office/sierra/invoices/${data.data.id}?print=true`;
+        printInvoice(data.data.id);
       } else if (action === "download") {
-        redirect = `/dashboard/office/sierra/invoices/${data.data.id}?download=true`;
+        downloadInvoice(data.data.id);
+      } else {
+        router.push("/dashboard/office/sierra/invoices");
       }
-
-      router.push(redirect);
     } catch (error: any) {
       toast.error(error.message || "Failed to create invoice");
     } finally {
@@ -524,7 +524,7 @@ export default function CreateSierraInvoicePage() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* LEFT COLUMN */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-6 min-w-0">
           {/* 1. Invoice Details */}
           <Card>
             <CardHeader>
@@ -792,18 +792,18 @@ export default function CreateSierraInvoicePage() {
               <CardDescription>{items.length} item(s) added</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="border rounded-md">
-                <Table>
+              <div className="border rounded-md overflow-x-auto">
+                <Table className="min-w-[520px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-12">#</TableHead>
+                      <TableHead className="w-10">#</TableHead>
                       <TableHead>Product</TableHead>
                       <TableHead className="text-center w-20">Qty</TableHead>
-                      <TableHead className="text-center w-20">Free</TableHead>
-                      <TableHead className="text-right w-24">Unit Price</TableHead>
-                      <TableHead className="text-center w-20">Disc%</TableHead>
-                      <TableHead className="text-right w-28">Total</TableHead>
-                      <TableHead className="w-12"></TableHead>
+                      <TableHead className="text-center w-16 hidden sm:table-cell">Free</TableHead>
+                      <TableHead className="text-right w-24">Price</TableHead>
+                      <TableHead className="text-center w-16 hidden sm:table-cell">Disc%</TableHead>
+                      <TableHead className="text-right w-24">Total</TableHead>
+                      <TableHead className="w-10"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -817,15 +817,19 @@ export default function CreateSierraInvoicePage() {
                     ) : (
                       items.map((item, idx) => (
                         <TableRow key={item.id}>
-                          <TableCell>{idx + 1}</TableCell>
+                          <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
                           <TableCell>
-                            <div className="font-medium">{item.productName}</div>
+                            <div className="font-medium leading-tight">{item.productName}</div>
                             <div className="text-xs text-muted-foreground">{item.sku}</div>
+                            <div className="text-xs text-muted-foreground sm:hidden">
+                              {item.freeQuantity > 0 && `Free: ${item.freeQuantity} · `}
+                              {item.discountPercent > 0 && `Disc: ${item.discountPercent}%`}
+                            </div>
                           </TableCell>
                           <TableCell className="text-center">{item.quantity} {item.unit}</TableCell>
-                          <TableCell className="text-center">{item.freeQuantity || "-"}</TableCell>
+                          <TableCell className="text-center hidden sm:table-cell">{item.freeQuantity || "-"}</TableCell>
                           <TableCell className="text-right">{item.unitPrice.toLocaleString()}</TableCell>
-                          <TableCell className="text-center">
+                          <TableCell className="text-center hidden sm:table-cell">
                             {item.discountPercent > 0 ? `${item.discountPercent}%` : "-"}
                           </TableCell>
                           <TableCell className="text-right font-bold">{item.total.toLocaleString()}</TableCell>

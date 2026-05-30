@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, use } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Printer,
@@ -51,7 +51,7 @@ import {
 } from "@/components/ui/sheet";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { printInvoice } from "../print-utils";
+import { printInvoice, downloadInvoice } from "../print-utils";
 import { shareInvoice } from "@/app/lib/invoice-print";
 import { CancelInvoiceButton } from "@/components/ui/CancelInvoiceButton";
 
@@ -98,6 +98,7 @@ export default function RetailViewInvoicePage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [loading, setLoading] = useState(true);
   const [invoice, setInvoice] = useState<any>(null);
@@ -149,6 +150,16 @@ export default function RetailViewInvoicePage({
     fetchInvoice();
     fetchReturns();
   }, [id, router]);
+
+  // Auto-trigger print or download when redirected from "Save & Print / Save & Download"
+  useEffect(() => {
+    if (loading || !invoice) return;
+    if (searchParams.get("print") === "true") {
+      printInvoice(id);
+    } else if (searchParams.get("download") === "true") {
+      downloadInvoice(id);
+    }
+  }, [loading, invoice]);
 
   const fetchHistory = async () => {
     setHistoryLoading(true);

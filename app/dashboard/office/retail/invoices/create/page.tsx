@@ -584,7 +584,7 @@ export default function CreateRetailInvoicePage() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* LEFT COLUMN */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-6 min-w-0">
           {/* 1. Invoice Details */}
           <Card>
             <CardHeader>
@@ -1100,20 +1100,18 @@ export default function CreateRetailInvoicePage() {
               <CardDescription>{items.length} item(s) added</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="border rounded-md">
-                <Table>
+              <div className="border rounded-md overflow-x-auto">
+                <Table className="min-w-[520px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-12">#</TableHead>
+                      <TableHead className="w-10">#</TableHead>
                       <TableHead>Product</TableHead>
                       <TableHead className="text-center w-20">Qty</TableHead>
-                      <TableHead className="text-center w-20">Free</TableHead>
-                      <TableHead className="text-right w-24">
-                        Unit Price
-                      </TableHead>
-                      <TableHead className="text-center w-20">Disc%</TableHead>
-                      <TableHead className="text-right w-28">Total</TableHead>
-                      <TableHead className="w-12"></TableHead>
+                      <TableHead className="text-center w-16 hidden sm:table-cell">Free</TableHead>
+                      <TableHead className="text-right w-24">Price</TableHead>
+                      <TableHead className="text-center w-16 hidden sm:table-cell">Disc%</TableHead>
+                      <TableHead className="text-right w-24">Total</TableHead>
+                      <TableHead className="w-10"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1171,31 +1169,23 @@ export default function CreateRetailInvoicePage() {
                           <TableRow key={item.id} className={rowBorderClass}>
                             <TableCell>{idx + 1}</TableCell>
                             <TableCell>
-                              <div className="flex items-center">
+                              <div className="flex items-center flex-wrap gap-1">
                                 <span className="font-medium text-slate-900">{item.productName}</span>
                                 {supplierBadge}
                               </div>
-                              <div className="text-xs text-muted-foreground font-mono mt-0.5">
-                                {item.sku}
+                              <div className="text-xs text-muted-foreground font-mono mt-0.5">{item.sku}</div>
+                              <div className="text-xs text-muted-foreground sm:hidden mt-0.5">
+                                {item.freeQuantity > 0 && `Free: ${item.freeQuantity} · `}
+                                {item.discountPercent > 0 && `Disc: ${item.discountPercent}%`}
                               </div>
                             </TableCell>
-                          <TableCell className="text-center">
-                            {item.quantity} {item.unit}
+                          <TableCell className="text-center">{item.quantity} {item.unit}</TableCell>
+                          <TableCell className="text-center hidden sm:table-cell">{item.freeQuantity || "-"}</TableCell>
+                          <TableCell className="text-right">{item.unitPrice.toLocaleString()}</TableCell>
+                          <TableCell className="text-center hidden sm:table-cell">
+                            {item.discountPercent > 0 ? `${item.discountPercent}%` : "-"}
                           </TableCell>
-                          <TableCell className="text-center">
-                            {item.freeQuantity || "-"}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {item.unitPrice.toLocaleString()}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {item.discountPercent > 0
-                              ? `${item.discountPercent}%`
-                              : "-"}
-                          </TableCell>
-                          <TableCell className="text-right font-bold">
-                            {item.total.toLocaleString()}
-                          </TableCell>
+                          <TableCell className="text-right font-bold">{item.total.toLocaleString()}</TableCell>
                           <TableCell>
                             <Button
                               variant="ghost"
