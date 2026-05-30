@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
       const { data: batch, error: itemsError } = await supabaseAdmin
         .from("order_items")
         .select(`
-          id, quantity, unit_price, actual_unit_cost, total_price,
+          id, quantity, free_quantity, unit_price, actual_unit_cost, total_price, claim_status,
           product:products (id, name, sku),
           order:orders!inner (
             id, order_id, status, created_at, order_date, business_id, sales_rep_id,
@@ -78,6 +78,11 @@ export async function GET(request: NextRequest) {
       amount: number; due: number; paymentStatus: string;
       profit?: number | null;
       profitMargin?: number | null;
+      freeQty?: number;
+      freeCost?: number;
+      pendingClaimCost?: number;
+      netProfit?: number | null;
+      netMargin?: number | null;
     };
     type BusinessEntry = {
       id: string; name: string;
@@ -85,6 +90,9 @@ export async function GET(request: NextRequest) {
       invoicedOrderIds: Set<string>;
       customerCountSet: Set<string>;
       dueAmount: number;
+      pendingClaimCost: number;
+      totalFreeQty: number;
+      totalFreeCost: number;
       productMap: Record<string, ProductEntry>;
       customerMap: Record<string, CustomerEntry>;
       repMap: Record<string, RepEntry>;
@@ -102,6 +110,9 @@ export async function GET(request: NextRequest) {
           invoicedOrderIds: new Set(),
           customerCountSet: new Set(),
           dueAmount: 0,
+          pendingClaimCost: 0,
+          totalFreeQty: 0,
+          totalFreeCost: 0,
           productMap: {}, customerMap: {}, repMap: {}, invoiceList: [],
         };
       }
@@ -166,7 +177,7 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    const orderProfitMap: Record<string, { revenue: number; cost: number }> = {};
+    const orderProfitMap: Record<string, { revenue: number; cost: number; freeQty: number; freeCost: number; pendingClaimCost: number }> = {};
 
     // Pass 2 — order items: cost + products + customers, ONLY for invoiced orders
     (orderItems || []).forEach((item: any) => {
@@ -182,18 +193,28 @@ export async function GET(request: NextRequest) {
       if (!biz.invoicedOrderIds.has(order.order_id)) return;
 
       const qty = Number(item.quantity) || 0;
+      const freeQty = Number(item.free_quantity) || 0;
       const itemRevenue = Number(item.total_price) || 0;
       const cost = qty * (Number(item.actual_unit_cost) || 0);
+      const freeCost = freeQty * (Number(item.actual_unit_cost) || 0);
+      const pendingClaim = item.claim_status !== "Approved" ? freeCost : 0;
 
       const oid = order.order_id;
       if (!orderProfitMap[oid]) {
-        orderProfitMap[oid] = { revenue: 0, cost: 0 };
+        orderProfitMap[oid] = { revenue: 0, cost: 0, freeQty: 0, freeCost: 0, pendingClaimCost: 0 };
       }
       orderProfitMap[oid].revenue += itemRevenue;
       orderProfitMap[oid].cost += cost;
+      orderProfitMap[oid].freeQty += freeQty;
+      orderProfitMap[oid].freeCost += freeCost;
+      orderProfitMap[oid].pendingClaimCost += pendingClaim;
 
       biz.totalCost += cost;
       biz.totalUnits += qty;
+      biz.totalFreeQty += freeQty;
+      biz.totalFreeCost += freeCost;
+      biz.pendingClaimCost += pendingClaim;
+
       if (order.customer?.id) biz.customerCountSet.add(order.customer.id);
 
       // Products
@@ -261,6 +282,7 @@ export async function GET(request: NextRequest) {
     // Build final list
     const businesses = Object.values(businessMap).map((biz) => {
       const totalProfit = biz.totalRevenue - biz.totalCost;
+      const netProfit = totalProfit - biz.pendingClaimCost;
 
       const products = Object.values(biz.productMap)
         .map((p) => ({ ...p, margin: p.revenue > 0 ? (p.profit / p.revenue) * 100 : 0 }))
@@ -288,10 +310,22 @@ export async function GET(request: NextRequest) {
         const profitEntry = orderProfitMap[inv.orderId];
         const profit = profitEntry ? profitEntry.revenue - profitEntry.cost : null;
         const profitMargin = profitEntry && profitEntry.revenue > 0 ? ((profitEntry.revenue - profitEntry.cost) / profitEntry.revenue) * 100 : null;
+        
+        const freeQty = profitEntry ? profitEntry.freeQty : 0;
+        const freeCost = profitEntry ? profitEntry.freeCost : 0;
+        const pendingClaimCost = profitEntry ? profitEntry.pendingClaimCost : 0;
+        const netProfit = profit !== null ? profit - pendingClaimCost : null;
+        const netMargin = profitEntry && profitEntry.revenue > 0 && netProfit !== null ? (netProfit / profitEntry.revenue) * 100 : null;
+
         return {
           ...inv,
           profit,
           profitMargin,
+          freeQty,
+          freeCost,
+          pendingClaimCost,
+          netProfit,
+          netMargin,
         };
       }).sort(
         (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
@@ -307,6 +341,11 @@ export async function GET(request: NextRequest) {
         invoiceCount: invoices.length,
         customerCount: biz.customerCountSet.size,
         dueAmount: biz.dueAmount,
+        pendingClaimCost: biz.pendingClaimCost,
+        netProfit,
+        netMargin: biz.totalRevenue > 0 ? (netProfit / biz.totalRevenue) * 100 : 0,
+        totalFreeQty: biz.totalFreeQty,
+        totalFreeCost: biz.totalFreeCost,
         margin: biz.totalRevenue > 0 ? (totalProfit / biz.totalRevenue) * 100 : 0,
         products,
         customers,
@@ -373,24 +412,33 @@ export async function GET(request: NextRequest) {
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
     );
 
+    const overallTotalRevenue = businesses.reduce((s, b) => s + b.totalRevenue, 0);
+    const overallTotalCost = businesses.reduce((s, b) => s + b.totalCost, 0);
+    const overallTotalProfit = overallTotalRevenue - overallTotalCost;
+    const overallPendingClaimCost = businesses.reduce((s, b) => s + b.pendingClaimCost, 0);
+    const overallNetProfit = overallTotalProfit - overallPendingClaimCost;
+
     const overall = {
       id: "overall",
       name: "Overall",
-      totalRevenue: businesses.reduce((s, b) => s + b.totalRevenue, 0),
-      totalCost: businesses.reduce((s, b) => s + b.totalCost, 0),
-      totalProfit: businesses.reduce((s, b) => s + b.totalProfit, 0),
+      totalRevenue: overallTotalRevenue,
+      totalCost: overallTotalCost,
+      totalProfit: overallTotalProfit,
       totalUnits: businesses.reduce((s, b) => s + b.totalUnits, 0),
       invoiceCount: businesses.reduce((s, b) => s + b.invoiceCount, 0),
       customerCount: businesses.reduce((s, b) => s + b.customerCount, 0),
       dueAmount: businesses.reduce((s, b) => s + b.dueAmount, 0),
-      margin: 0,
+      pendingClaimCost: overallPendingClaimCost,
+      netProfit: overallNetProfit,
+      netMargin: overallTotalRevenue > 0 ? (overallNetProfit / overallTotalRevenue) * 100 : 0,
+      totalFreeQty: businesses.reduce((s, b) => s + b.totalFreeQty, 0),
+      totalFreeCost: businesses.reduce((s, b) => s + b.totalFreeCost, 0),
+      margin: overallTotalRevenue > 0 ? (overallTotalProfit / overallTotalRevenue) * 100 : 0,
       products: overallProducts,
       customers: overallCustomers,
       reps: overallReps,
       invoices: overallInvoices,
     };
-    overall.margin = overall.totalRevenue > 0
-      ? (overall.totalProfit / overall.totalRevenue) * 100 : 0;
 
     return NextResponse.json({ overall, businesses });
   } catch (error: any) {
@@ -398,3 +446,4 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+

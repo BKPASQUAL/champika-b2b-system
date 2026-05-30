@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
       const { data: batch, error: itemsError } = await supabaseAdmin
         .from("order_items")
         .select(`
-          id, quantity, free_quantity, unit_price, actual_unit_cost, total_price,
+          id, quantity, free_quantity, unit_price, actual_unit_cost, total_price, claim_status,
           product:products!inner (id, name, sku, supplier_name, category),
           order:orders!inner (
             id, order_id, status, is_inter_branch, created_at, order_date, business_id,
@@ -66,6 +66,7 @@ export async function GET(request: NextRequest) {
       costPrice: number; sellingPrice: number;
       stockQty: number; stockCostValue: number; stockSellingValue: number;
       unitsSold: number; freeQty: number; revenue: number; cost: number; profit: number;
+      pendingClaimQty: number; pendingClaimCost: number;
     };
     type CustomerEntry = {
       id: string; name: string; orders: number; revenue: number; cost: number; profit: number;
@@ -102,6 +103,7 @@ export async function GET(request: NextRequest) {
         costPrice, sellingPrice,
         stockQty, stockCostValue: stockQty * costPrice, stockSellingValue: stockQty * sellingPrice,
         unitsSold: 0, freeQty: 0, revenue: 0, cost: 0, profit: 0,
+        pendingClaimQty: 0, pendingClaimCost: 0,
       };
     });
 
@@ -141,11 +143,18 @@ export async function GET(request: NextRequest) {
           category: item.product.category || "", costPrice: 0, sellingPrice: 0,
           stockQty: 0, stockCostValue: 0, stockSellingValue: 0,
           unitsSold: 0, freeQty: 0, revenue: 0, cost: 0, profit: 0,
+          pendingClaimQty: 0, pendingClaimCost: 0,
         };
       }
       const prod = supplierMap[supplier].products[pid];
       prod.unitsSold += qty; prod.freeQty += freeQty;
       prod.revenue += revenue; prod.cost += cost; prod.profit += profit;
+
+      const isClaimed = item.claim_status === "Approved";
+      if (!isClaimed) {
+        prod.pendingClaimQty += freeQty;
+        prod.pendingClaimCost += freeQty * (Number(item.actual_unit_cost) || 0);
+      }
 
       // Customer aggregation
       const cId = order.customer?.id || "unknown";
@@ -223,6 +232,11 @@ export async function GET(request: NextRequest) {
       const totalCost = invoiceList.reduce((s, i) => s + i.cost, 0);
       const totalProfit = totalRevenue - totalCost;
 
+      const pendingClaimQty = productList.reduce((s, p) => s + (p.pendingClaimQty || 0), 0);
+      const pendingClaimCost = productList.reduce((s, p) => s + (p.pendingClaimCost || 0), 0);
+      const netProfit = totalProfit - pendingClaimCost;
+      const netMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
+
       return {
         name,
         productCount: productList.length,
@@ -236,6 +250,10 @@ export async function GET(request: NextRequest) {
         totalCost,
         totalProfit,
         margin: totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0,
+        pendingClaimQty,
+        pendingClaimCost,
+        netProfit,
+        netMargin,
         products: productList,
         customers: customerList,
         invoices: invoiceList,

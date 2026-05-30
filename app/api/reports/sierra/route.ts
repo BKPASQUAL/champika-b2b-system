@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
       const { data: batch, error: itemErr } = await supabaseAdmin
         .from("order_items")
         .select(
-          `id, quantity, free_quantity, unit_price, actual_unit_cost, created_at,
+          `id, quantity, free_quantity, unit_price, actual_unit_cost, claim_status, created_at,
            order:orders!inner (
              order_id, status, created_at, order_date, invoice_no,
              customer:customers (shop_name),
@@ -176,16 +176,33 @@ export async function GET(request: NextRequest) {
 
     let totalRevenue = 0;
     let totalCost = 0;
+    let pendingClaimQty = 0;
+    let pendingClaimCost = 0;
+    let totalFreeQty = 0;
+    let totalFreeCost = 0;
     (orderItems || []).forEach((item: any) => {
       if (interBranchOrderIds.has(item.order?.order_id)) return;
       const qty = Number(item.quantity) || 0;
+      const freeQty = Number(item.free_quantity) || 0;
       const unitPrice = Number(item.unit_price) || 0;
       const unitCost = Number(item.actual_unit_cost) || 0;
       totalRevenue += qty * unitPrice;
       totalCost += qty * unitCost;
+
+      const freeCost = freeQty * unitCost;
+      totalFreeQty += freeQty;
+      totalFreeCost += freeCost;
+
+      const isClaimed = item.claim_status === "Approved";
+      if (!isClaimed) {
+        pendingClaimQty += freeQty;
+        pendingClaimCost += freeCost;
+      }
     });
     const totalProfit = totalRevenue - totalCost;
     const profitMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+    const netProfit = totalProfit - pendingClaimCost;
+    const netMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
 
     // ── Process: Monthly Distribution ─────────────────────────────────────────
     const monthMap: Record<string, { month: string; monthKey: string; billCount: number; totalSales: number; totalPurchases: number }> = {};
@@ -261,21 +278,45 @@ export async function GET(request: NextRequest) {
     (orderItems || []).forEach((item: any) => {
       if (interBranchOrderIds.has(item.order?.order_id)) return;
       const qty = Number(item.quantity) || 0;
+      const freeQty = Number(item.free_quantity) || 0;
       const unitPrice = Number(item.unit_price) || 0;
       const unitCost = Number(item.actual_unit_cost) || 0;
       const revenue = qty * unitPrice;
       const cost = qty * unitCost;
       const pid = item.product.id;
       if (!productMap[pid]) {
-        productMap[pid] = { id: pid, sku: item.product.sku, name: item.product.name, qtySold: 0, revenue: 0, cost: 0, profit: 0 };
+        productMap[pid] = {
+          id: pid,
+          sku: item.product.sku,
+          name: item.product.name,
+          qtySold: 0,
+          freeQty: 0,
+          pendingClaimQty: 0,
+          pendingClaimCost: 0,
+          revenue: 0,
+          cost: 0,
+          profit: 0
+        };
       }
       productMap[pid].qtySold += qty;
+      productMap[pid].freeQty += freeQty;
       productMap[pid].revenue += revenue;
       productMap[pid].cost += cost;
       productMap[pid].profit += revenue - cost;
+
+      const isClaimed = item.claim_status === "Approved";
+      if (!isClaimed) {
+        productMap[pid].pendingClaimQty += freeQty;
+        productMap[pid].pendingClaimCost += freeQty * unitCost;
+      }
     });
     const products = Object.values(productMap)
-      .map((p) => ({ ...p, margin: p.revenue > 0 ? (p.profit / p.revenue) * 100 : 0 }))
+      .map((p) => ({
+        ...p,
+        margin: p.revenue > 0 ? (p.profit / p.revenue) * 100 : 0,
+        netProfit: p.profit - p.pendingClaimCost,
+        netMargin: p.revenue > 0 ? ((p.profit - p.pendingClaimCost) / p.revenue) * 100 : 0
+      }))
       .sort((a, b) => b.revenue - a.revenue);
 
     // ── Process: Customers ────────────────────────────────────────────────────

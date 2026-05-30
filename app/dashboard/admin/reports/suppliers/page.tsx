@@ -392,73 +392,115 @@ export default function SupplierAnalyticsPage() {
               </p>
             </div>
 
-            {/* KPI Cards — 2 cols on mobile, 5 on lg */}
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
-              <Card>
-                <CardHeader className="pb-1 pt-3 px-3 md:px-4">
-                  <CardTitle className="text-[10px] md:text-xs text-muted-foreground font-medium flex items-center gap-1">
-                    <Boxes className="h-3 w-3" /> Total Stock
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
-                  <div className="text-lg md:text-xl font-bold">{fmt(current.totalStock)}</div>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">units in warehouse</p>
-                </CardContent>
-              </Card>
+            {/* KPI Cards — Restructured into Stock and Financial Rows */}
+            <div className="space-y-4">
+              {/* Row 1: Stock Overview */}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground mb-2">Stock Inventory Overview</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
+                  <Card>
+                    <CardHeader className="pb-1 pt-3 px-3 md:px-4">
+                      <CardTitle className="text-[10px] md:text-xs text-muted-foreground font-medium flex items-center gap-1">
+                        <Boxes className="h-3 w-3" /> Total Stock
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
+                      <div className="text-lg md:text-xl font-bold">{fmt(current.totalStock)}</div>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">units in warehouse</p>
+                    </CardContent>
+                  </Card>
 
-              <Card>
-                <CardHeader className="pb-1 pt-3 px-3 md:px-4">
-                  <CardTitle className="text-[10px] md:text-xs text-muted-foreground font-medium flex items-center gap-1">
-                    <Package className="h-3 w-3" /> Stock Value
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
-                  <div className="text-sm md:text-xl font-bold">LKR {fmt(current.totalStockCostValue)}</div>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">cost value</p>
-                </CardContent>
-              </Card>
+                  <Card>
+                    <CardHeader className="pb-1 pt-3 px-3 md:px-4">
+                      <CardTitle className="text-[10px] md:text-xs text-muted-foreground font-medium flex items-center gap-1">
+                        <Package className="h-3 w-3" /> Stock Value
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
+                      <div className="text-sm md:text-xl font-bold">LKR {fmt(current.totalStockCostValue)}</div>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">cost value</p>
+                    </CardContent>
+                  </Card>
 
-              <Card>
-                <CardHeader className="pb-1 pt-3 px-3 md:px-4">
-                  <CardTitle className="text-[10px] md:text-xs text-muted-foreground font-medium flex items-center gap-1">
-                    <ShoppingBag className="h-3 w-3" /> Stock Sell Value
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
-                  <div className="text-sm md:text-xl font-bold">LKR {fmt(current.totalStockSellingValue)}</div>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">stock at sell price</p>
-                </CardContent>
-              </Card>
+                  <Card>
+                    <CardHeader className="pb-1 pt-3 px-3 md:px-4">
+                      <CardTitle className="text-[10px] md:text-xs text-muted-foreground font-medium flex items-center gap-1">
+                        <ShoppingBag className="h-3 w-3" /> Stock Sell Value
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
+                      <div className="text-sm md:text-xl font-bold">LKR {fmt(current.totalStockSellingValue)}</div>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">stock at sell price</p>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
 
-              <Card className="bg-blue-50 border-blue-200">
-                <CardHeader className="pb-1 pt-3 px-3 md:px-4">
-                  <CardTitle className="text-[10px] md:text-xs text-blue-700 font-medium flex items-center gap-1">
-                    <DollarSign className="h-3 w-3" /> Total Sales
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
-                  <div className="text-sm md:text-xl font-bold text-blue-700">LKR {fmt(current.totalRevenue)}</div>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                    {fmt(current.totalUnitsSold)} units sold
-                  </p>
-                </CardContent>
-              </Card>
+              {/* Row 2: Financial Performance & Claims Reconciliation */}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground mb-2">Financials & Supplier Claims (Lag Reconciliation)</p>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+                  <Card className="bg-blue-50 border-blue-200">
+                    <CardHeader className="pb-1 pt-3 px-3 md:px-4">
+                      <CardTitle className="text-[10px] md:text-xs text-blue-700 font-medium flex items-center gap-1">
+                        <DollarSign className="h-3 w-3" /> Total Sales
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
+                      <div className="text-sm md:text-xl font-bold text-blue-700">LKR {fmt(current.totalRevenue)}</div>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">
+                        {fmt(current.totalUnitsSold)} units sold
+                      </p>
+                    </CardContent>
+                  </Card>
 
-              <Card className={current.totalProfit >= 0 ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}>
-                <CardHeader className="pb-1 pt-3 px-3 md:px-4">
-                  <CardTitle className={`text-[10px] md:text-xs font-medium flex items-center gap-1 ${current.totalProfit >= 0 ? "text-green-700" : "text-red-700"}`}>
-                    <TrendingUp className="h-3 w-3" /> Total Profit
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
-                  <div className={`text-sm md:text-xl font-bold ${current.totalProfit >= 0 ? "text-green-700" : "text-red-700"}`}>
-                    LKR {fmt(current.totalProfit)}
-                  </div>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                    {current.margin.toFixed(1)}% margin
-                  </p>
-                </CardContent>
-              </Card>
+                  <Card className="bg-gray-50 border-gray-200">
+                    <CardHeader className="pb-1 pt-3 px-3 md:px-4">
+                      <CardTitle className="text-[10px] md:text-xs text-gray-700 font-medium flex items-center gap-1">
+                        <TrendingUp className="h-3 w-3" /> Expected Gross Profit
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
+                      <div className="text-sm md:text-xl font-bold text-gray-700">
+                        LKR {fmt(current.totalProfit)}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">
+                        {current.margin.toFixed(1)}% expected margin
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-orange-50 border-orange-200">
+                    <CardHeader className="pb-1 pt-3 px-3 md:px-4">
+                      <CardTitle className="text-[10px] md:text-xs text-orange-700 font-medium flex items-center gap-1">
+                        <Boxes className="h-3 w-3" /> Pending Claims Value
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
+                      <div className="text-sm md:text-xl font-bold text-orange-700">LKR {fmt(current.pendingClaimCost)}</div>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">
+                        {fmt(current.pendingClaimQty)} unclaimed units
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  <Card className={current.netProfit >= 0 ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}>
+                    <CardHeader className="pb-1 pt-3 px-3 md:px-4">
+                      <CardTitle className={`text-[10px] md:text-xs font-medium flex items-center gap-1 ${current.netProfit >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                        <TrendingUp className="h-3 w-3" /> Realized Net Profit
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
+                      <div className={`text-sm md:text-xl font-bold ${current.netProfit >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                        LKR {fmt(current.netProfit)}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">
+                        {current.netMargin.toFixed(1)}% margin (actual)
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
             </div>
 
             {/* Charts — stacked on mobile, side-by-side on lg */}
@@ -585,6 +627,20 @@ export default function SupplierAnalyticsPage() {
                               <p className="font-medium">{fmt(p.unitsSold)}</p>
                             </div>
                           </div>
+                          {(p.freeQty > 0 || p.pendingClaimQty > 0) && (
+                            <div className="grid grid-cols-3 gap-2 text-xs bg-orange-50/50 p-1.5 rounded border border-orange-100">
+                              <div>
+                                <p className="text-[10px] text-muted-foreground">Free Issued</p>
+                                <p className="font-medium">{fmt(p.freeQty || 0)} units</p>
+                              </div>
+                              <div className="col-span-2">
+                                <p className="text-[10px] text-muted-foreground">Pending Claims</p>
+                                <p className="font-semibold text-orange-700">
+                                  {p.pendingClaimQty > 0 ? `${fmt(p.pendingClaimQty)} units (LKR ${fmt(p.pendingClaimCost)})` : "None"}
+                                </p>
+                              </div>
+                            </div>
+                          )}
                           <div className="grid grid-cols-3 gap-2 text-xs">
                             <div>
                               <p className="text-[10px] text-muted-foreground">Revenue</p>
@@ -613,7 +669,9 @@ export default function SupplierAnalyticsPage() {
                             <TableHead>Category</TableHead>
                             <TableHead className="text-right">Stock</TableHead>
                             <TableHead className="text-right hidden md:table-cell">Stock Value</TableHead>
-                            <TableHead className="text-right">Units Sold</TableHead>
+                            <TableHead className="text-right font-medium">Units Sold</TableHead>
+                            <TableHead className="text-right">Free Issued</TableHead>
+                            <TableHead className="text-right">Pending Claims</TableHead>
                             <TableHead className="text-right">Revenue</TableHead>
                             <TableHead className="text-right hidden md:table-cell">Cost</TableHead>
                             <TableHead className="text-right">Profit</TableHead>
@@ -622,7 +680,7 @@ export default function SupplierAnalyticsPage() {
                         </TableHeader>
                         <TableBody>
                           {pagedProducts.map((p: any) => (
-                            <TableRow key={p.id}>
+                            <TableRow key={p.id} className="hover:bg-muted/30">
                               <TableCell className="min-w-[140px]">
                                 <div>
                                   <p className="font-medium text-xs leading-tight">{p.name}</p>
@@ -635,6 +693,15 @@ export default function SupplierAnalyticsPage() {
                                 {p.stockCostValue > 0 ? `LKR ${fmt(p.stockCostValue)}` : "—"}
                               </TableCell>
                               <TableCell className="text-right text-xs font-medium">{fmt(p.unitsSold)}</TableCell>
+                              <TableCell className="text-right text-xs text-muted-foreground">{fmt(p.freeQty || 0)}</TableCell>
+                              <TableCell className="text-right text-xs text-orange-700 font-medium">
+                                {p.pendingClaimQty > 0 ? (
+                                  <span className="flex flex-col items-end">
+                                    <span>{fmt(p.pendingClaimQty)}</span>
+                                    <span className="text-[9px] text-muted-foreground font-normal">(LKR {fmt(p.pendingClaimCost)})</span>
+                                  </span>
+                                ) : "—"}
+                              </TableCell>
                               <TableCell className="text-right text-xs">
                                 {p.revenue > 0 ? `LKR ${fmt(p.revenue)}` : "—"}
                               </TableCell>
@@ -655,7 +722,7 @@ export default function SupplierAnalyticsPage() {
                           ))}
                           {filteredProducts.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={9} className="text-center h-20 text-muted-foreground text-sm">
+                              <TableCell colSpan={11} className="text-center h-20 text-muted-foreground text-sm">
                                 No products found.
                               </TableCell>
                             </TableRow>

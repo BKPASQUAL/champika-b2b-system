@@ -227,6 +227,10 @@ export default function BusinessAnalyticsPage() {
     amount: filteredInvoices.reduce((s, i) => s + i.amount, 0),
     due: filteredInvoices.reduce((s, i) => s + i.due, 0),
     profit: filteredInvoices.reduce((s, i) => s + (i.profit || 0), 0),
+    freeQty: filteredInvoices.reduce((s, i) => s + (i.freeQty || 0), 0),
+    freeCost: filteredInvoices.reduce((s, i) => s + (i.freeCost || 0), 0),
+    netProfit: filteredInvoices.reduce((s, i) => s + (i.netProfit || 0), 0),
+    pendingClaimCost: filteredInvoices.reduce((s, i) => s + (i.pendingClaimCost || 0), 0),
   }), [filteredInvoices]);
 
   const custTotals = useMemo(() => ({
@@ -427,69 +431,112 @@ export default function BusinessAnalyticsPage() {
               )}
             </div>
 
-            {/* KPI Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-              <Card className="bg-blue-50 border-blue-200">
-                <CardHeader className="pb-1 pt-3 px-3 md:px-4">
-                  <CardTitle className="text-[10px] md:text-xs text-blue-700 font-medium flex items-center gap-1">
-                    <DollarSign className="h-3 w-3" /> Total Sales
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
-                  <div className="text-sm md:text-xl font-bold text-blue-700">
-                    LKR {fmt(current.totalRevenue)}
-                  </div>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                    {fmt(current.totalUnits)} units sold
-                  </p>
-                </CardContent>
-              </Card>
+            {/* KPI Cards — Restructured into Reconciliation and Receivables Rows */}
+            <div className="space-y-4">
+              {/* Row 1: Sales & Profits Reconciliation */}
+              <div>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Sales & Profits Reconciliation (Claims Lag)</p>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+                  {/* Total Sales */}
+                  <Card className="bg-blue-50/50 border-blue-100">
+                    <CardHeader className="pb-1 pt-3 px-3 md:px-4">
+                      <CardTitle className="text-[10px] md:text-xs text-blue-700 font-medium flex items-center gap-1">
+                        <DollarSign className="h-3 w-3" /> Total Sales
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
+                      <div className="text-sm md:text-xl font-bold text-blue-700">LKR {fmt(current.totalRevenue)}</div>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{fmt(current.totalUnits)} units sold</p>
+                    </CardContent>
+                  </Card>
 
-              <Card className={current.totalProfit >= 0 ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}>
-                <CardHeader className="pb-1 pt-3 px-3 md:px-4">
-                  <CardTitle className={`text-[10px] md:text-xs font-medium flex items-center gap-1 ${current.totalProfit >= 0 ? "text-green-700" : "text-red-700"}`}>
-                    <TrendingUp className="h-3 w-3" /> Total Profit
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
-                  <div className={`text-sm md:text-xl font-bold ${current.totalProfit >= 0 ? "text-green-700" : "text-red-700"}`}>
-                    LKR {fmt(current.totalProfit)}
-                  </div>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                    {current.margin.toFixed(1)}% margin
-                  </p>
-                </CardContent>
-              </Card>
+                  {/* Gross Profit (Expected) */}
+                  <Card className="bg-slate-50/50 border-slate-200">
+                    <CardHeader className="pb-1 pt-3 px-3 md:px-4">
+                      <CardTitle className="text-[10px] md:text-xs text-slate-700 font-medium flex items-center gap-1">
+                        <TrendingUp className="h-3 w-3" /> Expected Gross Profit
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
+                      <div className="text-sm md:text-xl font-bold text-slate-800">LKR {fmt(current.totalProfit)}</div>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{current.margin.toFixed(1)}% margin</p>
+                    </CardContent>
+                  </Card>
 
-              <Card className="bg-red-50 border-red-200">
-                <CardHeader className="pb-1 pt-3 px-3 md:px-4">
-                  <CardTitle className="text-[10px] md:text-xs text-red-700 font-medium flex items-center gap-1">
-                    <AlertCircle className="h-3 w-3" /> Due Invoices
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
-                  <div className="text-sm md:text-xl font-bold text-red-700">
-                    LKR {fmt(current.dueAmount)}
-                  </div>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">outstanding balance</p>
-                </CardContent>
-              </Card>
+                  {/* Pending Claims */}
+                  <Card className={current.pendingClaimCost > 0 ? "bg-orange-50/50 border-orange-200" : "bg-gray-50/50 border-gray-200"}>
+                    <CardHeader className="pb-1 pt-3 px-3 md:px-4">
+                      <CardTitle className={`text-[10px] md:text-xs font-medium flex items-center gap-1 ${current.pendingClaimCost > 0 ? "text-orange-700" : "text-gray-600"}`}>
+                        <AlertCircle className="h-3 w-3" /> Pending Claims
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
+                      <div className={`text-sm md:text-xl font-bold ${current.pendingClaimCost > 0 ? "text-orange-700" : "text-gray-800"}`}>
+                        LKR {fmt(current.pendingClaimCost || 0)}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{current.totalFreeQty || 0} free units unclaimed</p>
+                    </CardContent>
+                  </Card>
 
-              <Card>
-                <CardHeader className="pb-1 pt-3 px-3 md:px-4">
-                  <CardTitle className="text-[10px] md:text-xs text-muted-foreground font-medium flex items-center gap-1">
-                    <Users className="h-3 w-3" /> Customers
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
-                  <div className="text-lg md:text-xl font-bold">
-                    {fmt(current.customerCount)}
-                  </div>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                    {fmt(current.invoiceCount)} invoices
-                  </p>
-                </CardContent>
-              </Card>
+                  {/* Realized Net Profit */}
+                  <Card className="bg-green-50 border-green-200">
+                    <CardHeader className="pb-1 pt-3 px-3 md:px-4">
+                      <CardTitle className="text-[10px] md:text-xs text-green-700 font-medium flex items-center gap-1">
+                        <TrendingUp className="h-3 w-3" /> Realized Net Profit
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
+                      <div className="text-sm md:text-xl font-bold text-green-700">LKR {fmt(current.netProfit || 0)}</div>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{(current.netMargin || 0).toFixed(1)}% net margin</p>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+
+              {/* Row 2: Outstanding Balance & Customer Counts */}
+              <div>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Receivables & Customer Reach</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
+                  {/* Due Invoices */}
+                  <Card className="bg-red-50 border-red-200">
+                    <CardHeader className="pb-1 pt-3 px-3 md:px-4">
+                      <CardTitle className="text-[10px] md:text-xs text-red-700 font-medium flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3" /> Due Invoices
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
+                      <div className="text-sm md:text-xl font-bold text-red-700">LKR {fmt(current.dueAmount)}</div>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">outstanding balance</p>
+                    </CardContent>
+                  </Card>
+
+                  {/* Customers */}
+                  <Card>
+                    <CardHeader className="pb-1 pt-3 px-3 md:px-4">
+                      <CardTitle className="text-[10px] md:text-xs text-muted-foreground font-medium flex items-center gap-1">
+                        <Users className="h-3 w-3" /> Customers
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
+                      <div className="text-lg md:text-xl font-bold">{fmt(current.customerCount)}</div>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">active buyer accounts</p>
+                    </CardContent>
+                  </Card>
+
+                  {/* Total Invoices */}
+                  <Card>
+                    <CardHeader className="pb-1 pt-3 px-3 md:px-4">
+                      <CardTitle className="text-[10px] md:text-xs text-muted-foreground font-medium flex items-center gap-1">
+                        <Receipt className="h-3 w-3" /> Total Invoices
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
+                      <div className="text-lg md:text-xl font-bold">{fmt(current.invoiceCount)}</div>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">invoices issued in range</p>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
             </div>
 
             {/* Charts */}
@@ -704,10 +751,12 @@ export default function BusinessAnalyticsPage() {
                           <TableHead>Date</TableHead>
                           <TableHead>Invoice No</TableHead>
                           <TableHead>Customer</TableHead>
+                          <TableHead className="text-right">Free Issues</TableHead>
+                          <TableHead className="text-right">Claim Value</TableHead>
                           <TableHead className="text-right">Amount</TableHead>
                           <TableHead className="text-right">Due</TableHead>
-                          <TableHead className="text-right">Profit</TableHead>
-                          <TableHead className="text-right">Margin</TableHead>
+                          <TableHead className="text-right">Expected Profit</TableHead>
+                          <TableHead className="text-right">Realized Net Profit</TableHead>
                           <TableHead>Status</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -717,23 +766,29 @@ export default function BusinessAnalyticsPage() {
                           <TableCell colSpan={3} className="font-bold text-xs">
                             Total — {filteredInvoices.length} invoices
                           </TableCell>
+                          <TableCell className="text-right text-orange-600 font-bold">
+                            {invTotals.freeQty > 0 ? `${invTotals.freeQty} units` : "—"}
+                          </TableCell>
+                          <TableCell className="text-right text-orange-600 font-bold">
+                            {invTotals.freeCost > 0 ? `LKR ${fmt(invTotals.freeCost)}` : "—"}
+                          </TableCell>
                           <TableCell className="text-right text-blue-700 font-bold">
                             LKR {fmt(invTotals.amount)}
                           </TableCell>
                           <TableCell className="text-right text-red-600 font-bold">
                             LKR {fmt(invTotals.due)}
                           </TableCell>
-                          <TableCell className={`text-right font-bold ${invTotals.profit >= 0 ? "text-green-700" : "text-red-700"}`}>
+                          <TableCell className={`text-right font-bold ${invTotals.profit >= 0 ? "text-slate-700" : "text-red-700"}`}>
                             LKR {fmt(invTotals.profit)}
                           </TableCell>
-                          <TableCell className="text-right text-xs font-bold">
-                            {invTotals.amount > 0 ? ((invTotals.profit / invTotals.amount) * 100).toFixed(1) : "0.0"}%
+                          <TableCell className={`text-right font-bold ${invTotals.netProfit >= 0 ? "text-green-700 font-bold" : "text-red-700 font-bold"}`}>
+                            LKR {fmt(invTotals.netProfit)}
                           </TableCell>
                           <TableCell />
                         </TableRow>
                         {filteredInvoices.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={8} className="text-center text-muted-foreground text-xs py-8">
+                            <TableCell colSpan={10} className="text-center text-muted-foreground text-xs py-8">
                               No invoices found
                             </TableCell>
                           </TableRow>
@@ -743,25 +798,73 @@ export default function BusinessAnalyticsPage() {
                               <TableCell className="text-muted-foreground whitespace-nowrap">{inv.date}</TableCell>
                               <TableCell className="font-mono font-medium">{inv.invoiceNo}</TableCell>
                               <TableCell>{inv.customer}</TableCell>
+                              
+                              {/* Free Issues */}
+                              <TableCell className="text-right font-mono font-medium">
+                                {inv.freeQty > 0 ? (
+                                  <span className="text-orange-600 font-semibold">{inv.freeQty} units</span>
+                                ) : (
+                                  <span className="text-muted-foreground/45">—</span>
+                                )}
+                              </TableCell>
+                              
+                              {/* Claim Value */}
+                              <TableCell className="text-right font-mono">
+                                {inv.freeQty > 0 ? (
+                                  <div className="flex flex-col items-end">
+                                    <span className="text-orange-600 font-semibold">LKR {fmt(inv.freeCost)}</span>
+                                    {inv.pendingClaimCost > 0 ? (
+                                      <span className="text-[9px] text-orange-500 bg-orange-50 px-1 rounded font-sans">Unclaimed</span>
+                                    ) : (
+                                      <span className="text-[9px] text-green-600 bg-green-50 px-1 rounded font-sans">Claimed</span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-muted-foreground/45">—</span>
+                                )}
+                              </TableCell>
+
                               <TableCell className="text-right font-medium">
                                 LKR {fmt(inv.amount)}
                               </TableCell>
                               <TableCell className={`text-right font-medium ${inv.due > 0 ? "text-red-600" : "text-muted-foreground"}`}>
                                 {inv.due > 0 ? `LKR ${fmt(inv.due)}` : "—"}
                               </TableCell>
+                              
+                              {/* Expected Profit */}
                               <TableCell className={`text-right font-mono tabular-nums font-semibold ${
                                 inv.profit === null || inv.profit === undefined ? "text-muted-foreground"
-                                : inv.profit >= 0 ? "text-green-700" : "text-red-600"
+                                : inv.profit >= 0 ? "text-slate-700" : "text-red-600"
                               }`}>
-                                {inv.profit === null || inv.profit === undefined
-                                  ? <span className="text-[10px] text-muted-foreground/50">—</span>
-                                  : `LKR ${fmt(inv.profit)}`}
+                                {inv.profit === null || inv.profit === undefined ? (
+                                  <span className="text-[10px] text-muted-foreground/50">—</span>
+                                ) : (
+                                  <div className="flex flex-col items-end">
+                                    <span>LKR {fmt(inv.profit)}</span>
+                                    <span className="text-[9px] text-muted-foreground font-normal">
+                                      {inv.profitMargin !== null ? `${inv.profitMargin.toFixed(1)}%` : ""}
+                                    </span>
+                                  </div>
+                                )}
                               </TableCell>
-                              <TableCell className="text-right">
-                                {inv.profitMargin === null || inv.profitMargin === undefined
-                                  ? <span className="text-[10px] text-muted-foreground/50">—</span>
-                                  : <MarginBadge margin={inv.profitMargin} />}
+                              
+                              {/* Realized Net Profit */}
+                              <TableCell className={`text-right font-mono tabular-nums font-semibold ${
+                                inv.netProfit === null || inv.netProfit === undefined ? "text-muted-foreground"
+                                : inv.netProfit >= 0 ? "text-green-700 font-bold" : "text-red-600 font-bold bg-red-50/50"
+                              }`}>
+                                {inv.netProfit === null || inv.netProfit === undefined ? (
+                                  <span className="text-[10px] text-muted-foreground/50">—</span>
+                                ) : (
+                                  <div className="flex flex-col items-end">
+                                    <span>LKR {fmt(inv.netProfit)}</span>
+                                    <span className={`text-[9px] font-normal ${inv.netProfit >= 0 ? "text-green-600" : "text-red-500"}`}>
+                                      {inv.netMargin !== null ? `${inv.netMargin.toFixed(1)}%` : ""}
+                                    </span>
+                                  </div>
+                                )}
                               </TableCell>
+                              
                               <TableCell>
                                 <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${STATUS_COLORS[inv.paymentStatus] || "bg-gray-100 text-gray-700"}`}>
                                   {inv.paymentStatus}
