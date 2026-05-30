@@ -10,5 +10,6 @@ export default function AdminChequeManagementPage() {
       themeColor="gray"
       Icon={CreditCard}
     />
+    
   );
 }
