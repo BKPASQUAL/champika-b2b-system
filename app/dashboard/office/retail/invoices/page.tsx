@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { printInvoice, downloadInvoice } from "./print-utils";
 import { Input } from "@/components/ui/input";
 import {
   Plus,
@@ -428,10 +429,10 @@ export default function RetailInvoicesPage() {
                       <div className="flex items-center justify-between border-t pt-2">
                         <p className="text-xs text-gray-400">{formatDate(invoice.invoiceDate, invoice.createdAt)}</p>
                         <div className="flex items-center gap-1" onClick={(e) => e.preventDefault()}>
-                          <Button variant="ghost" size="icon" className="h-7 w-7">
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => printInvoice(invoice.id)}>
                             <Printer className="h-3.5 w-3.5" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7">
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => downloadInvoice(invoice.id)}>
                             <Download className="h-3.5 w-3.5" />
                           </Button>
                         </div>
@@ -473,8 +474,8 @@ export default function RetailInvoicesPage() {
                             <Link href={`/dashboard/office/retail/invoices/${invoice.id}`}>
                               <Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button>
                             </Link>
-                            <Button variant="ghost" size="icon"><Printer className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon"><Download className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" onClick={() => printInvoice(invoice.id)}><Printer className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" onClick={() => downloadInvoice(invoice.id)}><Download className="h-4 w-4" /></Button>
                           </div>
                         </TableCell>
                       </TableRow>
