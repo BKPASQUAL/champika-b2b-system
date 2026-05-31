@@ -271,13 +271,14 @@ export default function RetailInvoicesPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Retail Invoices</h1>
-          <p className="text-gray-500 mt-1">{businessName}</p>
+          <h1 className="text-xl sm:text-3xl font-bold text-gray-900">Retail Invoices</h1>
+          <p className="text-gray-500 text-sm mt-0.5">{businessName}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <Button
             variant="outline"
             size="icon"
@@ -289,56 +290,53 @@ export default function RetailInvoicesPage() {
           </Button>
           <Link href="/dashboard/office/retail/invoices/create">
             <Button className="bg-green-600 hover:bg-green-700">
-              <Plus className="h-4 w-4 mr-2" />
-              Create Invoice
+              <Plus className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Create Invoice</span>
             </Button>
           </Link>
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      {/* Stats cards — 2×2 on mobile, 4 across on md+ */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              Total Invoices
+          <CardHeader className="pb-1 pt-3 px-4">
+            <CardTitle className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+              Total
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 pb-3">
             <div className="text-2xl font-bold">{stats.total}</div>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
+          <CardHeader className="pb-1 pt-3 px-4">
+            <CardTitle className="text-xs font-medium text-gray-500 uppercase tracking-wide">
               Paid
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {stats.paid}
-            </div>
+          <CardContent className="px-4 pb-3">
+            <div className="text-2xl font-bold text-green-600">{stats.paid}</div>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
+          <CardHeader className="pb-1 pt-3 px-4">
+            <CardTitle className="text-xs font-medium text-gray-500 uppercase tracking-wide">
               Unpaid
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              {stats.unpaid}
-            </div>
+          <CardContent className="px-4 pb-3">
+            <div className="text-2xl font-bold text-red-600">{stats.unpaid}</div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
+        <Card className="col-span-2 md:col-span-1">
+          <CardHeader className="pb-1 pt-3 px-4">
+            <CardTitle className="text-xs font-medium text-gray-500 uppercase tracking-wide">
               Total Value
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
+          <CardContent className="px-4 pb-3">
+            <div className="text-sm sm:text-base xl:text-2xl font-bold text-primary truncate">
               {formatCurrency(stats.totalValue)}
             </div>
           </CardContent>
@@ -395,81 +393,88 @@ export default function RetailInvoicesPage() {
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="border rounded-lg overflow-x-auto">
-                <Table className="min-w-[1000px]">
+              {/* Mobile card list */}
+              <div className="xl:hidden space-y-4">
+                {paginatedInvoices.map((invoice) => (
+                  <Link key={invoice.id} href={`/dashboard/office/retail/invoices/${invoice.id}`}>
+                    <div className="border rounded-lg p-4 bg-white hover:bg-gray-50 space-y-3">
+                      {/* Top row: invoice no + badges */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="font-semibold text-sm">{invoice.invoiceNo}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">{invoice.customerName}</p>
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                          {getStatusBadge(invoice.status)}
+                          {getOrderStatusBadge(invoice.orderStatus)}
+                        </div>
+                      </div>
+                      {/* Amount row */}
+                      <div className="grid grid-cols-3 gap-2 border-t pt-3">
+                        <div>
+                          <p className="text-[10px] uppercase text-gray-400 tracking-wide">Total</p>
+                          <p className="font-bold text-sm">{formatCurrency(invoice.totalAmount)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase text-gray-400 tracking-wide">Paid</p>
+                          <p className="font-semibold text-sm text-green-600">{formatCurrency(invoice.paidAmount)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase text-gray-400 tracking-wide">Due</p>
+                          <p className="font-semibold text-sm text-red-500">{formatCurrency(invoice.dueAmount)}</p>
+                        </div>
+                      </div>
+                      {/* Date + actions */}
+                      <div className="flex items-center justify-between border-t pt-2">
+                        <p className="text-xs text-gray-400">{formatDate(invoice.invoiceDate, invoice.createdAt)}</p>
+                        <div className="flex items-center gap-1" onClick={(e) => e.preventDefault()}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7">
+                            <Printer className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7">
+                            <Download className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+
+              {/* Desktop table */}
+              <div className="hidden xl:block border rounded-lg overflow-x-auto">
+                <Table className="min-w-[900px]">
                   <TableHeader>
                     <TableRow className="bg-gray-50">
-                      <TableHead className="font-semibold">
-                        Invoice No
-                      </TableHead>
-                      {/* ❌ Manual Ref REMOVED */}
+                      <TableHead className="font-semibold">Invoice No</TableHead>
                       <TableHead className="font-semibold">Date</TableHead>
                       <TableHead className="font-semibold">Customer</TableHead>
-                      <TableHead className="text-right font-semibold">
-                        Amount
-                      </TableHead>
-                      <TableHead className="text-right font-semibold">
-                        Paid
-                      </TableHead>
-                      <TableHead className="text-right font-semibold">
-                        Due
-                      </TableHead>
-                      <TableHead className="text-center font-semibold">
-                        Payment
-                      </TableHead>
-                      <TableHead className="text-center font-semibold">
-                        Status
-                      </TableHead>
-                      <TableHead className="text-right font-semibold">
-                        Actions
-                      </TableHead>
+                      <TableHead className="text-right font-semibold">Amount</TableHead>
+                      <TableHead className="text-right font-semibold">Paid</TableHead>
+                      <TableHead className="text-right font-semibold">Due</TableHead>
+                      <TableHead className="text-center font-semibold">Payment</TableHead>
+                      <TableHead className="text-center font-semibold">Status</TableHead>
+                      <TableHead className="text-right font-semibold">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {paginatedInvoices.map((invoice) => (
                       <TableRow key={invoice.id} className="hover:bg-gray-50">
-                        <TableCell className="font-medium">
-                          {invoice.invoiceNo}
-                        </TableCell>
-
-                        {/* ❌ Manual Ref REMOVED */}
-
-                        {/* ✅ Fixed Date (Falls back to createdAt if invoiceDate is missing) */}
-                        <TableCell>
-                          {formatDate(invoice.invoiceDate, invoice.createdAt)}
-                        </TableCell>
-
+                        <TableCell className="font-medium">{invoice.invoiceNo}</TableCell>
+                        <TableCell>{formatDate(invoice.invoiceDate, invoice.createdAt)}</TableCell>
                         <TableCell>{invoice.customerName}</TableCell>
-                        <TableCell className="text-right font-medium">
-                          {formatCurrency(invoice.totalAmount)}
-                        </TableCell>
-                        <TableCell className="text-right text-green-600">
-                          {formatCurrency(invoice.paidAmount)}
-                        </TableCell>
-                        <TableCell className="text-right text-red-600">
-                          {formatCurrency(invoice.dueAmount)}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {getStatusBadge(invoice.status)}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {getOrderStatusBadge(invoice.orderStatus)}
-                        </TableCell>
+                        <TableCell className="text-right font-medium">{formatCurrency(invoice.totalAmount)}</TableCell>
+                        <TableCell className="text-right text-green-600">{formatCurrency(invoice.paidAmount)}</TableCell>
+                        <TableCell className="text-right text-red-600">{formatCurrency(invoice.dueAmount)}</TableCell>
+                        <TableCell className="text-center">{getStatusBadge(invoice.status)}</TableCell>
+                        <TableCell className="text-center">{getOrderStatusBadge(invoice.orderStatus)}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-2">
-                            <Link
-                              href={`/dashboard/office/retail/invoices/${invoice.id}`}
-                            >
-                              <Button variant="ghost" size="icon">
-                                <Eye className="h-4 w-4" />
-                              </Button>
+                            <Link href={`/dashboard/office/retail/invoices/${invoice.id}`}>
+                              <Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button>
                             </Link>
-                            <Button variant="ghost" size="icon">
-                              <Printer className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon">
-                              <Download className="h-4 w-4" />
-                            </Button>
+                            <Button variant="ghost" size="icon"><Printer className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon"><Download className="h-4 w-4" /></Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -478,55 +483,25 @@ export default function RetailInvoicesPage() {
                 </Table>
               </div>
 
-              {/* Pagination controls... */}
-              <div className="flex items-center justify-between px-2">
-                <div className="text-sm text-muted-foreground">
-                  Showing {startIndex + 1} to{" "}
-                  {Math.min(endIndex, filteredInvoices.length)} of{" "}
-                  {filteredInvoices.length} entries
+              {/* Pagination */}
+              <div className="flex items-center justify-between px-1">
+                <div className="text-xs sm:text-sm text-muted-foreground">
+                  {startIndex + 1}–{Math.min(endIndex, filteredInvoices.length)} of {filteredInvoices.length}
                 </div>
-                <div className="flex items-center space-x-2">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => setCurrentPage(1)}
-                    disabled={currentPage === 1}
-                  >
+                <div className="flex items-center space-x-1">
+                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}>
                     <ChevronsLeft className="h-4 w-4" />
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() =>
-                      setCurrentPage((prev) => Math.max(prev - 1, 1))
-                    }
-                    disabled={currentPage === 1}
-                  >
+                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))} disabled={currentPage === 1}>
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
-                  <div className="text-sm font-medium">
-                    Page {currentPage} of {totalPages || 1}
+                  <div className="text-sm font-medium px-2">
+                    {currentPage} / {totalPages || 1}
                   </div>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() =>
-                      setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-                    }
-                    disabled={currentPage === totalPages || totalPages === 0}
-                  >
+                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages || totalPages === 0}>
                     <ChevronRight className="h-4 w-4" />
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => setCurrentPage(totalPages)}
-                    disabled={currentPage === totalPages || totalPages === 0}
-                  >
+                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages || totalPages === 0}>
                     <ChevronsRight className="h-4 w-4" />
                   </Button>
                 </div>
