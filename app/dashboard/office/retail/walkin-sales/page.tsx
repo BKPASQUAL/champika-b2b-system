@@ -570,10 +570,10 @@ export default function CreateRetailInvoicePage() {
         <div className="lg:col-span-2 space-y-4 sm:space-y-6 min-w-0">
           {/* 1. Invoice Details */}
           <Card>
-            <CardHeader className="pb-3 sm:pb-6">
+            <CardHeader className="pb-2">
               <CardTitle className="text-base sm:text-lg">Invoice Details</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3 sm:space-y-4">
+            <CardContent className="space-y-3 pt-2">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Customer Selection with Walk-in Button */}
                 <div className="space-y-2">
