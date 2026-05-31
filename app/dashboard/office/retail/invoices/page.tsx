@@ -395,8 +395,8 @@ export default function RetailInvoicesPage() {
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="border rounded-lg overflow-hidden">
-                <Table>
+              <div className="border rounded-lg overflow-x-auto">
+                <Table className="min-w-[1000px]">
                   <TableHeader>
                     <TableRow className="bg-gray-50">
                       <TableHead className="font-semibold">

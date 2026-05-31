@@ -68,8 +68,8 @@ export function CancelInvoiceButton({ id, invoiceNo, orderStatus, onSuccess }: P
         onClick={() => setOpen(true)}
         className="bg-background text-orange-600 border-orange-200 hover:bg-orange-50 hover:text-orange-700"
       >
-        <XCircle className="w-4 h-4 mr-2" />
-        Cancel Invoice
+        <XCircle className="w-4 h-4 sm:mr-2" />
+        <span className="hidden sm:inline">Cancel Invoice</span>
       </Button>
 
       <AlertDialog open={open} onOpenChange={setOpen}>

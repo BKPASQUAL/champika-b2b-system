@@ -601,7 +601,7 @@ export default function CreateRetailInvoicePage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Customer Selection with Walk-in Button */}
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
@@ -706,7 +706,7 @@ export default function CreateRetailInvoicePage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Invoice Number */}
                 <div className="space-y-2">
                   <Label>Invoice No (Auto)</Label>
@@ -1110,7 +1110,7 @@ export default function CreateRetailInvoicePage() {
             </CardHeader>
             <CardContent>
               <div className="border rounded-md overflow-x-auto">
-                <Table className="min-w-[520px]">
+                <Table className="min-w-[650px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-10">#</TableHead>

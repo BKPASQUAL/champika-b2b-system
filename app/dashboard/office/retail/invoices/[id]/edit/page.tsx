@@ -537,7 +537,7 @@ export default function EditRetailInvoicePage({
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* LEFT COLUMN */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-6 min-w-0">
           {/* 1. Invoice Details */}
           <Card>
             <CardHeader>
@@ -545,7 +545,7 @@ export default function EditRetailInvoicePage({
               <CardDescription>Customer and billing information</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
                     <Label>Customer <span className="text-red-500">*</span></Label>
@@ -615,7 +615,7 @@ export default function EditRetailInvoicePage({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Invoice No</Label>
                   <Input value={invoiceNumber} disabled className="bg-muted" />
@@ -862,8 +862,8 @@ export default function EditRetailInvoicePage({
               <CardDescription>{items.length} item(s) added. Adjust values directly below.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="border rounded-md">
-                <Table>
+              <div className="border rounded-md overflow-x-auto">
+                <Table className="min-w-[800px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-12">#</TableHead>
