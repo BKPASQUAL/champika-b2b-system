@@ -1,7 +1,7 @@
 // app/dashboard/office/retail/walkin-sales/page.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -158,6 +158,14 @@ export default function CreateRetailInvoicePage() {
 
   // Edit mode — tracks which item is being edited (null = adding new)
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
+
+  const addProductCardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (productOpen) {
+      addProductCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [productOpen]);
 
   // --- 1. Get Business Context and Fetch Initial Data ---
   useEffect(() => {
@@ -720,9 +728,10 @@ export default function CreateRetailInvoicePage() {
           </Card>
 
           {/* 2. Add Items */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base sm:text-lg">Add Products</CardTitle>
+          <div ref={addProductCardRef} className="scroll-mt-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base sm:text-lg">Add Products</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 sm:space-y-4">
               {/* Product Selection */}
@@ -1080,7 +1089,8 @@ export default function CreateRetailInvoicePage() {
                 </Button>
               </div>
             </CardContent>
-          </Card>
+            </Card>
+          </div>
 
           {/* 3. Items Table */}
           <Card>

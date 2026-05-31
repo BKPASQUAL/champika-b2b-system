@@ -164,6 +164,13 @@ export default function CreateRetailInvoicePage() {
   });
 
   const qtyInputRef = useRef<HTMLInputElement>(null);
+  const addProductCardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (productOpen) {
+      addProductCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [productOpen]);
 
   // --- Global Keyboard Shortcuts ---
   useEffect(() => {
@@ -739,9 +746,10 @@ export default function CreateRetailInvoicePage() {
           </Card>
 
           {/* 2. Add Items */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Add Products</CardTitle>
+          <div ref={addProductCardRef} className="scroll-mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Add Products</CardTitle>
               <CardDescription>
                 Search and add products to the invoice
               </CardDescription>
@@ -1091,7 +1099,8 @@ export default function CreateRetailInvoicePage() {
                 Add to Invoice
               </Button>
             </CardContent>
-          </Card>
+            </Card>
+          </div>
 
           {/* 3. Items Table */}
           <Card>

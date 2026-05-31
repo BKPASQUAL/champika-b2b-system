@@ -1,7 +1,7 @@
 // app/dashboard/office/retail/invoices/[id]/edit/page.tsx
 "use client";
 
-import React, { useState, useEffect, use } from "react";
+import React, { useState, useEffect, use, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -166,6 +166,14 @@ export default function EditRetailInvoicePage({
     discountPercent: "",
     stockAvailable: 0,
   });
+
+  const addProductCardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (productOpen) {
+      addProductCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [productOpen]);
 
   // --- 1. Fetch Data ---
   useEffect(() => {
@@ -628,9 +636,10 @@ export default function EditRetailInvoicePage({
           </Card>
 
           {/* 2. Add Items */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Add Products</CardTitle>
+          <div ref={addProductCardRef} className="scroll-mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Add Products</CardTitle>
               <CardDescription>Search and add new products</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -843,7 +852,8 @@ export default function EditRetailInvoicePage({
                 <Plus className="w-4 h-4 mr-2" /> Add to Invoice
               </Button>
             </CardContent>
-          </Card>
+            </Card>
+          </div>
 
           {/* 3. Items Table (Editable) */}
           <Card>
