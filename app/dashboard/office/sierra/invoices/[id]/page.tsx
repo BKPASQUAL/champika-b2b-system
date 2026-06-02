@@ -96,6 +96,9 @@ interface PaymentRecord {
   cheque_no?: string;
   cheque_status?: string;
   cheque_date?: string;
+  is_cancelled?: boolean;
+  cancelled_at?: string;
+  cancelled_reason?: string;
 }
 
 export default function WiremanViewInvoicePage({
