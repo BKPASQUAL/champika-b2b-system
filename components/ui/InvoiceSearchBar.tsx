@@ -284,10 +284,8 @@ function FullInvoiceDetail({
     (acc, r) => acc + r.quantity * (r.products?.selling_price || 0),
     0
   );
-  const totalPaid = paymentsList.reduce(
-    (acc, p) => acc + Number(p.amount || 0),
-    0
-  );
+  // Use the DB-stored paidAmount as the authoritative value (correctly maintained on cancellations/reversals)
+  const totalPaid = Number(invoice.paidAmount ?? 0);
   const netTotal = invoice.grandTotal || invoice.totalAmount || 0;
   const grossTotal = netTotal + totalRefunded;
   const extraDiscountAmt = invoice.extraDiscountAmount || 0;
@@ -680,63 +678,89 @@ function FullInvoiceDetail({
                       <TableHead className="pl-6">Date</TableHead>
                       <TableHead>Method</TableHead>
                       <TableHead>Reference / Cheque</TableHead>
+                      <TableHead>Status</TableHead>
                       <TableHead className="text-right pr-6">Amount</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {paymentsList.map((pay: any) => (
-                      <TableRow key={pay.id} className="hover:bg-emerald-50/10">
-                        <TableCell className="pl-6 text-sm">
-                          {new Date(pay.payment_date).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          <Badge
-                            variant="secondary"
-                            className="font-normal text-xs"
-                          >
-                            {pay.method}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {pay.method?.toLowerCase() === "cheque" ||
-                          pay.cheque_no ? (
-                            <div className="flex flex-col gap-0.5">
-                              {pay.cheque_no && (
-                                <span className="font-mono text-xs font-medium text-foreground">
-                                  {pay.cheque_no}
-                                </span>
-                              )}
-                              {pay.cheque_date && (
-                                <span className="text-[10px]">
-                                  Due:{" "}
-                                  {new Date(
-                                    pay.cheque_date
-                                  ).toLocaleDateString()}
-                                </span>
-                              )}
-                              {pay.cheque_status && (
-                                <span className="text-[10px] italic">
-                                  ({pay.cheque_status})
-                                </span>
-                              )}
-                            </div>
-                          ) : (
-                            "-"
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right pr-6 font-mono font-medium">
-                          LKR{" "}
-                          {Number(pay.amount).toLocaleString("en-LK", {
-                            minimumFractionDigits: 2,
-                          })}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {paymentsList.map((pay: any) => {
+                      const isCancelled = pay.is_cancelled === true;
+                      const isReturned = !isCancelled && pay.cheque_status === "Returned";
+                      const isVoided = isCancelled || isReturned;
+                      const isCheque = pay.method?.toLowerCase() === "cheque";
+                      return (
+                        <TableRow
+                          key={pay.id}
+                          className={isCancelled ? "bg-red-50/50 hover:bg-red-50/70 opacity-80" : isReturned ? "bg-red-50/40 hover:bg-red-50/60" : "hover:bg-emerald-50/10"}
+                        >
+                          <TableCell className="pl-6 text-sm">
+                            {new Date(pay.payment_date).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            <Badge variant="secondary" className="font-normal text-xs">
+                              {pay.method}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {isCheque || pay.cheque_no ? (
+                              <div className="flex flex-col gap-0.5">
+                                {pay.cheque_no && (
+                                  <span className={`font-mono text-xs font-medium ${isVoided ? "line-through text-gray-400" : "text-foreground"}`}>
+                                    {pay.cheque_no}
+                                  </span>
+                                )}
+                                {pay.cheque_date && (
+                                  <span className="text-[10px]">
+                                    Due: {new Date(pay.cheque_date).toLocaleDateString()}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              "-"
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {isCancelled ? (
+                              <Badge variant="outline" className="text-[10px] px-1.5 border bg-red-50 text-red-700 border-red-200">
+                                Cancelled
+                              </Badge>
+                            ) : isCheque && pay.cheque_status ? (
+                              <Badge
+                                variant="outline"
+                                className={`text-[10px] px-1.5 border ${
+                                  pay.cheque_status === "Cleared" ? "bg-green-50 text-green-700 border-green-200" :
+                                  pay.cheque_status === "Returned" ? "bg-red-50 text-red-700 border-red-200" :
+                                  pay.cheque_status === "Bounced" ? "bg-red-50 text-red-600 border-red-200" :
+                                  pay.cheque_status === "Deposited" ? "bg-blue-50 text-blue-700 border-blue-200" :
+                                  "bg-amber-50 text-amber-700 border-amber-200"
+                                }`}
+                              >
+                                {pay.cheque_status}
+                              </Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right pr-6 font-mono font-medium">
+                            <span className={isVoided ? "line-through text-gray-400" : ""}>
+                              LKR{" "}
+                              {Number(pay.amount).toLocaleString("en-LK", { minimumFractionDigits: 2 })}
+                            </span>
+                            {isCancelled && (
+                              <p className="text-[10px] text-red-600 font-semibold">Cancelled</p>
+                            )}
+                            {isReturned && (
+                              <p className="text-[10px] text-red-500 font-medium">Reversed</p>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                   <TableFooter className="bg-emerald-50/30">
                     <TableRow>
                       <TableCell
-                        colSpan={3}
+                        colSpan={4}
                         className="pl-6 text-emerald-700 font-medium text-right"
                       >
                         Total Paid

@@ -736,12 +736,14 @@ export default function WiremanViewInvoicePage({
                     </TableHeader>
                     <TableBody>
                       {paymentsList.map((pay) => {
-                        const isReturned = pay.cheque_status === "Returned";
+                        const isCancelled = pay.is_cancelled === true;
+                        const isReturned = !isCancelled && pay.cheque_status === "Returned";
+                        const isVoided = isCancelled || isReturned;
                         const isCheque = pay.method?.toLowerCase() === "cheque";
                         return (
                           <TableRow
                             key={pay.id}
-                            className={isReturned ? "bg-red-50/40 hover:bg-red-50/60" : "hover:bg-emerald-50/10"}
+                            className={isCancelled ? "bg-red-50/50 hover:bg-red-50/70 opacity-80" : isReturned ? "bg-red-50/40 hover:bg-red-50/60" : "hover:bg-emerald-50/10"}
                           >
                             <TableCell className="pl-6 text-sm">
                               {new Date(pay.payment_date).toLocaleDateString()}
@@ -757,7 +759,7 @@ export default function WiremanViewInvoicePage({
                             <TableCell className="text-sm text-muted-foreground">
                               {isCheque ? (
                                 <div className="flex flex-col">
-                                  <span className={`font-mono text-xs font-medium ${isReturned ? "line-through text-gray-400" : "text-foreground"}`}>
+                                  <span className={`font-mono text-xs font-medium ${isVoided ? "line-through text-gray-400" : "text-foreground"}`}>
                                     {pay.cheque_no}
                                   </span>
                                   {pay.cheque_date && (
@@ -772,7 +774,11 @@ export default function WiremanViewInvoicePage({
                               )}
                             </TableCell>
                             <TableCell>
-                              {isCheque && pay.cheque_status ? (
+                              {isCancelled ? (
+                                <Badge variant="outline" className="text-[10px] px-1.5 border bg-red-50 text-red-700 border-red-200">
+                                  Cancelled
+                                </Badge>
+                              ) : isCheque && pay.cheque_status ? (
                                 <Badge
                                   variant="outline"
                                   className={`text-[10px] px-1.5 border ${
@@ -790,12 +796,15 @@ export default function WiremanViewInvoicePage({
                               )}
                             </TableCell>
                             <TableCell className="text-right pr-6 font-mono font-medium">
-                              <span className={isReturned ? "line-through text-gray-400" : ""}>
+                              <span className={isVoided ? "line-through text-gray-400" : ""}>
                                 LKR{" "}
                                 {Number(pay.amount).toLocaleString("en-LK", {
                                   minimumFractionDigits: 2,
                                 })}
                               </span>
+                              {isCancelled && (
+                                <p className="text-[10px] text-red-600 font-semibold">Cancelled</p>
+                              )}
                               {isReturned && (
                                 <p className="text-[10px] text-red-500 font-medium">Reversed</p>
                               )}
