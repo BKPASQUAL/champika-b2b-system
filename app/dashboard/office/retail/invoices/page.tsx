@@ -289,6 +289,12 @@ export default function RetailInvoicesPage() {
           >
             <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
           </Button>
+          <Link href="/dashboard/office/retail/invoices/search-invoice">
+            <Button variant="outline">
+              <Search className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Search Invoice</span>
+            </Button>
+          </Link>
           <Link href="/dashboard/office/retail/invoices/create">
             <Button className="bg-green-600 hover:bg-green-700">
               <Plus className="h-4 w-4 sm:mr-2" />

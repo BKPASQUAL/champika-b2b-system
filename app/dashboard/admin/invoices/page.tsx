@@ -292,6 +292,13 @@ export default function InvoicesPage() {
           </DropdownMenu>
 
           <Button
+            variant="outline"
+            onClick={() => router.push("/dashboard/admin/invoices/search-invoice")}
+          >
+            <Search className="w-4 h-4 mr-2" /> Search Invoice
+          </Button>
+
+          <Button
             onClick={() => router.push("/dashboard/admin/invoices/create")}
           >
             <Plus className="w-4 h-4 mr-2" /> Create Bill

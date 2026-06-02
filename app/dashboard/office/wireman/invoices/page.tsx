@@ -308,6 +308,15 @@ export default function WiremanInvoicesPage() {
               </DropdownMenuContent>
             </DropdownMenu>
 
+          <Button
+            variant="outline"
+            onClick={() =>
+              router.push("/dashboard/office/wireman/invoices/search-invoice")
+            }
+          >
+            <Search className="w-4 h-4 mr-2" /> Search Invoice
+          </Button>
+
           {/* Red Theme Button */}
           <Button
             onClick={() =>

@@ -235,6 +235,13 @@ export default function RepMyInvoicesPage() {
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
+          <Button
+            variant="outline"
+            onClick={() => router.push("/dashboard/rep/invoices/search-invoice")}
+          >
+            <Search className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Search Invoice</span>
+          </Button>
         </div>
       </div>
 
