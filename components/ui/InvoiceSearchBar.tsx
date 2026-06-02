@@ -698,17 +698,22 @@ function FullInvoiceDetail({
                           </Badge>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {pay.method === "Cheque" ? (
-                            <div className="flex flex-col">
-                              <span className="font-mono text-xs font-medium text-foreground">
-                                {pay.cheque_no}
-                              </span>
-                              <span className="text-[10px]">
-                                Due:{" "}
-                                {new Date(
-                                  pay.cheque_date!
-                                ).toLocaleDateString()}
-                              </span>
+                          {pay.method?.toLowerCase() === "cheque" ||
+                          pay.cheque_no ? (
+                            <div className="flex flex-col gap-0.5">
+                              {pay.cheque_no && (
+                                <span className="font-mono text-xs font-medium text-foreground">
+                                  {pay.cheque_no}
+                                </span>
+                              )}
+                              {pay.cheque_date && (
+                                <span className="text-[10px]">
+                                  Due:{" "}
+                                  {new Date(
+                                    pay.cheque_date
+                                  ).toLocaleDateString()}
+                                </span>
+                              )}
                               {pay.cheque_status && (
                                 <span className="text-[10px] italic">
                                   ({pay.cheque_status})
