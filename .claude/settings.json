@@ -14,7 +14,8 @@
       "Bash(Get-ChildItem -Path \"c:\\\\Projects\\\\champika-b2b-system\" -Recurse -Directory -ErrorAction SilentlyContinue)",
       "Bash(Select-Object -ExpandProperty FullName)",
       "Bash(Get-ChildItem -Path . -Directory)",
-      "Bash(xargs ls -la)"
+      "Bash(xargs ls -la)",
+      "Bash(grep -E \"\\\\.ts$\")"
     ],
     "additionalDirectories": [
       "\\tmp",

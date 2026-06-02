@@ -110,6 +110,9 @@ export async function GET(request: NextRequest) {
         cheque_number: p.cheque_no,
         cheque_date: p.cheque_date,
         cheque_status: p.cheque_status,
+        is_cancelled: p.is_cancelled ?? false,
+        cancelled_at: p.cancelled_at ?? null,
+        cancelled_reason: p.cancelled_reason ?? null,
 
         customers: {
           name: customerObj?.shop_name || "Unknown",

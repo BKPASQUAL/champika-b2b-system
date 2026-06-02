@@ -21,6 +21,7 @@ import {
   Banknote,
   CreditCard,
   Building2,
+  XCircle,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -42,6 +43,7 @@ interface PaymentTableProps {
   onSort: (field: SortField) => void;
   onUpdateStatus: (payment: Payment) => void;
   onView: (payment: Payment) => void;
+  onCancel: (payment: Payment) => void;
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
@@ -108,6 +110,7 @@ export function PaymentTable({
   onSort,
   onUpdateStatus,
   onView,
+  onCancel,
   currentPage,
   totalPages,
   onPageChange,
@@ -167,12 +170,19 @@ export function PaymentTable({
                 const chequeDateStr = payment.chequeDate ? new Date(payment.chequeDate).toLocaleDateString("en-LK") : null;
 
                 return (
-                  <TableRow key={payment.id} className={`transition-colors border-b border-gray-100 last:border-0 ${payment.chequeStatus === "Returned" ? "bg-red-50/40 hover:bg-red-50/60" : "hover:bg-purple-50/20"}`}>
+                  <TableRow key={payment.id} className={`transition-colors border-b border-gray-100 last:border-0 ${payment.isCancelled ? "bg-red-50/50 hover:bg-red-50/70 opacity-75" : payment.chequeStatus === "Returned" ? "bg-red-50/40 hover:bg-red-50/60" : "hover:bg-purple-50/20"}`}>
                     <TableCell className="py-3 px-4 text-sm text-gray-600 whitespace-nowrap">{dateStr}</TableCell>
                     <TableCell className="py-3 px-4">
-                      <span className="font-mono text-xs text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">
-                        PAY-{payment.paymentNumber}
-                      </span>
+                      <div className="flex flex-col gap-1">
+                        <span className="font-mono text-xs text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">
+                          PAY-{payment.paymentNumber}
+                        </span>
+                        {payment.isCancelled && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-red-100 text-red-700 border border-red-200 px-2 py-0.5 text-[10px] font-semibold w-fit">
+                            <XCircle className="w-2.5 h-2.5" /> CANCELLED
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="py-3 px-4">
                       <span className="text-sm font-semibold text-gray-800">{payment.invoiceNo}</span>
@@ -186,10 +196,13 @@ export function PaymentTable({
                       </button>
                     </TableCell>
                     <TableCell className="py-3 px-4 text-right">
-                      <span className={`text-sm font-bold ${payment.chequeStatus === "Returned" ? "line-through text-gray-400" : "text-gray-800"}`}>
+                      <span className={`text-sm font-bold ${payment.isCancelled || payment.chequeStatus === "Returned" ? "line-through text-gray-400" : "text-gray-800"}`}>
                         LKR {payment.amount.toLocaleString("en-LK", { minimumFractionDigits: 2 })}
                       </span>
-                      {payment.chequeStatus === "Returned" && (
+                      {payment.isCancelled && (
+                        <p className="text-[10px] text-red-600 font-semibold mt-0.5">Cancelled</p>
+                      )}
+                      {!payment.isCancelled && payment.chequeStatus === "Returned" && (
                         <p className="text-[10px] text-red-500 font-medium mt-0.5">Reversed</p>
                       )}
                     </TableCell>
@@ -241,11 +254,22 @@ export function PaymentTable({
                           <DropdownMenuItem onClick={() => window.open(`/dashboard/office/sierra/invoices/${payment.invoiceId}`, "_blank")} className="cursor-pointer">
                             <FileText className="mr-2 h-4 w-4" /> View Invoice
                           </DropdownMenuItem>
-                          {isCheque && payment.chequeStatus !== "Returned" && payment.chequeStatus !== "Cleared" && (
+                          {isCheque && !payment.isCancelled && payment.chequeStatus !== "Returned" && payment.chequeStatus !== "Cleared" && (
                             <>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem onClick={() => onUpdateStatus(payment)} className="cursor-pointer">
                                 <RefreshCw className="mr-2 h-4 w-4" /> Update Status
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                          {!payment.isCancelled && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => onCancel(payment)}
+                                className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+                              >
+                                <XCircle className="mr-2 h-4 w-4" /> Cancel Payment
                               </DropdownMenuItem>
                             </>
                           )}

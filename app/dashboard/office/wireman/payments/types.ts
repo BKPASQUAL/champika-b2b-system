@@ -25,6 +25,10 @@ export interface Payment {
   depositAccountType?: string;
   collectedBy: string;
   notes?: string;
+  // Cancellation
+  isCancelled?: boolean;
+  cancelledAt?: string;
+  cancelledReason?: string;
 }
 
 export type SortField =

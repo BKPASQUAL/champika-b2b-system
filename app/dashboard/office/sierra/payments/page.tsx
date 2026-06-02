@@ -22,7 +22,7 @@ import { BUSINESS_IDS } from "@/app/config/business-constants";
 import { Payment, SortField, SortOrder } from "./types";
 import { PaymentStats } from "./_components/PaymentStats";
 import { PaymentTable } from "./_components/PaymentTable";
-import { PaymentDialogs, PaymentViewDialog } from "./_components/PaymentDialogs";
+import { PaymentDialogs, PaymentViewDialog, CancelPaymentDialog } from "./_components/PaymentDialogs";
 import { CreatePaymentDialog } from "./_components/CreatePaymentDialog";
 
 export default function SierraPaymentsPage() {
@@ -44,6 +44,7 @@ export default function SierraPaymentsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
 
   const {
@@ -85,6 +86,9 @@ export default function SierraPaymentsPage() {
         depositAccountName: p.company_accounts?.account_name,
         depositAccountType: p.company_accounts?.account_type,
         collectedBy: "Office",
+        isCancelled: p.is_cancelled ?? false,
+        cancelledAt: p.cancelled_at ?? undefined,
+        cancelledReason: p.cancelled_reason ?? undefined,
       })),
     [rawPayments]
   );
@@ -236,6 +240,10 @@ export default function SierraPaymentsPage() {
               setSelectedPayment(p);
               setIsViewDialogOpen(true);
             }}
+            onCancel={(p) => {
+              setSelectedPayment(p);
+              setIsCancelDialogOpen(true);
+            }}
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={setCurrentPage}
@@ -261,6 +269,13 @@ export default function SierraPaymentsPage() {
         isOpen={isViewDialogOpen}
         setIsOpen={setIsViewDialogOpen}
         payment={selectedPayment}
+      />
+
+      <CancelPaymentDialog
+        isOpen={isCancelDialogOpen}
+        setIsOpen={setIsCancelDialogOpen}
+        payment={selectedPayment}
+        onCancelled={fetchPayments}
       />
     </div>
   );
