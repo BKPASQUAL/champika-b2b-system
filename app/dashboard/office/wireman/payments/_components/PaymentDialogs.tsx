@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -23,6 +24,7 @@ import { Payment, ChequeStatus } from "../types";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { invalidatePaymentCaches } from "@/hooks/useCachedFetch";
+import { AlertTriangle } from "lucide-react";
 
 interface InvoiceSnapshot {
   paidAmount: number;
@@ -223,7 +225,15 @@ export function PaymentViewDialog({ isOpen, setIsOpen, payment }: PaymentViewDia
         </DialogHeader>
 
         <div className="grid gap-3 py-2 text-sm">
-          {payment.chequeStatus === "Returned" && (
+          {payment.isCancelled && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 flex items-center gap-2 text-sm text-red-700 font-medium">
+              ⚠ This payment was cancelled — all balances have been reversed.
+              {payment.cancelledReason && (
+                <span className="font-normal text-red-600">Reason: {payment.cancelledReason}</span>
+              )}
+            </div>
+          )}
+          {!payment.isCancelled && payment.chequeStatus === "Returned" && (
             <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 flex items-center gap-2 text-sm text-red-700 font-medium">
               ⚠ This cheque was returned — the payment has been reversed and the invoice balance restored.
             </div>
@@ -235,10 +245,13 @@ export function PaymentViewDialog({ isOpen, setIsOpen, payment }: PaymentViewDia
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">Amount</p>
-              <p className={`font-bold ${payment.chequeStatus === "Returned" ? "line-through text-gray-400" : "text-gray-800"}`}>
+              <p className={`font-bold ${payment.isCancelled || payment.chequeStatus === "Returned" ? "line-through text-gray-400" : "text-gray-800"}`}>
                 LKR {payment.amount.toLocaleString()}
               </p>
-              {payment.chequeStatus === "Returned" && (
+              {payment.isCancelled && (
+                <p className="text-xs text-red-600 font-semibold">Cancelled</p>
+              )}
+              {!payment.isCancelled && payment.chequeStatus === "Returned" && (
                 <p className="text-xs text-red-500 font-medium">Reversed</p>
               )}
             </div>
@@ -280,6 +293,155 @@ export function PaymentViewDialog({ isOpen, setIsOpen, payment }: PaymentViewDia
 
         <DialogFooter>
           <Button variant="outline" onClick={() => setIsOpen(false)}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Cancel Payment Dialog ─────────────────────────────────────────────────────
+interface CancelPaymentDialogProps {
+  isOpen: boolean;
+  setIsOpen: (open: boolean) => void;
+  payment: Payment | null;
+  onCancelled: () => void;
+}
+
+export function CancelPaymentDialog({
+  isOpen,
+  setIsOpen,
+  payment,
+  onCancelled,
+}: CancelPaymentDialogProps) {
+  const [reason, setReason] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [invoiceSnapshot, setInvoiceSnapshot] = useState<InvoiceSnapshot | null>(null);
+
+  useEffect(() => {
+    setReason("");
+    setInvoiceSnapshot(null);
+
+    if (isOpen && payment?.invoiceId) {
+      fetch(`/api/invoices/${payment.invoiceId}`)
+        .then((r) => r.json())
+        .then((data) => {
+          const paid = Number(data.paid_amount ?? data.paidAmount ?? 0);
+          const total = Number(data.total_amount ?? data.grandTotal ?? data.totalAmount ?? 0);
+          setInvoiceSnapshot({
+            paidAmount: paid,
+            totalAmount: total,
+            dueAmount: Math.max(0, total - paid),
+            status: data.status ?? "",
+          });
+        })
+        .catch(() => {});
+    }
+  }, [isOpen, payment]);
+
+  const handleCancel = async () => {
+    if (!payment) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/payments/${payment.id}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: reason.trim() || null }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to cancel payment");
+      }
+      toast.success("Payment cancelled and all balances reversed");
+      invalidatePaymentCaches();
+      onCancelled();
+      setIsOpen(false);
+    } catch (e: any) {
+      toast.error(e.message || "Error cancelling payment");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!payment) return null;
+
+  const afterPaid = invoiceSnapshot
+    ? Math.max(0, invoiceSnapshot.paidAmount - payment.amount)
+    : null;
+  const afterDue = invoiceSnapshot
+    ? Math.max(0, invoiceSnapshot.totalAmount - (afterPaid ?? 0))
+    : null;
+
+  return (
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogContent className="sm:max-w-[480px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-red-700">
+            <AlertTriangle className="h-5 w-5" /> Cancel Payment
+          </DialogTitle>
+          <DialogDescription>
+            This will permanently reverse the payment and restore all related
+            balances.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+            <span className="text-muted-foreground">Customer</span>
+            <span className="font-semibold">{payment.customerName}</span>
+            <span className="text-muted-foreground">Invoice</span>
+            <span className="font-mono font-semibold">{payment.invoiceNo}</span>
+            <span className="text-muted-foreground">Amount</span>
+            <span className="font-bold text-gray-900">
+              LKR {payment.amount.toLocaleString("en-LK", { minimumFractionDigits: 2 })}
+            </span>
+            <span className="text-muted-foreground">Method</span>
+            <span className="capitalize font-medium">{payment.method}</span>
+          </div>
+
+          {invoiceSnapshot && afterPaid !== null && afterDue !== null && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-3 space-y-2 text-sm">
+              <p className="font-semibold text-red-700">What will be reversed:</p>
+              <ul className="text-xs space-y-1 text-red-800 list-disc list-inside">
+                <li>
+                  Invoice paid amount: LKR {invoiceSnapshot.paidAmount.toLocaleString()} →{" "}
+                  <strong>LKR {afterPaid.toLocaleString()}</strong>
+                </li>
+                <li>
+                  Invoice due amount: LKR {invoiceSnapshot.dueAmount.toLocaleString()} →{" "}
+                  <strong>LKR {afterDue.toLocaleString()}</strong>
+                </li>
+                <li>Customer outstanding balance restored by LKR {payment.amount.toLocaleString()}</li>
+                {(payment.method === "cash" || payment.method === "bank" ||
+                  (payment.method === "cheque" && payment.chequeStatus === "Cleared")) && (
+                  <li>Bank account balance reduced by LKR {payment.amount.toLocaleString()}</li>
+                )}
+              </ul>
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <Label className="text-sm font-medium">Reason (optional)</Label>
+            <Textarea
+              placeholder="Enter cancellation reason..."
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={2}
+              className="resize-none"
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setIsOpen(false)} disabled={loading}>
+            Go Back
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={handleCancel}
+            disabled={loading}
+          >
+            {loading ? "Cancelling..." : "Confirm Cancel"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
