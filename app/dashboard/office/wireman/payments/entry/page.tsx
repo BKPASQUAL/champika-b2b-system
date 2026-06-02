@@ -181,7 +181,7 @@ export default function WiremanPaymentEntryPage() {
         if (invRes.ok) {
           const invData = await invRes.json();
           const unpaid = invData.filter(
-            (inv: any) => inv.status !== "Paid" && (inv.dueAmount ?? 0) > 0
+            (inv: any) => inv.orderStatus === "Delivered" && inv.status !== "Paid" && (inv.dueAmount ?? 0) > 0
           );
           const seen = new Set<string>();
           const unique: Customer[] = [];
@@ -472,7 +472,7 @@ export default function WiremanPaymentEntryPage() {
           if (invRes.ok) {
             const invData = await invRes.json();
             const unpaid = invData.filter(
-              (inv: any) => inv.status !== "Paid" && (inv.dueAmount ?? 0) > 0
+              (inv: any) => inv.orderStatus === "Delivered" && inv.status !== "Paid" && (inv.dueAmount ?? 0) > 0
             );
             const seen = new Set<string>();
             const unique: Customer[] = [];

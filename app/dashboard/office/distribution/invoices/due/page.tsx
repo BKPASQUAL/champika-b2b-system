@@ -75,7 +75,7 @@ export default function DistributionDueAlertsPage() {
         const invDate = new Date(inv.date || inv.createdAt);
         const dueDate = new Date(invDate);
         dueDate.setDate(dueDate.getDate() + 30);
-        return dueDate < now && inv.dueAmount > 0;
+        return dueDate < now && inv.dueAmount > 0 && inv.orderStatus === "Delivered";
       })
       .map((inv: any) => {
         const invDate = new Date(inv.date || inv.createdAt);

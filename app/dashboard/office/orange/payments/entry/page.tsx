@@ -118,7 +118,7 @@ export default function OrangePaymentEntryPage() {
         const res = await fetch(`/api/invoices?businessId=${businessId}`);
         if (res.ok) {
           const data = await res.json();
-          const unpaid = data.filter((inv: any) => inv.status !== "Paid" && (inv.dueAmount ?? 0) > 0);
+          const unpaid = data.filter((inv: any) => inv.orderStatus === "Delivered" && inv.status !== "Paid" && (inv.dueAmount ?? 0) > 0);
           const seen = new Set<string>();
           const unique: Customer[] = [];
           for (const inv of unpaid) {
@@ -156,7 +156,7 @@ export default function OrangePaymentEntryPage() {
       if (res.ok) {
         const data = await res.json();
         const filtered: PendingInvoice[] = data
-          .filter((inv: any) => inv.customerId === customerId && inv.status !== "Paid" && (inv.dueAmount ?? 0) > 0)
+          .filter((inv: any) => inv.customerId === customerId && inv.orderStatus === "Delivered" && inv.status !== "Paid" && (inv.dueAmount ?? 0) > 0)
           .map((inv: any) => ({ id: inv.orderId || inv.id, invoiceNo: inv.invoiceNo, date: inv.date || (inv.createdAt?.split("T")[0] ?? ""), totalAmount: inv.totalAmount ?? 0, paidAmount: inv.paidAmount ?? 0, balance: inv.dueAmount ?? 0 }));
         setPendingInvoices(filtered);
         const map: Record<string, InvoiceSettlement> = {};

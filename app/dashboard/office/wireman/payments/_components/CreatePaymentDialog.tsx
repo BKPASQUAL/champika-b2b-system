@@ -90,7 +90,7 @@ export function CreatePaymentDialog({
           if (invRes.ok) {
             const invData = await invRes.json();
             const pending = invData
-              .filter((inv: any) => inv.status !== "Paid" && inv.dueAmount > 0)
+              .filter((inv: any) => inv.orderStatus === "Delivered" && inv.status !== "Paid" && inv.dueAmount > 0)
               .map((inv: any) => ({
                 id: inv.orderId || inv.id,
                 order_number: inv.invoiceNo,

@@ -193,7 +193,7 @@ function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
 
 export function downloadOutstandingReport(invoices: Invoice[], repFilter: string = "all") {
   const outstanding = invoices.filter(
-    (inv) => inv.status !== "Paid" && inv.dueAmount > 0 && (repFilter === "all" || inv.salesRepName === repFilter)
+    (inv) => inv.status !== "Paid" && inv.orderStatus !== "Cancelled" && inv.dueAmount > 0 && (repFilter === "all" || inv.salesRepName === repFilter)
   );
   if (outstanding.length === 0) { toast.info("No outstanding bills found"); return; }
   const doc = buildDoc(outstanding, repFilter);
@@ -205,7 +205,7 @@ export function downloadOutstandingReport(invoices: Invoice[], repFilter: string
 
 export function printOutstandingReport(invoices: Invoice[], repFilter: string = "all") {
   const outstanding = invoices.filter(
-    (inv) => inv.status !== "Paid" && inv.dueAmount > 0 && (repFilter === "all" || inv.salesRepName === repFilter)
+    (inv) => inv.status !== "Paid" && inv.orderStatus !== "Cancelled" && inv.dueAmount > 0 && (repFilter === "all" || inv.salesRepName === repFilter)
   );
   if (outstanding.length === 0) { toast.info("No outstanding bills found"); return; }
 

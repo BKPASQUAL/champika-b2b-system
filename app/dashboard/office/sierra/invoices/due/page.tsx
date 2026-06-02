@@ -79,6 +79,7 @@ export default function SierraDueAlertsPage() {
   const invoices: OverdueInvoice[] = useMemo(() => {
     const today = new Date();
     return rawInvoices
+      .filter((inv: any) => inv.orderStatus === "Delivered")
       .map((inv: any) => {
         const createdDate = new Date(inv.date || inv.createdAt);
         const diffTime = today.getTime() - createdDate.getTime();
