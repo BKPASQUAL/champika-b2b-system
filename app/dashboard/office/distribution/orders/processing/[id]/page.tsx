@@ -3,6 +3,7 @@
 import React, { useState, useEffect, use } from "react";
 import { useOrderLock } from "@/hooks/useOrderLock";
 import { useRouter } from "next/navigation";
+import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import {
   ArrowLeft,
   PackageCheck,
@@ -84,6 +85,22 @@ export default function ProcessOrderPage({
   const [items, setItems] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+
+  // --- User State ---
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("currentUser");
+      if (stored) {
+        try {
+          setCurrentUser(JSON.parse(stored));
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
+  }, []);
 
   // --- Edit Mode State ---
   const [isEditing, setIsEditing] = useState(false);
@@ -181,6 +198,7 @@ export default function ProcessOrderPage({
     const newTotalAmount = items.reduce((acc, item) => acc + item.total, 0);
 
     try {
+      const user = getUserBusinessContext();
       const res = await fetch(`/api/orders/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -189,6 +207,7 @@ export default function ProcessOrderPage({
           items: items,
           deletedItemIds: deletedItemIds,
           totalAmount: newTotalAmount,
+          userId: user?.id || currentUser?.id,
         }),
       });
 
@@ -248,10 +267,11 @@ export default function ProcessOrderPage({
     setProcessing(true);
 
     try {
+      const user = getUserBusinessContext();
       const res = await fetch(`/api/orders/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "Checking" }),
+        body: JSON.stringify({ status: "Checking", userId: user?.id || currentUser?.id }),
       });
 
       if (!res.ok) throw new Error("Failed to update order");

@@ -3,6 +3,7 @@
 import React, { useState, useEffect, use } from "react";
 import { useOrderLock } from "@/hooks/useOrderLock";
 import { useRouter } from "next/navigation";
+import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import {
   ArrowLeft,
   ClipboardCheck,
@@ -86,6 +87,22 @@ export default function CheckOrderPage({
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [lastCheckedInvoice, setLastCheckedInvoice] = useState<string | null>(null);
+
+  // --- User State ---
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("currentUser");
+      if (stored) {
+        try {
+          setCurrentUser(JSON.parse(stored));
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
+  }, []);
 
   useEffect(() => {
     setLastCheckedInvoice(localStorage.getItem("checking_last_invoice"));
@@ -186,6 +203,7 @@ export default function CheckOrderPage({
     const newTotalAmount = items.reduce((acc, item) => acc + item.total, 0);
 
     try {
+      const user = getUserBusinessContext();
       const res = await fetch(`/api/orders/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -194,6 +212,7 @@ export default function CheckOrderPage({
           items: items,
           deletedItemIds: deletedItemIds,
           totalAmount: newTotalAmount,
+          userId: user?.id || currentUser?.id,
         }),
       });
 
@@ -249,10 +268,11 @@ export default function CheckOrderPage({
     setProcessing(true);
 
     try {
+      const user = getUserBusinessContext();
       const res = await fetch(`/api/orders/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "Loading" }),
+        body: JSON.stringify({ status: "Loading", userId: user?.id || currentUser?.id }),
       });
 
       if (!res.ok) throw new Error("Failed to update order");
