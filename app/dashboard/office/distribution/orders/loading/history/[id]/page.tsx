@@ -54,6 +54,7 @@ import {
   printLoadingSheet,
 } from "@/app/dashboard/admin/orders/loading/history/print-loading-sheet";
 import { printBulkInvoices } from "@/app/dashboard/office/distribution/invoices/print-utils";
+import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 
 interface OrderDetail {
   id: string;
@@ -183,8 +184,9 @@ export default function DistributionLoadingSheetDetailPage({
     if (!removeTarget) return;
     setRemovingOrderId(removeTarget.id);
     try {
+      const user = getUserBusinessContext();
       const res = await fetch(
-        `/api/orders/loading/history/${id}/orders/${removeTarget.id}?status=${encodeURIComponent(removeStage)}`,
+        `/api/orders/loading/history/${id}/orders/${removeTarget.id}?status=${encodeURIComponent(removeStage)}&userId=${user?.id || ""}`,
         { method: "DELETE" }
       );
       if (!res.ok) throw new Error("Failed to remove order");
@@ -217,10 +219,11 @@ export default function DistributionLoadingSheetDetailPage({
     if (selectedAddIds.length === 0) return;
     setAddingBusy(true);
     try {
+      const user = getUserBusinessContext();
       const res = await fetch(`/api/orders/loading/history/${id}/orders`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderIds: selectedAddIds }),
+        body: JSON.stringify({ orderIds: selectedAddIds, userId: user?.id }),
       });
       if (!res.ok) throw new Error("Failed to add orders");
       toast.success(`${selectedAddIds.length} order(s) added.`);

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { triggerAgencyBillsForInvoice } from "@/app/lib/inter-branch-billing";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 
 const CHAMPIKA_BUSINESS_IDS = [
   BUSINESS_IDS.CHAMPIKA_RETAIL,
@@ -226,7 +228,7 @@ export async function PATCH(
 
   try {
     const body = await request.json();
-    const { status, action, items, totalAmount } = body;
+    const { status, action, items, totalAmount, userId, reason } = body;
 
     // --- SCENARIO 1: UPDATE ORDER ITEMS (EDIT MODE) ---
     if (action === "update_items" && items) {
@@ -359,6 +361,44 @@ export async function PATCH(
         .single();
 
       if (fetchError) throw fetchError;
+
+      // Log status transition to invoice_history
+      if (currentOrder && currentOrder.status !== status) {
+        const { data: invoice } = await supabaseAdmin
+          .from("invoices")
+          .select("id")
+          .eq("order_id", id)
+          .single();
+
+        if (invoice) {
+          const cookieStore = await cookies();
+          const supabase = createServerClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+            {
+              cookies: {
+                getAll() {
+                  return cookieStore.getAll();
+                },
+                setAll() {},
+              },
+            }
+          );
+          const { data: { user } } = await supabase.auth.getUser();
+          const activeUserId = user?.id || userId || null;
+
+          await supabaseAdmin.from("invoice_history").insert({
+            invoice_id: invoice.id,
+            previous_data: {
+              status: currentOrder.status,
+              new_status: status,
+            },
+            changed_by: activeUserId,
+            change_reason: reason || `Status changed from ${currentOrder.status} to ${status}`,
+            changed_at: new Date().toISOString(),
+          });
+        }
+      }
 
       if (status === "Cancelled" && currentOrder.status !== "Cancelled") {
         const locationIds = await getRepLocationIds(currentOrder.sales_rep_id);

@@ -42,6 +42,8 @@ import {
 import { toast } from "sonner";
 import { LoadingSheetDialog } from "@/app/dashboard/admin/orders/_components/LoadingSheetDialog";
 import { downloadLoadingSummary } from "./print-loading-summary";
+import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+
 
 interface Order {
   id: string;
@@ -176,10 +178,11 @@ export default function DistributionLoadingOrdersPage() {
     if (!selectedSheetId) return;
     setAddingToExistingBusy(true);
     try {
+      const user = getUserBusinessContext();
       const res = await fetch(`/api/orders/loading/history/${selectedSheetId}/orders`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderIds: selectedOrders }),
+        body: JSON.stringify({ orderIds: selectedOrders, userId: user?.id }),
       });
       if (!res.ok) throw new Error("Failed to add orders");
       toast.success(`${selectedOrders.length} order(s) added to loading sheet.`);
@@ -196,6 +199,7 @@ export default function DistributionLoadingOrdersPage() {
 
   const handleCreateLoad = async (formData: any) => {
     try {
+      const user = getUserBusinessContext();
       const res = await fetch("/api/orders/loading", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -205,6 +209,7 @@ export default function DistributionLoadingOrdersPage() {
           helperName: formData.helperName || "",
           date: formData.date,
           orderIds: selectedOrders,
+          userId: user?.id,
         }),
       });
       const result = await res.json();

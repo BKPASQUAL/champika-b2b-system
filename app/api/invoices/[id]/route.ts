@@ -58,6 +58,7 @@ export async function GET(
         orders (
           id,
           sales_rep_id,
+          created_by,
           business_id,
           status,
           order_date,
@@ -66,6 +67,10 @@ export async function GET(
           extra_discount_amount,
           profiles!orders_sales_rep_id_fkey (
             full_name
+          ),
+          creator:profiles!orders_created_by_fkey (
+            full_name,
+            email
           )
         )
       `,
@@ -143,6 +148,7 @@ export async function GET(
         phone: invoice.customers?.phone || "",
         address: invoice.customers?.address || "",
       },
+      createdBy: invoice.orders?.creator?.full_name || invoice.orders?.creator?.email || null,
       salesRep: invoice.orders?.business_id === BUSINESS_IDS.CHAMPIKA_RETAIL
         ? "Champika Hardware - Retail"
         : invoice.orders?.profiles?.full_name || (BUSINESS_NAMES as Record<string, string>)[invoice.orders?.business_id] || "Direct Sale",

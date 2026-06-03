@@ -53,6 +53,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { cn } from "@/lib/utils";
 
 interface OrderItem {
@@ -179,6 +180,7 @@ export default function ProcessOrderPage({
     const newTotalAmount = items.reduce((acc, item) => acc + item.total, 0);
 
     try {
+      const user = getUserBusinessContext();
       const res = await fetch(`/api/orders/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -187,6 +189,7 @@ export default function ProcessOrderPage({
           items: items,
           deletedItemIds: deletedItemIds,
           totalAmount: newTotalAmount,
+          userId: user?.id,
         }),
       });
 
@@ -246,10 +249,11 @@ export default function ProcessOrderPage({
     setProcessing(true);
 
     try {
+      const user = getUserBusinessContext();
       const res = await fetch(`/api/orders/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "Checking" }),
+        body: JSON.stringify({ status: "Checking", userId: user?.id }),
       });
 
       if (!res.ok) throw new Error("Failed to update order");

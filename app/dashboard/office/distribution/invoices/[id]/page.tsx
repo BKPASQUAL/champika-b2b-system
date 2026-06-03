@@ -68,6 +68,9 @@ interface InvoiceHistory {
   changedBy: string;
   reason: string;
   previousTotal: number;
+  previousStatus?: string;
+  newStatus?: string | null;
+  previousItems?: any[];
 }
 
 interface ReturnRecord {
@@ -154,6 +157,7 @@ export default function DistributionViewInvoicePage({
   useEffect(() => {
     fetchInvoice();
     fetchReturns();
+    fetchHistory();
   }, [id, router]);
 
   const fetchHistory = async () => {
@@ -986,6 +990,296 @@ export default function DistributionViewInvoicePage({
             </Card>
           </div>
         </div>
+
+        {/* --- Workflow Progress Tracker --- */}
+        {(() => {
+          const stepsDef = [
+            { key: "Pending", label: "Pending", desc: "Order Placed & Awaiting Approval", icon: Clock },
+            { key: "Approved", label: "Approved", desc: "Approved by Office", icon: CheckCircle2 },
+            { key: "Processing", label: "Processing", desc: "Items Prepared in Warehouse", icon: Package },
+            { key: "Checking", label: "Checking", desc: "SKUs and Quantities Verified", icon: CheckCircle2 },
+            { key: "In Transit", label: "In Transit", desc: "Dispatched with Loading Sheet", icon: Package },
+            { key: "Delivered", label: "Delivered", desc: "Reconciled & Completed", icon: CheckCircle2 },
+          ];
+
+          const currentStatus = invoice?.orderStatus || "Pending";
+          const isCancelled = currentStatus === "Cancelled";
+
+          const statusOrder = ["Pending", "Approved", "Processing", "Checking", "In Transit", "Delivered"];
+
+          const normalizedStatus = (status: string) => {
+            if (status === "Loading") return "In Transit";
+            if (status === "Completed") return "Delivered";
+            return status;
+          };
+
+          const activeNorm = normalizedStatus(currentStatus);
+          const activeIndex = statusOrder.indexOf(activeNorm);
+
+          const sortedLogs = [...historyLogs].sort(
+            (a, b) => new Date(a.changedAt).getTime() - new Date(b.changedAt).getTime()
+          );
+
+          const steps = stepsDef.map((step, index) => {
+            let isCompleted = false;
+            let isActive = false;
+            let completedBy = "";
+            let completedAt = "";
+
+            if (isCancelled) {
+              isActive = false;
+              const transitionLog = sortedLogs.find(log => {
+                const newStat = normalizedStatus(log.newStatus || "");
+                if (newStat === step.key) return true;
+                const reasonLower = log.reason.toLowerCase();
+                return reasonLower.includes(step.key.toLowerCase()) || 
+                       (step.key === "In Transit" && (reasonLower.includes("transit") || reasonLower.includes("lorry"))) ||
+                       (step.key === "Delivered" && (reasonLower.includes("delivered") || reasonLower.includes("reconciliation") || reasonLower.includes("complete")));
+              });
+
+              if (transitionLog) {
+                isCompleted = true;
+                completedBy = transitionLog.changedBy;
+                completedAt = transitionLog.changedAt;
+              } else if (step.key === "Pending") {
+                isCompleted = true;
+                completedBy = invoice.salesRep || "System";
+                completedAt = invoice.date;
+              }
+            } else {
+              if (index < activeIndex) {
+                isCompleted = true;
+              } else if (index === activeIndex) {
+                isActive = true;
+              }
+            }
+
+            if (step.key === "Pending") {
+              completedBy = invoice.createdBy || invoice.salesRep || "Sales Rep";
+              completedAt = invoice.date;
+            } else {
+              const transitionLog = sortedLogs.find(log => {
+                const newStat = normalizedStatus(log.newStatus || "");
+                if (newStat === step.key) return true;
+                const reasonLower = log.reason.toLowerCase();
+                if (step.key === "Approved" && (reasonLower.includes("approved") || reasonLower.includes("approve"))) return true;
+                if (step.key === "Processing" && (reasonLower.includes("processing") || reasonLower.includes("process"))) return true;
+                if (step.key === "Checking" && (reasonLower.includes("checking") || reasonLower.includes("check"))) return true;
+                if (step.key === "In Transit" && (reasonLower.includes("in transit") || reasonLower.includes("transit") || reasonLower.includes("lorry"))) return true;
+                if (step.key === "Delivered" && (reasonLower.includes("delivered") || reasonLower.includes("reconciliation") || reasonLower.includes("complete"))) return true;
+                return false;
+              });
+
+              if (transitionLog) {
+                completedBy = transitionLog.changedBy;
+                completedAt = transitionLog.changedAt;
+                isCompleted = true;
+              } else if (isCompleted) {
+                completedBy = "System / Legacy";
+                completedAt = invoice.date;
+              }
+            }
+
+            return {
+              ...step,
+              isCompleted,
+              isActive,
+              completedBy,
+              completedAt,
+            };
+          });
+
+          const cancellationLog = [...historyLogs].find(log => {
+            const reasonLower = log.reason.toLowerCase();
+            return reasonLower.includes("cancel") || log.newStatus === "Cancelled";
+          });
+
+          return (
+            <Card className="shadow-sm border border-slate-100 overflow-hidden bg-white">
+              <CardHeader className="bg-slate-50/50 border-b py-3 px-4 flex flex-row items-center justify-between">
+                <div className="space-y-0.5">
+                  <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500">
+                    Workflow Tracking
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Monitor status transitions and team accountability
+                  </CardDescription>
+                </div>
+                {isCancelled && (
+                  <Badge variant="destructive" className="animate-pulse px-3 py-1 font-bold text-xs uppercase">
+                    Cancelled
+                  </Badge>
+                )}
+              </CardHeader>
+              <CardContent className="p-4 md:p-6">
+                {isCancelled && cancellationLog && (
+                  <div className="mb-6 p-4 rounded-lg bg-red-50 border border-red-100 flex items-start gap-3">
+                    <div className="h-8 w-8 rounded-full bg-red-100 flex items-center justify-center text-red-600 shrink-0">
+                      <Clock className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-sm text-red-900">Order Cancelled</h4>
+                      <p className="text-xs text-red-700 mt-1">
+                        Cancelled by <span className="font-semibold">{cancellationLog.changedBy}</span> on{" "}
+                        {new Date(cancellationLog.changedAt).toLocaleString()}
+                      </p>
+                      <p className="text-xs text-red-600 italic mt-1">
+                        Reason: {cancellationLog.reason}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Desktop Stepper (lg+) */}
+                <div className="hidden lg:flex items-start justify-between relative w-full">
+                  {/* Progress Line */}
+                  <div className="absolute top-5 left-8 right-8 h-0.5 bg-slate-200 -z-0">
+                    <div 
+                      className="h-full bg-primary transition-all duration-500 ease-in-out"
+                      style={{
+                        width: `${
+                          isCancelled 
+                            ? 0 
+                            : (steps.filter(s => s.isCompleted).length - 1) / (steps.length - 1) * 100
+                        }%`
+                      }}
+                    />
+                  </div>
+
+                  {steps.map((step, idx) => {
+                    const StepIcon = step.icon;
+                    return (
+                      <div key={step.key} className="flex flex-col items-center flex-1 relative z-10 px-2">
+                        {/* Circle Icon */}
+                        <div 
+                          className={cn(
+                            "h-10 w-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 shadow-sm",
+                            step.isCompleted
+                              ? "bg-emerald-500 border-emerald-500 text-white shadow-emerald-100"
+                              : step.isActive
+                              ? "bg-blue-600 border-blue-600 text-white animate-pulse shadow-blue-100 ring-4 ring-blue-100"
+                              : "bg-white border-slate-300 text-slate-400"
+                          )}
+                        >
+                          {step.isCompleted ? (
+                            <CheckCircle2 className="w-5 h-5" />
+                          ) : (
+                            <StepIcon className="w-5 h-5" />
+                          )}
+                        </div>
+
+                        {/* Step Label */}
+                        <p 
+                          className={cn(
+                            "text-xs font-bold mt-3 text-center transition-colors",
+                            step.isCompleted
+                              ? "text-slate-800"
+                              : step.isActive
+                              ? "text-blue-600"
+                              : "text-slate-500"
+                          )}
+                        >
+                          {step.label}
+                        </p>
+                        
+                        {/* Step Description */}
+                        <p className="text-[10px] text-muted-foreground text-center mt-0.5 max-w-[120px]">
+                          {step.desc}
+                        </p>
+
+                        {/* Completion Info */}
+                        {step.isCompleted && step.completedAt && (
+                          <div className="mt-2 text-[9px] text-slate-500 bg-slate-50 border rounded px-1.5 py-0.5 text-center leading-normal">
+                            <span className="font-semibold block text-slate-700 max-w-[100px] truncate" title={step.completedBy}>
+                              {step.completedBy}
+                            </span>
+                            <span className="text-[8px] text-slate-400 block mt-0.5">
+                              {new Date(step.completedAt).toLocaleString(undefined, {
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit"
+                              })}
+                            </span>
+                          </div>
+                        )}
+
+                        {step.isActive && (
+                          <span className="mt-2 text-[9px] bg-blue-50 text-blue-600 border border-blue-100 rounded px-1.5 py-0.5 font-bold uppercase tracking-wider scale-90">
+                            Active
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Mobile/Tablet Timeline (<lg) */}
+                <div className="lg:hidden space-y-6 relative before:absolute before:inset-y-2 before:left-5 before:w-0.5 before:bg-slate-200">
+                  {steps.map((step, idx) => {
+                    const StepIcon = step.icon;
+                    return (
+                      <div key={step.key} className="relative flex gap-4 pl-1">
+                        {/* Icon indicator */}
+                        <div 
+                          className={cn(
+                            "w-9 h-9 rounded-full flex items-center justify-center border-2 z-10 shrink-0 shadow-sm",
+                            step.isCompleted
+                              ? "bg-emerald-500 border-emerald-500 text-white"
+                              : step.isActive
+                              ? "bg-blue-600 border-blue-600 text-white ring-4 ring-blue-100 animate-pulse"
+                              : "bg-white border-slate-300 text-slate-400"
+                          )}
+                        >
+                          {step.isCompleted ? (
+                            <CheckCircle2 className="w-4 h-4" />
+                          ) : (
+                            <StepIcon className="w-4 h-4" />
+                          )}
+                        </div>
+
+                        {/* Step details */}
+                        <div className="space-y-1 py-0.5 flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h4 
+                              className={cn(
+                                "text-sm font-bold",
+                                step.isCompleted
+                                  ? "text-slate-800"
+                                  : step.isActive
+                                  ? "text-blue-600"
+                                  : "text-slate-500"
+                              )}
+                            >
+                              {step.label}
+                            </h4>
+                            {step.isActive && (
+                              <Badge variant="secondary" className="bg-blue-50 text-blue-600 border border-blue-100 text-[9px] px-1.5 py-0">
+                                Active
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground">{step.desc}</p>
+                          
+                          {/* Completed Details */}
+                          {step.isCompleted && step.completedAt && (
+                            <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
+                              <span>by <span className="font-semibold text-slate-700">{step.completedBy}</span></span>
+                              <span className="text-slate-300">|</span>
+                              <span className="text-slate-400">
+                                {new Date(step.completedAt).toLocaleString()}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })()}
       </div>
     </div>
   );

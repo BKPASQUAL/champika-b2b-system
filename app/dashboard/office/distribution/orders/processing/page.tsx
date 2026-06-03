@@ -51,6 +51,7 @@ import { toast } from "sonner";
 import { Order, OrderStatus } from "../types";
 import { downloadLoadingSummary } from "../loading/print-loading-summary";
 import { printBulkInvoices } from "@/app/lib/invoice-print";
+import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 
 interface LorryGroup {
   id: string;
@@ -177,10 +178,11 @@ export default function DistributionProcessingOrdersPage() {
     await Promise.all(
       selectedOrders.map(async (id) => {
         try {
+          const user = getUserBusinessContext();
           const res = await fetch(`/api/orders/${id}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ status: targetStatus }),
+            body: JSON.stringify({ status: targetStatus, userId: user?.id }),
           });
           if (res.ok) successCount++;
           else failCount++;
@@ -204,10 +206,11 @@ export default function DistributionProcessingOrdersPage() {
     await Promise.all(
       selectedOrders.map(async (id) => {
         try {
+          const user = getUserBusinessContext();
           const res = await fetch(`/api/orders/${id}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ status: "Checking" }),
+            body: JSON.stringify({ status: "Checking", userId: user?.id }),
           });
           if (res.ok) successCount++;
           else failCount++;

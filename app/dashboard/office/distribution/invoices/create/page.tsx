@@ -55,6 +55,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
+import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 
 // --- Types ---
 
@@ -396,6 +397,7 @@ export default function CreateDistributionInvoicePage() {
 
     setSubmitting(true);
 
+    const user = getUserBusinessContext();
     const invoiceData = {
       businessId: distributionBusinessId, // Locked to Distribution
       customerId,
@@ -411,8 +413,9 @@ export default function CreateDistributionInvoicePage() {
       status: "Unpaid", // Default payment status
       paidAmount: 0, // Default paid amount
       dueAmount: grandTotal, // Initial due
-      performedByName: null,
-      performedByEmail: null,
+      userId: user?.id || null,
+      performedByName: user?.name || null,
+      performedByEmail: user?.email || null,
     };
 
     try {

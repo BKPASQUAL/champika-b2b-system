@@ -2,6 +2,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 
 // Validation Schema
 const createLoadSchema = z.object({
@@ -10,7 +12,9 @@ const createLoadSchema = z.object({
   helperName: z.string().optional().or(z.literal("")),
   date: z.string(),
   orderIds: z.array(z.string()).min(1, "Select at least one order"),
+  userId: z.string().optional(),
 });
+
 
 export async function GET(request: NextRequest) {
   try {
@@ -102,6 +106,17 @@ export async function POST(request: NextRequest) {
 
     if (loadError) throw loadError;
 
+    // Fetch previous statuses & associated invoices before updating
+    const { data: previousOrders } = await supabaseAdmin
+      .from("orders")
+      .select("id, status")
+      .in("id", val.orderIds);
+
+    const { data: invoices } = await supabaseAdmin
+      .from("invoices")
+      .select("id, order_id")
+      .in("order_id", val.orderIds);
+
     // Update Orders
     const { error: updateError } = await supabaseAdmin
       .from("orders")
@@ -112,6 +127,42 @@ export async function POST(request: NextRequest) {
       .in("id", val.orderIds);
 
     if (updateError) throw updateError;
+
+    // Log status transitions to invoice_history
+    if (invoices && previousOrders) {
+      const cookieStore = await cookies();
+      const supabase = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          cookies: {
+            getAll() {
+              return cookieStore.getAll();
+            },
+            setAll() {},
+          },
+        }
+      );
+      const { data: { user } } = await supabase.auth.getUser();
+      const activeUserId = user?.id || val.userId || null;
+
+      for (const inv of invoices) {
+        const prevOrder = previousOrders.find((o) => o.id === inv.order_id);
+        const prevStatus = prevOrder ? prevOrder.status : "Pending";
+        if (prevStatus !== "In Transit") {
+          await supabaseAdmin.from("invoice_history").insert({
+            invoice_id: inv.id,
+            previous_data: {
+              status: prevStatus,
+              new_status: "In Transit",
+            },
+            changed_by: activeUserId,
+            change_reason: `Assigned to loading sheet ${loadIdStr} and status set to In Transit`,
+            changed_at: new Date().toISOString(),
+          });
+        }
+      }
+    }
 
     return NextResponse.json(
       { message: "Load sheet created successfully", loadId: loadIdStr },

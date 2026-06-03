@@ -39,6 +39,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingSheetDialog } from "../_components/LoadingSheetDialog";
+import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+
 
 interface Order {
   id: string;
@@ -173,10 +175,11 @@ export default function LoadingOrdersPage() {
     if (!selectedSheetId) return;
     setAddingToExistingBusy(true);
     try {
+      const user = getUserBusinessContext();
       const res = await fetch(`/api/orders/loading/history/${selectedSheetId}/orders`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderIds: selectedOrders }),
+        body: JSON.stringify({ orderIds: selectedOrders, userId: user?.id }),
       });
       if (!res.ok) throw new Error("Failed to add orders");
       toast.success(`${selectedOrders.length} order(s) added to loading sheet.`);
@@ -193,6 +196,7 @@ export default function LoadingOrdersPage() {
 
   const handleCreateLoad = async (formData: any) => {
     try {
+      const user = getUserBusinessContext();
       const res = await fetch("/api/orders/loading", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -202,6 +206,7 @@ export default function LoadingOrdersPage() {
           helperName: formData.helperName || "",
           date: formData.date,
           orderIds: selectedOrders,
+          userId: user?.id,
         }),
       });
       const result = await res.json();

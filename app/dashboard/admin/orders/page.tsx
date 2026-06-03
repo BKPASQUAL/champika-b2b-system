@@ -23,6 +23,8 @@ import { Order, SortField, SortOrder, OrderStatus } from "./types";
 import { OrderStats } from "./_components/OrderStats";
 import { OrderFilters } from "./_components/OrderFilters";
 import { OrderTable } from "./_components/OrderTable";
+import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+
 
 export default function OrdersPage() {
   const router = useRouter();
@@ -107,10 +109,11 @@ export default function OrdersPage() {
     setOrders(updatedOrders);
 
     try {
+      const user = getUserBusinessContext();
       const response = await fetch(`/api/orders/${order.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify({ status: newStatus, userId: user?.id }),
       });
 
       if (!response.ok) throw new Error("Failed");

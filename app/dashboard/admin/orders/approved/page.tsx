@@ -35,6 +35,7 @@ import {
   Boxes,
 } from "lucide-react";
 import { toast } from "sonner";
+import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 
 interface LorryOrder {
   id: string;
@@ -176,12 +177,13 @@ export default function ApprovedOrdersPage() {
         if (!res.ok) throw new Error("Failed to create lorry group");
       }
 
+      const user = getUserBusinessContext();
       await Promise.all(
         assignOrderIds.map((id) =>
           fetch(`/api/orders/${id}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ status: "Processing" }),
+            body: JSON.stringify({ status: "Processing", userId: user?.id }),
           })
         )
       );

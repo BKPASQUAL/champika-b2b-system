@@ -302,6 +302,7 @@ export default function DirectBillPage() {
 
     setSubmitting(true);
     try {
+      const user = getUserBusinessContext();
       const res = await fetch("/api/invoices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -318,8 +319,9 @@ export default function DirectBillPage() {
           orderStatus: "Delivered",  // always Delivered for direct bills
           paymentStatus: "Unpaid",
           paidAmount: 0,
-          performedByName: currentUserName,
-          performedByEmail: null,
+          userId: user?.id || null,
+          performedByName: user?.name || null,
+          performedByEmail: user?.email || null,
         }),
       });
 

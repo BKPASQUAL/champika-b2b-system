@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { triggerAgencyBillsForInvoice } from "@/app/lib/inter-branch-billing";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 
 const CHAMPIKA_BUSINESS_IDS = [
   BUSINESS_IDS.CHAMPIKA_RETAIL,
@@ -22,6 +24,13 @@ export async function POST(request: NextRequest) {
     // 1. Process Each Order Update
     for (const update of updates) {
       const { orderId, status, finalAmount, paymentStatus } = update;
+
+      // Fetch current status before updating
+      const { data: currentOrder } = await supabaseAdmin
+        .from("orders")
+        .select("status")
+        .eq("id", orderId)
+        .single();
 
       // A. Update Order Status
       // Processing, Checking, Loading keep load_id so the lorry is remembered.
@@ -63,19 +72,49 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (invoice) {
+        const cookieStore = await cookies();
+        const supabase = createServerClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          {
+            cookies: {
+              getAll() {
+                return cookieStore.getAll();
+              },
+              setAll() {},
+            },
+          }
+        );
+        const { data: { user } } = await supabase.auth.getUser();
+        const activeUserId = user?.id || userId || null;
+
+        // Log status transition if changed
+        if (currentOrder && currentOrder.status !== finalStatus) {
+          await supabaseAdmin.from("invoice_history").insert({
+            invoice_id: invoice.id,
+            previous_data: {
+              status: currentOrder.status,
+              new_status: finalStatus,
+            },
+            changed_by: activeUserId,
+            change_reason: `Reconciliation: Status updated from ${currentOrder.status} to ${finalStatus}`,
+            changed_at: new Date().toISOString(),
+          });
+        }
+
         // Check if the amount passed from frontend differs from DB
         // (In the read-only UI flow, this likely won't trigger unless data changed mid-flight,
         // but it serves as a robust backend check)
         if (invoice.total_amount !== finalAmount) {
           // --- Audit Logging (If User ID Provided) ---
-          if (userId) {
+          if (activeUserId) {
             await supabaseAdmin.from("invoice_history").insert({
               invoice_id: invoice.id,
               previous_data: {
                 total_amount: invoice.total_amount,
                 status: "Reconciling",
               },
-              changed_by: userId, // Log the user
+              changed_by: activeUserId, // Log the user
               change_reason: `Reconciliation: Amount adjusted from ${invoice.total_amount} to ${finalAmount}`,
               changed_at: new Date().toISOString(),
             });

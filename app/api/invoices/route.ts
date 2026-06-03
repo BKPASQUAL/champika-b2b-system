@@ -57,6 +57,7 @@ const invoiceSchema = z.object({
   // Performer info (logged-in user who created this invoice)
   performedByName: z.string().optional().nullable(),
   performedByEmail: z.string().optional().nullable(),
+  userId: z.string().optional().nullable(),
 });
 
 // --- GET: Fetch All Invoices ---
@@ -284,7 +285,7 @@ export async function POST(request: NextRequest) {
         status: val.orderStatus,
         total_amount: val.grandTotal,
         notes: val.notes || null,
-        created_by: val.salesRepId,
+        created_by: val.userId || val.salesRepId,
         business_id: resolvedBusinessId,
         extra_discount_percent: val.extraDiscountPercent,
         extra_discount_amount: val.extraDiscountAmount,
@@ -460,6 +461,19 @@ export async function POST(request: NextRequest) {
     }
 
     if (invoiceError) throw invoiceError;
+
+    // Log initial creation to invoice_history
+    const activeUserId = val.userId || val.salesRepId || null;
+    await supabaseAdmin.from("invoice_history").insert({
+      invoice_id: invoiceData.id,
+      previous_data: {
+        status: null,
+        new_status: val.orderStatus,
+      },
+      changed_by: activeUserId,
+      change_reason: `Order Placed & Awaiting Approval`,
+      changed_at: new Date().toISOString(),
+    });
 
     // 7. Record Payment
     if (val.paidAmount > 0) {

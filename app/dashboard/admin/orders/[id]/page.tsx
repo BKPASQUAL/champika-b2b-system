@@ -84,6 +84,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
 import { printOrder } from "@/app/lib/order-html";
+import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 
 interface Product {
   id: string;
@@ -444,6 +445,7 @@ export default function ViewOrderPage({
     const totalAmount = items.reduce((acc, item) => acc + (item.total || 0), 0);
 
     try {
+      const user = getUserBusinessContext();
       const res = await fetch(`/api/orders/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -454,6 +456,7 @@ export default function ViewOrderPage({
           deletedItemIds: Array.from(deletedItemIds),
           totalAmount,
           orderDate: billingDate,
+          userId: user?.id,
         }),
       });
 
@@ -475,10 +478,11 @@ export default function ViewOrderPage({
   const executeApprove = async () => {
     setProcessing(true);
     try {
+      const user = getUserBusinessContext();
       const res = await fetch(`/api/orders/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "Approved" }),
+        body: JSON.stringify({ status: "Approved", userId: user?.id }),
       });
       if (!res.ok) throw new Error("Failed to approve order");
       toast.success("Order Approved!");
@@ -494,10 +498,11 @@ export default function ViewOrderPage({
   const executeReject = async () => {
     setProcessing(true);
     try {
+      const user = getUserBusinessContext();
       const res = await fetch(`/api/orders/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "Cancelled" }),
+        body: JSON.stringify({ status: "Cancelled", userId: user?.id }),
       });
       if (!res.ok) throw new Error("Failed to cancel order");
       toast.success("Order Cancelled.");
@@ -514,10 +519,11 @@ export default function ViewOrderPage({
     if (!targetStage) return;
     setProcessing(true);
     try {
+      const user = getUserBusinessContext();
       const res = await fetch(`/api/orders/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: targetStage }),
+        body: JSON.stringify({ status: targetStage, userId: user?.id }),
       });
       if (!res.ok) throw new Error("Failed to move order");
       toast.success(`Order moved to ${targetStage}.`);
