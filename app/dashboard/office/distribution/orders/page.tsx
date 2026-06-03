@@ -28,6 +28,14 @@ import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 export default function OrdersPage() {
   const router = useRouter();
 
+  // Redirect non-admin users away from this page
+  React.useEffect(() => {
+    const user = getUserBusinessContext();
+    if (user && user.role !== "admin") {
+      router.replace("/dashboard/office/distribution/orders/pending");
+    }
+  }, [router]);
+
   // Filters State
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");

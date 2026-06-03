@@ -289,7 +289,10 @@ export function AppSidebar({
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-4 py-4">
         <div className="space-y-4">
-          {navSections.map((section, sectionIdx) => (
+          {navSections.map((section, sectionIdx) => {
+            const visibleItems = section.items.filter((item: any) => !item.adminOnly || isAdmin);
+            if (visibleItems.length === 0) return null;
+            return (
             <div key={sectionIdx}>
               {section.title && (
                 <h3 className="mb-2 px-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -297,7 +300,7 @@ export function AppSidebar({
                 </h3>
               )}
               <div className="space-y-1">
-                {section.items.filter((item: any) => !item.adminOnly || isAdmin).map((item) => {
+                {visibleItems.map((item) => {
                   const Icon = item.icon;
                   const isActive = pathname === item.href;
 
@@ -331,7 +334,8 @@ export function AppSidebar({
                 })}
               </div>
             </div>
-          ))}
+            );
+          })}
 
           {/* Account Settings nav item */}
           <div className="border-t pt-3 mt-1">

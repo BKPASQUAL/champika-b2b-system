@@ -15,7 +15,8 @@
       "Bash(Select-Object -ExpandProperty FullName)",
       "Bash(Get-ChildItem -Path . -Directory)",
       "Bash(xargs ls -la)",
-      "Bash(grep -E \"\\\\.ts$\")"
+      "Bash(grep -E \"\\\\.ts$\")",
+      "Bash(business\")"
     ],
     "additionalDirectories": [
       "\\tmp",

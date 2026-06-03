@@ -272,7 +272,10 @@ export function MobileNav({
           {/* ── Navigation ─────────────────────────────────── */}
           <nav className="flex-1 overflow-y-auto px-3 py-4">
             <div className="space-y-5">
-              {navSections.map((section, sectionIdx) => (
+              {navSections.map((section, sectionIdx) => {
+                const visibleItems = section.items.filter((item: any) => !item.adminOnly || isAdmin);
+                if (visibleItems.length === 0) return null;
+                return (
                 <div key={sectionIdx}>
                   {section.title && (
                     <p className="mb-1.5 px-3 text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
@@ -280,7 +283,7 @@ export function MobileNav({
                     </p>
                   )}
                   <div className="space-y-0.5">
-                    {section.items.filter((item: any) => !item.adminOnly || isAdmin).map((item) => {
+                    {visibleItems.map((item) => {
                       const Icon = item.icon;
                       const isActive = pathname === item.href;
                       return (
@@ -304,7 +307,8 @@ export function MobileNav({
                     })}
                   </div>
                 </div>
-              ))}
+                );
+              })}
 
               {/* Account Settings nav item */}
               <div className="border-t pt-4">
