@@ -66,9 +66,13 @@ interface LorryGroup {
 
 const LOCK_EXPIRE_MS = 30 * 60 * 1000;
 
-const STATUS_OPTIONS: { value: OrderStatus; label: string }[] = [
+const STATUS_OPTIONS_ADMIN: { value: OrderStatus; label: string }[] = [
   { value: "Approved", label: "Approved" },
   { value: "Pending", label: "Pending" },
+];
+
+const STATUS_OPTIONS_OFFICE: { value: OrderStatus; label: string }[] = [
+  { value: "Approved", label: "Approved" },
 ];
 
 export default function DistributionProcessingOrdersPage() {
@@ -92,6 +96,7 @@ export default function DistributionProcessingOrdersPage() {
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [targetStatus, setTargetStatus] = useState<OrderStatus>("Approved");
   const [changingStatus, setChangingStatus] = useState(false);
+  const [isOffice, setIsOffice] = useState(true);
 
   const [assignLorryOpen, setAssignLorryOpen] = useState(false);
   const [pickedLorry, setPickedLorry] = useState("");
@@ -118,7 +123,11 @@ export default function DistributionProcessingOrdersPage() {
     }
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    fetchData();
+    const user = getUserBusinessContext();
+    setIsOffice(user?.role === "office");
+  }, [fetchData]);
 
   const isOrderLocked = (order: Order) =>
     !!order.lockedBy && !!order.lockedAt &&
@@ -734,7 +743,7 @@ export default function DistributionProcessingOrdersPage() {
                 <SelectValue placeholder="Select new status" />
               </SelectTrigger>
               <SelectContent>
-                {STATUS_OPTIONS.map((opt) => (
+                {(isOffice ? STATUS_OPTIONS_OFFICE : STATUS_OPTIONS_ADMIN).map((opt) => (
                   <SelectItem key={opt.value} value={opt.value}>
                     {opt.label}
                   </SelectItem>
