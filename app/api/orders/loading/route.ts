@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
         status,
         total_amount,
         order_date,
+        notes,
         customers (
           shop_name,
           route
@@ -39,6 +40,7 @@ export async function GET(request: NextRequest) {
           full_name
         ),
         invoices (
+          id,
           invoice_no
         )
       `
@@ -56,17 +58,21 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
 
-    const formattedOrders = (orders ?? []).map((order: any) => ({
-      id: order.id,
-      orderId: order.order_id,
-      invoiceNo: order.invoices?.[0]?.invoice_no || order.invoice_no || null,
-      shopName: order.customers?.shop_name || "Unknown",
-      route: order.customers?.route || "-",
-      salesRepName: order.profiles?.full_name || "Unknown",
-      totalAmount: order.total_amount,
-      status: order.status,
-      date: order.order_date,
-    }));
+    // Filter out orders that have a pending cancellation request
+    const formattedOrders = (orders ?? [])
+      .filter((order: any) => !order.notes?.includes("[CANCEL_REQUEST:"))
+      .map((order: any) => ({
+        id: order.id,
+        orderId: order.order_id,
+        invoiceId: order.invoices?.[0]?.id || null,
+        invoiceNo: order.invoices?.[0]?.invoice_no || order.invoice_no || null,
+        shopName: order.customers?.shop_name || "Unknown",
+        route: order.customers?.route || "-",
+        salesRepName: order.profiles?.full_name || "Unknown",
+        totalAmount: order.total_amount,
+        status: order.status,
+        date: order.order_date,
+      }));
 
     return NextResponse.json(formattedOrders);
   } catch (error: any) {

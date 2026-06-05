@@ -138,10 +138,23 @@ export async function POST(
       }
     }
 
-    // 8. Mark order as Cancelled
+    // 8. Mark order as Cancelled and strip cancel request pattern from notes
+    const { data: orderData } = await supabaseAdmin
+      .from("orders")
+      .select("notes")
+      .eq("id", invoice.order_id)
+      .single();
+
+    const cleanNotes = orderData?.notes
+      ? orderData.notes.replace(/\[CANCEL_REQUEST:\s*.*?\]\s*/g, "").trim()
+      : null;
+
     await supabaseAdmin
       .from("orders")
-      .update({ status: "Cancelled" })
+      .update({
+        status: "Cancelled",
+        notes: cleanNotes || null,
+      })
       .eq("id", invoice.order_id);
 
     // 9. Save cancellation snapshot to history

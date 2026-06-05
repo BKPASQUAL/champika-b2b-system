@@ -48,6 +48,7 @@ import {
 interface OrderRow {
   id: string;
   orderId: string;
+  invoiceId?: string | null;
   invoiceNo: string | null;
   totalAmount: number;
 }
@@ -330,12 +331,31 @@ export default function DistributionDeliveryHistoryPage() {
                                 {load.orders.length === 0 ? (
                                   <span className="text-xs text-muted-foreground">No orders</span>
                                 ) : (
-                                  load.orders.map((o) => (
-                                    <span key={o.id} className="flex items-center gap-1 text-xs font-mono bg-white border border-slate-200 text-slate-700 px-2 py-0.5 rounded">
-                                      <FileText className="h-3 w-3 text-indigo-400" />
-                                      {o.invoiceNo || o.orderId}
-                                    </span>
-                                  ))
+                                  load.orders.map((o) => {
+                                    const hasInvoice = !!o.invoiceId;
+                                    return (
+                                      <button
+                                        key={o.id}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (hasInvoice) {
+                                            window.open(`/dashboard/office/distribution/invoices/${o.invoiceId}`, "_blank");
+                                          } else {
+                                            toast.error("Invoice details not available");
+                                          }
+                                        }}
+                                        className={`flex items-center gap-1 text-xs font-mono bg-white border border-slate-200 text-slate-700 px-2 py-0.5 rounded transition-all ${
+                                          hasInvoice
+                                            ? "hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-300 cursor-pointer"
+                                            : "opacity-60 cursor-not-allowed"
+                                        }`}
+                                        title={hasInvoice ? "Click to view invoice" : "Invoice not available"}
+                                      >
+                                        <FileText className="h-3 w-3 text-indigo-400" />
+                                        {o.invoiceNo || o.orderId}
+                                      </button>
+                                    );
+                                  })
                                 )}
                               </div>
                             </TableCell>

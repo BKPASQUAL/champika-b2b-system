@@ -28,6 +28,7 @@ export interface Order {
   salesRep: string;
   lockedBy?: string | null;
   lockedAt?: string | null;
+  notes?: string | null;
 }
 
 export type SortField =

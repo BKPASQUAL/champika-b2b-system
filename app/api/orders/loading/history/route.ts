@@ -42,6 +42,27 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
 
+    // A. Gather all order IDs across all fetched sheets
+    const orderIds = loadingSheets?.flatMap((sheet: any) => sheet.orders?.map((o: any) => o.id) || []) || [];
+
+    // B. Query matching invoices to retrieve their database IDs
+    let invoicesMap: Record<string, { id: string; invoice_no: string }> = {};
+    if (orderIds.length > 0) {
+      const { data: invoices, error: invoiceError } = await supabaseAdmin
+        .from("invoices")
+        .select("id, invoice_no, order_id")
+        .in("order_id", orderIds);
+
+      if (!invoiceError && invoices) {
+        invoices.forEach((inv: any) => {
+          invoicesMap[inv.order_id] = {
+            id: inv.id,
+            invoice_no: inv.invoice_no,
+          };
+        });
+      }
+    }
+
     // Format the response
     const formattedHistory = loadingSheets.map((sheet: any) => ({
       id: sheet.id,
@@ -60,7 +81,8 @@ export async function GET(request: NextRequest) {
       orders: sheet.orders?.map((o: any) => ({
         id: o.id,
         orderId: o.order_id,
-        invoiceNo: o.invoice_no || null,
+        invoiceId: invoicesMap[o.id]?.id || null,
+        invoiceNo: invoicesMap[o.id]?.invoice_no || o.invoice_no || null,
         totalAmount: o.total_amount || 0,
       })) || [],
       createdAt: sheet.created_at,

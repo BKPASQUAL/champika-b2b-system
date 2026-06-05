@@ -47,6 +47,7 @@ import {
   Plus,
   Truck,
   ArrowRight,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -60,6 +61,7 @@ interface OrderDetail {
   id: string;
   orderId: string;
   invoiceNo: string;
+  invoiceId?: string;
   totalAmount: number;
   originalAmount?: number;
   status: string;
@@ -513,8 +515,21 @@ export default function LoadingSheetDetailPage({
                   return (
                     <TableRow key={order.id}>
                       <TableCell className="font-medium font-mono">
-                        {order.orderId}
-                        <div className="text-xs text-muted-foreground">{order.invoiceNo}</div>
+                        <span className="text-xs text-muted-foreground block">Order: {order.orderId}</span>
+                        {order.invoiceId ? (
+                          <button
+                            onClick={() => window.open(`/dashboard/admin/invoices/${order.invoiceId}`, "_blank")}
+                            className="text-sm font-bold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1 mt-0.5"
+                            title="Click to view invoice"
+                          >
+                            <FileText className="h-3.5 w-3.5" />
+                            {order.invoiceNo}
+                          </button>
+                        ) : (
+                          <span className="text-sm font-semibold text-slate-700 block mt-0.5">
+                            {order.invoiceNo}
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="font-medium">{order.customer.shopName}</div>

@@ -19,18 +19,31 @@ const supabaseServiceRoleKey = envVars["SUPABASE_SERVICE_ROLE_KEY"];
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
 
 async function main() {
-  const { data, error } = await supabaseAdmin
-    .from("order_items")
+  const { data: ordersData, error: ordersError } = await supabaseAdmin
+    .from("orders")
     .select("*")
     .limit(1);
 
-  if (error) {
-    console.error("Error:", error);
-    return;
+  if (ordersError) {
+    console.error("Orders Error:", ordersError);
+  } else if (ordersData && ordersData.length > 0) {
+    console.log("Orders schema fields:", Object.keys(ordersData[0]));
+  } else {
+    console.log("No orders found");
   }
 
-  console.log("Single order item schema fields:");
-  console.log(Object.keys(data[0]));
+  const { data: invoicesData, error: invoicesError } = await supabaseAdmin
+    .from("invoices")
+    .select("*")
+    .limit(1);
+
+  if (invoicesError) {
+    console.error("Invoices Error:", invoicesError);
+  } else if (invoicesData && invoicesData.length > 0) {
+    console.log("Invoices schema fields:", Object.keys(invoicesData[0]));
+  } else {
+    console.log("No invoices found");
+  }
 }
 
 main();

@@ -97,6 +97,7 @@ export async function GET(request: NextRequest) {
         salesRep: repName,
         lockedBy: order.locked_by ?? null,
         lockedAt: order.locked_at ?? null,
+        notes: order.notes ?? null,
       };
     });
 

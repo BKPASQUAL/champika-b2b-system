@@ -26,6 +26,12 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Search,
   Filter,
   Truck,
@@ -38,6 +44,8 @@ import {
   MapPin,
   Download,
   FolderOpen,
+  Eye,
+  MoreHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingSheetDialog } from "@/app/dashboard/admin/orders/_components/LoadingSheetDialog";
@@ -48,6 +56,7 @@ import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 interface Order {
   id: string;
   orderId: string;
+  invoiceId?: string;
   invoiceNo?: string;
   shopName: string;
   route: string;
@@ -358,7 +367,14 @@ export default function DistributionLoadingOrdersPage() {
                           onCheckedChange={() => toggleSelectOrder(order.id)}
                           onClick={(e) => e.stopPropagation()}
                         />
-                        <div className="flex items-center gap-1 font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded text-xs">
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/dashboard/office/distribution/orders/${order.id}`);
+                          }}
+                          className="flex items-center gap-1 font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded text-xs transition-colors hover:bg-indigo-100 hover:text-indigo-900 cursor-pointer"
+                          title="Click to view order"
+                        >
                           <FileText className="h-3 w-3" />
                           {order.invoiceNo || "N/A"}
                         </div>
@@ -387,9 +403,20 @@ export default function DistributionLoadingOrdersPage() {
                       </div>
                     </div>
 
-                    {/* Row 3: Total */}
-                    <div className="flex justify-end border-t pt-2">
-                      <p className="font-bold text-slate-900">LKR {order.totalAmount.toLocaleString()}</p>
+                    {/* Row 3: Total & Actions */}
+                    <div className="flex justify-between items-center border-t pt-2 mt-1">
+                      <div className="flex gap-1.5" onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs font-semibold text-indigo-600 hover:text-indigo-800 hover:bg-slate-50 px-2"
+                          onClick={() => router.push(`/dashboard/office/distribution/orders/${order.id}`)}
+                        >
+                          <Eye className="w-3.5 h-3.5 mr-1" /> View Order
+                        </Button>
+
+                      </div>
+                      <p className="font-bold text-slate-900 text-sm">LKR {order.totalAmount.toLocaleString()}</p>
                     </div>
                   </div>
                 );
@@ -415,6 +442,7 @@ export default function DistributionLoadingOrdersPage() {
                   <TableHead>Sales Rep</TableHead>
                   <TableHead className="text-right">Total Bill</TableHead>
                   <TableHead className="text-center">Status</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -446,9 +474,17 @@ export default function DistributionLoadingOrdersPage() {
                             onCheckedChange={() => toggleSelectOrder(order.id)}
                           />
                         </TableCell>
-                        <TableCell>
+                        <TableCell
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/dashboard/office/distribution/orders/${order.id}`);
+                          }}
+                        >
                           <div className="flex flex-col">
-                            <span className="font-medium font-mono text-indigo-700 text-xs flex items-center gap-1">
+                            <span
+                              className="font-medium font-mono text-xs flex items-center gap-1 w-fit transition-all text-indigo-700 hover:text-indigo-900 hover:underline cursor-pointer"
+                              title="Click to view order"
+                            >
                               <FileText className="h-3 w-3" />
                               {order.invoiceNo || "N/A"}
                             </span>
@@ -488,6 +524,16 @@ export default function DistributionLoadingOrdersPage() {
                           <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 text-xs">
                             {order.status}
                           </Badge>
+                        </TableCell>
+                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 text-xs hover:bg-slate-100 hover:text-slate-900 border-slate-200"
+                            onClick={() => router.push(`/dashboard/office/distribution/orders/${order.id}`)}
+                          >
+                            <Eye className="w-3.5 h-3.5 mr-1" /> View Order
+                          </Button>
                         </TableCell>
                       </TableRow>
                     );

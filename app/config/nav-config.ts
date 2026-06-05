@@ -93,6 +93,11 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           href: "/dashboard/admin/orders/loading/active",
           icon: Send,
         },
+        {
+          name: "7. Cancel Requests",
+          href: "/dashboard/admin/orders/cancel-requests",
+          icon: AlertCircle,
+        },
       ],
     },
     {

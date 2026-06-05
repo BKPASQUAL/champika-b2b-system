@@ -21,6 +21,7 @@ import {
   Check,
   ChevronsUpDown,
   ArrowRightLeft,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,6 +64,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import {
   Select,
   SelectContent,
@@ -162,6 +169,11 @@ export default function ViewOrderPage({
   const [showSaveConfirmDialog, setShowSaveConfirmDialog] = useState(false);
   const [showMoveStageDialog, setShowMoveStageDialog] = useState(false);
   const [targetStage, setTargetStage] = useState("");
+  const [showCancelRequestDialog, setShowCancelRequestDialog] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [showInvoiceSheet, setShowInvoiceSheet] = useState(false);
+  const [invoiceDetails, setInvoiceDetails] = useState<any>(null);
+  const [loadingInvoice, setLoadingInvoice] = useState(false);
 
   // --- Fetch Order ---
   const fetchOrderDetails = async () => {
@@ -545,6 +557,62 @@ export default function ViewOrderPage({
     }
   };
 
+  const cancelRequestReason = order?.notes
+    ? order.notes.match(/\[CANCEL_REQUEST:\s*(.*?)\]/)?.[1]
+    : null;
+  const isCancelPending = !!cancelRequestReason;
+
+  const handleRequestCancel = async () => {
+    if (!cancelReason.trim()) {
+      toast.error("Please provide a reason for cancellation");
+      return;
+    }
+    setProcessing(true);
+    try {
+      const user = getUserBusinessContext();
+      const res = await fetch(`/api/orders/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "request_cancel",
+          reason: cancelReason,
+          userId: user?.id,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to request cancellation");
+
+      toast.success("Cancellation request submitted successfully");
+      setShowCancelRequestDialog(false);
+      setCancelReason("");
+      fetchOrderDetails();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to request cancellation");
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const openInvoiceSheet = async () => {
+    if (!order?.invoiceId) {
+      toast.error("No invoice associated with this order");
+      return;
+    }
+    setShowInvoiceSheet(true);
+    setLoadingInvoice(true);
+    try {
+      const res = await fetch(`/api/invoices/${order.invoiceId}`);
+      if (!res.ok) throw new Error("Failed to fetch invoice details");
+      const data = await res.json();
+      setInvoiceDetails(data);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to load invoice");
+    } finally {
+      setLoadingInvoice(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center py-16">
@@ -652,7 +720,7 @@ export default function ViewOrderPage({
               >
                 <Printer className="w-4 h-4 mr-2" /> Print
               </Button>
-              {!["Cancelled", "Completed", "Delivered"].includes(order.status) && (
+              {!["Cancelled", "Completed", "Delivered"].includes(order.status) && !isCancelPending && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -661,6 +729,17 @@ export default function ViewOrderPage({
                   className="bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 hover:text-purple-800"
                 >
                   <ArrowRightLeft className="w-4 h-4 mr-2" /> Move Stage
+                </Button>
+              )}
+              {order.status === "Loading" && !isCancelPending && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowCancelRequestDialog(true)}
+                  disabled={processing}
+                  className="bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 hover:text-orange-800"
+                >
+                  <XCircle className="w-4 h-4 mr-2" /> Request Cancellation
                 </Button>
               )}
               {order.status === "Pending" && (
@@ -704,6 +783,30 @@ export default function ViewOrderPage({
           <span>
             <strong>Out-of-stock override is active:</strong> Products with 0 stock are visible and can be added to the order.
           </span>
+        </div>
+      )}
+
+      {isCancelPending && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-amber-50 border border-amber-300 rounded-lg p-4 text-amber-800 shadow-sm animate-pulse">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 shrink-0 text-amber-500 mt-0.5 animate-bounce" />
+            <div>
+              <h4 className="font-semibold text-amber-900">Cancellation request pending Admin approval</h4>
+              <p className="text-sm text-amber-800 mt-1">
+                <strong>Reason:</strong> {cancelRequestReason}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-amber-800 border-amber-300 hover:bg-amber-100"
+              onClick={openInvoiceSheet}
+            >
+              <FileText className="w-4 h-4 mr-1" /> View Associated Invoice
+            </Button>
+          </div>
         </div>
       )}
 
@@ -1574,6 +1677,180 @@ export default function ViewOrderPage({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Request Cancellation Dialog */}
+      {order && (
+        <Dialog open={showCancelRequestDialog} onOpenChange={(open) => { setShowCancelRequestDialog(open); if (!open) setCancelReason(""); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-orange-600">
+                <XCircle className="h-5 w-5" />
+                Request Cancellation for Order #{order.orderId}
+              </DialogTitle>
+              <DialogDescription>
+                Please provide a reason for requesting order/invoice cancellation. An admin must accept this request before the cancellation is finalized.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-2 space-y-2">
+              <Label htmlFor="cancel-reason">Reason for Cancellation</Label>
+              <textarea
+                id="cancel-reason"
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="e.g., Customer requested changes, delivery details incorrect..."
+                className="w-full min-h-[100px] border border-slate-200 rounded-md p-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent resize-none"
+                required
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => { setShowCancelRequestDialog(false); setCancelReason(""); }}
+                disabled={processing}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleRequestCancel}
+                disabled={processing || !cancelReason.trim()}
+                className="bg-orange-600 hover:bg-orange-700 text-white"
+              >
+                {processing ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <XCircle className="w-4 h-4 mr-2" />
+                )}
+                Submit Request
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Invoice Details Sidebar (Sheet) */}
+      <Sheet open={showInvoiceSheet} onOpenChange={setShowInvoiceSheet}>
+        <SheetContent className="sm:max-w-xl overflow-y-auto h-full">
+          <SheetHeader className="pb-4 border-b">
+            <SheetTitle className="text-xl font-bold flex items-center gap-2">
+              <FileText className="w-5 h-5 text-blue-600" />
+              Invoice Details
+            </SheetTitle>
+          </SheetHeader>
+
+          {loadingInvoice ? (
+            <div className="flex justify-center items-center h-[300px]">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : invoiceDetails ? (
+            <div className="py-4 space-y-6">
+              {isCancelPending && (
+                <div className="flex items-start gap-3 bg-amber-50 border border-amber-300 rounded-lg p-4 text-amber-800 shadow-sm">
+                  <AlertTriangle className="h-5 w-5 shrink-0 text-amber-500 mt-0.5 animate-bounce" />
+                  <div>
+                    <h4 className="font-semibold text-amber-900 text-sm">Cancellation Pending Approval</h4>
+                    <p className="text-xs text-amber-800 mt-1">
+                      <strong>Reason:</strong> {cancelRequestReason}
+                    </p>
+                  </div>
+                </div>
+              )}
+              {/* Invoice Meta */}
+              <div className="bg-slate-50 p-4 rounded-lg border space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-muted-foreground uppercase font-semibold">Invoice No</span>
+                  <span className="font-mono font-bold text-sm text-slate-900">{invoiceDetails.invoiceNo}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-muted-foreground uppercase font-semibold">Invoice Date</span>
+                  <span className="text-sm font-medium">{new Date(invoiceDetails.date).toLocaleDateString()}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-muted-foreground uppercase font-semibold">Payment Status</span>
+                  <Badge className={invoiceDetails.status === "Paid" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}>
+                    {invoiceDetails.status}
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Customer Info */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Bill To</h4>
+                <div className="p-3 border rounded-lg bg-slate-50/50">
+                  <p className="font-semibold text-sm">{invoiceDetails.customerName || invoiceDetails.customers?.shop_name}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Rep: {invoiceDetails.salesRepName}</p>
+                </div>
+              </div>
+
+              {/* Items Table */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Items</h4>
+                <div className="border rounded-md overflow-hidden">
+                  <Table>
+                    <TableHeader className="bg-slate-50">
+                      <TableRow>
+                        <TableHead className="text-xs font-semibold">Item</TableHead>
+                        <TableHead className="text-center text-xs font-semibold">Qty</TableHead>
+                        <TableHead className="text-right text-xs font-semibold">Total</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {invoiceDetails.items?.map((item: any) => (
+                        <TableRow key={item.productId || item.sku}>
+                          <TableCell className="py-2.5">
+                            <p className="text-sm font-medium leading-none">{item.productName || item.sku}</p>
+                            <p className="text-[10px] text-muted-foreground font-mono mt-1">{item.sku}</p>
+                          </TableCell>
+                          <TableCell className="text-center py-2.5 text-sm">
+                            {item.quantity} {item.unit}
+                            {item.freeQuantity > 0 && (
+                              <span className="text-[10px] text-green-600 block">+{item.freeQuantity} free</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right py-2.5 font-mono text-sm font-medium">
+                            LKR {item.total?.toLocaleString()}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+
+              {/* Summary */}
+              <div className="border-t pt-4 space-y-2.5">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="font-medium font-mono">LKR {invoiceDetails.totalAmount?.toLocaleString()}</span>
+                </div>
+                {invoiceDetails.extraDiscountAmount > 0 && (
+                  <div className="flex justify-between text-sm text-red-600">
+                    <span>Discount</span>
+                    <span className="font-medium font-mono">-LKR {invoiceDetails.extraDiscountAmount?.toLocaleString()}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center pt-2 border-t border-dashed">
+                  <span className="font-bold text-sm">Grand Total</span>
+                  <span className="font-bold font-mono text-lg text-blue-600">
+                    LKR {invoiceDetails.totalAmount?.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Paid Amount</span>
+                  <span className="font-medium font-mono text-green-600">LKR {invoiceDetails.paidAmount?.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm pt-1 border-t">
+                  <span className="font-semibold text-slate-700">Due Amount</span>
+                  <span className="font-bold font-mono text-red-600">LKR {invoiceDetails.dueAmount?.toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground text-sm">
+              Failed to load invoice details.
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

@@ -83,6 +83,7 @@ export async function GET(
       salesRep: order.profiles?.full_name || "Unknown",
       salesRepId: order.sales_rep_id,
       customerId: order.customer_id,
+      notes: order.notes,
 
       // Customer Details
       customer: {
@@ -350,6 +351,130 @@ export async function PATCH(
       return NextResponse.json({
         message: "Order items and stock updated successfully",
       });
+    }
+
+    // --- SCENARIO 3: REQUEST INVOICE/ORDER CANCELLATION ---
+    if (action === "request_cancel") {
+      if (!userId) {
+        return NextResponse.json({ error: "Unauthorized: userId is required" }, { status: 401 });
+      }
+      if (!reason) {
+        return NextResponse.json({ error: "Reason is required to request cancellation" }, { status: 400 });
+      }
+
+      // Fetch the order status and notes
+      const { data: order, error: orderError } = await supabaseAdmin
+        .from("orders")
+        .select("status, notes")
+        .eq("id", id)
+        .single();
+
+      if (orderError || !order) {
+        return NextResponse.json({ error: "Order not found" }, { status: 404 });
+      }
+
+      if (order.status !== "Loading") {
+        return NextResponse.json(
+          { error: `Cancellation can only be requested in the Loading stage. Current status is: ${order.status}` },
+          { status: 400 }
+        );
+      }
+
+      if (order.notes?.includes("[CANCEL_REQUEST:")) {
+        return NextResponse.json({ error: "A cancellation request is already pending for this order" }, { status: 400 });
+      }
+
+      // Format notes with the cancel request prefix
+      const currentNotes = order.notes || "";
+      const cleanNotes = currentNotes.includes("[CANCEL_REQUEST:")
+        ? currentNotes.replace(/\[CANCEL_REQUEST:\s*.*?\]\s*/g, "").trim()
+        : currentNotes.trim();
+      const newNotes = `[CANCEL_REQUEST: ${reason}]${cleanNotes ? "\n" + cleanNotes : ""}`;
+
+      // Update the order notes
+      const { error: updateError } = await supabaseAdmin
+        .from("orders")
+        .update({ notes: newNotes })
+        .eq("id", id);
+
+      if (updateError) throw updateError;
+
+      // Find the associated invoice to log history
+      const { data: invoice } = await supabaseAdmin
+        .from("invoices")
+        .select("id")
+        .eq("order_id", id)
+        .single();
+
+      if (invoice) {
+        await supabaseAdmin.from("invoice_history").insert({
+          invoice_id: invoice.id,
+          previous_data: {
+            status: order.status,
+            notes: order.notes,
+          },
+          changed_by: userId,
+          change_reason: `Cancel requested: ${reason}`,
+          changed_at: new Date().toISOString(),
+        });
+      }
+
+      return NextResponse.json({ message: "Cancellation requested successfully" });
+    }
+
+    // --- SCENARIO 4: REJECT CANCELLATION REQUEST ---
+    if (action === "reject_cancel_request") {
+      if (!userId) {
+        return NextResponse.json({ error: "Unauthorized: userId is required" }, { status: 401 });
+      }
+
+      // Fetch the order
+      const { data: order, error: orderError } = await supabaseAdmin
+        .from("orders")
+        .select("status, notes")
+        .eq("id", id)
+        .single();
+
+      if (orderError || !order) {
+        return NextResponse.json({ error: "Order not found" }, { status: 404 });
+      }
+
+      if (!order.notes?.includes("[CANCEL_REQUEST:")) {
+        return NextResponse.json({ error: "No pending cancellation request found for this order" }, { status: 400 });
+      }
+
+      // Strip the cancel request prefix
+      const cleanNotes = order.notes.replace(/\[CANCEL_REQUEST:\s*.*?\]\s*/g, "").trim();
+
+      // Update order notes
+      const { error: updateError } = await supabaseAdmin
+        .from("orders")
+        .update({ notes: cleanNotes || null })
+        .eq("id", id);
+
+      if (updateError) throw updateError;
+
+      // Log to invoice history
+      const { data: invoice } = await supabaseAdmin
+        .from("invoices")
+        .select("id")
+        .eq("order_id", id)
+        .single();
+
+      if (invoice) {
+        await supabaseAdmin.from("invoice_history").insert({
+          invoice_id: invoice.id,
+          previous_data: {
+            status: order.status,
+            notes: order.notes,
+          },
+          changed_by: userId,
+          change_reason: "Cancel request rejected by Admin",
+          changed_at: new Date().toISOString(),
+        });
+      }
+
+      return NextResponse.json({ message: "Cancellation request rejected successfully" });
     }
 
     // --- SCENARIO 2: STATUS UPDATE (APPROVE/REJECT/CANCEL) ---
