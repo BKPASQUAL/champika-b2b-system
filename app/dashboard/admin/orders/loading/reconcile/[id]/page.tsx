@@ -664,7 +664,6 @@ export default function ReconcileLoadPage({
                                     <SelectItem value="Partial">Partial</SelectItem>
                                     <SelectItem value="Returned">Returned</SelectItem>
                                     <SelectItem value="Loading">Reschedule</SelectItem>
-                                    <SelectItem value="Pending">Pending</SelectItem>
                                     <SelectItem value="Cancelled">Cancelled</SelectItem>
                                   </SelectContent>
                                 </Select>

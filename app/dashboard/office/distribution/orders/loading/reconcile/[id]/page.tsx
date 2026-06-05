@@ -666,7 +666,6 @@ export default function OfficeReconcileLoadPage({
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="Pending">Pending</SelectItem>
                                     <SelectItem value="Approved">Approved</SelectItem>
                                     <SelectItem value="Processing">Processing</SelectItem>
                                     <SelectItem value="Checking">Checking</SelectItem>
