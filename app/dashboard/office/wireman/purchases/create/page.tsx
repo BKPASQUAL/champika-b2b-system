@@ -12,6 +12,7 @@ import {
   RefreshCcw,
   X,
   Search,
+  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -150,6 +151,7 @@ export default function CreateWiremanPurchasePage() {
 
   // Items State
   const [items, setItems] = useState<PurchaseItem[]>([]);
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
 
   // --- Dropdown States ---
   const [searchTerm, setSearchTerm] = useState("");
@@ -372,7 +374,12 @@ export default function CreateWiremanPurchasePage() {
       total: total,
     };
 
-    setItems([...items, newItem]);
+    if (editingItemId) {
+      setItems(items.map((i) => i.id === editingItemId ? { ...newItem, id: editingItemId } : i));
+      setEditingItemId(null);
+    } else {
+      setItems([...items, newItem]);
+    }
 
     setCurrentItem({
       productId: "",
@@ -388,8 +395,37 @@ export default function CreateWiremanPurchasePage() {
     setSearchTerm("");
   };
 
-  const handleRemoveItem = (id: string) =>
+  const handleRemoveItem = (id: string) => {
     setItems(items.filter((item) => item.id !== id));
+    if (editingItemId === id) {
+      setEditingItemId(null);
+      setCurrentItem({ productId: "", sku: "", quantity: "", freeQuantity: "", mrp: 0, sellingPrice: 0, unitPrice: "", discountPercent: "", unit: "" });
+      setSearchTerm("");
+    }
+  };
+
+  const handleEditItem = (item: PurchaseItem) => {
+    setCurrentItem({
+      productId: item.productId,
+      sku: item.sku,
+      quantity: item.quantity,
+      freeQuantity: item.freeQuantity,
+      mrp: item.mrp,
+      sellingPrice: item.sellingPrice,
+      unitPrice: item.unitPrice,
+      discountPercent: item.discountPercent,
+      unit: item.unit,
+    });
+    setSearchTerm(item.productName);
+    setEditingItemId(item.id);
+    setTimeout(() => qtyInputRef.current?.focus({ preventScroll: true }), 100);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingItemId(null);
+    setCurrentItem({ productId: "", sku: "", quantity: "", freeQuantity: "", mrp: 0, sellingPrice: 0, unitPrice: "", discountPercent: "", unit: "" });
+    setSearchTerm("");
+  };
 
   // --- Bill Calculations ---
   const totalGross = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
@@ -890,9 +926,20 @@ export default function CreateWiremanPurchasePage() {
                       className="w-full h-9 bg-red-600 hover:bg-red-700"
                       disabled={!currentItem.productId}
                     >
-                      <Plus className="w-4 h-4 mr-2" /> Add
+                      {editingItemId ? <><Pencil className="w-3.5 h-3.5 mr-1" /> Update</> : <><Plus className="w-4 h-4 mr-1" /> Add</>}
                     </Button>
                   </div>
+                  {editingItemId && (
+                    <div className="col-span-1">
+                      <Button
+                        variant="outline"
+                        className="w-full h-9 text-xs"
+                        onClick={handleCancelEdit}
+                      >
+                        <X className="w-3.5 h-3.5 mr-1" /> Cancel
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -922,7 +969,10 @@ export default function CreateWiremanPurchasePage() {
                     </TableRow>
                   ) : (
                     items.map((item) => (
-                      <TableRow key={item.id}>
+                      <TableRow
+                        key={item.id}
+                        className={editingItemId === item.id ? "bg-amber-50 border-l-2 border-l-amber-400" : ""}
+                      >
                         <TableCell>
                           <div className="font-medium">{item.productName}</div>
                           <div className="text-xs text-muted-foreground">{item.sku}</div>
@@ -939,13 +989,23 @@ export default function CreateWiremanPurchasePage() {
                           {item.total.toLocaleString()}
                         </TableCell>
                         <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            onClick={() => handleRemoveItem(item.id)}
-                          >
-                            <Trash2 className="w-4 h-4 text-red-500" />
-                          </Button>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => handleEditItem(item)}
+                              className="hover:bg-amber-100 hover:text-amber-700"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => handleRemoveItem(item.id)}
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))

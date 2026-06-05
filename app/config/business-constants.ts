@@ -33,6 +33,14 @@ export const BUSINESS_ROUTES = {
   [BUSINESS_IDS.SIERRA_AGENCY]: "/dashboard/office/sierra",
 } as const;
 
+export const BUSINESS_PO_PREFIXES: Record<string, string> = {
+  [BUSINESS_IDS.ORANGE_AGENCY]: "O",
+  [BUSINESS_IDS.CHAMPIKA_RETAIL]: "R",
+  [BUSINESS_IDS.CHAMPIKA_DISTRIBUTION]: "D",
+  [BUSINESS_IDS.WIREMAN_AGENCY]: "W",
+  [BUSINESS_IDS.SIERRA_AGENCY]: "S",
+};
+
 export const BUSINESS_THEMES = {
   [BUSINESS_IDS.ORANGE_AGENCY]: {
     primary: "orange",

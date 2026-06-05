@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
+import { BUSINESS_PO_PREFIXES } from "@/app/config/business-constants";
 
 // --- Validation Schemas ---
 
@@ -98,8 +99,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 1. Find Global Main Warehouse and supplier name in parallel
-    const [locationResult, supplierResult, countResult] = await Promise.all([
+    // 1. Find Main Warehouse and last purchase for this business in parallel
+    const [locationResult, lastPurchaseResult] = await Promise.all([
       supabaseAdmin
         .from("locations")
         .select("id")
@@ -107,13 +108,12 @@ export async function POST(request: NextRequest) {
         .eq("name", "Main Warehouse")
         .maybeSingle(),
       supabaseAdmin
-        .from("suppliers")
-        .select("name")
-        .eq("id", val.supplier_id)
-        .single(),
-      supabaseAdmin
         .from("purchases")
-        .select("*", { count: "exact", head: true }),
+        .select("purchase_id")
+        .eq("business_id", val.business_id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ]);
 
     let location = locationResult.data;
@@ -128,13 +128,14 @@ export async function POST(request: NextRequest) {
       location = newLocation;
     }
 
-    // 2. Generate Purchase ID with supplier first letter prefix
-    const supplierPrefix = supplierResult.data?.name
-      ? supplierResult.data.name.trim().charAt(0).toUpperCase()
-      : "";
-
-    const nextId = (countResult.count || 0) + 1001;
-    const purchaseId = `${supplierPrefix}PO-${nextId}`;
+    // 2. Generate business-specific sequential Purchase ID
+    const businessPrefix = BUSINESS_PO_PREFIXES[val.business_id] || "X";
+    let nextId = 1001;
+    if (lastPurchaseResult.data?.purchase_id) {
+      const match = lastPurchaseResult.data.purchase_id.match(/(\d+)$/);
+      if (match) nextId = parseInt(match[1]) + 1;
+    }
+    const purchaseId = `${businessPrefix}PO-${nextId}`;
 
     // 3. Insert Purchase
     const { data: purchase, error: purchaseError } = await supabaseAdmin

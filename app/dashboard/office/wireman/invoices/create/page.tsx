@@ -12,6 +12,8 @@ import {
   Loader2,
   ChevronsUpDown,
   Check,
+  Pencil,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -298,6 +300,7 @@ export default function CreateWiremanInvoicePage() {
   // Items State
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [extraDiscount, setExtraDiscount] = useState<number | string>("");
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
 
   const [currentItem, setCurrentItem] = useState<{
     productId: string;
@@ -493,7 +496,12 @@ export default function CreateWiremanInvoicePage() {
       total: netTotal,
     };
 
-    setItems([...items, newItem]);
+    if (editingItemId) {
+      setItems(items.map((i) => i.id === editingItemId ? { ...newItem, id: editingItemId } : i));
+      setEditingItemId(null);
+    } else {
+      setItems([...items, newItem]);
+    }
 
     setCurrentItem({
       productId: "",
@@ -510,6 +518,32 @@ export default function CreateWiremanInvoicePage() {
 
   const handleRemoveItem = (id: string) => {
     setItems(items.filter((item) => item.id !== id));
+    if (editingItemId === id) {
+      setEditingItemId(null);
+      setCurrentItem({ productId: "", sku: "", quantity: "", freeQuantity: "", unit: "", mrp: 0, unitPrice: 0, discountPercent: 0, stockAvailable: 0 });
+    }
+  };
+
+  const handleEditItem = (item: InvoiceItem) => {
+    const product = products.find((p) => p.id === item.productId);
+    setCurrentItem({
+      productId: item.productId,
+      sku: item.sku,
+      quantity: item.quantity,
+      freeQuantity: item.freeQuantity,
+      unit: item.unit,
+      mrp: item.mrp,
+      unitPrice: item.unitPrice,
+      discountPercent: item.discountPercent,
+      stockAvailable: product?.stock_quantity ?? item.quantity,
+    });
+    setEditingItemId(item.id);
+    setTimeout(() => qtyInputRef.current?.focus({ preventScroll: true }), 100);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingItemId(null);
+    setCurrentItem({ productId: "", sku: "", quantity: "", freeQuantity: "", unit: "", mrp: 0, unitPrice: 0, discountPercent: 0, stockAvailable: 0 });
   };
 
   const handleSaveInvoice = async () => {
@@ -870,15 +904,25 @@ export default function CreateWiremanInvoicePage() {
                 </div>
               </div>
 
-              <Button
-                onClick={handleAddItem}
-                className="w-full bg-red-600 hover:bg-red-700"
-                variant="default"
-                disabled={!currentItem.productId}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add to Bill
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleAddItem}
+                  className="flex-1 bg-red-600 hover:bg-red-700"
+                  variant="default"
+                  disabled={!currentItem.productId}
+                >
+                  {editingItemId ? (
+                    <><Pencil className="w-4 h-4 mr-2" /> Update Item</>
+                  ) : (
+                    <><Plus className="w-4 h-4 mr-2" /> Add to Bill</>
+                  )}
+                </Button>
+                {editingItemId && (
+                  <Button variant="outline" onClick={handleCancelEdit}>
+                    <X className="w-4 h-4 mr-1" /> Cancel
+                  </Button>
+                )}
+              </div>
             </CardContent>
           </Card>
 
@@ -902,7 +946,7 @@ export default function CreateWiremanInvoicePage() {
                       </TableHead>
                       <TableHead className="text-center w-20">Disc%</TableHead>
                       <TableHead className="text-right w-28">Total</TableHead>
-                      <TableHead className="w-12"></TableHead>
+                      <TableHead className="w-20"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -918,7 +962,10 @@ export default function CreateWiremanInvoicePage() {
                       </TableRow>
                     ) : (
                       items.map((item, idx) => (
-                        <TableRow key={item.id}>
+                        <TableRow
+                          key={item.id}
+                          className={editingItemId === item.id ? "bg-amber-50 border-l-2 border-l-amber-400" : ""}
+                        >
                           <TableCell>{idx + 1}</TableCell>
                           <TableCell>
                             <div className="font-medium">
@@ -946,13 +993,23 @@ export default function CreateWiremanInvoicePage() {
                             {item.total.toLocaleString()}
                           </TableCell>
                           <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              onClick={() => handleRemoveItem(item.id)}
-                            >
-                              <Trash2 className="w-4 h-4 text-destructive" />
-                            </Button>
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                onClick={() => handleEditItem(item)}
+                                className="hover:bg-amber-100 hover:text-amber-700"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                onClick={() => handleRemoveItem(item.id)}
+                              >
+                                <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))
