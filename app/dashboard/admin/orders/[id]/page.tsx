@@ -1342,8 +1342,8 @@ export default function ViewOrderPage({
         </div>
 
         {/* RIGHT COLUMN */}
-        <div className="lg:col-span-1 space-y-6">
-          <Card className="sticky top-6">
+        <div className="lg:col-span-1 space-y-6 sticky top-6 self-start">
+          <Card>
             <CardHeader className="pb-4">
               <CardTitle className="text-lg">Order Summary</CardTitle>
             </CardHeader>
@@ -1474,48 +1474,50 @@ export default function ViewOrderPage({
                   </p>
                 ) : (
                   <>
-                    {unpaidInvoices.map((inv) => (
-                      <div
-                        key={inv.id}
-                        className="p-2.5 rounded-md border border-orange-200 bg-white text-sm space-y-1"
-                      >
-                        <div className="flex justify-between items-center">
-                          <span className="font-mono font-semibold text-orange-800 text-xs">
-                            {inv.invoiceNo}
-                          </span>
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] h-4 border-orange-300 text-orange-700"
-                          >
-                            {inv.status}
-                          </Badge>
-                        </div>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-muted-foreground">Invoice Date</span>
-                          <span className="font-medium">
-                            {new Date(inv.date).toLocaleDateString()}{" "}
-                            <span className="text-muted-foreground">
-                              ({Math.floor((Date.now() - new Date(inv.date).getTime()) / 86400000)} days ago)
+                    <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
+                      {unpaidInvoices.map((inv) => (
+                        <div
+                          key={inv.id}
+                          className="p-2.5 rounded-md border border-orange-200 bg-white text-sm space-y-1"
+                        >
+                          <div className="flex justify-between items-center">
+                            <span className="font-mono font-semibold text-orange-800 text-xs">
+                              {inv.invoiceNo}
                             </span>
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-muted-foreground">Due Amount</span>
-                          <span className="font-semibold text-red-600">
-                            LKR {(inv.dueAmount ?? inv.amount).toLocaleString()}
-                          </span>
-                        </div>
-                        {inv.dueDate && (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] h-4 border-orange-300 text-orange-700"
+                            >
+                              {inv.status}
+                            </Badge>
+                          </div>
                           <div className="flex justify-between text-xs">
-                            <span className="text-muted-foreground">Due Date</span>
-                            <span className="font-medium text-orange-700">
-                              {new Date(inv.dueDate).toLocaleDateString()}
+                            <span className="text-muted-foreground">Invoice Date</span>
+                            <span className="font-medium">
+                              {new Date(inv.date).toLocaleDateString()}{" "}
+                              <span className="text-muted-foreground">
+                                ({Math.floor((Date.now() - new Date(inv.date).getTime()) / 86400000)} days ago)
+                              </span>
                             </span>
                           </div>
-                        )}
-                      </div>
-                    ))}
-                    <div className="flex justify-between text-xs font-semibold pt-1 border-t border-orange-200">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-muted-foreground">Due Amount</span>
+                            <span className="font-semibold text-red-600">
+                              LKR {(inv.dueAmount ?? inv.amount).toLocaleString()}
+                            </span>
+                          </div>
+                          {inv.dueDate && (
+                            <div className="flex justify-between text-xs">
+                              <span className="text-muted-foreground">Due Date</span>
+                              <span className="font-medium text-orange-700">
+                                {new Date(inv.dueDate).toLocaleDateString()}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex justify-between text-xs font-semibold pt-2 border-t border-orange-200">
                       <span className="text-orange-700">Total Outstanding</span>
                       <span className="text-red-600">
                         LKR{" "}
