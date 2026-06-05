@@ -88,6 +88,12 @@ export const distributionNavItems: DistNavSection[] = [
         href: "/dashboard/office/distribution/orders/loading/active",
         icon: Send,
       },
+      {
+        name: "7. Cancel Requests",
+        href: "/dashboard/office/distribution/orders/cancel-requests",
+        icon: AlertCircle,
+        adminOnly: true,
+      },
     ],
   },
   {
