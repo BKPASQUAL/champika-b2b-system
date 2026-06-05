@@ -16,7 +16,8 @@
       "Bash(Get-ChildItem -Path . -Directory)",
       "Bash(xargs ls -la)",
       "Bash(grep -E \"\\\\.ts$\")",
-      "Bash(business\")"
+      "Bash(business\")",
+      "Bash(grep -E \"\\\\.\\(ts|tsx|js|jsx\\)$\")"
     ],
     "additionalDirectories": [
       "\\tmp",

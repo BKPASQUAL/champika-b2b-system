@@ -90,6 +90,7 @@ interface PurchaseDetail {
   status: "Ordered" | "Received" | "Cancelled";
   paymentStatus: "Paid" | "Unpaid" | "Partial";
   totalAmount: number;
+  extraDiscount?: number;
   paidAmount: number;
   notes?: string;
   supplier: {
@@ -637,15 +638,52 @@ export default function OrangeViewBillPage({
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4 pt-6">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Bill Total</span>
-                  <span className="font-medium font-mono">
-                    LKR{" "}
-                    {bill.totalAmount.toLocaleString("en-LK", {
-                      minimumFractionDigits: 2,
-                    })}
-                  </span>
-                </div>
+                {(bill.extraDiscount ?? 0) > 0 ? (
+                  <>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Gross Total</span>
+                      <span className="font-medium font-mono">
+                        LKR{" "}
+                        {(bill.totalAmount + (bill.extraDiscount ?? 0)).toLocaleString("en-LK", {
+                          minimumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm text-orange-600">
+                      <span>
+                        Extra Discount{" "}
+                        <span className="text-xs font-mono">
+                          ({((bill.extraDiscount ?? 0) / (bill.totalAmount + (bill.extraDiscount ?? 0)) * 100).toFixed(2)}%)
+                        </span>
+                      </span>
+                      <span className="font-medium font-mono">
+                        - LKR{" "}
+                        {(bill.extraDiscount ?? 0).toLocaleString("en-LK", {
+                          minimumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Net Total</span>
+                      <span className="font-medium font-mono">
+                        LKR{" "}
+                        {bill.totalAmount.toLocaleString("en-LK", {
+                          minimumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Bill Total</span>
+                    <span className="font-medium font-mono">
+                      LKR{" "}
+                      {bill.totalAmount.toLocaleString("en-LK", {
+                        minimumFractionDigits: 2,
+                      })}
+                    </span>
+                  </div>
+                )}
 
                 {bill.paidAmount > 0 && (
                   <div className="flex justify-between text-sm text-emerald-600 mt-2">

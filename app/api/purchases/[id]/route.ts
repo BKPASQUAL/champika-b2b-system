@@ -60,6 +60,7 @@ export async function GET(
       status: purchase.status,
       paymentStatus: purchase.payment_status,
       totalAmount: purchase.total_amount,
+      extraDiscount: purchase.extra_discount || 0,
       paidAmount: purchase.paid_amount || 0,
 
       supplier: {

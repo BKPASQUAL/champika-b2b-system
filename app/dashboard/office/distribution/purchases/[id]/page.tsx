@@ -52,6 +52,7 @@ interface PurchaseDetail {
   status: "Ordered" | "Received" | "Cancelled";
   paymentStatus: "Paid" | "Unpaid" | "Partial";
   totalAmount: number;
+  extraDiscount?: number;
   paidAmount: number;
   supplier: {
     name: string;
@@ -522,6 +523,23 @@ export default function DistributionViewPurchasePage({
                     })}
                   </span>
                 </div>
+
+                {(purchase.extraDiscount ?? 0) > 0 && (
+                  <div className="flex justify-between text-sm text-orange-600">
+                    <span>
+                      Extra Discount{" "}
+                      <span className="text-xs font-mono">
+                        ({((purchase.extraDiscount ?? 0) / (purchase.totalAmount + (purchase.extraDiscount ?? 0)) * 100).toFixed(2)}%)
+                      </span>
+                    </span>
+                    <span className="font-medium font-mono">
+                      - LKR{" "}
+                      {(purchase.extraDiscount ?? 0).toLocaleString("en-LK", {
+                        minimumFractionDigits: 2,
+                      })}
+                    </span>
+                  </div>
+                )}
 
                 <Separator className="my-2" />
 

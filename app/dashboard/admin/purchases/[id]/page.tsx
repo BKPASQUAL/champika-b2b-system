@@ -55,6 +55,7 @@ interface PurchaseDetail {
   status: "Ordered" | "Received" | "Cancelled";
   paymentStatus: "Paid" | "Unpaid" | "Partial";
   totalAmount: number;
+  extraDiscount?: number;
   paidAmount: number;
   supplier: {
     name: string;
@@ -482,16 +483,53 @@ export default function ViewPurchasePage({
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4 pt-6">
-                {/* Total Cost */}
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Total Cost</span>
-                  <span className="font-medium font-mono">
-                    LKR{" "}
-                    {purchase.totalAmount.toLocaleString("en-LK", {
-                      minimumFractionDigits: 2,
-                    })}
-                  </span>
-                </div>
+                {/* Gross Total (before extra discount) */}
+                {(purchase.extraDiscount ?? 0) > 0 ? (
+                  <>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Gross Total</span>
+                      <span className="font-medium font-mono">
+                        LKR{" "}
+                        {(purchase.totalAmount + (purchase.extraDiscount ?? 0)).toLocaleString("en-LK", {
+                          minimumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm text-orange-600">
+                      <span>
+                        Extra Discount{" "}
+                        <span className="text-xs font-mono">
+                          ({((purchase.extraDiscount ?? 0) / (purchase.totalAmount + (purchase.extraDiscount ?? 0)) * 100).toFixed(2)}%)
+                        </span>
+                      </span>
+                      <span className="font-medium font-mono">
+                        - LKR{" "}
+                        {(purchase.extraDiscount ?? 0).toLocaleString("en-LK", {
+                          minimumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Net Total</span>
+                      <span className="font-medium font-mono">
+                        LKR{" "}
+                        {purchase.totalAmount.toLocaleString("en-LK", {
+                          minimumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Total Cost</span>
+                    <span className="font-medium font-mono">
+                      LKR{" "}
+                      {purchase.totalAmount.toLocaleString("en-LK", {
+                        minimumFractionDigits: 2,
+                      })}
+                    </span>
+                  </div>
+                )}
 
                 {purchase.paidAmount > 0 && (
                   <div className="flex justify-between text-sm text-emerald-600">
