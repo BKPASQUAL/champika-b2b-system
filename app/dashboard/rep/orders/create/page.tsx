@@ -20,6 +20,7 @@ import {
   BadgeCheck,
   Clock,
   RotateCcw,
+  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -243,6 +244,7 @@ export default function CreateOrderPage() {
   // Items State
   const [items, setItems] = useState<OrderItem[]>([]);
   const [extraDiscount, setExtraDiscount] = useState<string>("");
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
 
   // Popover States
   const [customerOpen, setCustomerOpen] = useState(false);
@@ -455,7 +457,7 @@ export default function CreateOrderPage() {
     const netTotal = grossTotal - discountAmount;
 
     const newItem: OrderItem = {
-      id: Date.now().toString(),
+      id: editingItemId || Date.now().toString(),
       productId: currentItem.productId,
       sku: product.sku,
       productName: product.name,
@@ -470,7 +472,13 @@ export default function CreateOrderPage() {
       supplier: product.supplier,
     };
 
-    setItems([...items, newItem]);
+    if (editingItemId) {
+      setItems(items.map((i) => i.id === editingItemId ? newItem : i));
+      setEditingItemId(null);
+      toast.success("Item updated");
+    } else {
+      setItems([...items, newItem]);
+    }
 
     // Reset
     setCurrentItem({
@@ -489,6 +497,65 @@ export default function CreateOrderPage() {
 
   const handleRemoveItem = (id: string) => {
     setItems(items.filter((item) => item.id !== id));
+    if (editingItemId === id) {
+      setEditingItemId(null);
+      setCurrentItem({
+        productId: "",
+        sku: "",
+        quantity: "",
+        freeQuantity: "",
+        unit: "",
+        mrp: 0,
+        unitPrice: 0,
+        discountPercent: "",
+        stockAvailable: 0,
+        supplier: "",
+      });
+    }
+  };
+
+  const handleEditItem = (item: OrderItem) => {
+    setEditingItemId(item.id);
+    const product = products.find((p) => p.id === item.productId);
+    const currentStock = product ? product.stock_quantity : 0;
+
+    setCurrentItem({
+      productId: item.productId,
+      sku: item.sku,
+      quantity: item.quantity.toString(),
+      freeQuantity: item.freeQuantity > 0 ? item.freeQuantity.toString() : "",
+      unit: item.unit,
+      mrp: item.mrp,
+      unitPrice: item.unitPrice,
+      discountPercent: item.discountPercent > 0 ? item.discountPercent.toString() : "",
+      stockAvailable: currentStock + item.quantity + item.freeQuantity,
+      supplier: item.supplier || "",
+    });
+
+    if (typeof window !== "undefined") {
+      addProductCardRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }
+
+    setTimeout(() => qtyInputRef.current?.focus({ preventScroll: true }), 100);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingItemId(null);
+    setCurrentItem({
+      productId: "",
+      sku: "",
+      quantity: "",
+      freeQuantity: "",
+      unit: "",
+      mrp: 0,
+      unitPrice: 0,
+      discountPercent: "",
+      stockAvailable: 0,
+      supplier: "",
+    });
   };
 
   // --- Create New Customer ---
@@ -971,15 +1038,19 @@ export default function CreateOrderPage() {
 
           {/* 2. Add Products */}
           <div ref={addProductCardRef} className="scroll-mt-4 w-full">
-            <Card className="w-full min-w-0 overflow-hidden">
-            <CardHeader className="pb-1 sm:pb-2">
-              <CardTitle className="text-base sm:text-lg">Add Products</CardTitle>
-              <CardDescription className="text-xs sm:text-sm">
-                {outOfStockOverride
-                  ? "All items available — including out-of-stock products"
-                  : "Search and add products to the order"}
-              </CardDescription>
-            </CardHeader>
+            <Card className={cn("w-full min-w-0 overflow-hidden transition-all", editingItemId ? "border-blue-500 border-2" : "")}>
+              <CardHeader className="pb-1 sm:pb-2">
+                <CardTitle className="text-base sm:text-lg">
+                  {editingItemId ? "Edit Item" : "Add Products"}
+                </CardTitle>
+                <CardDescription className="text-xs sm:text-sm">
+                  {editingItemId
+                    ? "Update item details, then click Update Item"
+                    : outOfStockOverride
+                    ? "All items available — including out-of-stock products"
+                    : "Search and add products to the order"}
+                </CardDescription>
+              </CardHeader>
             <CardContent className="space-y-3 sm:space-y-4">
 
               {/* Product search */}
@@ -988,12 +1059,13 @@ export default function CreateOrderPage() {
 
                 {/* Supplier Filter Buttons Row */}
                 {combinedSuppliers.length > 0 && (
-                  <div className="flex flex-row flex-nowrap items-center overflow-x-auto gap-2 pb-2 border-b border-slate-100 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                  <div className={cn("flex flex-row flex-nowrap items-center overflow-x-auto gap-2 pb-2 border-b border-slate-100 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]", editingItemId && "opacity-50 pointer-events-none")}>
                     <Button
                       type="button"
                       variant={supplierFilter === "all" ? "default" : "outline"}
                       size="sm"
                       onClick={() => setSupplierFilter("all")}
+                      disabled={editingItemId !== null}
                       className={cn(
                         "h-8 text-xs font-semibold rounded-full shrink-0 transition-all duration-200",
                         supplierFilter === "all"
@@ -1013,6 +1085,7 @@ export default function CreateOrderPage() {
                           variant={isSelected ? "default" : "outline"}
                           size="sm"
                           onClick={() => setSupplierFilter(sup.name)}
+                          disabled={editingItemId !== null}
                           className={cn(
                             "h-8 text-xs font-semibold rounded-full shrink-0 transition-all duration-200",
                             isSelected ? styles.bgActive : cn("bg-white", styles.borderInactive)
@@ -1028,6 +1101,7 @@ export default function CreateOrderPage() {
                 <Popover
                   open={productOpen}
                   onOpenChange={(open) => {
+                    if (editingItemId) return;
                     setProductOpen(open);
                     if (open && typeof window !== "undefined" && window.innerWidth < 1024) {
                       addProductCardRef.current?.scrollIntoView({
@@ -1042,6 +1116,7 @@ export default function CreateOrderPage() {
                       variant="outline"
                       role="combobox"
                       aria-expanded={productOpen}
+                      disabled={editingItemId !== null}
                       className="w-full justify-between text-sm"
                     >
                       <span className="truncate">
@@ -1226,14 +1301,34 @@ export default function CreateOrderPage() {
                 </div>
               </div>
 
-              <Button
-                onClick={handleAddItem}
-                className="w-full bg-blue-600 hover:bg-blue-700"
-                disabled={!currentItem.productId}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add to Order
-              </Button>
+              <div className="flex gap-2">
+                {editingItemId && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleCancelEdit}
+                  >
+                    Cancel
+                  </Button>
+                )}
+                <Button
+                  onClick={handleAddItem}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700"
+                  disabled={!currentItem.productId}
+                >
+                  {editingItemId ? (
+                    <>
+                      <Save className="w-4 h-4 mr-2" />
+                      Update Item
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add to Order
+                    </>
+                  )}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -1293,14 +1388,26 @@ export default function CreateOrderPage() {
                           <span className="font-bold text-sm">
                             LKR {item.total.toLocaleString()}
                           </span>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => handleRemoveItem(item.id)}
-                          >
-                            <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                          </Button>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              disabled={editingItemId !== null}
+                              onClick={() => handleEditItem(item)}
+                            >
+                              <Pencil className="w-3.5 h-3.5 text-blue-500" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              disabled={editingItemId !== null}
+                              onClick={() => handleRemoveItem(item.id)}
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     );
@@ -1338,7 +1445,7 @@ export default function CreateOrderPage() {
                       items.map((item, idx) => {
                         const styles = item.supplier ? getSupplierColorStyles(item.supplier) : null;
                         return (
-                          <TableRow key={item.id} className={cn(item.supplier && cn("border-l-4", styles?.borderLeft))}>
+                          <TableRow key={item.id} className={cn(item.supplier && cn("border-l-4", styles?.borderLeft), editingItemId === item.id && "bg-blue-50/50")}>
                             <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
                             <TableCell>
                               <div className="flex items-center flex-wrap gap-1.5">
@@ -1372,13 +1479,24 @@ export default function CreateOrderPage() {
                               {item.total.toLocaleString()}
                             </TableCell>
                             <TableCell>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleRemoveItem(item.id)}
-                              >
-                                <Trash2 className="w-4 h-4 text-destructive" />
-                              </Button>
+                              <div className="flex items-center gap-1 justify-end">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  disabled={editingItemId !== null}
+                                  onClick={() => handleEditItem(item)}
+                                >
+                                  <Pencil className="w-4 h-4 text-blue-500" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  disabled={editingItemId !== null}
+                                  onClick={() => handleRemoveItem(item.id)}
+                                >
+                                  <Trash2 className="w-4 h-4 text-destructive" />
+                                </Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         );
