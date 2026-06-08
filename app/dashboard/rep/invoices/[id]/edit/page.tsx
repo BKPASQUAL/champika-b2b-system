@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, use } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -15,11 +15,7 @@ import {
   AlertTriangle,
   UserPlus,
   MapPin,
-  ShoppingCart,
-  FileText,
-  BadgeCheck,
   Clock,
-  RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,7 +65,6 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { useFormDraft } from "@/hooks/useFormDraft";
 
 // --- Types ---
 
@@ -98,6 +93,13 @@ interface OrderItem {
   discountAmount: number;
   total: number;
   supplier?: string;
+}
+
+interface UserData {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
 }
 
 const FIXED_SUPPLIERS = [
@@ -192,14 +194,12 @@ const getSupplierColorStyles = (supplier?: string | null) => {
   };
 };
 
-interface UserData {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-}
-
-export default function CreateOrderPage() {
+export default function EditOrderPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = use(params);
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -207,10 +207,8 @@ export default function CreateOrderPage() {
   const [outOfStockOverride, setOutOfStockOverride] = useState(false);
   const [canCreateCustomer, setCanCreateCustomer] = useState(false);
   const [userBusinessId, setUserBusinessId] = useState<string | null>(null);
-
-  // Draft restore state
-  const [draftRestoreOpen, setDraftRestoreOpen] = useState(false);
-  const [draftAge, setDraftAge] = useState("");
+  const [invoiceNo, setInvoiceNo] = useState("");
+  const [isNotPending, setIsNotPending] = useState(false);
 
   // New Customer Dialog
   const [newCustomerOpen, setNewCustomerOpen] = useState(false);
@@ -268,42 +266,6 @@ export default function CreateOrderPage() {
   const qtyInputRef = useRef<HTMLInputElement>(null);
   const addProductCardRef = useRef<HTMLDivElement>(null);
 
-  // --- Draft Auto-Save ---
-  const hasDraftInput = (items.length > 0 || customerId !== null) && !submitting;
-  const { clearDraft, loadDraft } = useFormDraft(
-    "invoice_draft_rep",
-    { customerId, orderDate, items, extraDiscount },
-    !loading && hasDraftInput
-  );
-
-  // Check for saved draft once initial data finishes loading
-  useEffect(() => {
-    if (loading || customers.length === 0) return;
-    const draft = loadDraft();
-    if (!draft) return;
-    if (!draft.items?.length && !draft.customerId) return;
-
-    const mins = Math.floor((Date.now() - draft._savedAt) / 60000);
-    setDraftAge(mins < 1 ? "just now" : `${mins} minute${mins !== 1 ? "s" : ""} ago`);
-    setDraftRestoreOpen(true);
-  }, [loading, customers.length]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleRestoreDraft = () => {
-    const draft = loadDraft();
-    if (!draft) return;
-    if (draft.customerId !== undefined) setCustomerId(draft.customerId);
-    if (draft.orderDate) setOrderDate(draft.orderDate);
-    if (draft.items?.length) setItems(draft.items);
-    if (draft.extraDiscount !== undefined) setExtraDiscount(draft.extraDiscount);
-    setDraftRestoreOpen(false);
-    toast.success("Draft restored successfully");
-  };
-
-  const handleDiscardDraft = () => {
-    clearDraft();
-    setDraftRestoreOpen(false);
-  };
-
   // --- Fetch Data on Mount ---
   useEffect(() => {
     const fetchData = async () => {
@@ -336,14 +298,53 @@ export default function CreateOrderPage() {
           return;
         }
 
-        // 2. Check settings and fetch suppliers in parallel
-        const [overrideData, customerCreateData, routesData, suppliersData, settingSuppliersData] = await Promise.all([
+        // 2. Fetch Settings, Routes, Suppliers in Parallel
+        const [overrideData, customerCreateData, routesData, suppliersData, settingSuppliersData, invoiceRes] = await Promise.all([
           fetch("/api/settings/invoice-override").then((r) => r.json()).catch(() => ({ enabled: false })),
           fetch("/api/settings/rep-customer-creation").then((r) => r.json()).catch(() => ({ enabled: false })),
           fetch("/api/settings/categories?type=route").then((r) => r.json()).catch(() => []),
           fetch("/api/suppliers").then((r) => r.json()).catch(() => []),
           fetch("/api/settings/categories?type=supplier").then((r) => r.json()).catch(() => []),
+          fetch(`/api/invoices/${id}`),
         ]);
+
+        if (!invoiceRes.ok) {
+          throw new Error("Failed to fetch invoice details");
+        }
+        const invoiceData = await invoiceRes.json();
+
+        // Check if invoice order status is Pending
+        if (invoiceData.orderStatus !== "Pending") {
+          setIsNotPending(true);
+          setLoading(false);
+          return;
+        }
+
+        setInvoiceNo(invoiceData.manualInvoiceNo || invoiceData.invoiceNo);
+        setCustomerId(invoiceData.customerId);
+        setOrderDate(invoiceData.date);
+        setExtraDiscount(invoiceData.extraDiscountPercent ? invoiceData.extraDiscountPercent.toString() : "");
+
+        // Map items
+        if (invoiceData.items) {
+          setItems(
+            invoiceData.items.map((item: any) => ({
+              id: item.id || Math.random().toString(),
+              productId: item.productId,
+              sku: item.sku,
+              productName: item.productName || item.name,
+              quantity: item.quantity,
+              freeQuantity: item.freeQuantity || 0,
+              unit: item.unit || "unit",
+              mrp: item.mrp || 0,
+              unitPrice: item.unitPrice || 0,
+              discountPercent: item.discountPercent || 0,
+              discountAmount: item.discountAmount || 0,
+              total: item.total || 0,
+              supplier: item.supplier || "",
+            }))
+          );
+        }
 
         const overrideEnabled = overrideData.enabled ?? false;
         setOutOfStockOverride(overrideEnabled);
@@ -392,7 +393,7 @@ export default function CreateOrderPage() {
     };
 
     fetchData();
-  }, []);
+  }, [id]);
 
   // --- Product Selection Handler ---
   const handleProductSelect = (productId: string) => {
@@ -491,6 +492,7 @@ export default function CreateOrderPage() {
     setItems(items.filter((item) => item.id !== id));
   };
 
+
   // --- Create New Customer ---
   const handleCreateCustomer = async () => {
     if (!newCustomer.phone.trim() || newCustomer.phone.trim().length < 9) {
@@ -539,22 +541,7 @@ export default function CreateOrderPage() {
     }
   };
 
-  // --- Totals ---
-  const subtotal = items.reduce((sum, item) => sum + item.total, 0);
-  const totalItemDiscount = items.reduce((sum, item) => sum + item.discountAmount, 0);
-  const grossTotal = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-
-  const extraDiscPercVal = parseFloat(extraDiscount) || 0;
-  const extraDiscountAmount = (subtotal * extraDiscPercVal) / 100;
-  const grandTotal = Math.max(0, subtotal - extraDiscountAmount);
-
-  // Current item live totals
-  const qtyNum = parseFloat(currentItem.quantity) || 0;
-  const discPercNum = parseFloat(currentItem.discountPercent) || 0;
-  const currentDiscountAmt = (currentItem.unitPrice * qtyNum * discPercNum) / 100;
-  const currentTotal = currentItem.unitPrice * qtyNum - currentDiscountAmt;
-
-  // --- Save Order ---
+  // --- Save Order Updates ---
   const handleSaveOrder = async () => {
     if (!customerId) {
       toast.error("Please select a customer.");
@@ -575,7 +562,6 @@ export default function CreateOrderPage() {
     const orderData = {
       customerId,
       salesRepId: currentUser.id,
-      businessId: userBusinessId,
       invoiceDate: orderDate,
       orderStatus: "Pending",
       items,
@@ -583,35 +569,42 @@ export default function CreateOrderPage() {
       extraDiscountPercent: extraDiscPercVal,
       extraDiscountAmount: extraDiscountAmount,
       grandTotal: grandTotal,
-      notes: "",
-      performedByName: currentUser.name ?? null,
-      performedByEmail: currentUser.email ?? null,
+      notes: "Updated by sales representative",
+      userId: currentUser.id,
+      changeReason: "Representative edited pending invoice items",
     };
 
     try {
-      // Step 1 → Step 2 after a short beat so user sees the transition
       await new Promise((r) => setTimeout(r, 600));
       setSubmitStep(2);
 
-      const res = await fetch("/api/invoices", {
-        method: "POST",
+      const res = await fetch(`/api/invoices/${id}`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(orderData),
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to place order");
+      if (!res.ok) throw new Error(data.error || "Failed to update invoice");
 
-      clearDraft();
       setSubmitStep(3);
       await new Promise((r) => setTimeout(r, 1200));
-      router.push(`/dashboard/rep/invoices/${data.data.id}`);
+      router.push(`/dashboard/rep/invoices/${id}`);
     } catch (error: any) {
-      toast.error(error.message || "Failed to create order");
+      toast.error(error.message || "Failed to update invoice");
       setSubmitting(false);
       setSubmitStep(0);
     }
   };
+
+  // --- Totals ---
+  const subtotal = items.reduce((sum, item) => sum + item.total, 0);
+  const totalItemDiscount = items.reduce((sum, item) => sum + item.discountAmount, 0);
+  const grossTotal = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+
+  const extraDiscPercVal = parseFloat(extraDiscount) || 0;
+  const extraDiscountAmount = (subtotal * extraDiscPercVal) / 100;
+  const grandTotal = Math.max(0, subtotal - extraDiscountAmount);
 
   const combinedSuppliers = React.useMemo(() => {
     const rawList = [...FIXED_SUPPLIERS, ...suppliers];
@@ -648,169 +641,27 @@ export default function CreateOrderPage() {
     );
   }
 
-  // ── Submission overlay ─────────────────────────────────────────────────────
-  const steps = [
-    { icon: ShoppingCart, label: "Validating order",   desc: "Checking items & customer details" },
-    { icon: FileText,     label: "Creating invoice",   desc: "Saving your order to the system"    },
-    { icon: BadgeCheck,   label: "Order confirmed!",   desc: "Everything is set — redirecting…"   },
-  ];
-
-  if (submitting) {
+  if (isNotPending) {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white">
-        {/* Subtle animated background */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-primary/5 blur-3xl animate-pulse" />
-          <div className="absolute -bottom-40 -left-40 w-96 h-96 rounded-full bg-primary/5 blur-3xl animate-pulse [animation-delay:1s]" />
-        </div>
-
-        <div className="relative z-10 flex flex-col items-center gap-10 w-full max-w-sm px-6">
-          {/* Central icon ring */}
-          <div className="relative flex items-center justify-center">
-            {/* Outer pulse rings */}
-            {submitStep < 3 && (
-              <>
-                <span className="absolute inline-flex h-28 w-28 rounded-full bg-primary/10 animate-ping [animation-duration:1.4s]" />
-                <span className="absolute inline-flex h-24 w-24 rounded-full bg-primary/15 animate-ping [animation-duration:1.4s] [animation-delay:0.3s]" />
-              </>
-            )}
-            {/* Icon circle */}
-            <div className={cn(
-              "relative h-20 w-20 rounded-full flex items-center justify-center shadow-xl transition-all duration-700",
-              submitStep === 3
-                ? "bg-emerald-500 scale-110 shadow-emerald-200"
-                : "bg-primary shadow-primary/30"
-            )}>
-              {submitStep === 3 ? (
-                <BadgeCheck className="h-10 w-10 text-white animate-[scale-in_0.3s_ease-out]" strokeWidth={1.8} />
-              ) : (
-                <Loader2 className="h-10 w-10 text-white animate-spin" strokeWidth={1.8} />
-              )}
-            </div>
-          </div>
-
-          {/* Steps list */}
-          <div className="w-full space-y-3">
-            {steps.map((step, idx) => {
-              const Icon = step.icon;
-              const stepNum = idx + 1;
-              const isDone    = submitStep > stepNum;
-              const isActive  = submitStep === stepNum;
-              const isPending = submitStep < stepNum;
-
-              return (
-                <div
-                  key={idx}
-                  className={cn(
-                    "flex items-center gap-4 rounded-2xl px-5 py-4 transition-all duration-500",
-                    isActive  && "bg-primary/8 border border-primary/20 shadow-sm scale-[1.02]",
-                    isDone    && "bg-emerald-50 border border-emerald-100",
-                    isPending && "opacity-35"
-                  )}
-                >
-                  {/* Step icon / check */}
-                  <div className={cn(
-                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-all duration-500",
-                    isActive  && "bg-primary text-white",
-                    isDone    && "bg-emerald-500 text-white",
-                    isPending && "bg-muted text-muted-foreground"
-                  )}>
-                    {isDone
-                      ? <Check className="h-4 w-4" strokeWidth={2.5} />
-                      : <Icon className={cn("h-4 w-4", isActive && "animate-pulse")} />
-                    }
-                  </div>
-
-                  {/* Text */}
-                  <div className="flex-1 min-w-0">
-                    <p className={cn(
-                      "text-sm font-semibold leading-tight",
-                      isActive  && "text-primary",
-                      isDone    && "text-emerald-700",
-                      isPending && "text-muted-foreground"
-                    )}>
-                      {step.label}
-                    </p>
-                    {(isActive || isDone) && (
-                      <p className={cn(
-                        "text-xs mt-0.5",
-                        isDone   && "text-emerald-600",
-                        isActive && "text-muted-foreground"
-                      )}>
-                        {step.desc}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Active spinner dot */}
-                  {isActive && (
-                    <div className="flex gap-1">
-                      {[0, 1, 2].map((i) => (
-                        <span
-                          key={i}
-                          className="h-1.5 w-1.5 rounded-full bg-primary animate-bounce"
-                          style={{ animationDelay: `${i * 0.15}s` }}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Progress bar */}
-          <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
-            <div
-              className="h-full rounded-full bg-primary transition-all duration-700 ease-out"
-              style={{ width: submitStep === 0 ? "0%" : submitStep === 1 ? "33%" : submitStep === 2 ? "66%" : "100%",
-                       backgroundColor: submitStep === 3 ? "rgb(16 185 129)" : undefined }}
-            />
-          </div>
-        </div>
+      <div className="flex flex-col items-center justify-center py-20 space-y-4">
+        <AlertTriangle className="h-12 w-12 text-red-500" />
+        <h2 className="text-xl font-bold">Access Denied</h2>
+        <p className="text-muted-foreground text-sm text-center max-w-md">
+          Only invoices with a <strong>Pending</strong> delivery status can be edited by sales representatives.
+        </p>
+        <Button onClick={() => router.push(`/dashboard/rep/invoices/${id}`)}>
+          Go to Invoice Details
+        </Button>
       </div>
     );
   }
-  // ── End overlay ─────────────────────────────────────────────────────────────
+
+  const currentTotal =
+    (parseFloat(currentItem.quantity) || 0) * currentItem.unitPrice *
+    (1 - (parseFloat(currentItem.discountPercent) || 0) / 100);
 
   return (
     <div className="space-y-4 mx-auto pb-28 lg:pb-6 w-full max-w-full min-w-0 overflow-x-hidden">
-
-      {/* Draft Restore Dialog */}
-      <Dialog open={draftRestoreOpen} onOpenChange={setDraftRestoreOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <RotateCcw className="h-5 w-5 text-primary" />
-              Unsaved Draft Found
-            </DialogTitle>
-            <DialogDescription>
-              You have an unsaved order draft from <strong>{draftAge}</strong>.
-              Would you like to restore it and continue where you left off?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={handleDiscardDraft}>
-              Discard Draft
-            </Button>
-            <Button onClick={handleRestoreDraft}>
-              <RotateCcw className="h-4 w-4 mr-2" />
-              Restore Draft
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Out-of-stock override banner */}
-      {outOfStockOverride && (
-        <div className="flex items-start gap-2 bg-orange-50 border border-orange-300 rounded-xl px-4 py-3 text-sm text-orange-800">
-          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-orange-500" />
-          <span>
-            <strong>Special Sales Period Active:</strong> Out-of-stock items are
-            visible and can be invoiced. Stock validation is temporarily disabled.
-          </span>
-        </div>
-      )}
 
       {/* ── Page header ── */}
       <div className="flex items-center gap-3">
@@ -818,32 +669,26 @@ export default function CreateOrderPage() {
           variant="ghost"
           size="icon"
           className="shrink-0"
-          onClick={() => router.push("/dashboard/rep")}
+          onClick={() => router.push(`/dashboard/rep/invoices/${id}`)}
         >
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <div className="flex-1 min-w-0">
           <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight truncate">
-            New Sales Order
+            Edit Sales Order
           </h1>
-          <p className="text-muted-foreground text-xs sm:text-sm mt-0.5 hidden sm:block">
-            Create a new order for your customer
+          <p className="text-muted-foreground text-xs sm:text-sm mt-0.5">
+            Modifying Invoice #{invoiceNo}
           </p>
         </div>
-        {hasDraftInput && (
-          <span className="hidden sm:flex items-center gap-1.5 text-xs text-muted-foreground bg-muted px-2.5 py-1 rounded-full shrink-0">
-            <Clock className="h-3 w-3" />
-            Draft auto-saving
-          </span>
-        )}
-        {/* Desktop Place Order button — hidden on mobile (uses sticky bar below) */}
+        {/* Desktop Save button — hidden on mobile */}
         <Button
           onClick={handleSaveOrder}
           disabled={items.length === 0 || submitting}
           className="hidden lg:flex bg-black hover:bg-gray-800 text-white shrink-0"
         >
           <Save className="w-4 h-4 mr-2" />
-          Place Order
+          Update Invoice
         </Button>
       </div>
 
@@ -972,271 +817,271 @@ export default function CreateOrderPage() {
           {/* 2. Add Products */}
           <div ref={addProductCardRef} className="scroll-mt-4 w-full">
             <Card className="w-full min-w-0 overflow-hidden">
-            <CardHeader className="pb-1 sm:pb-2">
-              <CardTitle className="text-base sm:text-lg">Add Products</CardTitle>
-              <CardDescription className="text-xs sm:text-sm">
-                {outOfStockOverride
-                  ? "All items available — including out-of-stock products"
-                  : "Search and add products to the order"}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3 sm:space-y-4">
+              <CardHeader className="pb-1 sm:pb-2">
+                <CardTitle className="text-base sm:text-lg">Add Products</CardTitle>
+                <CardDescription className="text-xs sm:text-sm">
+                  {outOfStockOverride
+                    ? "All items available — including out-of-stock products"
+                    : "Search and add products to the order"}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3 sm:space-y-4">
 
-              {/* Product search */}
-              <div className="space-y-2">
-                <Label className="text-xs sm:text-sm">Product</Label>
+                {/* Product search */}
+                <div className="space-y-2">
+                  <Label className="text-xs sm:text-sm">Product</Label>
 
-                {/* Supplier Filter Buttons Row */}
-                {combinedSuppliers.length > 0 && (
-                  <div className="flex flex-row flex-nowrap items-center overflow-x-auto gap-2 pb-2 border-b border-slate-100 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                    <Button
-                      type="button"
-                      variant={supplierFilter === "all" ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setSupplierFilter("all")}
-                      className={cn(
-                        "h-8 text-xs font-semibold rounded-full shrink-0 transition-all duration-200",
-                        supplierFilter === "all"
-                          ? "bg-slate-900 text-white shadow-sm hover:bg-slate-800"
-                          : "border-gray-200 text-gray-700 bg-white hover:bg-gray-50"
-                      )}
-                    >
-                      🌐 All Products
-                    </Button>
-                    {combinedSuppliers.map((sup) => {
-                      const styles = getSupplierColorStyles(sup.name);
-                      const isSelected = supplierFilter === sup.name;
-                      return (
-                        <Button
-                          key={sup.id || sup.name}
-                          type="button"
-                          variant={isSelected ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => setSupplierFilter(sup.name)}
-                          className={cn(
-                            "h-8 text-xs font-semibold rounded-full shrink-0 transition-all duration-200",
-                            isSelected ? styles.bgActive : cn("bg-white", styles.borderInactive)
-                          )}
-                        >
-                          {styles.dot} {getSupplierCleanName(sup.name)}
-                        </Button>
-                      );
-                    })}
-                  </div>
-                )}
+                  {/* Supplier Filter Buttons Row */}
+                  {combinedSuppliers.length > 0 && (
+                    <div className="flex flex-row flex-nowrap items-center overflow-x-auto gap-2 pb-2 border-b border-slate-100 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                      <Button
+                        type="button"
+                        variant={supplierFilter === "all" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setSupplierFilter("all")}
+                        className={cn(
+                          "h-8 text-xs font-semibold rounded-full shrink-0 transition-all duration-200",
+                          supplierFilter === "all"
+                            ? "bg-slate-900 text-white shadow-sm hover:bg-slate-800"
+                            : "border-gray-200 text-gray-700 bg-white hover:bg-gray-50"
+                        )}
+                      >
+                        🌐 All Products
+                      </Button>
+                      {combinedSuppliers.map((sup) => {
+                        const styles = getSupplierColorStyles(sup.name);
+                        const isSelected = supplierFilter === sup.name;
+                        return (
+                          <Button
+                            key={sup.id || sup.name}
+                            type="button"
+                            variant={isSelected ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setSupplierFilter(sup.name)}
+                            className={cn(
+                              "h-8 text-xs font-semibold rounded-full shrink-0 transition-all duration-200",
+                              isSelected ? styles.bgActive : cn("bg-white", styles.borderInactive)
+                            )}
+                          >
+                            {styles.dot} {getSupplierCleanName(sup.name)}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  )}
 
-                <Popover
-                  open={productOpen}
-                  onOpenChange={(open) => {
-                    setProductOpen(open);
-                    if (open && typeof window !== "undefined" && window.innerWidth < 1024) {
-                      addProductCardRef.current?.scrollIntoView({
-                        behavior: "smooth",
-                        block: "start",
-                      });
-                    }
-                  }}
-                >
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={productOpen}
-                      className="w-full justify-between text-sm"
-                    >
-                      <span className="truncate">
-                        {currentItem.productId
-                          ? products.find((p) => p.id === currentItem.productId)?.name
-                          : "Select Product"}
-                      </span>
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent
-                    className="w-[var(--radix-popover-trigger-width)] p-0"
-                    align="start"
+                  <Popover
+                    open={productOpen}
+                    onOpenChange={(open) => {
+                      setProductOpen(open);
+                      if (open && typeof window !== "undefined" && window.innerWidth < 1024) {
+                        addProductCardRef.current?.scrollIntoView({
+                          behavior: "smooth",
+                          block: "start",
+                        });
+                      }
+                    }}
                   >
-                    <Command>
-                      <CommandInput placeholder="Search product by name or SKU..." />
-                      <CommandList>
-                        <CommandEmpty>
-                          {filteredAvailableProducts.length === 0
-                            ? "No products found for this supplier"
-                            : "No product found in your stock."}
-                        </CommandEmpty>
-                        <CommandGroup>
-                          {filteredAvailableProducts.map((product) => {
-                            const styles = product.supplier ? getSupplierColorStyles(product.supplier) : null;
-                            return (
-                              <CommandItem
-                                key={product.id}
-                                value={`${product.name} ${product.sku} ${product.supplier || ""}`}
-                                onSelect={() => handleProductSelect(product.id)}
-                                className={cn(
-                                  "flex items-center px-3 py-2 cursor-pointer transition-colors duration-150",
-                                  product.supplier && cn("border-l-4", styles?.borderLeft)
-                                )}
-                              >
-                                <Check
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={productOpen}
+                        className="w-full justify-between text-sm"
+                      >
+                        <span className="truncate">
+                          {currentItem.productId
+                            ? products.find((p) => p.id === currentItem.productId)?.name
+                            : "Select Product"}
+                        </span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      className="w-[var(--radix-popover-trigger-width)] p-0"
+                      align="start"
+                    >
+                      <Command>
+                        <CommandInput placeholder="Search product by name or SKU..." />
+                        <CommandList>
+                          <CommandEmpty>
+                            {filteredAvailableProducts.length === 0
+                              ? "No products found for this supplier"
+                              : "No product found in your stock."}
+                          </CommandEmpty>
+                          <CommandGroup>
+                            {filteredAvailableProducts.map((product) => {
+                              const styles = product.supplier ? getSupplierColorStyles(product.supplier) : null;
+                              return (
+                                <CommandItem
+                                  key={product.id}
+                                  value={`${product.name} ${product.sku} ${product.supplier || ""}`}
+                                  onSelect={() => handleProductSelect(product.id)}
                                   className={cn(
-                                    "mr-2 h-4 w-4 shrink-0",
-                                    currentItem.productId === product.id
-                                      ? "opacity-100"
-                                      : "opacity-0"
+                                    "flex items-center px-3 py-2 cursor-pointer transition-colors duration-150",
+                                    product.supplier && cn("border-l-4", styles?.borderLeft)
                                   )}
-                                />
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="font-semibold text-slate-900 truncate">
-                                      {product.name}
-                                    </span>
-                                    {product.supplier && (
-                                      <span className={cn(
-                                        "text-[9px] font-bold px-2 py-0.5 rounded-full border shrink-0",
-                                        styles?.badge
-                                      )}>
-                                        {getSupplierCleanName(product.supplier)}
-                                      </span>
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4 shrink-0",
+                                      currentItem.productId === product.id
+                                        ? "opacity-100"
+                                        : "opacity-0"
                                     )}
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="font-semibold text-slate-900 truncate">
+                                        {product.name}
+                                      </span>
+                                      {product.supplier && (
+                                        <span className={cn(
+                                          "text-[9px] font-bold px-2 py-0.5 rounded-full border shrink-0",
+                                          styles?.badge
+                                        )}>
+                                          {getSupplierCleanName(product.supplier)}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5 font-sans">
+                                      <span className="font-mono">{product.sku}</span>
+                                      <span>•</span>
+                                      <span>Stock: <strong className={cn(product.stock_quantity === 0 ? "text-red-500 font-bold" : "text-slate-700")}>{product.stock_quantity}</strong></span>
+                                      <span>•</span>
+                                      <span>LKR {product.selling_price.toLocaleString()}</span>
+                                    </div>
                                   </div>
-                                  <div className="text-xs text-muted-foreground flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5 font-sans">
-                                    <span className="font-mono">{product.sku}</span>
-                                    <span>•</span>
-                                    <span>Stock: <strong className={cn(product.stock_quantity === 0 ? "text-red-500 font-bold" : "text-slate-700")}>{product.stock_quantity}</strong></span>
-                                    <span>•</span>
-                                    <span>LKR {product.selling_price.toLocaleString()}</span>
-                                  </div>
-                                </div>
-                              </CommandItem>
-                            );
-                          })}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
+                                </CommandItem>
+                              );
+                            })}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
 
-              {/* Qty / Free / Unit / Stock — 2 cols on mobile, 4 on md+ */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-                <div className="space-y-2">
-                  <Label className="text-xs sm:text-sm">Quantity</Label>
-                  <Input
-                    ref={qtyInputRef}
-                    type="number"
-                    min="1"
-                    placeholder="Qty"
-                    value={currentItem.quantity}
-                    onChange={(e) =>
-                      setCurrentItem({ ...currentItem, quantity: e.target.value })
-                    }
-                    onKeyDown={handleKeyDown}
-                    className="text-sm"
-                  />
+                {/* Qty / Free / Unit / Stock — 2 cols on mobile, 4 on md+ */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs sm:text-sm">Quantity</Label>
+                    <Input
+                      ref={qtyInputRef}
+                      type="number"
+                      min="1"
+                      placeholder="Qty"
+                      value={currentItem.quantity}
+                      onChange={(e) =>
+                        setCurrentItem({ ...currentItem, quantity: e.target.value })
+                      }
+                      onKeyDown={handleKeyDown}
+                      className="text-sm"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs sm:text-sm">Free Qty</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      placeholder="0"
+                      value={currentItem.freeQuantity}
+                      onChange={(e) =>
+                        setCurrentItem({ ...currentItem, freeQuantity: e.target.value })
+                      }
+                      onKeyDown={handleKeyDown}
+                      className="text-sm"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs sm:text-sm">Unit</Label>
+                    <Input
+                      value={currentItem.unit || "-"}
+                      disabled
+                      className="bg-muted text-sm"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs sm:text-sm">Stock</Label>
+                    <Input
+                      value={currentItem.productId ? currentItem.stockAvailable : "-"}
+                      disabled
+                      className={cn(
+                        "text-sm",
+                        !outOfStockOverride &&
+                        currentItem.stockAvailable > 0 &&
+                        currentItem.stockAvailable < 10
+                          ? "text-destructive font-bold bg-muted"
+                          : "bg-muted"
+                      )}
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-xs sm:text-sm">Free Qty</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    placeholder="0"
-                    value={currentItem.freeQuantity}
-                    onChange={(e) =>
-                      setCurrentItem({ ...currentItem, freeQuantity: e.target.value })
-                    }
-                    onKeyDown={handleKeyDown}
-                    className="text-sm"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs sm:text-sm">Unit</Label>
-                  <Input
-                    value={currentItem.unit || "-"}
-                    disabled
-                    className="bg-muted text-sm"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs sm:text-sm">Stock</Label>
-                  <Input
-                    value={currentItem.productId ? currentItem.stockAvailable : "-"}
-                    disabled
-                    className={cn(
-                      "text-sm",
-                      !outOfStockOverride &&
-                      currentItem.stockAvailable > 0 &&
-                      currentItem.stockAvailable < 10
-                        ? "text-destructive font-bold bg-muted"
-                        : "bg-muted"
-                    )}
-                  />
-                </div>
-              </div>
 
-              {/* MRP / Unit Price / Discount / Total — 2 cols on mobile, 4 on md+ */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-                <div className="space-y-2">
-                  <Label className="text-xs sm:text-sm">MRP</Label>
-                  <Input
-                    type="number"
-                    value={currentItem.mrp || ""}
-                    onChange={(e) =>
-                      setCurrentItem({ ...currentItem, mrp: Number(e.target.value) })
-                    }
-                    onKeyDown={handleKeyDown}
-                    placeholder="0.00"
-                    className="text-sm"
-                  />
+                {/* MRP / Unit Price / Discount / Total — 2 cols on mobile, 4 on md+ */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs sm:text-sm">MRP</Label>
+                    <Input
+                      type="number"
+                      value={currentItem.mrp || ""}
+                      onChange={(e) =>
+                        setCurrentItem({ ...currentItem, mrp: Number(e.target.value) })
+                      }
+                      onKeyDown={handleKeyDown}
+                      placeholder="0.00"
+                      className="text-sm"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs sm:text-sm">Unit Price</Label>
+                    <Input
+                      type="number"
+                      value={currentItem.unitPrice || ""}
+                      onChange={(e) =>
+                        setCurrentItem({ ...currentItem, unitPrice: Number(e.target.value) })
+                      }
+                      onKeyDown={handleKeyDown}
+                      placeholder="0.00"
+                      className="text-sm"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs sm:text-sm">Disc %</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      placeholder="0"
+                      value={currentItem.discountPercent}
+                      onChange={(e) =>
+                        setCurrentItem({ ...currentItem, discountPercent: e.target.value })
+                      }
+                      onKeyDown={handleKeyDown}
+                      className="text-sm"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs sm:text-sm">Total</Label>
+                    <Input
+                      value={currentTotal.toFixed(2)}
+                      disabled
+                      className="font-bold bg-muted text-sm"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-xs sm:text-sm">Unit Price</Label>
-                  <Input
-                    type="number"
-                    value={currentItem.unitPrice || ""}
-                    onChange={(e) =>
-                      setCurrentItem({ ...currentItem, unitPrice: Number(e.target.value) })
-                    }
-                    onKeyDown={handleKeyDown}
-                    placeholder="0.00"
-                    className="text-sm"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs sm:text-sm">Disc %</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="100"
-                    placeholder="0"
-                    value={currentItem.discountPercent}
-                    onChange={(e) =>
-                      setCurrentItem({ ...currentItem, discountPercent: e.target.value })
-                    }
-                    onKeyDown={handleKeyDown}
-                    className="text-sm"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs sm:text-sm">Total</Label>
-                  <Input
-                    value={currentTotal.toFixed(2)}
-                    disabled
-                    className="font-bold bg-muted text-sm"
-                  />
-                </div>
-              </div>
 
-              <Button
-                onClick={handleAddItem}
-                className="w-full bg-blue-600 hover:bg-blue-700"
-                disabled={!currentItem.productId}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add to Order
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
+                <Button
+                  onClick={handleAddItem}
+                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  disabled={!currentItem.productId}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add to Order
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
 
           {/* 3. Order Items */}
           <Card className="w-full min-w-0 overflow-hidden">
@@ -1467,7 +1312,7 @@ export default function CreateOrderPage() {
                 className="w-full bg-black hover:bg-gray-800 text-white mt-2"
               >
                 <Save className="w-4 h-4 mr-2" />
-                Place Order
+                Update Invoice
               </Button>
             </CardContent>
           </Card>
@@ -1516,7 +1361,7 @@ export default function CreateOrderPage() {
             className="bg-black hover:bg-gray-800 text-white shrink-0"
           >
             <Save className="w-4 h-4 sm:mr-2" />
-            <span className="hidden sm:inline">Place Order</span>
+            <span className="hidden sm:inline">Update Invoice</span>
           </Button>
         </div>
       </div>
@@ -1655,10 +1500,55 @@ export default function CreateOrderPage() {
               className="flex-1 sm:flex-none bg-black hover:bg-gray-800 text-white"
             >
               {creatingCustomer && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Add Customer
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Submitting overlay ── */}
+      {submitting && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center space-y-4 animate-in fade-in zoom-in duration-200">
+            <div className="h-16 w-16 rounded-full bg-blue-50 flex items-center justify-center">
+              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            </div>
+            <div>
+              <h3 className="font-bold text-lg text-slate-900">
+                {submitStep === 1
+                  ? "Validating stock..."
+                  : submitStep === 2
+                  ? "Updating invoice..."
+                  : "Completed!"}
+              </h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                {submitStep === 1
+                  ? "Please wait while we check item availability"
+                  : submitStep === 2
+                  ? "Reverting old stock and saving new invoice data"
+                  : "Invoice updated successfully! Redirecting..."}
+              </p>
+            </div>
+
+            {/* Progress dots indicator */}
+            <div className="flex gap-1.5 pt-2">
+              {[0, 1, 2].map((i) => {
+                const active = submitStep > i;
+                return (
+                  <div
+                    key={i}
+                    className={cn(
+                      "h-1.5 w-1.5 rounded-full transition-all duration-300",
+                      active ? "bg-blue-600 scale-125" : "bg-slate-200"
+                    )}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

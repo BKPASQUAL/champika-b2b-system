@@ -201,6 +201,16 @@ export default function RepInvoiceDetailPage({
           </div>
 
           <div className="flex items-center gap-2 ml-11 md:ml-0 flex-wrap">
+            {invoice?.orderStatus === "Pending" && (
+              <Button
+                variant="default"
+                size="sm"
+                className="bg-blue-600 hover:bg-blue-700 text-white border-none shrink-0"
+                onClick={() => router.push(`/dashboard/rep/invoices/${id}/edit`)}
+              >
+                Edit Invoice
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"

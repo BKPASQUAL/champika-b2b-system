@@ -352,10 +352,10 @@ export default function RepMyInvoicesPage() {
               </div>
             ) : (
               paginated.map((inv) => (
-                <button
+                <div
                   key={inv.id}
                   onClick={() => router.push(`/dashboard/rep/invoices/${inv.id}`)}
-                  className="w-full text-left rounded-xl border bg-card hover:bg-muted/40 active:scale-[0.99] transition-all duration-150 p-4 space-y-3 shadow-sm"
+                  className="w-full text-left rounded-xl border bg-card hover:bg-muted/40 transition-all duration-150 p-4 space-y-3 shadow-sm cursor-pointer"
                 >
                   {/* Row 1: invoice no + payment badge */}
                   <div className="flex items-start justify-between gap-2">
@@ -410,17 +410,32 @@ export default function RepMyInvoicesPage() {
                   </div>
 
                   {/* Row 4: delivery badge + age */}
-                  <div className="flex items-center justify-between">
-                    <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full ${DELIVERY_STATUS_COLORS[inv.orderStatus] ?? "bg-gray-100 text-gray-700"}`}>
-                      <Truck className="w-3 h-3" />
-                      {inv.orderStatus || "—"}
-                    </span>
-                    <span className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      <DueDateCell billingDate={inv.date} />
-                    </span>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full ${DELIVERY_STATUS_COLORS[inv.orderStatus] ?? "bg-gray-100 text-gray-700"}`}>
+                        <Truck className="w-3 h-3" />
+                        {inv.orderStatus || "—"}
+                      </span>
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        <DueDateCell billingDate={inv.date} />
+                      </span>
+                    </div>
+                    {inv.orderStatus === "Pending" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2.5 text-xs text-blue-600 border-blue-100 hover:bg-blue-50/55 hover:text-blue-700 shrink-0 animate-in fade-in"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push(`/dashboard/rep/invoices/${inv.id}/edit`);
+                        }}
+                      >
+                        Edit
+                      </Button>
+                    )}
                   </div>
-                </button>
+                </div>
               ))
             )}
           </div>
@@ -508,14 +523,26 @@ export default function RepMyInvoicesPage() {
                         <DueDateCell billingDate={inv.date} />
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 px-2 text-xs gap-1"
-                          onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/rep/invoices/${inv.id}`); }}
-                        >
-                          <Eye className="w-3 h-3" /> View
-                        </Button>
+                        <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2 text-xs gap-1"
+                            onClick={() => router.push(`/dashboard/rep/invoices/${inv.id}`)}
+                          >
+                            <Eye className="w-3 h-3" /> View
+                          </Button>
+                          {inv.orderStatus === "Pending" && (
+                            <Button
+                              size="sm"
+                              variant="default"
+                              className="h-7 px-2 text-xs gap-1 bg-blue-600 hover:bg-blue-700 text-white border-none animate-in fade-in"
+                              onClick={() => router.push(`/dashboard/rep/invoices/${inv.id}/edit`)}
+                            >
+                              Edit
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
