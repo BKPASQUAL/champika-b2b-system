@@ -42,7 +42,100 @@ interface Product {
   minStock: number;
   unitOfMeasure: string;
   images: string[];
+  supplier?: string;
 }
+
+const FIXED_SUPPLIERS = [
+  { id: "orange-orel", name: "Orange (Orel Corporation)" },
+  { id: "sierra-cables", name: "Sierra Cables" },
+  { id: "wireman", name: "Wireman" }
+];
+
+const getSupplierCleanName = (name?: string | null) => {
+  if (!name) return "General";
+  const s = name.toLowerCase();
+  if (s.includes("sierra")) return "Sierra Cables";
+  if (s.includes("wireman")) return "Wireman";
+  if (s.includes("orange")) return "Orange";
+  if (s.includes("chint")) return "Chint";
+  if (s.includes("kelani")) return "Kelani";
+  if (s.includes("acl")) return "ACL";
+  return name;
+};
+
+const getSupplierColorStyles = (supplier?: string | null) => {
+  if (!supplier) {
+    return {
+      dot: "⚪",
+      bgActive: "bg-slate-800 hover:bg-slate-900 text-white border-slate-800 shadow-sm",
+      borderInactive: "border-slate-200 text-slate-700 hover:bg-slate-50",
+      badge: "bg-slate-100 text-slate-700 border-slate-200",
+      borderLeft: "border-l-slate-200 bg-slate-50/10",
+    };
+  }
+  const s = supplier.toLowerCase();
+  if (s.includes("sierra")) {
+    return {
+      dot: "🟣",
+      bgActive: "bg-purple-600 hover:bg-purple-700 text-white border-purple-600 shadow-sm",
+      borderInactive: "border-purple-200 text-purple-700 hover:bg-purple-50",
+      badge: "bg-purple-100 text-purple-700 border-purple-200",
+      borderLeft: "border-l-purple-500 bg-purple-50/10",
+    };
+  }
+  if (s.includes("wireman")) {
+    return {
+      dot: "🔴",
+      bgActive: "bg-red-600 hover:bg-red-700 text-white border-red-600 shadow-sm",
+      borderInactive: "border-red-200 text-red-700 hover:bg-red-50",
+      badge: "bg-red-100 text-red-700 border-red-200",
+      borderLeft: "border-l-red-500 bg-red-50/10",
+    };
+  }
+  if (s.includes("orange")) {
+    return {
+      dot: "🟠",
+      bgActive: "bg-orange-500 hover:bg-orange-600 text-white border-orange-500 shadow-sm",
+      borderInactive: "border-orange-200 text-orange-700 hover:bg-orange-50",
+      badge: "bg-orange-100 text-orange-700 border-orange-200",
+      borderLeft: "border-l-orange-500 bg-orange-50/10",
+    };
+  }
+  if (s.includes("chint")) {
+    return {
+      dot: "🔵",
+      bgActive: "bg-blue-600 hover:bg-blue-700 text-white border-blue-600 shadow-sm",
+      borderInactive: "border-blue-200 text-blue-700 hover:bg-blue-50",
+      badge: "bg-blue-100 text-blue-700 border-blue-200",
+      borderLeft: "border-l-blue-500 bg-blue-50/10",
+    };
+  }
+  if (s.includes("kelani")) {
+    return {
+      dot: "🟢",
+      bgActive: "bg-green-600 hover:bg-green-700 text-white border-green-600 shadow-sm",
+      borderInactive: "border-green-200 text-green-700 hover:bg-green-50",
+      badge: "bg-green-100 text-green-700 border-green-200",
+      borderLeft: "border-l-green-500 bg-green-50/10",
+    };
+  }
+  if (s.includes("acl")) {
+    return {
+      dot: "🟡",
+      bgActive: "bg-amber-500 hover:bg-amber-600 text-white border-amber-500 shadow-sm",
+      borderInactive: "border-amber-200 text-amber-700 hover:bg-amber-50",
+      badge: "bg-amber-100 text-amber-700 border-amber-200",
+      borderLeft: "border-l-amber-500 bg-amber-50/10",
+    };
+  }
+  return {
+    dot: "⚪",
+    bgActive: "bg-slate-800 hover:bg-slate-900 text-white border-slate-800 shadow-sm",
+    borderInactive: "border-slate-200 text-slate-700 hover:bg-slate-50",
+    badge: "bg-slate-100 text-slate-700 border-slate-200",
+    borderLeft: "border-l-slate-500 bg-slate-50/10",
+  };
+};
 
 const NUMBER_WORDS: Record<string, string> = {
   "0": "zero", "1": "one", "2": "two", "3": "three", "4": "four",
@@ -72,9 +165,11 @@ function getSearchTerms(query: string): string[] {
 
 export default function RepProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [supplierFilter, setSupplierFilter] = useState("all");
 
   // --- Preview Modal State ---
   const [previewProduct, setPreviewProduct] = useState<Product | null>(null);
@@ -84,11 +179,19 @@ export default function RepProductsPage() {
     const fetchProducts = async () => {
       try {
         setLoading(true);
-        const res = await fetch("/api/products");
-        if (!res.ok) throw new Error("Failed to load products");
-        const data = await res.json();
+        const [productsRes, suppliersRes, settingSuppliersRes] = await Promise.all([
+          fetch("/api/products"),
+          fetch("/api/suppliers").catch(() => null),
+          fetch("/api/settings/categories?type=supplier").catch(() => null),
+        ]);
+        if (!productsRes.ok) throw new Error("Failed to load products");
+        const data = await productsRes.json();
+        const suppliersData = suppliersRes && suppliersRes.ok ? await suppliersRes.json() : [];
+        const settingSuppliersData = settingSuppliersRes && settingSuppliersRes.ok ? await settingSuppliersRes.json() : [];
+
         const b2bData = data.filter((p: any) => p.subCategory !== "Retail Exclusive" && !p.retailOnly);
         setProducts(b2bData);
+        setSuppliers([...suppliersData, ...settingSuppliersData]);
       } catch (error) {
         toast.error("Could not load product catalog");
       } finally {
@@ -98,6 +201,24 @@ export default function RepProductsPage() {
 
     fetchProducts();
   }, []);
+
+  const combinedSuppliers = React.useMemo(() => {
+    const rawList = [...FIXED_SUPPLIERS, ...suppliers];
+    const cleaned: { id: string; name: string }[] = [];
+    const seen = new Set<string>();
+
+    rawList.forEach((sup) => {
+      const cleanName = getSupplierCleanName(sup.name);
+      if (!seen.has(cleanName)) {
+        seen.add(cleanName);
+        cleaned.push({
+          id: sup.id || cleanName,
+          name: cleanName
+        });
+      }
+    });
+    return cleaned;
+  }, [suppliers]);
 
   // --- Filters ---
   const uniqueCategories = [
@@ -109,7 +230,7 @@ export default function RepProductsPage() {
     const searchTerms = getSearchTerms(searchQuery);
     const haystack = [
       product.name, product.sku, product.category,
-      product.brand ?? "",
+      product.brand ?? "", product.supplier ?? "",
     ].join(" ").toLowerCase();
     const matchesSearch =
       searchQuery.trim() === "" ||
@@ -118,7 +239,11 @@ export default function RepProductsPage() {
     const matchesCategory =
       categoryFilter === "all" || product.category === categoryFilter;
 
-    return matchesSearch && matchesCategory;
+    const matchesSupplier =
+      supplierFilter === "all" ||
+      (!!product.supplier && getSupplierCleanName(product.supplier) === supplierFilter);
+
+    return matchesSearch && matchesCategory && matchesSupplier;
   });
 
   // --- Helpers ---
@@ -228,47 +353,88 @@ export default function RepProductsPage() {
   return (
     <div className="space-y-4 pb-20">
       {/* Header & Filters */}
-      <div className="sticky top-0 z-20 bg-gray-50/95 backdrop-blur supports-[backdrop-filter]:bg-gray-50/60  -mx-4 px-4 sm:mx-0 sm:px-0 mb-4 border-b sm:border-0 border-gray-200">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h1 className="text-lg font-bold tracking-tight text-gray-900 flex items-center gap-2">
-              <Box className="h-5 w-5 text-blue-600" />
-              Catalog
-            </h1>
+      <div className="sticky top-0 z-20 bg-gray-50/95 backdrop-blur supports-[backdrop-filter]:bg-gray-50/60 -mx-4 px-4 sm:mx-0 sm:px-0 mb-4 border-b border-gray-200 sm:border-0">
+        <div className="flex flex-col gap-3 py-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h1 className="text-lg font-bold tracking-tight text-gray-900 flex items-center gap-2">
+                <Box className="h-5 w-5 text-blue-600" />
+                Catalog
+              </h1>
+            </div>
+
+            <div className="flex flex-row gap-2 w-full sm:w-auto">
+              <div className="relative flex-1 sm:w-60">
+                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search..."
+                  className="pl-8 h-9 text-sm bg-white border-gray-200 shadow-sm"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger className="w-[140px] h-9 text-xs bg-white border-gray-200 shadow-sm">
+                  <div className="flex items-center gap-2 text-muted-foreground truncate">
+                    <Filter className="h-3 w-3 shrink-0" />
+                    <span className="truncate">
+                      {categoryFilter === "all" ? "Category" : categoryFilter}
+                    </span>
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  {uniqueCategories.map((cat) => (
+                    <SelectItem
+                      key={cat}
+                      value={cat}
+                      className="capitalize text-xs"
+                    >
+                      {cat}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
-          <div className="flex flex-row gap-2 w-full sm:w-auto">
-            <div className="relative flex-1 sm:w-60">
-              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search..."
-                className="pl-8 h-9 text-sm bg-white border-gray-200 shadow-sm"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-[140px] h-9 text-xs bg-white border-gray-200 shadow-sm">
-                <div className="flex items-center gap-2 text-muted-foreground truncate">
-                  <Filter className="h-3 w-3 shrink-0" />
-                  <span className="truncate">
-                    {categoryFilter === "all" ? "Category" : categoryFilter}
-                  </span>
-                </div>
-              </SelectTrigger>
-              <SelectContent>
-                {uniqueCategories.map((cat) => (
-                  <SelectItem
-                    key={cat}
-                    value={cat}
-                    className="capitalize text-xs"
+          {/* Supplier Horizontal Scroll Filter */}
+          {combinedSuppliers.length > 0 && (
+            <div className="flex flex-row flex-nowrap items-center overflow-x-auto gap-2 pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+              <Button
+                type="button"
+                variant={supplierFilter === "all" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSupplierFilter("all")}
+                className={cn(
+                  "h-8 text-xs font-semibold rounded-full shrink-0 transition-all duration-200",
+                  supplierFilter === "all"
+                    ? "bg-slate-900 text-white shadow-sm hover:bg-slate-800"
+                    : "border-gray-200 text-gray-700 bg-white hover:bg-gray-50"
+                )}
+              >
+                🌐 All Suppliers
+              </Button>
+              {combinedSuppliers.map((sup) => {
+                const styles = getSupplierColorStyles(sup.name);
+                const isSelected = supplierFilter === sup.name;
+                return (
+                  <Button
+                    key={sup.id || sup.name}
+                    type="button"
+                    variant={isSelected ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setSupplierFilter(sup.name)}
+                    className={cn(
+                      "h-8 text-xs font-semibold rounded-full shrink-0 transition-all duration-200",
+                      isSelected ? styles.bgActive : cn("bg-white", styles.borderInactive)
+                    )}
                   >
-                    {cat}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+                    {styles.dot} {getSupplierCleanName(sup.name)}
+                  </Button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
@@ -328,10 +494,20 @@ export default function RepProductsPage() {
                   {/* Details Footer */}
                   <div className="flex flex-col gap-1">
                     <div className="flex justify-between items-start">
-                      <div className="">
-                        <p className="text-[9px] text-gray-400 uppercase font-bold tracking-wider truncate leading-none mb-0.5">
-                          {product.brand || product.category}
-                        </p>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                          <p className="text-[9px] text-gray-400 uppercase font-bold tracking-wider truncate leading-none">
+                            {product.brand || product.category}
+                          </p>
+                          {product.supplier && (
+                            <span className={cn(
+                              "text-[8px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider",
+                              getSupplierColorStyles(product.supplier).badge
+                            )}>
+                              {getSupplierCleanName(product.supplier)}
+                            </span>
+                          )}
+                        </div>
                         <h3
                           className="text-[11px] font-medium text-gray-900 leading-snug line-clamp-2 group-hover:text-blue-600 transition-colors"
                           title={product.name}

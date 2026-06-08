@@ -81,6 +81,7 @@ interface Product {
   mrp: number;
   stock_quantity: number;
   unit_of_measure: string;
+  supplier?: string;
 }
 
 interface OrderItem {
@@ -96,7 +97,100 @@ interface OrderItem {
   discountPercent: number;
   discountAmount: number;
   total: number;
+  supplier?: string;
 }
+
+const FIXED_SUPPLIERS = [
+  { id: "orange-orel", name: "Orange (Orel Corporation)" },
+  { id: "sierra-cables", name: "Sierra Cables" },
+  { id: "wireman", name: "Wireman" }
+];
+
+const getSupplierCleanName = (name?: string | null) => {
+  if (!name) return "General";
+  const s = name.toLowerCase();
+  if (s.includes("sierra")) return "Sierra Cables";
+  if (s.includes("wireman")) return "Wireman";
+  if (s.includes("orange")) return "Orange";
+  if (s.includes("chint")) return "Chint";
+  if (s.includes("kelani")) return "Kelani";
+  if (s.includes("acl")) return "ACL";
+  return name;
+};
+
+const getSupplierColorStyles = (supplier?: string | null) => {
+  if (!supplier) {
+    return {
+      dot: "⚪",
+      bgActive: "bg-slate-800 hover:bg-slate-900 text-white border-slate-800 shadow-sm",
+      borderInactive: "border-slate-200 text-slate-700 hover:bg-slate-50",
+      badge: "bg-slate-100 text-slate-700 border-slate-200",
+      borderLeft: "border-l-slate-200 bg-slate-50/10",
+    };
+  }
+  const s = supplier.toLowerCase();
+  if (s.includes("sierra")) {
+    return {
+      dot: "🟣",
+      bgActive: "bg-purple-600 hover:bg-purple-700 text-white border-purple-600 shadow-sm",
+      borderInactive: "border-purple-200 text-purple-700 hover:bg-purple-50",
+      badge: "bg-purple-100 text-purple-700 border-purple-200",
+      borderLeft: "border-l-purple-500 bg-purple-50/10",
+    };
+  }
+  if (s.includes("wireman")) {
+    return {
+      dot: "🔴",
+      bgActive: "bg-red-600 hover:bg-red-700 text-white border-red-600 shadow-sm",
+      borderInactive: "border-red-200 text-red-700 hover:bg-red-50",
+      badge: "bg-red-100 text-red-700 border-red-200",
+      borderLeft: "border-l-red-500 bg-red-50/10",
+    };
+  }
+  if (s.includes("orange")) {
+    return {
+      dot: "🟠",
+      bgActive: "bg-orange-500 hover:bg-orange-600 text-white border-orange-500 shadow-sm",
+      borderInactive: "border-orange-200 text-orange-700 hover:bg-orange-50",
+      badge: "bg-orange-100 text-orange-700 border-orange-200",
+      borderLeft: "border-l-orange-500 bg-orange-50/10",
+    };
+  }
+  if (s.includes("chint")) {
+    return {
+      dot: "🔵",
+      bgActive: "bg-blue-600 hover:bg-blue-700 text-white border-blue-600 shadow-sm",
+      borderInactive: "border-blue-200 text-blue-700 hover:bg-blue-50",
+      badge: "bg-blue-100 text-blue-700 border-blue-200",
+      borderLeft: "border-l-blue-500 bg-blue-50/10",
+    };
+  }
+  if (s.includes("kelani")) {
+    return {
+      dot: "🟢",
+      bgActive: "bg-green-600 hover:bg-green-700 text-white border-green-600 shadow-sm",
+      borderInactive: "border-green-200 text-green-700 hover:bg-green-50",
+      badge: "bg-green-100 text-green-700 border-green-200",
+      borderLeft: "border-l-green-500 bg-green-50/10",
+    };
+  }
+  if (s.includes("acl")) {
+    return {
+      dot: "🟡",
+      bgActive: "bg-amber-500 hover:bg-amber-600 text-white border-amber-500 shadow-sm",
+      borderInactive: "border-amber-200 text-amber-700 hover:bg-amber-50",
+      badge: "bg-amber-100 text-amber-700 border-amber-200",
+      borderLeft: "border-l-amber-500 bg-amber-50/10",
+    };
+  }
+  return {
+    dot: "⚪",
+    bgActive: "bg-slate-800 hover:bg-slate-900 text-white border-slate-800 shadow-sm",
+    borderInactive: "border-slate-200 text-slate-700 hover:bg-slate-50",
+    badge: "bg-slate-100 text-slate-700 border-slate-200",
+    borderLeft: "border-l-slate-500 bg-slate-50/10",
+  };
+};
 
 interface UserData {
   id: string;
@@ -154,6 +248,9 @@ export default function CreateOrderPage() {
   const [customerOpen, setCustomerOpen] = useState(false);
   const [productOpen, setProductOpen] = useState(false);
 
+  const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([]);
+  const [supplierFilter, setSupplierFilter] = useState("all");
+
   // Current Item Being Added — string-based inputs like distribution
   const [currentItem, setCurrentItem] = useState({
     productId: "",
@@ -165,6 +262,7 @@ export default function CreateOrderPage() {
     unitPrice: 0,
     discountPercent: "",
     stockAvailable: 0,
+    supplier: "",
   });
 
   const qtyInputRef = useRef<HTMLInputElement>(null);
@@ -237,56 +335,43 @@ export default function CreateOrderPage() {
           return;
         }
 
-        // 2. Check settings in parallel
-        const [overrideData, customerCreateData, routesData] = await Promise.all([
+        // 2. Check settings and fetch suppliers in parallel
+        const [overrideData, customerCreateData, routesData, suppliersData, settingSuppliersData] = await Promise.all([
           fetch("/api/settings/invoice-override").then((r) => r.json()).catch(() => ({ enabled: false })),
           fetch("/api/settings/rep-customer-creation").then((r) => r.json()).catch(() => ({ enabled: false })),
           fetch("/api/settings/categories?type=route").then((r) => r.json()).catch(() => []),
+          fetch("/api/suppliers").then((r) => r.json()).catch(() => []),
+          fetch("/api/settings/categories?type=supplier").then((r) => r.json()).catch(() => []),
         ]);
 
         const overrideEnabled = overrideData.enabled ?? false;
         setOutOfStockOverride(overrideEnabled);
         setCanCreateCustomer(customerCreateData.enabled ?? false);
         setRoutes(routesData.filter((r: any) => r.name));
+        setSuppliers([...suppliersData, ...settingSuppliersData]);
 
-        // 3. Fetch Products
-        // Override ON: all active products (incl. 0-stock items with no location row)
-        // Override OFF: only items stocked at rep's assigned location
-        if (overrideEnabled) {
-          const productsRes = await fetch("/api/products?active=true");
-          if (!productsRes.ok) throw new Error("Failed to load products");
-          const productsData = await productsRes.json();
-          setProducts(
-            productsData
-              .filter((p: any) => p.subCategory !== "Retail Exclusive" && !p.retailOnly)
-              .map((p: any) => ({
-                id: p.id,
-                sku: p.sku || "N/A",
-                name: p.name,
-                selling_price: p.sellingPrice || 0,
-                mrp: p.mrp || 0,
-                stock_quantity: p.stock || 0,
-                unit_of_measure: p.unitOfMeasure || "unit",
-              }))
-          );
-        } else {
-          const productsRes = await fetch(`/api/rep/stock?userId=${userId}`);
-          if (!productsRes.ok) throw new Error("Failed to load rep stock");
-          const productsData = await productsRes.json();
-          setProducts(
-            productsData
-              .filter((p: any) => p.subCategory !== "Retail Exclusive")
-              .map((p: any) => ({
-                id: p.id,
-                sku: p.sku,
-                name: p.name,
-                selling_price: p.selling_price,
-                mrp: p.mrp,
-                stock_quantity: p.stock_quantity,
-                unit_of_measure: p.unit_of_measure || "unit",
-              }))
-          );
-        }
+        // 3. Fetch Products (Specific to Rep's Location)
+        const stockUrl = overrideEnabled
+          ? `/api/rep/stock?userId=${userId}&includeOutOfStock=true`
+          : `/api/rep/stock?userId=${userId}`;
+        const productsRes = await fetch(stockUrl);
+        if (!productsRes.ok) throw new Error("Failed to load rep stock");
+        const productsData = await productsRes.json();
+
+        setProducts(
+          productsData
+            .filter((p: any) => p.subCategory !== "Retail Exclusive")
+            .map((p: any) => ({
+              id: p.id,
+              sku: p.sku,
+              name: p.name,
+              selling_price: p.selling_price,
+              mrp: p.mrp,
+              stock_quantity: p.stock_quantity,
+              unit_of_measure: p.unit_of_measure || "unit",
+              supplier: p.supplier,
+            }))
+        );
 
         // 4. Fetch Customers — filtered to rep's own business
         const customersUrl = bizId
@@ -323,6 +408,7 @@ export default function CreateOrderPage() {
       unitPrice: product.selling_price,
       discountPercent: "",
       stockAvailable: product.stock_quantity,
+      supplier: product.supplier || "",
     });
 
     setProductOpen(false);
@@ -380,6 +466,7 @@ export default function CreateOrderPage() {
       discountPercent: discPerc,
       discountAmount: discountAmount,
       total: netTotal,
+      supplier: product.supplier,
     };
 
     setItems([...items, newItem]);
@@ -395,6 +482,7 @@ export default function CreateOrderPage() {
       unitPrice: 0,
       discountPercent: "",
       stockAvailable: 0,
+      supplier: "",
     });
   };
 
@@ -524,9 +612,32 @@ export default function CreateOrderPage() {
     }
   };
 
+  const combinedSuppliers = React.useMemo(() => {
+    const rawList = [...FIXED_SUPPLIERS, ...suppliers];
+    const cleaned: { id: string; name: string }[] = [];
+    const seen = new Set<string>();
+
+    rawList.forEach((sup) => {
+      const cleanName = getSupplierCleanName(sup.name);
+      if (!seen.has(cleanName)) {
+        seen.add(cleanName);
+        cleaned.push({
+          id: sup.id || cleanName,
+          name: cleanName
+        });
+      }
+    });
+    return cleaned;
+  }, [suppliers]);
+
   const availableProducts = products.filter(
     (p) => !items.some((i) => i.productId === p.id)
   );
+
+  const filteredAvailableProducts = availableProducts.filter((product) => {
+    if (supplierFilter === "all") return true;
+    return product.supplier && getSupplierCleanName(product.supplier) === supplierFilter;
+  });
 
   if (loading) {
     return (
@@ -872,6 +983,46 @@ export default function CreateOrderPage() {
               {/* Product search */}
               <div className="space-y-2">
                 <Label className="text-xs sm:text-sm">Product</Label>
+
+                {/* Supplier Filter Buttons Row */}
+                {combinedSuppliers.length > 0 && (
+                  <div className="flex flex-row flex-nowrap items-center overflow-x-auto gap-2 pb-2 border-b border-slate-100 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                    <Button
+                      type="button"
+                      variant={supplierFilter === "all" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setSupplierFilter("all")}
+                      className={cn(
+                        "h-8 text-xs font-semibold rounded-full shrink-0 transition-all duration-200",
+                        supplierFilter === "all"
+                          ? "bg-slate-900 text-white shadow-sm hover:bg-slate-800"
+                          : "border-gray-200 text-gray-700 bg-white hover:bg-gray-50"
+                      )}
+                    >
+                      🌐 All Products
+                    </Button>
+                    {combinedSuppliers.map((sup) => {
+                      const styles = getSupplierColorStyles(sup.name);
+                      const isSelected = supplierFilter === sup.name;
+                      return (
+                        <Button
+                          key={sup.id || sup.name}
+                          type="button"
+                          variant={isSelected ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setSupplierFilter(sup.name)}
+                          className={cn(
+                            "h-8 text-xs font-semibold rounded-full shrink-0 transition-all duration-200",
+                            isSelected ? styles.bgActive : cn("bg-white", styles.borderInactive)
+                          )}
+                        >
+                          {styles.dot} {getSupplierCleanName(sup.name)}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                )}
+
                 <Popover open={productOpen} onOpenChange={setProductOpen}>
                   <PopoverTrigger asChild>
                     <Button
@@ -895,33 +1046,57 @@ export default function CreateOrderPage() {
                     <Command>
                       <CommandInput placeholder="Search product by name or SKU..." />
                       <CommandList>
-                        <CommandEmpty>No product found in your stock.</CommandEmpty>
+                        <CommandEmpty>
+                          {filteredAvailableProducts.length === 0
+                            ? "No products found for this supplier"
+                            : "No product found in your stock."}
+                        </CommandEmpty>
                         <CommandGroup>
-                          {availableProducts.map((product) => (
-                            <CommandItem
-                              key={product.id}
-                              value={`${product.name} ${product.sku}`}
-                              onSelect={() => handleProductSelect(product.id)}
-                            >
-                              <Check
+                          {filteredAvailableProducts.map((product) => {
+                            const styles = product.supplier ? getSupplierColorStyles(product.supplier) : null;
+                            return (
+                              <CommandItem
+                                key={product.id}
+                                value={`${product.name} ${product.sku} ${product.supplier || ""}`}
+                                onSelect={() => handleProductSelect(product.id)}
                                 className={cn(
-                                  "mr-2 h-4 w-4 shrink-0",
-                                  currentItem.productId === product.id
-                                    ? "opacity-100"
-                                    : "opacity-0"
+                                  "flex items-center px-3 py-2 cursor-pointer transition-colors duration-150",
+                                  product.supplier && cn("border-l-4", styles?.borderLeft)
                                 )}
-                              />
-                              <div className="flex-1 min-w-0">
-                                <div className="font-medium text-sm truncate">
-                                  {product.name}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4 shrink-0",
+                                    currentItem.productId === product.id
+                                      ? "opacity-100"
+                                      : "opacity-0"
+                                  )}
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="font-semibold text-slate-900 truncate">
+                                      {product.name}
+                                    </span>
+                                    {product.supplier && (
+                                      <span className={cn(
+                                        "text-[9px] font-bold px-2 py-0.5 rounded-full border shrink-0",
+                                        styles?.badge
+                                      )}>
+                                        {getSupplierCleanName(product.supplier)}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5 font-sans">
+                                    <span className="font-mono">{product.sku}</span>
+                                    <span>•</span>
+                                    <span>Stock: <strong className={cn(product.stock_quantity === 0 ? "text-red-500 font-bold" : "text-slate-700")}>{product.stock_quantity}</strong></span>
+                                    <span>•</span>
+                                    <span>LKR {product.selling_price.toLocaleString()}</span>
+                                  </div>
                                 </div>
-                                <div className="text-xs text-muted-foreground">
-                                  {product.sku} · Stock: {product.stock_quantity} · LKR{" "}
-                                  {product.selling_price}
-                                </div>
-                              </div>
-                            </CommandItem>
-                          ))}
+                              </CommandItem>
+                            );
+                          })}
                         </CommandGroup>
                       </CommandList>
                     </Command>
@@ -1067,47 +1242,60 @@ export default function CreateOrderPage() {
                     <p className="text-sm">No items added yet</p>
                   </div>
                 ) : (
-                  items.map((item, idx) => (
-                    <div key={item.id} className="flex items-start gap-3 px-4 py-3">
-                      <span className="text-xs text-muted-foreground pt-0.5 w-5 shrink-0">
-                        {idx + 1}
-                      </span>
-                      <div className="flex-1 min-w-0 space-y-1">
-                        <p className="font-medium text-sm leading-tight truncate">
-                          {item.productName}
-                        </p>
-                        <p className="text-xs text-muted-foreground">{item.sku}</p>
-                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-                          <span>Qty: <span className="text-foreground font-medium">{item.quantity} {item.unit}</span></span>
-                          {item.freeQuantity > 0 && (
-                            <span>Free: <span className="text-foreground font-medium">{item.freeQuantity}</span></span>
-                          )}
-                          <span>Price: <span className="text-foreground font-medium">LKR {item.unitPrice.toLocaleString()}</span></span>
-                          {item.discountPercent > 0 && (
-                            <span>Disc: <span className="text-foreground font-medium">{item.discountPercent}%</span></span>
-                          )}
+                  items.map((item, idx) => {
+                    const styles = item.supplier ? getSupplierColorStyles(item.supplier) : null;
+                    return (
+                      <div key={item.id} className={cn("flex items-start gap-3 px-4 py-3", item.supplier && cn("border-l-4", styles?.borderLeft))}>
+                        <span className="text-xs text-muted-foreground pt-0.5 w-5 shrink-0">
+                          {idx + 1}
+                        </span>
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="font-medium text-sm leading-tight truncate">
+                              {item.productName}
+                            </p>
+                            {item.supplier && (
+                              <span className={cn(
+                                "text-[8px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider",
+                                styles?.badge
+                              )}>
+                                {getSupplierCleanName(item.supplier)}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground">{item.sku}</p>
+                          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                            <span>Qty: <span className="text-foreground font-medium">{item.quantity} {item.unit}</span></span>
+                            {item.freeQuantity > 0 && (
+                              <span>Free: <span className="text-foreground font-medium">{item.freeQuantity}</span></span>
+                            )}
+                            <span>Price: <span className="text-foreground font-medium">LKR {item.unitPrice.toLocaleString()}</span></span>
+                            {item.discountPercent > 0 && (
+                              <span>Disc: <span className="text-foreground font-medium">{item.discountPercent}%</span></span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <span className="font-bold text-sm">
+                            LKR {item.total.toLocaleString()}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => handleRemoveItem(item.id)}
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                          </Button>
                         </div>
                       </div>
-                      <div className="flex flex-col items-end gap-1 shrink-0">
-                        <span className="font-bold text-sm">
-                          LKR {item.total.toLocaleString()}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => handleRemoveItem(item.id)}
-                        >
-                          <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
 
               {/* ── Desktop table (hidden on mobile) ── */}
-              <div className="hidden sm:block border rounded-md">
+              <div className="hidden sm:block border rounded-md overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -1133,41 +1321,54 @@ export default function CreateOrderPage() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      items.map((item, idx) => (
-                        <TableRow key={item.id}>
-                          <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
-                          <TableCell>
-                            <div className="font-medium">{item.productName}</div>
-                            <div className="text-xs text-muted-foreground">{item.sku}</div>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {item.quantity} {item.unit}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {item.freeQuantity || "-"}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {item.unitPrice.toLocaleString()}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {item.discountPercent > 0
-                              ? `${item.discountPercent}%`
-                              : "-"}
-                          </TableCell>
-                          <TableCell className="text-right font-bold">
-                            {item.total.toLocaleString()}
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleRemoveItem(item.id)}
-                            >
-                              <Trash2 className="w-4 h-4 text-destructive" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))
+                      items.map((item, idx) => {
+                        const styles = item.supplier ? getSupplierColorStyles(item.supplier) : null;
+                        return (
+                          <TableRow key={item.id} className={cn(item.supplier && cn("border-l-4", styles?.borderLeft))}>
+                            <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center flex-wrap gap-1.5">
+                                <span className="font-medium text-slate-900">{item.productName}</span>
+                                {item.supplier && (
+                                  <span className={cn(
+                                    "text-[9px] font-bold px-2 py-0.5 rounded-full border",
+                                    styles?.badge
+                                  )}>
+                                    {getSupplierCleanName(item.supplier)}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-muted-foreground">{item.sku}</div>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {item.quantity} {item.unit}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {item.freeQuantity || "-"}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {item.unitPrice.toLocaleString()}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {item.discountPercent > 0
+                                ? `${item.discountPercent}%`
+                                : "-"}
+                            </TableCell>
+                            <TableCell className="text-right font-bold">
+                              {item.total.toLocaleString()}
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleRemoveItem(item.id)}
+                              >
+                                <Trash2 className="w-4 h-4 text-destructive" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
                     )}
                   </TableBody>
                 </Table>
