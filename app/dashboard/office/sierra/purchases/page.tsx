@@ -143,6 +143,10 @@ export default function SierraPurchasesPage() {
     router.push(`/dashboard/office/sierra/purchases/${purchase.id}`);
   };
 
+  const handleEdit = (purchase: Purchase) => {
+    router.push(`/dashboard/office/sierra/purchases/${purchase.id}/edit`);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -214,6 +218,7 @@ export default function SierraPurchasesPage() {
             sortOrder={sortOrder}
             onSort={handleSort}
             onView={handleView}
+            onEdit={handleEdit}
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={setCurrentPage}

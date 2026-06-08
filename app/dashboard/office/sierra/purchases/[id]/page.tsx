@@ -283,18 +283,15 @@ export default function SierraViewBillPage({
               <Printer className="w-4 h-4 mr-2 text-muted-foreground" /> Print
             </Button>
 
-            {/* Optional Edit Button (if status permits) */}
-            {/* {bill.status === "Ordered" && (
-              <Button
-                size="sm"
-                className="bg-red-600 hover:bg-red-700 text-white"
-                onClick={() =>
-                  router.push(`/dashboard/office/sierra/purchases/${id}/edit`)
-                }
-              >
-                <Edit className="w-4 h-4 mr-2" /> Edit Bill
-              </Button>
-            )} */}
+            <Button
+              size="sm"
+              className="bg-purple-600 hover:bg-purple-700 text-white"
+              onClick={() =>
+                router.push(`/dashboard/office/sierra/purchases/${id}/edit`)
+              }
+            >
+              <Edit className="w-4 h-4 mr-2" /> Edit Bill
+            </Button>
           </div>
         </div>
 

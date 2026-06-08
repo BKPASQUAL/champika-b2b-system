@@ -15,6 +15,7 @@ import {
   FileText,
   Loader2,
   Calendar,
+  Pencil,
 } from "lucide-react";
 import {
   Purchase,
@@ -33,6 +34,7 @@ interface PurchaseTableProps {
   sortOrder: SortOrder;
   onSort: (field: SortField) => void;
   onView: (purchase: Purchase) => void;
+  onEdit: (purchase: Purchase) => void;
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
@@ -42,6 +44,7 @@ export function PurchaseTable({
   purchases,
   loading,
   onView,
+  onEdit,
   currentPage,
   totalPages,
   onPageChange,
@@ -165,14 +168,24 @@ export function PurchaseTable({
                     LKR {purchase.totalAmount.toLocaleString()}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => onView(purchase)}
-                      className="hover:bg-red-100 hover:text-red-700"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </Button>
+                    <div className="flex items-center justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => onEdit(purchase)}
+                        className="hover:bg-amber-100 hover:text-amber-700"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => onView(purchase)}
+                        className="hover:bg-purple-100 hover:text-purple-700"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, use } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -35,14 +35,11 @@ import {
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
-import { ProductDialogs } from "../../products/_components/ProductDialogs";
-import { ProductFormData } from "../../products/types";
-import { SupplierDialogs } from "../../suppliers/_components/SupplierDialogs";
-import { SupplierFormData } from "../../suppliers/types";
+import { ProductDialogs } from "../../../products/_components/ProductDialogs";
+import { ProductFormData } from "../../../products/types";
+import { SupplierDialogs } from "../../../suppliers/_components/SupplierDialogs";
+import { SupplierFormData } from "../../../suppliers/types";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
-import { invalidateCache } from "@/hooks/useCachedFetch";
-
-// --- Types ---
 
 interface Product {
   id: string;
@@ -84,21 +81,25 @@ const parseNumber = (val: string | number) => {
   return Number(val);
 };
 
-export default function CreateSierraPurchasePage() {
+export default function EditSierraPurchasePage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = use(params);
   const router = useRouter();
   const [loadingData, setLoadingData] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  // --- Inline Product Creation State ---
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [categories, setCategories] = useState<{ id: string; name: string; parent_id?: string }[]>([]);
-  const [supplierCategories, setSupplierCategories] = useState<{ id: string; name: string; phone?: string; ownerName?: string; }[]>([]);
+  const [supplierCategories, setSupplierCategories] = useState<{ id: string; name: string; phone?: string; ownerName?: string }[]>([]);
   const [submittingProduct, setSubmittingProduct] = useState(false);
-  
+
   const [formData, setFormData] = useState<ProductFormData>({
     sku: "",
     companyCode: "",
-    name: "",
+    name: "Sierra ",
     category: "",
     subCategory: "",
     brand: "",
@@ -106,7 +107,7 @@ export default function CreateSierraPurchasePage() {
     modelType: "",
     subModel: "",
     sizeSpec: "",
-    supplier: "Sierra Cables Plc",
+    supplier: "Sierra Agency",
     stock: "0",
     minStock: "0",
     mrp: "",
@@ -117,7 +118,6 @@ export default function CreateSierraPurchasePage() {
     isActive: true,
   });
 
-  // --- Inline Supplier Creation State ---
   const [isAddSupplierDialogOpen, setIsAddSupplierDialogOpen] = useState(false);
   const [supplierFormData, setSupplierFormData] = useState<SupplierFormData>({
     name: "",
@@ -132,44 +132,28 @@ export default function CreateSierraPurchasePage() {
   });
   const [submittingSupplier, setSubmittingSupplier] = useState(false);
 
-  // Context State
-  const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(
-    null,
-  );
-  const [currentBusinessName, setCurrentBusinessName] = useState<string>("");
+  const [currentBusinessId] = useState<string>(BUSINESS_IDS.SIERRA_AGENCY);
+  const [currentBusinessName, setCurrentBusinessName] = useState<string>("Sierra Agency");
 
-  // Data States
   const [products, setProducts] = useState<Product[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
 
-  // Form States
   const [supplierId, setSupplierId] = useState<string | null>(null);
-  const [purchaseDate, setPurchaseDate] = useState(
-    new Date().toISOString().split("T")[0],
-  );
+  const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split("T")[0]);
   const [arrivalDate, setArrivalDate] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
-
-  const [extraDiscountPercent, setExtraDiscountPercent] = useState<
-    number | string
-  >("");
-
-  // Items State
+  const [extraDiscountPercent, setExtraDiscountPercent] = useState<number | string>("");
   const [items, setItems] = useState<PurchaseItem[]>([]);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
 
-  // --- Dropdown States ---
   const [searchTerm, setSearchTerm] = useState("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
-
-  // Input Refs for Fast Data Entry
   const qtyInputRef = useRef<HTMLInputElement>(null);
 
-  // Current Item Edit State
   const [currentItem, setCurrentItem] = useState<{
     productId: string;
     sku: string;
@@ -192,28 +176,25 @@ export default function CreateSierraPurchasePage() {
     unit: "",
   });
 
-  // --- 1. Get User Context ---
   useEffect(() => {
     const user = getUserBusinessContext();
     if (!user) {
       toast.error("Session not found. Please log in again.");
       router.push("/login");
     } else {
-      setCurrentBusinessId(BUSINESS_IDS.SIERRA_AGENCY);
       setCurrentBusinessName(user.businessName ?? "Sierra Agency");
     }
   }, [router]);
 
-  // --- 2. Fetch Data Function ---
   const loadData = async () => {
-    if (!currentBusinessId) return;
     setLoadingData(true);
     try {
-      const [prodRes, supRes, catRes, supCatRes] = await Promise.all([
+      const [prodRes, supRes, catRes, supCatRes, purchaseRes] = await Promise.all([
         fetch("/api/products?active=true"),
         fetch(`/api/suppliers?businessId=${currentBusinessId}`),
         fetch("/api/settings/categories?type=category"),
         fetch("/api/settings/categories?type=supplier"),
+        fetch(`/api/purchases/${id}`),
       ]);
 
       if (catRes.ok) setCategories(await catRes.json());
@@ -221,29 +202,60 @@ export default function CreateSierraPurchasePage() {
 
       if (prodRes.ok) {
         const allProducts: Product[] = await prodRes.json();
-        // FILTER: Keep only Sierra products
         const sierraProducts = allProducts.filter((p) =>
-          p.supplier?.toLowerCase().includes("sierra"),
+          p.supplier?.toLowerCase().includes("sierra")
         );
         setProducts(sierraProducts);
-      } else {
-        toast.error("Failed to load products");
       }
 
       if (supRes.ok) {
         const supplierData = await supRes.json();
         setSuppliers(supplierData);
-        // Auto-select Sierra supplier if found
-        const sierraSupplier = supplierData.find((s: Supplier) =>
-          s.name.toLowerCase().includes("sierra"),
-        );
-        if (sierraSupplier) {
-          setSupplierId(sierraSupplier.id);
-        } else if (supplierData.length === 1) {
-          setSupplierId(supplierData[0].id);
-        }
       }
-    } catch (error) {
+
+      if (purchaseRes.ok) {
+        const purchase = await purchaseRes.json();
+
+        setSupplierId(purchase.supplierId);
+        setPurchaseDate(purchase.purchaseDate?.split("T")[0] || new Date().toISOString().split("T")[0]);
+        setArrivalDate(purchase.arrivalDate?.split("T")[0] || "");
+        setInvoiceNumber(purchase.invoiceNo === "-" ? "" : purchase.invoiceNo || "");
+
+        // Calculate percent from stored amount
+        const gross = purchase.totalAmount + purchase.extraDiscount;
+        const pct = gross > 0 ? (purchase.extraDiscount / gross) * 100 : 0;
+        setExtraDiscountPercent(pct > 0 ? parseFloat(pct.toFixed(4)) : "");
+
+        // Map existing items to PurchaseItem format
+        const mappedItems: PurchaseItem[] = purchase.items.map((item: any) => {
+          const qty = item.quantity;
+          const unitPrice = item.unitCost;
+          const discPct = item.discountPercent || 0;
+          const discAmt = item.discount || 0;
+          const finalPrice = unitPrice - discAmt / (qty || 1);
+          return {
+            id: item.id,
+            productId: item.productId,
+            sku: item.sku,
+            productName: item.productName,
+            quantity: qty,
+            freeQuantity: item.freeQuantity || 0,
+            unit: item.unit,
+            mrp: item.mrp || 0,
+            sellingPrice: item.sellingPrice || 0,
+            unitPrice,
+            discountPercent: discPct,
+            discountAmount: discAmt,
+            finalPrice,
+            total: item.totalCost,
+          };
+        });
+        setItems(mappedItems);
+      } else {
+        toast.error("Failed to load purchase");
+        router.push("/dashboard/office/sierra/purchases");
+      }
+    } catch {
       toast.error("Failed to load data");
     } finally {
       setLoadingData(false);
@@ -252,15 +264,11 @@ export default function CreateSierraPurchasePage() {
 
   useEffect(() => {
     loadData();
-  }, [currentBusinessId]);
+  }, [id]);
 
-  // --- Close Dropdown on Click Outside ---
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsDropdownOpen(false);
       }
     }
@@ -268,10 +276,8 @@ export default function CreateSierraPurchasePage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // --- Global Keyboard Shortcuts ---
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // Shift + F to focus search
       if (e.shiftKey && (e.key === "f" || e.key === "F")) {
         e.preventDefault();
         searchInputRef.current?.focus({ preventScroll: true });
@@ -280,10 +286,6 @@ export default function CreateSierraPurchasePage() {
     window.addEventListener("keydown", handleGlobalKeyDown);
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   }, []);
-
-  // --- Handlers ---
-  const handleSupplierChange = (newSupplierId: string) =>
-    setSupplierId(newSupplierId);
 
   const handleProductSelect = (product: Product) => {
     setCurrentItem({
@@ -298,51 +300,34 @@ export default function CreateSierraPurchasePage() {
       quantity: "",
       unit: product.unitOfMeasure || "Pcs",
     });
-    setSearchTerm(product.name); // Set input text to selected product
-    setIsDropdownOpen(false); // Close dropdown
-    setHighlightedIndex(-1); // Reset highlight
-
-    // Auto-focus quantity input for fast data entry
-    setTimeout(() => {
-      qtyInputRef.current?.focus({ preventScroll: true });
-    }, 100);
+    setSearchTerm(product.name);
+    setIsDropdownOpen(false);
+    setHighlightedIndex(-1);
+    setTimeout(() => qtyInputRef.current?.focus({ preventScroll: true }), 100);
   };
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!isDropdownOpen) {
-      if (e.key === "ArrowDown" || e.key === "Enter") {
-        setIsDropdownOpen(true);
-      }
+      if (e.key === "ArrowDown" || e.key === "Enter") setIsDropdownOpen(true);
       return;
     }
-
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setHighlightedIndex((prevIndex) => {
-        const nextIndex =
-          prevIndex < filteredProducts.length - 1 ? prevIndex + 1 : prevIndex;
-        itemRefs.current[nextIndex]?.scrollIntoView({
-          behavior: "smooth",
-          block: "nearest",
-        });
-        return nextIndex;
+      setHighlightedIndex((prev) => {
+        const next = prev < filteredProducts.length - 1 ? prev + 1 : prev;
+        itemRefs.current[next]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        return next;
       });
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setHighlightedIndex((prevIndex) => {
-        const nextIndex = prevIndex > 0 ? prevIndex - 1 : prevIndex;
-        itemRefs.current[nextIndex]?.scrollIntoView({
-          behavior: "smooth",
-          block: "nearest",
-        });
-        return nextIndex;
+      setHighlightedIndex((prev) => {
+        const next = prev > 0 ? prev - 1 : prev;
+        itemRefs.current[next]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        return next;
       });
     } else if (e.key === "Enter") {
       e.preventDefault();
-      if (
-        highlightedIndex >= 0 &&
-        highlightedIndex < filteredProducts.length
-      ) {
+      if (highlightedIndex >= 0 && highlightedIndex < filteredProducts.length) {
         handleProductSelect(filteredProducts[highlightedIndex]);
       }
     } else if (e.key === "Escape") {
@@ -350,25 +335,11 @@ export default function CreateSierraPurchasePage() {
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      handleAddItem();
-    }
-  };
-
   const handleAddItem = () => {
     const qty = parseNumber(currentItem.quantity);
     const unitPrice = parseNumber(currentItem.unitPrice);
-
-    if (!currentItem.productId || qty <= 0) {
-      toast.error("Please enter a valid quantity");
-      return;
-    }
-    if (unitPrice < 0) {
-      toast.error("Invalid Cost Price");
-      return;
-    }
+    if (!currentItem.productId || qty <= 0) return toast.error("Please enter a valid quantity");
+    if (unitPrice < 0) return toast.error("Invalid Cost Price");
 
     const product = products.find((p) => p.id === currentItem.productId);
     if (!product) return;
@@ -390,11 +361,11 @@ export default function CreateSierraPurchasePage() {
       unit: currentItem.unit,
       mrp: currentItem.mrp,
       sellingPrice: currentItem.sellingPrice,
-      unitPrice: unitPrice,
+      unitPrice,
       discountPercent: discountPct,
       discountAmount: totalDiscountAmount,
       finalPrice: netUnitPrice,
-      total: total,
+      total,
     };
 
     if (editingItemId) {
@@ -403,24 +374,13 @@ export default function CreateSierraPurchasePage() {
     } else {
       setItems([...items, newItem]);
     }
-
-    setCurrentItem({
-      productId: "",
-      sku: "",
-      quantity: "",
-      freeQuantity: "",
-      mrp: 0,
-      sellingPrice: 0,
-      unitPrice: "",
-      discountPercent: "",
-      unit: "",
-    });
+    setCurrentItem({ productId: "", sku: "", quantity: "", freeQuantity: "", mrp: 0, sellingPrice: 0, unitPrice: "", discountPercent: "", unit: "" });
     setSearchTerm("");
   };
 
-  const handleRemoveItem = (id: string) => {
-    setItems(items.filter((item) => item.id !== id));
-    if (editingItemId === id) {
+  const handleRemoveItem = (itemId: string) => {
+    setItems(items.filter((item) => item.id !== itemId));
+    if (editingItemId === itemId) {
       setEditingItemId(null);
       setCurrentItem({ productId: "", sku: "", quantity: "", freeQuantity: "", mrp: 0, sellingPrice: 0, unitPrice: "", discountPercent: "", unit: "" });
       setSearchTerm("");
@@ -450,48 +410,38 @@ export default function CreateSierraPurchasePage() {
     setSearchTerm("");
   };
 
-  const totalGross = items.reduce(
-    (sum, item) => sum + item.unitPrice * item.quantity,
-    0,
-  );
-  const totalLineDiscount = items.reduce(
-    (sum, item) => sum + item.discountAmount,
-    0,
-  );
+  const totalGross = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+  const totalLineDiscount = items.reduce((sum, item) => sum + item.discountAmount, 0);
   const subtotal = totalGross - totalLineDiscount;
-  const extraDiscountAmount =
-    (subtotal * parseNumber(extraDiscountPercent)) / 100;
+  const extraDiscountAmount = (subtotal * parseNumber(extraDiscountPercent)) / 100;
   const finalTotal = subtotal - extraDiscountAmount;
 
   const handleSavePurchase = async () => {
     if (items.length === 0) return toast.error("Add at least one item");
     if (!supplierId) return toast.error("Select a supplier");
-    if (!currentBusinessId) return toast.error("Business context missing");
 
     setSubmitting(true);
     const purchasePayload = {
       supplier_id: supplierId,
-      business_id: currentBusinessId,
       purchase_date: purchaseDate,
       arrival_date: arrivalDate || "",
       invoice_number: invoiceNumber || "",
       total_amount: finalTotal,
       extra_discount: extraDiscountAmount,
       extra_discount_percent: parseNumber(extraDiscountPercent),
-      items: items,
+      items,
     };
 
     try {
-      const res = await fetch("/api/purchases", {
-        method: "POST",
+      const res = await fetch(`/api/purchases/${id}`, {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(purchasePayload),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to create purchase");
-      invalidateCache("/api/purchases");
-      toast.success("Bill Created Successfully!");
-      router.push("/dashboard/office/sierra/purchases");
+      if (!res.ok) throw new Error(data.error || "Failed to update purchase");
+      toast.success("Bill Updated Successfully!");
+      router.push(`/dashboard/office/sierra/purchases/${id}`);
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -504,55 +454,23 @@ export default function CreateSierraPurchasePage() {
       toast.error("Please fill required fields (Name, Category)");
       return;
     }
-
     setSubmittingProduct(true);
     const payload = {
       ...formData,
-      supplier: suppliers.find(s => s.id === supplierId)?.name || "Sierra Cables Plc",
+      supplier: suppliers.find((s) => s.id === supplierId)?.name || "Sierra Agency",
       stock: Number(formData.stock) || 0,
       minStock: Number(formData.minStock) || 0,
       mrp: Number(formData.mrp) || 0,
       sellingPrice: Number(formData.sellingPrice) || 0,
       costPrice: Number(formData.costPrice) || 0,
     };
-
     try {
-      const res = await fetch("/api/products", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
+      const res = await fetch("/api/products", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Operation failed");
-      }
-
+      if (!res.ok) throw new Error(data.error || "Operation failed");
       toast.success("Product created successfully!");
       setIsAddDialogOpen(false);
-      setFormData({
-        sku: "",
-        companyCode: "",
-        name: "",
-        category: "",
-        subCategory: "",
-        brand: "",
-        subBrand: "",
-        modelType: "",
-        subModel: "",
-        sizeSpec: "",
-        supplier: "Sierra Cables Plc",
-        stock: "0",
-        minStock: "0",
-        mrp: "",
-        sellingPrice: "",
-        costPrice: "",
-        images: [],
-        unitOfMeasure: "Pcs",
-        isActive: true,
-      });
-      // Refresh the product catalog so the new item is available immediately!
-      await loadData(); 
+      await loadData();
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -565,40 +483,13 @@ export default function CreateSierraPurchasePage() {
       toast.error("Please fill in required fields (Name, Contact, Phone)");
       return;
     }
-
     setSubmittingSupplier(true);
-    const payload = {
-      ...supplierFormData,
-      businessId: BUSINESS_IDS.SIERRA_AGENCY,
-    };
-
     try {
-      const res = await fetch("/api/suppliers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
+      const res = await fetch("/api/suppliers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...supplierFormData, businessId: BUSINESS_IDS.SIERRA_AGENCY }) });
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to create supplier");
-      }
-
+      if (!res.ok) throw new Error(data.error || "Failed to create supplier");
       toast.success("Supplier created successfully!");
       setIsAddSupplierDialogOpen(false);
-      setSupplierFormData({
-        name: "",
-        contactPerson: "",
-        email: "",
-        phone: "",
-        address: "",
-        category: "",
-        status: "Active",
-        duePayment: 0,
-        businessId: BUSINESS_IDS.SIERRA_AGENCY,
-      });
-      invalidateCache("/api/suppliers");
-      // Refresh the setup and auto-select
       await loadData();
     } catch (error: any) {
       toast.error(error.message);
@@ -608,23 +499,19 @@ export default function CreateSierraPurchasePage() {
   };
 
   const filteredProducts = products.filter((p) => {
-    if (items.some((i) => i.productId === p.id)) return false;
-
-    const searchLower = searchTerm.toLowerCase();
     if (searchTerm === "") return true;
-
-    return (
-      p.name.toLowerCase().includes(searchLower) ||
-      p.sku.toLowerCase().includes(searchLower) ||
-      (p.companyCode && p.companyCode.toLowerCase().includes(searchLower)) ||
-      (p.supplier && p.supplier.toLowerCase().includes(searchLower))
-    );
+    const words = searchTerm.toLowerCase().trim().split(/\s+/);
+    for (const word of words) {
+      const pName = p.name?.toLowerCase() || "";
+      const pSku = p.sku?.toLowerCase() || "";
+      const pCode = p.companyCode?.toLowerCase() || "";
+      if (!pName.includes(word) && !pSku.includes(word) && !pCode.includes(word)) return false;
+    }
+    return true;
   });
 
   const currentLineDiscountAmount =
-    ((parseNumber(currentItem.unitPrice) *
-      parseNumber(currentItem.discountPercent)) /
-      100) *
+    ((parseNumber(currentItem.unitPrice) * parseNumber(currentItem.discountPercent)) / 100) *
     parseNumber(currentItem.quantity);
 
   if (loadingData) {
@@ -641,39 +528,39 @@ export default function CreateSierraPurchasePage() {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => router.push("/dashboard/office/sierra/purchases")}
+          onClick={() => router.push(`/dashboard/office/sierra/purchases/${id}`)}
         >
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <div className="flex-1">
-          <h1 className="text-3xl font-bold tracking-tight text-red-900">
-            New Bill
+          <h1 className="text-3xl font-bold tracking-tight text-purple-900">
+            Edit Bill
           </h1>
           <p className="text-muted-foreground mt-1">
-            Create a new bill for {currentBusinessName}
+            Update bill for {currentBusinessName}
           </p>
         </div>
         <Button
           onClick={handleSavePurchase}
           disabled={items.length === 0 || submitting}
-          className="bg-red-600 hover:bg-red-700"
+          className="bg-purple-600 hover:bg-purple-700"
         >
           {submitting ? (
             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
           ) : (
             <Save className="w-4 h-4 mr-2" />
           )}
-          Save Bill
+          Update Bill
         </Button>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
         {/* LEFT COLUMN */}
         <div className="lg:col-span-2 space-y-3">
-          <Card className="border-red-200">
+          <Card className="border-purple-200">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Factory className="w-4 h-4 text-red-600" /> Bill Details
+                <Factory className="w-4 h-4 text-purple-600" /> Bill Details
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -684,17 +571,14 @@ export default function CreateSierraPurchasePage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-auto p-0 text-xs text-red-600 hover:text-red-700 hover:bg-transparent"
+                      className="h-auto p-0 text-xs text-purple-600 hover:text-purple-700 hover:bg-transparent"
                       type="button"
                       onClick={() => setIsAddSupplierDialogOpen(true)}
                     >
                       <Plus className="w-3 h-3 mr-1" /> New
                     </Button>
                   </div>
-                  <Select
-                    value={supplierId || ""}
-                    onValueChange={handleSupplierChange}
-                  >
+                  <Select value={supplierId || ""} onValueChange={setSupplierId}>
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Select Supplier" />
                     </SelectTrigger>
@@ -732,13 +616,13 @@ export default function CreateSierraPurchasePage() {
                     type="date"
                     value={arrivalDate}
                     onChange={(e) => setArrivalDate(e.target.value)}
-                    placeholder="Select date"
                   />
                 </div>
               </div>
             </CardContent>
           </Card>
 
+          {/* Add Items */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Add Items</CardTitle>
@@ -747,28 +631,22 @@ export default function CreateSierraPurchasePage() {
                   variant="outline"
                   size="sm"
                   onClick={() => setIsAddDialogOpen(true)}
-                  className="text-xs border-dashed border-red-300 text-red-600 hover:text-red-700 hover:bg-red-50"
+                  className="text-xs border-dashed border-purple-300 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
                   type="button"
                 >
                   <Plus className="w-3 h-3 mr-1" /> New Item
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={loadData}
-                  className="text-xs"
-                  type="button"
-                >
+                <Button variant="ghost" size="sm" onClick={loadData} className="text-xs" type="button">
                   <RefreshCcw className="w-3 h-3 mr-1" /> Refresh
                 </Button>
               </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {/* --- CUSTOM NORMAL SEARCHABLE DROPDOWN --- */}
                 <div className="w-full relative" ref={dropdownRef}>
                   <Label className="mb-2 block">
-                    Product Search ({products.length} Sierra products loaded)
+                    Product Search ({products.length} Sierra products loaded) —{" "}
+                    <span className="text-xs text-muted-foreground">Shift+F to focus</span>
                   </Label>
                   <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -777,49 +655,29 @@ export default function CreateSierraPurchasePage() {
                       placeholder="Type product name or SKU..."
                       className="pl-8"
                       value={searchTerm}
-                      onChange={(e) => {
-                        setSearchTerm(e.target.value);
-                        setIsDropdownOpen(true);
-                        setHighlightedIndex(-1); // Reset highlight when typing
-                      }}
+                      onChange={(e) => { setSearchTerm(e.target.value); setIsDropdownOpen(true); setHighlightedIndex(-1); }}
                       onFocus={() => setIsDropdownOpen(true)}
                       onKeyDown={handleSearchKeyDown}
                     />
                     {searchTerm && (
                       <button
-                        onClick={() => {
-                          setSearchTerm("");
-                          setCurrentItem((prev) => ({
-                            ...prev,
-                            productId: "",
-                          }));
-                          setHighlightedIndex(-1);
-                        }}
+                        onClick={() => { setSearchTerm(""); setCurrentItem((prev) => ({ ...prev, productId: "" })); setHighlightedIndex(-1); }}
                         className="absolute right-2 top-2.5 text-muted-foreground hover:text-black"
                       >
                         <X className="w-4 h-4" />
                       </button>
                     )}
                   </div>
-
                   {isDropdownOpen && (
                     <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
                       {filteredProducts.length === 0 ? (
-                        <div className="p-3 text-sm text-center text-gray-500">
-                          No products found
-                        </div>
+                        <div className="p-3 text-sm text-center text-gray-500">No products found</div>
                       ) : (
                         filteredProducts.map((product, index) => (
                           <div
                             key={product.id}
-                            ref={(el) => {
-                              itemRefs.current[index] = el;
-                            }}
-                            className={`p-2 cursor-pointer border-b border-gray-50 last:border-0 ${
-                              highlightedIndex === index
-                                ? "bg-red-100" // Highlighted color
-                                : "hover:bg-red-50"
-                            }`}
+                            ref={(el) => { itemRefs.current[index] = el; }}
+                            className={`p-2 cursor-pointer border-b border-gray-50 last:border-0 ${highlightedIndex === index ? "bg-purple-100" : "hover:bg-purple-50"}`}
                             onMouseEnter={() => setHighlightedIndex(index)}
                             onClick={() => handleProductSelect(product)}
                           >
@@ -827,18 +685,11 @@ export default function CreateSierraPurchasePage() {
                               {product.name}
                             </div>
                             <div className="text-xs text-gray-600 grid grid-cols-2 gap-1 font-medium">
-                              <div>
-                                <span className="text-gray-400 font-normal">Item Code:</span> {product.sku}
-                              </div>
+                              <div><span className="text-gray-400 font-normal">Item Code:</span> {product.sku}</div>
                               {product.companyCode && (
-                                <div>
-                                  <span className="text-gray-400 font-normal">Company Code:</span>{" "}
-                                  <span className="text-blue-600">{product.companyCode}</span>
-                                </div>
+                                <div><span className="text-gray-400 font-normal">Company Code:</span> <span className="text-blue-600">{product.companyCode}</span></div>
                               )}
-                              <div className="col-span-2">
-                                <span className="text-gray-400 font-normal">Supplier:</span> {product.supplier || "No Supplier"}
-                              </div>
+                              <div className="col-span-2"><span className="text-gray-400 font-normal">Supplier:</span> {product.supplier || "No Supplier"}</div>
                             </div>
                           </div>
                         ))
@@ -846,26 +697,15 @@ export default function CreateSierraPurchasePage() {
                     </div>
                   )}
                 </div>
-                {/* ----------------------- */}
 
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 items-end">
                   <div className="col-span-1">
                     <Label className="mb-2 block text-xs">Item Code</Label>
-                    <Input
-                      value={currentItem.sku || ""}
-                      disabled
-                      className="h-9 bg-muted text-xs"
-                      placeholder="Auto"
-                    />
+                    <Input value={currentItem.sku || ""} disabled className="h-9 bg-muted text-xs" placeholder="Auto" />
                   </div>
                   <div className="col-span-1">
                     <Label className="mb-2 block text-xs">Unit</Label>
-                    <Input
-                      value={currentItem.unit || ""}
-                      disabled
-                      className="h-9 bg-muted text-xs"
-                      placeholder="Unit"
-                    />
+                    <Input value={currentItem.unit || ""} disabled className="h-9 bg-muted text-xs" placeholder="Unit" />
                   </div>
                   <div className="col-span-1">
                     <Label className="mb-2 block text-xs">Quantity</Label>
@@ -874,59 +714,31 @@ export default function CreateSierraPurchasePage() {
                       type="number"
                       min="1"
                       value={currentItem.quantity}
-                      onChange={(e) =>
-                        setCurrentItem({
-                          ...currentItem,
-                          quantity:
-                            e.target.value === ""
-                              ? ""
-                              : parseInt(e.target.value),
-                        })
-                      }
-                      onKeyDown={handleKeyDown}
+                      onChange={(e) => setCurrentItem({ ...currentItem, quantity: e.target.value === "" ? "" : parseInt(e.target.value) })}
+                      onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAddItem())}
                       className="h-9 text-xs"
                     />
                   </div>
                   <div className="col-span-1">
-                    <Label className="mb-2 block text-xs text-green-600">
-                      Free Qty
-                    </Label>
+                    <Label className="mb-2 block text-xs text-green-600">Free Qty</Label>
                     <Input
                       type="number"
                       min="0"
                       value={currentItem.freeQuantity}
-                      onChange={(e) =>
-                        setCurrentItem({
-                          ...currentItem,
-                          freeQuantity:
-                            e.target.value === ""
-                              ? ""
-                              : parseInt(e.target.value),
-                        })
-                      }
-                      onKeyDown={handleKeyDown}
+                      onChange={(e) => setCurrentItem({ ...currentItem, freeQuantity: e.target.value === "" ? "" : parseInt(e.target.value) })}
+                      onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAddItem())}
                       className="h-9 border-green-200 text-xs"
                     />
                   </div>
                   <div className="col-span-1">
-                    <Label className="mb-2 block text-xs font-semibold text-blue-600">
-                      Cost Price
-                    </Label>
+                    <Label className="mb-2 block text-xs font-semibold text-blue-600">Cost Price</Label>
                     <Input
                       type="number"
                       min="0"
                       step="0.01"
                       value={currentItem.unitPrice}
-                      onChange={(e) =>
-                        setCurrentItem({
-                          ...currentItem,
-                          unitPrice:
-                            e.target.value === ""
-                              ? ""
-                              : parseFloat(e.target.value),
-                        })
-                      }
-                      onKeyDown={handleKeyDown}
+                      onChange={(e) => setCurrentItem({ ...currentItem, unitPrice: e.target.value === "" ? "" : parseFloat(e.target.value) })}
+                      onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAddItem())}
                       className="h-9 border-blue-200 text-xs"
                     />
                   </div>
@@ -938,29 +750,15 @@ export default function CreateSierraPurchasePage() {
                       max="100"
                       step="0.01"
                       value={currentItem.discountPercent}
-                      onChange={(e) =>
-                        setCurrentItem({
-                          ...currentItem,
-                          discountPercent:
-                            e.target.value === ""
-                              ? ""
-                              : parseFloat(e.target.value),
-                        })
-                      }
-                      onKeyDown={handleKeyDown}
+                      onChange={(e) => setCurrentItem({ ...currentItem, discountPercent: e.target.value === "" ? "" : parseFloat(e.target.value) })}
+                      onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAddItem())}
                       className="h-9 text-xs"
                     />
                   </div>
                   <div className="col-span-1">
-                    <Label className="mb-2 block text-xs text-muted-foreground">
-                      Disc Amt
-                    </Label>
+                    <Label className="mb-2 block text-xs text-muted-foreground">Disc Amt</Label>
                     <Input
-                      value={
-                        currentLineDiscountAmount > 0
-                          ? currentLineDiscountAmount.toFixed(2)
-                          : ""
-                      }
+                      value={currentLineDiscountAmount > 0 ? currentLineDiscountAmount.toFixed(2) : ""}
                       disabled
                       className="h-9 bg-muted text-xs"
                       placeholder="0.00"
@@ -973,19 +771,14 @@ export default function CreateSierraPurchasePage() {
                       min="0"
                       step="0.01"
                       value={currentItem.sellingPrice || ""}
-                      onChange={(e) =>
-                        setCurrentItem({
-                          ...currentItem,
-                          sellingPrice: parseFloat(e.target.value) || 0,
-                        })
-                      }
+                      onChange={(e) => setCurrentItem({ ...currentItem, sellingPrice: parseFloat(e.target.value) || 0 })}
                       className="h-9 text-xs"
                     />
                   </div>
                   <div className="col-span-1">
                     <Button
                       onClick={handleAddItem}
-                      className="w-full h-9 bg-red-600 hover:bg-red-700"
+                      className="w-full h-9 bg-purple-600 hover:bg-purple-700"
                       disabled={!currentItem.productId}
                     >
                       {editingItemId ? <><Pencil className="w-3.5 h-3.5 mr-1" /> Update</> : <><Plus className="w-4 h-4 mr-1" /> Add</>}
@@ -1003,11 +796,11 @@ export default function CreateSierraPurchasePage() {
             </CardContent>
           </Card>
 
-          {/* Table */}
+          {/* Items Table */}
           <Card>
             <CardContent className="p-0">
               <Table>
-                <TableHeader className="bg-red-50/50">
+                <TableHeader className="bg-purple-50/50">
                   <TableRow>
                     <TableHead>Product</TableHead>
                     <TableHead className="text-right">Cost</TableHead>
@@ -1021,10 +814,7 @@ export default function CreateSierraPurchasePage() {
                 <TableBody>
                   {items.length === 0 ? (
                     <TableRow>
-                      <TableCell
-                        colSpan={7}
-                        className="text-center py-8 text-muted-foreground"
-                      >
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                         No items added
                       </TableCell>
                     </TableRow>
@@ -1036,27 +826,15 @@ export default function CreateSierraPurchasePage() {
                       >
                         <TableCell>
                           <div className="font-medium">{item.productName}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {item.sku}
-                          </div>
+                          <div className="text-xs text-muted-foreground">{item.sku}</div>
                         </TableCell>
-                        <TableCell className="text-right">
-                          {item.unitPrice}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {item.quantity}
-                        </TableCell>
-                        <TableCell className="text-right text-green-600">
-                          {item.freeQuantity || "-"}
-                        </TableCell>
+                        <TableCell className="text-right">{item.unitPrice}</TableCell>
+                        <TableCell className="text-right">{item.quantity}</TableCell>
+                        <TableCell className="text-right text-green-600">{item.freeQuantity || "-"}</TableCell>
                         <TableCell className="text-right text-red-500">
-                          {item.discountAmount > 0
-                            ? item.discountAmount.toFixed(2)
-                            : "-"}
+                          {item.discountAmount > 0 ? item.discountAmount.toFixed(2) : "-"}
                         </TableCell>
-                        <TableCell className="text-right font-bold">
-                          {item.total.toLocaleString()}
-                        </TableCell>
+                        <TableCell className="text-right font-bold">{item.total.toLocaleString()}</TableCell>
                         <TableCell>
                           <div className="flex items-center justify-end gap-1">
                             <Button
@@ -1067,11 +845,7 @@ export default function CreateSierraPurchasePage() {
                             >
                               <Pencil className="w-3.5 h-3.5" />
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              onClick={() => handleRemoveItem(item.id)}
-                            >
+                            <Button variant="ghost" size="icon-sm" onClick={() => handleRemoveItem(item.id)}>
                               <Trash2 className="w-3.5 h-3.5 text-red-500" />
                             </Button>
                           </div>
@@ -1087,8 +861,8 @@ export default function CreateSierraPurchasePage() {
 
         {/* RIGHT COLUMN - Summary */}
         <div className="lg:col-span-1">
-          <Card className="sticky top-6 border-red-200 shadow-md">
-            <CardHeader className="bg-red-50/30 pb-4">
+          <Card className="sticky top-6 border-purple-200 shadow-md">
+            <CardHeader className="bg-purple-50/30 pb-4">
               <CardTitle className="text-lg">Bill Summary</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 pt-6">
@@ -1101,9 +875,7 @@ export default function CreateSierraPurchasePage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Date:</span>
-                  <span className="font-medium">
-                    {new Date(purchaseDate).toLocaleDateString()}
-                  </span>
+                  <span className="font-medium">{new Date(purchaseDate).toLocaleDateString()}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Invoice #:</span>
@@ -1115,29 +887,23 @@ export default function CreateSierraPurchasePage() {
                   <span>Subtotal:</span>
                   <span>LKR {subtotal.toLocaleString()}</span>
                 </div>
-                <div className="space-y-2 bg-red-50 p-3 rounded-md border border-red-100">
+                <div className="space-y-2 bg-purple-50 p-3 rounded-md border border-purple-100">
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs text-red-800">
-                      Extra Discount (%)
-                    </Label>
+                    <Label className="text-xs text-purple-800">Extra Discount (%)</Label>
                     <Input
                       type="number"
                       min="0"
                       max="100"
                       value={extraDiscountPercent}
                       onChange={(e) =>
-                        setExtraDiscountPercent(
-                          e.target.value === ""
-                            ? ""
-                            : parseFloat(e.target.value),
-                        )
+                        setExtraDiscountPercent(e.target.value === "" ? "" : parseFloat(e.target.value))
                       }
                       placeholder="0%"
                       className="h-7 w-20 text-right text-xs bg-white"
                     />
                   </div>
                   {extraDiscountAmount > 0 && (
-                    <div className="flex justify-between text-xs text-red-600 font-medium">
+                    <div className="flex justify-between text-xs text-purple-600 font-medium">
                       <span>Amount:</span>
                       <span>
                         - LKR{" "}
@@ -1149,9 +915,9 @@ export default function CreateSierraPurchasePage() {
                     </div>
                   )}
                 </div>
-                <div className="flex justify-between items-center pt-4 border-t-2 border-red-100 mt-2">
+                <div className="flex justify-between items-center pt-4 border-t-2 border-purple-100 mt-2">
                   <span className="font-bold text-lg">Net Payable:</span>
-                  <span className="text-2xl font-bold text-red-600">
+                  <span className="text-2xl font-bold text-purple-600">
                     LKR{" "}
                     {Math.max(0, finalTotal).toLocaleString(undefined, {
                       minimumFractionDigits: 2,
@@ -1161,22 +927,17 @@ export default function CreateSierraPurchasePage() {
               </div>
               <Button
                 onClick={handleSavePurchase}
-                className="w-full bg-red-600 hover:bg-red-700 mt-4"
+                className="w-full bg-purple-600 hover:bg-purple-700 mt-4"
                 size="lg"
                 disabled={items.length === 0 || submitting}
               >
-                {submitting ? (
-                  "Processing..."
-                ) : (
-                  <>
-                    <Save className="w-4 h-4 mr-2" /> Confirm Bill
-                  </>
-                )}
+                {submitting ? "Updating..." : <><Save className="w-4 h-4 mr-2" /> Update Bill</>}
               </Button>
             </CardContent>
           </Card>
         </div>
       </div>
+
       <ProductDialogs
         isAddDialogOpen={isAddDialogOpen}
         setIsAddDialogOpen={setIsAddDialogOpen}
