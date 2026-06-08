@@ -773,7 +773,7 @@ export default function CreateOrderPage() {
   // ── End overlay ─────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-4 mx-auto pb-28 lg:pb-6">
+    <div className="space-y-4 mx-auto pb-28 lg:pb-6 w-full max-w-full min-w-0 overflow-x-hidden">
 
       {/* Draft Restore Dialog */}
       <Dialog open={draftRestoreOpen} onOpenChange={setDraftRestoreOpen}>
@@ -846,14 +846,14 @@ export default function CreateOrderPage() {
         </Button>
       </div>
 
-      <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-3 w-full max-w-full min-w-0">
 
         {/* ── LEFT COLUMN ── */}
-        <div className="lg:col-span-2 space-y-4 sm:space-y-6">
+        <div className="lg:col-span-2 space-y-4 sm:space-y-6 w-full min-w-0">
 
           {/* 1. Customer Details */}
-          <Card>
-            <CardHeader className="pb-3 sm:pb-6">
+          <Card className="w-full min-w-0 overflow-hidden">
+            <CardHeader className="pb-1 sm:pb-2">
               <CardTitle className="text-base sm:text-lg">Customer Details</CardTitle>
               <CardDescription className="text-xs sm:text-sm">
                 Select the customer for this order
@@ -969,8 +969,8 @@ export default function CreateOrderPage() {
           </Card>
 
           {/* 2. Add Products */}
-          <Card>
-            <CardHeader className="pb-3 sm:pb-6">
+          <Card className="w-full min-w-0 overflow-hidden">
+            <CardHeader className="pb-1 sm:pb-2">
               <CardTitle className="text-base sm:text-lg">Add Products</CardTitle>
               <CardDescription className="text-xs sm:text-sm">
                 {outOfStockOverride
@@ -1104,8 +1104,8 @@ export default function CreateOrderPage() {
                 </Popover>
               </div>
 
-              {/* Qty / Free / Unit / Stock — 2 cols on mobile, 4 on sm+ */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+              {/* Qty / Free / Unit / Stock — 2 cols on mobile, 4 on md+ */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
                 <div className="space-y-2">
                   <Label className="text-xs sm:text-sm">Quantity</Label>
                   <Input
@@ -1160,8 +1160,8 @@ export default function CreateOrderPage() {
                 </div>
               </div>
 
-              {/* MRP / Unit Price / Discount / Total — 2 cols on mobile, 4 on sm+ */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+              {/* MRP / Unit Price / Discount / Total — 2 cols on mobile, 4 on md+ */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
                 <div className="space-y-2">
                   <Label className="text-xs sm:text-sm">MRP</Label>
                   <Input
@@ -1225,8 +1225,8 @@ export default function CreateOrderPage() {
           </Card>
 
           {/* 3. Order Items */}
-          <Card>
-            <CardHeader className="pb-3 sm:pb-6">
+          <Card className="w-full min-w-0 overflow-hidden">
+            <CardHeader className="pb-1 sm:pb-2">
               <CardTitle className="text-base sm:text-lg">Order Items</CardTitle>
               <CardDescription className="text-xs sm:text-sm">
                 {items.length} item(s) added
