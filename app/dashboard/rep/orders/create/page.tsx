@@ -266,6 +266,7 @@ export default function CreateOrderPage() {
   });
 
   const qtyInputRef = useRef<HTMLInputElement>(null);
+  const addProductCardRef = useRef<HTMLDivElement>(null);
 
   // --- Draft Auto-Save ---
   const hasDraftInput = (items.length > 0 || customerId !== null) && !submitting;
@@ -969,7 +970,8 @@ export default function CreateOrderPage() {
           </Card>
 
           {/* 2. Add Products */}
-          <Card className="w-full min-w-0 overflow-hidden">
+          <div ref={addProductCardRef} className="scroll-mt-4 w-full">
+            <Card className="w-full min-w-0 overflow-hidden">
             <CardHeader className="pb-1 sm:pb-2">
               <CardTitle className="text-base sm:text-lg">Add Products</CardTitle>
               <CardDescription className="text-xs sm:text-sm">
@@ -1023,7 +1025,18 @@ export default function CreateOrderPage() {
                   </div>
                 )}
 
-                <Popover open={productOpen} onOpenChange={setProductOpen}>
+                <Popover
+                  open={productOpen}
+                  onOpenChange={(open) => {
+                    setProductOpen(open);
+                    if (open && typeof window !== "undefined" && window.innerWidth < 1024) {
+                      addProductCardRef.current?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "start",
+                      });
+                    }
+                  }}
+                >
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
@@ -1223,6 +1236,7 @@ export default function CreateOrderPage() {
               </Button>
             </CardContent>
           </Card>
+        </div>
 
           {/* 3. Order Items */}
           <Card className="w-full min-w-0 overflow-hidden">
