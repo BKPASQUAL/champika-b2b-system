@@ -29,15 +29,13 @@ export async function GET(request: NextRequest) {
 
     const locationIds = assignments.map((a) => a.location_id);
 
-    // 2. Build the Query
-    // Use !inner on products to ensure we filter stocks based on product properties
-    let query = supabaseAdmin
-      .from("product_stocks")
-      .select(
-        `
-        quantity,
-        location_id,
-        products!inner (
+    // 2. Build the Query & Aggregate Data
+    if (includeOutOfStock) {
+      // Out-of-stock mode: Fetch ALL active products (left-joining stocks for the rep's locations)
+      let query = supabaseAdmin
+        .from("products")
+        .select(
+          `
           id,
           sku,
           name,
@@ -52,45 +50,35 @@ export async function GET(request: NextRequest) {
           is_active,
           supplier_name,
           company_code,
-          retail_only
+          retail_only,
+          product_stocks (
+            quantity,
+            location_id
+          )
+        `
         )
-      `
-      )
-      .in("location_id", locationIds);
+        .eq("is_active", true)
+        .in("product_stocks.location_id", locationIds);
 
-    // Only filter by quantity > 0 in normal mode; allow 0-stock when override is active
-    if (!includeOutOfStock) {
-      query = query.gt("quantity", 0);
-    }
+      // Apply Supplier Filter if provided
+      if (supplier) {
+        query = query.eq("supplier_name", supplier);
+      }
+      if (supplierLike) {
+        query = query.ilike("supplier_name", `%${supplierLike}%`);
+      }
 
-    // ✅ 3. Apply Supplier Filter if provided
-    if (supplier) {
-      query = query.eq("products.supplier_name", supplier);
-    }
-    if (supplierLike) {
-      query = query.ilike("products.supplier_name", `%${supplierLike}%`);
-    }
+      const { data: productsData, error: productsError } = await query;
+      if (productsError) throw productsError;
 
-    const { data: stocks, error: stockError } = await query;
-
-    if (stockError) throw stockError;
-
-    // 4. Aggregate data
-    // (In case a user is assigned to multiple locations, we sum the stock)
-    const productMap = new Map();
-
-    stocks?.forEach((item: any) => {
-      const p = item.products;
-      if (!p) return;
-
-      // --- FILTER: Hide Inactive Products ---
-      if (p.is_active === false) return;
-
-      if (productMap.has(p.id)) {
-        const existing = productMap.get(p.id);
-        existing.stock_quantity += item.quantity;
-      } else {
-        productMap.set(p.id, {
+      const productList = productsData?.map((p: any) => {
+        let stock_quantity = 0;
+        if (p.product_stocks) {
+          p.product_stocks.forEach((item: any) => {
+            stock_quantity += item.quantity;
+          });
+        }
+        return {
           id: p.id,
           sku: p.sku,
           name: p.name,
@@ -98,17 +86,89 @@ export async function GET(request: NextRequest) {
           retail_price: p.retail_price ?? null,
           retail_only: p.retail_only ?? false,
           mrp: p.mrp,
-          stock_quantity: item.quantity,
+          stock_quantity,
           unit_of_measure: p.unit_of_measure || "unit",
           category: p.category,
           subCategory: p.sub_category,
           supplier: p.supplier_name,
           company_code: p.company_code,
-        });
-      }
-    });
+        };
+      });
 
-    return NextResponse.json(Array.from(productMap.values()));
+      return NextResponse.json(productList || []);
+    } else {
+      // Normal mode: Fetch only products with active stock > 0 in rep's locations
+      let query = supabaseAdmin
+        .from("product_stocks")
+        .select(
+          `
+          quantity,
+          location_id,
+          products!inner (
+            id,
+            sku,
+            name,
+            selling_price,
+            cost_price,
+            retail_price,
+            mrp,
+            unit_of_measure,
+            category,
+            sub_category,
+            brand,
+            is_active,
+            supplier_name,
+            company_code,
+            retail_only
+          )
+        `
+        )
+        .in("location_id", locationIds)
+        .gt("quantity", 0);
+
+      // Apply Supplier Filter if provided
+      if (supplier) {
+        query = query.eq("products.supplier_name", supplier);
+      }
+      if (supplierLike) {
+        query = query.ilike("products.supplier_name", `%${supplierLike}%`);
+      }
+
+      const { data: stocks, error: stockError } = await query;
+      if (stockError) throw stockError;
+
+      const productMap = new Map();
+      stocks?.forEach((item: any) => {
+        const p = item.products;
+        if (!p) return;
+
+        // --- FILTER: Hide Inactive Products ---
+        if (p.is_active === false) return;
+
+        if (productMap.has(p.id)) {
+          const existing = productMap.get(p.id);
+          existing.stock_quantity += item.quantity;
+        } else {
+          productMap.set(p.id, {
+            id: p.id,
+            sku: p.sku,
+            name: p.name,
+            selling_price: p.selling_price,
+            retail_price: p.retail_price ?? null,
+            retail_only: p.retail_only ?? false,
+            mrp: p.mrp,
+            stock_quantity: item.quantity,
+            unit_of_measure: p.unit_of_measure || "unit",
+            category: p.category,
+            subCategory: p.sub_category,
+            supplier: p.supplier_name,
+            company_code: p.company_code,
+          });
+        }
+      });
+
+      return NextResponse.json(Array.from(productMap.values()));
+    }
   } catch (error: any) {
     console.error("Rep Stock API Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
