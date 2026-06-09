@@ -299,31 +299,68 @@ export async function POST(request: NextRequest) {
 
     const productIds = [...new Set(val.items.map((i) => i.productId))];
 
-    const [productsRes, costLayersRes] = await Promise.all([
+    const [productsRes, costLayersRes, productSuppliersRes] = await Promise.all([
       supabaseAdmin
         .from("products")
-        .select("id, commission_type, commission_value, cost_price, actual_cost_price")
+        .select("id, commission_type, commission_value, cost_price, actual_cost_price, supplier_name, category, sub_category")
         .in("id", productIds),
       // Fetch FIFO cost layers oldest-first for all products in this invoice
       supabaseAdmin
         .from("product_cost_layers")
-        .select("id, product_id, cost_price, remaining_quantity")
+        .select(`
+          id,
+          product_id,
+          cost_price,
+          remaining_quantity,
+          purchase_id,
+          purchases (
+            supplier_id,
+            suppliers (
+              id,
+              name
+            )
+          )
+        `)
         .in("product_id", productIds)
         .gt("remaining_quantity", 0)
         .order("created_at", { ascending: true }),
+      supabaseAdmin
+        .from("product_suppliers")
+        .select("product_id, supplier_id, supplier_name, commission_value")
+        .in("product_id", productIds)
     ]);
 
     const products = productsRes.data;
 
+    // Fetch commission rules for all potential suppliers to avoid query-in-loop
+    const suppliersSet = new Set<string>();
+    (products || []).forEach((p) => { if (p.supplier_name) suppliersSet.add(p.supplier_name); });
+    (productSuppliersRes.data || []).forEach((ps) => { if (ps.supplier_name) suppliersSet.add(ps.supplier_name); });
+    (costLayersRes.data || []).forEach((layer: any) => {
+      const name = layer.purchases?.suppliers?.name;
+      if (name) suppliersSet.add(name);
+    });
+
+    const uniqueSupplierNames = Array.from(suppliersSet);
+    let commissionRules: any[] = [];
+    if (uniqueSupplierNames.length > 0) {
+      const { data: rules } = await supabaseAdmin
+        .from("commission_rules")
+        .select("supplier_name, category, sub_category, rate")
+        .in("supplier_name", uniqueSupplierNames);
+      commissionRules = rules || [];
+    }
+
     // Build mutable in-memory FIFO layer queue per product
-    type CostLayer = { id: string; cost_price: number; remaining_quantity: number };
-    const layerMap: Record<string, CostLayer[]> = {};
+    const layerMap: Record<string, any[]> = {};
     (costLayersRes.data || []).forEach((layer: any) => {
       if (!layerMap[layer.product_id]) layerMap[layer.product_id] = [];
       layerMap[layer.product_id].push({
         id: layer.id,
         cost_price: Number(layer.cost_price),
         remaining_quantity: Number(layer.remaining_quantity),
+        purchase_id: layer.purchase_id,
+        purchases: layer.purchases,
       });
     });
 
@@ -337,20 +374,6 @@ export async function POST(request: NextRequest) {
     const orderItems = val.items.map((item) => {
       const product = products?.find((p) => p.id === item.productId);
 
-      let commissionEarned = 0;
-
-      if (product) {
-        if (product.commission_type === "percentage") {
-          const itemTotal = item.unitPrice * item.quantity;
-          commissionEarned =
-            (itemTotal * (product.commission_value || 0)) / 100;
-        } else if (product.commission_type === "fixed") {
-          commissionEarned = (product.commission_value || 0) * item.quantity;
-        }
-      }
-
-      totalCommissionForOrder += commissionEarned;
-
       // Actual Selling Price Calculation
       const totalQty = item.quantity + item.freeQuantity;
       const discountShare =
@@ -360,9 +383,10 @@ export async function POST(request: NextRequest) {
       const netLineTotal = item.total - discountShare;
       const actualUnitPrice = totalQty > 0 ? netLineTotal / totalQty : 0;
 
-      // FIFO Cost Calculation: consume oldest cost layers first
+      // FIFO Cost & Commission Calculation: consume oldest cost layers first
       const layers = layerMap[item.productId] || [];
       let fifoCost = 0;
+      let commissionEarned = 0;
 
       if (layers.length > 0) {
         let needed = totalQty;
@@ -372,22 +396,108 @@ export async function POST(request: NextRequest) {
           if (needed <= 0) break;
           const consume = Math.min(needed, layer.remaining_quantity);
           totalCostForItem += consume * layer.cost_price;
+
+          // Resolve supplier for this layer
+          const layerSupplierName = layer.purchases?.suppliers?.name || product?.supplier_name;
+          const layerSupplierId = layer.purchases?.supplier_id;
+
+          // Determine commission rate for this specific chunk
+          let rate = product?.commission_value || 0; // default fallback
+          let resolved = false;
+
+          // 1. Check custom override in product_suppliers
+          if (layerSupplierId) {
+            const override = productSuppliersRes.data?.find(
+              (ps: any) => ps.product_id === item.productId && ps.supplier_id === layerSupplierId
+            );
+            if (override && override.commission_value !== null && override.commission_value !== undefined) {
+              rate = Number(override.commission_value);
+              resolved = true;
+            }
+          }
+
+          // 2. Look up from commission rules
+          if (!resolved && layerSupplierName) {
+            const rules = commissionRules.filter((r: any) => r.supplier_name === layerSupplierName);
+            if (rules.length > 0) {
+              const subCatRule = product?.sub_category ? rules.find((r: any) => r.category === product.category && r.sub_category === product.sub_category) : null;
+              const catRule = rules.find((r: any) => r.category === product?.category && !r.sub_category);
+              const globalRule = rules.find((r: any) => r.category === "ALL");
+              
+              if (subCatRule) {
+                rate = subCatRule.rate;
+              } else if (catRule) {
+                rate = catRule.rate;
+              } else if (globalRule) {
+                rate = globalRule.rate;
+              }
+            }
+          }
+
+          // Compute commission for this chunk
+          if (product?.commission_type === "percentage" || !product?.commission_type) {
+            const chunkRevenue = item.unitPrice * consume;
+            commissionEarned += (chunkRevenue * rate) / 100;
+          } else if (product?.commission_type === "fixed") {
+            commissionEarned += rate * consume;
+          }
+
           layer.remaining_quantity -= consume;
           // Record the updated remaining qty for this layer
           layerFinalQty.set(layer.id, layer.remaining_quantity);
           needed -= consume;
         }
 
-        // If more qty sold than layers cover, use the last layer's cost
-        if (needed > 0 && layers.length > 0) {
-          totalCostForItem += needed * layers[layers.length - 1].cost_price;
+        // If more qty sold than layers cover, use the fallback supplier
+        if (needed > 0) {
+          const fallbackSupplierName = product?.supplier_name;
+          let rate = product?.commission_value || 0;
+
+          if (fallbackSupplierName) {
+            const rules = commissionRules.filter((r: any) => r.supplier_name === fallbackSupplierName);
+            if (rules.length > 0) {
+              const subCatRule = product?.sub_category ? rules.find((r: any) => r.category === product.category && r.sub_category === product.sub_category) : null;
+              const catRule = rules.find((r: any) => r.category === product?.category && !r.sub_category);
+              const globalRule = rules.find((r: any) => r.category === "ALL");
+              
+              if (subCatRule) {
+                rate = subCatRule.rate;
+              } else if (catRule) {
+                rate = catRule.rate;
+              } else if (globalRule) {
+                rate = globalRule.rate;
+              }
+            }
+          }
+
+          if (product?.commission_type === "percentage" || !product?.commission_type) {
+            const chunkRevenue = item.unitPrice * needed;
+            commissionEarned += (chunkRevenue * rate) / 100;
+          } else if (product?.commission_type === "fixed") {
+            commissionEarned += rate * needed;
+          }
+
+          if (layers.length > 0) {
+            totalCostForItem += needed * layers[layers.length - 1].cost_price;
+          } else {
+            totalCostForItem += needed * Number(product?.actual_cost_price || product?.cost_price || 0);
+          }
         }
 
         fifoCost = totalQty > 0 ? totalCostForItem / totalQty : 0;
       } else {
-        // No cost layers yet — fall back to current product cost
+        // No cost layers yet — fall back to current product cost and commission
         fifoCost = Number(product?.actual_cost_price || product?.cost_price || 0);
+        let rate = product?.commission_value || 0;
+        if (product?.commission_type === "percentage" || !product?.commission_type) {
+          const itemTotal = item.unitPrice * item.quantity;
+          commissionEarned = (itemTotal * rate) / 100;
+        } else if (product?.commission_type === "fixed") {
+          commissionEarned = rate * item.quantity;
+        }
       }
+
+      totalCommissionForOrder += commissionEarned;
 
       return {
         order_id: orderData.id,

@@ -39,6 +39,9 @@ export async function GET(request: NextRequest) {
         product_stocks (
           quantity,
           damaged_quantity
+        ),
+        product_suppliers (
+          supplier_name
         )
       `,
       )
@@ -74,6 +77,7 @@ export async function GET(request: NextRequest) {
         subModel: p.sub_model,
         sizeSpec: p.size_spec,
         supplier: p.supplier_name,
+        secondarySuppliers: p.product_suppliers ? p.product_suppliers.map((ps: any) => ps.supplier_name) : [],
         stock: realStock,
         minStock: p.min_stock_level || 0,
         mrp: p.mrp || 0,

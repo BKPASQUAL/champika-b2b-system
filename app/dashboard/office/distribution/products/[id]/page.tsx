@@ -104,6 +104,80 @@ export default function ProductDetailsPage({
   const [loading, setLoading] = useState(true);
   const [transactionPage, setTransactionPage] = useState(1);
 
+  // Secondary Suppliers state
+  const [secondarySuppliers, setSecondarySuppliers] = useState<any[]>([]);
+  const [allSuppliers, setAllSuppliers] = useState<any[]>([]);
+  const [selectedSupplierId, setSelectedSupplierId] = useState<string>("");
+  const [newCostPrice, setNewCostPrice] = useState<string>("");
+  const [newCommissionValue, setNewCommissionValue] = useState<string>("");
+  const [addingSupplier, setAddingSupplier] = useState<boolean>(false);
+
+
+  const fetchSecondarySuppliers = async () => {
+    try {
+      const res = await fetch(`/api/products/${id}/suppliers`);
+      if (res.ok) {
+        const data = await res.json();
+        setSecondarySuppliers(data);
+      }
+    } catch (err) {
+      console.error("Error fetching secondary suppliers:", err);
+    }
+  };
+
+  const handleAddSecondarySupplier = async () => {
+    if (!selectedSupplierId) {
+      toast.error("Please select a supplier");
+      return;
+    }
+    setAddingSupplier(true);
+    try {
+      const res = await fetch(`/api/products/${id}/suppliers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          supplierId: selectedSupplierId,
+          costPrice: newCostPrice ? parseFloat(newCostPrice) : null,
+          commissionValue: newCommissionValue ? parseFloat(newCommissionValue) : null,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to add supplier");
+      }
+
+      toast.success("Secondary supplier added successfully");
+      setSelectedSupplierId("");
+      setNewCostPrice("");
+      setNewCommissionValue("");
+      fetchSecondarySuppliers();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to add supplier");
+    } finally {
+      setAddingSupplier(false);
+    }
+  };
+
+  const handleRemoveSecondarySupplier = async (supplierId: string) => {
+    if (!confirm("Are you sure you want to remove this supplier?")) return;
+    try {
+      const res = await fetch(`/api/products/${id}/suppliers?supplierId=${supplierId}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to remove supplier");
+      }
+
+      toast.success("Supplier removed successfully");
+      fetchSecondarySuppliers();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to remove supplier");
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -123,6 +197,20 @@ export default function ProductDetailsPage({
           const packData = await packRes.json();
           if (Array.isArray(packData)) setPackSizes(packData);
         }
+
+        // Fetch secondary suppliers
+        const suppliersRes = await fetch(`/api/products/${id}/suppliers`);
+        if (suppliersRes.ok) {
+          const data = await suppliersRes.json();
+          setSecondarySuppliers(data);
+        }
+
+        // Fetch all suppliers for dropdown
+        const allRes = await fetch(`/api/suppliers`);
+        if (allRes.ok) {
+          const data = await allRes.json();
+          setAllSuppliers(data);
+        }
       } catch (error) {
         toast.error("Error loading data");
         console.error(error);
@@ -133,6 +221,7 @@ export default function ProductDetailsPage({
 
     fetchData();
   }, [id]);
+
 
   if (loading) {
     return (
@@ -278,9 +367,11 @@ export default function ProductDetailsPage({
           <Tabs defaultValue="history" className="space-y-4">
             <TabsList className="w-full sm:w-auto">
               <TabsTrigger value="history"><span className="sm:hidden">History</span><span className="hidden sm:inline">Transaction History</span></TabsTrigger>
+              <TabsTrigger value="suppliers">Suppliers</TabsTrigger>
               <TabsTrigger value="analytics">Analytics</TabsTrigger>
               <TabsTrigger value="details"><span className="sm:hidden">Details</span><span className="hidden sm:inline">Product Details</span></TabsTrigger>
             </TabsList>
+
 
             <TabsContent value="history" className="space-y-4">
               <Card>
@@ -811,8 +902,176 @@ export default function ProductDetailsPage({
                 </Card>
               )}
             </TabsContent>
+
+            {/* --- SUPPLIERS TAB CONTENT --- */}
+            <TabsContent value="suppliers" className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-3">
+                {/* Primary Supplier Info */}
+                <Card className="md:col-span-1">
+                  <CardHeader>
+                    <CardTitle className="text-lg">Primary Supplier</CardTitle>
+                    <CardDescription>Default supplier configured for this product</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground uppercase">Supplier Name</label>
+                      <div className="text-sm font-medium mt-0.5">{product.supplier || "—"}</div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 border-t pt-3">
+                      <div>
+                        <label className="text-xs font-semibold text-muted-foreground uppercase">Cost Price</label>
+                        <div className="text-sm font-mono mt-0.5">{formatCurrency(product.costPrice)}</div>
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-muted-foreground uppercase">Commission</label>
+                        <div className="text-sm font-medium mt-0.5 text-orange-600">
+                          {product.commissionValue}% ({product.commissionType || "percentage"})
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Add Secondary Supplier Form */}
+                <Card className="md:col-span-2">
+                  <CardHeader>
+                    <CardTitle className="text-lg">Add Secondary Supplier</CardTitle>
+                    <CardDescription>Associate an additional supplier with this product</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid gap-4 sm:grid-cols-3 items-end">
+                      <div className="space-y-2">
+                        <label className="text-xs font-semibold text-muted-foreground">Select Supplier</label>
+                        <select
+                          className="w-full text-sm rounded-md border border-input bg-background px-3 py-2 ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                          value={selectedSupplierId}
+                          onChange={(e) => setSelectedSupplierId(e.target.value)}
+                        >
+                          <option value="">Choose a Supplier</option>
+                          {allSuppliers
+                            .filter(
+                              (s) =>
+                                s.name !== product.supplier &&
+                                !secondarySuppliers.some((ss) => ss.supplierId === s.id)
+                            )
+                            .map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.name} ({s.category})
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-xs font-semibold text-muted-foreground">Cost Price Override (LKR)</label>
+                        <input
+                          type="number"
+                          placeholder="e.g. 150 (Optional)"
+                          className="w-full text-sm rounded-md border border-input bg-background px-3 py-2 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                          value={newCostPrice}
+                          onChange={(e) => setNewCostPrice(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-xs font-semibold text-muted-foreground">Commission Override (%)</label>
+                        <input
+                          type="number"
+                          placeholder="e.g. 5 (Optional)"
+                          className="w-full text-sm rounded-md border border-input bg-background px-3 py-2 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                          value={newCommissionValue}
+                          onChange={(e) => setNewCommissionValue(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end mt-4">
+                      <Button
+                        onClick={handleAddSecondarySupplier}
+                        disabled={!selectedSupplierId || addingSupplier}
+                        className="gap-2"
+                      >
+                        {addingSupplier && <Loader2 className="h-4 w-4 animate-spin" />}
+                        Add Supplier
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Secondary Suppliers Table */}
+                <Card className="col-span-3">
+                  <CardHeader>
+                    <CardTitle className="text-lg">Associated Secondary Suppliers</CardTitle>
+                    <CardDescription>Other suppliers who can provide this product</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Code</TableHead>
+                          <TableHead>Supplier Name</TableHead>
+                          <TableHead>Custom Cost Price</TableHead>
+                          <TableHead>Custom Commission</TableHead>
+                          <TableHead>Contact Info</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="w-[100px] text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {secondarySuppliers.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                              No secondary suppliers associated with this product yet.
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          secondarySuppliers.map((ss) => (
+                            <TableRow key={ss.supplierId}>
+                              <TableCell className="font-mono text-xs text-muted-foreground">{ss.supplierCode}</TableCell>
+                              <TableCell className="font-medium">{ss.name}</TableCell>
+                              <TableCell className="font-mono text-sm">
+                                {ss.costPrice !== null && ss.costPrice !== undefined ? formatCurrency(ss.costPrice) : <span className="text-muted-foreground italic text-xs">No override</span>}
+                              </TableCell>
+                              <TableCell className="font-medium text-orange-600">
+                                {ss.commissionValue !== null && ss.commissionValue !== undefined ? `${ss.commissionValue}%` : <span className="text-muted-foreground italic text-xs">No override</span>}
+                              </TableCell>
+                              <TableCell className="text-xs text-muted-foreground">
+                                <div>{ss.phone || "—"}</div>
+                                <div>{ss.email || "—"}</div>
+                              </TableCell>
+                              <TableCell>
+                                <span
+                                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                                    ss.status === "Active"
+                                      ? "bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20"
+                                      : "bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20"
+                                  }`}
+                                >
+                                  {ss.status}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-red-500 hover:text-red-700"
+                                  onClick={() => handleRemoveSecondarySupplier(ss.supplierId)}
+                                >
+                                  Remove
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
           </Tabs>
         </div>
+
 
         <div>
           <Card className="h-fit sticky top-6">

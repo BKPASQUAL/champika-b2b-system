@@ -514,8 +514,13 @@ export default function CreateDistributionPurchasePage() {
     // No supplier selected → show nothing
     if (!selectedSupplierName) return false;
 
-    // Only show products belonging to the selected supplier
-    if (!p.supplier || p.supplier.toLowerCase() !== selectedSupplierName.toLowerCase()) {
+    // Only show products belonging to the selected supplier (as primary or secondary)
+    const isPrimary = p.supplier && p.supplier.toLowerCase() === selectedSupplierName.toLowerCase();
+    const isSecondary = (p as any).secondarySuppliers && (p as any).secondarySuppliers.some(
+      (sName: string) => sName.toLowerCase() === selectedSupplierName.toLowerCase()
+    );
+
+    if (!isPrimary && !isSecondary) {
       return false;
     }
 
