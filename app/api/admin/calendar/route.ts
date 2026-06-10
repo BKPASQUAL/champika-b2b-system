@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
         cheque_status,
         payment_date,
         suppliers ( name ),
-        purchases!inner ( business_id )
+        purchases!inner ( business_id, purchase_id )
       `)
       .eq("payment_method", "cheque")
       .not("cheque_date", "is", null)
@@ -75,35 +75,100 @@ export async function GET(request: NextRequest) {
     const { data: supplierCheques, error: supErr } = await supQuery;
     if (supErr) throw supErr;
 
-    const events = [
-      ...(customerCheques || []).map((p: any) => {
-        const customer = Array.isArray(p.customers) ? p.customers[0] : p.customers;
-        const invoice = Array.isArray(p.invoices) ? p.invoices[0] : p.invoices;
-        return {
+    // Group customer cheques by (cheque_no, cheque_date, shop_name)
+    const groupedCustomerCheques = new Map<string, any>();
+    for (const p of (customerCheques || [])) {
+      const customer = Array.isArray(p.customers) ? p.customers[0] : p.customers;
+      const shopName = customer?.shop_name || "Unknown";
+      const invoice = Array.isArray(p.invoices) ? p.invoices[0] : p.invoices;
+      const invoiceNo = invoice?.invoice_no || "N/A";
+      
+      const chqNo = (p.cheque_no || "").trim();
+      const chqDate = p.cheque_date;
+      
+      const groupKey = chqNo 
+        ? `${chqNo}_${chqDate}_${shopName}`
+        : `single_${p.id}`;
+
+      if (groupedCustomerCheques.has(groupKey)) {
+        const existing = groupedCustomerCheques.get(groupKey);
+        existing.amount += Number(p.amount);
+        if (invoiceNo && invoiceNo !== "N/A" && !existing.invoiceNos.includes(invoiceNo)) {
+          existing.invoiceNos.push(invoiceNo);
+        }
+      } else {
+        groupedCustomerCheques.set(groupKey, {
           id: p.id,
           type: "customer" as const,
           date: p.cheque_date,
           cheque_number: p.cheque_no,
-          amount: p.amount,
+          amount: Number(p.amount),
           status: p.cheque_status,
-          name: customer?.shop_name || "Unknown",
-          reference: invoice?.invoice_no || "N/A",
-        };
-      }),
-      ...(supplierCheques || []).map((p: any) => {
-        const supplier = Array.isArray(p.suppliers) ? p.suppliers[0] : p.suppliers;
-        return {
+          name: shopName,
+          invoiceNos: invoiceNo && invoiceNo !== "N/A" ? [invoiceNo] : [],
+        });
+      }
+    }
+
+    const customerEvents = Array.from(groupedCustomerCheques.values()).map(item => ({
+      id: item.id,
+      type: item.type,
+      date: item.date,
+      cheque_number: item.cheque_number,
+      amount: item.amount,
+      status: item.status,
+      name: item.name,
+      reference: item.invoiceNos.length > 0 ? item.invoiceNos.join(", ") : "N/A",
+    }));
+
+    // Group supplier cheques by (cheque_number, cheque_date, supplier_name)
+    const groupedSupplierCheques = new Map<string, any>();
+    for (const p of (supplierCheques || [])) {
+      const supplier = Array.isArray(p.suppliers) ? p.suppliers[0] : p.suppliers;
+      const supplierName = supplier?.name || "Unknown Supplier";
+      const purchase = Array.isArray(p.purchases) ? p.purchases[0] : p.purchases;
+      const purchaseId = purchase?.purchase_id || "N/A";
+      
+      const chqNumber = (p.cheque_number || "").trim();
+      const chqDate = p.cheque_date;
+      
+      const groupKey = chqNumber 
+        ? `${chqNumber}_${chqDate}_${supplierName}`
+        : `single_${p.id}`;
+
+      if (groupedSupplierCheques.has(groupKey)) {
+        const existing = groupedSupplierCheques.get(groupKey);
+        existing.amount += Number(p.amount);
+        if (purchaseId && purchaseId !== "N/A" && !existing.purchaseIds.includes(purchaseId)) {
+          existing.purchaseIds.push(purchaseId);
+        }
+      } else {
+        groupedSupplierCheques.set(groupKey, {
           id: p.id,
           type: "supplier" as const,
           date: p.cheque_date,
           cheque_number: p.cheque_number,
-          amount: p.amount,
+          amount: Number(p.amount),
           status: p.cheque_status,
-          name: supplier?.name || "Unknown Supplier",
-          reference: p.payment_date || "N/A",
-        };
-      }),
-    ];
+          name: supplierName,
+          purchaseIds: purchaseId && purchaseId !== "N/A" ? [purchaseId] : [],
+          payment_date: p.payment_date,
+        });
+      }
+    }
+
+    const supplierEvents = Array.from(groupedSupplierCheques.values()).map(item => ({
+      id: item.id,
+      type: item.type,
+      date: item.date,
+      cheque_number: item.cheque_number,
+      amount: item.amount,
+      status: item.status,
+      name: item.name,
+      reference: item.purchaseIds.length > 0 ? item.purchaseIds.join(", ") : (item.payment_date || "N/A"),
+    }));
+
+    const events = [...customerEvents, ...supplierEvents];
 
     return NextResponse.json(events);
   } catch (error: any) {

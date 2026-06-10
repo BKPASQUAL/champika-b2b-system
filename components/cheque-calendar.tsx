@@ -96,7 +96,7 @@ function HoverTooltip({ tooltip }: { tooltip: TooltipState }) {
             <p className="font-medium">{event.date}</p>
           </div>
           <div>
-            <p className="text-muted-foreground mb-0.5">{isCustomer ? "Invoice" : "Pmt Date"}</p>
+            <p className="text-muted-foreground mb-0.5">{isCustomer ? "Invoice" : "Purchase"}</p>
             <p className="font-medium truncate">{event.reference}</p>
           </div>
         </div>
@@ -146,7 +146,7 @@ function BottomSheet({ event, onClose }: { event: ChequeEvent; onClose: () => vo
           </div>
           <div>
             <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">
-              {isCustomer ? "Invoice" : "Payment Date"}
+              {isCustomer ? "Invoice" : "Purchase"}
             </p>
             <p className="font-semibold">{event.reference}</p>
           </div>
@@ -216,7 +216,7 @@ function DesktopEventModal({ event, onClose }: { event: ChequeEvent; onClose: ()
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-widest font-semibold text-muted-foreground mb-0.5">
-                {isCustomer ? "Invoice" : "Payment Date"}
+                {isCustomer ? "Invoice" : "Purchase"}
               </p>
               <p className="text-sm font-semibold text-gray-800 truncate">{event.reference}</p>
             </div>
@@ -302,7 +302,7 @@ function DesktopDayPopover({
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-gray-800 truncate">{ev.name}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    #{ev.cheque_number || "—"} · {isCustomer ? ev.reference : `Pmt ${ev.reference}`}
+                    #{ev.cheque_number || "—"} · {ev.reference}
                   </p>
                 </div>
                 <div className="text-right shrink-0">
@@ -375,7 +375,7 @@ function EventRow({
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-gray-800 truncate">{event.name}</p>
         <p className="text-xs text-muted-foreground mt-0.5">
-          #{event.cheque_number || "—"} · {isCustomer ? event.reference : `Pmt ${event.reference}`}
+          #{event.cheque_number || "—"} · {event.reference}
         </p>
       </div>
       <div className="text-right shrink-0">
