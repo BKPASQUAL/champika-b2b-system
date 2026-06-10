@@ -868,6 +868,41 @@ export function ChequeCalendarView({
     return map;
   }, [events, filter]);
 
+  const summaryTotals = useMemo(() => {
+    let startDate: Date;
+    let endDate: Date;
+
+    if (view === "day") {
+      startDate = currentDate;
+      endDate = currentDate;
+    } else if (view === "week") {
+      startDate = weekStart;
+      endDate = new Date(weekStart);
+      endDate.setDate(weekStart.getDate() + 6);
+    } else {
+      startDate = new Date(year, month, 1);
+      endDate = new Date(year, month + 1, 0);
+    }
+
+    const startKey = toDateKey(startDate);
+    const endKey = toDateKey(endDate);
+
+    let customerTotal = 0;
+    let supplierTotal = 0;
+
+    events.forEach((e) => {
+      if (e.date >= startKey && e.date <= endKey) {
+        if (e.type === "customer") {
+          customerTotal += e.amount;
+        } else if (e.type === "supplier") {
+          supplierTotal += e.amount;
+        }
+      }
+    });
+
+    return { customerTotal, supplierTotal };
+  }, [events, view, currentDate, weekStart, year, month]);
+
   function prev() {
     const d = new Date(currentDate);
     if (view === "month") setCurrentDate(new Date(year, month - 1, 1));
@@ -954,7 +989,17 @@ export function ChequeCalendarView({
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
-          <div className="w-14 shrink-0" />
+          {/* Summary values integrated inside the nav bar */}
+          <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-semibold shrink-0 select-none">
+            <div className="flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-1.5 rounded-lg border border-blue-100">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+              <span>Cust: LKR {summaryTotals.customerTotal.toLocaleString("en-LK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+            <div className="flex items-center gap-1 bg-orange-50 text-orange-700 px-2 py-1.5 rounded-lg border border-orange-100">
+              <span className="w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0" />
+              <span>Supp: LKR {summaryTotals.supplierTotal.toLocaleString("en-LK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+          </div>
         </div>
 
         {/* Content */}
