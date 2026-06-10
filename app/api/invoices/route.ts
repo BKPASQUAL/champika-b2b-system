@@ -546,6 +546,11 @@ export async function POST(request: NextRequest) {
     // 6. Create Invoice Record (retry up to 5 times on duplicate invoice_no)
     let invoiceData: any = null;
     let invoiceError: any = null;
+
+    const isFullyPaid = (val.grandTotal - val.paidAmount) < 10;
+    const finalPaidAmount = isFullyPaid ? val.grandTotal : val.paidAmount;
+    const finalPaymentStatus = isFullyPaid ? "Paid" : val.paymentStatus;
+
     for (let attempt = 0; attempt < 5; attempt++) {
       if (attempt > 0) {
         invoiceNo = await getNextInvoiceNo();
@@ -558,8 +563,8 @@ export async function POST(request: NextRequest) {
           order_id: orderData.id,
           customer_id: val.customerId,
           total_amount: val.grandTotal,
-          paid_amount: val.paidAmount,
-          status: val.paymentStatus,
+          paid_amount: finalPaidAmount,
+          status: finalPaymentStatus,
           due_date: dueDate,
           created_at: new Date(),
         })
@@ -638,7 +643,8 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (customer) {
-      const pendingAmount = val.grandTotal - val.paidAmount;
+      const isFullyPaid = (val.grandTotal - val.paidAmount) < 10;
+      const pendingAmount = isFullyPaid ? 0 : (val.grandTotal - val.paidAmount);
       if (pendingAmount !== 0) {
         await supabaseAdmin
           .from("customers")

@@ -93,17 +93,19 @@ export async function POST(
           Number(invoice.paid_amount || 0) - amount
         );
         const total = Number(invoice.total_amount || 0);
+        const isFullyPaid = (total - newPaidAmount) < 10;
+        const finalPaidAmount = isFullyPaid ? total : newPaidAmount;
         const newStatus =
-          newPaidAmount <= 0
+          finalPaidAmount <= 0
             ? "Unpaid"
-            : newPaidAmount < total
-            ? "Partial"
-            : "Paid";
+            : isFullyPaid
+            ? "Paid"
+            : "Partial";
 
         await supabaseAdmin
           .from("invoices")
           .update({
-            paid_amount: newPaidAmount,
+            paid_amount: finalPaidAmount,
             status: newStatus,
             updated_at: new Date().toISOString(),
           })

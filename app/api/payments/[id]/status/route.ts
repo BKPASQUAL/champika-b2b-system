@@ -129,14 +129,16 @@ export async function PATCH(
 
         if (invoice) {
           const newPaidAmount = Math.max(0, Number(invoice.paid_amount || 0) - amount);
+          const isFullyPaid = (Number(invoice.total_amount) - newPaidAmount) < 10;
+          const finalPaidAmount = isFullyPaid ? Number(invoice.total_amount) : newPaidAmount;
           const newStatus =
-            newPaidAmount <= 0 ? "Unpaid" :
-            newPaidAmount < Number(invoice.total_amount) ? "Partial" : "Paid";
+            finalPaidAmount <= 0 ? "Unpaid" :
+            isFullyPaid ? "Paid" : "Partial";
 
           await supabaseAdmin
             .from("invoices")
             .update({
-              paid_amount: newPaidAmount,
+              paid_amount: finalPaidAmount,
               status: newStatus,
               updated_at: new Date().toISOString(),
             })

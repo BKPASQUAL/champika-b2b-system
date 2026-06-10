@@ -370,11 +370,23 @@ export async function PATCH(
       .eq("id", currentInvoice.order_id);
 
     // Update Invoice
+    const paid = Number(currentInvoice.paid_amount) || 0;
+    const isFullyPaid = (val.grandTotal - paid) < 10;
+    const finalPaidAmount = isFullyPaid ? val.grandTotal : paid;
+    const finalStatus =
+      finalPaidAmount <= 0
+        ? "Unpaid"
+        : isFullyPaid
+        ? "Paid"
+        : "Partial";
+
     await supabaseAdmin
       .from("invoices")
       .update({
         customer_id: val.customerId,
         total_amount: val.grandTotal,
+        paid_amount: finalPaidAmount,
+        status: finalStatus,
         ...(val.manual_invoice_no !== undefined && { manual_invoice_no: val.manual_invoice_no }),
       })
       .eq("id", id);
@@ -503,11 +515,16 @@ export async function PATCH(
       .single();
 
     if (currentCustomer) {
+      const paid = Number(currentInvoice.paid_amount) || 0;
+      const isFullyPaid = (val.grandTotal - paid) < 10;
+      const finalPaidAmount = isFullyPaid ? val.grandTotal : paid;
+      const autoPayCredit = finalPaidAmount - paid;
+
       await supabaseAdmin
         .from("customers")
         .update({
           outstanding_balance:
-            (currentCustomer.outstanding_balance || 0) + val.grandTotal,
+            (currentCustomer.outstanding_balance || 0) + val.grandTotal - autoPayCredit,
         })
         .eq("id", val.customerId);
     }

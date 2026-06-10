@@ -235,13 +235,14 @@ export async function POST(request: NextRequest) {
 
     // 3. Update Invoice Status and Paid Amount
     const newPaidAmount = (Number(invoice.paid_amount) || 0) + val.amount;
-    const isFullyPaid = newPaidAmount >= Number(invoice.total_amount);
+    const isFullyPaid = (Number(invoice.total_amount) - newPaidAmount) < 10;
+    const finalPaidAmount = isFullyPaid ? Number(invoice.total_amount) : newPaidAmount;
     const newStatus = isFullyPaid ? "Paid" : "Partial";
 
     const { error: invoiceUpdateError } = await supabaseAdmin
       .from("invoices")
       .update({
-        paid_amount: newPaidAmount,
+        paid_amount: finalPaidAmount,
         status: newStatus,
         updated_at: new Date().toISOString(),
       })
@@ -251,7 +252,8 @@ export async function POST(request: NextRequest) {
 
     // 4. Update Customer Outstanding Balance
     const currentBalance = Number(customer.outstanding_balance) || 0;
-    const newBalance = currentBalance - val.amount;
+    const creditAmount = isFullyPaid ? (Number(invoice.total_amount) - (Number(invoice.paid_amount) || 0)) : val.amount;
+    const newBalance = currentBalance - creditAmount;
 
     const { error: customerUpdateError } = await supabaseAdmin
       .from("customers")
@@ -343,7 +345,7 @@ export async function POST(request: NextRequest) {
           invoiceId: invoice.id,
           invoiceNo: invoice.invoice_no,
           previousPaidAmount: Number(invoice.paid_amount) || 0,
-          newPaidAmount,
+          newPaidAmount: finalPaidAmount,
           newStatus,
           isFullyPaid,
         },

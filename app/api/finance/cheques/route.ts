@@ -197,11 +197,21 @@ export async function PUT(request: NextRequest) {
           0,
           (invoice.paid_amount || 0) - payment.amount
         );
+        const total = Number(invoice.total_amount || 0);
+        const isFullyPaid = (total - newPaid) < 10;
+        const finalPaidAmount = isFullyPaid ? total : newPaid;
+        const newStatus =
+          finalPaidAmount <= 0
+            ? "Unpaid"
+            : isFullyPaid
+            ? "Paid"
+            : "Partial";
+
         await supabaseAdmin
           .from("invoices")
           .update({
-            paid_amount: newPaid,
-            status: newPaid === 0 ? "Unpaid" : "Partial",
+            paid_amount: finalPaidAmount,
+            status: newStatus,
           })
           .eq("id", payment.invoice_id);
       }

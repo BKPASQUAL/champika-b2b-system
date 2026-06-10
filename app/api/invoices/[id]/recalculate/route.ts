@@ -62,9 +62,23 @@ export async function POST(
     // If it's not generated, you can uncomment the due_amount update.
 
     // 3. Update Invoice
+    const paid = Number(invoice.paid_amount) || 0;
+    const isFullyPaid = (newGrandTotal - paid) < 10;
+    const finalPaidAmount = isFullyPaid ? newGrandTotal : paid;
+    const finalStatus =
+      finalPaidAmount <= 0
+        ? "Unpaid"
+        : isFullyPaid
+        ? "Paid"
+        : "Partial";
+
     await supabase
       .from("invoices")
-      .update({ total_amount: newGrandTotal })
+      .update({
+        total_amount: newGrandTotal,
+        paid_amount: finalPaidAmount,
+        status: finalStatus,
+      })
       .eq("id", id);
 
     // 4. Update Order
@@ -88,7 +102,10 @@ export async function POST(
 
     // 6. Fix Customer Balance
     const diff = Number(invoice.total_amount) - newGrandTotal;
-    if (invoice.customer_id && diff !== 0) {
+    const autoPayCredit = finalPaidAmount - paid;
+    const totalAdjustment = diff + autoPayCredit;
+
+    if (invoice.customer_id && totalAdjustment !== 0) {
       const { data: customer } = await supabase
         .from("customers")
         .select("outstanding_balance")
@@ -98,7 +115,7 @@ export async function POST(
         await supabase
           .from("customers")
           .update({
-            outstanding_balance: Number(customer.outstanding_balance) - diff,
+            outstanding_balance: Number(customer.outstanding_balance) - totalAdjustment,
           })
           .eq("id", invoice.customer_id);
       }
