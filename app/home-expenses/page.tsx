@@ -745,7 +745,7 @@ export default function HomeExpensesPage() {
                                 placeholder="Search categories..."
                                 value={categorySearchQuery}
                                 onChange={(e) => setCategorySearchQuery(e.target.value)}
-                                className="w-full h-8 rounded-lg bg-slate-950 border border-slate-850 px-2.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all"
+                                className="w-full h-8 rounded-lg bg-slate-950 border border-slate-850 px-2.5 text-base md:text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all"
                                 onClick={(e) => e.stopPropagation()}
                               />
                             </div>
@@ -829,7 +829,7 @@ export default function HomeExpensesPage() {
                             placeholder="e.g. Rent, Tuition, Dog Food..."
                             value={newCategoryName}
                             onChange={(e) => setNewCategoryName(e.target.value)}
-                            className="w-full h-10 rounded-lg bg-slate-900 border border-slate-800 px-3 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30 transition-all font-medium"
+                            className="w-full h-10 rounded-lg bg-slate-900 border border-slate-800 px-3 text-base md:text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30 transition-all font-medium"
                             required
                           />
                         </div>
@@ -860,7 +860,7 @@ export default function HomeExpensesPage() {
                     </div>
 
                     {/* Row for Place & Date */}
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       
                       {/* Place */}
                       <div className="space-y-1.5">
@@ -890,7 +890,7 @@ export default function HomeExpensesPage() {
                             placeholder="e.g. Cargill's"
                             value={place}
                             onChange={(e) => setPlace(e.target.value)}
-                            className="w-full h-11 rounded-xl bg-slate-900/90 border border-slate-800 pl-8.5 pr-3 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all"
+                            className="w-full h-11 rounded-xl bg-slate-900/90 border border-slate-800 pl-8.5 pr-3 text-base md:text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all"
                           />
                         </div>
                       </div>
@@ -923,7 +923,7 @@ export default function HomeExpensesPage() {
                             type="date"
                             value={expenseDate}
                             onChange={(e) => setExpenseDate(e.target.value)}
-                            className="w-full h-11 rounded-xl bg-slate-900/90 border border-slate-800 pl-8.5 pr-3 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all cursor-pointer"
+                            className="w-full h-11 rounded-xl bg-slate-900/90 border border-slate-800 pl-8.5 pr-3 text-base md:text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all cursor-pointer"
                             required
                           />
                         </div>
@@ -944,7 +944,7 @@ export default function HomeExpensesPage() {
                           value={description}
                           onChange={(e) => setDescription(e.target.value)}
                           rows={2}
-                          className="w-full rounded-xl bg-slate-900/90 border border-slate-800 pl-8.5 pr-3 py-2.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all resize-none"
+                          className="w-full rounded-xl bg-slate-900/90 border border-slate-800 pl-8.5 pr-3 py-2.5 text-base md:text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all resize-none"
                         />
                       </div>
                     </div>
@@ -989,13 +989,13 @@ export default function HomeExpensesPage() {
                         placeholder="Search expenses..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full h-9 rounded-lg bg-slate-950/80 border border-slate-800 px-3 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        className="w-full h-9 rounded-lg bg-slate-950/80 border border-slate-800 px-3 text-base md:text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                       />
                     </div>
                     <select
                       value={filterGroup}
                       onChange={(e) => setFilterGroup(e.target.value)}
-                      className="h-9 rounded-lg bg-slate-950/80 border border-slate-800 px-2 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="h-9 rounded-lg bg-slate-950/80 border border-slate-800 px-2 text-base md:text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     >
                       {groups.map((grp) => (
                         <option key={grp} value={grp} className="bg-slate-950 text-slate-300">
