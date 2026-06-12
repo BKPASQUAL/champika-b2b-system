@@ -860,7 +860,7 @@ export default function HomeExpensesPage() {
                     </div>
 
                     {/* Row for Place & Date */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 gap-3">
                       
                       {/* Place */}
                       <div className="space-y-1.5">
@@ -882,7 +882,7 @@ export default function HomeExpensesPage() {
                           </button>
                         </div>
                         <div className="relative">
-                          <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-500">
+                          <div className="absolute inset-y-0 left-3 hidden sm:flex items-center pointer-events-none text-slate-500">
                             <MapPin className="w-3.5 h-3.5" />
                           </div>
                           <input
@@ -890,7 +890,7 @@ export default function HomeExpensesPage() {
                             placeholder="e.g. Cargill's"
                             value={place}
                             onChange={(e) => setPlace(e.target.value)}
-                            className="w-full h-11 rounded-xl bg-slate-900/90 border border-slate-800 pl-8.5 pr-3 text-base md:text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all"
+                            className="w-full h-11 rounded-xl bg-slate-900/90 border border-slate-800 pl-3 sm:pl-8.5 pr-3 text-base md:text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all"
                           />
                         </div>
                       </div>
@@ -916,14 +916,14 @@ export default function HomeExpensesPage() {
                         </div>
                         
                         <div className="relative">
-                          <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-500">
+                          <div className="absolute inset-y-0 left-3 hidden sm:flex items-center pointer-events-none text-slate-500">
                             <Calendar className="w-3.5 h-3.5" />
                           </div>
                           <input
                             type="date"
                             value={expenseDate}
                             onChange={(e) => setExpenseDate(e.target.value)}
-                            className="w-full h-11 rounded-xl bg-slate-900/90 border border-slate-800 pl-8.5 pr-3 text-base md:text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all cursor-pointer"
+                            className="w-full h-11 rounded-xl bg-slate-900/90 border border-slate-800 pl-3 sm:pl-8.5 pr-3 text-base md:text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all cursor-pointer"
                             required
                           />
                         </div>
@@ -936,7 +936,7 @@ export default function HomeExpensesPage() {
                         Notes / Description
                       </label>
                       <div className="relative">
-                        <div className="absolute top-3.5 left-3 flex items-start pointer-events-none text-slate-500">
+                        <div className="absolute top-3.5 left-3 hidden sm:flex items-start pointer-events-none text-slate-500">
                           <FileText className="w-3.5 h-3.5" />
                         </div>
                         <textarea
@@ -944,7 +944,7 @@ export default function HomeExpensesPage() {
                           value={description}
                           onChange={(e) => setDescription(e.target.value)}
                           rows={2}
-                          className="w-full rounded-xl bg-slate-900/90 border border-slate-800 pl-8.5 pr-3 py-2.5 text-base md:text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all resize-none"
+                          className="w-full rounded-xl bg-slate-900/90 border border-slate-800 pl-3 sm:pl-8.5 pr-3 py-2.5 text-base md:text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all resize-none"
                         />
                       </div>
                     </div>
