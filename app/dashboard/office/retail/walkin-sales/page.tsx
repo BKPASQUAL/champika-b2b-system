@@ -160,6 +160,26 @@ export default function CreateRetailInvoicePage() {
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
 
   const addProductCardRef = useRef<HTMLDivElement>(null);
+  const quantityInputRef = useRef<HTMLInputElement>(null);
+
+  const [isLandscape, setIsLandscape] = useState(false);
+  const [isDesktopScreen, setIsDesktopScreen] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(orientation: landscape) and (max-width: 1279px)");
+    setIsLandscape(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsLandscape(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1280px)");
+    setIsDesktopScreen(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsDesktopScreen(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
 
   useEffect(() => {
     if (productOpen) {
@@ -298,6 +318,12 @@ export default function CreateRetailInvoicePage() {
       discountPercent: "", // Start empty
       stockAvailable: product.stock_quantity,
     });
+
+    // Auto-focus and select the quantity input field
+    setTimeout(() => {
+      quantityInputRef.current?.focus();
+      quantityInputRef.current?.select();
+    }, 150);
   };
 
   const resetCurrentItem = () => {
@@ -486,7 +512,7 @@ export default function CreateRetailInvoicePage() {
   const filteredAvailableProducts = availableProducts.filter((product) => {
     if (supplierFilter === "all") return true;
     if (supplierFilter === "retail") return product.retailOnly === true;
-    
+
     const sup = (product.supplier || "").toLowerCase();
     if (supplierFilter === "sierra") return sup.includes("sierra") && !product.retailOnly;
     if (supplierFilter === "wireman") return sup.includes("wireman") && !product.retailOnly;
@@ -521,10 +547,10 @@ export default function CreateRetailInvoicePage() {
   }
 
   return (
-    <div className="space-y-4 mx-auto pb-28 lg:pb-6">
+    <div className={cn("mx-auto", isLandscape ? "space-y-3 pb-4" : "space-y-4 pb-28 xl:pb-6")}>
 
-      {/* ── Page header ── */}
-      <div className="flex items-center gap-3">
+      {/* ── Page header (Desktop only) ── */}
+      <div className="hidden xl:flex items-center gap-3 mb-6">
         <Button
           variant="ghost"
           size="icon"
@@ -541,8 +567,8 @@ export default function CreateRetailInvoicePage() {
             {businessName} · Create a new walk-in sale
           </p>
         </div>
-        {/* Desktop-only action buttons */}
-        <div className="hidden lg:flex items-center gap-2 shrink-0">
+        {/* Desktop action buttons */}
+        <div className="flex items-center gap-2 shrink-0">
           <Button
             variant="outline"
             size="sm"
@@ -573,12 +599,25 @@ export default function CreateRetailInvoicePage() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
+
+
+      <div className={cn(
+        "grid",
+        isLandscape ? "gap-3 grid-cols-[1fr_22rem]" : "gap-4 sm:gap-6 xl:grid-cols-3"
+      )}>
         {/* LEFT COLUMN */}
-        <div className="lg:col-span-2 space-y-4 sm:space-y-6 min-w-0">
+        <div className={cn("min-w-0", isLandscape ? "space-y-3" : "xl:col-span-2 space-y-4 sm:space-y-6")}>
           {/* 1. Invoice Details */}
-          <Card>
-            <CardHeader className="pb-2">
+          <Card className="gap-0.5 xl:gap-4">
+            <CardHeader className="pb-0 xl:pb-2 flex flex-row items-center gap-3">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0 xl:hidden"
+                onClick={() => router.push("/dashboard/office/retail/invoices")}
+              >
+                <ArrowLeft className="w-4 h-4 text-slate-500" />
+              </Button>
               <CardTitle className="text-base sm:text-lg">Invoice Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 pt-2">
@@ -619,8 +658,8 @@ export default function CreateRetailInvoicePage() {
                         {customerId
                           ? customers.find((c) => c.id === customerId)?.name
                           : customers.length > 0
-                          ? "Select Customer"
-                          : "No Retail Customers"}
+                            ? "Select Customer"
+                            : "No Retail Customers"}
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
                     </PopoverTrigger>
@@ -729,371 +768,372 @@ export default function CreateRetailInvoicePage() {
 
           {/* 2. Add Items */}
           <div ref={addProductCardRef} className="scroll-mt-4">
-            <Card>
-              <CardHeader className="pb-2">
+            <Card className="gap-0.5 xl:gap-4">
+              <CardHeader className="pb-0 xl:pb-2">
                 <CardTitle className="text-base sm:text-lg">Add Products</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 sm:space-y-4">
-              {/* Product Selection */}
-              <div className="grid grid-cols-4 gap-4">
-                <div className="col-span-4 space-y-2">
-                  <div className="flex justify-between items-center">
-                    <Label className="text-sm font-medium">
-                      Product{" "}
-                      {stockLoading && (
-                        <Loader2 className="inline h-3 w-3 animate-spin ml-2" />
-                      )}
-                    </Label>
-                  </div>
-                  
-                  {/* Supplier Filter Buttons Row */}
-                  <div className="flex gap-2 pb-2 border-b border-slate-100 overflow-x-auto scrollbar-hide flex-nowrap">
-                    <Button
-                      type="button"
-                      variant={supplierFilter === "all" ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setSupplierFilter("all")}
-                      className={cn(
-                        "h-8 text-xs font-semibold rounded-full transition-all duration-200 shrink-0",
-                        supplierFilter === "all" && "bg-slate-900 text-white shadow-sm"
-                      )}
-                    >
-                      🌐 All Products
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={supplierFilter === "sierra" ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setSupplierFilter("sierra")}
-                      className={cn(
-                        "h-8 text-xs font-semibold rounded-full border-purple-200 text-purple-700 hover:bg-purple-50 transition-all duration-200",
-                        supplierFilter === "sierra" && "bg-purple-600 text-white border-purple-600 hover:bg-purple-700 hover:text-white shadow-sm"
-                      )}
-                    >
-                      🟣 Sierra Cables
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={supplierFilter === "wireman" ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setSupplierFilter("wireman")}
-                      className={cn(
-                        "h-8 text-xs font-semibold rounded-full border-red-200 text-red-700 hover:bg-red-50 transition-all duration-200",
-                        supplierFilter === "wireman" && "bg-red-600 text-white border-red-600 hover:bg-red-700 hover:text-white shadow-sm"
-                      )}
-                    >
-                      🔴 Wireman
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={supplierFilter === "orange" ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setSupplierFilter("orange")}
-                      className={cn(
-                        "h-8 text-xs font-semibold rounded-full border-orange-200 text-orange-700 hover:bg-orange-50 transition-all duration-200",
-                        supplierFilter === "orange" && "bg-orange-500 text-white border-orange-500 hover:bg-orange-600 hover:text-white shadow-sm"
-                      )}
-                    >
-                      🟠 Orange
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={supplierFilter === "retail" ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setSupplierFilter("retail")}
-                      className={cn(
-                        "h-8 text-xs font-semibold rounded-full border-emerald-200 text-emerald-700 hover:bg-emerald-50 transition-all duration-200",
-                        supplierFilter === "retail" && "bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700 hover:text-white shadow-sm"
-                      )}
-                    >
-                      🛍️ Retail Only
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={supplierFilter === "other" ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setSupplierFilter("other")}
-                      className={cn(
-                        "h-8 text-xs font-semibold rounded-full border-slate-200 text-slate-700 hover:bg-slate-50 transition-all duration-200",
-                        supplierFilter === "other" && "bg-slate-600 text-white border-slate-600 hover:bg-slate-700 hover:text-white shadow-sm"
-                      )}
-                    >
-                      ⚪ Other Suppliers
-                    </Button>
-                  </div>
+              </CardHeader>
+              <CardContent className="space-y-3 sm:space-y-4">
+                {/* Product Selection */}
+                <div className="grid grid-cols-4 gap-4">
+                  <div className="col-span-4 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <Label className="text-sm font-medium">
+                        Product{" "}
+                        {stockLoading && (
+                          <Loader2 className="inline h-3 w-3 animate-spin ml-2" />
+                        )}
+                      </Label>
+                    </div>
 
-                  <Popover open={productOpen} onOpenChange={setProductOpen}>
-                    <PopoverTrigger asChild>
+                    {/* Supplier Filter Buttons Row */}
+                    <div className="flex gap-2 pb-2 border-b border-slate-100 overflow-x-auto scrollbar-hide flex-nowrap">
                       <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={productOpen}
-                        className="w-full justify-between"
-                        disabled={stockLoading}
+                        type="button"
+                        variant={supplierFilter === "all" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setSupplierFilter("all")}
+                        className={cn(
+                          "h-8 text-xs font-semibold rounded-full transition-all duration-200 shrink-0",
+                          supplierFilter === "all" && "bg-slate-900 text-white shadow-sm"
+                        )}
                       >
-                        {currentItem.productId
-                          ? products.find((p) => p.id === currentItem.productId)
-                              ?.name
-                          : stockLoading
-                          ? "Loading products..."
-                          : "Select Product"}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        🌐 All Products
                       </Button>
-                    </PopoverTrigger>
-                    <PopoverContent
-                      className="w-[var(--radix-popover-trigger-width)] p-0"
-                      align="start"
-                      side="bottom"
-                      avoidCollisions={false}
-                    >
-                      <Command>
-                        <CommandInput placeholder="Search product..." />
-                        <CommandList>
-                          <CommandEmpty>
-                            {filteredAvailableProducts.length === 0
-                              ? "No products found in this category"
-                              : "No products found."}
-                          </CommandEmpty>
-                          <CommandGroup>
-                            {filteredAvailableProducts.map((product) => {
-                              const isSierra = (product.supplier || "").toLowerCase().includes("sierra");
-                              const isWireman = (product.supplier || "").toLowerCase().includes("wireman");
-                              const isOrange = (product.supplier || "").toLowerCase().includes("orange");
-                              const isRetailOnly = product.retailOnly;
-                              
-                              let borderClass = "border-l-4 border-slate-300";
-                              let bgHoverClass = "hover:bg-slate-50";
-                              let supplierLabelName = "Retail/Other";
-                              let badgeColor = "bg-slate-100 text-slate-700 border-slate-200";
-                              
-                              if (isRetailOnly) {
-                                borderClass = "border-l-4 border-emerald-500";
-                                bgHoverClass = "hover:bg-emerald-50/50";
-                                supplierLabelName = "Retail Only";
-                                badgeColor = "bg-emerald-100 text-emerald-800 border-emerald-200";
-                              } else if (isSierra) {
-                                borderClass = "border-l-4 border-purple-500";
-                                bgHoverClass = "hover:bg-purple-50/50";
-                                supplierLabelName = "Sierra";
-                                badgeColor = "bg-purple-100 text-purple-700 border-purple-200";
-                              } else if (isWireman) {
-                                borderClass = "border-l-4 border-red-500";
-                                bgHoverClass = "hover:bg-red-50/50";
-                                supplierLabelName = "Wireman";
-                                badgeColor = "bg-red-100 text-red-700 border-red-200";
-                              } else if (isOrange) {
-                                borderClass = "border-l-4 border-orange-500";
-                                bgHoverClass = "hover:bg-orange-50/50";
-                                supplierLabelName = "Orange";
-                                badgeColor = "bg-orange-100 text-orange-700 border-orange-200";
-                              }
+                      <Button
+                        type="button"
+                        variant={supplierFilter === "sierra" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setSupplierFilter("sierra")}
+                        className={cn(
+                          "h-8 text-xs font-semibold rounded-full border-purple-200 text-purple-700 hover:bg-purple-50 transition-all duration-200",
+                          supplierFilter === "sierra" && "bg-purple-600 text-white border-purple-600 hover:bg-purple-700 hover:text-white shadow-sm"
+                        )}
+                      >
+                        🟣 Sierra Cables
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={supplierFilter === "wireman" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setSupplierFilter("wireman")}
+                        className={cn(
+                          "h-8 text-xs font-semibold rounded-full border-red-200 text-red-700 hover:bg-red-50 transition-all duration-200",
+                          supplierFilter === "wireman" && "bg-red-600 text-white border-red-600 hover:bg-red-700 hover:text-white shadow-sm"
+                        )}
+                      >
+                        🔴 Wireman
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={supplierFilter === "orange" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setSupplierFilter("orange")}
+                        className={cn(
+                          "h-8 text-xs font-semibold rounded-full border-orange-200 text-orange-700 hover:bg-orange-50 transition-all duration-200",
+                          supplierFilter === "orange" && "bg-orange-500 text-white border-orange-500 hover:bg-orange-600 hover:text-white shadow-sm"
+                        )}
+                      >
+                        🟠 Orange
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={supplierFilter === "retail" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setSupplierFilter("retail")}
+                        className={cn(
+                          "h-8 text-xs font-semibold rounded-full border-emerald-200 text-emerald-700 hover:bg-emerald-50 transition-all duration-200",
+                          supplierFilter === "retail" && "bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700 hover:text-white shadow-sm"
+                        )}
+                      >
+                        🛍️ Retail Only
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={supplierFilter === "other" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setSupplierFilter("other")}
+                        className={cn(
+                          "h-8 text-xs font-semibold rounded-full border-slate-200 text-slate-700 hover:bg-slate-50 transition-all duration-200",
+                          supplierFilter === "other" && "bg-slate-600 text-white border-slate-600 hover:bg-slate-700 hover:text-white shadow-sm"
+                        )}
+                      >
+                        ⚪ Other Suppliers
+                      </Button>
+                    </div>
 
-                              return (
-                                <CommandItem
-                                  key={product.id}
-                                  value={`${product.name} ${product.sku} ${product.supplier || ""}`}
-                                  onSelect={() => {
-                                    handleProductSelect(product.id);
-                                    setProductOpen(false);
-                                  }}
-                                  className={cn(
-                                    "flex items-center px-3 py-2 cursor-pointer transition-colors duration-150",
-                                    borderClass,
-                                    bgHoverClass
-                                  )}
-                                >
-                                  <Check
+                    <Popover open={productOpen} onOpenChange={setProductOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={productOpen}
+                          className="w-full justify-between"
+                          disabled={stockLoading}
+                        >
+                          {currentItem.productId
+                            ? products.find((p) => p.id === currentItem.productId)
+                              ?.name
+                            : stockLoading
+                              ? "Loading products..."
+                              : "Select Product"}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        className="w-[var(--radix-popover-trigger-width)] p-0"
+                        align="start"
+                        side="bottom"
+                        avoidCollisions={false}
+                      >
+                        <Command>
+                          <CommandInput placeholder="Search product..." />
+                          <CommandList className="max-h-[200px]">
+                            <CommandEmpty>
+                              {filteredAvailableProducts.length === 0
+                                ? "No products found in this category"
+                                : "No products found."}
+                            </CommandEmpty>
+                            <CommandGroup>
+                              {filteredAvailableProducts.map((product) => {
+                                const isSierra = (product.supplier || "").toLowerCase().includes("sierra");
+                                const isWireman = (product.supplier || "").toLowerCase().includes("wireman");
+                                const isOrange = (product.supplier || "").toLowerCase().includes("orange");
+                                const isRetailOnly = product.retailOnly;
+
+                                let borderClass = "border-l-4 border-slate-300";
+                                let bgHoverClass = "hover:bg-slate-50";
+                                let supplierLabelName = "Retail/Other";
+                                let badgeColor = "bg-slate-100 text-slate-700 border-slate-200";
+
+                                if (isRetailOnly) {
+                                  borderClass = "border-l-4 border-emerald-500";
+                                  bgHoverClass = "hover:bg-emerald-50/50";
+                                  supplierLabelName = "Retail Only";
+                                  badgeColor = "bg-emerald-100 text-emerald-800 border-emerald-200";
+                                } else if (isSierra) {
+                                  borderClass = "border-l-4 border-purple-500";
+                                  bgHoverClass = "hover:bg-purple-50/50";
+                                  supplierLabelName = "Sierra";
+                                  badgeColor = "bg-purple-100 text-purple-700 border-purple-200";
+                                } else if (isWireman) {
+                                  borderClass = "border-l-4 border-red-500";
+                                  bgHoverClass = "hover:bg-red-50/50";
+                                  supplierLabelName = "Wireman";
+                                  badgeColor = "bg-red-100 text-red-700 border-red-200";
+                                } else if (isOrange) {
+                                  borderClass = "border-l-4 border-orange-500";
+                                  bgHoverClass = "hover:bg-orange-50/50";
+                                  supplierLabelName = "Orange";
+                                  badgeColor = "bg-orange-100 text-orange-700 border-orange-200";
+                                }
+
+                                return (
+                                  <CommandItem
+                                    key={product.id}
+                                    value={`${product.name} ${product.sku} ${product.supplier || ""}`}
+                                    onSelect={() => {
+                                      handleProductSelect(product.id);
+                                      setProductOpen(false);
+                                    }}
                                     className={cn(
-                                      "mr-2 h-4 w-4 shrink-0",
-                                      currentItem.productId === product.id
-                                        ? "opacity-100"
-                                        : "opacity-0"
+                                      "flex items-center px-3 py-2 cursor-pointer transition-colors duration-150",
+                                      borderClass,
+                                      bgHoverClass
                                     )}
-                                  />
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center justify-between gap-2">
-                                      <span className="font-semibold text-slate-900 truncate">
-                                        {product.name}
-                                      </span>
-                                      <span className={cn(
-                                        "text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0",
-                                        badgeColor
-                                      )}>
-                                        {supplierLabelName}
-                                      </span>
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4 shrink-0",
+                                        currentItem.productId === product.id
+                                          ? "opacity-100"
+                                          : "opacity-0"
+                                      )}
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="font-semibold text-slate-900 truncate">
+                                          {product.name}
+                                        </span>
+                                        <span className={cn(
+                                          "text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0",
+                                          badgeColor
+                                        )}>
+                                          {supplierLabelName}
+                                        </span>
+                                      </div>
+                                      <div className="text-xs text-muted-foreground flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5 font-sans">
+                                        <span className="font-mono">{product.sku}</span>
+                                        <span>•</span>
+                                        <span>Stock: <strong className={cn(product.stock_quantity === 0 ? "text-red-500 font-bold" : "text-slate-700")}>{product.stock_quantity}</strong></span>
+                                        <span>•</span>
+                                        <span>LKR {(product.retail_price ?? product.selling_price).toLocaleString()}</span>
+                                      </div>
                                     </div>
-                                    <div className="text-xs text-muted-foreground flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5 font-sans">
-                                      <span className="font-mono">{product.sku}</span>
-                                      <span>•</span>
-                                      <span>Stock: <strong className={cn(product.stock_quantity === 0 ? "text-red-500 font-bold" : "text-slate-700")}>{product.stock_quantity}</strong></span>
-                                      <span>•</span>
-                                      <span>LKR {(product.retail_price ?? product.selling_price).toLocaleString()}</span>
-                                    </div>
-                                  </div>
-                                </CommandItem>
-                              );
-                            })}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                  {/* <p className="text-xs text-muted-foreground mt-1">
+                                  </CommandItem>
+                                );
+                              })}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    {/* <p className="text-xs text-muted-foreground mt-1">
                     Showing products from your assigned warehouse locations.
                   </p> */}
+                  </div>
                 </div>
-              </div>
 
-              {/* Quantity and Free Quantity Row */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Quantity</Label>
-                  <Input
-                    type="number"
-                    min="1"
-                    value={currentItem.quantity}
-                    className="h-11"
-                    onChange={(e) =>
-                      setCurrentItem({
-                        ...currentItem,
-                        quantity:
-                          e.target.value === "" ? "" : Number(e.target.value),
-                      })
-                    }
-                  />
+                {/* Quantity and Free Quantity Row */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Quantity</Label>
+                    <Input
+                      ref={quantityInputRef}
+                      type="number"
+                      min="1"
+                      value={currentItem.quantity}
+                      className="h-11"
+                      onChange={(e) =>
+                        setCurrentItem({
+                          ...currentItem,
+                          quantity:
+                            e.target.value === "" ? "" : Number(e.target.value),
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Free Qty</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={currentItem.freeQuantity}
+                      className="h-11"
+                      onChange={(e) =>
+                        setCurrentItem({
+                          ...currentItem,
+                          freeQuantity:
+                            e.target.value === "" ? "" : Number(e.target.value),
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Unit</Label>
+                    <Input
+                      value={currentItem.unit || "—"}
+                      disabled
+                      className="bg-muted h-11 text-center font-medium"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">In Stock</Label>
+                    <Input
+                      value={currentItem.stockAvailable || "—"}
+                      disabled
+                      className={cn(
+                        "h-11 text-center font-bold bg-muted",
+                        currentItem.stockAvailable > 0 && currentItem.stockAvailable < 10
+                          ? "text-destructive"
+                          : "text-slate-700"
+                      )}
+                    />
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Free Qty</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={currentItem.freeQuantity}
-                    className="h-11"
-                    onChange={(e) =>
-                      setCurrentItem({
-                        ...currentItem,
-                        freeQuantity:
-                          e.target.value === "" ? "" : Number(e.target.value),
-                      })
-                    }
-                  />
+
+                {/* Price Row */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">MRP</Label>
+                    <Input
+                      type="number"
+                      value={currentItem.mrp}
+                      className="h-11"
+                      onChange={(e) =>
+                        setCurrentItem({
+                          ...currentItem,
+                          mrp:
+                            e.target.value === "" ? "" : Number(e.target.value),
+                        })
+                      }
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Unit Price</Label>
+                    <Input
+                      type="number"
+                      value={currentItem.unitPrice}
+                      className="h-11"
+                      onChange={(e) =>
+                        setCurrentItem({
+                          ...currentItem,
+                          unitPrice:
+                            e.target.value === "" ? "" : Number(e.target.value),
+                        })
+                      }
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Discount %</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={currentItem.discountPercent}
+                      className="h-11"
+                      onChange={(e) =>
+                        setCurrentItem({
+                          ...currentItem,
+                          discountPercent:
+                            e.target.value === "" ? "" : Number(e.target.value),
+                        })
+                      }
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Line Total</Label>
+                    <Input
+                      value={(safeUnitPrice * safeQuantity - currentDiscountAmt).toFixed(2)}
+                      disabled
+                      className="h-11 font-bold bg-green-50 text-green-700 border-green-100 text-right"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Unit</Label>
-                  <Input
-                    value={currentItem.unit || "—"}
-                    disabled
-                    className="bg-muted h-11 text-center font-medium"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">In Stock</Label>
-                  <Input
-                    value={currentItem.stockAvailable || "—"}
-                    disabled
+
+                {/* Add / Update Button */}
+                <div className={cn("grid gap-2", editingItemId ? "grid-cols-2" : "grid-cols-1")}>
+                  {editingItemId && (
+                    <Button variant="outline" onClick={resetCurrentItem} className="h-12">
+                      <X className="w-4 h-4 mr-2" />
+                      Cancel
+                    </Button>
+                  )}
+                  <Button
+                    onClick={handleAddItem}
                     className={cn(
-                      "h-11 text-center font-bold bg-muted",
-                      currentItem.stockAvailable > 0 && currentItem.stockAvailable < 10
-                        ? "text-destructive"
-                        : "text-slate-700"
+                      "h-12 text-base font-bold shadow-sm",
+                      editingItemId
+                        ? "bg-blue-600 hover:bg-blue-700"
+                        : "bg-green-600 hover:bg-green-700"
                     )}
-                  />
-                </div>
-              </div>
-
-              {/* Price Row */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">MRP</Label>
-                  <Input
-                    type="number"
-                    value={currentItem.mrp}
-                    className="h-11"
-                    onChange={(e) =>
-                      setCurrentItem({
-                        ...currentItem,
-                        mrp:
-                          e.target.value === "" ? "" : Number(e.target.value),
-                      })
-                    }
-                    placeholder="0.00"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Unit Price</Label>
-                  <Input
-                    type="number"
-                    value={currentItem.unitPrice}
-                    className="h-11"
-                    onChange={(e) =>
-                      setCurrentItem({
-                        ...currentItem,
-                        unitPrice:
-                          e.target.value === "" ? "" : Number(e.target.value),
-                      })
-                    }
-                    placeholder="0.00"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Discount %</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={currentItem.discountPercent}
-                    className="h-11"
-                    onChange={(e) =>
-                      setCurrentItem({
-                        ...currentItem,
-                        discountPercent:
-                          e.target.value === "" ? "" : Number(e.target.value),
-                      })
-                    }
-                    placeholder="0"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Line Total</Label>
-                  <Input
-                    value={(safeUnitPrice * safeQuantity - currentDiscountAmt).toFixed(2)}
-                    disabled
-                    className="h-11 font-bold bg-green-50 text-green-700 border-green-100 text-right"
-                  />
-                </div>
-              </div>
-
-              {/* Add / Update Button */}
-              <div className={cn("grid gap-2", editingItemId ? "grid-cols-2" : "grid-cols-1")}>
-                {editingItemId && (
-                  <Button variant="outline" onClick={resetCurrentItem} className="h-12">
-                    <X className="w-4 h-4 mr-2" />
-                    Cancel
+                    disabled={!currentItem.productId}
+                  >
+                    {editingItemId ? (
+                      <><Pencil className="w-4 h-4 mr-2" />Update Item</>
+                    ) : (
+                      <><Plus className="w-4 h-4 mr-2" />Add to Invoice</>
+                    )}
                   </Button>
-                )}
-                <Button
-                  onClick={handleAddItem}
-                  className={cn(
-                    "h-12 text-base font-bold shadow-sm",
-                    editingItemId
-                      ? "bg-blue-600 hover:bg-blue-700"
-                      : "bg-green-600 hover:bg-green-700"
-                  )}
-                  disabled={!currentItem.productId}
-                >
-                  {editingItemId ? (
-                    <><Pencil className="w-4 h-4 mr-2" />Update Item</>
-                  ) : (
-                    <><Plus className="w-4 h-4 mr-2" />Add to Invoice</>
-                  )}
-                </Button>
-              </div>
-            </CardContent>
+                </div>
+              </CardContent>
             </Card>
           </div>
 
           {/* 3. Items Table */}
-          <Card>
+          <Card className={cn(isLandscape ? "hidden" : "")}>
             <CardHeader className="pb-3 sm:pb-6">
               <CardTitle className="text-base sm:text-lg">Invoice Items</CardTitle>
               <CardDescription className="text-xs sm:text-sm">{items.length} item(s) added</CardDescription>
@@ -1115,10 +1155,10 @@ export default function CreateRetailInvoicePage() {
                     let leftBorder = "border-l-4 border-l-slate-200";
                     let supplierLabel = "";
                     let supplierBadgeCls = "bg-slate-100 text-slate-600 border-slate-200";
-                    if (isRetailOnly)      { leftBorder = "border-l-4 border-l-emerald-500"; supplierLabel = "Retail Only"; supplierBadgeCls = "bg-emerald-100 text-emerald-700 border-emerald-200"; }
-                    else if (isSierra)     { leftBorder = "border-l-4 border-l-purple-500";  supplierLabel = "Sierra";      supplierBadgeCls = "bg-purple-100 text-purple-700 border-purple-200"; }
-                    else if (isWireman)    { leftBorder = "border-l-4 border-l-red-500";     supplierLabel = "Wireman";     supplierBadgeCls = "bg-red-100 text-red-700 border-red-200"; }
-                    else if (isOrange)     { leftBorder = "border-l-4 border-l-orange-500";  supplierLabel = "Orange";      supplierBadgeCls = "bg-orange-100 text-orange-700 border-orange-200"; }
+                    if (isRetailOnly) { leftBorder = "border-l-4 border-l-emerald-500"; supplierLabel = "Retail Only"; supplierBadgeCls = "bg-emerald-100 text-emerald-700 border-emerald-200"; }
+                    else if (isSierra) { leftBorder = "border-l-4 border-l-purple-500"; supplierLabel = "Sierra"; supplierBadgeCls = "bg-purple-100 text-purple-700 border-purple-200"; }
+                    else if (isWireman) { leftBorder = "border-l-4 border-l-red-500"; supplierLabel = "Wireman"; supplierBadgeCls = "bg-red-100 text-red-700 border-red-200"; }
+                    else if (isOrange) { leftBorder = "border-l-4 border-l-orange-500"; supplierLabel = "Orange"; supplierBadgeCls = "bg-orange-100 text-orange-700 border-orange-200"; }
 
                     const isEditing = editingItemId === item.id;
 
@@ -1188,39 +1228,142 @@ export default function CreateRetailInvoicePage() {
           </Card>
         </div>
 
-        {/* RIGHT COLUMN — desktop sidebar only */}
-        <div className="lg:col-span-1 hidden lg:block">
+        {/* RIGHT COLUMN — desktop sidebar + landscape POS */}
+        <div className={cn(isLandscape ? "block" : "xl:col-span-1 hidden xl:block")}>
           <Card className="sticky top-6 border shadow-sm">
             <CardHeader className="pb-2 border-b">
               <CardTitle className="text-base font-semibold text-slate-700">Invoice Summary</CardTitle>
             </CardHeader>
             <CardContent className="p-4 space-y-4">
 
-              {/* Customer & billing info */}
-              <div className="space-y-2.5">
-                <div>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Customer</p>
-                  <p className="text-sm font-semibold mt-0.5 leading-snug wrap-break-word text-slate-800">
-                    {customers.find((c) => c.id === customerId)?.name || <span className="text-muted-foreground italic">Not selected</span>}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Business</p>
-                  <p className="text-sm font-medium mt-0.5 leading-snug wrap-break-word text-slate-700">{businessName}</p>
-                </div>
-                <div className="flex gap-4">
-                  <div className="flex-1">
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Payment</p>
-                    <p className={cn("text-sm font-semibold mt-0.5", paymentType === "Cash" ? "text-green-600" : "text-orange-600")}>
-                      {paymentType === "Cash" ? "💵 Cash" : "📋 Credit"}
+              {/* Customer & billing info — Desktop only */}
+              {isDesktopScreen && (
+                <div className="space-y-2.5 mb-4">
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Customer</p>
+                    <p className="text-sm font-semibold mt-0.5 leading-snug wrap-break-word text-slate-800">
+                      {customers.find((c) => c.id === customerId)?.name || <span className="text-muted-foreground italic">Not selected</span>}
                     </p>
                   </div>
-                  <div className="flex-1">
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Date</p>
-                    <p className="text-sm font-medium mt-0.5 text-slate-700">{invoiceDate}</p>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Business</p>
+                    <p className="text-sm font-medium mt-0.5 leading-snug wrap-break-word text-slate-700">{businessName}</p>
+                  </div>
+                  <div className="flex gap-4">
+                    <div className="flex-1">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Payment</p>
+                      <p className={cn("text-sm font-semibold mt-0.5", paymentType === "Cash" ? "text-green-600" : "text-orange-600")}>
+                        {paymentType === "Cash" ? "💵 Cash" : "📋 Credit"}
+                      </p>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Date</p>
+                      <p className="text-sm font-medium mt-0.5 text-slate-700">{invoiceDate}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
+
+              {/* Invoice Items list in sidebar — Mobile/Tablet only */}
+              {!isDesktopScreen && (
+                <>
+                  {items.length > 0 ? (
+                    <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
+                      {items.map((item, idx) => {
+                        const isSierra = (item.supplier || "").toLowerCase().includes("sierra");
+                        const isWireman = (item.supplier || "").toLowerCase().includes("wireman");
+                        const isOrange = (item.supplier || "").toLowerCase().includes("orange");
+                        const isRetailOnly = item.retailOnly;
+
+                        let leftBorder = "border-l-4 border-l-slate-300";
+                        let supplierLabel = "";
+                        let supplierBadgeCls = "bg-slate-100 text-slate-600 border-slate-200";
+                        if (isRetailOnly) {
+                          leftBorder = "border-l-4 border-l-emerald-500";
+                          supplierLabel = "Retail Only";
+                          supplierBadgeCls = "bg-emerald-50 text-emerald-700 border-emerald-100";
+                        } else if (isSierra) {
+                          leftBorder = "border-l-4 border-l-purple-500";
+                          supplierLabel = "Sierra";
+                          supplierBadgeCls = "bg-purple-50 text-purple-700 border-purple-100";
+                        } else if (isWireman) {
+                          leftBorder = "border-l-4 border-l-red-500";
+                          supplierLabel = "Wireman";
+                          supplierBadgeCls = "bg-red-50 text-red-700 border-red-100";
+                        } else if (isOrange) {
+                          leftBorder = "border-l-4 border-l-orange-500";
+                          supplierLabel = "Orange";
+                          supplierBadgeCls = "bg-orange-50 text-orange-700 border-orange-100";
+                        }
+
+                        const isEditing = editingItemId === item.id;
+
+                        return (
+                          <div
+                            key={item.id}
+                            className={cn(
+                              "flex items-start justify-between gap-2 rounded-lg border bg-slate-50/50 p-2 transition-all duration-200",
+                              leftBorder,
+                              isEditing ? "bg-blue-50/80 border-blue-200 shadow-sm" : "hover:bg-slate-100/70 border-slate-100"
+                            )}
+                          >
+                            {/* Details */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1 flex-wrap">
+                                <span className="font-semibold text-xs leading-tight text-slate-800 break-words">{item.productName}</span>
+                                {supplierLabel && (
+                                  <span className={cn("text-[9px] font-bold px-1 py-0.2 rounded border shrink-0", supplierBadgeCls)}>
+                                    {supplierLabel}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1 text-[10px] text-muted-foreground font-sans">
+                                <span className="font-mono text-[9px]">{item.sku}</span>
+                                <span>·</span>
+                                <span>{item.quantity} {item.unit}</span>
+                                {item.freeQuantity > 0 && <span className="text-green-600 font-medium">+{item.freeQuantity} free</span>}
+                                <span>·</span>
+                                <span>LKR {item.unitPrice.toLocaleString()}</span>
+                                {item.discountPercent > 0 && <span className="text-orange-600 font-semibold">{item.discountPercent}% off</span>}
+                              </div>
+                            </div>
+
+                            {/* Total + Actions */}
+                            <div className="flex flex-col items-end gap-1.5 shrink-0 ml-2">
+                              <span className="font-bold text-xs text-slate-800">
+                                {item.total.toLocaleString()}
+                              </span>
+                              <div className="flex gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className={cn("h-6 w-6 rounded-md hover:bg-blue-100/50 text-blue-500", isEditing && "bg-blue-100 text-blue-600")}
+                                  onClick={() => handleEditItem(item.id)}
+                                >
+                                  <Pencil className="w-3 h-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 rounded-md hover:bg-red-100/50 text-destructive"
+                                  onClick={() => handleRemoveItem(item.id)}
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-6 text-muted-foreground rounded-lg border border-dashed border-slate-200 bg-slate-50/20">
+                      <Package className="w-6 h-6 mb-1.5 opacity-30 text-slate-400" />
+                      <p className="text-xs">No items in the invoice</p>
+                    </div>
+                  )}
+                </>
+              )}
 
               {/* Totals breakdown */}
               <div className="border-t pt-3 space-y-1.5">
@@ -1273,35 +1416,69 @@ export default function CreateRetailInvoicePage() {
               </div>
 
               {/* Quick action buttons in sidebar */}
-              <div className="grid grid-cols-2 gap-2 pt-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleSaveAction("print")}
-                  disabled={items.length === 0 || loading}
-                  className="h-10 text-xs font-medium"
-                >
-                  {loading ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Printer className="w-3.5 h-3.5 mr-1.5" />}
-                  Print
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={() => handleSaveAction("save")}
-                  disabled={items.length === 0 || loading}
-                  className="h-10 bg-green-600 hover:bg-green-700 text-xs font-bold"
-                >
-                  {loading ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1.5" />}
-                  Save
-                </Button>
-              </div>
+              {isDesktopScreen ? (
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleSaveAction("print")}
+                    disabled={items.length === 0 || loading}
+                    className="h-10 text-xs font-medium"
+                  >
+                    {loading ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Printer className="w-3.5 h-3.5 mr-1.5" />}
+                    Print
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => handleSaveAction("save")}
+                    disabled={items.length === 0 || loading}
+                    className="h-10 bg-green-600 hover:bg-green-700 text-xs font-bold"
+                  >
+                    {loading ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1.5" />}
+                    Save
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-1.5 pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleSaveAction("download")}
+                    disabled={items.length === 0 || loading}
+                    className="h-10 text-xs font-medium px-1"
+                  >
+                    {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3 mr-1 shrink-0" />}
+                    <span>PDF</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleSaveAction("print")}
+                    disabled={items.length === 0 || loading}
+                    className="h-10 text-xs font-medium px-1"
+                  >
+                    {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Printer className="w-3 h-3 mr-1 shrink-0" />}
+                    <span>Print</span>
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => handleSaveAction("save")}
+                    disabled={items.length === 0 || loading}
+                    className="h-10 bg-green-600 hover:bg-green-700 text-xs font-bold px-1 text-white"
+                  >
+                    {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3 mr-1 shrink-0" />}
+                    <span>Save</span>
+                  </Button>
+                </div>
+              )}
 
             </CardContent>
           </Card>
         </div>
       </div>
 
-      {/* ── Mobile / Tablet sticky bottom bar ── */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t shadow-lg px-4 py-3">
+      {/* ── Mobile / Tablet sticky bottom bar — hidden in landscape (summary panel takes over) ── */}
+      {!isLandscape && <div className="xl:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t shadow-lg px-4 py-3">
         <div className="flex items-center gap-3 max-w-2xl mx-auto">
           {/* Mini totals */}
           <div className="flex-1 min-w-0">
@@ -1356,7 +1533,7 @@ export default function CreateRetailInvoicePage() {
             <span className="hidden sm:inline">Save Invoice</span>
           </Button>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

@@ -152,7 +152,10 @@ export function AppSidebar({
   };
 
   return (
-    <div className="hidden lg:flex w-64 border-r bg-card h-screen sticky top-0 flex-col shadow-sm z-40">
+    <div className={cn(
+      isRetail ? "hidden xl:flex" : "hidden lg:flex",
+      "w-64 border-r bg-card h-screen sticky top-0 flex-col shadow-sm z-40"
+    )}>
       {/* Logo Header / Portal Switcher */}
       <div className="h-16 flex items-center border-b px-4 shrink-0">
         {canSwitch ? (

@@ -2,9 +2,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { AppSidebar } from "@/components/ui/layout/AppSidebar";
 import { MobileNav } from "@/components/ui/layout/MobileNav";
+import { cn } from "@/lib/utils";
 import { Store } from "lucide-react";
 import {
   getUserBusinessContext,
@@ -18,6 +19,7 @@ export default function RetailOfficeLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [businessName, setBusinessName] = useState<string>("");
   const [isAuthorized, setIsAuthorized] = useState<boolean>(false);
 
@@ -61,6 +63,8 @@ export default function RetailOfficeLayout({
     );
   }
 
+  const isWalkinSale = pathname === "/dashboard/office/retail/walkin-sales";
+
   // Main Layout
   return (
     <div className="flex h-screen w-full bg-gray-50 overflow-hidden">
@@ -70,13 +74,19 @@ export default function RetailOfficeLayout({
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         {/* Mobile Header */}
-        <header className="lg:hidden h-16 bg-white border-b flex items-center px-4 shrink-0 z-30">
+        <header className="xl:hidden h-16 bg-white border-b flex items-center px-4 shrink-0 z-30">
           <MobileNav role="office" isRetail={true} />
-          <span className="ml-4 font-bold text-gray-700">Retail Portal</span>
+          {isWalkinSale ? (
+            <span className="ml-4 font-bold text-gray-700 truncate">
+              {businessName || "Retail Portal"}
+            </span>
+          ) : (
+            <span className="ml-4 font-bold text-gray-700">Retail Portal</span>
+          )}
         </header>
 
         {/* Desktop Header */}
-        <header className="hidden lg:flex h-16 bg-white border-b items-center justify-between px-8 shrink-0 z-10">
+        <header className="hidden xl:flex h-16 bg-white border-b items-center justify-between px-8 shrink-0 z-10">
           <div className="flex items-center gap-3">
             <div className="h-8 w-8 bg-green-100 rounded-lg flex items-center justify-center">
               <Store className="h-4 w-4 text-green-600" />
@@ -96,7 +106,9 @@ export default function RetailOfficeLayout({
         </header>
 
         {/* Page Content */}
-        <div className="flex-1 p-4 md:p-8 overflow-y-auto">{children}</div>
+        <div className={cn("flex-1 overflow-y-auto", isWalkinSale ? "p-3 sm:p-4" : "p-4 md:p-8")}>
+          {children}
+        </div>
       </main>
     </div>
   );
