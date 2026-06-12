@@ -2,10 +2,10 @@
   "name": "Champika Hardware",
   "short_name": "Champika Hardware",
   "description": "Champika Hardware B2B Management System",
-  "start_url": "/login",
+  "start_url": "/home-expenses",
   "display": "standalone",
-  "background_color": "#2563eb",
-  "theme_color": "#2563eb",
+  "background_color": "#020617",
+  "theme_color": "#020617",
   "icons": [
     {
       "src": "/icons/icon-192x192.png",
