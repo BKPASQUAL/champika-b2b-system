@@ -269,7 +269,7 @@ export default function RetailViewInvoicePage({
     <div className="min-h-screen bg-muted/40">
       <div className="mx-auto space-y-6 px-2 sm:px-0">
         {/* --- Top Header Section --- */}
-        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+        <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-3">
           <div className="space-y-1">
             <div className="flex items-center gap-2 flex-wrap">
               <Button
@@ -295,7 +295,7 @@ export default function RetailViewInvoicePage({
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5 lg:shrink-0">
+          <div className="flex flex-wrap items-center gap-1.5 xl:shrink-0">
             {/* Refresh Button */}
             <Button
               variant="outline"
@@ -415,9 +415,9 @@ export default function RetailViewInvoicePage({
         </div>
 
         {/* --- Main Content Grid --- */}
-        <div className="grid gap-6 lg:grid-cols-3">
+        <div className="grid gap-6 xl:grid-cols-3">
           {/* LEFT COLUMN (Details & Items) */}
-          <div className="lg:col-span-2 space-y-6 min-w-0">
+          <div className="xl:col-span-2 space-y-6 min-w-0">
             {/* Stakeholders Card */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Card className="shadow-sm border-l-4 border-l-blue-500">
@@ -911,7 +911,7 @@ export default function RetailViewInvoicePage({
           </div>
 
           {/* RIGHT COLUMN (Summary) */}
-          <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-1 gap-6 h-fit">
             <Card className="shadow-sm">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
