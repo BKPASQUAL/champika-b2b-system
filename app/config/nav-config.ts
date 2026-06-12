@@ -278,6 +278,11 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
         { name: "Users", href: "/dashboard/admin/users", icon: Users },
         { name: "Settings", href: "/dashboard/admin/settings", icon: Settings },
         {
+          name: "Home Expenses",
+          href: "/home-expenses",
+          icon: Coins,
+        },
+        {
           name: "Backup & Export",
           href: "/dashboard/admin/backup",
           icon: HardDrive,

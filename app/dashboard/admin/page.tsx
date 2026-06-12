@@ -15,6 +15,7 @@ import {
   AlertOctagon,
   Building2,
   Loader2,
+  Coins,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -488,12 +489,13 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* ── Quick Links ───────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
         {[
           { label: "Invoices", href: "/dashboard/admin/invoices", icon: FileText, color: "text-blue-600", bg: "bg-blue-50" },
           { label: "Orders", href: "/dashboard/admin/orders", icon: ShoppingCart, color: "text-yellow-600", bg: "bg-yellow-50" },
           { label: "Payments", href: "/dashboard/admin/payments", icon: Banknote, color: "text-green-600", bg: "bg-green-50" },
           { label: "Suppliers", href: "/dashboard/admin/suppliers", icon: Building2, color: "text-purple-600", bg: "bg-purple-50" },
+          { label: "Home Expenses", href: "/home-expenses", icon: Coins, color: "text-indigo-600", bg: "bg-indigo-50" },
         ].map(({ label, href, icon: Icon, color, bg }) => (
           <Link key={label} href={href}>
             <Card className="hover:shadow-md transition-shadow cursor-pointer">
