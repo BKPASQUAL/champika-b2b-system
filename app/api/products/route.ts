@@ -23,7 +23,7 @@ const productSchema = z.object({
   unitOfMeasure: z.string().optional(),
   isActive: z.boolean().optional(),
   retailOnly: z.boolean().optional(),
-  retailPrice: z.number().min(0).optional(),
+  retailPrice: z.number().min(0).nullable().optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -230,19 +230,49 @@ export async function POST(request: NextRequest) {
     if (productError) throw productError;
 
     // Create Initial Stock Entry in Main Warehouse
-    const { data: mainWarehouse } = await supabaseAdmin
-      .from("locations")
-      .select("id")
-      .is("business_id", null)
-      .maybeSingle();
+    // Create Initial Stock Entry (support custom target location or resolve via userId)
+    let targetLocationId = body.locationId || null;
+    const requestUserId = body.userId || null;
 
-    if (mainWarehouse) {
-      await supabaseAdmin.from("product_stocks").insert({
-        product_id: product.id,
-        location_id: mainWarehouse.id,
-        quantity: val.stock,
-        damaged_quantity: 0,
-      });
+    if (!targetLocationId && requestUserId) {
+      const { data: assignments, error: assignError } = await supabaseAdmin
+        .from("location_assignments")
+        .select("location_id")
+        .eq("user_id", requestUserId);
+
+      if (!assignError && assignments && assignments.length > 0) {
+        targetLocationId = assignments[0].location_id;
+      }
+    }
+
+    if (targetLocationId) {
+      const { error: stockError } = await supabaseAdmin
+        .from("product_stocks")
+        .insert({
+          product_id: product.id,
+          location_id: targetLocationId,
+          quantity: val.stock,
+          damaged_quantity: 0,
+        });
+      if (stockError) throw stockError;
+    } else {
+      const { data: mainWarehouse } = await supabaseAdmin
+        .from("locations")
+        .select("id")
+        .is("business_id", null)
+        .maybeSingle();
+
+      if (mainWarehouse) {
+        const { error: stockError } = await supabaseAdmin
+          .from("product_stocks")
+          .insert({
+            product_id: product.id,
+            location_id: mainWarehouse.id,
+            quantity: val.stock,
+            damaged_quantity: 0,
+          });
+        if (stockError) throw stockError;
+      }
     }
 
     return NextResponse.json(

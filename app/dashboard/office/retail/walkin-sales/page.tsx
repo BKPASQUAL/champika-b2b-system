@@ -16,6 +16,7 @@ import {
   Download,
   Pencil,
   X,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,6 +48,14 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
@@ -110,6 +119,7 @@ export default function CreateRetailInvoicePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [stockLoading, setStockLoading] = useState(false);
+  const [retailOutOfStockOverride, setRetailOutOfStockOverride] = useState(false);
 
   // Business Context
   const [businessId, setBusinessId] = useState<string | null>(null);
@@ -142,6 +152,44 @@ export default function CreateRetailInvoicePage() {
 
   // Supplier filter state
   const [supplierFilter, setSupplierFilter] = useState<"all" | "sierra" | "wireman" | "orange" | "retail" | "other">("all");
+
+  // New Product Modal States
+  const [isAddProductOpen, setIsAddProductOpen] = useState(false);
+  const [suppliersList, setSuppliersList] = useState<{ id: string; name: string }[]>([]);
+  const [categoriesList, setCategoriesList] = useState<string[]>([]);
+  const [submittingProduct, setSubmittingProduct] = useState(false);
+
+  // Settings dropdowns states
+  const [brands, setBrands] = useState<{ id: string; name: string; parent_id?: string }[]>([]);
+  const [models, setModels] = useState<{ id: string; name: string; parent_id?: string; category_id?: string }[]>([]);
+  const [specs, setSpecs] = useState<{ id: string; name: string; parent_id?: string; category_id?: string }[]>([]);
+  const [packSizes, setPackSizes] = useState<{ id: string; name: string; description?: string }[]>([]);
+  const [categories, setCategories] = useState<{ id: string; name: string; parent_id?: string }[]>([]);
+
+  // Add Spec state
+  const [isAddingSpec, setIsAddingSpec] = useState(false);
+  const [newSpecName, setNewSpecName] = useState("");
+  const [isSavingSpec, setIsSavingSpec] = useState(false);
+
+  const [newProduct, setNewProduct] = useState({
+    name: "",
+    sku: "",
+    companyCode: "",
+    category: "",
+    subCategory: "",
+    brand: "",
+    subBrand: "",
+    modelType: "",
+    subModel: "",
+    sizeSpec: "",
+    supplier: "",
+    unitOfMeasure: "Pcs",
+    stock: "",
+    mrp: "",
+    sellingPrice: "",
+    retailPrice: "",
+    costPrice: "",
+  });
 
   // Current Item Being Added - Initialized with empty values
   const [currentItem, setCurrentItem] = useState<CurrentItemState>({
@@ -186,6 +234,51 @@ export default function CreateRetailInvoicePage() {
       addProductCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }, [productOpen]);
+
+  // Reusable function to fetch rep stock
+  const fetchRepStock = async (usrId: string, overrideVal?: boolean) => {
+    setStockLoading(true);
+    try {
+      const activeOverride = overrideVal ?? retailOutOfStockOverride;
+      const productsRes = await fetch(
+        `/api/rep/stock?userId=${usrId}${activeOverride ? "&includeOutOfStock=true" : ""}`
+      );
+      if (!productsRes.ok) {
+        throw new Error("Failed to fetch assigned stock");
+      }
+      const productsData = await productsRes.json();
+      if (Array.isArray(productsData)) {
+        setProducts(
+          productsData.map((p: any) => ({
+            id: p.id,
+            sku: p.sku,
+            name: p.name,
+            selling_price: p.selling_price || 0,
+            retail_price: p.retail_price ?? null,
+            mrp: p.mrp || 0,
+            stock_quantity: p.stock_quantity || 0,
+            unit_of_measure: p.unit_of_measure || "unit",
+            supplier: p.supplier || "",
+            retailOnly: p.retailOnly ?? p.retail_only ?? false,
+          }))
+        );
+
+        if (productsData.length === 0) {
+          toast.warning(
+            "No stock found. Please check your Warehouse Assignments."
+          );
+        }
+      } else {
+        console.error("Invalid product data format", productsData);
+        setProducts([]);
+      }
+    } catch (error) {
+      console.error("Error fetching rep stock:", error);
+      toast.error("Failed to load stock");
+    } finally {
+      setStockLoading(false);
+    }
+  };
 
   // --- 1. Get Business Context and Fetch Initial Data ---
   useEffect(() => {
@@ -255,42 +348,58 @@ export default function CreateRetailInvoicePage() {
           }))
         );
 
-        setStockLoading(true);
-        const productsRes = await fetch(`/api/rep/stock?userId=${user.id}`);
-
-        if (!productsRes.ok) {
-          throw new Error("Failed to fetch assigned stock");
-        }
-
-        const productsData = await productsRes.json();
-
-        if (Array.isArray(productsData)) {
-          setProducts(
-            productsData.map((p: any) => ({
-              id: p.id,
-              sku: p.sku,
-              name: p.name,
-              selling_price: p.selling_price || 0,
-              retail_price: p.retail_price ?? null,
-              mrp: p.mrp || 0,
-              stock_quantity: p.stock_quantity || 0,
-              unit_of_measure: p.unit_of_measure || "unit",
-              supplier: p.supplier || "",
-              retailOnly: p.retailOnly ?? p.retail_only ?? false,
-            }))
-          );
-
-          if (productsData.length === 0) {
-            toast.warning(
-              "No stock found. Please check your Warehouse Assignments."
+        // Fetch categories and suppliers for the modal dropdowns
+        try {
+          const supRes = await fetch("/api/suppliers");
+          if (supRes.ok) {
+            const supData = await supRes.json();
+            const setSupRes = await fetch("/api/settings/categories?type=supplier");
+            const setSupData = setSupRes.ok ? await setSupRes.json() : [];
+            const mergedSups = [...supData, ...setSupData].filter(
+              (v, i, a) => a.findIndex((t) => t.name === v.name) === i
             );
+            setSuppliersList(mergedSups);
           }
-        } else {
-          console.error("Invalid product data format", productsData);
-          setProducts([]);
+
+          const catRes = await fetch("/api/settings/categories?type=category");
+          if (catRes.ok) {
+            const catData = await catRes.json();
+            if (Array.isArray(catData)) {
+              setCategories(catData);
+              setCategoriesList(catData.filter((c: any) => !c.parent_id).map((c: any) => c.name));
+            }
+          }
+
+          // Fetch brands, models, specs, and pack sizes in parallel
+          Promise.all([
+            fetch("/api/settings/categories?type=brand").then((r) => r.json()).catch(() => []),
+            fetch("/api/settings/categories?type=model").then((r) => r.json()).catch(() => []),
+            fetch("/api/settings/categories?type=spec").then((r) => r.json()).catch(() => []),
+            fetch("/api/settings/categories?type=pack_size").then((r) => r.json()).catch(() => []),
+          ]).then(([brandsData, modelsData, specsData, packSizesData]) => {
+            if (Array.isArray(brandsData)) setBrands(brandsData);
+            if (Array.isArray(modelsData)) setModels(modelsData);
+            if (Array.isArray(specsData)) setSpecs(specsData);
+            if (Array.isArray(packSizesData)) setPackSizes(packSizesData);
+          });
+        } catch (err) {
+          console.error("Error fetching suppliers/categories for modal:", err);
         }
 
-        setStockLoading(false);
+        // Fetch out-of-stock override setting first
+        let isOverrideEnabled = false;
+        try {
+          const overrideRes = await fetch("/api/settings/retail-invoice-override").catch(() => null);
+          if (overrideRes?.ok) {
+            const overrideData = await overrideRes.json();
+            setRetailOutOfStockOverride(overrideData.enabled ?? false);
+            isOverrideEnabled = overrideData.enabled ?? false;
+          }
+        } catch (err) {
+          console.error("Error fetching retail invoice override setting:", err);
+        }
+
+        await fetchRepStock(user.id, isOverrideEnabled);
       } catch (error) {
         console.error("Error fetching data:", error);
         toast.error("Failed to load data");
@@ -301,6 +410,110 @@ export default function CreateRetailInvoicePage() {
 
     fetchInitialData();
   }, [router]);
+
+  const handleCreateProduct = async () => {
+    if (!newProduct.name.trim()) {
+      toast.error("Product name is required");
+      return;
+    }
+    if (!newProduct.category.trim()) {
+      toast.error("Category is required");
+      return;
+    }
+    if (!newProduct.supplier.trim()) {
+      toast.error("Supplier is required");
+      return;
+    }
+    
+    const qty = Number(newProduct.stock) || 0;
+    const mrp = Number(newProduct.mrp) || 0;
+    const sellingPrice = Number(newProduct.sellingPrice) || 0;
+    const retailPrice = newProduct.retailPrice === "" ? null : Number(newProduct.retailPrice);
+    const costPrice = Number(newProduct.costPrice) || 0;
+
+    const activePrice = retailPrice ?? sellingPrice;
+
+    if (activePrice <= 0) {
+      toast.error("Please enter a Selling Price or Retail Price greater than 0.");
+      return;
+    }
+
+    if (activePrice <= costPrice) {
+      toast.error("Selling Price or Retail Price must be greater than Cost Price.");
+      return;
+    }
+
+    setSubmittingProduct(true);
+    try {
+      const payload = {
+        name: newProduct.name.trim(),
+        sku: newProduct.sku.trim() || undefined,
+        companyCode: newProduct.companyCode.trim() || undefined,
+        category: newProduct.category,
+        subCategory: newProduct.subCategory || undefined,
+        brand: newProduct.brand || undefined,
+        subBrand: newProduct.subBrand || undefined,
+        modelType: newProduct.modelType || undefined,
+        subModel: newProduct.subModel || undefined,
+        sizeSpec: newProduct.sizeSpec || undefined,
+        supplier: newProduct.supplier,
+        unitOfMeasure: newProduct.unitOfMeasure,
+        stock: qty,
+        minStock: 0,
+        mrp: mrp,
+        sellingPrice: sellingPrice || (retailPrice ?? 0),
+        retailPrice: retailPrice,
+        costPrice: costPrice,
+        retailOnly: true, // Always true since we are creating it in retail mode
+        userId: userId, // Pass user id so backend inserts stock to the user's assigned location
+      };
+
+      const res = await fetch("/api/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const resData = await res.json();
+      if (!res.ok) {
+        throw new Error(resData.error || "Failed to create product");
+      }
+
+      toast.success("Product created successfully!");
+      setIsAddProductOpen(false);
+      setIsAddingSpec(false);
+      // Reset form
+      setNewProduct({
+        name: "",
+        sku: "",
+        companyCode: "",
+        category: "",
+        subCategory: "",
+        brand: "",
+        subBrand: "",
+        modelType: "",
+        subModel: "",
+        sizeSpec: "",
+        supplier: "",
+        unitOfMeasure: "Pcs",
+        stock: "",
+        mrp: "",
+        sellingPrice: "",
+        retailPrice: "",
+        costPrice: "",
+      });
+
+      // Refetch stocks
+      if (userId) {
+        await fetchRepStock(userId);
+      }
+    } catch (err: any) {
+      console.error("Error creating product:", err);
+      toast.error(err.message || "Failed to create product");
+    } finally {
+      setSubmittingProduct(false);
+    }
+  };
 
   // --- Product Selection Handler ---
   const handleProductSelect = (productId: string) => {
@@ -377,7 +590,7 @@ export default function CreateRetailInvoicePage() {
     }
 
     const totalReqQty = qty + freeQty;
-    if (totalReqQty > currentItem.stockAvailable) {
+    if (!retailOutOfStockOverride && totalReqQty > currentItem.stockAvailable) {
       toast.error(`Insufficient stock! Available: ${currentItem.stockAvailable}`);
       return;
     }
@@ -528,6 +741,100 @@ export default function CreateRetailInvoicePage() {
     return true;
   });
 
+  // --- Filtering Logic for New Product Dialog ---
+  const mainCategories = categories.filter((c) => !c.parent_id);
+  const selectedCatObj = mainCategories.find(
+    (c) => c.name === newProduct.category,
+  );
+  const selectedCatId = selectedCatObj?.id;
+
+  const subCategories = categories.filter(
+    (c) => c.parent_id && c.parent_id === selectedCatId,
+  );
+
+  const selectedSubCatObj = subCategories.find(
+    (c) => c.name === newProduct.subCategory,
+  );
+  const selectedSubCatId = selectedSubCatObj?.id;
+
+  const mainBrands = brands.filter((b) => !b.parent_id);
+  const selectedBrandId = mainBrands.find((b) => b.name === newProduct.brand)?.id;
+  const subBrands = brands.filter(
+    (b) => b.parent_id && b.parent_id === selectedBrandId,
+  );
+
+  const categoryModels = models.filter((m) => {
+    if (m.parent_id) return false;
+    if (selectedSubCatId) {
+      return m.category_id === selectedSubCatId;
+    }
+    return m.category_id === selectedCatId;
+  });
+
+  const selectedModelId = categoryModels.find(
+    (m) => m.name.trim() === newProduct.modelType?.trim(),
+  )?.id;
+
+  const subModels = models.filter((m) => {
+    const isChild = m.parent_id && m.parent_id === selectedModelId;
+    if (!isChild) return false;
+    if (selectedSubCatId && m.category_id) {
+      return m.category_id === selectedSubCatId;
+    }
+    return true;
+  });
+
+  const selectedSubModelId = subModels.find(
+    (m) => m.name.trim() === newProduct.subModel?.trim(),
+  )?.id;
+
+  const effectiveModelId =
+    selectedSubModelId || selectedModelId || selectedSubCatId || selectedCatId;
+
+  const categorySpecs = specs.filter((s) => {
+    if (selectedSubModelId && s.parent_id === selectedSubModelId) return true;
+    if (selectedModelId && s.parent_id === selectedModelId) return true;
+    if (selectedSubCatId && s.parent_id === selectedSubCatId) return true;
+    if (selectedCatId && s.parent_id === selectedCatId) return true;
+    return false;
+  });
+
+  const handleAddSpec = async () => {
+    if (!newSpecName.trim() || !effectiveModelId) return;
+
+    setIsSavingSpec(true);
+    try {
+      const res = await fetch("/api/settings/categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newSpecName.trim(),
+          type: "spec",
+          parent_id: effectiveModelId,
+          category_id: selectedSubCatId || selectedCatId,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to create spec");
+
+      toast.success("Specification added successfully");
+      // Refetch specs
+      const specsRes = await fetch("/api/settings/categories?type=spec");
+      if (specsRes.ok) {
+        const specsData = await specsRes.json();
+        if (Array.isArray(specsData)) setSpecs(specsData);
+      }
+      setNewSpecName("");
+      setIsAddingSpec(false);
+      setNewProduct({ ...newProduct, sizeSpec: newSpecName.trim() });
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to add specification");
+    } finally {
+      setIsSavingSpec(false);
+    }
+  };
+
   // Helper for current item calculation
   const safeUnitPrice =
     currentItem.unitPrice === "" ? 0 : currentItem.unitPrice;
@@ -548,6 +855,19 @@ export default function CreateRetailInvoicePage() {
 
   return (
     <div className={cn("mx-auto", isLandscape ? "space-y-3 pb-4" : "space-y-4 pb-28 xl:pb-6")}>
+
+      {/* Out of Stock Override Banner */}
+      {retailOutOfStockOverride && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-amber-800 text-xs sm:text-sm flex items-start gap-3 shadow-sm">
+          <AlertTriangle className="h-5 w-5 shrink-0 text-amber-600 mt-0.5" />
+          <div className="space-y-1">
+            <span className="font-bold block text-sm">Retail Out-of-Stock Invoicing Override is Active</span>
+            <span className="text-muted-foreground block text-xs">
+              You can search, select, and invoice any product regardless of current stock levels. Items with insufficient stock will be clamp-deducted to 0 on saving.
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* ── Page header (Desktop only) ── */}
       <div className="hidden xl:flex items-center gap-3 mb-6">
@@ -783,6 +1103,14 @@ export default function CreateRetailInvoicePage() {
                           <Loader2 className="inline h-3 w-3 animate-spin ml-2" />
                         )}
                       </Label>
+                      <Button
+                        type="button"
+                        variant="link"
+                        className="h-auto p-0 text-xs font-semibold text-emerald-600 hover:text-emerald-700 hover:no-underline flex items-center gap-1 shrink-0"
+                        onClick={() => setIsAddProductOpen(true)}
+                      >
+                        <Plus className="w-3.5 h-3.5" /> New Product Retail
+                      </Button>
                     </div>
 
                     {/* Supplier Filter Buttons Row */}
@@ -887,7 +1215,7 @@ export default function CreateRetailInvoicePage() {
                       >
                         <Command>
                           <CommandInput placeholder="Search product..." />
-                          <CommandList className="max-h-[200px]">
+                          <CommandList className="max-h-[400px]">
                             <CommandEmpty>
                               {filteredAvailableProducts.length === 0
                                 ? "No products found in this category"
@@ -1000,6 +1328,12 @@ export default function CreateRetailInvoicePage() {
                             e.target.value === "" ? "" : Number(e.target.value),
                         })
                       }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddItem();
+                        }
+                      }}
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -1016,6 +1350,12 @@ export default function CreateRetailInvoicePage() {
                             e.target.value === "" ? "" : Number(e.target.value),
                         })
                       }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddItem();
+                        }
+                      }}
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -1056,6 +1396,12 @@ export default function CreateRetailInvoicePage() {
                             e.target.value === "" ? "" : Number(e.target.value),
                         })
                       }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddItem();
+                        }
+                      }}
                       placeholder="0.00"
                     />
                   </div>
@@ -1072,6 +1418,12 @@ export default function CreateRetailInvoicePage() {
                             e.target.value === "" ? "" : Number(e.target.value),
                         })
                       }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddItem();
+                        }
+                      }}
                       placeholder="0.00"
                     />
                   </div>
@@ -1090,6 +1442,12 @@ export default function CreateRetailInvoicePage() {
                             e.target.value === "" ? "" : Number(e.target.value),
                         })
                       }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddItem();
+                        }
+                      }}
                       placeholder="0"
                     />
                   </div>
@@ -1534,6 +1892,405 @@ export default function CreateRetailInvoicePage() {
           </Button>
         </div>
       </div>}
+      {/* ── New Product Retail Dialog ── */}
+      <Dialog open={isAddProductOpen} onOpenChange={setIsAddProductOpen}>
+        <DialogContent className="max-w-3xl overflow-y-auto bg-white rounded-xl shadow-2xl p-6 border border-slate-100 animate-in fade-in zoom-in duration-200">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-slate-800 flex items-center gap-2">
+              <Package className="w-5 h-5 text-emerald-600 animate-pulse" />
+              New Product (Retail)
+            </DialogTitle>
+            <DialogDescription className="text-slate-500 text-xs mt-1">
+              Add a new retail-exclusive item. The initial stock will be assigned directly to your active location.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-2 gap-4 py-4">
+            {/* NAME & COMPANY CODE ROW */}
+            <div className="col-span-2 grid grid-cols-3 gap-4">
+              {/* Product Name */}
+              <div className="col-span-2 space-y-2">
+                <Label>Product Name *</Label>
+                <Input
+                  value={newProduct.name}
+                  onChange={(e) =>
+                    setNewProduct({ ...newProduct, name: e.target.value })
+                  }
+                  placeholder="e.g. SuperBright LED Bulb 9W"
+                />
+              </div>
+
+              {/* Company Code */}
+              <div className="col-span-1 space-y-2">
+                <Label>Company Code</Label>
+                <Input
+                  value={newProduct.companyCode || ""}
+                  onChange={(e) =>
+                    setNewProduct({ ...newProduct, companyCode: e.target.value })
+                  }
+                  placeholder="e.g. CMP-001"
+                  className="font-mono"
+                />
+              </div>
+            </div>
+
+            {/* Category Selection */}
+            <div className="space-y-2">
+              <Label>Category *</Label>
+              <Select
+                value={newProduct.category}
+                onValueChange={(val) => {
+                  setNewProduct({
+                    ...newProduct,
+                    category: val,
+                    subCategory: "",
+                    modelType: "",
+                    subModel: "",
+                    sizeSpec: "",
+                  });
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {mainCategories.map((c) => (
+                    <SelectItem key={c.id} value={c.name}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Sub Category</Label>
+              <Select
+                value={newProduct.subCategory}
+                onValueChange={(val) =>
+                  setNewProduct({
+                    ...newProduct,
+                    subCategory: val === "none" ? "" : val,
+                    modelType: "",
+                    subModel: "",
+                    sizeSpec: "",
+                  })
+                }
+                disabled={!newProduct.category}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select Sub Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">
+                    <span className="italic text-muted-foreground">None</span>
+                  </SelectItem>
+                  {subCategories.map((c) => (
+                    <SelectItem key={c.id} value={c.name}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Brand */}
+            <div className="space-y-2">
+              <Label>Brand</Label>
+              <Select
+                value={newProduct.brand}
+                onValueChange={(val) =>
+                  setNewProduct({
+                    ...newProduct,
+                    brand: val === "none" ? "" : val,
+                    subBrand: "",
+                  })
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select Brand" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {mainBrands.map((b) => (
+                    <SelectItem key={b.id} value={b.name}>
+                      {b.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Sub Brand */}
+            <div className="space-y-2">
+              <Label>Sub Brand</Label>
+              <Select
+                value={newProduct.subBrand}
+                onValueChange={(val) =>
+                  setNewProduct({
+                    ...newProduct,
+                    subBrand: val === "none" ? "" : val,
+                  })
+                }
+                disabled={!newProduct.brand}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select Sub Brand" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {subBrands.map((b) => (
+                    <SelectItem key={b.id} value={b.name}>
+                      {b.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Specification with Add New Logic */}
+            <div className="col-span-1 space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Specification</Label>
+                {newProduct.category && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs text-blue-600 hover:text-blue-800"
+                    onClick={() => {
+                      setIsAddingSpec(!isAddingSpec);
+                      setNewSpecName("");
+                    }}
+                  >
+                    <Plus className="w-3 h-3 mr-1" />
+                    {isAddingSpec ? "Cancel" : "Add New"}
+                  </Button>
+                )}
+              </div>
+
+              {isAddingSpec ? (
+                <div className="flex gap-2">
+                  <Input
+                    value={newSpecName}
+                    onChange={(e) => setNewSpecName(e.target.value)}
+                    placeholder="New spec"
+                    className="h-9"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handleAddSpec}
+                    disabled={!newSpecName.trim() || isSavingSpec}
+                  >
+                    {isSavingSpec ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              ) : (
+                <Select
+                  value={newProduct.sizeSpec}
+                  onValueChange={(val) =>
+                    setNewProduct({
+                      ...newProduct,
+                      sizeSpec: val === "none" ? "" : val,
+                    })
+                  }
+                  disabled={!newProduct.category}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select Spec" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {categorySpecs.length > 0 ? (
+                      categorySpecs.map((s) => (
+                        <SelectItem key={s.id} value={s.name}>
+                          {s.name}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="no-specs" disabled>
+                        No specs found
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            {/* Supplier */}
+            <div className="space-y-2">
+              <Label>Supplier *</Label>
+              <Select
+                value={newProduct.supplier}
+                onValueChange={(val) => {
+                  setNewProduct({ ...newProduct, supplier: val });
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select Supplier" />
+                </SelectTrigger>
+                <SelectContent>
+                  {suppliersList.map((s) => (
+                    <SelectItem key={s.id} value={s.name}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Pricing Section */}
+            <div className="col-span-2 grid grid-cols-3 gap-4 border-t pt-4">
+              <div className="space-y-2">
+                <Label>MRP (LKR)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={newProduct.mrp}
+                  onChange={(e) =>
+                    setNewProduct({
+                      ...newProduct,
+                      mrp: e.target.value,
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Selling Price (LKR) *</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={newProduct.sellingPrice}
+                  onChange={(e) =>
+                    setNewProduct({
+                      ...newProduct,
+                      sellingPrice: e.target.value,
+                    })
+                  }
+                  className="border-green-200 focus-visible:ring-green-400"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Cost Price (LKR)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={newProduct.costPrice}
+                  onChange={(e) =>
+                    setNewProduct({
+                      ...newProduct,
+                      costPrice: e.target.value,
+                    })
+                  }
+                />
+              </div>
+            </div>
+
+            {/* Retail Portal Pricing */}
+            <div className="col-span-2 border border-purple-200 rounded-lg p-4 bg-purple-50/50">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-xs font-semibold text-purple-700 uppercase tracking-wide">Retail Portal Pricing</span>
+                <span className="text-[10px] text-muted-foreground">(optional — leave empty to use selling price)</span>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-purple-700">Retail Price (LKR)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={newProduct.retailPrice}
+                  onChange={(e) =>
+                    setNewProduct({
+                      ...newProduct,
+                      retailPrice: e.target.value,
+                    })
+                  }
+                  placeholder="e.g. 350.00 — leave empty to use selling price"
+                  className="border-purple-200 focus-visible:ring-purple-400"
+                />
+                <p className="text-[10px] text-purple-600">
+                  When set, this price is used in the retail walk-in sales portal instead of the regular selling price.
+                </p>
+              </div>
+            </div>
+
+            {/* Stock & Unit of Measure */}
+            <div className="col-span-2 grid grid-cols-2 gap-4 pt-4 border-t">
+              <div className="space-y-2">
+                <Label>Pack Size (Unit)</Label>
+                <Select
+                  value={newProduct.unitOfMeasure}
+                  onValueChange={(val) =>
+                    setNewProduct({ ...newProduct, unitOfMeasure: val })
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select Pack Size" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {!packSizes.some(p => p.name.toLowerCase() === 'pcs') && (
+                      <SelectItem value="Pcs">Pcs (1 pc)</SelectItem>
+                    )}
+                    {packSizes.map((pack) => (
+                      <SelectItem key={pack.id} value={pack.name}>
+                        {pack.name} {pack.description && `(${pack.description} pcs)`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Initial Stock Quantity *</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  value={newProduct.stock}
+                  onChange={(e) =>
+                    setNewProduct({
+                      ...newProduct,
+                      stock: e.target.value,
+                    })
+                  }
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t border-slate-100">
+            <Button
+              variant="outline"
+              type="button"
+              onClick={() => {
+                setIsAddProductOpen(false);
+                setIsAddingSpec(false);
+              }}
+              className="h-10"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleCreateProduct}
+              disabled={submittingProduct}
+              className="bg-emerald-600 hover:bg-emerald-700 h-10 font-semibold shadow-sm text-white"
+            >
+              {submittingProduct ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                "Create Product"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

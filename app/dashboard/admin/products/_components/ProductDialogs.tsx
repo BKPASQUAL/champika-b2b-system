@@ -419,67 +419,7 @@ export function ProductDialogs({
               </Select>
             </div>
 
-            {/* Model */}
-            <div className="space-y-2">
-              <Label>Model</Label>
-              <Select
-                value={formData.modelType}
-                onValueChange={(val) =>
-                  setFormData({
-                    ...formData,
-                    modelType: val === "none" ? "" : val,
-                    subModel: "",
-                    sizeSpec: "",
-                  })
-                }
-                disabled={!formData.category}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select Model" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  {categoryModels.length > 0 ? (
-                    categoryModels.map((m) => (
-                      <SelectItem key={m.id} value={m.name}>
-                        {m.name}
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value="no-models" disabled>
-                      No models for this selection
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
 
-            {/* Sub Model */}
-            <div className="space-y-2">
-              <Label>Sub Model</Label>
-              <Select
-                value={formData.subModel}
-                onValueChange={(val) =>
-                  setFormData({
-                    ...formData,
-                    subModel: val === "none" ? "" : val,
-                  })
-                }
-                disabled={!formData.modelType}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select Sub Model" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  {subModels.map((m) => (
-                    <SelectItem key={m.id} value={m.name}>
-                      {m.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
 
             {/* Specification with Add New Logic */}
             <div className="col-span-1 space-y-2">

@@ -14,6 +14,7 @@ import {
   ChevronsUpDown,
   Printer,
   Download,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -122,6 +123,7 @@ export default function EditRetailInvoicePage({
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [stockLoading, setStockLoading] = useState(false);
+  const [retailOutOfStockOverride, setRetailOutOfStockOverride] = useState(false);
 
   // Business Context
   const [businessId, setBusinessId] = useState<string | null>(null);
@@ -192,11 +194,24 @@ export default function EditRetailInvoicePage({
         setBusinessName(user.businessName ?? BUSINESS_NAMES[BUSINESS_IDS.CHAMPIKA_RETAIL]);
         setUserId(user.id);
 
+        // Fetch Out-of-Stock setting
+        let isOverrideEnabled = false;
+        try {
+          const overrideRes = await fetch("/api/settings/retail-invoice-override").catch(() => null);
+          if (overrideRes?.ok) {
+            const overrideData = await overrideRes.json();
+            setRetailOutOfStockOverride(overrideData.enabled ?? false);
+            isOverrideEnabled = overrideData.enabled ?? false;
+          }
+        } catch (err) {
+          console.error("Error fetching retail invoice override setting:", err);
+        }
+
         // 2. Fetch Data (Invoice, Customers, Products)
         const [invRes, custRes, prodRes] = await Promise.all([
           fetch(`/api/invoices/${id}`),
           fetch(`/api/customers?businessId=${BUSINESS_IDS.CHAMPIKA_RETAIL}&status=Active`),
-          fetch(`/api/rep/stock?userId=${user.id}`),
+          fetch(`/api/rep/stock?userId=${user.id}${isOverrideEnabled ? "&includeOutOfStock=true" : ""}`),
         ]);
 
         if (!invRes.ok) throw new Error("Failed to load invoice");
@@ -486,6 +501,19 @@ export default function EditRetailInvoicePage({
 
   return (
     <div className="space-y-4 mx-auto pb-16 lg:pb-0">
+      {/* Out of Stock Override Banner */}
+      {retailOutOfStockOverride && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-amber-800 text-xs sm:text-sm flex items-start gap-3 shadow-sm">
+          <AlertTriangle className="h-5 w-5 shrink-0 text-amber-600 mt-0.5" />
+          <div className="space-y-1">
+            <span className="font-bold block text-sm">Retail Out-of-Stock Invoicing Override is Active</span>
+            <span className="text-muted-foreground block text-xs">
+              You can search, select, and invoice any product regardless of current stock levels. Items with insufficient stock will be clamp-deducted to 0 on saving.
+            </span>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row items-center gap-4">
         <div className="flex items-center gap-4 w-full md:w-auto">
           <Button
@@ -738,7 +766,7 @@ export default function EditRetailInvoicePage({
                   >
                     <Command>
                       <CommandInput placeholder="Search product..." />
-                      <CommandList>
+                      <CommandList className="max-h-[400px]">
                         <CommandEmpty>
                           {filteredAvailableProducts.length === 0
                             ? "No products found in this category"
@@ -827,19 +855,61 @@ export default function EditRetailInvoicePage({
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="space-y-2">
                   <Label>Quantity</Label>
-                  <Input type="number" min="1" value={currentItem.quantity} onChange={(e) => setCurrentItem({ ...currentItem, quantity: e.target.value === "" ? "" : Number(e.target.value) })} />
+                  <Input
+                    type="number"
+                    min="1"
+                    value={currentItem.quantity}
+                    onChange={(e) => setCurrentItem({ ...currentItem, quantity: e.target.value === "" ? "" : Number(e.target.value) })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddItem();
+                      }
+                    }}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Free Qty</Label>
-                  <Input type="number" min="0" value={currentItem.freeQuantity} onChange={(e) => setCurrentItem({ ...currentItem, freeQuantity: e.target.value === "" ? "" : Number(e.target.value) })} />
+                  <Input
+                    type="number"
+                    min="0"
+                    value={currentItem.freeQuantity}
+                    onChange={(e) => setCurrentItem({ ...currentItem, freeQuantity: e.target.value === "" ? "" : Number(e.target.value) })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddItem();
+                      }
+                    }}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Unit Price</Label>
-                  <Input type="number" value={currentItem.unitPrice} onChange={(e) => setCurrentItem({ ...currentItem, unitPrice: e.target.value === "" ? "" : Number(e.target.value) })} />
+                  <Input
+                    type="number"
+                    value={currentItem.unitPrice}
+                    onChange={(e) => setCurrentItem({ ...currentItem, unitPrice: e.target.value === "" ? "" : Number(e.target.value) })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddItem();
+                      }
+                    }}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Disc %</Label>
-                  <Input type="number" value={currentItem.discountPercent} onChange={(e) => setCurrentItem({ ...currentItem, discountPercent: e.target.value === "" ? "" : Number(e.target.value) })} />
+                  <Input
+                    type="number"
+                    value={currentItem.discountPercent}
+                    onChange={(e) => setCurrentItem({ ...currentItem, discountPercent: e.target.value === "" ? "" : Number(e.target.value) })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddItem();
+                      }
+                    }}
+                  />
                 </div>
               </div>
 

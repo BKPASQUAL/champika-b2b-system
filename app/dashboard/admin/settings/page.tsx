@@ -511,9 +511,11 @@ function SyncSierraCostsAction() {
 // ── Operations Section ────────────────────────────────────────────────────────
 function OperationsSettings() {
   const [stockOverride, setStockOverride] = useState(false);
+  const [retailStockOverride, setRetailStockOverride] = useState(false);
   const [repCustomerCreate, setRepCustomerCreate] = useState(false);
   const [loading, setLoading] = useState(true);
   const [savingStock, setSavingStock] = useState(false);
+  const [savingRetailStock, setSavingRetailStock] = useState(false);
   const [savingCustomer, setSavingCustomer] = useState(false);
 
   const [discountPortals, setDiscountPortals] = useState({
@@ -526,10 +528,12 @@ function OperationsSettings() {
       fetch("/api/settings/invoice-override").then((r) => r.json()).catch(() => ({ enabled: false })),
       fetch("/api/settings/rep-customer-creation").then((r) => r.json()).catch(() => ({ enabled: false })),
       fetch("/api/settings/discount-feature").then((r) => r.json()).catch(() => ({})),
-    ]).then(([stock, cust, disc]) => {
+      fetch("/api/settings/retail-invoice-override").then((r) => r.json()).catch(() => ({ enabled: false })),
+    ]).then(([stock, cust, disc, retailStock]) => {
       setStockOverride(stock.enabled ?? false);
       setRepCustomerCreate(cust.enabled ?? false);
       setDiscountPortals((prev) => ({ ...prev, ...disc }));
+      setRetailStockOverride(retailStock.enabled ?? false);
     }).finally(() => setLoading(false));
   }, []);
 
@@ -576,6 +580,29 @@ function OperationsSettings() {
       toast.error(err.message || "Failed to save setting");
     } finally {
       setSavingStock(false);
+    }
+  };
+
+  const handleRetailStockToggle = async (value: boolean) => {
+    setSavingRetailStock(true);
+    try {
+      const res = await fetch("/api/settings/retail-invoice-override", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: value }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to save");
+      setRetailStockOverride(data.enabled);
+      toast.success(
+        data.enabled
+          ? "Out-of-stock invoicing enabled for Retail portal"
+          : "Out-of-stock invoicing disabled for Retail portal — normal mode restored"
+      );
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save setting");
+    } finally {
+      setSavingRetailStock(false);
     }
   };
 
@@ -660,6 +687,49 @@ function OperationsSettings() {
                 <strong>Override is ON.</strong> Reps can currently invoice any
                 item regardless of stock levels. Remember to turn this off after
                 the sales period ends.
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Retail Stock Override Toggle */}
+        <div
+          className={cn(
+            "rounded-xl border-2 p-5 transition-colors",
+            retailStockOverride ? "border-amber-300 bg-amber-50" : "border-gray-100 bg-white"
+          )}
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1 flex-1">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-semibold text-gray-800">
+                  Allow Retail Portal to Invoice Out-of-Stock Items
+                </p>
+                {retailStockOverride && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold">
+                    <AlertTriangle className="h-3 w-3" />
+                    ACTIVE
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                When enabled, the retail portal can create walk-in sales invoices for any product even if
+                assigned stock is 0. Turn this off to restore normal retail stock validation.
+              </p>
+            </div>
+            <Switch
+              checked={retailStockOverride}
+              onCheckedChange={handleRetailStockToggle}
+              disabled={loading || savingRetailStock}
+              className="shrink-0 mt-0.5 data-[state=checked]:bg-amber-500"
+            />
+          </div>
+          {retailStockOverride && (
+            <div className="mt-4 flex items-start gap-2 bg-amber-100 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+              <span>
+                <strong>Override is ON.</strong> Retail portal can currently invoice any
+                item regardless of stock levels. Remember to turn this off when normal stock validation is required.
               </span>
             </div>
           )}
