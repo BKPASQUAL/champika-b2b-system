@@ -97,6 +97,9 @@ export default function HomeExpensesPage() {
   // Layout context (only shows main dashboard exit link if logged in)
   const [loggedInUser, setLoggedInUser] = useState(false);
 
+  // Floating Scroll to Top state
+  const [showScrollTop, setShowScrollTop] = useState(false);
+
   // Tab State: Switches between "log" (Logger Form) and "analytics" (Analytics view)
   const [activeTab, setActiveTab] = useState<"log" | "analytics">("log");
 
@@ -183,7 +186,17 @@ export default function HomeExpensesPage() {
 
     fetchExpenses();
 
+    const handleScroll = () => {
+      if (window.scrollY > 300) {
+        setShowScrollTop(true);
+      } else {
+        setShowScrollTop(false);
+      }
+    };
+    window.addEventListener("scroll", handleScroll);
+
     return () => {
+      window.removeEventListener("scroll", handleScroll);
       // Revert dynamic styling when navigating away from this page
       htmlEl.classList.remove("dark");
       bodyEl.classList.remove("dark");
@@ -356,6 +369,13 @@ export default function HomeExpensesPage() {
     } catch (error: any) {
       toast.error("Failed to delete expense.");
     }
+  };
+
+  const scrollToTop = () => {
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
   };
 
   // Helper to find category metadata
@@ -632,7 +652,7 @@ export default function HomeExpensesPage() {
         </header>
 
         {/* Main Panel */}
-        <div className="flex-1 p-3 sm:p-6 md:p-8 flex flex-col items-center w-full max-w-full overflow-x-hidden">
+        <div className="flex-1 p-3 pb-32 sm:p-6 md:p-8 flex flex-col items-center w-full max-w-full overflow-x-hidden">
           
           {/* Mobile Tabs Switcher */}
           <div className="md:hidden w-full max-w-md bg-slate-900/80 border border-slate-800 p-1.5 rounded-2xl flex items-center mb-5 shrink-0">
@@ -1006,7 +1026,7 @@ export default function HomeExpensesPage() {
                   </div>
 
                   {/* List */}
-                  <div className="space-y-2.5 max-h-[350px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent flex-1">
+                  <div className="space-y-2.5 max-h-none md:max-h-[350px] overflow-y-visible md:overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent flex-1">
                     {loading ? (
                       <div className="py-8 flex flex-col items-center justify-center text-slate-500 gap-2">
                         <RefreshCw className="w-5 h-5 animate-spin text-indigo-500" />
@@ -1120,7 +1140,7 @@ export default function HomeExpensesPage() {
                       No expense data logged yet.
                     </div>
                   ) : (
-                    <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-800">
+                    <div className="space-y-2 max-h-none md:max-h-[300px] overflow-y-visible md:overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-800">
                       {monthlyExpenses.map((m) => {
                         const isExpanded = expandedMonth === m.monthStr;
                         return (
@@ -1212,7 +1232,7 @@ export default function HomeExpensesPage() {
                       No expense data logged yet.
                     </div>
                   ) : (
-                    <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-800">
+                    <div className="space-y-2 max-h-none md:max-h-[350px] overflow-y-visible md:overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-800">
                       {dailyExpenses.map((day) => {
                         const isExpanded = expandedDate === day.date;
                         return (
@@ -1296,7 +1316,7 @@ export default function HomeExpensesPage() {
                       No categories logged yet.
                     </div>
                   ) : (
-                    <div className="space-y-3.5 max-h-[300px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-800">
+                    <div className="space-y-3.5 max-h-none md:max-h-[300px] overflow-y-visible md:overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-800">
                       {categoryBreakdown.map((item) => {
                         const meta = getCategoryMeta(item.category);
                         const Icon = meta.icon;
@@ -1341,6 +1361,18 @@ export default function HomeExpensesPage() {
           
         </div>
       </main>
+
+      {/* Floating Scroll to Top Button */}
+      {showScrollTop && (
+        <button
+          type="button"
+          onClick={scrollToTop}
+          className="fixed bottom-6 right-6 z-50 p-3.5 rounded-full bg-indigo-600/80 hover:bg-indigo-600 backdrop-blur-md text-white shadow-lg shadow-indigo-500/20 border border-indigo-500/30 transition-all duration-300 hover:scale-110 active:scale-95 animate-in fade-in slide-in-from-bottom-4 flex items-center justify-center cursor-pointer"
+          aria-label="Scroll to top"
+        >
+          <ChevronUp className="w-5 h-5" />
+        </button>
+      )}
 
     </div>
   );
