@@ -553,10 +553,8 @@ export function ChequeManagementPage({
       setExtractedTransactions(resData.transactions || []);
       setIsDemoMode(!!resData.isDemo);
 
-      // Pre-select matches
-      const systemMatches = cheques.filter(
-        (c) => c.chequeStatus === "Pending" || c.chequeStatus === "Deposited"
-      );
+      // Match against all cheques (including already Cleared/Returned/Bounced)
+      const systemMatches = cheques;
 
       const newConfirmed = new Set<string>();
       const initialStatuses: Record<string, ChequeStatus> = {};
@@ -588,7 +586,10 @@ export function ChequeManagementPage({
 
         if (found) {
           found.ids.forEach((id) => {
-            newConfirmed.add(id);
+            const isAlreadyReconciled = found?.chequeStatus === (tx.status || "Cleared");
+            if (!isAlreadyReconciled) {
+              newConfirmed.add(id);
+            }
             initialStatuses[id] = tx.status || "Cleared";
             if (found?.depositAccountId) {
               initialAccounts[id] = found.depositAccountId;
@@ -610,12 +611,23 @@ export function ChequeManagementPage({
   };
 
   const handleApplyReconciliation = async () => {
-    if (confirmedMatchIds.size === 0) {
-      toast.error("No matches confirmed.");
+    // Filter to only those payments that actually need updates
+    const matchIdsToReconcile = Array.from(confirmedMatchIds).filter((id) => {
+      const pay = rawPayments.find((p: any) => p.id === id);
+      const targetStatus = matchedPaymentStatuses[id] || "Cleared";
+      return pay && pay.cheque_status !== targetStatus;
+    });
+
+    if (matchIdsToReconcile.length === 0) {
+      toast.success("All selected cheques are already reconciled in the database.");
+      setIsReconcileOpen(false);
+      setReconcileFile(null);
+      setReconcileStep("upload");
+      setExtractedTransactions([]);
       return;
     }
 
-    const pendingClearedMatchIds = Array.from(confirmedMatchIds).filter((id) => {
+    const pendingClearedMatchIds = matchIdsToReconcile.filter((id) => {
       const pay = rawPayments.find((p: any) => p.id === id);
       const targetStatus = matchedPaymentStatuses[id] || "Cleared";
       return pay && pay.cheque_status === "Pending" && targetStatus === "Cleared";
@@ -635,7 +647,7 @@ export function ChequeManagementPage({
 
     try {
       await Promise.all(
-        Array.from(confirmedMatchIds).map(async (id) => {
+        matchIdsToReconcile.map(async (id) => {
           try {
             const targetStatus = matchedPaymentStatuses[id] || "Cleared";
             const resolvedAccId = specificDepositAccounts[id] || reconcileDefaultAccountId;
@@ -750,10 +762,8 @@ export function ChequeManagementPage({
     const matched: any[] = [];
     const unmatched: any[] = [];
 
-    // Copy system cheques that are Pending or Deposited
-    const matchableCheques = cheques.filter(
-      (c) => c.chequeStatus === "Pending" || c.chequeStatus === "Deposited"
-    );
+    // Match against all cheques (including already Cleared/Returned/Bounced)
+    const matchableCheques = cheques;
 
     const matchedSystemIds = new Set<string>();
 
@@ -1696,24 +1706,34 @@ export function ChequeManagementPage({
 
                       const needsAccount = currentStatus === "Pending" && targetStatus === "Cleared";
 
+                      const alreadyReconciled = currentStatus === targetStatus;
+
                       return (
-                        <div key={index} className={cn("p-4 transition-colors", !isSelected && "bg-gray-50/40 opacity-70")}>
+                        <div key={index} className={cn(
+                          "p-4 transition-colors",
+                          alreadyReconciled && "bg-green-50/10",
+                          !alreadyReconciled && !isSelected && "bg-gray-50/40 opacity-70"
+                        )}>
                           <div className="flex items-start gap-3 justify-between">
-                            <div className="mt-1">
-                              <Checkbox
-                                checked={isSelected}
-                                onCheckedChange={(checked) => {
-                                  setConfirmedMatchIds((prev) => {
-                                    const next = new Set(prev);
-                                    if (checked) {
-                                      sysRecord.ids.forEach(id => next.add(id));
-                                    } else {
-                                      sysRecord.ids.forEach(id => next.delete(id));
-                                    }
-                                    return next;
-                                  });
-                                }}
-                              />
+                            <div className="mt-1 flex items-center justify-center h-4 w-4">
+                              {alreadyReconciled ? (
+                                <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
+                              ) : (
+                                <Checkbox
+                                  checked={isSelected}
+                                  onCheckedChange={(checked) => {
+                                    setConfirmedMatchIds((prev) => {
+                                      const next = new Set(prev);
+                                      if (checked) {
+                                        sysRecord.ids.forEach(id => next.add(id));
+                                      } else {
+                                        sysRecord.ids.forEach(id => next.delete(id));
+                                      }
+                                      return next;
+                                    });
+                                  }}
+                                />
+                              )}
                             </div>
 
                             <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
@@ -1741,14 +1761,20 @@ export function ChequeManagementPage({
                                   <span>Amount: <span className="font-bold text-gray-800">{formatCurrency(sysRecord.amount)}</span></span>
                                   <span>Date: {formatDate(sysRecord.chequeDate)}</span>
                                 </p>
-                                <p className="text-muted-foreground">
-                                  Current Status: <StatusBadge status={currentStatus} />
+                                <p className="text-muted-foreground flex items-center gap-1.5 flex-wrap">
+                                  <span>Current Status:</span>
+                                  <StatusBadge status={currentStatus} />
+                                  {alreadyReconciled && (
+                                    <span className="inline-flex items-center text-[10px] font-bold text-green-700 bg-green-50 border border-green-200 px-1 py-0.2 rounded">
+                                      Reconciled
+                                    </span>
+                                  )}
                                 </p>
                               </div>
                             </div>
                           </div>
 
-                          {isSelected && (
+                          {isSelected && !alreadyReconciled && (
                             <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap items-center gap-4 justify-end text-xs">
                               <div className="flex items-center gap-2">
                                 <Label className="text-xs text-muted-foreground">Reconcile Status:</Label>
