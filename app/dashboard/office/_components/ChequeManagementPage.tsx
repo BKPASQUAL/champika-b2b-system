@@ -43,6 +43,12 @@ import {
   ChevronLeft,
   ChevronRight,
   ArrowUpDown,
+  Sparkles,
+  Upload,
+  FileText,
+  Check,
+  AlertCircle,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -496,6 +502,185 @@ export function ChequeManagementPage({
 
   const [bulkConfirming, setBulkConfirming] = useState(false);
 
+  // ─── AI Reconciliation State ───────────────────────────────────────────────
+  const [isReconcileOpen, setIsReconcileOpen] = useState(false);
+  const [reconcileFile, setReconcileFile] = useState<File | null>(null);
+  const [reconcileLoading, setReconcileLoading] = useState(false);
+  const [reconcileLoadingStatus, setReconcileLoadingStatus] = useState("");
+  const [reconcileStep, setReconcileStep] = useState<"upload" | "loading" | "results">("upload");
+  const [extractedTransactions, setExtractedTransactions] = useState<any[]>([]);
+  const [isDemoMode, setIsDemoMode] = useState(false);
+  
+  // Confirmed matched payment IDs
+  const [confirmedMatchIds, setConfirmedMatchIds] = useState<Set<string>>(new Set());
+  const [matchedPaymentStatuses, setMatchedPaymentStatuses] = useState<Record<string, ChequeStatus>>({}); // paymentId -> Cleared | Returned
+  
+  // Deposit accounts for pending items
+  const [reconcileDefaultAccountId, setReconcileDefaultAccountId] = useState("");
+  const [specificDepositAccounts, setSpecificDepositAccounts] = useState<Record<string, string>>({}); // paymentId -> bankAccountId
+  const [reconcileApplying, setReconcileApplying] = useState(false);
+
+
+  const handleProcessStatement = async () => {
+    if (!reconcileFile) {
+      toast.error("Please select a statement PDF file first.");
+      return;
+    }
+
+    setReconcileStep("loading");
+    setReconcileLoading(true);
+    setReconcileLoadingStatus("Uploading statement PDF...");
+
+    try {
+      const fd = new FormData();
+      fd.append("file", reconcileFile);
+      if (businessId) {
+        fd.append("businessId", businessId);
+      }
+
+      setReconcileLoadingStatus("AI is extracting cheque transactions...");
+      const res = await fetch("/api/cheques/reconcile", {
+        method: "POST",
+        body: fd,
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || "Failed to process statement");
+      }
+
+      const resData = await res.json();
+      setExtractedTransactions(resData.transactions || []);
+      setIsDemoMode(!!resData.isDemo);
+
+      // Pre-select matches
+      const systemMatches = cheques.filter(
+        (c) => c.chequeStatus === "Pending" || c.chequeStatus === "Deposited"
+      );
+
+      const newConfirmed = new Set<string>();
+      const initialStatuses: Record<string, ChequeStatus> = {};
+      const initialAccounts: Record<string, string> = {};
+
+      resData.transactions.forEach((tx: any) => {
+        let found: ChequeRecord | undefined;
+        
+        // Match strictly by Cheque Number AND Amount AND Date range (within 14 days)
+        found = systemMatches.find((c) => {
+          const cleanSysNo = (c.chequeNo || "").trim().replace(/^0+/, "");
+          const cleanTxNo = (tx.chequeNo || "").trim().replace(/^0+/, "");
+          const isChqNoMatch = cleanSysNo && cleanTxNo && 
+            (cleanSysNo === cleanTxNo || cleanSysNo.includes(cleanTxNo) || cleanTxNo.includes(cleanSysNo));
+          if (!isChqNoMatch) return false;
+
+          const isAmountMatch = Math.abs(c.amount - tx.amount) < 0.1;
+          if (!isAmountMatch) return false;
+
+          if (c.chequeDate && tx.date) {
+            const sysDate = new Date(c.chequeDate).getTime();
+            const txDate = new Date(tx.date).getTime();
+            const daysDiff = Math.abs(sysDate - txDate) / (1000 * 60 * 60 * 24);
+            return daysDiff <= 14;
+          }
+
+          return true;
+        });
+
+        if (found) {
+          found.ids.forEach((id) => {
+            newConfirmed.add(id);
+            initialStatuses[id] = tx.status || "Cleared";
+            if (found?.depositAccountId) {
+              initialAccounts[id] = found.depositAccountId;
+            }
+          });
+        }
+      });
+
+      setConfirmedMatchIds(newConfirmed);
+      setMatchedPaymentStatuses(initialStatuses);
+      setSpecificDepositAccounts(initialAccounts);
+      setReconcileStep("results");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to analyze bank statement.");
+      setReconcileStep("upload");
+    } finally {
+      setReconcileLoading(false);
+    }
+  };
+
+  const handleApplyReconciliation = async () => {
+    if (confirmedMatchIds.size === 0) {
+      toast.error("No matches confirmed.");
+      return;
+    }
+
+    const pendingClearedMatchIds = Array.from(confirmedMatchIds).filter((id) => {
+      const pay = rawPayments.find((p: any) => p.id === id);
+      const targetStatus = matchedPaymentStatuses[id] || "Cleared";
+      return pay && pay.cheque_status === "Pending" && targetStatus === "Cleared";
+    });
+
+    for (const id of pendingClearedMatchIds) {
+      const resolvedAccId = specificDepositAccounts[id] || reconcileDefaultAccountId;
+      if (!resolvedAccId || resolvedAccId === "__none") {
+        toast.error("Please specify a deposit account for all cleared pending cheques.");
+        return;
+      }
+    }
+
+    setReconcileApplying(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    try {
+      await Promise.all(
+        Array.from(confirmedMatchIds).map(async (id) => {
+          try {
+            const targetStatus = matchedPaymentStatuses[id] || "Cleared";
+            const resolvedAccId = specificDepositAccounts[id] || reconcileDefaultAccountId;
+            
+            const body: Record<string, string> = { chequeStatus: targetStatus };
+            if (targetStatus === "Cleared" && resolvedAccId && resolvedAccId !== "__none") {
+              body.depositAccountId = resolvedAccId;
+            }
+
+            const r = await fetch(`/api/payments/${id}/status`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+            });
+
+            if (!r.ok) throw new Error("Failed");
+            successCount++;
+          } catch {
+            failCount++;
+          }
+        })
+      );
+
+      if (successCount > 0) {
+        toast.success(`Successfully reconciled ${successCount} cheque(s).`);
+      }
+      if (failCount > 0) {
+        toast.error(`Failed to reconcile ${failCount} cheque(s).`);
+      }
+
+      setIsReconcileOpen(false);
+      setReconcileFile(null);
+      setReconcileStep("upload");
+      setExtractedTransactions([]);
+      
+      invalidatePaymentCaches();
+      invalidateFinanceCaches();
+      refetch();
+    } catch (err) {
+      toast.error("Reconciliation process failed.");
+    } finally {
+      setReconcileApplying(false);
+    }
+  };
+
   useEffect(() => {
     fetch("/api/finance/accounts?active=true")
       .then((r) => (r.ok ? r.json() : []))
@@ -557,6 +742,61 @@ export function ChequeManagementPage({
     const singles = ungrouped.map((p) => fromGroup([p]));
     return [...grouped, ...singles];
   }, [rawPayments]);
+
+  // ─── Matching algorithm for AI Reconciliation ──────────────────────────────
+  const matchedReconciliation = useMemo(() => {
+    if (extractedTransactions.length === 0) return { matched: [], unmatched: [] };
+
+    const matched: any[] = [];
+    const unmatched: any[] = [];
+
+    // Copy system cheques that are Pending or Deposited
+    const matchableCheques = cheques.filter(
+      (c) => c.chequeStatus === "Pending" || c.chequeStatus === "Deposited"
+    );
+
+    const matchedSystemIds = new Set<string>();
+
+    for (const tx of extractedTransactions) {
+      let found: ChequeRecord | undefined;
+
+      // Match strictly by Cheque Number AND Amount AND Date range (within 14 days)
+      found = matchableCheques.find((c) => {
+        if (c.ids.some(id => matchedSystemIds.has(id))) return false;
+
+        const cleanSysNo = (c.chequeNo || "").trim().replace(/^0+/, "");
+        const cleanTxNo = (tx.chequeNo || "").trim().replace(/^0+/, "");
+        const isChqNoMatch = cleanSysNo && cleanTxNo && 
+          (cleanSysNo === cleanTxNo || cleanSysNo.includes(cleanTxNo) || cleanTxNo.includes(cleanSysNo));
+        if (!isChqNoMatch) return false;
+
+        const isAmountMatch = Math.abs(c.amount - tx.amount) < 0.1;
+        if (!isAmountMatch) return false;
+
+        if (c.chequeDate && tx.date) {
+          const sysDate = new Date(c.chequeDate).getTime();
+          const txDate = new Date(tx.date).getTime();
+          const daysDiff = Math.abs(sysDate - txDate) / (1000 * 60 * 60 * 24);
+          return daysDiff <= 14;
+        }
+
+        return true;
+      });
+
+      if (found) {
+        found.ids.forEach((id) => matchedSystemIds.add(id));
+        matched.push({
+          extracted: tx,
+          system: found,
+          suggestedStatus: tx.status || "Cleared",
+        });
+      } else {
+        unmatched.push(tx);
+      }
+    }
+
+    return { matched, unmatched };
+  }, [extractedTransactions, cheques]);
 
   const applyFilters = (list: ChequeRecord[]) =>
     list.filter((c) => {
@@ -755,6 +995,15 @@ export function ChequeManagementPage({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsReconcileOpen(true)}
+            className="gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-900/50 dark:text-indigo-400 dark:hover:bg-indigo-950/30"
+          >
+            <Sparkles className="h-4 w-4 text-indigo-500" />
+            AI Reconciliation
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setIsHistoryOpen(true)} className="gap-2">
             <History className="h-4 w-4" />
             History
@@ -1271,6 +1520,384 @@ export function ChequeManagementPage({
           )}
         </SheetContent>
       </Sheet>
+
+      {/* AI Reconciliation Dialog */}
+      <Dialog open={isReconcileOpen} onOpenChange={(open) => {
+        if (!open && !reconcileLoading && !reconcileApplying) {
+          setIsReconcileOpen(false);
+          setReconcileFile(null);
+          setReconcileStep("upload");
+          setExtractedTransactions([]);
+        }
+      }}>
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-6">
+          <DialogHeader className="shrink-0 pb-2 border-b">
+            <DialogTitle className="flex items-center gap-2 text-xl font-bold">
+              <Sparkles className="h-5 w-5 text-indigo-500 animate-pulse" />
+              AI Cheque Reconciliation
+            </DialogTitle>
+            <DialogDescription>
+              Upload a bank statement PDF to automatically extract cheque transactions and match them with system records.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Step 1: Upload */}
+          {reconcileStep === "upload" && (
+            <div className="flex-1 overflow-y-auto py-6 space-y-6">
+              {/* File Dropzone */}
+              <div
+                className={cn(
+                  "border-2 border-dashed border-gray-200 rounded-xl p-8 text-center bg-gray-50/50 hover:bg-gray-50 transition-all cursor-pointer flex flex-col items-center justify-center min-h-[200px]",
+                  reconcileFile && "border-indigo-300 bg-indigo-50/20"
+                )}
+                onClick={() => document.getElementById("reconcile-file-upload")?.click()}
+              >
+                <input
+                  id="reconcile-file-upload"
+                  type="file"
+                  accept=".pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    if (file) setReconcileFile(file);
+                  }}
+                />
+                
+                {reconcileFile ? (
+                  <div className="space-y-3">
+                    <div className="p-3 bg-indigo-100 text-indigo-600 rounded-full w-12 h-12 flex items-center justify-center mx-auto">
+                      <FileText className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-gray-800 truncate max-w-md mx-auto">{reconcileFile.name}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{(reconcileFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs border-red-200 text-red-600 hover:bg-red-50"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setReconcileFile(null);
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-1" />
+                      Remove
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="p-3 bg-gray-100 text-gray-400 rounded-full w-12 h-12 flex items-center justify-center mx-auto">
+                      <Upload className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-gray-700">Click or drag bank statement PDF here</p>
+                      <p className="text-xs text-muted-foreground mt-1">Supports PDF format up to 10MB</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Demo Mode Notice */}
+              <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4 flex gap-3">
+                <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                <div className="text-xs text-amber-800 space-y-1">
+                  <p className="font-semibold">Demo / Sandbox Mode Information</p>
+                  <p className="leading-relaxed">
+                    If your <code className="bg-amber-100 px-1 py-0.5 rounded font-mono">GEMINI_API_KEY</code> environment variable is not configured in <code className="bg-amber-100 px-1 py-0.5 rounded font-mono">.env.local</code>, the system automatically runs a database-backed simulator. The simulator extracts pending/deposited cheques from your system to show a realistic match result.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 2: Loading */}
+          {reconcileStep === "loading" && (
+            <div className="flex-1 flex flex-col items-center justify-center py-12 space-y-4">
+              <Loader2 className="h-10 w-10 animate-spin text-indigo-600" />
+              <div className="text-center">
+                <p className="text-sm font-medium text-gray-800">{reconcileLoadingStatus}</p>
+                <p className="text-xs text-muted-foreground mt-1">This will only take a moment...</p>
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Results */}
+          {reconcileStep === "results" && (
+            <div className="flex-1 overflow-y-auto py-4 space-y-6 min-h-0">
+              {/* Demo Mode Banner */}
+              {isDemoMode && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 flex items-center gap-2 text-xs text-amber-800">
+                  <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+                  <span><strong>Demo Mode Active:</strong> Showing simulated bank statement extraction matched with real database cheques.</span>
+                </div>
+              )}
+
+              {/* Match Overview Stats */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="rounded-lg border p-3 bg-green-50/50 border-green-200 text-center">
+                  <p className="text-xs text-green-600 font-medium">Matches Found</p>
+                  <p className="text-2xl font-bold text-green-700 mt-1">{matchedReconciliation.matched.length}</p>
+                </div>
+                <div className="rounded-lg border p-3 bg-amber-50/50 border-amber-200 text-center">
+                  <p className="text-xs text-amber-600 font-medium">Unmatched Statement Rows</p>
+                  <p className="text-2xl font-bold text-amber-700 mt-1">{matchedReconciliation.unmatched.length}</p>
+                </div>
+                <div className="rounded-lg border p-3 bg-indigo-50/50 border-indigo-200 text-center">
+                  <p className="text-xs text-indigo-600 font-medium">Auto-Confirmed</p>
+                  <p className="text-2xl font-bold text-indigo-700 mt-1">{confirmedMatchIds.size}</p>
+                </div>
+              </div>
+
+              {/* Default Deposit Account Selector (if there are matches) */}
+              {matchedReconciliation.matched.length > 0 && (
+                <div className="rounded-lg border bg-gray-50 p-4 space-y-2">
+                  <Label className="text-xs font-bold text-gray-700">Default Deposit Account</Label>
+                  <p className="text-xs text-muted-foreground">Select a default bank account to clear pending cheques into. Individual matches can be overridden.</p>
+                  <Select value={reconcileDefaultAccountId} onValueChange={setReconcileDefaultAccountId}>
+                    <SelectTrigger className="w-full bg-white">
+                      <SelectValue placeholder="Select deposit account..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {bankAccounts.length === 0 ? (
+                        <SelectItem value="__none" disabled>No active bank accounts</SelectItem>
+                      ) : (
+                        bankAccounts.map((acc) => (
+                          <SelectItem key={acc.id} value={acc.id}>
+                            {acc.account_name} {acc.account_type ? `(${acc.account_type})` : ""}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Matched Cheques List */}
+              <div className="space-y-3">
+                <h3 className="font-semibold text-sm text-gray-800 flex items-center gap-1.5">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  Matched Cheque Transactions ({matchedReconciliation.matched.length})
+                </h3>
+                
+                {matchedReconciliation.matched.length === 0 ? (
+                  <div className="border border-dashed rounded-lg p-6 text-center text-xs text-muted-foreground">
+                    No matching pending or deposited cheques found in system.
+                  </div>
+                ) : (
+                  <div className="border rounded-lg overflow-hidden divide-y bg-white">
+                    {matchedReconciliation.matched.map((m, index) => {
+                      const sysRecord = m.system as ChequeRecord;
+                      const tx = m.extracted;
+                      const isSelected = sysRecord.ids.some(id => confirmedMatchIds.has(id));
+                      const primaryId = sysRecord.ids[0];
+                      const currentStatus = sysRecord.chequeStatus;
+                      const targetStatus = matchedPaymentStatuses[primaryId] || "Cleared";
+
+                      const needsAccount = currentStatus === "Pending" && targetStatus === "Cleared";
+
+                      return (
+                        <div key={index} className={cn("p-4 transition-colors", !isSelected && "bg-gray-50/40 opacity-70")}>
+                          <div className="flex items-start gap-3 justify-between">
+                            <div className="mt-1">
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={(checked) => {
+                                  setConfirmedMatchIds((prev) => {
+                                    const next = new Set(prev);
+                                    if (checked) {
+                                      sysRecord.ids.forEach(id => next.add(id));
+                                    } else {
+                                      sysRecord.ids.forEach(id => next.delete(id));
+                                    }
+                                    return next;
+                                  });
+                                }}
+                              />
+                            </div>
+
+                            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                              {/* Left: Statement Transaction */}
+                              <div className="space-y-1">
+                                <p className="font-bold text-gray-500 uppercase tracking-wide text-[10px]">Statement Transaction</p>
+                                <p className="font-mono font-semibold text-gray-800 flex items-center gap-1">
+                                  #{tx.chequeNo || "Unknown"}
+                                  <span className={cn(
+                                    "px-1.5 py-0.5 rounded text-[10px] font-bold",
+                                    tx.status === "Returned" ? "bg-red-50 text-red-700 border border-red-100" : "bg-green-50 text-green-700 border border-green-100"
+                                  )}>
+                                    {tx.status || "Cleared"}
+                                  </span>
+                                </p>
+                                <p className="text-gray-600 italic">"{tx.description}"</p>
+                                <p className="text-muted-foreground">Amount: <span className="font-bold text-gray-800">{formatCurrency(tx.amount)}</span> · Date: {formatDate(tx.date)}</p>
+                              </div>
+
+                              {/* Right: Database Match */}
+                              <div className="space-y-1 border-t md:border-t-0 md:border-l border-gray-100 md:pl-4">
+                                <p className="font-bold text-indigo-500 uppercase tracking-wide text-[10px]">Database Cheque Match</p>
+                                <p className="font-semibold text-gray-800 truncate">{sysRecord.customerName}</p>
+                                <p className="text-muted-foreground flex justify-between">
+                                  <span>Amount: <span className="font-bold text-gray-800">{formatCurrency(sysRecord.amount)}</span></span>
+                                  <span>Date: {formatDate(sysRecord.chequeDate)}</span>
+                                </p>
+                                <p className="text-muted-foreground">
+                                  Current Status: <StatusBadge status={currentStatus} />
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {isSelected && (
+                            <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap items-center gap-4 justify-end text-xs">
+                              <div className="flex items-center gap-2">
+                                <Label className="text-xs text-muted-foreground">Reconcile Status:</Label>
+                                <Select
+                                  value={targetStatus}
+                                  onValueChange={(val) => {
+                                    setMatchedPaymentStatuses((prev) => ({
+                                      ...prev,
+                                      ...sysRecord.ids.reduce((a, id) => ({ ...a, [id]: val }), {}),
+                                    }));
+                                  }}
+                                >
+                                  <SelectTrigger className="h-7 w-[110px] bg-white text-xs py-0">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="Cleared" className="text-xs">Cleared</SelectItem>
+                                    <SelectItem value="Returned" className="text-xs">Returned</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+
+                              {needsAccount && (
+                                <div className="flex items-center gap-2">
+                                  <Label className="text-xs text-muted-foreground">Deposit Account:</Label>
+                                  <Select
+                                    value={specificDepositAccounts[primaryId] || reconcileDefaultAccountId}
+                                    onValueChange={(val) => {
+                                      setSpecificDepositAccounts((prev) => ({
+                                        ...prev,
+                                        ...sysRecord.ids.reduce((a, id) => ({ ...a, [id]: val }), {}),
+                                      }));
+                                    }}
+                                  >
+                                    <SelectTrigger className="h-7 w-[180px] bg-white text-xs py-0">
+                                      <SelectValue placeholder="Use default account..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {bankAccounts.map((acc) => (
+                                        <SelectItem key={acc.id} value={acc.id} className="text-xs">
+                                          {acc.account_name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Unmatched Statement Transactions */}
+              <div className="space-y-3">
+                <h3 className="font-semibold text-sm text-gray-800 flex items-center gap-1.5">
+                  <AlertCircle className="h-4 w-4 text-amber-500" />
+                  Unmatched Statement Transactions ({matchedReconciliation.unmatched.length})
+                </h3>
+                
+                {matchedReconciliation.unmatched.length === 0 ? (
+                  <div className="border border-dashed rounded-lg p-4 text-center text-xs text-muted-foreground">
+                    All transactions in the statement were successfully matched with system cheques.
+                  </div>
+                ) : (
+                  <div className="border rounded-lg divide-y bg-white overflow-hidden text-xs">
+                    {matchedReconciliation.unmatched.map((tx, index) => (
+                      <div key={index} className="p-3 flex justify-between items-start bg-gray-50/30 gap-4">
+                        <div className="space-y-0.5">
+                          <p className="font-mono font-semibold text-gray-700 flex items-center gap-1.5">
+                            #{tx.chequeNo || "No Cheque No"}
+                            <span className={cn(
+                              "px-1.5 py-0.2 rounded text-[9px] font-bold border",
+                              tx.status === "Returned" ? "bg-red-50 text-red-700 border-red-100" : "bg-green-50 text-green-700 border-green-100"
+                            )}>
+                              {tx.status}
+                            </span>
+                          </p>
+                          <p className="text-muted-foreground italic text-[11px]">"{tx.description}"</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="font-bold text-gray-800">{formatCurrency(tx.amount)}</p>
+                          <p className="text-muted-foreground text-[10px]">{formatDate(tx.date)}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Footer */}
+          <DialogFooter className="shrink-0 pt-4 border-t gap-2">
+            {reconcileStep === "upload" && (
+              <>
+                <Button variant="outline" onClick={() => setIsReconcileOpen(false)}>Cancel</Button>
+                <Button
+                  className="bg-indigo-600 hover:bg-indigo-700 gap-1.5"
+                  onClick={handleProcessStatement}
+                  disabled={!reconcileFile || reconcileLoading}
+                >
+                  <Sparkles className="h-4 w-4" />
+                  Process Statement
+                </Button>
+              </>
+            )}
+
+            {reconcileStep === "loading" && (
+              <Button variant="outline" disabled>Processing...</Button>
+            )}
+
+            {reconcileStep === "results" && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setReconcileStep("upload");
+                    setExtractedTransactions([]);
+                  }}
+                  disabled={reconcileApplying}
+                >
+                  Back
+                </Button>
+                <Button
+                  className="bg-green-600 hover:bg-green-700 gap-1.5"
+                  onClick={handleApplyReconciliation}
+                  disabled={confirmedMatchIds.size === 0 || reconcileApplying}
+                >
+                  {reconcileApplying ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Applying...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="h-4 w-4" />
+                      Apply Reconciliation ({confirmedMatchIds.size})
+                    </>
+                  )}
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
