@@ -547,7 +547,7 @@ export async function POST(request: NextRequest) {
     let invoiceData: any = null;
     let invoiceError: any = null;
 
-    const isFullyPaid = (val.grandTotal - val.paidAmount) < 10;
+    const isFullyPaid = (val.grandTotal - val.paidAmount) < 100;
     const finalPaidAmount = isFullyPaid ? val.grandTotal : val.paidAmount;
     const finalPaymentStatus = isFullyPaid ? "Paid" : val.paymentStatus;
 
@@ -643,7 +643,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (customer) {
-      const isFullyPaid = (val.grandTotal - val.paidAmount) < 10;
+      const isFullyPaid = (val.grandTotal - val.paidAmount) < 100;
       const pendingAmount = isFullyPaid ? 0 : (val.grandTotal - val.paidAmount);
       if (pendingAmount !== 0) {
         await supabaseAdmin

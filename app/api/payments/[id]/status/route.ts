@@ -129,7 +129,7 @@ export async function PATCH(
 
         if (invoice) {
           const newPaidAmount = Math.max(0, Number(invoice.paid_amount || 0) - amount);
-          const isFullyPaid = (Number(invoice.total_amount) - newPaidAmount) < 10;
+          const isFullyPaid = (Number(invoice.total_amount) - newPaidAmount) < 100;
           const finalPaidAmount = isFullyPaid ? Number(invoice.total_amount) : newPaidAmount;
           const newStatus =
             finalPaidAmount <= 0 ? "Unpaid" :

@@ -29,10 +29,10 @@ async function main() {
   const matching = invoices.filter(inv => {
     if (inv.status === "Paid") return false;
     const due = Number(inv.total_amount) - Number(inv.paid_amount || 0);
-    return due > -0.01 && due < 10;
+    return due > -0.01 && due < 100;
   });
 
-  console.log(`Found ${matching.length} invoices with due amount < 10 LKR (and status !== 'Paid'):`);
+  console.log(`Found ${matching.length} invoices with due amount < 100 LKR (and status !== 'Paid'):`);
   matching.forEach(inv => {
     const due = Number(inv.total_amount) - Number(inv.paid_amount || 0);
     console.log(`- Invoice: ${inv.invoice_no}, Shop: ${inv.customers?.shop_name}, Total: ${inv.total_amount}, Paid: ${inv.paid_amount}, Due: ${due}, Status: ${inv.status}`);

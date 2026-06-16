@@ -235,7 +235,7 @@ export async function POST(request: NextRequest) {
 
     // 3. Update Invoice Status and Paid Amount
     const newPaidAmount = (Number(invoice.paid_amount) || 0) + val.amount;
-    const isFullyPaid = (Number(invoice.total_amount) - newPaidAmount) < 10;
+    const isFullyPaid = (Number(invoice.total_amount) - newPaidAmount) < 100;
     const finalPaidAmount = isFullyPaid ? Number(invoice.total_amount) : newPaidAmount;
     const newStatus = isFullyPaid ? "Paid" : "Partial";
 

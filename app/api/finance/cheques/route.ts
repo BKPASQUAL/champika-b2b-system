@@ -198,7 +198,7 @@ export async function PUT(request: NextRequest) {
           (invoice.paid_amount || 0) - payment.amount
         );
         const total = Number(invoice.total_amount || 0);
-        const isFullyPaid = (total - newPaid) < 10;
+        const isFullyPaid = (total - newPaid) < 100;
         const finalPaidAmount = isFullyPaid ? total : newPaid;
         const newStatus =
           finalPaidAmount <= 0

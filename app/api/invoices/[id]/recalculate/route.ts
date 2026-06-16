@@ -63,7 +63,7 @@ export async function POST(
 
     // 3. Update Invoice
     const paid = Number(invoice.paid_amount) || 0;
-    const isFullyPaid = (newGrandTotal - paid) < 10;
+    const isFullyPaid = (newGrandTotal - paid) < 100;
     const finalPaidAmount = isFullyPaid ? newGrandTotal : paid;
     const finalStatus =
       finalPaidAmount <= 0

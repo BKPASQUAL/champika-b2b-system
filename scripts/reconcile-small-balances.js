@@ -17,7 +17,7 @@ const supabaseServiceRoleKey = envVars["SUPABASE_SERVICE_ROLE_KEY"];
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
 
 async function main() {
-  console.log("Starting reconciliation of small due balances (< 10 LKR)...");
+  console.log("Starting reconciliation of small due balances (< 100 LKR)...");
 
   // 1. Fetch all invoices
   const { data: invoices, error } = await supabaseAdmin
@@ -29,13 +29,13 @@ async function main() {
     return;
   }
 
-  // Filter invoices where total_amount > 0 and (total_amount - paid_amount) is > -0.01 and < 10
+  // Filter invoices where total_amount > 0 and (total_amount - paid_amount) is > -0.01 and < 100
   const matching = invoices.filter(inv => {
     if (inv.status === "Paid") return false;
     const total = Number(inv.total_amount) || 0;
     if (total <= 0) return false; // Skip empty/draft invoices
     const due = total - Number(inv.paid_amount || 0);
-    return due > -0.01 && due < 10;
+    return due > -0.01 && due < 100;
   });
 
   console.log(`Found ${matching.length} invoices to reconcile.`);

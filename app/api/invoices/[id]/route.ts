@@ -371,7 +371,7 @@ export async function PATCH(
 
     // Update Invoice
     const paid = Number(currentInvoice.paid_amount) || 0;
-    const isFullyPaid = (val.grandTotal - paid) < 10;
+    const isFullyPaid = (val.grandTotal - paid) < 100;
     const finalPaidAmount = isFullyPaid ? val.grandTotal : paid;
     const finalStatus =
       finalPaidAmount <= 0
@@ -516,7 +516,7 @@ export async function PATCH(
 
     if (currentCustomer) {
       const paid = Number(currentInvoice.paid_amount) || 0;
-      const isFullyPaid = (val.grandTotal - paid) < 10;
+      const isFullyPaid = (val.grandTotal - paid) < 100;
       const finalPaidAmount = isFullyPaid ? val.grandTotal : paid;
       const autoPayCredit = finalPaidAmount - paid;
 
