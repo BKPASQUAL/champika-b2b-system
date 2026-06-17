@@ -121,3 +121,32 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+// ─── PATCH: Associate temporary attachments with real entity ID ─────────────────────────
+export async function PATCH(request: NextRequest) {
+  try {
+    const { tempEntityId, realEntityId, entityType } = await request.json();
+
+    if (!tempEntityId || !realEntityId || !entityType) {
+      return NextResponse.json(
+        { error: "tempEntityId, realEntityId and entityType are required" },
+        { status: 400 }
+      );
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("document_attachments")
+      .update({ entity_id: realEntityId })
+      .eq("entity_type", entityType)
+      .eq("entity_id", tempEntityId)
+      .select();
+
+    if (error) throw error;
+
+    return NextResponse.json({ success: true, updatedCount: data?.length || 0 });
+  } catch (error: any) {
+    console.error("PATCH /api/attachments error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+

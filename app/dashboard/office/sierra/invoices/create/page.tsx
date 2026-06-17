@@ -15,6 +15,14 @@ import {
   Printer,
   Download,
   AlertTriangle,
+  Paperclip,
+  Camera,
+  ImageIcon,
+  FileText,
+  File,
+  Upload,
+  Share2,
+  Copy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,6 +64,7 @@ import { CustomerDialogs } from "../../customers/_components/CustomerDialogs";
 import { CustomerFormData } from "../../customers/types";
 import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import { printInvoice, downloadInvoice } from "../print-utils";
+import { DocumentAttachments } from "@/components/ui/DocumentAttachments";
 
 // --- Types ---
 
@@ -116,6 +125,18 @@ export default function CreateSierraInvoicePage() {
   const [noManualRef, setNoManualRef] = useState(false);
   const [isIncorrect, setIsIncorrect] = useState(false);
   const paymentType = "Credit";
+
+  // Temporary Upload Link & Sync State
+  const [tempInvoiceId, setTempInvoiceId] = useState(() => {
+    if (typeof window !== "undefined" && window.crypto?.randomUUID) {
+      return window.crypto.randomUUID();
+    }
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+      const r = (Math.random() * 16) | 0;
+      const v = c === "x" ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  });
 
   const salesRepId = currentUser?.id || "";
   const orderStatus = "Delivered";
@@ -444,6 +465,21 @@ export default function CreateSierraInvoicePage() {
       toast.success("Invoice Created Successfully!");
       invalidatePaymentCaches();
 
+      // Transfer mobile attachments from temp ID to real ID
+      try {
+        await fetch("/api/attachments", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tempEntityId: tempInvoiceId,
+            realEntityId: data.data.id,
+            entityType: "invoice",
+          }),
+        });
+      } catch (patchErr) {
+        console.error("Error patching attachments:", patchErr);
+      }
+
       if (action === "print") {
         printInvoice(data.data.id);
       } else if (action === "download") {
@@ -455,6 +491,30 @@ export default function CreateSierraInvoicePage() {
       toast.error(error.message || "Failed to create invoice");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleShareTempLink = async () => {
+    const tempUrl = `${window.location.origin}/invoice/${tempInvoiceId}?draft=true`;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "Upload Proof for Sierra Invoice",
+          text: "Please open this link on your mobile to upload delivery proof / images:",
+          url: tempUrl,
+        });
+      } catch (err: any) {
+        if (err?.name !== "AbortError") {
+          toast.error("Failed to share upload link");
+        }
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(tempUrl);
+        toast.success("Mobile upload link copied! Send it via WhatsApp or SMS.");
+      } catch {
+        toast.error("Failed to copy link");
+      }
     }
   };
 
@@ -850,6 +910,17 @@ export default function CreateSierraInvoicePage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Images & Attachments with Mobile Upload sharing */}
+          <DocumentAttachments
+            entityType="invoice"
+            entityId={tempInvoiceId}
+            title="Images & Attachments"
+            allowUpload={true}
+            pollInterval={3000}
+            showMobileUpload={true}
+            onShareLink={handleShareTempLink}
+          />
         </div>
 
         {/* RIGHT COLUMN */}

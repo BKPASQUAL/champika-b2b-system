@@ -54,6 +54,12 @@ interface DocumentAttachmentsProps {
   title?: string;
   /** Whether to show the upload area (set false for read-only views) */
   allowUpload?: boolean;
+  /** Optional polling interval in ms to pull new files uploaded on other devices */
+  pollInterval?: number;
+  /** Whether to show mobile upload button banner */
+  showMobileUpload?: boolean;
+  /** Callback to trigger when mobile upload button is clicked */
+  onShareLink?: () => void;
 }
 
 function formatBytes(bytes: number): string {
@@ -75,6 +81,9 @@ export function DocumentAttachments({
   entityId,
   title = "Attachments",
   allowUpload = true,
+  pollInterval,
+  showMobileUpload = false,
+  onShareLink,
 }: DocumentAttachmentsProps) {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,9 +94,9 @@ export function DocumentAttachments({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  const fetchAttachments = async () => {
+  const fetchAttachments = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const res = await fetch(
         `/api/attachments?entityType=${entityType}&entityId=${entityId}`
       );
@@ -95,16 +104,24 @@ export function DocumentAttachments({
       const data = await res.json();
       setAttachments(data);
     } catch (err: any) {
-      toast.error(err.message);
+      if (!silent) toast.error(err.message);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (entityId) fetchAttachments();
+    if (!entityId) return;
+    fetchAttachments();
+
+    if (pollInterval && pollInterval > 0) {
+      const interval = setInterval(() => {
+        fetchAttachments(true);
+      }, pollInterval);
+      return () => clearInterval(interval);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entityId]);
+  }, [entityId, entityType, pollInterval]);
 
   const uploadFile = async (file: File) => {
     if (file.size > 20 * 1024 * 1024) {
@@ -203,6 +220,31 @@ export function DocumentAttachments({
         </CardHeader>
 
         <CardContent className="p-4 space-y-4">
+          {/* Mobile Upload Section */}
+          {showMobileUpload && onShareLink && (
+            <div className="bg-violet-50/40 border border-violet-100 rounded-lg p-3.5 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="space-y-1 text-center sm:text-left">
+                <h4 className="text-sm font-semibold text-slate-900 flex items-center justify-center sm:justify-start gap-1.5">
+                  <Camera className="w-4.5 h-4.5 text-violet-600" />
+                  Upload from Mobile Phone
+                </h4>
+                <p className="text-xs text-muted-foreground">
+                  Share a secure link to snap and upload proof-of-delivery photos from a mobile phone.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={onShareLink}
+                className="gap-2 shrink-0 border-violet-200 hover:bg-violet-100/50 text-violet-700 hover:text-violet-800 bg-white"
+              >
+                <Share2 className="w-4 h-4" />
+                Get Upload Link
+              </Button>
+            </div>
+          )}
+
           {/* Upload Area */}
           {allowUpload && (
             <div className="space-y-2">

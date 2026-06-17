@@ -6,6 +6,8 @@ import {
   printInvoice,
   downloadInvoice,
 } from "@/app/lib/invoice-print";
+import { DocumentAttachments } from "@/components/ui/DocumentAttachments";
+import { Camera } from "lucide-react";
 
 const PDF_WIDTH = 794; // A4 at 96 dpi
 
@@ -28,6 +30,42 @@ export default function InvoicePrintView({ invoice }: { invoice: any }) {
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
   }, []);
+
+  if (invoice.isDraft) {
+    return (
+      <>
+        <style>{`
+          html, body {
+            background-color: #f8fafc;
+            min-height: 100vh;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+          }
+        `}</style>
+        <div className="max-w-md mx-auto p-4 space-y-5 min-h-screen flex flex-col justify-start pt-8">
+          <div className="bg-gradient-to-r from-violet-600 to-indigo-600 text-white p-6 rounded-2xl shadow-lg space-y-2.5 text-center">
+            <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center mx-auto">
+              <Camera className="w-6 h-6 text-white" />
+            </div>
+            <div className="space-y-1">
+              <h1 className="text-xl font-bold tracking-tight">Mobile Photo Uploader</h1>
+              <p className="text-xs text-violet-100/90 leading-relaxed">
+                Take a photo or upload delivery proof images. Files uploaded here will sync to the office desktop instantly.
+              </p>
+            </div>
+          </div>
+
+          <DocumentAttachments
+            entityType="invoice"
+            entityId={invoice.id}
+            title="Snap & Upload Proof"
+            allowUpload={true}
+          />
+        </div>
+      </>
+    );
+  }
 
   return (
     <>

@@ -51,11 +51,31 @@ async function getInvoice(id: string) {
 
 export default async function InvoicePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const { id } = await params;
-  const invoice = await getInvoice(id);
-  if (!invoice) notFound();
+  const sp = await searchParams;
+  const isDraft = sp.draft === "true";
+
+  let invoice;
+  if (isDraft) {
+    invoice = {
+      id,
+      invoiceNo: "Draft " + id.substring(0, 8),
+      date: new Date().toISOString().split("T")[0],
+      grandTotal: 0,
+      customer: { shop: "New Draft Invoice", name: "", phone: "", address: "" },
+      salesRep: "",
+      items: [],
+      isDraft: true,
+    };
+  } else {
+    invoice = await getInvoice(id);
+    if (!invoice) notFound();
+  }
+
   return <InvoicePrintView invoice={invoice} />;
 }
