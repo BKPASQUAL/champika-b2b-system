@@ -16,13 +16,14 @@ export async function POST(request: NextRequest) {
     const base64Pdf = buffer.toString("base64");
 
     const apiKey = process.env.GEMINI_API_KEY;
+    const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
     const hasKey = !!apiKey && apiKey !== "placeholder-key" && apiKey.trim() !== "";
 
     if (hasKey) {
       // ─── Real AI Mode using Gemini API ──────────────────────────────────────────
       try {
         const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
           {
             method: "POST",
             headers: {
@@ -105,8 +106,11 @@ Only return valid parseable JSON. Do not include markdown code block formatting 
 
         throw new Error("Invalid response format from AI model: 'transactions' array not found");
       } catch (aiError: any) {
-        console.error("AI extraction failed, falling back to Demo Mode:", aiError.message);
-        // Fall through to Demo Mode fallback
+        console.error("AI extraction failed:", aiError.message);
+        return NextResponse.json(
+          { error: `AI Extraction Failed: ${aiError.message}` },
+          { status: 500 }
+        );
       }
     }
 
