@@ -22,8 +22,12 @@ import {
   Download,
   Share2,
   RefreshCw,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { Label } from "@/components/ui/label";
 import {
   Card,
   CardContent,
@@ -453,6 +457,18 @@ export default function WiremanViewInvoicePage({
             </Button>
           </div>
         </div>
+
+        {isIncorrect && (
+          <Alert variant="destructive" className="border-red-200 bg-red-50/50 text-red-950 dark:bg-red-950/20 dark:text-red-300 dark:border-red-900/60 shadow-sm">
+            <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400 animate-pulse" />
+            <AlertTitle className="text-red-900 dark:text-red-300 font-semibold flex items-center gap-1.5">
+              Incorrect Entry / Mistake Flagged
+            </AlertTitle>
+            <AlertDescription className="text-red-700/95 dark:text-red-400/90 text-xs">
+              This invoice has been flagged as having data entry errors or billing discrepancies. Please review the items, pricing, or customer details before taking action. This flag will be automatically cleared once the invoice is paid in full.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* --- Main Content Grid --- */}
         <div className="grid gap-6 lg:grid-cols-3">
@@ -917,26 +933,30 @@ export default function WiremanViewInvoicePage({
                   </Badge>
                 </div>
                 <Separator />
-                <div className="flex justify-between items-center">
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-sm font-medium">Invoice Mistake</span>
-                    <span className="text-xs text-muted-foreground">Flag as incorrect entry</span>
-                  </div>
-                  <Button
-                    variant={isIncorrect ? "destructive" : "outline"}
-                    size="sm"
-                    onClick={handleToggleIncorrect}
+                <div className={cn(
+                  "flex items-start gap-3 p-3 rounded-lg border transition-all duration-200 mt-2",
+                  isIncorrect 
+                    ? "bg-red-50/50 border-red-200/60 dark:bg-red-950/10 dark:border-red-900/40" 
+                    : "bg-slate-50/50 border-slate-100 dark:bg-slate-900/10 dark:border-slate-800/40"
+                )}>
+                  <Checkbox
+                    id="details-incorrect-checkbox"
+                    checked={isIncorrect}
+                    onCheckedChange={() => handleToggleIncorrect()}
                     disabled={togglingIncorrect}
-                    className="h-8 shrink-0 font-medium"
-                  >
-                    {togglingIncorrect ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : isIncorrect ? (
-                      "Mark Correct"
-                    ) : (
-                      "Mark Incorrect"
-                    )}
-                  </Button>
+                    className="data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600 border-slate-300 mt-0.5 cursor-pointer"
+                  />
+                  <div className="flex-1 flex flex-col gap-0.5">
+                    <Label htmlFor="details-incorrect-checkbox" className={cn("text-sm font-semibold cursor-pointer select-none", isIncorrect ? "text-red-950 dark:text-red-300" : "")}>
+                      Mark Incorrect (Mistake)
+                    </Label>
+                    <span className="text-xs text-muted-foreground">
+                      Check this if there is a mistake in this invoice's manual entries.
+                    </span>
+                  </div>
+                  {togglingIncorrect && (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground shrink-0 self-center" />
+                  )}
                 </div>
               </CardContent>
             </Card>

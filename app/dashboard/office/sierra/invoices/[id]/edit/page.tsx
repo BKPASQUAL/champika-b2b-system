@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Card,
   CardContent,
@@ -1005,20 +1006,39 @@ export default function SierraEditInvoicePage({
                 </div>
               </div>
 
-              <div className="border-t pt-4 bg-red-50/40 p-3 rounded-md border border-red-100/60 mt-4">
-                <label className="flex items-center gap-2 text-sm font-semibold text-red-950 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
+              <div className="border-t pt-4 bg-red-50/50 dark:bg-red-950/20 p-3.5 rounded-lg border border-red-200/60 mt-4">
+                <div className="flex gap-2.5 items-start">
+                  <Checkbox
+                    id="incorrect-checkbox"
                     checked={isIncorrect}
-                    onChange={(e) => setIsIncorrect(e.target.checked)}
-                    className="rounded border-red-300 text-red-600 focus:ring-red-500 h-4 w-4 shrink-0"
+                    onCheckedChange={(checked) => setIsIncorrect(!!checked)}
+                    className="data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600 border-red-300 mt-1 cursor-pointer"
                     disabled={isReadOnly}
                   />
-                  Mark Incorrect (Mistake)
-                </label>
-                <p className="text-[11px] text-muted-foreground mt-1">
-                  Check this if there is a mistake in this invoice's manual entries.
-                </p>
+                  <div className="space-y-1">
+                    <Label htmlFor="incorrect-checkbox" className="text-sm font-semibold text-red-950 dark:text-red-300 leading-tight block cursor-pointer select-none">
+                      Mark Incorrect (Mistake)
+                    </Label>
+                    <p className="text-[11px] text-red-700/80 dark:text-red-400/80 leading-normal">
+                      Check this if there is a mistake in this invoice's manual entries.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t pt-4 mt-4">
+                <Button
+                  onClick={handleUpdateInvoice}
+                  disabled={items.length === 0 || saving || isReadOnly}
+                  className="w-full bg-red-600 hover:bg-red-700 text-white font-medium"
+                >
+                  {saving ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4 mr-2" />
+                  )}
+                  Update Bill
+                </Button>
               </div>
             </CardContent>
           </Card>
