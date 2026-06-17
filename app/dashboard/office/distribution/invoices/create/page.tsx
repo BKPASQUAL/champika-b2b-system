@@ -13,9 +13,20 @@ import {
   Check,
   ChevronsUpDown,
   AlertTriangle,
+  Printer,
+  Download,
+  Paperclip,
+  Camera,
+  ImageIcon,
+  FileText,
+  File,
+  Upload,
+  Share2,
+  Copy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Card,
   CardContent,
@@ -56,6 +67,8 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { printInvoice, downloadInvoice } from "../print-utils";
+import { DocumentAttachments } from "@/components/ui/DocumentAttachments";
 
 // --- Types ---
 
@@ -109,6 +122,19 @@ export default function CreateDistributionInvoicePage() {
   const [invoiceNumber, setInvoiceNumber] = useState("INV-NEW");
   const [salesRepId, setSalesRepId] = useState<string>("");
   const [orderStatus, setOrderStatus] = useState<string>("Pending");
+  const [isIncorrect, setIsIncorrect] = useState(false);
+
+  // Temporary Upload Link & Sync State
+  const [tempInvoiceId, setTempInvoiceId] = useState(() => {
+    if (typeof window !== "undefined" && window.crypto?.randomUUID) {
+      return window.crypto.randomUUID();
+    }
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+      const r = (Math.random() * 16) | 0;
+      const v = c === "x" ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  });
 
   // Items State
   const [items, setItems] = useState<InvoiceItem[]>([]);
@@ -381,7 +407,7 @@ export default function CreateDistributionInvoicePage() {
   const grandTotal = Math.max(0, subtotal - extraDiscountAmount);
 
   // --- Save Invoice ---
-  const handleSaveInvoice = async () => {
+  const handleSaveAction = async (action: "save" | "print" | "download") => {
     if (!customerId) {
       toast.error("Please select a customer.");
       return;
@@ -416,6 +442,7 @@ export default function CreateDistributionInvoicePage() {
       userId: user?.id || null,
       performedByName: user?.name || null,
       performedByEmail: user?.email || null,
+      isIncorrect,
     };
 
     try {
@@ -433,11 +460,57 @@ export default function CreateDistributionInvoicePage() {
 
       toast.success("Invoice Created Successfully!");
       invalidatePaymentCaches();
-      router.push("/dashboard/office/distribution/invoices");
+
+      // Transfer mobile attachments from temp ID to real ID
+      try {
+        await fetch("/api/attachments", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tempEntityId: tempInvoiceId,
+            realEntityId: data.data.id,
+            entityType: "invoice",
+          }),
+        });
+      } catch (patchErr) {
+        console.error("Error patching attachments:", patchErr);
+      }
+
+      if (action === "print") {
+        printInvoice(data.data.id);
+      } else if (action === "download") {
+        downloadInvoice(data.data.id);
+      } else {
+        router.push("/dashboard/office/distribution/invoices");
+      }
     } catch (error: any) {
       toast.error(error.message || "Failed to create invoice");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleShareTempLink = async () => {
+    const tempUrl = `${window.location.origin}/invoice/${tempInvoiceId}?draft=true`;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "Upload Proof for Distribution Invoice",
+          text: "Please open this link on your mobile to upload delivery proof / images:",
+          url: tempUrl,
+        });
+      } catch (err: any) {
+        if (err?.name !== "AbortError") {
+          toast.error("Failed to share upload link");
+        }
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(tempUrl);
+        toast.success("Mobile upload link copied! Send it via WhatsApp or SMS.");
+      } catch {
+        toast.error("Failed to copy link");
+      }
     }
   };
 
@@ -464,34 +537,47 @@ export default function CreateDistributionInvoicePage() {
 
   return (
     <div className="space-y-4 mx-auto pb-20">
-      <div className="flex items-center gap-4">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => router.push("/dashboard/office/distribution/invoices")}
-        >
-          <ArrowLeft className="w-4 h-4" />
-        </Button>
-        <div className="flex-1">
-          <h1 className="text-3xl font-bold tracking-tight text-blue-900">
-            New Distribution Invoice
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Create a new bill for a customer (Distribution)
-          </p>
+      <div className="flex flex-col md:flex-row items-center gap-4">
+        <div className="flex items-center gap-4 w-full md:w-auto">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => router.push("/dashboard/office/distribution/invoices")}
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
+          <div className="flex-1">
+            <h1 className="text-3xl font-bold tracking-tight text-blue-900">New Distribution Invoice</h1>
+            <p className="text-muted-foreground mt-1">Create a new bill for a customer (Distribution)</p>
+          </div>
         </div>
-        <Button
-          onClick={handleSaveInvoice}
-          disabled={items.length === 0 || submitting}
-          className="bg-blue-600 hover:bg-blue-700"
-        >
-          {submitting ? (
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-          ) : (
-            <Save className="w-4 h-4 mr-2" />
-          )}
-          Save Invoice
-        </Button>
+
+        <div className="flex items-center gap-2 ml-auto">
+          <Button
+            variant="outline"
+            onClick={() => handleSaveAction("download")}
+            disabled={items.length === 0 || submitting}
+          >
+            {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+            Save & Download
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => handleSaveAction("print")}
+            disabled={items.length === 0 || submitting}
+          >
+            {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Printer className="w-4 h-4 mr-2" />}
+            Save & Print
+          </Button>
+          <Button
+            onClick={() => handleSaveAction("save")}
+            disabled={items.length === 0 || submitting}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+            Save Invoice
+          </Button>
+        </div>
       </div>
 
       {outOfStockOverride && (
@@ -1008,6 +1094,17 @@ export default function CreateDistributionInvoicePage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Images & Attachments with Mobile Upload sharing */}
+          <DocumentAttachments
+            entityType="invoice"
+            entityId={tempInvoiceId}
+            title="Images & Attachments"
+            allowUpload={true}
+            pollInterval={3000}
+            showMobileUpload={true}
+            onShareLink={handleShareTempLink}
+          />
         </div>
 
         {/* RIGHT COLUMN */}
@@ -1085,11 +1182,61 @@ export default function CreateDistributionInvoicePage() {
                   </span>
                 </div>
               </div>
+              <div className="border-t pt-4 bg-red-50/50 dark:bg-red-950/20 p-3.5 rounded-lg border border-red-200/60 mt-4">
+                <div className="flex gap-2.5 items-start">
+                  <Checkbox
+                    id="incorrect-checkbox"
+                    checked={isIncorrect}
+                    onCheckedChange={(checked) => setIsIncorrect(!!checked)}
+                    className="data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600 border-red-300 mt-1 cursor-pointer"
+                  />
+                  <div className="space-y-1">
+                    <Label htmlFor="incorrect-checkbox" className="text-sm font-semibold text-red-950 dark:text-red-300 leading-tight block cursor-pointer select-none">
+                      Mark Incorrect (Mistake)
+                    </Label>
+                    <p className="text-[11px] text-red-700/80 dark:text-red-400/80 leading-normal">
+                      Check this if there is a mistake in this invoice's manual entries.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t pt-4 space-y-3 mt-4">
+                <Button
+                  onClick={() => handleSaveAction("save")}
+                  disabled={items.length === 0 || submitting}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium"
+                >
+                  {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                  Save Invoice
+                </Button>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    variant="outline"
+                    type="button"
+                    onClick={() => handleSaveAction("print")}
+                    disabled={items.length === 0 || submitting}
+                    className="w-full text-xs"
+                  >
+                    {submitting ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Printer className="w-3 h-3 mr-1" />}
+                    Save & Print
+                  </Button>
+                  <Button
+                    variant="outline"
+                    type="button"
+                    onClick={() => handleSaveAction("download")}
+                    disabled={items.length === 0 || submitting}
+                    className="w-full text-xs"
+                  >
+                    {submitting ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Download className="w-3 h-3 mr-1" />}
+                    Save & PDF
+                  </Button>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
       </div>
-
     </div>
   );
 }
