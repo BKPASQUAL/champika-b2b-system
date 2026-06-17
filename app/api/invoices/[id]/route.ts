@@ -33,6 +33,7 @@ const updateInvoiceSchema = z.object({
   userId: z.string().optional(),
   isDraft: z.boolean().optional(),
   changeReason: z.string().optional(),
+  isIncorrect: z.boolean().optional(),
 });
 
 export async function GET(
@@ -136,6 +137,7 @@ export async function GET(
       grandTotal: invoice.total_amount,
       paidAmount: invoice.paid_amount,
       dueDate: invoice.due_date || null,
+      isIncorrect: invoice.is_incorrect || false,
 
       // Extra Discount
       extraDiscountPercent: invoice.orders?.extra_discount_percent || 0,
@@ -380,15 +382,22 @@ export async function PATCH(
         ? "Paid"
         : "Partial";
 
+    const invoiceUpdateFields: any = {
+      customer_id: val.customerId,
+      total_amount: val.grandTotal,
+      paid_amount: finalPaidAmount,
+      status: finalStatus,
+      ...(val.manual_invoice_no !== undefined && { manual_invoice_no: val.manual_invoice_no }),
+      ...(val.isIncorrect !== undefined && { is_incorrect: val.isIncorrect }),
+    };
+
+    if (isFullyPaid) {
+      invoiceUpdateFields.is_incorrect = false;
+    }
+
     await supabaseAdmin
       .from("invoices")
-      .update({
-        customer_id: val.customerId,
-        total_amount: val.grandTotal,
-        paid_amount: finalPaidAmount,
-        status: finalStatus,
-        ...(val.manual_invoice_no !== undefined && { manual_invoice_no: val.manual_invoice_no }),
-      })
+      .update(invoiceUpdateFields)
       .eq("id", id);
 
     // Build historical cost map from old items (preserves original cost for unchanged products)

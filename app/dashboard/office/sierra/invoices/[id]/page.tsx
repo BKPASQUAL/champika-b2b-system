@@ -125,6 +125,9 @@ export default function WiremanViewInvoicePage({
   // Share state
   const [sharing, setSharing] = useState(false);
 
+  const [isIncorrect, setIsIncorrect] = useState(false);
+  const [togglingIncorrect, setTogglingIncorrect] = useState(false);
+
   const fetchInvoice = async (silent = false) => {
     if (!silent) setLoading(true);
     else setRefreshing(true);
@@ -133,12 +136,31 @@ export default function WiremanViewInvoicePage({
       if (!res.ok) throw new Error("Failed to load invoice");
       const data = await res.json();
       setInvoice(data);
+      setIsIncorrect(data.isIncorrect || false);
     } catch (error) {
       toast.error("Error loading invoice details");
       if (!silent) router.push("/dashboard/office/sierra/invoices");
     } finally {
       if (!silent) setLoading(false);
       else setRefreshing(false);
+    }
+  };
+
+  const handleToggleIncorrect = async () => {
+    setTogglingIncorrect(true);
+    try {
+      const res = await fetch(`/api/invoices/${id}/incorrect`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isIncorrect: !isIncorrect }),
+      });
+      if (!res.ok) throw new Error();
+      setIsIncorrect(!isIncorrect);
+      toast.success(`Invoice marked as ${!isIncorrect ? "incorrect" : "correct"}`);
+    } catch {
+      toast.error("Failed to update invoice status");
+    } finally {
+      setTogglingIncorrect(false);
     }
   };
 
@@ -275,6 +297,12 @@ export default function WiremanViewInvoicePage({
                 Invoice {invoice.invoiceNo}
               </h1>
               {renderOrderStatusBadge(invoice.orderStatus || "Pending")}
+              {isIncorrect && (
+                <Badge variant="outline" className="px-3 py-1 bg-red-50 text-red-700 border-red-200 gap-1.5 font-semibold">
+                  <span className="h-1.5 w-1.5 rounded-full bg-red-600 animate-pulse" />
+                  Incorrect Entry
+                </Badge>
+              )}
             </div>
             <p className="text-sm text-muted-foreground ml-11">
               Invoice Date:{" "}
@@ -887,6 +915,28 @@ export default function WiremanViewInvoicePage({
                         ? "Partial"
                         : "Unpaid"}
                   </Badge>
+                </div>
+                <Separator />
+                <div className="flex justify-between items-center">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-sm font-medium">Invoice Mistake</span>
+                    <span className="text-xs text-muted-foreground">Flag as incorrect entry</span>
+                  </div>
+                  <Button
+                    variant={isIncorrect ? "destructive" : "outline"}
+                    size="sm"
+                    onClick={handleToggleIncorrect}
+                    disabled={togglingIncorrect}
+                    className="h-8 shrink-0 font-medium"
+                  >
+                    {togglingIncorrect ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : isIncorrect ? (
+                      "Mark Correct"
+                    ) : (
+                      "Mark Incorrect"
+                    )}
+                  </Button>
                 </div>
               </CardContent>
             </Card>

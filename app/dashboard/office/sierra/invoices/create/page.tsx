@@ -112,6 +112,7 @@ export default function CreateSierraInvoicePage() {
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split("T")[0]);
   const [manualInvoiceNo, setManualInvoiceNo] = useState("");
   const [noManualRef, setNoManualRef] = useState(false);
+  const [isIncorrect, setIsIncorrect] = useState(false);
   const paymentType = "Credit";
 
   const salesRepId = currentUser?.id || "";
@@ -422,6 +423,7 @@ export default function CreateSierraInvoicePage() {
       paidAmount: 0,
       performedByName: currentUser?.name ?? null,
       performedByEmail: currentUser?.email ?? null,
+      isIncorrect,
     };
 
     try {
@@ -921,6 +923,21 @@ export default function CreateSierraInvoicePage() {
                     LKR {grandTotal.toLocaleString()}
                   </span>
                 </div>
+              </div>
+
+              <div className="border-t pt-4 bg-red-50/40 p-3 rounded-md border border-red-100/60 mt-4">
+                <label className="flex items-center gap-2 text-sm font-semibold text-red-950 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={isIncorrect}
+                    onChange={(e) => setIsIncorrect(e.target.checked)}
+                    className="rounded border-red-300 text-red-600 focus:ring-red-500 h-4 w-4 shrink-0"
+                  />
+                  Mark Incorrect (Mistake)
+                </label>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Check this if there is a mistake in this invoice's manual entries.
+                </p>
               </div>
             </CardContent>
           </Card>

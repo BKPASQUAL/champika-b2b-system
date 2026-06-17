@@ -132,6 +132,7 @@ export default function SierraInvoicesPage() {
         orderStatus: inv.orderStatus || "Pending",
         itemsCount: 0,
         profit: inv.profit || 0,
+        isIncorrect: inv.isIncorrect || false,
       })),
     [rawInvoices]
   );

@@ -239,13 +239,19 @@ export async function POST(request: NextRequest) {
     const finalPaidAmount = isFullyPaid ? Number(invoice.total_amount) : newPaidAmount;
     const newStatus = isFullyPaid ? "Paid" : "Partial";
 
+    const invoiceUpdateFields: any = {
+      paid_amount: finalPaidAmount,
+      status: newStatus,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (isFullyPaid) {
+      invoiceUpdateFields.is_incorrect = false;
+    }
+
     const { error: invoiceUpdateError } = await supabaseAdmin
       .from("invoices")
-      .update({
-        paid_amount: finalPaidAmount,
-        status: newStatus,
-        updated_at: new Date().toISOString(),
-      })
+      .update(invoiceUpdateFields)
       .eq("id", invoice.id);
 
     if (invoiceUpdateError) throw invoiceUpdateError;

@@ -58,6 +58,7 @@ const invoiceSchema = z.object({
   performedByName: z.string().optional().nullable(),
   performedByEmail: z.string().optional().nullable(),
   userId: z.string().optional().nullable(),
+  isIncorrect: z.boolean().optional().default(false),
 });
 
 // --- GET: Fetch All Invoices ---
@@ -180,6 +181,7 @@ export async function GET(request: NextRequest) {
         createdAt: inv.created_at,
         businessId: bId,
         profit: totalProfit,
+        isIncorrect: inv.is_incorrect || false,
       };
     });
 
@@ -567,6 +569,7 @@ export async function POST(request: NextRequest) {
           status: finalPaymentStatus,
           due_date: dueDate,
           created_at: new Date(),
+          is_incorrect: val.isIncorrect,
         })
         .select()
         .single();

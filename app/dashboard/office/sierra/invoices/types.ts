@@ -29,6 +29,7 @@ export interface Invoice {
   itemsCount?: number;
   businessId?: string;
   profit: number;
+  isIncorrect?: boolean;
 }
 
 export type SortField =

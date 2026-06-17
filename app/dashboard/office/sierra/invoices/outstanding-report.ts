@@ -105,7 +105,7 @@ function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
 
       tableData.push([
         new Date(inv.date).toLocaleDateString("en-GB"),
-        inv.manualInvoiceNo || "",
+        `${inv.manualInvoiceNo || ""}${inv.isIncorrect ? " (Incorrect)" : ""}`,
         daysOverdue,
         fmt(inv.totalAmount),
         fmt(inv.paidAmount),

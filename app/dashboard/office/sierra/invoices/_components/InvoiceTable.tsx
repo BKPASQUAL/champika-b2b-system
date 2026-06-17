@@ -258,9 +258,16 @@ export function InvoiceTable({
 
                     {/* 2. Auto Invoice Number */}
                     <TableCell>
-                      <span className="font-mono text-[10px] md:text-xs font-bold text-foreground bg-slate-100 dark:bg-slate-800 px-1 md:px-2 py-1 rounded">
-                        {invoice.invoiceNo}
-                      </span>
+                      <div className="flex flex-col gap-1">
+                        <span className="font-mono text-[10px] md:text-xs font-bold text-foreground bg-slate-100 dark:bg-slate-800 px-1 md:px-2 py-1 rounded w-fit">
+                          {invoice.invoiceNo}
+                        </span>
+                        {invoice.isIncorrect && (
+                          <span className="text-[10px] leading-none text-red-600 font-semibold bg-red-50 border border-red-100 px-1.5 py-0.5 rounded w-fit">
+                            Incorrect Entry
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
 
                     {/* 3. Manual Ref (The Separate Column) */}
@@ -385,9 +392,16 @@ export function InvoiceTable({
               {/* Top Row: Invoice # and Date */}
               <div className="flex justify-between items-start">
                 <div className="flex flex-col gap-1">
-                  <span className="font-mono text-sm font-bold text-foreground bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded w-fit">
-                    {invoice.invoiceNo}
-                  </span>
+                  <div className="flex flex-wrap gap-1.5 items-center">
+                    <span className="font-mono text-sm font-bold text-foreground bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded w-fit">
+                      {invoice.invoiceNo}
+                    </span>
+                    {invoice.isIncorrect && (
+                      <span className="text-[10px] leading-none text-red-600 font-semibold bg-red-50 border border-red-100 px-1.5 py-0.5 rounded">
+                        Incorrect Entry
+                      </span>
+                    )}
+                  </div>
                   {invoice.manualInvoiceNo && invoice.manualInvoiceNo.trim() !== "" && (
                     <div className="flex items-center text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded w-fit mt-0.5">
                       <FileText className="w-3 h-3 mr-1" />

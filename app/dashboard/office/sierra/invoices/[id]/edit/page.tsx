@@ -132,6 +132,7 @@ export default function SierraEditInvoicePage({
   const [customerId, setCustomerId] = useState<string>("");
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split("T")[0]);
   const [manualInvoiceNo, setManualInvoiceNo] = useState("");
+  const [isIncorrect, setIsIncorrect] = useState(false);
 
   // New Customer Dialog
   const [isAddCustomerDialogOpen, setIsAddCustomerDialogOpen] = useState(false);
@@ -209,6 +210,7 @@ export default function SierraEditInvoicePage({
         setInvoiceNumber(invoice.invoiceNo || "");
         setManualInvoiceNo(invoice.manualInvoiceNo || "");
         setOrderStatus(invoice.orderStatus || "Delivered");
+        setIsIncorrect(invoice.isIncorrect || false);
         const repId = invoice.salesRepId || user.id;
         setSalesRepId(repId);
 
@@ -484,6 +486,7 @@ export default function SierraEditInvoicePage({
           manual_invoice_no: manualInvoiceNo,
           userId,
           changeReason: editReason || "Updated Invoice",
+          isIncorrect,
         }),
       });
 
@@ -1000,6 +1003,22 @@ export default function SierraEditInvoicePage({
                     LKR {grandTotal.toLocaleString()}
                   </span>
                 </div>
+              </div>
+
+              <div className="border-t pt-4 bg-red-50/40 p-3 rounded-md border border-red-100/60 mt-4">
+                <label className="flex items-center gap-2 text-sm font-semibold text-red-950 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={isIncorrect}
+                    onChange={(e) => setIsIncorrect(e.target.checked)}
+                    className="rounded border-red-300 text-red-600 focus:ring-red-500 h-4 w-4 shrink-0"
+                    disabled={isReadOnly}
+                  />
+                  Mark Incorrect (Mistake)
+                </label>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Check this if there is a mistake in this invoice's manual entries.
+                </p>
               </div>
             </CardContent>
           </Card>
