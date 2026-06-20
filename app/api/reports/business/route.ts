@@ -308,14 +308,14 @@ export async function GET(request: NextRequest) {
 
       const invoices = [...biz.invoiceList].map((inv: any) => {
         const profitEntry = orderProfitMap[inv.orderId];
-        const profit = profitEntry ? profitEntry.revenue - profitEntry.cost : null;
-        const profitMargin = profitEntry && profitEntry.revenue > 0 ? ((profitEntry.revenue - profitEntry.cost) / profitEntry.revenue) * 100 : null;
+        const profit = profitEntry ? inv.amount - profitEntry.cost : null;
+        const profitMargin = profit !== null && inv.amount > 0 ? (profit / inv.amount) * 100 : null;
         
         const freeQty = profitEntry ? profitEntry.freeQty : 0;
         const freeCost = profitEntry ? profitEntry.freeCost : 0;
         const pendingClaimCost = profitEntry ? profitEntry.pendingClaimCost : 0;
         const netProfit = profit !== null ? profit - pendingClaimCost : null;
-        const netMargin = profitEntry && profitEntry.revenue > 0 && netProfit !== null ? (netProfit / profitEntry.revenue) * 100 : null;
+        const netMargin = profitEntry && inv.amount > 0 && netProfit !== null ? (netProfit / inv.amount) * 100 : null;
 
         return {
           ...inv,

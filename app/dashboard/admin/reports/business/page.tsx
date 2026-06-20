@@ -451,15 +451,15 @@ export default function BusinessAnalyticsPage() {
                   </Card>
 
                   {/* Gross Profit (Expected) */}
-                  <Card className="bg-slate-50/50 border-slate-200">
+                  <Card className="bg-green-50 border-green-200">
                     <CardHeader className="pb-1 pt-3 px-3 md:px-4">
-                      <CardTitle className="text-[10px] md:text-xs text-slate-700 font-medium flex items-center gap-1">
+                      <CardTitle className="text-[10px] md:text-xs text-green-700 font-medium flex items-center gap-1">
                         <TrendingUp className="h-3 w-3" /> Expected Gross Profit
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
-                      <div className="text-sm md:text-xl font-bold text-slate-800">LKR {fmt(current.totalProfit)}</div>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">{current.margin.toFixed(1)}% margin</p>
+                      <div className="text-sm md:text-xl font-bold text-green-700">LKR {fmt(current.totalProfit)}</div>
+                      <p className="text-[10px] text-green-600/80 mt-0.5">{current.margin.toFixed(1)}% margin</p>
                     </CardContent>
                   </Card>
 
@@ -479,14 +479,14 @@ export default function BusinessAnalyticsPage() {
                   </Card>
 
                   {/* Realized Net Profit */}
-                  <Card className="bg-green-50 border-green-200">
+                  <Card className="bg-slate-50/50 border-slate-200">
                     <CardHeader className="pb-1 pt-3 px-3 md:px-4">
-                      <CardTitle className="text-[10px] md:text-xs text-green-700 font-medium flex items-center gap-1">
+                      <CardTitle className="text-[10px] md:text-xs text-slate-700 font-medium flex items-center gap-1">
                         <TrendingUp className="h-3 w-3" /> Realized Net Profit
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
-                      <div className="text-sm md:text-xl font-bold text-green-700">LKR {fmt(current.netProfit || 0)}</div>
+                      <div className="text-sm md:text-xl font-bold text-slate-800">LKR {fmt(current.netProfit || 0)}</div>
                       <p className="text-[10px] text-muted-foreground mt-0.5">{(current.netMargin || 0).toFixed(1)}% net margin</p>
                     </CardContent>
                   </Card>
@@ -834,14 +834,14 @@ export default function BusinessAnalyticsPage() {
                               {/* Expected Profit */}
                               <TableCell className={`text-right font-mono tabular-nums font-semibold ${
                                 inv.profit === null || inv.profit === undefined ? "text-muted-foreground"
-                                : inv.profit >= 0 ? "text-slate-700" : "text-red-600"
+                                : inv.profit >= 0 ? "text-green-700 font-bold" : "text-red-600 font-bold"
                               }`}>
                                 {inv.profit === null || inv.profit === undefined ? (
                                   <span className="text-[10px] text-muted-foreground/50">—</span>
                                 ) : (
                                   <div className="flex flex-col items-end">
                                     <span>LKR {fmt(inv.profit)}</span>
-                                    <span className="text-[9px] text-muted-foreground font-normal">
+                                    <span className={`text-[9px] font-normal ${inv.profit >= 0 ? "text-green-600" : "text-red-500"}`}>
                                       {inv.profitMargin !== null ? `${inv.profitMargin.toFixed(1)}%` : ""}
                                     </span>
                                   </div>
@@ -851,14 +851,14 @@ export default function BusinessAnalyticsPage() {
                               {/* Realized Net Profit */}
                               <TableCell className={`text-right font-mono tabular-nums font-semibold ${
                                 inv.netProfit === null || inv.netProfit === undefined ? "text-muted-foreground"
-                                : inv.netProfit >= 0 ? "text-green-700 font-bold" : "text-red-600 font-bold bg-red-50/50"
+                                : inv.netProfit >= 0 ? "text-slate-700" : "text-red-600"
                               }`}>
                                 {inv.netProfit === null || inv.netProfit === undefined ? (
                                   <span className="text-[10px] text-muted-foreground/50">—</span>
                                 ) : (
                                   <div className="flex flex-col items-end">
                                     <span>LKR {fmt(inv.netProfit)}</span>
-                                    <span className={`text-[9px] font-normal ${inv.netProfit >= 0 ? "text-green-600" : "text-red-500"}`}>
+                                    <span className="text-[9px] text-muted-foreground font-normal">
                                       {inv.netMargin !== null ? `${inv.netMargin.toFixed(1)}%` : ""}
                                     </span>
                                   </div>
