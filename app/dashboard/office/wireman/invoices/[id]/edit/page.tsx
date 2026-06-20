@@ -249,6 +249,7 @@ export default function WiremanEditInvoicePage({
   const [saving, setSaving] = useState(false);
   const [stockLoading, setStockLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [outOfStockOverride, setOutOfStockOverride] = useState(false);
 
   const productSearchInputRef = useRef<HTMLInputElement>(null);
   const qtyInputRef = useRef<HTMLInputElement>(null);
@@ -304,15 +305,23 @@ export default function WiremanEditInvoicePage({
         setBusinessId(BUSINESS_IDS.WIREMAN_AGENCY);
         setCurrentUser({ id: user.id, name: user.name, email: user.email, role: user.role });
 
-        const [invRes, custRes, retRes] = await Promise.all([
+        const [invRes, custRes, retRes, overrideRes] = await Promise.all([
           fetch(`/api/invoices/${id}`),
           fetch(`/api/customers?businessId=${BUSINESS_IDS.WIREMAN_AGENCY}`),
           fetch(`/api/invoices/${id}/returns`),
+          fetch("/api/settings/portal-stock-override").catch(() => null),
         ]);
 
         const invoice = await invRes.json();
         const custData = await custRes.json();
         const retData = await retRes.json();
+
+        let isOverrideEnabled = false;
+        if (overrideRes?.ok) {
+          const overrideData = await overrideRes.json();
+          setOutOfStockOverride(overrideData.wireman ?? false);
+          isOverrideEnabled = overrideData.wireman ?? false;
+        }
 
         setCustomers(custData.map((c: any) => ({ id: c.id, name: c.shopName, phone: c.phone || "", ownerName: c.ownerName || "" })));
         setReturns(retData);
@@ -351,7 +360,7 @@ export default function WiremanEditInvoicePage({
         }
 
         setStockLoading(true);
-        const stockRes = await fetch(`/api/rep/stock?userId=${repId}&supplierLike=Wireman`);
+        const stockRes = await fetch(`/api/rep/stock?userId=${repId}&supplierLike=Wireman${isOverrideEnabled ? "&includeOutOfStock=true" : ""}`);
         const stockData = await stockRes.json();
         setProducts(
           Array.isArray(stockData)
@@ -428,7 +437,7 @@ export default function WiremanEditInvoicePage({
     const qty = parseNumber(currentItem.quantity);
     const freeQty = parseNumber(currentItem.freeQuantity);
     if (qty <= 0) { toast.error("Please enter a valid quantity"); return; }
-    if (!editingItemId && qty + freeQty > currentItem.stockAvailable) {
+    if (!outOfStockOverride && !editingItemId && qty + freeQty > currentItem.stockAvailable) {
       toast.error(`Insufficient stock! Available: ${currentItem.stockAvailable}`);
       return;
     }
@@ -675,6 +684,14 @@ export default function WiremanEditInvoicePage({
                     searchInputRef={productSearchInputRef}
                     onSelectCallback={onProductDropdownSelect}
                   />
+                  {outOfStockOverride && (
+                    <div className="flex items-center gap-2 text-amber-600 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 rounded-lg p-3 text-xs mt-2">
+                      <AlertTriangle className="h-4 w-4 shrink-0" strokeWidth={2} />
+                      <span>
+                        Out-of-stock invoicing is active. You can search, select, and bill items with 0 stock.
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="grid grid-cols-4 gap-4">

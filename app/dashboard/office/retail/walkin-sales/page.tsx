@@ -389,11 +389,11 @@ export default function CreateRetailInvoicePage() {
         // Fetch out-of-stock override setting first
         let isOverrideEnabled = false;
         try {
-          const overrideRes = await fetch("/api/settings/retail-invoice-override").catch(() => null);
+          const overrideRes = await fetch("/api/settings/portal-stock-override").catch(() => null);
           if (overrideRes?.ok) {
             const overrideData = await overrideRes.json();
-            setRetailOutOfStockOverride(overrideData.enabled ?? false);
-            isOverrideEnabled = overrideData.enabled ?? false;
+            setRetailOutOfStockOverride(overrideData.retail ?? false);
+            isOverrideEnabled = overrideData.retail ?? false;
           }
         } catch (err) {
           console.error("Error fetching retail invoice override setting:", err);

@@ -15,6 +15,7 @@ import {
   ChevronsUpDown,
   Printer,
   Download,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -116,6 +117,7 @@ export default function CreateRetailInvoicePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [stockLoading, setStockLoading] = useState(false);
+  const [outOfStockOverride, setOutOfStockOverride] = useState(false);
 
   // Business Context
   const [businessId, setBusinessId] = useState<string | null>(null);
@@ -202,6 +204,17 @@ export default function CreateRetailInvoicePage() {
           toast.error("User context not found");
           router.push("/login");
           return;
+        }
+
+        // Fetch Out-of-Stock setting
+        try {
+          const overrideRes = await fetch("/api/settings/portal-stock-override");
+          if (overrideRes.ok) {
+            const overrideData = await overrideRes.json();
+            setOutOfStockOverride(overrideData.retail ?? false);
+          }
+        } catch (err) {
+          console.error("Error loading portal stock overrides:", err);
         }
 
         const resolvedBusinessName = BUSINESS_NAMES[BUSINESS_IDS.CHAMPIKA_RETAIL];
@@ -347,7 +360,7 @@ export default function CreateRetailInvoicePage() {
     }
 
     const totalReqQty = qty + freeQty;
-    if (totalReqQty > currentItem.stockAvailable) {
+    if (!outOfStockOverride && totalReqQty > currentItem.stockAvailable) {
       toast.error(
         `Insufficient stock! Available: ${currentItem.stockAvailable}`
       );
@@ -484,7 +497,7 @@ export default function CreateRetailInvoicePage() {
   const grandTotal = subtotal - extraDiscountAmount;
 
   const availableProducts = products.filter(
-    (p) => !items.some((i) => i.productId === p.id)
+    (p) => !items.some((i) => i.productId === p.id) && (outOfStockOverride || p.stock_quantity > 0)
   );
 
   const filteredAvailableProducts = availableProducts.filter((product) => {
@@ -526,6 +539,17 @@ export default function CreateRetailInvoicePage() {
 
   return (
     <div className="space-y-4 mx-auto pb-16 lg:pb-0">
+      {outOfStockOverride && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-amber-800 text-xs sm:text-sm flex items-start gap-3 shadow-sm">
+          <AlertTriangle className="h-5 w-5 shrink-0 text-amber-600 mt-0.5" />
+          <div className="space-y-1">
+            <span className="font-bold block text-sm">Retail Out-of-Stock Invoicing Override is Active</span>
+            <span className="text-muted-foreground block text-xs">
+              You can search, select, and invoice any product regardless of current stock levels. Items with insufficient stock will be clamp-deducted to 0 on saving.
+            </span>
+          </div>
+        </div>
+      )}
       <div className="flex flex-col md:flex-row items-center gap-4">
         <div className="flex items-center gap-4 w-full md:w-auto">
           <Button
@@ -959,6 +983,14 @@ export default function CreateRetailInvoicePage() {
                       </Command>
                     </PopoverContent>
                   </Popover>
+                  {outOfStockOverride && (
+                    <div className="flex items-center gap-2 text-amber-600 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 rounded-lg p-3 text-xs mt-2">
+                      <AlertTriangle className="h-4 w-4 shrink-0" strokeWidth={2} />
+                      <span>
+                        Out-of-stock invoicing is active. You can search, select, and bill items with 0 stock.
+                      </span>
+                    </div>
+                  )}
                   <p className="text-xs text-muted-foreground mt-1">
                     Showing filtered retail products.
                   </p>

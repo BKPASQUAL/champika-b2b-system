@@ -108,6 +108,7 @@ export default function CreateSierraInvoicePage() {
 
   // Business Context
   const [businessId, setBusinessId] = useState<string | null>(null);
+  const [outOfStockOverride, setOutOfStockOverride] = useState(false);
   const [currentUser, setCurrentUser] = useState<{
     id: string;
     name: string;
@@ -209,6 +210,17 @@ export default function CreateSierraInvoicePage() {
             ownerName: c.ownerName || "",
           })),
         );
+
+        // Load stock override setting
+        try {
+          const overrideRes = await fetch("/api/settings/portal-stock-override");
+          if (overrideRes.ok) {
+            const overrideData = await overrideRes.json();
+            setOutOfStockOverride(overrideData.sierra ?? false);
+          }
+        } catch (err) {
+          console.error("Error loading portal stock overrides:", err);
+        }
       } catch (error) {
         console.error("Error fetching data:", error);
         toast.error("Failed to load initial data");
@@ -227,7 +239,7 @@ export default function CreateSierraInvoicePage() {
 
       setStockLoading(true);
       try {
-        const res = await fetch(`/api/rep/stock?userId=${salesRepId}&supplierLike=Sierra`);
+        const res = await fetch(`/api/rep/stock?userId=${salesRepId}&supplierLike=Sierra${outOfStockOverride ? "&includeOutOfStock=true" : ""}`);
         if (!res.ok) throw new Error("Failed to load stock");
 
         const productsData = await res.json();
@@ -253,7 +265,7 @@ export default function CreateSierraInvoicePage() {
     };
 
     fetchUserStock();
-  }, [salesRepId]);
+  }, [salesRepId, outOfStockOverride]);
 
   // Handlers
   const handleProductSelect = (selectedId: string) => {
@@ -314,7 +326,7 @@ export default function CreateSierraInvoicePage() {
     }
 
     const totalReqQty = qty + freeQty;
-    if (totalReqQty > currentItem.stockAvailable) {
+    if (!outOfStockOverride && totalReqQty > currentItem.stockAvailable) {
       toast.error(`Insufficient stock! Available: ${currentItem.stockAvailable}`);
       return;
     }
@@ -739,6 +751,14 @@ export default function CreateSierraInvoicePage() {
                   <p className="text-xs text-muted-foreground mt-1">
                     Showing Sierra products from your assigned stock.
                   </p>
+                  {outOfStockOverride && (
+                    <div className="flex items-center gap-2 text-amber-600 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 rounded-lg p-3 text-xs mt-2">
+                      <AlertTriangle className="h-4 w-4 shrink-0" strokeWidth={2} />
+                      <span>
+                        Out-of-stock invoicing is active. You can search, select, and bill items with 0 stock.
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 

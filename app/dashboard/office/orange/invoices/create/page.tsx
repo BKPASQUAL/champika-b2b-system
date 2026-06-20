@@ -22,6 +22,7 @@ import {
   Upload,
   Share2,
   Copy,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -96,6 +97,7 @@ export default function CreateInvoicePage() {
 
   // Business Context
   const [businessId, setBusinessId] = useState<string | null>(null);
+  const [outOfStockOverride, setOutOfStockOverride] = useState(false);
   const [currentUser, setCurrentUser] = useState<{
     id: string;
     name: string;
@@ -201,6 +203,17 @@ export default function CreateInvoicePage() {
             id: c.id,
             name: c.shopName, phone: c.phone || "", ownerName: c.ownerName || "" }))
         );
+
+        // 3. Load stock override setting
+        try {
+          const overrideRes = await fetch("/api/settings/portal-stock-override");
+          if (overrideRes.ok) {
+            const overrideData = await overrideRes.json();
+            setOutOfStockOverride(overrideData.orange ?? false);
+          }
+        } catch (err) {
+          console.error("Error loading portal stock overrides:", err);
+        }
       } catch (error) {
         console.error("Error fetching data:", error);
         toast.error("Failed to load initial data");
@@ -220,7 +233,7 @@ export default function CreateInvoicePage() {
       setStockLoading(true);
       try {
         // Fetch stock specifically for the logged-in user
-        const res = await fetch(`/api/rep/stock?userId=${salesRepId}`);
+        const res = await fetch(`/api/rep/stock?userId=${salesRepId}${outOfStockOverride ? "&includeOutOfStock=true" : ""}`);
         if (!res.ok) throw new Error("Failed to load stock");
 
         const productsData = await res.json();
@@ -246,7 +259,7 @@ export default function CreateInvoicePage() {
     };
 
     fetchUserStock();
-  }, [salesRepId]);
+  }, [salesRepId, outOfStockOverride]);
 
   // --- Product Selection Handler ---
   const handleProductSelect = (productId: string) => {
@@ -285,7 +298,7 @@ export default function CreateInvoicePage() {
     }
 
     const totalReqQty = currentItem.quantity + currentItem.freeQuantity;
-    if (totalReqQty > currentItem.stockAvailable) {
+    if (!outOfStockOverride && totalReqQty > currentItem.stockAvailable) {
       toast.error(
         `Insufficient stock! Available: ${currentItem.stockAvailable}`
       );
@@ -722,6 +735,14 @@ export default function CreateInvoicePage() {
                       </Command>
                     </PopoverContent>
                   </Popover>
+                  {outOfStockOverride && (
+                    <div className="flex items-center gap-2 text-amber-600 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 rounded-lg p-3 text-xs mt-2">
+                      <AlertTriangle className="h-4 w-4 shrink-0" strokeWidth={2} />
+                      <span>
+                        Out-of-stock invoicing is active. You can search, select, and bill items with 0 stock.
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 

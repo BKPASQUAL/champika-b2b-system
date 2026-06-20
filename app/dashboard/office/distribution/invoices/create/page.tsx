@@ -212,10 +212,10 @@ export default function CreateDistributionInvoicePage() {
         setReps(salesReps);
 
         // Fetch out-of-stock override setting
-        const overrideRes = await fetch("/api/settings/invoice-override").catch(() => null);
+        const overrideRes = await fetch("/api/settings/portal-stock-override").catch(() => null);
         if (overrideRes?.ok) {
           const overrideData = await overrideRes.json();
-          setOutOfStockOverride(overrideData.enabled ?? false);
+          setOutOfStockOverride(overrideData.distribution ?? false);
         }
       } catch (error) {
         console.error("Error fetching data:", error);

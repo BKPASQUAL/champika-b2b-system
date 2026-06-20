@@ -511,12 +511,15 @@ function SyncSierraCostsAction() {
 // ── Operations Section ────────────────────────────────────────────────────────
 function OperationsSettings() {
   const [stockOverride, setStockOverride] = useState(false);
-  const [retailStockOverride, setRetailStockOverride] = useState(false);
   const [repCustomerCreate, setRepCustomerCreate] = useState(false);
   const [loading, setLoading] = useState(true);
   const [savingStock, setSavingStock] = useState(false);
-  const [savingRetailStock, setSavingRetailStock] = useState(false);
   const [savingCustomer, setSavingCustomer] = useState(false);
+
+  const [portalStockOverrides, setPortalStockOverrides] = useState({
+    wireman: false, sierra: false, orange: false, distribution: false, retail: false,
+  });
+  const [savingPortalStock, setSavingPortalStock] = useState<string | null>(null);
 
   const [discountPortals, setDiscountPortals] = useState({
     wireman: false, sierra: false, orange: false, distribution: false,
@@ -528,12 +531,12 @@ function OperationsSettings() {
       fetch("/api/settings/invoice-override").then((r) => r.json()).catch(() => ({ enabled: false })),
       fetch("/api/settings/rep-customer-creation").then((r) => r.json()).catch(() => ({ enabled: false })),
       fetch("/api/settings/discount-feature").then((r) => r.json()).catch(() => ({})),
-      fetch("/api/settings/retail-invoice-override").then((r) => r.json()).catch(() => ({ enabled: false })),
-    ]).then(([stock, cust, disc, retailStock]) => {
+      fetch("/api/settings/portal-stock-override").then((r) => r.json()).catch(() => ({})),
+    ]).then(([stock, cust, disc, portalStock]) => {
       setStockOverride(stock.enabled ?? false);
       setRepCustomerCreate(cust.enabled ?? false);
       setDiscountPortals((prev) => ({ ...prev, ...disc }));
-      setRetailStockOverride(retailStock.enabled ?? false);
+      setPortalStockOverrides((prev) => ({ ...prev, ...portalStock }));
     }).finally(() => setLoading(false));
   }, []);
 
@@ -583,26 +586,26 @@ function OperationsSettings() {
     }
   };
 
-  const handleRetailStockToggle = async (value: boolean) => {
-    setSavingRetailStock(true);
+  const handlePortalStockToggle = async (portal: string, value: boolean) => {
+    setSavingPortalStock(portal);
     try {
-      const res = await fetch("/api/settings/retail-invoice-override", {
+      const res = await fetch("/api/settings/portal-stock-override", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled: value }),
+        body: JSON.stringify({ [portal]: value }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to save");
-      setRetailStockOverride(data.enabled);
+      setPortalStockOverrides((prev) => ({ ...prev, [portal]: value }));
       toast.success(
-        data.enabled
-          ? "Out-of-stock invoicing enabled for Retail portal"
-          : "Out-of-stock invoicing disabled for Retail portal — normal mode restored"
+        value
+          ? `Out-of-stock invoicing enabled for ${portal === "retail" ? "Retail" : portal.charAt(0).toUpperCase() + portal.slice(1) + " Agency"}`
+          : `Out-of-stock invoicing disabled for ${portal === "retail" ? "Retail" : portal.charAt(0).toUpperCase() + portal.slice(1) + " Agency"}`
       );
     } catch (err: any) {
       toast.error(err.message || "Failed to save setting");
     } finally {
-      setSavingRetailStock(false);
+      setSavingPortalStock(null);
     }
   };
 
@@ -692,47 +695,76 @@ function OperationsSettings() {
           )}
         </div>
 
-        {/* Retail Stock Override Toggle */}
-        <div
-          className={cn(
-            "rounded-xl border-2 p-5 transition-colors",
-            retailStockOverride ? "border-amber-300 bg-amber-50" : "border-gray-100 bg-white"
-          )}
-        >
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-1 flex-1">
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-semibold text-gray-800">
-                  Allow Retail Portal to Invoice Out-of-Stock Items
-                </p>
-                {retailStockOverride && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold">
-                    <AlertTriangle className="h-3 w-3" />
-                    ACTIVE
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                When enabled, the retail portal can create walk-in sales invoices for any product even if
-                assigned stock is 0. Turn this off to restore normal retail stock validation.
-              </p>
-            </div>
-            <Switch
-              checked={retailStockOverride}
-              onCheckedChange={handleRetailStockToggle}
-              disabled={loading || savingRetailStock}
-              className="shrink-0 mt-0.5 data-[state=checked]:bg-amber-500"
-            />
+        {/* Unified Business Portal Stock Override Settings */}
+        <div className="space-y-3">
+          <div>
+            <p className="text-sm font-semibold text-gray-800">Allow Business Portals to Invoice Out-of-Stock Items</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              When enabled, staff/office users can create customer bills for products even if stock is 0.
+              Turn this off to enforce normal stock validation.
+            </p>
           </div>
-          {retailStockOverride && (
-            <div className="mt-4 flex items-start gap-2 bg-amber-100 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
-              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-              <span>
-                <strong>Override is ON.</strong> Retail portal can currently invoice any
-                item regardless of stock levels. Remember to turn this off when normal stock validation is required.
-              </span>
-            </div>
-          )}
+          {(["wireman", "sierra", "orange", "distribution", "retail"] as const).map((portal) => {
+            const active = portalStockOverrides[portal];
+            const saving = savingPortalStock === portal;
+            const label = portal === "retail" ? "Retail" : portal.charAt(0).toUpperCase() + portal.slice(1) + " Agency";
+            const activeColors = {
+              wireman: "border-red-300 bg-red-50 text-red-700",
+              sierra: "border-purple-300 bg-purple-50 text-purple-700",
+              orange: "border-orange-300 bg-orange-50 text-orange-700",
+              distribution: "border-blue-300 bg-blue-50 text-blue-700",
+              retail: "border-amber-300 bg-amber-50 text-amber-700",
+            };
+            const activeColor = activeColors[portal];
+            const inactiveColor = "border-gray-100 bg-white";
+            const switchColors = {
+              wireman: "data-[state=checked]:bg-red-500",
+              sierra: "data-[state=checked]:bg-purple-500",
+              orange: "data-[state=checked]:bg-orange-500",
+              distribution: "data-[state=checked]:bg-blue-500",
+              retail: "data-[state=checked]:bg-amber-500",
+            };
+
+            return (
+              <div
+                key={portal}
+                className={cn(
+                  "rounded-xl border-2 p-4 transition-colors",
+                  active ? activeColor : inactiveColor
+                )}
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-gray-800">{label}</p>
+                      {active && (
+                        <span className={cn(
+                          "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold",
+                          portal === "wireman" && "bg-red-100 text-red-700",
+                          portal === "sierra" && "bg-purple-100 text-purple-700",
+                          portal === "orange" && "bg-orange-100 text-orange-700",
+                          portal === "distribution" && "bg-blue-100 text-blue-700",
+                          portal === "retail" && "bg-amber-100 text-amber-700",
+                        )}>
+                          <AlertTriangle className="h-3 w-3 mr-0.5" />
+                          ACTIVE
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {active ? `Out-of-stock invoicing is active for ${label}` : `Normal stock validation enforced for ${label}`}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={active}
+                    onCheckedChange={(v) => handlePortalStockToggle(portal, v)}
+                    disabled={loading || saving}
+                    className={cn("shrink-0", switchColors[portal])}
+                  />
+                </div>
+              </div>
+            );
+          })}
         </div>
 
         {/* Rep Customer Creation Toggle */}

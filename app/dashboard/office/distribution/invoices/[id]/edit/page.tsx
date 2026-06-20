@@ -199,12 +199,12 @@ export default function DistributionEditInvoicePage({
           fetch("/api/users"),
           fetch(`/api/invoices/${id}`),
           fetch(`/api/invoices/${id}/returns`),
-          fetch("/api/settings/invoice-override").catch(() => null),
+          fetch("/api/settings/portal-stock-override").catch(() => null),
         ]);
 
         if (overrideRes?.ok) {
           const overrideData = await overrideRes.json();
-          setOutOfStockOverride(overrideData.enabled ?? false);
+          setOutOfStockOverride(overrideData.distribution ?? false);
         }
 
         const custData = await custRes.json();

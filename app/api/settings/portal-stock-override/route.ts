@@ -2,7 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 const SETTING_KEY = "portal_out_of_stock_invoicing";
-const defaultValue = { wireman: false, sierra: false, orange: false, distribution: false, retail: false };
+
+const defaultValue = {
+  wireman: false,
+  sierra: false,
+  orange: false,
+  distribution: false,
+  retail: false,
+};
 
 export async function GET() {
   try {
@@ -12,28 +19,26 @@ export async function GET() {
       .eq("key", SETTING_KEY)
       .single();
 
-    if (error) {
-      // Table may not exist yet or row missing — default to disabled
-      return NextResponse.json({ enabled: false });
-    }
+    if (error) return NextResponse.json(defaultValue);
 
-    return NextResponse.json({ enabled: data?.value?.retail ?? false });
+    return NextResponse.json({ ...defaultValue, ...(data?.value ?? {}) });
   } catch {
-    return NextResponse.json({ enabled: false });
+    return NextResponse.json(defaultValue);
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { enabled } = await request.json();
+    const body = await request.json();
 
+    // Fetch current value and merge partial update
     const { data: current } = await supabaseAdmin
       .from("app_settings")
       .select("value")
       .eq("key", SETTING_KEY)
       .single();
 
-    const merged = { ...defaultValue, ...(current?.value ?? {}), retail: Boolean(enabled) };
+    const merged = { ...defaultValue, ...(current?.value ?? {}), ...body };
 
     const { error } = await supabaseAdmin
       .from("app_settings")
@@ -44,7 +49,7 @@ export async function POST(request: NextRequest) {
 
     if (error) throw error;
 
-    return NextResponse.json({ success: true, enabled: Boolean(enabled) });
+    return NextResponse.json({ success: true, ...merged });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
