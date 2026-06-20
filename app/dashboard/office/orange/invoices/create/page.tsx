@@ -23,6 +23,8 @@ import {
   Share2,
   Copy,
   AlertTriangle,
+  Edit,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -138,6 +140,7 @@ export default function CreateInvoicePage() {
   // Items State
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [extraDiscount, setExtraDiscount] = useState<number>(0);
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
 
   // Popover States
   const [customerOpen, setCustomerOpen] = useState(false);
@@ -276,21 +279,32 @@ export default function CreateInvoicePage() {
     const product = products.find((p) => p.id === productId);
     if (!product) return;
 
+    let additionalStock = 0;
+    if (editingItemId) {
+      const editingItem = items.find((i) => i.id === editingItemId);
+      if (editingItem && editingItem.productId === productId) {
+        additionalStock = editingItem.quantity + editingItem.freeQuantity;
+      }
+    }
+
     setCurrentItem({
       productId: product.id,
       sku: product.sku,
-      quantity: "",
-      freeQuantity: "",
+      quantity: editingItemId ? currentItem.quantity : "",
+      freeQuantity: editingItemId ? currentItem.freeQuantity : "",
       unit: product.unit_of_measure,
       mrp: product.mrp,
       unitPrice: product.selling_price,
-      discountPercent: "",
-      stockAvailable: product.stock_quantity,
+      discountPercent: editingItemId ? currentItem.discountPercent : "",
+      stockAvailable: product.stock_quantity + additionalStock,
     });
 
-    setTimeout(() => {
-      qtyInputRef.current?.focus({ preventScroll: true });
-    }, 100);
+    setProductOpen(false);
+    if (!editingItemId) {
+      setTimeout(() => {
+        qtyInputRef.current?.focus({ preventScroll: true });
+      }, 100);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -316,7 +330,7 @@ export default function CreateInvoicePage() {
     }
 
     const totalReqQty = qty + freeQty;
-    if (!outOfStockOverride && totalReqQty > currentItem.stockAvailable) {
+    if (!outOfStockOverride && !editingItemId && totalReqQty > currentItem.stockAvailable) {
       toast.error(
         `Insufficient stock! Available: ${currentItem.stockAvailable}`
       );
@@ -324,7 +338,7 @@ export default function CreateInvoicePage() {
     }
 
     const product = products.find((p) => p.id === currentItem.productId);
-    if (!product) return;
+    if (!product && !editingItemId) return;
 
     const unitPrice = currentItem.unitPrice === "" ? 0 : Number(currentItem.unitPrice);
     const mrp = currentItem.mrp === "" ? 0 : Number(currentItem.mrp);
@@ -335,11 +349,11 @@ export default function CreateInvoicePage() {
     const netTotal = grossTotal - discountAmount;
 
     const newItem: InvoiceItem = {
-      id: Date.now().toString(),
+      id: editingItemId || Date.now().toString(),
       productId: currentItem.productId,
-      sku: product.sku,
-      productName: product.name,
-      unit: product.unit_of_measure,
+      sku: product?.sku || currentItem.sku,
+      productName: product?.name || "",
+      unit: product?.unit_of_measure || currentItem.unit,
       quantity: qty,
       freeQuantity: freeQty,
       mrp: mrp,
@@ -349,8 +363,44 @@ export default function CreateInvoicePage() {
       total: netTotal,
     };
 
-    setItems([...items, newItem]);
+    if (editingItemId) {
+      setItems(items.map((i) => (i.id === editingItemId ? newItem : i)));
+      setEditingItemId(null);
+    } else {
+      setItems([...items, newItem]);
+    }
 
+    setCurrentItem({
+      productId: "",
+      sku: "",
+      quantity: "",
+      freeQuantity: "",
+      unit: "",
+      mrp: "",
+      unitPrice: "",
+      discountPercent: "",
+      stockAvailable: 0,
+    });
+  };
+
+  const handleEditItem = (item: InvoiceItem) => {
+    setEditingItemId(item.id);
+    const product = products.find((p) => p.id === item.productId);
+    setCurrentItem({
+      productId: item.productId,
+      sku: item.sku,
+      quantity: item.quantity,
+      freeQuantity: item.freeQuantity,
+      unit: item.unit,
+      mrp: item.mrp,
+      unitPrice: item.unitPrice,
+      discountPercent: item.discountPercent,
+      stockAvailable: (product?.stock_quantity || 0) + item.quantity + item.freeQuantity,
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingItemId(null);
     setCurrentItem({
       productId: "",
       sku: "",
@@ -366,6 +416,20 @@ export default function CreateInvoicePage() {
 
   const handleRemoveItem = (id: string) => {
     setItems(items.filter((item) => item.id !== id));
+    if (editingItemId === id) {
+      setEditingItemId(null);
+      setCurrentItem({
+        productId: "",
+        sku: "",
+        quantity: "",
+        freeQuantity: "",
+        unit: "",
+        mrp: "",
+        unitPrice: "",
+        discountPercent: "",
+        stockAvailable: 0,
+      });
+    }
   };
 
   const handleSaveAction = async (action: "save" | "print" | "download") => {
@@ -488,9 +552,9 @@ export default function CreateInvoicePage() {
   const extraDiscountAmount = (subtotal * extraDiscount) / 100;
   const grandTotal = subtotal - extraDiscountAmount;
 
-  const availableProducts = products.filter(
-    (p) => !items.some((i) => i.productId === p.id)
-  );
+  const availableProducts = editingItemId
+    ? products
+    : products.filter((p) => !items.some((i) => i.productId === p.id));
 
   const safeUnitPrice = currentItem.unitPrice === "" ? 0 : Number(currentItem.unitPrice);
   const safeQuantity = currentItem.quantity === "" ? 0 : Number(currentItem.quantity);
@@ -677,11 +741,11 @@ export default function CreateInvoicePage() {
           </Card>
 
           {/* 2. Add Items */}
-          <Card>
+          <Card className={editingItemId ? "border-orange-500 border-2" : ""}>
             <CardHeader>
-              <CardTitle>Add Products</CardTitle>
+              <CardTitle>{editingItemId ? "Edit Item" : "Add Products"}</CardTitle>
               <CardDescription>
-                Showing stock for your assigned location
+                {editingItemId ? "Update item details, then click Update Item" : "Showing stock for your assigned location"}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -694,14 +758,14 @@ export default function CreateInvoicePage() {
                       <Loader2 className="inline h-3 w-3 animate-spin ml-2" />
                     )}
                   </Label>
-                  <Popover open={productOpen} onOpenChange={setProductOpen}>
+                  <Popover open={!editingItemId && productOpen} onOpenChange={setProductOpen}>
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
                         role="combobox"
                         aria-expanded={productOpen}
                         className="w-full justify-between"
-                        disabled={stockLoading}
+                        disabled={stockLoading || !!editingItemId}
                       >
                         {currentItem.productId
                           ? products.find((p) => p.id === currentItem.productId)
@@ -784,6 +848,7 @@ export default function CreateInvoicePage() {
                       })
                     }
                     onKeyDown={handleKeyDown}
+                    disabled={!currentItem.productId}
                   />
                 </div>
                 <div className="space-y-2">
@@ -799,6 +864,7 @@ export default function CreateInvoicePage() {
                       })
                     }
                     onKeyDown={handleKeyDown}
+                    disabled={!currentItem.productId}
                   />
                 </div>
                 <div className="space-y-2">
@@ -834,11 +900,12 @@ export default function CreateInvoicePage() {
                     onChange={(e) =>
                       setCurrentItem({
                         ...currentItem,
-                        mrp: Number(e.target.value),
+                        mrp: e.target.value === "" ? "" : Number(e.target.value),
                       })
                     }
                     onKeyDown={handleKeyDown}
                     placeholder="0.00"
+                    disabled={!currentItem.productId}
                   />
                 </div>
                 <div className="space-y-2">
@@ -849,11 +916,12 @@ export default function CreateInvoicePage() {
                     onChange={(e) =>
                       setCurrentItem({
                         ...currentItem,
-                        unitPrice: Number(e.target.value),
+                        unitPrice: e.target.value === "" ? "" : Number(e.target.value),
                       })
                     }
                     onKeyDown={handleKeyDown}
                     placeholder="0.00"
+                    disabled={!currentItem.productId}
                   />
                 </div>
                 <div className="space-y-2">
@@ -866,11 +934,12 @@ export default function CreateInvoicePage() {
                     onChange={(e) =>
                       setCurrentItem({
                         ...currentItem,
-                        discountPercent: Number(e.target.value),
+                        discountPercent: e.target.value === "" ? "" : Number(e.target.value),
                       })
                     }
                     onKeyDown={handleKeyDown}
                     placeholder="0"
+                    disabled={!currentItem.productId}
                   />
                 </div>
                 <div className="space-y-2">
@@ -887,15 +956,32 @@ export default function CreateInvoicePage() {
               </div>
 
               {/* Add Button */}
-              <Button
-                onClick={handleAddItem}
-                className="w-full bg-orange-600 hover:bg-orange-700"
-                variant="default"
-                disabled={!currentItem.productId}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add to Bill
-              </Button>
+              <div className="flex gap-2">
+                {editingItemId && (
+                  <Button variant="outline" onClick={handleCancelEdit}>
+                    <X className="w-4 h-4 mr-2" />
+                    Cancel
+                  </Button>
+                )}
+                <Button
+                  onClick={handleAddItem}
+                  className="flex-1 bg-orange-600 hover:bg-orange-700"
+                  variant="default"
+                  disabled={!currentItem.productId}
+                >
+                  {editingItemId ? (
+                    <>
+                      <Save className="w-4 h-4 mr-2" />
+                      Update Item
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add to Bill
+                    </>
+                  )}
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
@@ -919,7 +1005,7 @@ export default function CreateInvoicePage() {
                       </TableHead>
                       <TableHead className="text-center w-20">Disc%</TableHead>
                       <TableHead className="text-right w-28">Total</TableHead>
-                      <TableHead className="w-12"></TableHead>
+                      <TableHead className="w-16"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -935,7 +1021,7 @@ export default function CreateInvoicePage() {
                       </TableRow>
                     ) : (
                       items.map((item, idx) => (
-                        <TableRow key={item.id}>
+                        <TableRow key={item.id} className={editingItemId === item.id ? "bg-orange-50" : ""}>
                           <TableCell>{idx + 1}</TableCell>
                           <TableCell>
                             <div className="font-medium">
@@ -963,13 +1049,24 @@ export default function CreateInvoicePage() {
                             {item.total.toLocaleString()}
                           </TableCell>
                           <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              onClick={() => handleRemoveItem(item.id)}
-                            >
-                              <Trash2 className="w-4 h-4 text-destructive" />
-                            </Button>
+                            <div className="flex gap-1 justify-end">
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                onClick={() => handleEditItem(item)}
+                                disabled={editingItemId !== null}
+                              >
+                                <Edit className="w-4 h-4 text-blue-500" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                onClick={() => handleRemoveItem(item.id)}
+                                disabled={editingItemId !== null}
+                              >
+                                <Trash2 className="w-4 h-4 text-destructive" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))
