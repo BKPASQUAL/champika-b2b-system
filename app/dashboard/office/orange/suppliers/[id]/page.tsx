@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { ProductDialogs } from "../../products/_components/ProductDialogs";
+import { ProductFormData } from "../../products/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -30,6 +32,7 @@ import {
   PackageCheck,
   Archive,
   AlertTriangle,
+  Plus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -44,6 +47,34 @@ export default function SupplierDetailsPage() {
   const [purchaseStart, setPurchaseStart] = useState("");
   const [purchaseEnd, setPurchaseEnd] = useState("");
 
+  // --- Products State ---
+  const [supplierProducts, setSupplierProducts] = useState<any[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [categories, setCategories] = useState<{ id: string; name: string; parent_id?: string }[]>([]);
+  
+  const [isAddProductDialogOpen, setIsAddProductDialogOpen] = useState(false);
+  const [productFormData, setProductFormData] = useState<ProductFormData>({
+    sku: "",
+    companyCode: "",
+    name: "Orange ",
+    category: "",
+    subCategory: "",
+    brand: "",
+    subBrand: "",
+    modelType: "",
+    subModel: "",
+    sizeSpec: "",
+    supplier: "Orange (Orel Corporation)",
+    stock: "",
+    minStock: "",
+    mrp: "",
+    sellingPrice: "",
+    costPrice: "",
+    images: [],
+    unitOfMeasure: "Pcs",
+    isActive: true,
+  });
+
   const rawId = params?.id;
   const supplierId = Array.isArray(rawId) ? rawId[0] : rawId;
 
@@ -52,6 +83,32 @@ export default function SupplierDetailsPage() {
     fetchSupplierDetails();
   }, [supplierId]);
 
+  const fetchSupplierProducts = async (supplierName: string) => {
+    try {
+      setLoadingProducts(true);
+      // Fetch products
+      const res = await fetch("/api/products");
+      if (res.ok) {
+        const allProducts = await res.json();
+        const filtered = allProducts.filter((p: any) => 
+          p.supplier?.toLowerCase() === supplierName.toLowerCase() || 
+          p.supplier?.toLowerCase().includes(supplierName.toLowerCase())
+        );
+        setSupplierProducts(filtered);
+      }
+      
+      // Fetch categories
+      const catRes = await fetch("/api/settings/categories?type=category");
+      if (catRes.ok) {
+        setCategories(await catRes.json());
+      }
+    } catch (err) {
+      console.error("Failed to load products", err);
+    } finally {
+      setLoadingProducts(false);
+    }
+  };
+
   const fetchSupplierDetails = async () => {
     try {
       setLoading(true);
@@ -59,11 +116,74 @@ export default function SupplierDetailsPage() {
       if (!res.ok) throw new Error("Failed to load supplier details");
       const jsonData = await res.json();
       setData(jsonData);
+
+      if (jsonData.supplier?.name) {
+         setProductFormData(prev => ({ ...prev, supplier: jsonData.supplier.name }));
+         fetchSupplierProducts(jsonData.supplier.name);
+      }
     } catch (error) {
       console.error(error);
       toast.error("Error loading supplier data");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveProduct = async () => {
+    if (!productFormData.name || !productFormData.category) {
+      toast.error("Please fill required fields (Name, Category)");
+      return;
+    }
+
+    const payload = {
+      ...productFormData,
+      stock: Number(productFormData.stock) || 0,
+      minStock: Number(productFormData.minStock) || 0,
+      mrp: Number(productFormData.mrp) || 0,
+      sellingPrice: Number(productFormData.sellingPrice) || 0,
+      costPrice: Number(productFormData.costPrice) || 0,
+    };
+
+    try {
+      const res = await fetch("/api/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const resData = await res.json();
+      if (!res.ok) throw new Error(resData.error || "Failed to create product");
+      
+      toast.success("Product created successfully!");
+      setIsAddProductDialogOpen(false);
+      
+      // Reset form (keep supplier name)
+      setProductFormData({
+        sku: "",
+        companyCode: "",
+        name: "Orange ",
+        category: "",
+        subCategory: "",
+        brand: "",
+        subBrand: "",
+        modelType: "",
+        subModel: "",
+        sizeSpec: "",
+        supplier: data?.supplier?.name || "Orange (Orel Corporation)",
+        stock: "",
+        minStock: "",
+        mrp: "",
+        sellingPrice: "",
+        costPrice: "",
+        images: [],
+        unitOfMeasure: "Pcs",
+        isActive: true,
+      });
+
+      if (data?.supplier?.name) {
+        fetchSupplierProducts(data.supplier.name);
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Operation failed");
     }
   };
 
@@ -255,9 +375,10 @@ export default function SupplierDetailsPage() {
 
       {/* Tabs */}
       <Tabs defaultValue="purchases" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 md:w-[400px]">
+        <TabsList className="grid w-full grid-cols-3 md:w-[600px]">
           <TabsTrigger value="purchases">Purchase History</TabsTrigger>
           <TabsTrigger value="payments">Payment History</TabsTrigger>
+          <TabsTrigger value="products">Products</TabsTrigger>
         </TabsList>
 
         {/* Purchases Tab */}
@@ -430,7 +551,76 @@ export default function SupplierDetailsPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Products Tab */}
+        <TabsContent value="products" className="mt-4">
+          <Card>
+            <CardHeader>
+              <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
+                <CardTitle>Supplier Products</CardTitle>
+                <Button
+                  onClick={() => setIsAddProductDialogOpen(true)}
+                  className="bg-orange-600 hover:bg-orange-700"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Item
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {loadingProducts ? (
+                <div className="py-8 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>SKU</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead className="text-right">Stock</TableHead>
+                      <TableHead className="text-right">Price (Rs)</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {supplierProducts.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                          No products found for this supplier.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      supplierProducts.map((prod: any) => (
+                        <TableRow key={prod.id}>
+                          <TableCell className="font-medium">{prod.sku}</TableCell>
+                          <TableCell>{prod.name}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{prod.category}</Badge>
+                          </TableCell>
+                          <TableCell className="text-right">{prod.stock}</TableCell>
+                          <TableCell className="text-right font-medium">{Number(prod.sellingPrice || prod.selling_price || 0).toLocaleString()}</TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+
+      <ProductDialogs
+        isAddDialogOpen={isAddProductDialogOpen}
+        setIsAddDialogOpen={setIsAddProductDialogOpen}
+        formData={productFormData}
+        setFormData={setProductFormData}
+        onSave={handleSaveProduct}
+        selectedProduct={null}
+        isDeleteDialogOpen={false}
+        setIsDeleteDialogOpen={() => {}}
+        onDeleteConfirm={() => {}}
+        categories={categories}
+      />
     </div>
   );
 }
