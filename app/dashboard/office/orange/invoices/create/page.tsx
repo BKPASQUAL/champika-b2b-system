@@ -143,15 +143,25 @@ export default function CreateInvoicePage() {
   const [customerOpen, setCustomerOpen] = useState(false);
   const [productOpen, setProductOpen] = useState(false);
 
-  const [currentItem, setCurrentItem] = useState({
+  const [currentItem, setCurrentItem] = useState<{
+    productId: string;
+    sku: string;
+    quantity: number | "";
+    freeQuantity: number | "";
+    unit: string;
+    mrp: number | "";
+    unitPrice: number | "";
+    discountPercent: number | "";
+    stockAvailable: number;
+  }>({
     productId: "",
     sku: "",
-    quantity: 1,
-    freeQuantity: 0,
+    quantity: "",
+    freeQuantity: "",
     unit: "",
-    mrp: 0,
-    unitPrice: 0,
-    discountPercent: 0,
+    mrp: "",
+    unitPrice: "",
+    discountPercent: "",
     stockAvailable: 0,
   });
 
@@ -269,12 +279,12 @@ export default function CreateInvoicePage() {
     setCurrentItem({
       productId: product.id,
       sku: product.sku,
-      quantity: 1,
-      freeQuantity: 0,
+      quantity: "",
+      freeQuantity: "",
       unit: product.unit_of_measure,
       mrp: product.mrp,
       unitPrice: product.selling_price,
-      discountPercent: 0,
+      discountPercent: "",
       stockAvailable: product.stock_quantity,
     });
 
@@ -297,7 +307,15 @@ export default function CreateInvoicePage() {
       return;
     }
 
-    const totalReqQty = currentItem.quantity + currentItem.freeQuantity;
+    const qty = currentItem.quantity === "" ? 0 : Number(currentItem.quantity);
+    const freeQty = currentItem.freeQuantity === "" ? 0 : Number(currentItem.freeQuantity);
+
+    if (qty <= 0) {
+      toast.error("Quantity must be greater than 0");
+      return;
+    }
+
+    const totalReqQty = qty + freeQty;
     if (!outOfStockOverride && totalReqQty > currentItem.stockAvailable) {
       toast.error(
         `Insufficient stock! Available: ${currentItem.stockAvailable}`
@@ -308,8 +326,12 @@ export default function CreateInvoicePage() {
     const product = products.find((p) => p.id === currentItem.productId);
     if (!product) return;
 
-    const grossTotal = currentItem.unitPrice * currentItem.quantity;
-    const discountAmount = (grossTotal * currentItem.discountPercent) / 100;
+    const unitPrice = currentItem.unitPrice === "" ? 0 : Number(currentItem.unitPrice);
+    const mrp = currentItem.mrp === "" ? 0 : Number(currentItem.mrp);
+    const discountPercent = currentItem.discountPercent === "" ? 0 : Number(currentItem.discountPercent);
+
+    const grossTotal = unitPrice * qty;
+    const discountAmount = (grossTotal * discountPercent) / 100;
     const netTotal = grossTotal - discountAmount;
 
     const newItem: InvoiceItem = {
@@ -318,11 +340,11 @@ export default function CreateInvoicePage() {
       sku: product.sku,
       productName: product.name,
       unit: product.unit_of_measure,
-      quantity: currentItem.quantity,
-      freeQuantity: currentItem.freeQuantity,
-      mrp: currentItem.mrp,
-      unitPrice: currentItem.unitPrice,
-      discountPercent: currentItem.discountPercent,
+      quantity: qty,
+      freeQuantity: freeQty,
+      mrp: mrp,
+      unitPrice: unitPrice,
+      discountPercent: discountPercent,
       discountAmount: discountAmount,
       total: netTotal,
     };
@@ -332,12 +354,12 @@ export default function CreateInvoicePage() {
     setCurrentItem({
       productId: "",
       sku: "",
-      quantity: 1,
-      freeQuantity: 0,
+      quantity: "",
+      freeQuantity: "",
       unit: "",
-      mrp: 0,
-      unitPrice: 0,
-      discountPercent: 0,
+      mrp: "",
+      unitPrice: "",
+      discountPercent: "",
       stockAvailable: 0,
     });
   };
@@ -470,11 +492,11 @@ export default function CreateInvoicePage() {
     (p) => !items.some((i) => i.productId === p.id)
   );
 
-  const currentDiscountAmt =
-    (currentItem.unitPrice *
-      currentItem.quantity *
-      currentItem.discountPercent) /
-    100;
+  const safeUnitPrice = currentItem.unitPrice === "" ? 0 : Number(currentItem.unitPrice);
+  const safeQuantity = currentItem.quantity === "" ? 0 : Number(currentItem.quantity);
+  const safeDiscount = currentItem.discountPercent === "" ? 0 : Number(currentItem.discountPercent);
+
+  const currentDiscountAmt = (safeUnitPrice * safeQuantity * safeDiscount) / 100;
 
   if (loading && !salesRepId) {
     return (
@@ -758,7 +780,7 @@ export default function CreateInvoicePage() {
                     onChange={(e) =>
                       setCurrentItem({
                         ...currentItem,
-                        quantity: Number(e.target.value),
+                        quantity: e.target.value === "" ? "" : Number(e.target.value),
                       })
                     }
                     onKeyDown={handleKeyDown}
@@ -773,7 +795,7 @@ export default function CreateInvoicePage() {
                     onChange={(e) =>
                       setCurrentItem({
                         ...currentItem,
-                        freeQuantity: Number(e.target.value),
+                        freeQuantity: e.target.value === "" ? "" : Number(e.target.value),
                       })
                     }
                     onKeyDown={handleKeyDown}
@@ -855,7 +877,7 @@ export default function CreateInvoicePage() {
                   <Label>Total</Label>
                   <Input
                     value={(
-                      currentItem.unitPrice * currentItem.quantity -
+                      safeUnitPrice * safeQuantity -
                       currentDiscountAmt
                     ).toFixed(2)}
                     disabled

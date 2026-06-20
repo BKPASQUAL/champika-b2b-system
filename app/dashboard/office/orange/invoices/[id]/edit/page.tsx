@@ -147,9 +147,26 @@ export default function OrangeEditInvoicePage({
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [extraDiscount, setExtraDiscount] = useState<number>(0);
 
-  const [currentItem, setCurrentItem] = useState({
-    productId: "", sku: "", quantity: 1, freeQuantity: 0,
-    unit: "", mrp: 0, unitPrice: 0, discountPercent: 0, stockAvailable: 0,
+  const [currentItem, setCurrentItem] = useState<{
+    productId: string;
+    sku: string;
+    quantity: number | "";
+    freeQuantity: number | "";
+    unit: string;
+    mrp: number | "";
+    unitPrice: number | "";
+    discountPercent: number | "";
+    stockAvailable: number;
+  }>({
+    productId: "",
+    sku: "",
+    quantity: "",
+    freeQuantity: "",
+    unit: "",
+    mrp: "",
+    unitPrice: "",
+    discountPercent: "",
+    stockAvailable: 0,
   });
 
   const lockedStatuses = ["Loading", "In Transit", "Delivered", "Completed", "Cancelled"];
@@ -283,10 +300,10 @@ export default function OrangeEditInvoicePage({
 
     setCurrentItem({
       productId: product.id, sku: product.sku,
-      quantity: editingItemId ? currentItem.quantity : 1,
-      freeQuantity: editingItemId ? currentItem.freeQuantity : 0,
+      quantity: editingItemId ? currentItem.quantity : "",
+      freeQuantity: editingItemId ? currentItem.freeQuantity : "",
       unit: product.unit_of_measure, mrp: product.mrp,
-      unitPrice: product.selling_price, discountPercent: 0,
+      unitPrice: product.selling_price, discountPercent: "",
       stockAvailable: product.stock_quantity + additionalStock,
     });
 
@@ -302,15 +319,21 @@ export default function OrangeEditInvoicePage({
     if (isReadOnly) return;
     if (!currentItem.productId) { toast.error("Please select a product"); return; }
 
-    const totalReqQty = currentItem.quantity + currentItem.freeQuantity;
+    const qty = currentItem.quantity === "" ? 0 : Number(currentItem.quantity);
+    const freeQty = currentItem.freeQuantity === "" ? 0 : Number(currentItem.freeQuantity);
+
+    const totalReqQty = qty + freeQty;
     if (!outOfStockOverride && !editingItemId && totalReqQty > currentItem.stockAvailable) {
       toast.error(`Insufficient stock! Available: ${currentItem.stockAvailable}`);
       return;
     }
 
     const product = products.find((p) => p.id === currentItem.productId);
-    const discountAmount = (currentItem.unitPrice * currentItem.quantity * currentItem.discountPercent) / 100;
-    const netTotal = currentItem.unitPrice * currentItem.quantity - discountAmount;
+    const unitPrice = currentItem.unitPrice === "" ? 0 : Number(currentItem.unitPrice);
+    const mrp = currentItem.mrp === "" ? 0 : Number(currentItem.mrp);
+    const discountPercent = currentItem.discountPercent === "" ? 0 : Number(currentItem.discountPercent);
+    const discountAmount = (unitPrice * qty * discountPercent) / 100;
+    const netTotal = unitPrice * qty - discountAmount;
 
     const newItem: InvoiceItem = {
       id: editingItemId || Date.now().toString(),
@@ -318,9 +341,9 @@ export default function OrangeEditInvoicePage({
       sku: product?.sku || currentItem.sku,
       productName: product?.name || "",
       unit: product?.unit_of_measure || currentItem.unit,
-      quantity: currentItem.quantity, freeQuantity: currentItem.freeQuantity,
-      mrp: currentItem.mrp, unitPrice: currentItem.unitPrice,
-      discountPercent: currentItem.discountPercent, discountAmount, total: netTotal,
+      quantity: qty, freeQuantity: freeQty,
+      mrp: mrp, unitPrice: unitPrice,
+      discountPercent: discountPercent, discountAmount, total: netTotal,
     };
 
     if (editingItemId) {
@@ -330,7 +353,7 @@ export default function OrangeEditInvoicePage({
       setItems([...items, newItem]);
     }
 
-    setCurrentItem({ productId: "", sku: "", quantity: 1, freeQuantity: 0, unit: "", mrp: 0, unitPrice: 0, discountPercent: 0, stockAvailable: 0 });
+    setCurrentItem({ productId: "", sku: "", quantity: "", freeQuantity: "", unit: "", mrp: "", unitPrice: "", discountPercent: "", stockAvailable: 0 });
   };
 
   const handleEditItem = (item: InvoiceItem) => {
@@ -346,7 +369,7 @@ export default function OrangeEditInvoicePage({
 
   const handleCancelEdit = () => {
     setEditingItemId(null);
-    setCurrentItem({ productId: "", sku: "", quantity: 1, freeQuantity: 0, unit: "", mrp: 0, unitPrice: 0, discountPercent: 0, stockAvailable: 0 });
+    setCurrentItem({ productId: "", sku: "", quantity: "", freeQuantity: "", unit: "", mrp: "", unitPrice: "", discountPercent: "", stockAvailable: 0 });
   };
 
   const handleRemoveItem = (itemId: string) => {
@@ -399,8 +422,12 @@ export default function OrangeEditInvoicePage({
   const extraDiscountAmount = (subtotal * extraDiscount) / 100;
   const grandTotal = subtotal - extraDiscountAmount - refundTotal;
 
+  const safeUnitPrice = currentItem.unitPrice === "" ? 0 : Number(currentItem.unitPrice);
+  const safeQuantity = currentItem.quantity === "" ? 0 : Number(currentItem.quantity);
+  const safeDiscount = currentItem.discountPercent === "" ? 0 : Number(currentItem.discountPercent);
+
   const availableProducts = editingItemId ? products : products.filter((p) => !items.some((i) => i.productId === p.id));
-  const currentDiscountAmt = (currentItem.unitPrice * currentItem.quantity * currentItem.discountPercent) / 100;
+  const currentDiscountAmt = (safeUnitPrice * safeQuantity * safeDiscount) / 100;
 
   if (loading) {
     return (
@@ -595,11 +622,11 @@ export default function OrangeEditInvoicePage({
               <div className="grid grid-cols-4 gap-4">
                 <div className="space-y-2">
                   <Label>Quantity</Label>
-                  <Input ref={qtyInputRef} type="number" min="1" value={currentItem.quantity} onChange={(e) => setCurrentItem({ ...currentItem, quantity: Number(e.target.value) })} onKeyDown={handleKeyDown} disabled={!currentItem.productId || isReadOnly} />
+                  <Input ref={qtyInputRef} type="number" min="1" value={currentItem.quantity} onChange={(e) => setCurrentItem({ ...currentItem, quantity: e.target.value === "" ? "" : Number(e.target.value) })} onKeyDown={handleKeyDown} disabled={!currentItem.productId || isReadOnly} />
                 </div>
                 <div className="space-y-2">
                   <Label>Free Qty</Label>
-                  <Input type="number" min="0" value={currentItem.freeQuantity} onChange={(e) => setCurrentItem({ ...currentItem, freeQuantity: Number(e.target.value) })} onKeyDown={handleKeyDown} disabled={!currentItem.productId || isReadOnly} />
+                  <Input type="number" min="0" value={currentItem.freeQuantity} onChange={(e) => setCurrentItem({ ...currentItem, freeQuantity: e.target.value === "" ? "" : Number(e.target.value) })} onKeyDown={handleKeyDown} disabled={!currentItem.productId || isReadOnly} />
                 </div>
                 <div className="space-y-2">
                   <Label>Unit</Label>
@@ -614,19 +641,19 @@ export default function OrangeEditInvoicePage({
               <div className="grid grid-cols-4 gap-4">
                 <div className="space-y-2">
                   <Label>MRP</Label>
-                  <Input type="number" value={currentItem.mrp || ""} onChange={(e) => setCurrentItem({ ...currentItem, mrp: Number(e.target.value) })} onKeyDown={handleKeyDown} placeholder="0.00" disabled={!currentItem.productId || isReadOnly} />
+                  <Input type="number" value={currentItem.mrp || ""} onChange={(e) => setCurrentItem({ ...currentItem, mrp: e.target.value === "" ? "" : Number(e.target.value) })} onKeyDown={handleKeyDown} placeholder="0.00" disabled={!currentItem.productId || isReadOnly} />
                 </div>
                 <div className="space-y-2">
                   <Label>Unit Price</Label>
-                  <Input type="number" value={currentItem.unitPrice || ""} onChange={(e) => setCurrentItem({ ...currentItem, unitPrice: Number(e.target.value) })} onKeyDown={handleKeyDown} placeholder="0.00" disabled={!currentItem.productId || isReadOnly} />
+                  <Input type="number" value={currentItem.unitPrice || ""} onChange={(e) => setCurrentItem({ ...currentItem, unitPrice: e.target.value === "" ? "" : Number(e.target.value) })} onKeyDown={handleKeyDown} placeholder="0.00" disabled={!currentItem.productId || isReadOnly} />
                 </div>
                 <div className="space-y-2">
                   <Label>Discount %</Label>
-                  <Input type="number" min="0" max="100" value={currentItem.discountPercent || ""} onChange={(e) => setCurrentItem({ ...currentItem, discountPercent: Number(e.target.value) })} onKeyDown={handleKeyDown} placeholder="0" disabled={!currentItem.productId || isReadOnly} />
+                  <Input type="number" min="0" max="100" value={currentItem.discountPercent || ""} onChange={(e) => setCurrentItem({ ...currentItem, discountPercent: e.target.value === "" ? "" : Number(e.target.value) })} onKeyDown={handleKeyDown} placeholder="0" disabled={!currentItem.productId || isReadOnly} />
                 </div>
                 <div className="space-y-2">
                   <Label>Total</Label>
-                  <Input value={(currentItem.unitPrice * currentItem.quantity - currentDiscountAmt).toFixed(2)} disabled className="font-bold bg-muted" />
+                  <Input value={(safeUnitPrice * safeQuantity - currentDiscountAmt).toFixed(2)} disabled className="font-bold bg-muted" />
                 </div>
               </div>
 
