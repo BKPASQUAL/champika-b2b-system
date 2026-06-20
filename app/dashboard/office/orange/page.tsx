@@ -59,15 +59,16 @@ export default function OrangeDashboardPage() {
   const fetchDashboardData = () => { refetchInvoices(); refetchPurchases(); refetchInventory(); };
 
   const data = useMemo<DashboardData>(() => {
+    const activeInvoices = invoices.filter((inv: any) => inv.orderStatus !== "Cancelled");
     const todayStr = new Date().toISOString().split("T")[0];
-    const todayInvoices = invoices.filter(
+    const todayInvoices = activeInvoices.filter(
       (inv: any) => inv.date && inv.date.startsWith(todayStr)
     );
     const todaySalesVal = todayInvoices.reduce(
       (sum: number, inv: any) => sum + (inv.finalAmount || inv.totalAmount || 0),
       0
     );
-    const dueInvoices = invoices.filter(
+    const dueInvoices = activeInvoices.filter(
       (inv: any) =>
         inv.paymentStatus !== "Paid" &&
         (inv.dueAmount > 0 || inv.status === "Overdue")
@@ -88,7 +89,7 @@ export default function OrangeDashboardPage() {
         supplierDueAmount: supplierDue,
         lowStockCount: stockData?.stats?.lowStock || 0,
       },
-      recentInvoices: invoices.slice(0, 5),
+      recentInvoices: activeInvoices.slice(0, 5),
       urgentDueInvoices: dueInvoices.sort((a: any, b: any) => b.dueAmount - a.dueAmount).slice(0, 3),
     };
   }, [invoices, purchases, stockData]);

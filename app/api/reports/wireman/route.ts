@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
       .select(
         `id, total_amount, due_amount, status, invoice_no, created_at,
          customers (shop_name),
-         orders!inner (order_date, business_id)`
+         orders!inner (status, order_date, business_id)`
       )
       .eq("orders.business_id", WIREMAN_ID)
       .gte("orders.order_date", fromDate)
@@ -32,9 +32,11 @@ export async function GET(request: NextRequest) {
 
     if (invErr) throw new Error(`Invoices query failed: ${invErr.message}`);
 
-    const invoices = (rawInvoices || []).filter(
-      (inv: any) => !(inv.customers?.shop_name || "").toLowerCase().includes("champika hardware")
-    );
+    const invoices = (rawInvoices || [])
+      .filter((inv: any) => inv.orders?.status !== "Cancelled")
+      .filter(
+        (inv: any) => !(inv.customers?.shop_name || "").toLowerCase().includes("champika hardware")
+      );
 
     // ── 2. Purchases ─────────────────────────────────────────────────────────
     const { data: purchases, error: purErr } = await supabaseAdmin

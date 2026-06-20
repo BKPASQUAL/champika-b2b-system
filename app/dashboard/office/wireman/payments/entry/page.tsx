@@ -257,6 +257,7 @@ export default function WiremanPaymentEntryPage() {
             .filter(
               (inv: any) =>
                 inv.customerId === customerId &&
+                inv.orderStatus === "Delivered" &&
                 inv.status !== "Paid" &&
                 (inv.dueAmount ?? 0) > 0
             )

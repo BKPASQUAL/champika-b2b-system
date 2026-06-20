@@ -17,23 +17,24 @@ interface InvoiceStatsProps {
 }
 
 export function InvoiceStats({ invoices }: InvoiceStatsProps) {
-  const totalRevenue = invoices.reduce((sum, inv) => sum + inv.totalAmount, 0);
+  const activeInvoices = invoices.filter((inv) => inv.orderStatus !== "Cancelled");
+  const totalRevenue = activeInvoices.reduce((sum, inv) => sum + inv.totalAmount, 0);
 
   // ✅ Total Profit Calculation
-  const totalProfit = invoices.reduce((sum, inv) => sum + (inv.profit || 0), 0);
+  const totalProfit = activeInvoices.reduce((sum, inv) => sum + (inv.profit || 0), 0);
 
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const last30DaysRevenue = invoices
+  const last30DaysRevenue = activeInvoices
     .filter((inv) => new Date(inv.date) >= thirtyDaysAgo)
     .reduce((sum, inv) => sum + inv.totalAmount, 0);
 
-  const totalDue = invoices.reduce((sum, inv) => sum + inv.dueAmount, 0);
-  const paidCount = invoices.filter((inv) => inv.status === "Paid").length;
-  const pendingCount = invoices.filter(
+  const totalDue = activeInvoices.reduce((sum, inv) => sum + inv.dueAmount, 0);
+  const paidCount = activeInvoices.filter((inv) => inv.status === "Paid").length;
+  const pendingCount = activeInvoices.filter(
     (inv) => inv.status === "Unpaid" || inv.status === "Partial",
   ).length;
-  const overdueCount = invoices.filter(
+  const overdueCount = activeInvoices.filter(
     (inv) => inv.status === "Overdue",
   ).length;
 

@@ -19,7 +19,10 @@ export async function GET() {
       // All invoices — for revenue, due, overdue stats
       supabaseAdmin
         .from("invoices")
-        .select("id, total_amount, paid_amount, due_amount, status, created_at"),
+        .select(`
+          id, total_amount, paid_amount, due_amount, status, created_at,
+          orders (status)
+        `),
 
       // All orders — for pending order count
       supabaseAdmin
@@ -64,11 +67,11 @@ export async function GET() {
     ]);
 
     // --- KPI Calculations ---
-    const invoices = invoicesRes.data ?? [];
+    const invoices = (invoicesRes.data ?? []).filter((inv: any) => inv.orders?.status !== "Cancelled");
     const orders = ordersRes.data ?? [];
     const suppliers = suppliersRes.data ?? [];
     const pendingCheques = chequesRes.data ?? [];
-    const recentInvoices = recentInvoicesRes.data ?? [];
+    const recentInvoices = (recentInvoicesRes.data ?? []).filter((inv: any) => inv.orders?.status !== "Cancelled");
     const profitItems = profitItemsRes.data ?? [];
 
     const totalRevenue = invoices.reduce(

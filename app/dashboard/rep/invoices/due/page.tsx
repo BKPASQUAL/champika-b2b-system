@@ -102,6 +102,7 @@ export default function RepDueInvoicesPage() {
 
         const overdue = data
           .filter((inv: any) => {
+            if (inv.orderStatus !== "Delivered") return false;
             if (!inv.dueDate) return false;
             if (inv.dueAmount <= 0) return false;
             const due = new Date(inv.dueDate); due.setHours(0, 0, 0, 0);

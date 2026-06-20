@@ -75,7 +75,7 @@ export default function DistributionDashboardPage() {
     const overdueList = invoicesData.filter((inv: any) => {
       const dueDate = new Date(inv.createdAt);
       dueDate.setDate(dueDate.getDate() + 30);
-      return dueDate < now && inv.dueAmount > 0;
+      return dueDate < now && inv.dueAmount > 0 && inv.orderStatus !== "Cancelled";
     });
     return {
       stats: {

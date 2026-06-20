@@ -193,6 +193,7 @@ export default function AdminPaymentEntryPage() {
           const unpaid = orders.filter(
             (o) =>
               o.paymentStatus !== "Paid" &&
+              o.status !== "Cancelled" &&
               (o.status === "Delivered" ||
                 o.status === "Completed" ||
                 o.paymentStatus === "Unpaid" ||
@@ -309,6 +310,7 @@ export default function AdminPaymentEntryPage() {
             (o: any) =>
               (o.customerId === customerId || o.customer_id === customerId) &&
               o.paymentStatus !== "Paid" &&
+              o.status !== "Cancelled" &&
               (o.status === "Delivered" || o.status === "Completed" || o.paymentStatus === "Unpaid" || o.paymentStatus === "Partial")
           );
           const invoices: PendingInvoice[] = filtered.map((o: any) => ({
