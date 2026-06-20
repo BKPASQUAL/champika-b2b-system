@@ -126,6 +126,7 @@ export default function OrangeEditInvoicePage({
   const [salesRepId, setSalesRepId] = useState<string>("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [orderStatus, setOrderStatus] = useState("Delivered");
+  const [manualInvoiceNo, setManualInvoiceNo] = useState("");
   const [editReason, setEditReason] = useState("");
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [historyLogs, setHistoryLogs] = useState<InvoiceHistory[]>([]);
@@ -211,6 +212,7 @@ export default function OrangeEditInvoicePage({
         setInvoiceDate(invoice.date || new Date().toISOString().split("T")[0]);
         setInvoiceNumber(invoice.invoiceNo || "");
         setOrderStatus(invoice.orderStatus || "Delivered");
+        setManualInvoiceNo(invoice.manualInvoiceNo || "");
         const repId = invoice.salesRepId || user.id;
         setSalesRepId(repId);
 
@@ -399,6 +401,7 @@ export default function OrangeEditInvoicePage({
           customerId, salesRepId, invoiceDate, orderStatus, items, grandTotal,
           extraDiscountPercent: extraDiscount, extraDiscountAmount,
           userId, changeReason: editReason || "Updated Invoice",
+          manual_invoice_no: manualInvoiceNo,
         }),
       });
       if (!res.ok) {
@@ -560,6 +563,17 @@ export default function OrangeEditInvoicePage({
                 <div className="space-y-2">
                   <Label>Invoice Number</Label>
                   <Input value={invoiceNumber} disabled className="bg-muted font-mono text-sm" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Manual Book/Invoice No</Label>
+                  <Input
+                    value={manualInvoiceNo}
+                    onChange={(e) => setManualInvoiceNo(e.target.value)}
+                    placeholder="Enter manual book number"
+                    disabled={isReadOnly}
+                  />
                 </div>
               </div>
             </CardContent>

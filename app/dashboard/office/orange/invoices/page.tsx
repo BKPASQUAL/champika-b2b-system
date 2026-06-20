@@ -95,6 +95,7 @@ export default function InvoicesPage() {
       rawInvoices.map((inv: any) => ({
         id: inv.id,
         invoiceNo: inv.invoiceNo,
+        manualInvoiceNo: inv.manualInvoiceNo || "",
         date: inv.date || (inv.createdAt ? inv.createdAt.split("T")[0] : new Date().toISOString().split("T")[0]),
         createdAt: inv.createdAt || "",
         customerId: inv.customerId,
@@ -118,7 +119,7 @@ export default function InvoicesPage() {
   // 4. Filter Logic
   const filteredInvoices = invoices.filter((inv) => {
     const searchTerms = getSearchTerms(searchQuery);
-    const haystack = [inv.invoiceNo, inv.customerName, inv.salesRepName]
+    const haystack = [inv.invoiceNo, inv.manualInvoiceNo || "", inv.customerName, inv.salesRepName]
       .join(" ").toLowerCase();
     const matchesSearch =
       searchQuery.trim() === "" ||

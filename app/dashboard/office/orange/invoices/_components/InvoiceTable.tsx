@@ -155,6 +155,11 @@ export function InvoiceTable({
                   Invoice # {getSortIcon("invoiceNo")}
                 </div>
               </TableHead>
+              <TableHead className="w-[120px] hidden md:table-cell">
+                <div className="flex items-center font-semibold">
+                  Manual Ref
+                </div>
+              </TableHead>
               <TableHead
                 onClick={() => onSort("customerName")}
                 className="cursor-pointer hover:bg-muted/50"
@@ -203,7 +208,7 @@ export function InvoiceTable({
             {invoices.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={8}
+                  colSpan={9}
                   className="text-center py-12 text-muted-foreground"
                 >
                   No invoices found
@@ -216,7 +221,26 @@ export function InvoiceTable({
                     {new Date(invoice.date).toLocaleDateString()}
                   </TableCell>
                   <TableCell className="font-mono text-xs">
-                    {invoice.invoiceNo}
+                    <div>{invoice.invoiceNo}</div>
+                    {invoice.manualInvoiceNo && (
+                      <div className="text-[10px] text-muted-foreground mt-0.5 md:hidden">
+                        Ref: {invoice.manualInvoiceNo}
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell className="hidden md:table-cell">
+                    {invoice.manualInvoiceNo &&
+                    invoice.manualInvoiceNo.trim() !== "" ? (
+                      <div className="flex items-center text-blue-700 bg-blue-50 px-2 py-1 rounded w-fit">
+                        <span className="text-xs font-bold font-mono">
+                          {invoice.manualInvoiceNo}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground text-xs italic opacity-50">
+                        -
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <div className="font-medium text-sm">
