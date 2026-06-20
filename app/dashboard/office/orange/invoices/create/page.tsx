@@ -64,6 +64,10 @@ import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
 import { printInvoice, downloadInvoice } from "../print-utils";
 import { DocumentAttachments } from "@/components/ui/DocumentAttachments";
+import { CustomerDialogs } from "../../customers/_components/CustomerDialogs";
+import { CustomerFormData } from "../../customers/types";
+import { ProductDialogs } from "../../products/_components/ProductDialogs";
+import { ProductFormData } from "../../products/types";
 
 // --- Types ---
 
@@ -111,6 +115,44 @@ export default function CreateInvoicePage() {
   const [customers, setCustomers] = useState<{ id: string; name: string; phone?: string; ownerName?: string; }[]>(
     []
   );
+  const [categories, setCategories] = useState<{ id: string; name: string; parent_id?: string }[]>([]);
+
+  // Inline Creation states
+  const [isAddCustomerDialogOpen, setIsAddCustomerDialogOpen] = useState(false);
+  const [customerFormData, setCustomerFormData] = useState<CustomerFormData>({
+    shopName: "",
+    ownerName: "",
+    phone: "",
+    email: "",
+    address: "",
+    route: "General",
+    status: "Active",
+    creditLimit: 0,
+    businessId: BUSINESS_IDS.ORANGE_AGENCY,
+  });
+
+  const [isAddProductDialogOpen, setIsAddProductDialogOpen] = useState(false);
+  const [productFormData, setProductFormData] = useState<ProductFormData>({
+    sku: "",
+    companyCode: "",
+    name: "Orange ",
+    category: "",
+    subCategory: "",
+    brand: "",
+    subBrand: "",
+    modelType: "",
+    subModel: "",
+    sizeSpec: "",
+    supplier: "Orange (Orel Corporation)",
+    stock: "0",
+    minStock: "0",
+    mrp: "",
+    sellingPrice: "",
+    costPrice: "",
+    images: [],
+    unitOfMeasure: "Pcs",
+    isActive: true,
+  });
 
   // Form State
   const [customerId, setCustomerId] = useState<string | null>(null);
@@ -216,6 +258,12 @@ export default function CreateInvoicePage() {
             id: c.id,
             name: c.shopName, phone: c.phone || "", ownerName: c.ownerName || "" }))
         );
+
+        // Fetch categories for product creation
+        const catRes = await fetch("/api/settings/categories?type=category");
+        if (catRes.ok) {
+          setCategories(await catRes.json());
+        }
 
         // 3. Load stock override setting
         try {
@@ -432,6 +480,129 @@ export default function CreateInvoicePage() {
     }
   };
 
+  const handleSaveCustomer = async () => {
+    if (!customerFormData.shopName || !customerFormData.route) {
+      toast.error("Please fill required fields (Shop Name, Route)");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/customers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(customerFormData),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to create customer");
+      toast.success("Customer created successfully!");
+      setIsAddCustomerDialogOpen(false);
+      
+      // Reset form
+      setCustomerFormData({
+        shopName: "",
+        ownerName: "",
+        phone: "",
+        email: "",
+        address: "",
+        route: "General",
+        status: "Active",
+        creditLimit: 0,
+        businessId: BUSINESS_IDS.ORANGE_AGENCY,
+      });
+
+      // Refetch customer list
+      const customersRes = await fetch(
+        `/api/customers?businessId=${BUSINESS_IDS.ORANGE_AGENCY}`
+      );
+      if (customersRes.ok) {
+        const customersData = await customersRes.json();
+        setCustomers(
+          customersData.map((c: any) => ({
+            id: c.id,
+            name: c.shopName, phone: c.phone || "", ownerName: c.ownerName || "" }))
+        );
+      }
+
+      // Auto-select the newly created customer
+      setCustomerId(data.data.id);
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
+  const handleSaveProduct = async () => {
+    if (!productFormData.name || !productFormData.category) {
+      toast.error("Please fill required fields (Name, Category)");
+      return;
+    }
+
+    const payload = {
+      ...productFormData,
+      supplier: "Orange (Orel Corporation)",
+      stock: Number(productFormData.stock) || 0,
+      minStock: Number(productFormData.minStock) || 0,
+      mrp: Number(productFormData.mrp) || 0,
+      sellingPrice: Number(productFormData.sellingPrice) || 0,
+      costPrice: Number(productFormData.costPrice) || 0,
+    };
+
+    try {
+      const res = await fetch("/api/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to create product");
+      toast.success("Product created successfully!");
+      setIsAddProductDialogOpen(false);
+      
+      // Reset form
+      setProductFormData({
+        sku: "",
+        companyCode: "",
+        name: "Orange ",
+        category: "",
+        subCategory: "",
+        brand: "",
+        subBrand: "",
+        modelType: "",
+        subModel: "",
+        sizeSpec: "",
+        supplier: "Orange (Orel Corporation)",
+        stock: "0",
+        minStock: "0",
+        mrp: "",
+        sellingPrice: "",
+        costPrice: "",
+        images: [],
+        unitOfMeasure: "Pcs",
+        isActive: true,
+      });
+
+      // Refetch products list
+      if (salesRepId) {
+        const stockRes = await fetch(`/api/rep/stock?userId=${salesRepId}${outOfStockOverride ? "&includeOutOfStock=true" : ""}`);
+        if (stockRes.ok) {
+          const productsData = await stockRes.json();
+          setProducts(
+            productsData.map((p: any) => ({
+              id: p.id,
+              sku: p.sku,
+              name: p.name,
+              selling_price: p.selling_price,
+              mrp: p.mrp,
+              stock_quantity: p.stock_quantity,
+              unit_of_measure: p.unit_of_measure || "unit",
+            }))
+          );
+        }
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Operation failed");
+    }
+  };
+
   const handleSaveAction = async (action: "save" | "print" | "download") => {
     if (!customerId) {
       toast.error("Please select a customer.");
@@ -626,7 +797,18 @@ export default function CreateInvoicePage() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Customer</Label>
+                  <div className="flex items-center justify-between">
+                    <Label>Customer</Label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto p-0 text-xs text-orange-600 hover:text-orange-700 hover:bg-transparent font-medium"
+                      type="button"
+                      onClick={() => setIsAddCustomerDialogOpen(true)}
+                    >
+                      <Plus className="w-3 h-3 mr-1" /> New Customer
+                    </Button>
+                  </div>
                   <Popover open={customerOpen} onOpenChange={setCustomerOpen}>
                     <PopoverTrigger asChild>
                       <Button
@@ -752,12 +934,23 @@ export default function CreateInvoicePage() {
               {/* Product Selection */}
               <div className="grid grid-cols-4 gap-4">
                 <div className="col-span-4 space-y-2">
-                  <Label>
-                    Product{" "}
-                    {stockLoading && (
-                      <Loader2 className="inline h-3 w-3 animate-spin ml-2" />
-                    )}
-                  </Label>
+                  <div className="flex items-center justify-between">
+                    <Label>
+                      Product{" "}
+                      {stockLoading && (
+                        <Loader2 className="inline h-3 w-3 animate-spin ml-2" />
+                      )}
+                    </Label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto p-0 text-xs text-orange-600 hover:text-orange-700 hover:bg-transparent font-medium"
+                      type="button"
+                      onClick={() => setIsAddProductDialogOpen(true)}
+                    >
+                      <Plus className="w-3 h-3 mr-1" /> New Product
+                    </Button>
+                  </div>
                   <Popover open={!editingItemId && productOpen} onOpenChange={setProductOpen}>
                     <PopoverTrigger asChild>
                       <Button
@@ -1218,6 +1411,31 @@ export default function CreateInvoicePage() {
           </Card>
         </div>
       </div>
+
+      <CustomerDialogs
+        isAddDialogOpen={isAddCustomerDialogOpen}
+        setIsAddDialogOpen={setIsAddCustomerDialogOpen}
+        formData={customerFormData}
+        setFormData={setCustomerFormData}
+        onSave={handleSaveCustomer}
+        selectedCustomer={null}
+        isDeleteDialogOpen={false}
+        setIsDeleteDialogOpen={() => {}}
+        onDeleteConfirm={() => {}}
+      />
+
+      <ProductDialogs
+        isAddDialogOpen={isAddProductDialogOpen}
+        setIsAddDialogOpen={setIsAddProductDialogOpen}
+        formData={productFormData}
+        setFormData={setProductFormData}
+        onSave={handleSaveProduct}
+        selectedProduct={null}
+        isDeleteDialogOpen={false}
+        setIsDeleteDialogOpen={() => {}}
+        onDeleteConfirm={() => {}}
+        categories={categories}
+      />
     </div>
   );
 }
