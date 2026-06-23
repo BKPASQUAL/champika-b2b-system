@@ -29,7 +29,11 @@ import {
   AlertCircle,
   Loader2,
   MapPin,
+  AlertTriangle,
+  RotateCcw,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
@@ -73,6 +77,8 @@ export default function StockAdjustmentPage() {
     PendingAdjustment[]
   >([]);
   const [submitting, setSubmitting] = useState(false);
+  const [zeroOutUnlisted, setZeroOutUnlisted] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   // 1. Fetch Data on Load
   useEffect(() => {
@@ -162,12 +168,24 @@ export default function StockAdjustmentPage() {
     setPendingAdjustments(pendingAdjustments.filter((p) => p.productId !== id));
   };
 
+  // Products with stock in this location that are NOT in the pending list
+  const unlistedWithStock = allProducts.filter(
+    (p) =>
+      (locationStocks[p.id] || 0) > 0 &&
+      !pendingAdjustments.some((a) => a.productId === p.id),
+  );
+
   const handleSaveAll = async () => {
     if (pendingAdjustments.length === 0) return toast.error("List is empty");
-    if (
-      !confirm(`Confirm saving ${pendingAdjustments.length} stock adjustments?`)
-    )
-      return;
+
+    const zeroCount = zeroOutUnlisted ? unlistedWithStock.length : 0;
+    const totalCount = pendingAdjustments.length + zeroCount;
+    const confirmMsg =
+      zeroOutUnlisted && zeroCount > 0
+        ? `Save ${pendingAdjustments.length} adjustment(s) AND zero out ${zeroCount} unlisted product(s)? Total: ${totalCount} items will be updated.`
+        : `Confirm saving ${pendingAdjustments.length} stock adjustment(s)?`;
+
+    if (!confirm(confirmMsg)) return;
 
     setSubmitting(true);
     try {
@@ -176,13 +194,21 @@ export default function StockAdjustmentPage() {
         newQuantity: item.newStock,
       }));
 
+      if (zeroOutUnlisted) {
+        unlistedWithStock.forEach((p) => {
+          itemsPayload.push({ productId: p.id, newQuantity: 0 });
+        });
+      }
+
       const res = await fetch("/api/inventory/adjust", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           locationId,
           items: itemsPayload,
-          reason: "Manual Stock Adjustment (Orange Portal)",
+          reason: zeroOutUnlisted
+            ? "Full Stock Count — unlisted items zeroed (Orange Portal)"
+            : "Manual Stock Adjustment (Orange Portal)",
           businessId: BUSINESS_IDS.ORANGE_AGENCY,
         }),
       });
@@ -200,6 +226,45 @@ export default function StockAdjustmentPage() {
     }
   };
 
+  const handleZeroAll = async () => {
+    const stockedProducts = allProducts.filter((p) => (locationStocks[p.id] || 0) > 0);
+    if (stockedProducts.length === 0) return toast.info("All products are already at 0.");
+    if (
+      !confirm(
+        `This will immediately set ALL ${stockedProducts.length} stocked product(s) to 0 in ${locationName}. You can then start entering your physical counts. Continue?`
+      )
+    )
+      return;
+
+    setResetting(true);
+    try {
+      const itemsPayload = stockedProducts.map((p) => ({ productId: p.id, newQuantity: 0 }));
+      const res = await fetch("/api/inventory/adjust", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          locationId,
+          items: itemsPayload,
+          reason: "Fresh Count Reset — all stock zeroed before manual count (Orange Portal)",
+          businessId: BUSINESS_IDS.ORANGE_AGENCY,
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Reset failed");
+
+      // Update local state so current stock shows 0
+      const newStockMap: Record<string, number> = {};
+      allProducts.forEach((p) => { newStockMap[p.id] = 0; });
+      setLocationStocks(newStockMap);
+      setPendingAdjustments([]);
+      toast.success(`All ${stockedProducts.length} products zeroed. Start entering your counts.`);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to reset stock");
+    } finally {
+      setResetting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center py-16">
@@ -209,13 +274,13 @@ export default function StockAdjustmentPage() {
   }
 
   return (
-    <div className="mx-auto space-y-6 ">
+    <div className="mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="w-5 h-5" />
         </Button>
-        <div>
+        <div className="flex-1">
           <h1 className="text-2xl font-bold flex items-center gap-2">
             Stock Adjustment
           </h1>
@@ -232,6 +297,19 @@ export default function StockAdjustmentPage() {
             .
           </p>
         </div>
+        <Button
+          variant="outline"
+          className="border-orange-300 text-orange-700 hover:bg-orange-50"
+          onClick={handleZeroAll}
+          disabled={resetting}
+        >
+          {resetting ? (
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          ) : (
+            <RotateCcw className="w-4 h-4 mr-2" />
+          )}
+          Zero All & Start Fresh
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -370,7 +448,37 @@ export default function StockAdjustmentPage() {
               </div>
             )}
 
-            <div className="mt-6 flex justify-end">
+            {/* Zero-out toggle */}
+            <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600" />
+                  <Label htmlFor="zero-unlisted-orange" className="font-semibold text-amber-800 cursor-pointer">
+                    Zero out all unlisted products
+                  </Label>
+                </div>
+                <Switch
+                  id="zero-unlisted-orange"
+                  checked={zeroOutUnlisted}
+                  onCheckedChange={setZeroOutUnlisted}
+                />
+              </div>
+              <p className="text-xs text-amber-700">
+                When ON, all products with stock that are <strong>not</strong> in your list above will be set to <strong>0</strong> on save.
+                {zeroOutUnlisted && unlistedWithStock.length > 0 && (
+                  <span className="ml-1 font-bold text-red-700">
+                    {unlistedWithStock.length} product(s) will be zeroed out.
+                  </span>
+                )}
+                {zeroOutUnlisted && unlistedWithStock.length === 0 && (
+                  <span className="ml-1 text-green-700 font-medium">
+                    All stocked products are already in your list.
+                  </span>
+                )}
+              </p>
+            </div>
+
+            <div className="mt-4 flex justify-end">
               <Button
                 size="lg"
                 className="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white"
@@ -382,7 +490,9 @@ export default function StockAdjustmentPage() {
                 ) : (
                   <Save className="w-4 h-4 mr-2" />
                 )}
-                Adjust All & Save
+                {zeroOutUnlisted && unlistedWithStock.length > 0
+                  ? `Adjust All & Zero ${unlistedWithStock.length} Others`
+                  : "Adjust All & Save"}
               </Button>
             </div>
           </CardContent>

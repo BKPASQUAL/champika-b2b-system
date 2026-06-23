@@ -29,12 +29,15 @@ import {
   AlertCircle,
   Loader2,
   MapPin,
+  AlertTriangle,
+  RotateCcw,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
 
-// Types
 interface Product {
   id: string;
   sku: string;
@@ -57,56 +60,41 @@ export default function SierraStockAdjustmentPage() {
   const rawId = params?.id;
   const locationId = Array.isArray(rawId) ? rawId[0] : rawId;
 
-  // Data State
   const [loading, setLoading] = useState(true);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
-  const [locationStocks, setLocationStocks] = useState<Record<string, number>>(
-    {},
-  );
+  const [locationStocks, setLocationStocks] = useState<Record<string, number>>({});
   const [locationName, setLocationName] = useState("");
-
-  // Form State
 
   const [selectedProductId, setSelectedProductId] = useState("");
   const [adjustmentValue, setAdjustmentValue] = useState("");
-  const [pendingAdjustments, setPendingAdjustments] = useState<
-    PendingAdjustment[]
-  >([]);
+  const [pendingAdjustments, setPendingAdjustments] = useState<PendingAdjustment[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [zeroOutUnlisted, setZeroOutUnlisted] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
-  // 1. Fetch Data on Load
   useEffect(() => {
     const initData = async () => {
       try {
         setLoading(true);
 
-        // Fetch Master Product List (Filtered for Sierra)
         const productsRes = await fetch(
           `/api/inventory?businessId=${BUSINESS_IDS.SIERRA_AGENCY}`,
         );
         const productsData = await productsRes.json();
 
-        // Fetch Current Location Stock (Filtered for Sierra)
         const stockRes = await fetch(
           `/api/inventory/${locationId}?businessId=${BUSINESS_IDS.SIERRA_AGENCY}`,
         );
         const stockData = await stockRes.json();
 
-        if (stockData.location) {
-          setLocationName(stockData.location.name);
-        }
+        if (stockData.location) setLocationName(stockData.location.name);
 
         const stockMap: Record<string, number> = {};
         if (stockData.stocks) {
-          stockData.stocks.forEach((s: any) => {
-            stockMap[s.id] = s.quantity;
-          });
+          stockData.stocks.forEach((s: any) => { stockMap[s.id] = s.quantity; });
         }
 
-        if (productsData.products) {
-          setAllProducts(productsData.products);
-        }
-
+        if (productsData.products) setAllProducts(productsData.products);
         setLocationStocks(stockMap);
       } catch (error) {
         console.error(error);
@@ -118,70 +106,118 @@ export default function SierraStockAdjustmentPage() {
     if (locationId) initData();
   }, [locationId]);
 
-  // Derived Values
   const selectedProduct = allProducts.find((p) => p.id === selectedProductId);
-  const currentStock = selectedProductId
-    ? locationStocks[selectedProductId] || 0
-    : 0;
+  const currentStock = selectedProductId ? locationStocks[selectedProductId] || 0 : 0;
 
-  // Handlers
   const handleAddToTable = () => {
     if (!selectedProduct) return toast.error("Select a product first");
     if (adjustmentValue === "") return toast.error("Enter a valid quantity");
 
     const newQty = parseFloat(adjustmentValue);
-    if (isNaN(newQty) || newQty < 0)
-      return toast.error("Quantity must be a valid positive number");
-
+    if (isNaN(newQty) || newQty < 0) return toast.error("Quantity must be a valid positive number");
     if (pendingAdjustments.some((p) => p.productId === selectedProductId)) {
       toast.error("This product is already in the adjustment list");
       return;
     }
 
-    const difference = newQty - currentStock;
-
-    const newItem: PendingAdjustment = {
-      productId: selectedProduct.id,
-      productName: selectedProduct.name,
-      sku: selectedProduct.sku,
-      currentStock: currentStock,
-      newStock: newQty,
-      difference: difference,
-    };
-
-    setPendingAdjustments([...pendingAdjustments, newItem]);
+    setPendingAdjustments([
+      ...pendingAdjustments,
+      {
+        productId: selectedProduct.id,
+        productName: selectedProduct.name,
+        sku: selectedProduct.sku,
+        currentStock,
+        newStock: newQty,
+        difference: newQty - currentStock,
+      },
+    ]);
     setAdjustmentValue("");
     setSelectedProductId("");
-
   };
 
   const handleRemoveItem = (id: string) => {
     setPendingAdjustments(pendingAdjustments.filter((p) => p.productId !== id));
   };
 
-  const handleSaveAll = async () => {
-    if (pendingAdjustments.length === 0) return toast.error("List is empty");
+  // Products with stock in this location not already in the pending list
+  const unlistedWithStock = allProducts.filter(
+    (p) =>
+      (locationStocks[p.id] || 0) > 0 &&
+      !pendingAdjustments.some((a) => a.productId === p.id),
+  );
+
+  const handleZeroAll = async () => {
+    const stockedProducts = allProducts.filter((p) => (locationStocks[p.id] || 0) > 0);
+    if (stockedProducts.length === 0) return toast.info("All products are already at 0.");
     if (
-      !confirm(`Confirm saving ${pendingAdjustments.length} stock adjustments?`)
+      !confirm(
+        `This will immediately set ALL ${stockedProducts.length} stocked product(s) to 0 in ${locationName}. You can then start entering your physical counts. Continue?`
+      )
     )
       return;
 
-    setSubmitting(true);
+    setResetting(true);
     try {
-      // ✅ FIX: Map items to the format expected by the API
-      const itemsPayload = pendingAdjustments.map((item) => ({
-        productId: item.productId,
-        newQuantity: item.newStock,
-      }));
-
-      // ✅ FIX: Send a single BATCH request
+      const itemsPayload = stockedProducts.map((p) => ({ productId: p.id, newQuantity: 0 }));
       const res = await fetch("/api/inventory/adjust", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           locationId,
-          items: itemsPayload, // The API expects this array
-          reason: "Manual Stock Adjustment (Sierra Portal)",
+          items: itemsPayload,
+          reason: "Fresh Count Reset — all stock zeroed before manual count (Sierra Portal)",
+          businessId: BUSINESS_IDS.SIERRA_AGENCY,
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Reset failed");
+
+      const newStockMap: Record<string, number> = {};
+      allProducts.forEach((p) => { newStockMap[p.id] = 0; });
+      setLocationStocks(newStockMap);
+      setPendingAdjustments([]);
+      toast.success(`All ${stockedProducts.length} products zeroed. Start entering your counts.`);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to reset stock");
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  const handleSaveAll = async () => {
+    if (pendingAdjustments.length === 0) return toast.error("List is empty");
+
+    const zeroCount = zeroOutUnlisted ? unlistedWithStock.length : 0;
+    const totalCount = pendingAdjustments.length + zeroCount;
+    const confirmMsg =
+      zeroOutUnlisted && zeroCount > 0
+        ? `Save ${pendingAdjustments.length} adjustment(s) AND zero out ${zeroCount} unlisted product(s)? Total: ${totalCount} items will be updated.`
+        : `Confirm saving ${pendingAdjustments.length} stock adjustment(s)?`;
+
+    if (!confirm(confirmMsg)) return;
+
+    setSubmitting(true);
+    try {
+      const itemsPayload = pendingAdjustments.map((item) => ({
+        productId: item.productId,
+        newQuantity: item.newStock,
+      }));
+
+      if (zeroOutUnlisted) {
+        unlistedWithStock.forEach((p) => {
+          itemsPayload.push({ productId: p.id, newQuantity: 0 });
+        });
+      }
+
+      const res = await fetch("/api/inventory/adjust", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          locationId,
+          items: itemsPayload,
+          reason: zeroOutUnlisted
+            ? "Full Stock Count — unlisted items zeroed (Sierra Portal)"
+            : "Manual Stock Adjustment (Sierra Portal)",
           businessId: BUSINESS_IDS.SIERRA_AGENCY,
         }),
       });
@@ -213,49 +249,56 @@ export default function SierraStockAdjustmentPage() {
         <Button variant="ghost" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="w-5 h-5" />
         </Button>
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2 text-red-950">
+        <div className="flex-1">
+          <h1 className="text-2xl font-bold flex items-center gap-2 text-purple-950">
             Stock Adjustment
           </h1>
           <p className="text-muted-foreground text-sm flex items-center gap-1">
             Update physical stock counts for{" "}
-            <span className="font-semibold text-red-600 flex items-center gap-1">
+            <span className="font-semibold text-purple-600 flex items-center gap-1">
               <MapPin className="w-3 h-3" />
               {locationName || "Location"}
             </span>
           </p>
         </div>
+        <Button
+          variant="outline"
+          className="border-purple-300 text-purple-700 hover:bg-purple-50"
+          onClick={handleZeroAll}
+          disabled={resetting}
+        >
+          {resetting ? (
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          ) : (
+            <RotateCcw className="w-4 h-4 mr-2" />
+          )}
+          Zero All & Start Fresh
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Left Panel */}
-        <Card className="md:col-span-1 h-fit border-red-100">
+        <Card className="md:col-span-1 h-fit border-purple-100">
           <CardHeader>
             <CardTitle className="text-lg">Add Adjustment</CardTitle>
-            <CardDescription>
-              Select product (Sierra Only) and enter count.
-            </CardDescription>
+            <CardDescription>Select product (Sierra Only) and enter count.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Select Product</label>
               <SearchableDropdown
-                options={allProducts.map((p) => ({
-                  id: p.id,
-                  name: p.name,
-                  info: p.sku,
-                }))}
+                options={allProducts.map((p) => ({ id: p.id, name: p.name, info: p.sku }))}
                 value={selectedProductId}
                 onChange={setSelectedProductId}
                 placeholder="Search product..."
               />
             </div>
 
-            <div className="p-3 bg-red-50/50 rounded-lg border border-red-100 text-center space-y-1">
-              <span className="text-xs text-red-600/70 uppercase tracking-wide">
+            <div className="p-3 bg-purple-50/50 rounded-lg border border-purple-100 text-center space-y-1">
+              <span className="text-xs text-purple-600/70 uppercase tracking-wide">
                 Current System Stock
               </span>
-              <div className="text-3xl font-bold text-red-900">
+              <div className="text-3xl font-bold text-purple-900">
                 {selectedProductId ? currentStock : "-"}
               </div>
             </div>
@@ -273,7 +316,7 @@ export default function SierraStockAdjustmentPage() {
             </div>
 
             <Button
-              className="w-full bg-red-600 hover:bg-red-700 text-white"
+              className="w-full bg-purple-600 hover:bg-purple-700 text-white"
               onClick={handleAddToTable}
               disabled={!selectedProductId || adjustmentValue === ""}
             >
@@ -290,7 +333,7 @@ export default function SierraStockAdjustmentPage() {
               <CardDescription>Review changes before saving.</CardDescription>
             </div>
             {pendingAdjustments.length > 0 && (
-              <Badge variant="secondary" className="bg-red-100 text-red-800">
+              <Badge variant="secondary" className="bg-purple-100 text-purple-800">
                 {pendingAdjustments.length} Items
               </Badge>
             )}
@@ -318,14 +361,12 @@ export default function SierraStockAdjustmentPage() {
                       <TableRow key={item.productId}>
                         <TableCell>
                           <div className="font-medium">{item.productName}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {item.sku}
-                          </div>
+                          <div className="text-xs text-muted-foreground">{item.sku}</div>
                         </TableCell>
                         <TableCell className="text-right text-muted-foreground">
                           {item.currentStock}
                         </TableCell>
-                        <TableCell className="text-right font-bold text-red-600">
+                        <TableCell className="text-right font-bold text-purple-600">
                           {item.newStock}
                         </TableCell>
                         <TableCell className="text-right">
@@ -358,7 +399,37 @@ export default function SierraStockAdjustmentPage() {
               </div>
             )}
 
-            <div className="mt-6 flex justify-end">
+            {/* Zero-out toggle */}
+            <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600" />
+                  <Label htmlFor="zero-unlisted-sierra" className="font-semibold text-amber-800 cursor-pointer">
+                    Zero out all unlisted products
+                  </Label>
+                </div>
+                <Switch
+                  id="zero-unlisted-sierra"
+                  checked={zeroOutUnlisted}
+                  onCheckedChange={setZeroOutUnlisted}
+                />
+              </div>
+              <p className="text-xs text-amber-700">
+                When ON, all products with stock that are <strong>not</strong> in your list above will be set to <strong>0</strong> on save.
+                {zeroOutUnlisted && unlistedWithStock.length > 0 && (
+                  <span className="ml-1 font-bold text-red-700">
+                    {unlistedWithStock.length} product(s) will be zeroed out.
+                  </span>
+                )}
+                {zeroOutUnlisted && unlistedWithStock.length === 0 && (
+                  <span className="ml-1 text-green-700 font-medium">
+                    All stocked products are already in your list.
+                  </span>
+                )}
+              </p>
+            </div>
+
+            <div className="mt-4 flex justify-end">
               <Button
                 size="lg"
                 className="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white"
@@ -370,7 +441,9 @@ export default function SierraStockAdjustmentPage() {
                 ) : (
                   <Save className="w-4 h-4 mr-2" />
                 )}
-                Adjust All & Save
+                {zeroOutUnlisted && unlistedWithStock.length > 0
+                  ? `Adjust All & Zero ${unlistedWithStock.length} Others`
+                  : "Adjust All & Save"}
               </Button>
             </div>
           </CardContent>
