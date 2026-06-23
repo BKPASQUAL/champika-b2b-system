@@ -34,6 +34,14 @@ import {
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
@@ -43,7 +51,12 @@ interface Product {
   sku: string;
   name: string;
   category: string;
+  supplier?: string;
 }
+
+const AGENCY_KEYWORDS = ["orange", "orel", "sierra", "wireman"];
+const isAgencyProduct = (p: Product) =>
+  AGENCY_KEYWORDS.some((kw) => p.supplier?.toLowerCase().includes(kw));
 
 interface PendingAdjustment {
   productId: string;
@@ -71,19 +84,24 @@ export default function StockAdjustmentPage() {
   const [submitting, setSubmitting] = useState(false);
   const [zeroOutUnlisted, setZeroOutUnlisted] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean; title: string; message: string; onConfirm: () => void;
+  }>({ open: false, title: "", message: "", onConfirm: () => {} });
+
+  const showConfirm = (title: string, message: string, onConfirm: () => void) =>
+    setConfirmDialog({ open: true, title, message, onConfirm });
 
   useEffect(() => {
     const initData = async () => {
       try {
         setLoading(true);
-        const productsRes = await fetch(
-          `/api/inventory?businessId=${BUSINESS_IDS.CHAMPIKA_DISTRIBUTION}`,
-        );
+        const [productsRes, fullProductsRes, stockRes] = await Promise.all([
+          fetch(`/api/inventory?businessId=${BUSINESS_IDS.CHAMPIKA_DISTRIBUTION}`),
+          fetch("/api/products?active=true"),
+          fetch(`/api/inventory/${locationId}?businessId=${BUSINESS_IDS.CHAMPIKA_DISTRIBUTION}`),
+        ]);
         const productsData = await productsRes.json();
-
-        const stockRes = await fetch(
-          `/api/inventory/${locationId}?businessId=${BUSINESS_IDS.CHAMPIKA_DISTRIBUTION}`,
-        );
+        const fullProductsData = fullProductsRes.ok ? await fullProductsRes.json() : [];
         const stockData = await stockRes.json();
 
         if (stockData.location) setLocationName(stockData.location.name);
@@ -93,7 +111,20 @@ export default function StockAdjustmentPage() {
           stockData.stocks.forEach((s: any) => { stockMap[s.id] = s.quantity; });
         }
 
-        if (productsData.products) setAllProducts(productsData.products);
+        // Merge supplier info from full product list
+        const supplierMap: Record<string, string> = {};
+        if (Array.isArray(fullProductsData)) {
+          fullProductsData.forEach((p: any) => { if (p.supplier) supplierMap[p.id] = p.supplier; });
+        }
+
+        if (productsData.products) {
+          setAllProducts(
+            productsData.products.map((p: Product) => ({
+              ...p,
+              supplier: supplierMap[p.id] || "",
+            }))
+          );
+        }
         setLocationStocks(stockMap);
       } catch (error) {
         console.error(error);
@@ -138,98 +169,106 @@ export default function StockAdjustmentPage() {
     setPendingAdjustments(pendingAdjustments.filter((p) => p.productId !== id));
   };
 
-  // Products with stock in this location not already in the pending list
+  // Non-agency products with stock not already in the pending list
+  // Agency products (Orange/Orel/Sierra/Wireman) are always protected from bulk zeroing
   const unlistedWithStock = allProducts.filter(
     (p) =>
+      !isAgencyProduct(p) &&
       (locationStocks[p.id] || 0) > 0 &&
       !pendingAdjustments.some((a) => a.productId === p.id),
   );
 
-  const handleZeroAll = async () => {
-    const stockedProducts = allProducts.filter((p) => (locationStocks[p.id] || 0) > 0);
-    if (stockedProducts.length === 0) return toast.info("All products are already at 0.");
-    if (
-      !confirm(
-        `This will immediately set ALL ${stockedProducts.length} stocked product(s) to 0 in ${locationName}. You can then start entering your physical counts. Continue?`
-      )
-    )
-      return;
+  const agencyWithStock = allProducts.filter(
+    (p) => isAgencyProduct(p) && (locationStocks[p.id] || 0) > 0,
+  );
 
-    setResetting(true);
-    try {
-      const itemsPayload = stockedProducts.map((p) => ({ productId: p.id, newQuantity: 0 }));
-      const res = await fetch("/api/inventory/adjust", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          locationId,
-          items: itemsPayload,
-          reason: "Fresh Count Reset — all stock zeroed before manual count (Distribution Portal)",
-          businessId: BUSINESS_IDS.CHAMPIKA_DISTRIBUTION,
-        }),
-      });
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || "Reset failed");
+  const handleZeroAll = () => {
+    const stockedNonAgency = allProducts.filter(
+      (p) => !isAgencyProduct(p) && (locationStocks[p.id] || 0) > 0
+    );
+    if (stockedNonAgency.length === 0) return toast.info("No non-agency products have stock to zero.");
 
-      const newStockMap: Record<string, number> = {};
-      allProducts.forEach((p) => { newStockMap[p.id] = 0; });
-      setLocationStocks(newStockMap);
-      setPendingAdjustments([]);
-      toast.success(`All ${stockedProducts.length} products zeroed. Start entering your counts.`);
-    } catch (error: any) {
-      toast.error(error.message || "Failed to reset stock");
-    } finally {
-      setResetting(false);
-    }
+    showConfirm(
+      "Zero All & Start Fresh",
+      `This will zero ${stockedNonAgency.length} non-agency product(s) in ${locationName}. Orange / Sierra / Wireman items (${agencyWithStock.length} with stock) will NOT be touched.`,
+      async () => {
+        setResetting(true);
+        try {
+          const itemsPayload = stockedNonAgency.map((p) => ({ productId: p.id, newQuantity: 0 }));
+          const res = await fetch("/api/inventory/adjust", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              locationId,
+              items: itemsPayload,
+              reason: "Fresh Count Reset — non-agency stock zeroed before manual count (Distribution Portal)",
+              businessId: BUSINESS_IDS.CHAMPIKA_DISTRIBUTION,
+            }),
+          });
+          const result = await res.json();
+          if (!res.ok) throw new Error(result.error || "Reset failed");
+
+          const newStockMap = { ...locationStocks };
+          stockedNonAgency.forEach((p) => { newStockMap[p.id] = 0; });
+          setLocationStocks(newStockMap);
+          setPendingAdjustments([]);
+          toast.success(`${stockedNonAgency.length} non-agency products zeroed. Agency items untouched.`);
+        } catch (error: any) {
+          toast.error(error.message || "Failed to reset stock");
+        } finally {
+          setResetting(false);
+        }
+      }
+    );
   };
 
-  const handleSaveAll = async () => {
+  const handleSaveAll = () => {
     if (pendingAdjustments.length === 0) return toast.error("List is empty");
 
     const zeroCount = zeroOutUnlisted ? unlistedWithStock.length : 0;
     const totalCount = pendingAdjustments.length + zeroCount;
     const confirmMsg =
       zeroOutUnlisted && zeroCount > 0
-        ? `Save ${pendingAdjustments.length} adjustment(s) AND zero out ${zeroCount} unlisted product(s)? Total: ${totalCount} items will be updated.`
-        : `Confirm saving ${pendingAdjustments.length} stock adjustment(s)?`;
+        ? `Save ${pendingAdjustments.length} adjustment(s) and zero out ${zeroCount} unlisted non-agency product(s). Total: ${totalCount} items will be updated.`
+        : `Save ${pendingAdjustments.length} stock adjustment(s) to ${locationName}.`;
 
-    if (!confirm(confirmMsg)) return;
+    showConfirm("Confirm Adjustments", confirmMsg, async () => {
+      setSubmitting(true);
+      try {
+        const itemsPayload = pendingAdjustments.map((item) => ({
+          productId: item.productId,
+          newQuantity: item.newStock,
+        }));
 
-    setSubmitting(true);
-    try {
-      const itemsPayload = pendingAdjustments.map((item) => ({
-        productId: item.productId,
-        newQuantity: item.newStock,
-      }));
+        if (zeroOutUnlisted) {
+          unlistedWithStock.forEach((p) => {
+            itemsPayload.push({ productId: p.id, newQuantity: 0 });
+          });
+        }
 
-      if (zeroOutUnlisted) {
-        unlistedWithStock.forEach((p) => {
-          itemsPayload.push({ productId: p.id, newQuantity: 0 });
+        const res = await fetch("/api/inventory/adjust", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            locationId,
+            items: itemsPayload,
+            reason: zeroOutUnlisted
+              ? "Full Stock Count — unlisted items zeroed (Distribution Portal)"
+              : "Manual Stock Adjustment (Distribution Portal)",
+            businessId: BUSINESS_IDS.CHAMPIKA_DISTRIBUTION,
+          }),
         });
+
+        if (!res.ok) throw new Error("Update failed");
+
+        toast.success("Stock adjustments saved successfully!");
+        router.push(`/dashboard/office/distribution/inventory/${locationId}`);
+      } catch (error) {
+        toast.error("Failed to save adjustments");
+      } finally {
+        setSubmitting(false);
       }
-
-      const res = await fetch("/api/inventory/adjust", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          locationId,
-          items: itemsPayload,
-          reason: zeroOutUnlisted
-            ? "Full Stock Count — unlisted items zeroed (Distribution Portal)"
-            : "Manual Stock Adjustment (Distribution Portal)",
-          businessId: BUSINESS_IDS.CHAMPIKA_DISTRIBUTION,
-        }),
-      });
-
-      if (!res.ok) throw new Error("Update failed");
-
-      toast.success("Stock adjustments saved successfully!");
-      router.push(`/dashboard/office/distribution/inventory/${locationId}`);
-    } catch (error) {
-      toast.error("Failed to save adjustments");
-    } finally {
-      setSubmitting(false);
-    }
+    });
   };
 
   if (loading) {
@@ -402,11 +441,11 @@ export default function StockAdjustmentPage() {
             )}
 
             {/* Zero-out toggle */}
-            <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-2">
+            <div className="mt-6 rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-amber-600" />
-                  <Label htmlFor="zero-unlisted-dist" className="font-semibold text-amber-800 cursor-pointer">
+                  <AlertTriangle className="w-4 h-4 text-blue-600" />
+                  <Label htmlFor="zero-unlisted-dist" className="font-semibold text-blue-800 cursor-pointer">
                     Zero out all unlisted products
                   </Label>
                 </div>
@@ -416,16 +455,22 @@ export default function StockAdjustmentPage() {
                   onCheckedChange={setZeroOutUnlisted}
                 />
               </div>
-              <p className="text-xs text-amber-700">
-                When ON, all products with stock that are <strong>not</strong> in your list above will be set to <strong>0</strong> on save.
+              <p className="text-xs text-blue-700">
+                When ON, non-agency products with stock <strong>not</strong> in your list will be set to <strong>0</strong> on save.
+                Orange / Sierra / Wireman items are <strong>always protected</strong>.
                 {zeroOutUnlisted && unlistedWithStock.length > 0 && (
                   <span className="ml-1 font-bold text-red-700">
-                    {unlistedWithStock.length} product(s) will be zeroed out.
+                    {unlistedWithStock.length} non-agency product(s) will be zeroed.
+                  </span>
+                )}
+                {zeroOutUnlisted && agencyWithStock.length > 0 && (
+                  <span className="ml-1 text-blue-700 font-medium">
+                    {agencyWithStock.length} agency item(s) skipped.
                   </span>
                 )}
                 {zeroOutUnlisted && unlistedWithStock.length === 0 && (
                   <span className="ml-1 text-green-700 font-medium">
-                    All stocked products are already in your list.
+                    All non-agency stocked products are already in your list.
                   </span>
                 )}
               </p>
@@ -451,6 +496,34 @@ export default function StockAdjustmentPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={confirmDialog.open} onOpenChange={(open) => setConfirmDialog((p) => ({ ...p, open }))}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-blue-600" />
+              {confirmDialog.title}
+            </DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground pt-1">
+              {confirmDialog.message}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setConfirmDialog((p) => ({ ...p, open: false }))}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={() => {
+                setConfirmDialog((p) => ({ ...p, open: false }));
+                confirmDialog.onConfirm();
+              }}
+            >
+              Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

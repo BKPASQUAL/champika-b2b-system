@@ -34,6 +34,14 @@ import {
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
@@ -79,6 +87,12 @@ export default function StockAdjustmentPage() {
   const [submitting, setSubmitting] = useState(false);
   const [zeroOutUnlisted, setZeroOutUnlisted] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean; title: string; message: string; onConfirm: () => void;
+  }>({ open: false, title: "", message: "", onConfirm: () => {} });
+
+  const showConfirm = (title: string, message: string, onConfirm: () => void) =>
+    setConfirmDialog({ open: true, title, message, onConfirm });
 
   // 1. Fetch Data on Load
   useEffect(() => {
@@ -175,94 +189,93 @@ export default function StockAdjustmentPage() {
       !pendingAdjustments.some((a) => a.productId === p.id),
   );
 
-  const handleSaveAll = async () => {
+  const handleSaveAll = () => {
     if (pendingAdjustments.length === 0) return toast.error("List is empty");
 
     const zeroCount = zeroOutUnlisted ? unlistedWithStock.length : 0;
     const totalCount = pendingAdjustments.length + zeroCount;
     const confirmMsg =
       zeroOutUnlisted && zeroCount > 0
-        ? `Save ${pendingAdjustments.length} adjustment(s) AND zero out ${zeroCount} unlisted product(s)? Total: ${totalCount} items will be updated.`
-        : `Confirm saving ${pendingAdjustments.length} stock adjustment(s)?`;
+        ? `Save ${pendingAdjustments.length} adjustment(s) and zero out ${zeroCount} unlisted product(s). Total: ${totalCount} items will be updated.`
+        : `Save ${pendingAdjustments.length} stock adjustment(s) to ${locationName}.`;
 
-    if (!confirm(confirmMsg)) return;
+    showConfirm("Confirm Adjustments", confirmMsg, async () => {
+      setSubmitting(true);
+      try {
+        const itemsPayload = pendingAdjustments.map((item) => ({
+          productId: item.productId,
+          newQuantity: item.newStock,
+        }));
 
-    setSubmitting(true);
-    try {
-      const itemsPayload = pendingAdjustments.map((item) => ({
-        productId: item.productId,
-        newQuantity: item.newStock,
-      }));
+        if (zeroOutUnlisted) {
+          unlistedWithStock.forEach((p) => {
+            itemsPayload.push({ productId: p.id, newQuantity: 0 });
+          });
+        }
 
-      if (zeroOutUnlisted) {
-        unlistedWithStock.forEach((p) => {
-          itemsPayload.push({ productId: p.id, newQuantity: 0 });
+        const res = await fetch("/api/inventory/adjust", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            locationId,
+            items: itemsPayload,
+            reason: zeroOutUnlisted
+              ? "Full Stock Count — unlisted items zeroed (Orange Portal)"
+              : "Manual Stock Adjustment (Orange Portal)",
+            businessId: BUSINESS_IDS.ORANGE_AGENCY,
+          }),
         });
+
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.error || "Update failed");
+
+        toast.success("Stock adjustments saved successfully!");
+        router.push(`/dashboard/office/orange/inventory/${locationId}`);
+      } catch (error: any) {
+        console.error(error);
+        toast.error(error.message || "Failed to save adjustments");
+      } finally {
+        setSubmitting(false);
       }
-
-      const res = await fetch("/api/inventory/adjust", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          locationId,
-          items: itemsPayload,
-          reason: zeroOutUnlisted
-            ? "Full Stock Count — unlisted items zeroed (Orange Portal)"
-            : "Manual Stock Adjustment (Orange Portal)",
-          businessId: BUSINESS_IDS.ORANGE_AGENCY,
-        }),
-      });
-
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || "Update failed");
-
-      toast.success("Stock adjustments saved successfully!");
-      router.push(`/dashboard/office/orange/inventory/${locationId}`);
-    } catch (error: any) {
-      console.error(error);
-      toast.error(error.message || "Failed to save adjustments");
-    } finally {
-      setSubmitting(false);
-    }
+    });
   };
 
-  const handleZeroAll = async () => {
+  const handleZeroAll = () => {
     const stockedProducts = allProducts.filter((p) => (locationStocks[p.id] || 0) > 0);
     if (stockedProducts.length === 0) return toast.info("All products are already at 0.");
-    if (
-      !confirm(
-        `This will immediately set ALL ${stockedProducts.length} stocked product(s) to 0 in ${locationName}. You can then start entering your physical counts. Continue?`
-      )
-    )
-      return;
 
-    setResetting(true);
-    try {
-      const itemsPayload = stockedProducts.map((p) => ({ productId: p.id, newQuantity: 0 }));
-      const res = await fetch("/api/inventory/adjust", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          locationId,
-          items: itemsPayload,
-          reason: "Fresh Count Reset — all stock zeroed before manual count (Orange Portal)",
-          businessId: BUSINESS_IDS.ORANGE_AGENCY,
-        }),
-      });
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || "Reset failed");
+    showConfirm(
+      "Zero All & Start Fresh",
+      `This will set ALL ${stockedProducts.length} stocked product(s) to 0 in ${locationName}. You can then start entering your physical counts.`,
+      async () => {
+        setResetting(true);
+        try {
+          const itemsPayload = stockedProducts.map((p) => ({ productId: p.id, newQuantity: 0 }));
+          const res = await fetch("/api/inventory/adjust", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              locationId,
+              items: itemsPayload,
+              reason: "Fresh Count Reset — all stock zeroed before manual count (Orange Portal)",
+              businessId: BUSINESS_IDS.ORANGE_AGENCY,
+            }),
+          });
+          const result = await res.json();
+          if (!res.ok) throw new Error(result.error || "Reset failed");
 
-      // Update local state so current stock shows 0
-      const newStockMap: Record<string, number> = {};
-      allProducts.forEach((p) => { newStockMap[p.id] = 0; });
-      setLocationStocks(newStockMap);
-      setPendingAdjustments([]);
-      toast.success(`All ${stockedProducts.length} products zeroed. Start entering your counts.`);
-    } catch (error: any) {
-      toast.error(error.message || "Failed to reset stock");
-    } finally {
-      setResetting(false);
-    }
+          const newStockMap: Record<string, number> = {};
+          allProducts.forEach((p) => { newStockMap[p.id] = 0; });
+          setLocationStocks(newStockMap);
+          setPendingAdjustments([]);
+          toast.success(`All ${stockedProducts.length} products zeroed. Start entering your counts.`);
+        } catch (error: any) {
+          toast.error(error.message || "Failed to reset stock");
+        } finally {
+          setResetting(false);
+        }
+      }
+    );
   };
 
   if (loading) {
@@ -449,11 +462,11 @@ export default function StockAdjustmentPage() {
             )}
 
             {/* Zero-out toggle */}
-            <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-2">
+            <div className="mt-6 rounded-lg border border-orange-200 bg-orange-50 p-4 space-y-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-amber-600" />
-                  <Label htmlFor="zero-unlisted-orange" className="font-semibold text-amber-800 cursor-pointer">
+                  <AlertTriangle className="w-4 h-4 text-orange-600" />
+                  <Label htmlFor="zero-unlisted-orange" className="font-semibold text-orange-800 cursor-pointer">
                     Zero out all unlisted products
                   </Label>
                 </div>
@@ -463,7 +476,7 @@ export default function StockAdjustmentPage() {
                   onCheckedChange={setZeroOutUnlisted}
                 />
               </div>
-              <p className="text-xs text-amber-700">
+              <p className="text-xs text-orange-700">
                 When ON, all products with stock that are <strong>not</strong> in your list above will be set to <strong>0</strong> on save.
                 {zeroOutUnlisted && unlistedWithStock.length > 0 && (
                   <span className="ml-1 font-bold text-red-700">
@@ -498,6 +511,34 @@ export default function StockAdjustmentPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={confirmDialog.open} onOpenChange={(open) => setConfirmDialog((p) => ({ ...p, open }))}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-orange-600" />
+              {confirmDialog.title}
+            </DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground pt-1">
+              {confirmDialog.message}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setConfirmDialog((p) => ({ ...p, open: false }))}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-orange-600 hover:bg-orange-700 text-white"
+              onClick={() => {
+                setConfirmDialog((p) => ({ ...p, open: false }));
+                confirmDialog.onConfirm();
+              }}
+            >
+              Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
