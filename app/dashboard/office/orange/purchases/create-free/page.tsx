@@ -30,6 +30,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
+import { ProductDialogs } from "../../products/_components/ProductDialogs";
+import { ProductFormData } from "../../products/types";
 
 interface ClaimableProduct {
   id: string;
@@ -71,6 +73,16 @@ function CreateOrangeFreeBillContent() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  const [isAddProductDialogOpen, setIsAddProductDialogOpen] = useState(false);
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+  const [submittingProduct, setSubmittingProduct] = useState(false);
+  const [productFormData, setProductFormData] = useState<ProductFormData>({
+    sku: "", companyCode: "", name: "Orange ", category: "", subCategory: "",
+    brand: "", subBrand: "", modelType: "", subModel: "", sizeSpec: "",
+    supplier: "Orange (Orel Corporation)", stock: "0", minStock: "0",
+    mrp: "", sellingPrice: "", costPrice: "", images: [], unitOfMeasure: "Pcs", isActive: true,
+  });
+
   const [currentItem, setCurrentItem] = useState<{
     productId: string;
     sku: string;
@@ -87,90 +99,124 @@ function CreateOrangeFreeBillContent() {
     maxQty: 0,
   });
 
-  useEffect(() => {
-    const loadData = async () => {
-      setLoadingData(true);
-      try {
-        const [claimsRes, productsRes, suppliersRes] = await Promise.all([
-          fetch("/api/orange/claims/free-issues"),
-          fetch("/api/products?active=true"),
-          fetch(`/api/suppliers?businessId=${BUSINESS_IDS.ORANGE_AGENCY}`),
-        ]);
+  const loadData = async (preserveItems = false) => {
+    setLoadingData(true);
+    try {
+      const [claimsRes, productsRes, suppliersRes, catRes] = await Promise.all([
+        fetch("/api/orange/claims/free-issues"),
+        fetch("/api/products?active=true"),
+        fetch(`/api/suppliers?businessId=${BUSINESS_IDS.ORANGE_AGENCY}`),
+        fetch("/api/settings/categories?type=category"),
+      ]);
 
-        if (!claimsRes.ok || !productsRes.ok || !suppliersRes.ok)
-          throw new Error("Failed to load data");
+      if (!claimsRes.ok || !productsRes.ok || !suppliersRes.ok)
+        throw new Error("Failed to load data");
 
-        const allClaims = await claimsRes.json();
-        const allProducts = await productsRes.json();
-        const allSuppliers = await suppliersRes.json();
+      const allClaims = await claimsRes.json();
+      const allProducts = await productsRes.json();
+      const allSuppliers = await suppliersRes.json();
+      if (catRes.ok) setCategories(await catRes.json());
 
-        // Auto-select the Orange / Orel supplier
-        const orangeSupplier = allSuppliers.find((s: any) =>
-          s.name.toLowerCase().includes("orange"),
-        );
-        if (orangeSupplier) {
-          setSupplierId(orangeSupplier.id);
-          setSupplierName(orangeSupplier.name);
-        } else if (allSuppliers.length === 1) {
-          setSupplierId(allSuppliers[0].id);
-          setSupplierName(allSuppliers[0].name);
-        }
-
-        // Build pending qty map from unclaimed items
-        const pendingQtyMap = new Map<string, number>();
-        allClaims.forEach((claim: any) => {
-          const pid = claim.product_id;
-          pendingQtyMap.set(pid, (pendingQtyMap.get(pid) || 0) + Number(claim.free_quantity));
-        });
-
-        // Filter to orange products only
-        const orangeProducts: ClaimableProduct[] = allProducts
-          .filter((p: any) => p.supplier?.toLowerCase().includes("orange"))
-          .map((p: any) => ({
-            id: p.id,
-            sku: p.sku,
-            name: p.name,
-            totalPendingQty: pendingQtyMap.get(p.id) || 0,
-            unit: p.unitOfMeasure || "Pcs",
-          }));
-
-        setClaimableProducts(orangeProducts);
-
-        // Pre-fill items if IDs passed via URL
-        if (idsParam) {
-          const ids = idsParam.split(",");
-          setPreSelectedIds(ids);
-
-          const selectedClaims = allClaims.filter((c: any) => ids.includes(c.id));
-          const billGroup: Record<string, PurchaseItem> = {};
-          selectedClaims.forEach((c: any) => {
-            const pid = c.product_id;
-            const qty = Number(c.free_quantity);
-            if (billGroup[pid]) {
-              billGroup[pid].quantity += qty;
-            } else {
-              billGroup[pid] = {
-                id: pid,
-                productId: pid,
-                sku: c.products.sku,
-                productName: c.products.name,
-                quantity: qty,
-                unit: "Pcs",
-              };
-            }
-          });
-          setItems(Object.values(billGroup));
-        }
-      } catch (error) {
-        console.error(error);
-        toast.error("Failed to load data");
-      } finally {
-        setLoadingData(false);
+      // Auto-select the Orange / Orel supplier
+      const orangeSupplier = allSuppliers.find((s: any) =>
+        s.name.toLowerCase().includes("orange"),
+      );
+      if (orangeSupplier) {
+        setSupplierId(orangeSupplier.id);
+        setSupplierName(orangeSupplier.name);
+      } else if (allSuppliers.length === 1) {
+        setSupplierId(allSuppliers[0].id);
+        setSupplierName(allSuppliers[0].name);
       }
-    };
 
-    loadData();
-  }, [idsParam]);
+      // Build pending qty map from unclaimed items
+      const pendingQtyMap = new Map<string, number>();
+      allClaims.forEach((claim: any) => {
+        const pid = claim.product_id;
+        pendingQtyMap.set(pid, (pendingQtyMap.get(pid) || 0) + Number(claim.free_quantity));
+      });
+
+      // Filter to orange products only
+      const orangeProducts: ClaimableProduct[] = allProducts
+        .filter((p: any) => p.supplier?.toLowerCase().includes("orange"))
+        .map((p: any) => ({
+          id: p.id,
+          sku: p.sku,
+          name: p.name,
+          totalPendingQty: pendingQtyMap.get(p.id) || 0,
+          unit: p.unitOfMeasure || "Pcs",
+        }));
+
+      setClaimableProducts(orangeProducts);
+
+      // Pre-fill items if IDs passed via URL (only on first load)
+      if (!preserveItems && idsParam) {
+        const ids = idsParam.split(",");
+        setPreSelectedIds(ids);
+
+        const selectedClaims = allClaims.filter((c: any) => ids.includes(c.id));
+        const billGroup: Record<string, PurchaseItem> = {};
+        selectedClaims.forEach((c: any) => {
+          const pid = c.product_id;
+          const qty = Number(c.free_quantity);
+          if (billGroup[pid]) {
+            billGroup[pid].quantity += qty;
+          } else {
+            billGroup[pid] = {
+              id: pid,
+              productId: pid,
+              sku: c.products.sku,
+              productName: c.products.name,
+              quantity: qty,
+              unit: "Pcs",
+            };
+          }
+        });
+        setItems(Object.values(billGroup));
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to load data");
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
+  useEffect(() => { loadData(); }, [idsParam]);
+
+  const handleCreateProduct = async () => {
+    if (!productFormData.name || !productFormData.category) return toast.error("Please fill required fields (Name, Category)");
+    setSubmittingProduct(true);
+    try {
+      const res = await fetch("/api/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...productFormData,
+          stock: Number(productFormData.stock) || 0,
+          minStock: Number(productFormData.minStock) || 0,
+          mrp: Number(productFormData.mrp) || 0,
+          sellingPrice: Number(productFormData.sellingPrice) || 0,
+          costPrice: Number(productFormData.costPrice) || 0,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to create product");
+      toast.success("Product created!");
+      setIsAddProductDialogOpen(false);
+      setProductFormData({
+        sku: "", companyCode: "", name: "Orange ", category: "", subCategory: "",
+        brand: "", subBrand: "", modelType: "", subModel: "", sizeSpec: "",
+        supplier: "Orange (Orel Corporation)", stock: "0", minStock: "0",
+        mrp: "", sellingPrice: "", costPrice: "", images: [], unitOfMeasure: "Pcs", isActive: true,
+      });
+      await loadData(true);
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setSubmittingProduct(false);
+    }
+  };
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -361,9 +407,19 @@ function CreateOrangeFreeBillContent() {
       <Card className="w-full">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Add Items</CardTitle>
-          <Button variant="ghost" size="sm" onClick={() => window.location.reload()}>
-            <RefreshCcw className="w-3 h-3 mr-1" /> Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsAddProductDialogOpen(true)}
+              className="text-xs border-dashed border-orange-300 text-orange-600 hover:bg-orange-50"
+            >
+              <Plus className="w-3 h-3 mr-1" /> New Item
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => loadData(true)} className="text-xs">
+              <RefreshCcw className="w-3 h-3 mr-1" /> Refresh
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-6 gap-3 items-end">
@@ -541,6 +597,19 @@ function CreateOrangeFreeBillContent() {
           </Button>
         </div>
       )}
+
+      <ProductDialogs
+        isAddDialogOpen={isAddProductDialogOpen}
+        setIsAddDialogOpen={setIsAddProductDialogOpen}
+        formData={productFormData}
+        setFormData={setProductFormData}
+        onSave={handleCreateProduct}
+        selectedProduct={null}
+        isDeleteDialogOpen={false}
+        setIsDeleteDialogOpen={() => {}}
+        onDeleteConfirm={() => {}}
+        categories={categories}
+      />
     </div>
   );
 }
