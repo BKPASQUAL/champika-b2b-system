@@ -24,6 +24,7 @@ import {
   Tags,
   TrendingUp,
   CheckCircle2,
+  ClipboardList,
 } from "lucide-react";
 
 interface DistNavItem {
@@ -103,6 +104,12 @@ export const distributionNavItems: DistNavSection[] = [
         name: "Customers",
         href: "/dashboard/office/distribution/customers",
         icon: Briefcase,
+      },
+      {
+        name: "Quotations",
+        href: "/dashboard/office/distribution/quotations",
+        icon: ClipboardList,
+        description: "Create and manage price quotations",
       },
       {
         name: "Bills / Invoice",

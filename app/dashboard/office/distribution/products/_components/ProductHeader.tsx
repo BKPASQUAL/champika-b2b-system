@@ -1,15 +1,13 @@
-// app/dashboard/admin/products/_components/ProductHeader.tsx
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Download, Plus, FileSpreadsheet, FileText, ClipboardList } from "lucide-react";
-import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { Download, Plus, FileSpreadsheet, FileText, ClipboardList, Layers } from "lucide-react";
 
 interface ProductHeaderProps {
   onAddClick: () => void;
@@ -45,14 +43,18 @@ export function ProductHeader({
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onExportExcel}>
-              <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" /> Export
-              to Excel
+              <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" /> Export to Excel
             </DropdownMenuItem>
             <DropdownMenuItem onClick={onExportPDF}>
               <FileText className="w-4 h-4 mr-2 text-red-600" /> Export to PDF
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        <Button variant="outline" asChild>
+          <Link href="/dashboard/office/distribution/products/advanced">
+            <Layers className="w-4 h-4 mr-2" /> Advanced Product Add
+          </Link>
+        </Button>
         <Button onClick={onAddClick}>
           <Plus className="w-4 h-4 mr-2" /> Add New Product
         </Button>

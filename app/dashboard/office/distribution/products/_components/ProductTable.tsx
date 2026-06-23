@@ -231,7 +231,7 @@ export function ProductTable({
                             </span>
                           ) : null}
                         </div>
-                        <div className="flex gap-2 text-[10px] text-muted-foreground font-mono">
+                        <div className="flex gap-2 items-center text-[10px] text-muted-foreground font-mono">
                           <span>SKU: {product.sku}</span>
                           {product.companyCode && <span>CC: {product.companyCode}</span>}
                         </div>

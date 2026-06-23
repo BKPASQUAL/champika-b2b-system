@@ -29,19 +29,52 @@ const NUMBER_WORDS: Record<string, string> = {
 const WORD_NUMBERS: Record<string, string> = Object.fromEntries(
   Object.entries(NUMBER_WORDS).map(([n, w]) => [w, n])
 );
-function getSearchTerms(query: string): string[] {
-  const q = query.toLowerCase().trim();
-  if (!q) return [];
-  const terms = new Set<string>([q]);
-  if (NUMBER_WORDS[q]) terms.add(NUMBER_WORDS[q]);
-  if (WORD_NUMBERS[q]) terms.add(WORD_NUMBERS[q]);
+
+// Strip /, ., ,, - so "1/113", "1.113", "1,113" all normalize to "1113"
+function normNum(s: string): string {
+  return s.replace(/[/.,\-]/g, "");
+}
+
+// All match variants for one token (normalized + number-word conversions)
+function tokenVariants(t: string): string[] {
+  const vs = new Set<string>([t]);
+  const n = normNum(t);
+  if (n !== t) vs.add(n);
+  if (NUMBER_WORDS[t]) vs.add(NUMBER_WORDS[t]);
+  if (WORD_NUMBERS[t]) vs.add(WORD_NUMBERS[t]);
   Object.entries(NUMBER_WORDS).forEach(([num, word]) => {
-    if (word.includes(q)) { terms.add(word); terms.add(num); }
+    if (word.includes(t)) { vs.add(word); vs.add(num); }
+    if (num.startsWith(t)) { vs.add(num); vs.add(word); }
   });
-  Object.entries(NUMBER_WORDS).forEach(([num, word]) => {
-    if (num.startsWith(q)) { terms.add(num); terms.add(word); }
+  return Array.from(vs);
+}
+
+// True if a token matches any field value
+function tokenMatches(token: string, fields: string[]): boolean {
+  const variants = tokenVariants(token);
+  return fields.some((f) => {
+    const fl = f.toLowerCase();
+    const fn = normNum(fl);
+    return variants.some((v) => fl.includes(v) || fn.includes(normNum(v)));
   });
-  return Array.from(terms);
+}
+
+// Relevance score for sorting (higher = better match)
+function nameScore(name: string, tokens: string[]): number {
+  if (!tokens.length) return 0;
+  const nl = name.toLowerCase();
+  const nn = normNum(nl);
+  const full = tokens.join(" ");
+  const fullN = normNum(full);
+  if (nl === full) return 100;
+  if (nn === fullN) return 90;
+  if (nl.startsWith(full)) return 80;
+  if (nn.startsWith(fullN)) return 70;
+  const hits = tokens.filter((t) => {
+    const vs = tokenVariants(t);
+    return vs.some((v) => nl.includes(v) || nn.includes(normNum(v)));
+  }).length;
+  return (hits / tokens.length) * 50;
 }
 
 export default function ProductsPage() {
@@ -117,49 +150,69 @@ export default function ProductsPage() {
     refetchProducts();
   }, [refetchProducts]);
 
-  // Filter Logic
-  const filteredProducts = products.filter((product) => {
-    const searchTerms = getSearchTerms(searchQuery);
-    const haystack = [
-      product.name, product.category, product.sku, product.supplier,
-      product.brand ?? "", product.subCategory ?? "",
-      product.modelType ?? "", product.sizeSpec ?? "",
-      product.companyCode ?? "",
-    ].join(" ").toLowerCase();
-    const matchesSearch =
-      searchQuery.trim() === "" ||
-      searchTerms.some((term) => haystack.includes(term));
+  // Filter Logic — token-based AND matching with numeric normalization
+  const searchTokens = useMemo(
+    () => searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean),
+    [searchQuery]
+  );
 
-    const matchesCategory =
-      categoryFilter === "all" || product.category === categoryFilter;
-    const matchesSupplier =
-      supplierFilter === "all" || product.supplier === supplierFilter;
+  const filteredProducts = useMemo(
+    () =>
+      products.filter((product) => {
+        const matchesSearch =
+          searchTokens.length === 0 ||
+          searchTokens.every((token) =>
+            tokenMatches(token, [
+              product.name,
+              product.category,
+              product.sku,
+              product.supplier,
+              product.brand ?? "",
+              product.subCategory ?? "",
+              product.modelType ?? "",
+              product.sizeSpec ?? "",
+              product.companyCode ?? "",
+            ])
+          );
 
-    let matchesStock = true;
-    if (stockFilter === "out-of-stock") matchesStock = product.stock === 0;
-    else if (stockFilter === "low")
-      matchesStock = product.stock > 0 && product.stock < product.minStock;
-    else if (stockFilter === "in-stock")
-      matchesStock = product.stock >= product.minStock;
+        const matchesCategory =
+          categoryFilter === "all" || product.category === categoryFilter;
+        const matchesSupplier =
+          supplierFilter === "all" || product.supplier === supplierFilter;
 
-    return matchesSearch && matchesCategory && matchesSupplier && matchesStock && !product.retailOnly;
-  });
+        let matchesStock = true;
+        if (stockFilter === "out-of-stock") matchesStock = product.stock === 0;
+        else if (stockFilter === "low")
+          matchesStock = product.stock > 0 && product.stock < product.minStock;
+        else if (stockFilter === "in-stock")
+          matchesStock = product.stock >= product.minStock;
 
-  // Sort Logic
-  const sortedProducts = [...filteredProducts].sort((a, b) => {
-    let aValue: any = a[sortField];
-    let bValue: any = b[sortField];
+        return matchesSearch && matchesCategory && matchesSupplier && matchesStock && !product.retailOnly;
+      }),
+    [products, searchTokens, categoryFilter, supplierFilter, stockFilter]
+  );
 
-    if (aValue === null || aValue === undefined) aValue = "";
-    if (bValue === null || bValue === undefined) bValue = "";
+  // Sort Logic — relevance first when searching, then field sort
+  const sortedProducts = useMemo(
+    () =>
+      [...filteredProducts].sort((a, b) => {
+        if (searchTokens.length > 0) {
+          const diff = nameScore(b.name, searchTokens) - nameScore(a.name, searchTokens);
+          if (diff !== 0) return diff;
+        }
 
-    if (typeof aValue === "string") aValue = aValue.toLowerCase();
-    if (typeof bValue === "string") bValue = bValue.toLowerCase();
-
-    if (aValue < bValue) return sortOrder === "asc" ? -1 : 1;
-    if (aValue > bValue) return sortOrder === "asc" ? 1 : -1;
-    return 0;
-  });
+        let aValue: any = a[sortField];
+        let bValue: any = b[sortField];
+        if (aValue == null) aValue = "";
+        if (bValue == null) bValue = "";
+        if (typeof aValue === "string") aValue = aValue.toLowerCase();
+        if (typeof bValue === "string") bValue = bValue.toLowerCase();
+        if (aValue < bValue) return sortOrder === "asc" ? -1 : 1;
+        if (aValue > bValue) return sortOrder === "asc" ? 1 : -1;
+        return 0;
+      }),
+    [filteredProducts, searchTokens, sortField, sortOrder]
+  );
 
   const totalPages = Math.ceil(sortedProducts.length / itemsPerPage);
   const paginatedProducts = sortedProducts.slice(
@@ -462,6 +515,7 @@ export default function ProductsPage() {
           fetchData();
         }}
       />
+
     </div>
   );
 }
