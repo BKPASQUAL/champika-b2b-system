@@ -76,10 +76,14 @@ export default function StockAdjustmentPage() {
     const initData = async () => {
       try {
         setLoading(true);
-        const productsRes = await fetch("/api/products?active=true");
+        const productsRes = await fetch(
+          `/api/inventory?businessId=${BUSINESS_IDS.CHAMPIKA_DISTRIBUTION}`,
+        );
         const productsData = await productsRes.json();
 
-        const stockRes = await fetch(`/api/inventory/${locationId}`);
+        const stockRes = await fetch(
+          `/api/inventory/${locationId}?businessId=${BUSINESS_IDS.CHAMPIKA_DISTRIBUTION}`,
+        );
         const stockData = await stockRes.json();
 
         if (stockData.location) setLocationName(stockData.location.name);
@@ -89,7 +93,7 @@ export default function StockAdjustmentPage() {
           stockData.stocks.forEach((s: any) => { stockMap[s.id] = s.quantity; });
         }
 
-        setAllProducts(productsData);
+        if (productsData.products) setAllProducts(productsData.products);
         setLocationStocks(stockMap);
       } catch (error) {
         console.error(error);
