@@ -20,6 +20,7 @@ import {
   CalendarDays,
   ScrollText,
   Printer,
+  Gift,
 } from "lucide-react";
 
 interface OrangeNavItem {
@@ -83,6 +84,11 @@ export const orangeOfficeNavItems: OrangeNavSection[] = [
         name: "Supplier List",
         href: "/dashboard/office/orange/suppliers",
         icon: Factory,
+      },
+      {
+        name: "Free Issue Claims",
+        href: "/dashboard/office/orange/claims",
+        icon: Gift,
       },
       {
         name: "Purchases",

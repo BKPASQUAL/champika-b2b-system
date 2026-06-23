@@ -19,7 +19,10 @@
       "Bash(business\")",
       "Bash(grep -E \"\\\\.\\(ts|tsx|js|jsx\\)$\")",
       "Bash(mkdir -p \"c:/Projects/champika-b2b-system/app/dashboard/office/wireman/purchases/[id]/edit\")",
-      "Bash(mkdir -p \"c:/Projects/champika-b2b-system/app/dashboard/office/sierra/purchases/[id]/edit\")"
+      "Bash(mkdir -p \"c:/Projects/champika-b2b-system/app/dashboard/office/sierra/purchases/[id]/edit\")",
+      "Bash(dir /s /b \"c:\\\\Projects\\\\champika-b2b-system\\\\app\\\\dashboard\\\\office\\\\wireman\")",
+      "Bash(dir /s /b \"c:\\\\Projects\\\\champika-b2b-system\\\\app\\\\dashboard\\\\office\\\\orange\")",
+      "Bash(dir /s /b \"c:\\\\Projects\\\\champika-b2b-system\\\\app\\\\dashboard\\\\office\\\\orange\\\\purchases\")"
     ],
     "additionalDirectories": [
       "\\tmp",
