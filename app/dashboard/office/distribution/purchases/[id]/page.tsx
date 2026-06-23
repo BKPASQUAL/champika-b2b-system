@@ -238,6 +238,17 @@ export default function DistributionViewPurchasePage({
             >
               <Printer className="w-4 h-4 mr-2 text-muted-foreground" /> Print
             </Button>
+            {purchase.status === "Ordered" && (
+              <Button
+                size="sm"
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+                onClick={() =>
+                  router.push(`/dashboard/office/distribution/purchases/${id}/edit`)
+                }
+              >
+                <Edit className="w-4 h-4 mr-2" /> Edit Bill
+              </Button>
+            )}
           </div>
         </div>
 

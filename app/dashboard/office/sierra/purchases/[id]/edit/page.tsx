@@ -387,6 +387,8 @@ export default function EditSierraPurchasePage({
     }
   };
 
+  const addItemsRef = useRef<HTMLDivElement>(null);
+
   const handleEditItem = (item: PurchaseItem) => {
     setCurrentItem({
       productId: item.productId,
@@ -400,8 +402,12 @@ export default function EditSierraPurchasePage({
       unit: item.unit,
     });
     setSearchTerm(item.productName);
+    setIsDropdownOpen(false);
     setEditingItemId(item.id);
-    setTimeout(() => qtyInputRef.current?.focus({ preventScroll: true }), 100);
+    setTimeout(() => {
+      addItemsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      qtyInputRef.current?.focus({ preventScroll: true });
+    }, 50);
   };
 
   const handleCancelEdit = () => {
@@ -623,7 +629,7 @@ export default function EditSierraPurchasePage({
           </Card>
 
           {/* Add Items */}
-          <Card>
+          <Card ref={addItemsRef}>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Add Items</CardTitle>
               <div className="flex items-center gap-2">

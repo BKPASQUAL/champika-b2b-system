@@ -285,7 +285,7 @@ export default function OrangeViewBillPage({
               <Printer className="w-4 h-4 mr-2 text-muted-foreground" /> Print
             </Button> */}
 
-            {/* {bill.status === "Ordered" && (
+            {bill.status === "Ordered" && (
               <Button
                 size="sm"
                 className="bg-orange-600 hover:bg-orange-700 text-white"
@@ -295,7 +295,7 @@ export default function OrangeViewBillPage({
               >
                 <Edit className="w-4 h-4 mr-2" /> Edit Bill
               </Button>
-            )} */}
+            )}
           </div>
         </div>
 
