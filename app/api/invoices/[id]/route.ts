@@ -6,11 +6,11 @@ import { BUSINESS_NAMES, BUSINESS_IDS } from "@/app/config/business-constants";
 // --- Validation Schemas ---
 const invoiceItemSchema = z.object({
   productId: z.string(),
-  sku: z.string().optional(),
-  productName: z.string().optional(),
+  sku: z.string().optional().nullable(),
+  productName: z.string().optional().nullable(),
   quantity: z.number().min(1),
   freeQuantity: z.number().default(0),
-  unit: z.string().optional(),
+  unit: z.string().optional().nullable(),
   mrp: z.number(),
   unitPrice: z.number(),
   // ✅ Discount Fields
@@ -28,11 +28,11 @@ const updateInvoiceSchema = z.object({
   grandTotal: z.number(),
   extraDiscountPercent: z.number().default(0),
   extraDiscountAmount: z.number().default(0),
-  notes: z.string().optional(),
-  manual_invoice_no: z.string().optional(),
-  userId: z.string().optional(),
+  notes: z.string().optional().nullable(),
+  manual_invoice_no: z.string().optional().nullable(),
+  userId: z.string().optional().nullable(),
   isDraft: z.boolean().optional(),
-  changeReason: z.string().optional(),
+  changeReason: z.string().optional().nullable(),
   isIncorrect: z.boolean().optional(),
 });
 
@@ -309,6 +309,28 @@ export async function PATCH(
         originalLocationIds = origAssignments?.map((a: any) => a.location_id) ?? [];
       }
 
+      // Fetch Main Warehouse ID as fallback if no locations resolved
+      if (originalLocationIds.length === 0) {
+        const { data: mainLoc } = await supabaseAdmin
+          .from("locations")
+          .select("id")
+          .is("business_id", null)
+          .eq("name", "Main Warehouse")
+          .maybeSingle();
+        if (mainLoc?.id) {
+          originalLocationIds = [mainLoc.id];
+        } else {
+          const { data: anyLoc } = await supabaseAdmin
+            .from("locations")
+            .select("id")
+            .limit(1)
+            .maybeSingle();
+          if (anyLoc?.id) {
+            originalLocationIds = [anyLoc.id];
+          }
+        }
+      }
+
       for (const item of currentItems) {
         const totalQty = item.quantity + (item.free_quantity || 0);
 
@@ -342,6 +364,14 @@ export async function PATCH(
               .from("product_stocks")
               .update({ quantity: locationStocks[0].quantity + totalQty })
               .eq("id", locationStocks[0].id);
+          } else {
+            await supabaseAdmin
+              .from("product_stocks")
+              .insert({
+                product_id: item.product_id,
+                location_id: originalLocationIds[0],
+                quantity: totalQty,
+              });
           }
         }
       }
@@ -465,6 +495,27 @@ export async function PATCH(
       ? assignments.map((a) => a.location_id)
       : [];
 
+    // Fetch Main Warehouse ID as fallback if no assignments exist
+    let mainWarehouseId: string | null = null;
+    if (assignedLocationIds.length === 0) {
+      const { data: mainLoc } = await supabaseAdmin
+        .from("locations")
+        .select("id")
+        .is("business_id", null)
+        .eq("name", "Main Warehouse")
+        .maybeSingle();
+
+      mainWarehouseId = mainLoc?.id || null;
+      if (!mainWarehouseId) {
+        const { data: anyLoc } = await supabaseAdmin
+          .from("locations")
+          .select("id")
+          .limit(1)
+          .maybeSingle();
+        mainWarehouseId = anyLoc?.id || null;
+      }
+    }
+
     for (const item of val.items) {
       const totalQty = item.quantity + item.freeQuantity;
 
@@ -479,38 +530,71 @@ export async function PATCH(
         await supabaseAdmin
           .from("products")
           .update({
-            stock_quantity: Math.max(0, prod.stock_quantity - totalQty),
+            stock_quantity: prod.stock_quantity - totalQty,
           })
           .eq("id", item.productId);
       }
 
       // 3. Deduct Location Stock
-      if (assignedLocationIds.length > 0) {
+      {
         let remainingToDeduct = totalQty;
+        const targetLocationIds = assignedLocationIds.length > 0
+          ? assignedLocationIds
+          : (mainWarehouseId ? [mainWarehouseId] : []);
 
-        const { data: locationStocks } = await supabaseAdmin
-          .from("product_stocks")
-          .select("id, location_id, quantity")
-          .eq("product_id", item.productId)
-          .in("location_id", assignedLocationIds)
-          .gt("quantity", 0)
-          .order("quantity", { ascending: false });
+        if (targetLocationIds.length > 0) {
+          const { data: locationStocks } = await supabaseAdmin
+            .from("product_stocks")
+            .select("id, location_id, quantity")
+            .eq("product_id", item.productId)
+            .in("location_id", targetLocationIds)
+            .gt("quantity", 0)
+            .order("quantity", { ascending: false });
 
-        if (locationStocks) {
-          for (const stockRec of locationStocks) {
-            if (remainingToDeduct <= 0) break;
+          if (locationStocks) {
+            for (const stockRec of locationStocks) {
+              if (remainingToDeduct <= 0) break;
 
-            const available = stockRec.quantity;
-            const deduct = Math.min(available, remainingToDeduct);
+              const available = stockRec.quantity;
+              const deduct = Math.min(available, remainingToDeduct);
 
-            await supabaseAdmin
+              await supabaseAdmin
+                .from("product_stocks")
+                .update({
+                  quantity: available - deduct,
+                })
+                .eq("id", stockRec.id);
+
+              remainingToDeduct -= deduct;
+            }
+          }
+
+          if (remainingToDeduct > 0) {
+            const targetLocationId = targetLocationIds[0];
+            const { data: existingStock } = await supabaseAdmin
               .from("product_stocks")
-              .update({
-                quantity: available - deduct,
-              })
-              .eq("id", stockRec.id);
+              .select("id, quantity")
+              .eq("product_id", item.productId)
+              .eq("location_id", targetLocationId)
+              .maybeSingle();
 
-            remainingToDeduct -= deduct;
+            if (existingStock) {
+              await supabaseAdmin
+                .from("product_stocks")
+                .update({
+                  quantity: Number(existingStock.quantity) - remainingToDeduct,
+                  last_updated: new Date().toISOString(),
+                })
+                .eq("id", existingStock.id);
+            } else {
+              await supabaseAdmin
+                .from("product_stocks")
+                .insert({
+                  product_id: item.productId,
+                  location_id: targetLocationId,
+                  quantity: -remainingToDeduct,
+                });
+            }
           }
         }
       }
@@ -601,6 +685,28 @@ export async function DELETE(
       locationIds = assignments?.map((a: any) => a.location_id) ?? [];
     }
 
+    // Fetch Main Warehouse ID as fallback if no location assignments exist
+    if (locationIds.length === 0) {
+      const { data: mainLoc } = await supabaseAdmin
+        .from("locations")
+        .select("id")
+        .is("business_id", null)
+        .eq("name", "Main Warehouse")
+        .maybeSingle();
+      if (mainLoc?.id) {
+        locationIds = [mainLoc.id];
+      } else {
+        const { data: anyLoc } = await supabaseAdmin
+          .from("locations")
+          .select("id")
+          .limit(1)
+          .maybeSingle();
+        if (anyLoc?.id) {
+          locationIds = [anyLoc.id];
+        }
+      }
+    }
+
     // 4. Restore stock for each item
     if (orderItems && orderItems.length > 0) {
       for (const item of orderItems) {
@@ -634,6 +740,14 @@ export async function DELETE(
               .from("product_stocks")
               .update({ quantity: locStocks[0].quantity + totalQty })
               .eq("id", locStocks[0].id);
+          } else {
+            await supabaseAdmin
+              .from("product_stocks")
+              .insert({
+                product_id: item.product_id,
+                location_id: locationIds[0],
+                quantity: totalQty,
+              });
           }
         }
       }

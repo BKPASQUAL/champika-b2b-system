@@ -146,13 +146,37 @@ async function restoreStock(
       .eq("id", productId);
   }
 
-  // 2. Location stock – add back to the location that currently has the most
-  if (locationIds.length > 0) {
+  // 2. Location stock
+  let targetLocationIds = [...locationIds];
+
+  if (targetLocationIds.length === 0) {
+    const { data: mainLoc } = await supabaseAdmin
+      .from("locations")
+      .select("id")
+      .is("business_id", null)
+      .eq("name", "Main Warehouse")
+      .maybeSingle();
+
+    if (mainLoc?.id) {
+      targetLocationIds = [mainLoc.id];
+    } else {
+      const { data: anyLoc } = await supabaseAdmin
+        .from("locations")
+        .select("id")
+        .limit(1)
+        .maybeSingle();
+      if (anyLoc?.id) {
+        targetLocationIds = [anyLoc.id];
+      }
+    }
+  }
+
+  if (targetLocationIds.length > 0) {
     const { data: locStocks } = await supabaseAdmin
       .from("product_stocks")
       .select("id, quantity")
       .eq("product_id", productId)
-      .in("location_id", locationIds)
+      .in("location_id", targetLocationIds)
       .order("quantity", { ascending: false });
 
     if (locStocks && locStocks.length > 0) {
@@ -160,6 +184,14 @@ async function restoreStock(
         .from("product_stocks")
         .update({ quantity: locStocks[0].quantity + qty })
         .eq("id", locStocks[0].id);
+    } else {
+      await supabaseAdmin
+        .from("product_stocks")
+        .insert({
+          product_id: productId,
+          location_id: targetLocationIds[0],
+          quantity: qty,
+        });
     }
   }
 }
@@ -180,19 +212,42 @@ async function deductStock(
   if (prod) {
     await supabaseAdmin
       .from("products")
-      .update({ stock_quantity: Math.max(0, prod.stock_quantity - qty) })
+      .update({ stock_quantity: prod.stock_quantity - qty })
       .eq("id", productId);
   }
 
   // 2. Location stock – waterfall from highest to lowest
-  if (locationIds.length > 0) {
-    let remaining = qty;
+  let remaining = qty;
+  let targetLocationIds = [...locationIds];
 
+  if (targetLocationIds.length === 0) {
+    const { data: mainLoc } = await supabaseAdmin
+      .from("locations")
+      .select("id")
+      .is("business_id", null)
+      .eq("name", "Main Warehouse")
+      .maybeSingle();
+
+    if (mainLoc?.id) {
+      targetLocationIds = [mainLoc.id];
+    } else {
+      const { data: anyLoc } = await supabaseAdmin
+        .from("locations")
+        .select("id")
+        .limit(1)
+        .maybeSingle();
+      if (anyLoc?.id) {
+        targetLocationIds = [anyLoc.id];
+      }
+    }
+  }
+
+  if (targetLocationIds.length > 0) {
     const { data: locStocks } = await supabaseAdmin
       .from("product_stocks")
       .select("id, quantity")
       .eq("product_id", productId)
-      .in("location_id", locationIds)
+      .in("location_id", targetLocationIds)
       .gt("quantity", 0)
       .order("quantity", { ascending: false });
 
@@ -205,6 +260,34 @@ async function deductStock(
           .update({ quantity: ls.quantity - deduct })
           .eq("id", ls.id);
         remaining -= deduct;
+      }
+    }
+
+    if (remaining > 0) {
+      const targetLocationId = targetLocationIds[0];
+      const { data: existingStock } = await supabaseAdmin
+        .from("product_stocks")
+        .select("id, quantity")
+        .eq("product_id", productId)
+        .eq("location_id", targetLocationId)
+        .maybeSingle();
+
+      if (existingStock) {
+        await supabaseAdmin
+          .from("product_stocks")
+          .update({
+            quantity: Number(existingStock.quantity) - remaining,
+            last_updated: new Date().toISOString(),
+          })
+          .eq("id", existingStock.id);
+      } else {
+        await supabaseAdmin
+          .from("product_stocks")
+          .insert({
+            product_id: productId,
+            location_id: targetLocationId,
+            quantity: -remaining,
+          });
       }
     }
   }

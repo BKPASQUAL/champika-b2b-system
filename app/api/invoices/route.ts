@@ -8,11 +8,11 @@ import { triggerAgencyBillsForInvoice } from "@/app/lib/inter-branch-billing";
 
 const invoiceItemSchema = z.object({
   productId: z.string(),
-  sku: z.string().optional(),
-  productName: z.string().optional(),
+  sku: z.string().optional().nullable(),
+  productName: z.string().optional().nullable(),
   quantity: z.number().min(1),
   freeQuantity: z.number().default(0),
-  unit: z.string().optional().or(z.literal("")),
+  unit: z.string().optional().nullable().or(z.literal("")),
   mrp: z.number(),
   unitPrice: z.number(),
   // ✅ Discount Fields
@@ -24,18 +24,18 @@ const invoiceItemSchema = z.object({
 const invoiceSchema = z.object({
   customerId: z.string().min(1, "Customer is required"),
   salesRepId: z.string().min(1).optional().nullable(),
-  businessId: z.string().optional(),
-  invoiceDate: z.string().optional(),
-  dueDate: z.string().optional(),
+  businessId: z.string().optional().nullable(),
+  invoiceDate: z.string().optional().nullable(),
+  dueDate: z.string().optional().nullable(),
   // ✅ NEW: Manual Invoice Number Field
-  manual_invoice_no: z.string().optional(),
+  manual_invoice_no: z.string().optional().nullable(),
   items: z.array(invoiceItemSchema).min(1, "At least one item is required"),
   subTotal: z.number(),
   // ✅ Extra Discount Fields
   extraDiscountPercent: z.number().default(0),
   extraDiscountAmount: z.number().default(0),
   grandTotal: z.number(),
-  notes: z.string().optional(),
+  notes: z.string().optional().nullable(),
   orderStatus: z
     .enum([
       "Pending",
@@ -669,6 +669,27 @@ export async function POST(request: NextRequest) {
       ? assignments.map((a) => a.location_id)
       : [];
 
+    // Fetch Main Warehouse ID as fallback if no assignments exist
+    let mainWarehouseId: string | null = null;
+    if (assignedLocationIds.length === 0) {
+      const { data: mainLoc } = await supabaseAdmin
+        .from("locations")
+        .select("id")
+        .is("business_id", null)
+        .eq("name", "Main Warehouse")
+        .maybeSingle();
+
+      mainWarehouseId = mainLoc?.id || null;
+      if (!mainWarehouseId) {
+        const { data: anyLoc } = await supabaseAdmin
+          .from("locations")
+          .select("id")
+          .limit(1)
+          .maybeSingle();
+        mainWarehouseId = anyLoc?.id || null;
+      }
+    }
+
     for (const item of val.items) {
       const totalQty = item.quantity + item.freeQuantity;
 
@@ -683,10 +704,7 @@ export async function POST(request: NextRequest) {
         await supabaseAdmin
           .from("products")
           .update({
-            stock_quantity: Math.max(
-              0,
-              (product.stock_quantity || 0) - totalQty,
-            ),
+            stock_quantity: (product.stock_quantity || 0) - totalQty,
           })
           .eq("id", item.productId);
       }
@@ -694,31 +712,60 @@ export async function POST(request: NextRequest) {
       // Location Stock — deduct from assigned locations, or all locations if none assigned
       {
         let remainingToDeduct = totalQty;
-        let stockQuery = supabaseAdmin
-          .from("product_stocks")
-          .select("id, quantity")
-          .eq("product_id", item.productId)
-          .gt("quantity", 0)
-          .order("quantity", { ascending: false });
+        const targetLocationIds = assignedLocationIds.length > 0
+          ? assignedLocationIds
+          : (mainWarehouseId ? [mainWarehouseId] : []);
 
-        if (assignedLocationIds.length > 0) {
-          stockQuery = stockQuery.in("location_id", assignedLocationIds);
-        }
+        if (targetLocationIds.length > 0) {
+          const { data: locationStocks } = await supabaseAdmin
+            .from("product_stocks")
+            .select("id, quantity")
+            .eq("product_id", item.productId)
+            .in("location_id", targetLocationIds)
+            .gt("quantity", 0)
+            .order("quantity", { ascending: false });
 
-        const { data: locationStocks } = await stockQuery;
+          if (locationStocks) {
+            for (const stockRec of locationStocks) {
+              if (remainingToDeduct <= 0) break;
+              const available = stockRec.quantity;
+              const deduct = Math.min(available, remainingToDeduct);
 
-        if (locationStocks) {
-          for (const stockRec of locationStocks) {
-            if (remainingToDeduct <= 0) break;
-            const available = stockRec.quantity;
-            const deduct = Math.min(available, remainingToDeduct);
+              await supabaseAdmin
+                .from("product_stocks")
+                .update({ quantity: available - deduct })
+                .eq("id", stockRec.id);
 
-            await supabaseAdmin
+              remainingToDeduct -= deduct;
+            }
+          }
+
+          if (remainingToDeduct > 0) {
+            const targetLocationId = targetLocationIds[0];
+            const { data: existingStock } = await supabaseAdmin
               .from("product_stocks")
-              .update({ quantity: available - deduct })
-              .eq("id", stockRec.id);
+              .select("id, quantity")
+              .eq("product_id", item.productId)
+              .eq("location_id", targetLocationId)
+              .maybeSingle();
 
-            remainingToDeduct -= deduct;
+            if (existingStock) {
+              await supabaseAdmin
+                .from("product_stocks")
+                .update({
+                  quantity: Number(existingStock.quantity) - remainingToDeduct,
+                  last_updated: new Date().toISOString(),
+                })
+                .eq("id", existingStock.id);
+            } else {
+              await supabaseAdmin
+                .from("product_stocks")
+                .insert({
+                  product_id: item.productId,
+                  location_id: targetLocationId,
+                  quantity: -remainingToDeduct,
+                });
+            }
           }
         }
       }
