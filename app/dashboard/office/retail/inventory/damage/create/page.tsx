@@ -48,9 +48,9 @@ import {
   Truck,
   Warehouse,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 interface Location {
@@ -76,10 +76,9 @@ interface DamageItem {
   damageType: "Location" | "Transport";
 }
 
-export default function CreateOrangeDamageReportPage() {
+export default function CreateRetailDamageReportPage() {
   const router = useRouter();
 
-  // --- State ---
   const [locations, setLocations] = useState<Location[]>([]);
   const [selectedLocationId, setSelectedLocationId] = useState("");
   const [reason, setReason] = useState("");
@@ -88,9 +87,7 @@ export default function CreateOrangeDamageReportPage() {
   const [selectedProductId, setSelectedProductId] = useState("");
   const [productOpen, setProductOpen] = useState(false);
   const [quantity, setQuantity] = useState("");
-  const [damageType, setDamageType] = useState<"Location" | "Transport">(
-    "Location"
-  );
+  const [damageType, setDamageType] = useState<"Location" | "Transport">("Location");
 
   const [damageItems, setDamageItems] = useState<DamageItem[]>([]);
 
@@ -98,7 +95,6 @@ export default function CreateOrangeDamageReportPage() {
   const [stockLoading, setStockLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // --- Effects ---
   useEffect(() => {
     fetchLocations();
   }, []);
@@ -108,17 +104,14 @@ export default function CreateOrangeDamageReportPage() {
       fetchLocationStock();
     } else {
       setSourceProducts([]);
-      setDamageItems([]);
       setSelectedProductId("");
     }
   }, [selectedLocationId]);
 
-  // --- Fetch Data ---
   const fetchLocations = async () => {
     try {
-      // Pass businessId to filter: Orange Agency Locations
       const res = await fetch(
-        `/api/settings/locations?businessId=${BUSINESS_IDS.ORANGE_AGENCY}`
+        `/api/settings/locations?businessId=${BUSINESS_IDS.CHAMPIKA_RETAIL}`
       );
       if (!res.ok) throw new Error("Failed to load locations");
       const data = await res.json();
@@ -134,20 +127,19 @@ export default function CreateOrangeDamageReportPage() {
     setStockLoading(true);
     try {
       const res = await fetch(
-        `/api/inventory/${selectedLocationId}?includeAll=true&businessId=${BUSINESS_IDS.ORANGE_AGENCY}`
+        `/api/inventory/${selectedLocationId}?includeAll=true&businessId=${BUSINESS_IDS.CHAMPIKA_RETAIL}`
       );
       if (!res.ok) throw new Error("Failed to load stock data");
       const data = await res.json();
-
-      const products = data.stocks.map((stock: any) => ({
-        id: stock.id,
-        sku: stock.sku,
-        name: stock.name,
-        available_quantity: stock.quantity,
-        unit: stock.unit_of_measure || "Units",
-      }));
-
-      setSourceProducts(products);
+      setSourceProducts(
+        data.stocks.map((stock: any) => ({
+          id: stock.id,
+          sku: stock.sku,
+          name: stock.name,
+          available_quantity: stock.quantity,
+          unit: stock.unit_of_measure || "Units",
+        }))
+      );
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -155,25 +147,20 @@ export default function CreateOrangeDamageReportPage() {
     }
   };
 
-  // --- Handlers ---
   const handleAddProduct = () => {
     if (!selectedProductId) return toast.error("Please select a product");
     const qty = parseFloat(quantity);
-    if (isNaN(qty) || qty <= 0)
-      return toast.error("Please enter a valid quantity");
+    if (isNaN(qty) || qty <= 0) return toast.error("Please enter a valid quantity");
 
     const product = sourceProducts.find((p) => p.id === selectedProductId);
     if (!product) return;
 
     if (qty > product.available_quantity) {
-      return toast.error(
-        `Max available is ${product.available_quantity} ${product.unit}`
-      );
+      return toast.error(`Max available is ${product.available_quantity} ${product.unit}`);
     }
 
     const existingIndex = damageItems.findIndex(
-      (item) =>
-        item.productId === selectedProductId && item.damageType === damageType
+      (item) => item.productId === selectedProductId && item.damageType === damageType
     );
 
     if (existingIndex >= 0) {
@@ -191,7 +178,7 @@ export default function CreateOrangeDamageReportPage() {
           quantity: qty,
           availableQuantity: product.available_quantity,
           unit: product.unit,
-          damageType: damageType,
+          damageType,
         },
       ]);
       toast.success("Added to damage list");
@@ -212,36 +199,28 @@ export default function CreateOrangeDamageReportPage() {
 
     setSubmitting(true);
     try {
-      const payload = {
-        locationId: selectedLocationId,
-        // Send the ORANGE_AGENCY Business ID
-        businessId: BUSINESS_IDS.ORANGE_AGENCY,
-        items: damageItems,
-        reason: reason || "Internal Damage Report",
-      };
-
       const res = await fetch("/api/inventory/damage", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          locationId: selectedLocationId,
+          businessId: BUSINESS_IDS.CHAMPIKA_RETAIL,
+          items: damageItems,
+          reason: reason || "Internal Damage Report",
+        }),
       });
 
       const data = await res.json();
-      if (!res.ok)
-        throw new Error(data.error || "Failed to submit damage report");
+      if (!res.ok) throw new Error(data.error || "Failed to submit damage report");
 
       toast.success("Damage report processed successfully");
-      router.push("/dashboard/office/orange/inventory/damage");
+      router.push("/dashboard/office/retail/inventory/damage");
     } catch (error: any) {
       toast.error(error.message);
     } finally {
       setSubmitting(false);
     }
   };
-
-  const selectedProduct = sourceProducts.find(
-    (p) => p.id === selectedProductId
-  );
 
   if (loading) {
     return (
@@ -250,6 +229,8 @@ export default function CreateOrangeDamageReportPage() {
       </div>
     );
   }
+
+  const selectedProduct = sourceProducts.find((p) => p.id === selectedProductId);
 
   return (
     <div className="space-y-6">
@@ -264,20 +245,18 @@ export default function CreateOrangeDamageReportPage() {
             >
               <ArrowLeft className="w-4 h-4" />
             </Button>
-            <h1 className="text-3xl font-bold tracking-tight text-orange-950">
-              Report New Damage (Orange)
+            <h1 className="text-3xl font-bold tracking-tight text-green-950">
+              Report New Damage (Retail)
             </h1>
           </div>
           <p className="text-muted-foreground mt-1 ml-8">
-            Mark inventory as damaged in Orange Agency locations.
+            Mark inventory as damaged in Champika Retail locations.
           </p>
         </div>
         <Button
           variant="destructive"
           onClick={handleSubmit}
-          disabled={
-            submitting || !selectedLocationId || damageItems.length === 0
-          }
+          disabled={submitting || !selectedLocationId || damageItems.length === 0}
         >
           {submitting ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -289,23 +268,18 @@ export default function CreateOrangeDamageReportPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Left: Inputs */}
         <div className="lg:col-span-2 space-y-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
-                <MapPin className="w-4 h-4 text-orange-600" /> Location &
-                Context
+                <MapPin className="w-4 h-4 text-green-600" /> Location & Context
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Location</Label>
-                  <Select
-                    value={selectedLocationId}
-                    onValueChange={setSelectedLocationId}
-                  >
+                  <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Select Location" />
                     </SelectTrigger>
@@ -330,14 +304,10 @@ export default function CreateOrangeDamageReportPage() {
             </CardContent>
           </Card>
 
-          <Card
-            className={
-              !selectedLocationId ? "opacity-60 pointer-events-none" : ""
-            }
-          >
+          <Card className={!selectedLocationId ? "opacity-60 pointer-events-none" : ""}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
-                <Package className="w-4 h-4 text-orange-600" /> Select Items
+                <Package className="w-4 h-4 text-green-600" /> Select Items
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -358,9 +328,7 @@ export default function CreateOrangeDamageReportPage() {
                             aria-expanded={productOpen}
                             className="w-full justify-between font-normal"
                           >
-                            {selectedProductId
-                              ? sourceProducts.find((p) => p.id === selectedProductId)?.name
-                              : "Search product..."}
+                            {selectedProduct ? selectedProduct.name : "Search product..."}
                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                           </Button>
                         </PopoverTrigger>
@@ -399,10 +367,7 @@ export default function CreateOrangeDamageReportPage() {
                     </div>
                     <div className="md:col-span-3 space-y-2">
                       <Label>Damage Type</Label>
-                      <Select
-                        value={damageType}
-                        onValueChange={(v: any) => setDamageType(v)}
-                      >
+                      <Select value={damageType} onValueChange={(v: any) => setDamageType(v)}>
                         <SelectTrigger className="w-full">
                           <SelectValue />
                         </SelectTrigger>
@@ -432,7 +397,7 @@ export default function CreateOrangeDamageReportPage() {
                       <Button
                         onClick={handleAddProduct}
                         disabled={!selectedProductId || !quantity}
-                        className="w-full bg-orange-600 hover:bg-orange-700"
+                        className="w-full bg-green-600 hover:bg-green-700"
                       >
                         <Plus className="w-4 h-4" />
                       </Button>
@@ -444,14 +409,12 @@ export default function CreateOrangeDamageReportPage() {
           </Card>
         </div>
 
-        {/* Right: List */}
         <div className="space-y-6">
           <Card className="h-full flex flex-col">
             <CardHeader className="border-b pb-3">
               <div className="flex justify-between items-center">
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <ClipboardList className="w-4 h-4 text-orange-600" /> Damage
-                  List
+                  <ClipboardList className="w-4 h-4 text-green-600" /> Damage List
                 </CardTitle>
                 {damageItems.length > 0 && (
                   <Button
@@ -486,12 +449,8 @@ export default function CreateOrangeDamageReportPage() {
                       {damageItems.map((item, idx) => (
                         <TableRow key={idx}>
                           <TableCell className="pl-4 py-3">
-                            <div className="font-medium text-sm">
-                              {item.productName}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {item.sku}
-                            </div>
+                            <div className="font-medium text-sm">{item.productName}</div>
+                            <div className="text-xs text-muted-foreground">{item.sku}</div>
                           </TableCell>
                           <TableCell>
                             <Badge

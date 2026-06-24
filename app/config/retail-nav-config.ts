@@ -21,6 +21,7 @@ import {
   ClipboardCheck,
   Banknote,
   BookOpen,
+  ShieldAlert,
 } from "lucide-react";
 
 interface RetailNavItem {
@@ -103,6 +104,12 @@ export const retailOfficeNavItems: RetailNavSection[] = [
         href: "/dashboard/office/retail/stock",
         icon: Package,
         description: "Retail location inventory",
+      },
+      {
+        name: "Damage Reports",
+        href: "/dashboard/office/retail/inventory/damage",
+        icon: ShieldAlert,
+        description: "Report and view damaged stock",
       },
       // {
       //   name: "Stock Requests",

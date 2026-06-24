@@ -21,6 +21,7 @@ import {
   Split,
   X,
   ArrowUpDown,
+  Trash2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -319,6 +320,12 @@ export default function RetailStockPage() {
             className="bg-green-600 hover:bg-green-700"
           >
             <ArrowRightLeft className="w-4 h-4 mr-2" /> Request Stock
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={() => router.push("/dashboard/office/retail/inventory/damage")}
+          >
+            <Trash2 className="w-4 h-4 mr-2" /> Report Damage
           </Button>
         </div>
       </div>

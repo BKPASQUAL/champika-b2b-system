@@ -20,7 +20,9 @@ export async function GET(
 
     if (locError) throw new Error("Location not found");
 
-    // 2. Fetch Stocks for this Location (Good OR Damaged > 0)
+    // 2. Fetch Stocks for this Location
+    const includeAll = url.searchParams.get("includeAll") === "true";
+
     // ✅ Updated: Use !inner join to allow filtering on product fields
     let query = supabaseAdmin
       .from("product_stocks")
@@ -41,8 +43,13 @@ export async function GET(
         )
       `,
       )
-      .eq("location_id", id)
-      .or("quantity.gt.0,damaged_quantity.gt.0"); // Fetch if EITHER good OR damaged stock exists
+      .eq("location_id", id);
+
+    // When includeAll=true (e.g. damage reporting), show all products with a stock record
+    // Otherwise only show products that have stock > 0
+    if (!includeAll) {
+      query = query.or("quantity.gt.0,damaged_quantity.gt.0");
+    }
 
     // ✅ Apply agency supplier filter if requested
     if (businessId === BUSINESS_IDS.WIREMAN_AGENCY) {

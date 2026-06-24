@@ -16,6 +16,7 @@ import {
   CalendarDays,
   ScrollText,
   Printer,
+  ShieldAlert,
 } from "lucide-react";
 
 interface WiremanNavItem {
@@ -115,6 +116,12 @@ export const wiremanOfficeNavItems: WiremanNavSection[] = [
         name: "Returns",
         href: "/dashboard/office/wireman/inventory/returns",
         icon: Undo2,
+      },
+      {
+        name: "Damage Reports",
+        href: "/dashboard/office/wireman/inventory/damage",
+        icon: ShieldAlert,
+        description: "Report and view damaged stock",
       },
     ],
   },

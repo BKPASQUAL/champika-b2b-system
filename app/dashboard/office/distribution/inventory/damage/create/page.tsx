@@ -22,6 +22,19 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   ArrowLeft,
   Loader2,
   Plus,
@@ -30,10 +43,12 @@ import {
   MapPin,
   ClipboardList,
   AlertTriangle,
-  Search,
+  Check,
+  ChevronsUpDown,
   Truck,
   Warehouse,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { BUSINESS_IDS } from "@/app/config/business-constants"; // Import Constants
@@ -71,6 +86,7 @@ export default function CreateDamageReportPage() {
 
   const [sourceProducts, setSourceProducts] = useState<Product[]>([]);
   const [selectedProductId, setSelectedProductId] = useState("");
+  const [productOpen, setProductOpen] = useState(false);
   const [quantity, setQuantity] = useState("");
   const [damageType, setDamageType] = useState<"Location" | "Transport">(
     "Location"
@@ -117,7 +133,9 @@ export default function CreateDamageReportPage() {
   const fetchLocationStock = async () => {
     setStockLoading(true);
     try {
-      const res = await fetch(`/api/inventory/${selectedLocationId}`);
+      const res = await fetch(
+        `/api/inventory/${selectedLocationId}?includeAll=true&businessId=${BUSINESS_IDS.CHAMPIKA_DISTRIBUTION}`
+      );
       if (!res.ok) throw new Error("Failed to load stock data");
       const data = await res.json();
 
@@ -331,38 +349,52 @@ export default function CreateDamageReportPage() {
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
                     <div className="md:col-span-5 space-y-2">
                       <Label>Product (Good Stock)</Label>
-                      <Select
-                        value={selectedProductId}
-                        onValueChange={setSelectedProductId}
-                      >
-                        <SelectTrigger className="w-full">
-                          <div className="flex items-center gap-2 text-muted-foreground">
-                            <Search className="w-4 h-4" />
-                            <SelectValue placeholder="Search product..." />
-                          </div>
-                        </SelectTrigger>
-                        <SelectContent className="max-h-[300px]">
-                          {sourceProducts.length === 0 ? (
-                            <div className="p-2 text-sm text-center">
-                              No Stock
-                            </div>
-                          ) : (
-                            sourceProducts.map((p) => (
-                              <SelectItem key={p.id} value={p.id}>
-                                <div className="flex justify-between w-full gap-4">
-                                  <span>{p.name}</span>
-                                  <Badge
-                                    variant="secondary"
-                                    className="text-xs"
+                      <Popover open={productOpen} onOpenChange={setProductOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={productOpen}
+                            className="w-full justify-between font-normal"
+                          >
+                            {selectedProductId
+                              ? sourceProducts.find((p) => p.id === selectedProductId)?.name
+                              : "Search product..."}
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="Search by name or SKU..." />
+                            <CommandList>
+                              <CommandEmpty>No product found.</CommandEmpty>
+                              <CommandGroup>
+                                {sourceProducts.map((p) => (
+                                  <CommandItem
+                                    key={p.id}
+                                    value={`${p.name} ${p.sku}`}
+                                    onSelect={() => {
+                                      setSelectedProductId(p.id);
+                                      setProductOpen(false);
+                                    }}
                                   >
-                                    {p.available_quantity} {p.unit}
-                                  </Badge>
-                                </div>
-                              </SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
-                      </Select>
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        selectedProductId === p.id ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    <span className="flex-1">{p.name}</span>
+                                    <Badge variant="secondary" className="text-xs ml-2">
+                                      {p.available_quantity} {p.unit}
+                                    </Badge>
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                     </div>
                     <div className="md:col-span-3 space-y-2">
                       <Label>Damage Type</Label>
@@ -370,7 +402,7 @@ export default function CreateDamageReportPage() {
                         value={damageType}
                         onValueChange={(v: any) => setDamageType(v)}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className="w-full">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>

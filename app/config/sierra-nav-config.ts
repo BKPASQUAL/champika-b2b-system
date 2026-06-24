@@ -18,6 +18,7 @@ import {
   Printer,
   ArrowRightLeft,
   TrendingUp,
+  ShieldAlert,
 } from "lucide-react";
 
 interface SierraNavItem {
@@ -112,6 +113,12 @@ export const sierraOfficeNavItems: SierraNavSection[] = [
         name: "Returns",
         href: "/dashboard/office/sierra/inventory/returns",
         icon: Undo2,
+      },
+      {
+        name: "Damage Reports",
+        href: "/dashboard/office/sierra/inventory/damage",
+        icon: ShieldAlert,
+        description: "Report and view damaged stock",
       },
     ],
   },
