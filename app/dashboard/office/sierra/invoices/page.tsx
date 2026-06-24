@@ -297,14 +297,24 @@ export default function SierraInvoicesPage() {
                 Export Excel
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => downloadOutstandingReport(invoices, repFilter)}
+                onClick={() => downloadOutstandingReport(invoices, repFilter, false)}
               >
-                <FileText className="w-4 h-4 mr-2 text-red-600" /> Outstanding Bills (PDF)
+                <FileText className="w-4 h-4 mr-2 text-red-600" /> Outstanding (PDF) - With Champika
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => printOutstandingReport(invoices, repFilter)}
+                onClick={() => downloadOutstandingReport(invoices, repFilter, true)}
               >
-                <Printer className="w-4 h-4 mr-2 text-red-600" /> Print Outstanding Bills
+                <FileText className="w-4 h-4 mr-2 text-red-600" /> Outstanding (PDF) - Without Champika
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => printOutstandingReport(invoices, repFilter, false)}
+              >
+                <Printer className="w-4 h-4 mr-2 text-red-600" /> Print Outstanding - With Champika
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => printOutstandingReport(invoices, repFilter, true)}
+              >
+                <Printer className="w-4 h-4 mr-2 text-red-600" /> Print Outstanding - Without Champika
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

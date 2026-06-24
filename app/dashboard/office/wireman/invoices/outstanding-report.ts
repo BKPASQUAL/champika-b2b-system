@@ -32,7 +32,7 @@ const COLOR = {
 const M = 8;
 const START_Y = 44;
 
-function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
+function buildDoc(outstanding: Invoice[], repFilter: string, excludeChampika: boolean = false): jsPDF {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth  = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -47,8 +47,8 @@ function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
   doc.setTextColor(...COLOR.titleRed);
   const subtitle =
     repFilter !== "all"
-      ? `Outstanding Bills (Grouped by Customer) — ${repFilter}`
-      : "Outstanding Bills (Grouped by Customer)";
+      ? `Outstanding Bills (Grouped by Customer) — ${repFilter}${excludeChampika ? " (Excl. Champika)" : ""}`
+      : `Outstanding Bills (Grouped by Customer)${excludeChampika ? " (Excl. Champika)" : ""}`;
   doc.text(subtitle, M, 28);
 
   doc.setFont("helvetica", "normal");
@@ -191,25 +191,44 @@ function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
   return doc;
 }
 
-export function downloadOutstandingReport(invoices: Invoice[], repFilter: string = "all") {
+export function downloadOutstandingReport(
+  invoices: Invoice[],
+  repFilter: string = "all",
+  excludeChampika: boolean = false
+) {
   const outstanding = invoices.filter(
-    (inv) => inv.status !== "Paid" && inv.orderStatus !== "Cancelled" && inv.dueAmount > 0 && (repFilter === "all" || inv.salesRepName === repFilter)
+    (inv) =>
+      inv.status !== "Paid" &&
+      inv.orderStatus !== "Cancelled" &&
+      inv.dueAmount > 0 &&
+      (repFilter === "all" || inv.salesRepName === repFilter) &&
+      (!excludeChampika || !(inv.customerName || "").toLowerCase().includes("champika hardware"))
   );
   if (outstanding.length === 0) { toast.info("No outstanding bills found"); return; }
-  const doc = buildDoc(outstanding, repFilter);
+  const doc = buildDoc(outstanding, repFilter, excludeChampika);
   const date = new Date().toISOString().split("T")[0];
   const repSuffix = repFilter !== "all" ? `_${repFilter.replace(/\s+/g, "_")}` : "";
-  doc.save(`Outstanding_By_Customer${repSuffix}_${date}.pdf`);
+  const champikaSuffix = excludeChampika ? "_Excl_Champika" : "";
+  doc.save(`Outstanding_By_Customer${repSuffix}${champikaSuffix}_${date}.pdf`);
   toast.success(`Report downloaded – ${outstanding.length} outstanding bill${outstanding.length > 1 ? "s" : ""}`);
 }
 
-export function printOutstandingReport(invoices: Invoice[], repFilter: string = "all") {
+export function printOutstandingReport(
+  invoices: Invoice[],
+  repFilter: string = "all",
+  excludeChampika: boolean = false
+) {
   const outstanding = invoices.filter(
-    (inv) => inv.status !== "Paid" && inv.orderStatus !== "Cancelled" && inv.dueAmount > 0 && (repFilter === "all" || inv.salesRepName === repFilter)
+    (inv) =>
+      inv.status !== "Paid" &&
+      inv.orderStatus !== "Cancelled" &&
+      inv.dueAmount > 0 &&
+      (repFilter === "all" || inv.salesRepName === repFilter) &&
+      (!excludeChampika || !(inv.customerName || "").toLowerCase().includes("champika hardware"))
   );
   if (outstanding.length === 0) { toast.info("No outstanding bills found"); return; }
 
-  const doc = buildDoc(outstanding, repFilter);
+  const doc = buildDoc(outstanding, repFilter, excludeChampika);
   doc.autoPrint();
   const blob = doc.output("blob");
   const url  = URL.createObjectURL(blob);
