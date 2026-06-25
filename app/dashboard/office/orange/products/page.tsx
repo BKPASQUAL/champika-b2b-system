@@ -77,7 +77,7 @@ export default function OrangeProductsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [stockFilter, setStockFilter] = useState("all");
-  const [showCost, setShowCost] = useState(false);
+  const [showCost, setShowCost] = useState(true);
 
   // Sorting & Pagination
   const [sortField, setSortField] = useState<SortField>("name");

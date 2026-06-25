@@ -39,6 +39,7 @@ export async function GET(
           unit_of_measure,
           selling_price,
           cost_price,
+          actual_cost_price,
           supplier_name
         )
       `,
@@ -79,7 +80,7 @@ export async function GET(
 
     const totalValue = safeStocks.reduce(
       (sum, item: any) =>
-        sum + Number(item.quantity) * (item.products?.selling_price || 0),
+        sum + Number(item.quantity) * (item.products?.actual_cost_price || item.products?.cost_price || 0),
       0,
     );
 
@@ -94,7 +95,7 @@ export async function GET(
         damagedQuantity: stockItem.damaged_quantity || 0, // Map damage qty
         lastUpdated: stockItem.last_updated,
         value:
-          Number(stockItem.quantity) * (stockItem.products?.selling_price || 0),
+          Number(stockItem.quantity) * (stockItem.products?.actual_cost_price || stockItem.products?.cost_price || 0),
       })),
       stats: {
         totalItems,

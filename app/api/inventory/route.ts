@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     let stocksQuery = supabaseAdmin
       .from("product_stocks")
       .select(
-        "location_id, quantity, product_id, products!inner(cost_price, selling_price, supplier_name)",
+        "location_id, quantity, product_id, products!inner(cost_price, actual_cost_price, selling_price, supplier_name)",
       );
 
     if (locationIds.length > 0) {
@@ -99,7 +99,7 @@ export async function GET(request: NextRequest) {
       );
       const totalValue = locStocks.reduce(
         (sum: number, s: any) =>
-          sum + Number(s.quantity) * (s.products?.selling_price || 0),
+          sum + Number(s.quantity) * (s.products?.actual_cost_price || s.products?.cost_price || 0),
         0,
       );
 
