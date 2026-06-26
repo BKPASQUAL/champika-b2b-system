@@ -31,6 +31,7 @@ import {
   MapPin,
   AlertTriangle,
   RotateCcw,
+  Pencil,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -79,6 +80,9 @@ export default function SierraStockAdjustmentPage() {
   const [submitting, setSubmitting] = useState(false);
   const [zeroOutUnlisted, setZeroOutUnlisted] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [editDialog, setEditDialog] = useState<{ open: boolean; productId: string; productName: string; editValue: string }>({
+    open: false, productId: "", productName: "", editValue: "",
+  });
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean; title: string; message: string; onConfirm: () => void;
   }>({ open: false, title: "", message: "", onConfirm: () => {} });
@@ -151,6 +155,21 @@ export default function SierraStockAdjustmentPage() {
 
   const handleRemoveItem = (id: string) => {
     setPendingAdjustments(pendingAdjustments.filter((p) => p.productId !== id));
+  };
+
+  const openEditDialog = (item: PendingAdjustment) => {
+    setEditDialog({ open: true, productId: item.productId, productName: item.productName, editValue: String(item.newStock) });
+  };
+
+  const handleEditSave = () => {
+    const newQty = parseFloat(editDialog.editValue);
+    if (isNaN(newQty) || newQty < 0) return toast.error("Quantity must be a valid positive number");
+    setPendingAdjustments(pendingAdjustments.map((p) =>
+      p.productId === editDialog.productId
+        ? { ...p, newStock: newQty, difference: newQty - p.currentStock }
+        : p
+    ));
+    setEditDialog((d) => ({ ...d, open: false }));
   };
 
   // Products with stock in this location not already in the pending list
@@ -301,7 +320,9 @@ export default function SierraStockAdjustmentPage() {
             <div className="space-y-2">
               <label className="text-sm font-medium">Select Product</label>
               <SearchableDropdown
-                options={allProducts.map((p) => ({ id: p.id, name: p.name, info: p.sku }))}
+                options={allProducts
+                  .filter((p) => !pendingAdjustments.some((a) => a.productId === p.id))
+                  .map((p) => ({ id: p.id, name: p.name, info: p.sku }))}
                 value={selectedProductId}
                 onChange={setSelectedProductId}
                 placeholder="Search product..."
@@ -367,7 +388,7 @@ export default function SierraStockAdjustmentPage() {
                       <TableHead className="text-right">System</TableHead>
                       <TableHead className="text-right">Physical</TableHead>
                       <TableHead className="text-right">Diff</TableHead>
-                      <TableHead className="w-[50px]"></TableHead>
+                      <TableHead className="w-[90px]"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -397,14 +418,24 @@ export default function SierraStockAdjustmentPage() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-red-500 hover:bg-red-50"
-                            onClick={() => handleRemoveItem(item.productId)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-purple-500 hover:bg-purple-50"
+                              onClick={() => openEditDialog(item)}
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-red-500 hover:bg-red-50"
+                              onClick={() => handleRemoveItem(item.productId)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -463,6 +494,39 @@ export default function SierraStockAdjustmentPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={editDialog.open} onOpenChange={(open) => setEditDialog((d) => ({ ...d, open }))}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="w-4 h-4 text-purple-600" />
+              Edit Stock Quantity
+            </DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground pt-1">
+              {editDialog.productName}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <label className="text-sm font-medium">New Physical Stock</label>
+            <Input
+              type="number"
+              className="mt-2 text-lg font-semibold"
+              value={editDialog.editValue}
+              onChange={(e) => setEditDialog((d) => ({ ...d, editValue: e.target.value }))}
+              onKeyDown={(e) => e.key === "Enter" && handleEditSave()}
+              autoFocus
+            />
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setEditDialog((d) => ({ ...d, open: false }))}>
+              Cancel
+            </Button>
+            <Button className="bg-purple-600 hover:bg-purple-700 text-white" onClick={handleEditSave}>
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={confirmDialog.open} onOpenChange={(open) => setConfirmDialog((p) => ({ ...p, open }))}>
         <DialogContent className="sm:max-w-md">
