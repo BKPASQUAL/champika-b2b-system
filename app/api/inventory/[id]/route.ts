@@ -24,46 +24,55 @@ export async function GET(
     const includeAll = url.searchParams.get("includeAll") === "true";
 
     // ✅ Updated: Use !inner join to allow filtering on product fields
-    let query = supabaseAdmin
-      .from("product_stocks")
-      .select(
-        `
-        quantity,
-        damaged_quantity,
-        last_updated,
-        products!inner (
-          id,
-          sku,
-          name,
-          category,
-          unit_of_measure,
-          selling_price,
-          cost_price,
-          actual_cost_price,
-          supplier_name
+    const stocks: any[] = [];
+    let page = 0;
+    const pageSize = 1000;
+    while (true) {
+      let query = supabaseAdmin
+        .from("product_stocks")
+        .select(
+          `
+          quantity,
+          damaged_quantity,
+          last_updated,
+          products!inner (
+            id,
+            sku,
+            name,
+            category,
+            unit_of_measure,
+            selling_price,
+            cost_price,
+            actual_cost_price,
+            supplier_name
+          )
+        `,
         )
-      `,
-      )
-      .eq("location_id", id);
+        .eq("location_id", id)
+        .range(page * pageSize, (page + 1) * pageSize - 1);
 
-    // When includeAll=true (e.g. damage reporting), show all products with a stock record
-    // Otherwise only show products that have stock > 0
-    if (!includeAll) {
-      query = query.or("quantity.gt.0,damaged_quantity.gt.0");
+      // When includeAll=true (e.g. damage reporting), show all products with a stock record
+      // Otherwise only show products that have stock > 0
+      if (!includeAll) {
+        query = query.or("quantity.gt.0,damaged_quantity.gt.0");
+      }
+
+      // ✅ Apply agency supplier filter if requested
+      if (businessId === BUSINESS_IDS.WIREMAN_AGENCY) {
+        query = query.ilike("products.supplier_name", "%Wireman%");
+      } else if (businessId === BUSINESS_IDS.SIERRA_AGENCY) {
+        query = query.ilike("products.supplier_name", "%Sierra%");
+      } else if (businessId === BUSINESS_IDS.ORANGE_AGENCY) {
+        query = query.ilike("products.supplier_name", "%Orange%");
+      }
+
+      const { data: pageStocks, error: stockError } = await query;
+      if (stockError) throw stockError;
+      if (!pageStocks || pageStocks.length === 0) break;
+      stocks.push(...pageStocks);
+      if (pageStocks.length < pageSize) break;
+      page++;
     }
-
-    // ✅ Apply agency supplier filter if requested
-    if (businessId === BUSINESS_IDS.WIREMAN_AGENCY) {
-      query = query.ilike("products.supplier_name", "%Wireman%");
-    } else if (businessId === BUSINESS_IDS.SIERRA_AGENCY) {
-      query = query.ilike("products.supplier_name", "%Sierra%");
-    } else if (businessId === BUSINESS_IDS.ORANGE_AGENCY) {
-      query = query.ilike("products.supplier_name", "%Orange%");
-    }
-
-    const { data: stocks, error: stockError } = await query;
-
-    if (stockError) throw stockError;
 
     // 3. Calculate Stats
     const safeStocks = stocks || [];

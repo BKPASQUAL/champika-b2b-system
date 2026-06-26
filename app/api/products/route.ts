@@ -31,29 +31,38 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const onlyActive = searchParams.get("active") === "true";
 
-    let query = supabaseAdmin
-      .from("products")
-      .select(
-        `
-        *,
-        product_stocks (
-          quantity,
-          damaged_quantity
-        ),
-        product_suppliers (
-          supplier_name
+    const data: any[] = [];
+    let page = 0;
+    const pageSize = 1000;
+    while (true) {
+      let query = supabaseAdmin
+        .from("products")
+        .select(
+          `
+          *,
+          product_stocks (
+            quantity,
+            damaged_quantity
+          ),
+          product_suppliers (
+            supplier_name
+          )
+        `,
         )
-      `,
-      )
-      .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .range(page * pageSize, (page + 1) * pageSize - 1);
 
-    if (onlyActive) {
-      query = query.eq("is_active", true);
+      if (onlyActive) {
+        query = query.eq("is_active", true);
+      }
+
+      const { data: pageData, error } = await query;
+      if (error) throw error;
+      if (!pageData || pageData.length === 0) break;
+      data.push(...pageData);
+      if (pageData.length < pageSize) break;
+      page++;
     }
-
-    const { data, error } = await query;
-
-    if (error) throw error;
 
     const mapped = data.map((p) => {
       const realStock =
