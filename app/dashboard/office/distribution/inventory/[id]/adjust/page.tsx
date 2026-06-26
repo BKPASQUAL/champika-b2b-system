@@ -487,6 +487,7 @@ export default function StockAdjustmentPage() {
                 placeholder="Enter qty"
                 value={adjustmentValue}
                 onChange={(e) => setAdjustmentValue(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAddToTable()}
                 disabled={!selectedProductId}
                 className="text-lg font-semibold"
               />
