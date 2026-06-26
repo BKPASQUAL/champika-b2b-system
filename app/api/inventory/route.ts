@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
     let productsQuery = supabaseAdmin
       .from("products")
       .select(
-        "id, name, sku, category, stock_quantity, damaged_quantity, min_stock_level, unit_of_measure, supplier_name",
+        "id, name, sku, category, stock_quantity, damaged_quantity, min_stock_level, unit_of_measure, supplier_name, images, mrp, selling_price",
       )
       .order("name");
 

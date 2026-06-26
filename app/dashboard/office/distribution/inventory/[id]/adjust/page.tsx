@@ -32,6 +32,7 @@ import {
   AlertTriangle,
   RotateCcw,
   Pencil,
+  Tag,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -54,6 +55,9 @@ interface Product {
   category: string;
   supplier?: string;
   unitOfMeasure?: string;
+  images?: string[];
+  mrp?: number;
+  sellingPrice?: number;
 }
 
 const AGENCY_KEYWORDS = ["orange", "orel", "sierra", "wireman"];
@@ -65,6 +69,7 @@ interface PendingAdjustment {
   productName: string;
   sku: string;
   unitOfMeasure?: string;
+  images?: string[];
   currentStock: number;
   newStock: number;
   difference: number;
@@ -91,6 +96,9 @@ export default function StockAdjustmentPage() {
   const [resetting, setResetting] = useState(false);
   const [editDialog, setEditDialog] = useState<{ open: boolean; productId: string; productName: string; editValue: string }>({
     open: false, productId: "", productName: "", editValue: "",
+  });
+  const [renameDialog, setRenameDialog] = useState<{ open: boolean; productId: string; currentName: string; newName: string; saving: boolean }>({
+    open: false, productId: "", currentName: "", newName: "", saving: false,
   });
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean; title: string; message: string; onConfirm: () => void;
@@ -134,6 +142,8 @@ export default function StockAdjustmentPage() {
               ...p,
               supplier: supplierMap[p.id] || "",
               unitOfMeasure: p.unit_of_measure || "Pcs",
+              mrp: p.mrp || 0,
+              sellingPrice: p.selling_price || 0,
             }))
           );
         }
@@ -176,6 +186,7 @@ export default function StockAdjustmentPage() {
         productName: selectedProduct.name,
         sku: selectedProduct.sku,
         unitOfMeasure: selectedProduct.unitOfMeasure,
+        images: selectedProduct.images,
         currentStock,
         newStock: finalQty,
         difference: finalQty - currentStock,
@@ -202,6 +213,28 @@ export default function StockAdjustmentPage() {
         : p
     ));
     setEditDialog((d) => ({ ...d, open: false }));
+  };
+
+  const handleRenameSave = async () => {
+    const trimmed = renameDialog.newName.trim();
+    if (!trimmed) return toast.error("Product name cannot be empty");
+    setRenameDialog((d) => ({ ...d, saving: true }));
+    try {
+      const res = await fetch(`/api/products/${renameDialog.productId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Rename failed");
+      setAllProducts((prev) => prev.map((p) => p.id === renameDialog.productId ? { ...p, name: trimmed } : p));
+      setPendingAdjustments((prev) => prev.map((p) => p.productId === renameDialog.productId ? { ...p, productName: trimmed } : p));
+      toast.success("Product renamed successfully");
+      setRenameDialog((d) => ({ ...d, open: false, saving: false }));
+    } catch (err: any) {
+      toast.error(err.message || "Failed to rename product");
+      setRenameDialog((d) => ({ ...d, saving: false }));
+    }
   };
 
   // Non-agency products with stock not already in the pending list
@@ -373,6 +406,33 @@ export default function StockAdjustmentPage() {
               />
             </div>
 
+            {selectedProduct && (
+              <div className="flex flex-col items-center gap-2">
+                {selectedProduct.images?.[0] ? (
+                  <img
+                    src={selectedProduct.images[0]}
+                    alt={selectedProduct.name}
+                    className="w-24 h-24 rounded-lg object-cover border border-border shadow-sm"
+                  />
+                ) : (
+                  <div className="w-24 h-24 rounded-lg border border-border bg-muted flex items-center justify-center">
+                    <span className="text-muted-foreground text-xs">No image</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-1 text-center">
+                  <span className="text-sm font-medium text-slate-700 leading-tight">{selectedProduct.name}</span>
+                  <button
+                    type="button"
+                    title="Rename product"
+                    onClick={() => setRenameDialog({ open: true, productId: selectedProduct.id, currentName: selectedProduct.name, newName: selectedProduct.name, saving: false })}
+                    className="text-muted-foreground hover:text-blue-600 transition-colors"
+                  >
+                    <Tag className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="p-3 bg-muted/30 rounded-lg border text-center space-y-1">
               <span className="text-xs text-muted-foreground uppercase tracking-wide">
                 Current System Stock
@@ -388,6 +448,20 @@ export default function StockAdjustmentPage() {
                   {getUnitSize(selectedProduct.unitOfMeasure) > 1 && (
                     <span className="text-xs text-muted-foreground">
                       Units: <span className="font-semibold text-slate-700">{getUnitSize(selectedProduct.unitOfMeasure)}</span>
+                    </span>
+                  )}
+                </div>
+              )}
+              {selectedProduct && ((selectedProduct.mrp ?? 0) > 0 || (selectedProduct.sellingPrice ?? 0) > 0) && (
+                <div className="flex items-center justify-center gap-4 pt-1 border-t mt-1">
+                  {(selectedProduct.mrp ?? 0) > 0 && (
+                    <span className="text-xs text-muted-foreground">
+                      MRP: <span className="font-semibold text-slate-700">Rs {selectedProduct.mrp?.toLocaleString()}</span>
+                    </span>
+                  )}
+                  {(selectedProduct.sellingPrice ?? 0) > 0 && (
+                    <span className="text-xs text-muted-foreground">
+                      Price: <span className="font-semibold text-blue-700">Rs {selectedProduct.sellingPrice?.toLocaleString()}</span>
                     </span>
                   )}
                 </div>
@@ -474,16 +548,31 @@ export default function StockAdjustmentPage() {
                     {pendingAdjustments.map((item) => (
                       <TableRow key={item.productId}>
                         <TableCell>
-                          <div className="font-medium">{item.productName}</div>
-                          <div className="text-xs text-muted-foreground">{item.sku}</div>
-                          {item.unitOfMeasure && (
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <span className="text-xs text-blue-600 font-medium">{item.unitOfMeasure}</span>
-                              {getUnitSize(item.unitOfMeasure) > 1 && (
-                                <span className="text-xs text-muted-foreground">{getUnitSize(item.unitOfMeasure)} units/pack</span>
+                          <div className="flex items-center gap-3">
+                            {item.images?.[0] ? (
+                              <img
+                                src={item.images[0]}
+                                alt={item.productName}
+                                className="w-10 h-10 rounded object-cover border border-border shrink-0"
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded border border-border bg-muted flex items-center justify-center shrink-0">
+                                <span className="text-muted-foreground text-[9px]">No img</span>
+                              </div>
+                            )}
+                            <div>
+                              <div className="font-medium">{item.productName}</div>
+                              <div className="text-xs text-muted-foreground">{item.sku}</div>
+                              {item.unitOfMeasure && (
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className="text-xs text-blue-600 font-medium">{item.unitOfMeasure}</span>
+                                  {getUnitSize(item.unitOfMeasure) > 1 && (
+                                    <span className="text-xs text-muted-foreground">{getUnitSize(item.unitOfMeasure)} units/pack</span>
+                                  )}
+                                </div>
                               )}
                             </div>
-                          )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-right text-muted-foreground">
                           {item.currentStock}
@@ -587,6 +676,36 @@ export default function StockAdjustmentPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={renameDialog.open} onOpenChange={(open) => setRenameDialog((d) => ({ ...d, open }))}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Tag className="w-4 h-4 text-blue-600" />
+              Rename Product
+            </DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground pt-1">
+              Current: <span className="font-medium text-slate-700">{renameDialog.currentName}</span>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <label className="text-sm font-medium">New Product Name</label>
+            <Input
+              className="mt-2"
+              value={renameDialog.newName}
+              onChange={(e) => setRenameDialog((d) => ({ ...d, newName: e.target.value }))}
+              onKeyDown={(e) => e.key === "Enter" && handleRenameSave()}
+              autoFocus
+            />
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setRenameDialog((d) => ({ ...d, open: false }))}>Cancel</Button>
+            <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={handleRenameSave} disabled={renameDialog.saving}>
+              {renameDialog.saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={editDialog.open} onOpenChange={(open) => setEditDialog((d) => ({ ...d, open }))}>
         <DialogContent className="sm:max-w-sm">
