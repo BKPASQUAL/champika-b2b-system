@@ -412,67 +412,60 @@ export default function StockAdjustmentPage() {
               />
             </div>
 
-            {selectedProduct && (
-              <div className="flex flex-col items-center gap-2">
-                {selectedProduct.images?.[0] ? (
+            {/* Product image + stock info side by side */}
+            <div className="rounded-lg border bg-muted/20 p-3 flex gap-3 items-start">
+              <div className="shrink-0">
+                {selectedProduct?.images?.[0] ? (
                   <img
                     src={selectedProduct.images[0]}
-                    alt={selectedProduct.name}
-                    className="w-24 h-24 rounded-lg object-cover border border-border shadow-sm"
+                    alt={selectedProduct?.name}
+                    className="w-20 h-20 rounded-lg object-cover border border-border shadow-sm"
                   />
                 ) : (
-                  <div className="w-24 h-24 rounded-lg border border-border bg-muted flex items-center justify-center">
-                    <span className="text-muted-foreground text-xs">No image</span>
+                  <div className="w-20 h-20 rounded-lg border border-border bg-muted flex items-center justify-center">
+                    <span className="text-muted-foreground text-[10px] text-center px-1">No image</span>
                   </div>
                 )}
-                <div className="flex items-center gap-1 text-center">
-                  <span className="text-sm font-medium text-slate-700 leading-tight">{selectedProduct.name}</span>
-                  <button
-                    type="button"
-                    title="Rename product"
-                    onClick={() => setRenameDialog({ open: true, productId: selectedProduct.id, currentName: selectedProduct.name, newName: selectedProduct.name, saving: false })}
-                    className="text-muted-foreground hover:text-orange-600 transition-colors"
-                  >
-                    <Tag className="w-3.5 h-3.5" />
-                  </button>
-                </div>
               </div>
-            )}
-
-            {/* 2. Stock Display */}
-            <div className="p-3 bg-muted/30 rounded-lg border text-center space-y-1">
-              <span className="text-xs text-muted-foreground uppercase tracking-wide">
-                Current System Stock
-              </span>
-              <div className="text-3xl font-bold text-slate-800">
-                {selectedProductId ? currentStock : "-"}
+              <div className="flex-1 min-w-0 space-y-1">
+                <div className="flex items-start gap-1">
+                  <span className="text-sm font-semibold text-slate-800 leading-tight">{selectedProduct?.name ?? "—"}</span>
+                  {selectedProduct && (
+                    <button
+                      type="button"
+                      title="Rename product"
+                      onClick={() => setRenameDialog({ open: true, productId: selectedProduct.id, currentName: selectedProduct.name, newName: selectedProduct.name, saving: false })}
+                      className="shrink-0 text-muted-foreground hover:text-orange-600 transition-colors mt-0.5"
+                    >
+                      <Tag className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+                <div>
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Current Stock</span>
+                  <div className="text-2xl font-bold text-slate-800 leading-none">
+                    {selectedProductId ? currentStock : "—"}
+                  </div>
+                </div>
+                {selectedProduct?.unitOfMeasure && (
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                    <span className="text-xs text-muted-foreground">Pack: <span className="font-semibold text-slate-700">{selectedProduct.unitOfMeasure}</span></span>
+                    {getUnitSize(selectedProduct.unitOfMeasure) > 1 && (
+                      <span className="text-xs text-muted-foreground">Units: <span className="font-semibold text-slate-700">{getUnitSize(selectedProduct.unitOfMeasure)}</span></span>
+                    )}
+                  </div>
+                )}
+                {selectedProduct && ((selectedProduct.mrp ?? 0) > 0 || (selectedProduct.sellingPrice ?? 0) > 0) && (
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 pt-1 border-t">
+                    {(selectedProduct.mrp ?? 0) > 0 && (
+                      <span className="text-xs text-muted-foreground">MRP: <span className="font-semibold text-slate-700">Rs {selectedProduct.mrp?.toLocaleString()}</span></span>
+                    )}
+                    {(selectedProduct.sellingPrice ?? 0) > 0 && (
+                      <span className="text-xs text-muted-foreground">Price: <span className="font-semibold text-orange-700">Rs {selectedProduct.sellingPrice?.toLocaleString()}</span></span>
+                    )}
+                  </div>
+                )}
               </div>
-              {selectedProduct?.unitOfMeasure && (
-                <div className="flex items-center justify-center gap-3 pt-1">
-                  <span className="text-xs text-muted-foreground">
-                    Pack: <span className="font-semibold text-slate-700">{selectedProduct.unitOfMeasure}</span>
-                  </span>
-                  {getUnitSize(selectedProduct.unitOfMeasure) > 1 && (
-                    <span className="text-xs text-muted-foreground">
-                      Units: <span className="font-semibold text-slate-700">{getUnitSize(selectedProduct.unitOfMeasure)}</span>
-                    </span>
-                  )}
-                </div>
-              )}
-              {selectedProduct && ((selectedProduct.mrp ?? 0) > 0 || (selectedProduct.sellingPrice ?? 0) > 0) && (
-                <div className="flex items-center justify-center gap-4 pt-1 border-t mt-1">
-                  {(selectedProduct.mrp ?? 0) > 0 && (
-                    <span className="text-xs text-muted-foreground">
-                      MRP: <span className="font-semibold text-slate-700">Rs {selectedProduct.mrp?.toLocaleString()}</span>
-                    </span>
-                  )}
-                  {(selectedProduct.sellingPrice ?? 0) > 0 && (
-                    <span className="text-xs text-muted-foreground">
-                      Price: <span className="font-semibold text-orange-700">Rs {selectedProduct.sellingPrice?.toLocaleString()}</span>
-                    </span>
-                  )}
-                </div>
-              )}
             </div>
 
             <div className="flex rounded-md border overflow-hidden text-sm font-medium">
