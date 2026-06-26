@@ -53,6 +53,7 @@ interface Product {
   name: string;
   category: string;
   supplier?: string;
+  unitOfMeasure?: string;
 }
 
 const AGENCY_KEYWORDS = ["orange", "orel", "sierra", "wireman"];
@@ -63,6 +64,7 @@ interface PendingAdjustment {
   productId: string;
   productName: string;
   sku: string;
+  unitOfMeasure?: string;
   currentStock: number;
   newStock: number;
   difference: number;
@@ -78,6 +80,7 @@ export default function StockAdjustmentPage() {
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [locationStocks, setLocationStocks] = useState<Record<string, number>>({});
   const [locationName, setLocationName] = useState("");
+  const [packSizes, setPackSizes] = useState<{ name: string; description?: string }[]>([]);
 
   const [selectedProductId, setSelectedProductId] = useState("");
   const [adjustmentValue, setAdjustmentValue] = useState("");
@@ -100,14 +103,17 @@ export default function StockAdjustmentPage() {
     const initData = async () => {
       try {
         setLoading(true);
-        const [productsRes, fullProductsRes, stockRes] = await Promise.all([
+        const [productsRes, fullProductsRes, stockRes, packRes] = await Promise.all([
           fetch(`/api/inventory?businessId=${BUSINESS_IDS.CHAMPIKA_DISTRIBUTION}`),
           fetch("/api/products?active=true"),
           fetch(`/api/inventory/${locationId}?businessId=${BUSINESS_IDS.CHAMPIKA_DISTRIBUTION}`),
+          fetch("/api/settings/categories?type=pack_size"),
         ]);
         const productsData = await productsRes.json();
         const fullProductsData = fullProductsRes.ok ? await fullProductsRes.json() : [];
         const stockData = await stockRes.json();
+        const packData = packRes.ok ? await packRes.json() : [];
+        if (Array.isArray(packData)) setPackSizes(packData);
 
         if (stockData.location) setLocationName(stockData.location.name);
 
@@ -124,9 +130,10 @@ export default function StockAdjustmentPage() {
 
         if (productsData.products) {
           setAllProducts(
-            productsData.products.map((p: Product) => ({
+            productsData.products.map((p: any) => ({
               ...p,
               supplier: supplierMap[p.id] || "",
+              unitOfMeasure: p.unit_of_measure || "Pcs",
             }))
           );
         }
@@ -143,6 +150,12 @@ export default function StockAdjustmentPage() {
 
   const selectedProduct = allProducts.find((p) => p.id === selectedProductId);
   const currentStock = selectedProductId ? locationStocks[selectedProductId] || 0 : 0;
+
+  const getUnitSize = (unitOfMeasure?: string) => {
+    if (!unitOfMeasure) return 1;
+    const pack = packSizes.find((p) => p.name === unitOfMeasure);
+    return pack?.description ? parseFloat(pack.description) : 1;
+  };
 
   const handleAddToTable = () => {
     if (!selectedProduct) return toast.error("Select a product first");
@@ -162,6 +175,7 @@ export default function StockAdjustmentPage() {
         productId: selectedProduct.id,
         productName: selectedProduct.name,
         sku: selectedProduct.sku,
+        unitOfMeasure: selectedProduct.unitOfMeasure,
         currentStock,
         newStock: finalQty,
         difference: finalQty - currentStock,
@@ -366,6 +380,18 @@ export default function StockAdjustmentPage() {
               <div className="text-3xl font-bold text-slate-800">
                 {selectedProductId ? currentStock : "-"}
               </div>
+              {selectedProduct?.unitOfMeasure && (
+                <div className="flex items-center justify-center gap-3 pt-1">
+                  <span className="text-xs text-muted-foreground">
+                    Pack: <span className="font-semibold text-slate-700">{selectedProduct.unitOfMeasure}</span>
+                  </span>
+                  {getUnitSize(selectedProduct.unitOfMeasure) > 1 && (
+                    <span className="text-xs text-muted-foreground">
+                      Units: <span className="font-semibold text-slate-700">{getUnitSize(selectedProduct.unitOfMeasure)}</span>
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="flex rounded-md border overflow-hidden text-sm font-medium">
@@ -450,6 +476,14 @@ export default function StockAdjustmentPage() {
                         <TableCell>
                           <div className="font-medium">{item.productName}</div>
                           <div className="text-xs text-muted-foreground">{item.sku}</div>
+                          {item.unitOfMeasure && (
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="text-xs text-blue-600 font-medium">{item.unitOfMeasure}</span>
+                              {getUnitSize(item.unitOfMeasure) > 1 && (
+                                <span className="text-xs text-muted-foreground">{getUnitSize(item.unitOfMeasure)} units/pack</span>
+                              )}
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell className="text-right text-muted-foreground">
                           {item.currentStock}
