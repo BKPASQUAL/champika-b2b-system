@@ -81,6 +81,7 @@ export default function StockAdjustmentPage() {
 
   const [selectedProductId, setSelectedProductId] = useState("");
   const [adjustmentValue, setAdjustmentValue] = useState("");
+  const [addMode, setAddMode] = useState<"set" | "add">("set");
   const [pendingAdjustments, setPendingAdjustments] = useState<PendingAdjustment[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [zeroOutUnlisted, setZeroOutUnlisted] = useState(false);
@@ -147,13 +148,14 @@ export default function StockAdjustmentPage() {
     if (!selectedProduct) return toast.error("Select a product first");
     if (adjustmentValue === "") return toast.error("Enter a valid quantity");
 
-    const newQty = parseFloat(adjustmentValue);
-    if (isNaN(newQty) || newQty < 0) return toast.error("Quantity must be a valid positive number");
+    const enteredQty = parseFloat(adjustmentValue);
+    if (isNaN(enteredQty) || enteredQty < 0) return toast.error("Quantity must be a valid positive number");
     if (pendingAdjustments.some((p) => p.productId === selectedProductId)) {
       toast.error("This product is already in the adjustment list");
       return;
     }
 
+    const finalQty = addMode === "add" ? currentStock + enteredQty : enteredQty;
     setPendingAdjustments([
       ...pendingAdjustments,
       {
@@ -161,8 +163,8 @@ export default function StockAdjustmentPage() {
         productName: selectedProduct.name,
         sku: selectedProduct.sku,
         currentStock,
-        newStock: newQty,
-        difference: newQty - currentStock,
+        newStock: finalQty,
+        difference: finalQty - currentStock,
       },
     ]);
     setAdjustmentValue("");
@@ -366,8 +368,27 @@ export default function StockAdjustmentPage() {
               </div>
             </div>
 
+            <div className="flex rounded-md border overflow-hidden text-sm font-medium">
+              <button
+                type="button"
+                className={cn("flex-1 py-2 transition-colors", addMode === "set" ? "bg-blue-600 text-white" : "bg-muted text-muted-foreground hover:bg-muted/70")}
+                onClick={() => setAddMode("set")}
+              >
+                Set
+              </button>
+              <button
+                type="button"
+                className={cn("flex-1 py-2 transition-colors", addMode === "add" ? "bg-blue-600 text-white" : "bg-muted text-muted-foreground hover:bg-muted/70")}
+                onClick={() => setAddMode("add")}
+              >
+                Add to Current
+              </button>
+            </div>
+
             <div className="space-y-2">
-              <label className="text-sm font-medium">New Physical Stock</label>
+              <label className="text-sm font-medium">
+                {addMode === "add" ? "Qty to Add" : "New Physical Stock"}
+              </label>
               <Input
                 type="number"
                 placeholder="Enter qty"
@@ -376,6 +397,11 @@ export default function StockAdjustmentPage() {
                 disabled={!selectedProductId}
                 className="text-lg font-semibold"
               />
+              {addMode === "add" && selectedProductId && adjustmentValue !== "" && !isNaN(parseFloat(adjustmentValue)) && (
+                <p className="text-xs text-blue-700 font-medium">
+                  Result: {currentStock} + {parseFloat(adjustmentValue)} = <span className="font-bold">{currentStock + parseFloat(adjustmentValue)}</span>
+                </p>
+              )}
             </div>
 
             <Button
