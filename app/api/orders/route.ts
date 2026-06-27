@@ -62,8 +62,10 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
 
-    // Map to Frontend Order Interface
-    const formattedOrders = data.map((order: any) => {
+    // Map to Frontend Order Interface — exclude cancelled orders
+    const formattedOrders = data
+      .filter((order: any) => order.status !== "Cancelled")
+      .map((order: any) => {
       // Get payment status and invoice number from the related invoice
       const paymentStatus = order.invoices?.[0]?.status || "Unpaid";
       // Priority: Invoice table > Order table > Placeholder

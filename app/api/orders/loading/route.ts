@@ -41,7 +41,8 @@ export async function GET(request: NextRequest) {
         ),
         invoices (
           id,
-          invoice_no
+          invoice_no,
+          status
         )
       `
       )
@@ -58,7 +59,7 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
 
-    // Filter out orders that have a pending cancellation request
+    // Filter out cancelled orders and pending cancellation requests
     const formattedOrders = (orders ?? [])
       .filter((order: any) => !order.notes?.includes("[CANCEL_REQUEST:"))
       .map((order: any) => ({

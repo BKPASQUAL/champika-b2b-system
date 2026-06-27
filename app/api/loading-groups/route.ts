@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
           load_id,
           status,
           customers (shop_name),
-          invoices (invoice_no)
+          invoices (invoice_no, status)
         `)
         .in("load_id", allGroupIds);
 
@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
         await supabaseAdmin.from("orders").update({ load_id: null }).in("id", staleIds);
       }
 
-      for (const o of (orders ?? []).filter((o: any) => o.status !== "Pending")) {
+      for (const o of (orders ?? []).filter((o: any) => o.status !== "Pending" && o.status !== "Cancelled")) {
         const key = o.load_id;
         if (!ordersMap[key]) ordersMap[key] = [];
         ordersMap[key].push({
