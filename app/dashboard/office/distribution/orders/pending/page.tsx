@@ -127,6 +127,27 @@ export default function DistributionPendingOrdersPage() {
       });
   }, [orders, searchQuery, selectedRep, sortField, sortDirection]);
 
+  const totalAmount = useMemo(
+    () => filteredOrders.reduce((sum, o) => sum + o.totalAmount, 0),
+    [filteredOrders]
+  );
+
+  const repTotals = useMemo(() => {
+    const map: Record<string, number> = {};
+    filteredOrders.forEach((o) => {
+      if (o.salesRep) map[o.salesRep] = (map[o.salesRep] || 0) + o.totalAmount;
+    });
+    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
+  }, [filteredOrders]);
+
+  const selectedTotal = useMemo(
+    () =>
+      filteredOrders
+        .filter((o) => selectedOrders.includes(o.id))
+        .reduce((sum, o) => sum + o.totalAmount, 0),
+    [filteredOrders, selectedOrders]
+  );
+
   // Group already-sorted filteredOrders by route, routes sorted alphabetically
   const groupedOrders = useMemo(() => {
     const groups: Record<string, Order[]> = {};
@@ -161,47 +182,83 @@ export default function DistributionPendingOrdersPage() {
   return (
     <div className="">
       {/* Header Section */}
-      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between mb-1">
+      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between mb-2">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Pending Orders</h1>
           <p className="text-muted-foreground text-sm">
             Orders waiting for approval or processing.
           </p>
         </div>
-        {selectedOrders.length > 0 && (
-          <div className="flex gap-2 animate-in fade-in zoom-in duration-300">
-            <Button
-              variant="outline"
-              onClick={() => {
-                const invoiceIds = filteredOrders
-                  .filter((o) => selectedOrders.includes(o.id) && o.invoiceId)
-                  .map((o) => o.invoiceId as string);
-                if (invoiceIds.length === 0) {
-                  toast.error("No invoices found for the selected orders.");
-                  return;
+        <div className="flex flex-col items-start md:items-end gap-2">
+          {filteredOrders.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 py-1.5 px-3 bg-slate-50 rounded-lg border border-slate-100 text-xs">
+              <div className="flex items-center gap-1.5 font-semibold text-slate-700 shrink-0">
+                <span>{filteredOrders.length} order{filteredOrders.length !== 1 ? "s" : ""}</span>
+                <span className="text-slate-400">·</span>
+                <span className="text-slate-900">LKR {totalAmount.toLocaleString()}</span>
+              </div>
+              {repTotals.length > 0 && (
+                <>
+                  <div className="w-px h-4 bg-slate-200 mx-0.5" />
+                  {repTotals.map(([rep, total]) => (
+                    <span
+                      key={rep}
+                      className="flex items-center gap-1 bg-white border border-slate-200 rounded-full px-2 py-0.5"
+                    >
+                      <User className="h-3 w-3 text-orange-400 shrink-0" />
+                      <span className="text-slate-600">{rep}:</span>
+                      <span className="font-semibold text-slate-800">
+                        LKR {total.toLocaleString()}
+                      </span>
+                    </span>
+                  ))}
+                </>
+              )}
+              {selectedOrders.length > 0 && (
+                <>
+                  <div className="w-px h-4 bg-slate-200 mx-0.5" />
+                  <span className="flex items-center gap-1 bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-full px-2 py-0.5 font-semibold shrink-0">
+                    Selected {selectedOrders.length}: LKR {selectedTotal.toLocaleString()}
+                  </span>
+                </>
+              )}
+            </div>
+          )}
+          {selectedOrders.length > 0 && (
+            <div className="flex gap-2 animate-in fade-in zoom-in duration-300">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const invoiceIds = filteredOrders
+                    .filter((o) => selectedOrders.includes(o.id) && o.invoiceId)
+                    .map((o) => o.invoiceId as string);
+                  if (invoiceIds.length === 0) {
+                    toast.error("No invoices found for the selected orders.");
+                    return;
+                  }
+                  printBulkInvoices(invoiceIds, "distribution");
+                }}
+                className="bg-white border-slate-200"
+              >
+                <Printer className="w-4 h-4 mr-2" />
+                Print Invoices ({selectedOrders.length})
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() =>
+                  downloadLoadingSummary(selectedOrders, {
+                    title: "PENDING ORDERS — ITEMS SUMMARY REPORT",
+                    filePrefix: "Pending_Summary",
+                  })
                 }
-                printBulkInvoices(invoiceIds, "distribution");
-              }}
-              className="bg-white border-slate-200"
-            >
-              <Printer className="w-4 h-4 mr-2" />
-              Print Invoices ({selectedOrders.length})
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() =>
-                downloadLoadingSummary(selectedOrders, {
-                  title: "PENDING ORDERS — ITEMS SUMMARY REPORT",
-                  filePrefix: "Pending_Summary",
-                })
-              }
-              className="bg-white border-slate-200"
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Download Summary ({selectedOrders.length})
-            </Button>
-          </div>
-        )}
+                className="bg-white border-slate-200"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Download Summary ({selectedOrders.length})
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Main Content Card */}
