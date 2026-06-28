@@ -31,11 +31,13 @@ async function handleRequest(request: NextRequest) {
     let batteryLevel: number | null = null;
 
     const method = request.method;
+    console.log(`[GPS Webhook] Incoming request method: ${method}`);
 
     // 1. Try parsing JSON body if it's a POST request
     if (method === "POST") {
       try {
         const body = await request.clone().json();
+        console.log("[GPS Webhook] Parsed JSON Body:", JSON.stringify(body));
         
         // Handle standard Traccar JSON format (nested structure)
         if (body.device && body.position) {
@@ -54,13 +56,15 @@ async function handleRequest(request: NextRequest) {
           heading = body.heading || body.course || body.bearing || 0;
           batteryLevel = body.batteryLevel || body.battery || null;
         }
-      } catch {
-        // If JSON parsing fails, fall back to URL parameters
+      } catch (e: any) {
+        console.log("[GPS Webhook] JSON parse fallback. Info:", e.message);
       }
     }
 
     // 2. Fall back/extract parameters from URL Query Parameters
     const searchParams = request.nextUrl.searchParams;
+    console.log("[GPS Webhook] URL query parameters:", searchParams.toString());
+
     if (!deviceId) {
       deviceId = searchParams.get("deviceId") || searchParams.get("id") || "";
     }
@@ -81,23 +85,36 @@ async function handleRequest(request: NextRequest) {
       batteryLevel = battStr ? parseInt(battStr) : null;
     }
 
+    console.log(`[GPS Webhook] Resolved Values -> IMEI: "${deviceId}", Lat: ${latitude}, Lng: ${longitude}, Speed: ${speed}, Heading: ${heading}, Battery: ${batteryLevel}`);
+
     if (!deviceId || !latitude || !longitude) {
+      console.warn("[GPS Webhook] Rejected: Missing required variables (deviceId, latitude, or longitude).");
       return NextResponse.json({ error: "Missing deviceId, latitude, or longitude" }, { status: 400 });
     }
 
     // 3. Find vehicle mapping by deviceId (IMEI)
+    console.log(`[GPS Webhook] Querying Supabase for vehicle mapped to IMEI: "${deviceId}"`);
     const { data: vehicle, error: fetchError } = await supabaseAdmin
       .from("vehicles")
-      .select("id")
+      .select("id, vehicle_number")
       .eq("device_id", deviceId)
       .eq("status", "Active")
       .maybeSingle();
 
-    if (fetchError || !vehicle) {
+    if (fetchError) {
+      console.error("[GPS Webhook] Database fetch error:", fetchError.message);
+      throw fetchError;
+    }
+
+    if (!vehicle) {
+      console.warn(`[GPS Webhook] Mismatch: No active vehicle found in DB for IMEI: "${deviceId}"`);
       return NextResponse.json({ error: `Vehicle with device ID ${deviceId} not found or inactive` }, { status: 404 });
     }
 
+    console.log(`[GPS Webhook] Mapped successfully to Vehicle: "${vehicle.vehicle_number}" (UUID: ${vehicle.id})`);
+
     // 4. Insert location record
+    console.log(`[GPS Webhook] Writing coordinates to vehicle_locations table...`);
     const { error: insertError } = await supabaseAdmin
       .from("vehicle_locations")
       .insert({
@@ -109,11 +126,15 @@ async function handleRequest(request: NextRequest) {
         battery_level: batteryLevel,
       });
 
-    if (insertError) throw insertError;
+    if (insertError) {
+      console.error("[GPS Webhook] Database insert error:", insertError.message);
+      throw insertError;
+    }
 
+    console.log(`[GPS Webhook] Successfully saved location coordinate log for vehicle ${vehicle.vehicle_number}!`);
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error("Webhook processing error:", error);
+    console.error("[GPS Webhook] Fatal webhook processing error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
