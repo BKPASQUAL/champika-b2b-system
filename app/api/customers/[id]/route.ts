@@ -13,6 +13,8 @@ const customerSchema = z.object({
   status: z.enum(["Active", "Inactive", "Blocked"]).default("Active"),
   creditLimit: z.number().min(0).default(0),
   businessId: z.string().min(1, "Business is required"),
+  latitude: z.number().optional().nullable(),
+  longitude: z.number().optional().nullable(),
 });
 
 // PATCH: Update a customer
@@ -53,6 +55,8 @@ export async function PATCH(
         status: val.status,
         credit_limit: val.creditLimit,
         business_id: val.businessId,
+        latitude: val.latitude,
+        longitude: val.longitude,
       })
       .eq("id", id);
 

@@ -14,6 +14,8 @@ const customerSchema = z.object({
   creditLimit: z.number().min(0).default(0),
   businessId: z.string().min(1, "Business is required"),
   assignedRepId: z.string().uuid().optional(),
+  latitude: z.number().optional().nullable(),
+  longitude: z.number().optional().nullable(),
 });
 
 // GET: Fetch customers
@@ -84,6 +86,8 @@ export async function GET(request: NextRequest) {
       totalOrders: 0,
       businessId: c.business_id,
       businessName: c.businesses?.name || "N/A",
+      latitude: c.latitude || null,
+      longitude: c.longitude || null,
     }));
 
     return NextResponse.json(mappedCustomers);
@@ -145,6 +149,8 @@ export async function POST(request: NextRequest) {
         business_id: val.businessId,
         outstanding_balance: 0,
         assigned_rep_id: val.assignedRepId || null,
+        latitude: val.latitude || null,
+        longitude: val.longitude || null,
       })
       .select()
       .single();

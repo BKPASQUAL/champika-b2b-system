@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 // ... imports
 import {
@@ -15,6 +16,7 @@ import {
   Wallet,
   Loader2,
   RefreshCw,
+  Map,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -42,6 +44,7 @@ import { CustomerTable } from "./_components/CustomerTable";
 import { CustomerDialogs } from "./_components/CustomerDialogs";
 
 export default function CustomersPage() {
+  const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Filters & State
@@ -226,6 +229,9 @@ export default function CustomersPage() {
           <Button variant="outline" size="icon" onClick={fetchCustomers} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
+          <Button variant="outline" onClick={() => router.push("/dashboard/admin/customers/map")}>
+            <Map className="w-4 h-4 mr-2" /> View Map
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline"><Download className="w-4 h-4 mr-2" /> Reports</Button>
@@ -282,7 +288,7 @@ export default function CustomersPage() {
                 route: c.route,
                 status: c.status,
                 creditLimit: c.creditLimit,
-                businessId: c.businessId || "", // Pre-fill businessId for Edit
+                businessId: c.businessId || "",
               });
               setSelectedCustomer(c);
               setIsAddDialogOpen(true);

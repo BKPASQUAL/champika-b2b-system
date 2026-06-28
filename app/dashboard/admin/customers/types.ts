@@ -16,8 +16,10 @@ export interface Customer {
   outstandingBalance: number;
   lastOrderDate: string;
   totalOrders: number;
-  businessId?: string; // For editing
-  businessName?: string; // For display in table
+  businessId?: string;
+  businessName?: string;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export type SortField =

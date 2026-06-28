@@ -207,6 +207,40 @@ export function CustomerDialogs({
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Latitude & Longitude */}
+            <div className="space-y-2">
+              <Label>Latitude (Optional)</Label>
+              <Input
+                type="number"
+                step="any"
+                value={formData.latitude ?? ""}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    latitude: e.target.value !== "" ? parseFloat(e.target.value) : null,
+                  })
+                }
+                placeholder="e.g. 7.8731"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Longitude (Optional)</Label>
+              <Input
+                type="number"
+                step="any"
+                value={formData.longitude ?? ""}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    longitude: e.target.value !== "" ? parseFloat(e.target.value) : null,
+                  })
+                }
+                placeholder="e.g. 80.7718"
+              />
+            </div>
+
           </div>
 
           <DialogFooter>

@@ -9,7 +9,9 @@ import {
   FileSpreadsheet,
   Search,
   RefreshCw,
+  Map,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,6 +65,7 @@ export default function DistributionCustomersPage() {
     null
   );
 
+  const router = useRouter();
   const [formData, setFormData] = useState<CustomerFormData>({
     shopName: "",
     ownerName: "",
@@ -73,6 +76,8 @@ export default function DistributionCustomersPage() {
     status: "Active",
     creditLimit: 0,
     businessId: distributionBusinessId, // Locked to Distribution
+    latitude: null,
+    longitude: null,
   });
 
 
@@ -187,6 +192,8 @@ export default function DistributionCustomersPage() {
       status: "Active",
       creditLimit: 0,
       businessId: distributionBusinessId,
+      latitude: null,
+      longitude: null,
     });
     setSelectedCustomer(null);
   };
@@ -243,6 +250,13 @@ export default function DistributionCustomersPage() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          <Button
+            variant="outline"
+            onClick={() => router.push("/dashboard/office/distribution/customers/map")}
+            className="border-blue-200 text-blue-700 hover:bg-blue-50"
+          >
+            <Map className="w-4 h-4 mr-2" /> View Map
+          </Button>
           <Button
             onClick={() => {
               resetForm();
@@ -302,6 +316,8 @@ export default function DistributionCustomersPage() {
                 status: c.status,
                 creditLimit: c.creditLimit,
                 businessId: distributionBusinessId,
+                latitude: c.latitude ?? null,
+                longitude: c.longitude ?? null,
               });
               setSelectedCustomer(c);
               setIsAddDialogOpen(true);
@@ -309,6 +325,9 @@ export default function DistributionCustomersPage() {
             onDelete={(c) => {
               setSelectedCustomer(c);
               setIsDeleteDialogOpen(true);
+            }}
+            onShowMap={(c) => {
+              router.push(`/dashboard/office/distribution/customers/map?focus=${c.id}`);
             }}
             currentPage={currentPage}
             totalPages={totalPages}

@@ -21,6 +21,8 @@ import {
   CheckCircle2,
   XCircle,
   AlertOctagon,
+  Map,
+  Navigation,
 } from "lucide-react";
 import { Customer, SortField, SortOrder, CustomerStatus } from "../types";
 import { TablePagination } from "@/components/ui/TablePagination";
@@ -33,6 +35,7 @@ interface CustomerTableProps {
   onSort: (field: SortField) => void;
   onEdit: (customer: Customer) => void;
   onDelete: (customer: Customer) => void;
+  onShowMap: (customer: Customer) => void;
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
@@ -46,6 +49,7 @@ export function CustomerTable({
   onSort,
   onEdit,
   onDelete,
+  onShowMap,
   currentPage,
   totalPages,
   onPageChange,
@@ -201,7 +205,29 @@ export function CustomerTable({
 
                   {/* Actions */}
                   <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
+                    <div className="flex items-center justify-end gap-1">
+                      {customer.latitude && customer.longitude && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            title="Show on Map"
+                            onClick={() => onShowMap(customer)}
+                            className="text-emerald-600 h-8 w-8 hover:text-emerald-700 hover:bg-emerald-50/50"
+                          >
+                            <Map className="w-4 h-4" />
+                          </Button>
+                          <a
+                            href={`https://www.google.com/maps/dir/?api=1&destination=${customer.latitude},${customer.longitude}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-indigo-50/50 text-indigo-600"
+                            title="Get Directions"
+                          >
+                            <Navigation className="w-4 h-4" />
+                          </a>
+                        </>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon-sm"
