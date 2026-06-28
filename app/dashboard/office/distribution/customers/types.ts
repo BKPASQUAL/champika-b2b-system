@@ -20,6 +20,7 @@ export interface Customer {
   businessName?: string;
   latitude?: number | null;
   longitude?: number | null;
+  locationNumber?: string;
 }
 
 export type SortField =
@@ -44,5 +45,6 @@ export interface CustomerFormData {
   businessId: string;
   latitude?: number | null;
   longitude?: number | null;
+  locationNumber?: string;
 }
 

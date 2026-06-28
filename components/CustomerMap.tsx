@@ -15,16 +15,40 @@ interface Customer {
   longitude?: number | null;
 }
 
+interface VehicleLocation {
+  latitude: number;
+  longitude: number;
+  speed: number;
+  heading: number;
+  battery_level: number | null;
+  updated_at: string;
+}
+
+interface Vehicle {
+  id: string;
+  vehicleNumber: string;
+  driverName: string | null;
+  deviceId: string | null;
+  status: string;
+  location: VehicleLocation | null;
+}
+
 interface CustomerMapProps {
   customers: Customer[];
   focusedCustomerId?: string | null;
   height?: string;
+  vehicles?: Vehicle[];
+  focusedVehicleId?: string | null;
+  historyRoute?: VehicleLocation[];
 }
 
 export default function CustomerMap({
   customers,
   focusedCustomerId = null,
   height = "450px",
+  vehicles = [],
+  focusedVehicleId = null,
+  historyRoute = [],
 }: CustomerMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const [leafletLoaded, setLeafletLoaded] = useState(false);
@@ -123,11 +147,24 @@ export default function CustomerMap({
       });
     };
 
+    const createTruckIcon = (color: string) => {
+      return L.divIcon({
+        html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="${color}" class="w-9 h-9 drop-shadow-md border-2 border-white rounded-full bg-white/90 p-1"><path d="M19 13v-2.268a2 2 0 0 0-.829-1.63L15 7.158V6a2 2 0 0 0-2-2H3a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h1.17a3 3 0 0 0 5.66 0H14.17a3 3 0 0 0 5.66 0H21a1 1 0 0 0 1-1v-3h-3zm-11 5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm9 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z" /></svg>`,
+        className: "custom-map-truck-icon",
+        iconSize: [36, 36],
+        iconAnchor: [18, 18],
+        popupAnchor: [0, -18],
+      });
+    };
+
     const blueIcon = createSvgIcon("#2563eb");
     const redIcon = createSvgIcon("#dc2626");
+    const truckIcon = createTruckIcon("#3b82f6");
+    const activeTruckIcon = createTruckIcon("#ef4444");
 
     let focusedMarker: any = null;
 
+    // Draw shop locations
     customersWithCoordinates.forEach((customer) => {
       const lat = customer.latitude as number;
       const lng = customer.longitude as number;
@@ -178,17 +215,114 @@ export default function CustomerMap({
       }
     });
 
+    // Draw active delivery trucks
+    const vehiclesWithCoordinates = vehicles.filter(
+      (v) => v.location && v.location.latitude !== null && v.location.longitude !== null
+    );
+
+    vehiclesWithCoordinates.forEach((v) => {
+      const lat = v.location!.latitude;
+      const lng = v.location!.longitude;
+      const isFocused = focusedVehicleId === v.id;
+
+      const marker = L.marker([lat, lng], {
+        icon: isFocused ? activeTruckIcon : truckIcon,
+      });
+
+      const popupHtml = `
+        <div style="font-family: inherit; font-size: 13px; line-height: 1.4; color: #1f2937; padding: 4px; min-width: 180px;">
+          <h4 style="font-size: 14px; font-weight: 700; color: #1e3a8a; margin: 0 0 6px 0; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px;">
+            🚚 ${v.vehicleNumber}
+          </h4>
+          <p style="margin: 3px 0;"><b>Driver:</b> ${v.driverName || "Unassigned"}</p>
+          <p style="margin: 3px 0;"><b>Speed:</b> ${v.location!.speed.toFixed(0)} km/h</p>
+          <p style="margin: 3px 0;"><b>IMEI:</b> ${v.deviceId || "N/A"}</p>
+          <p style="margin: 3px 0; font-size: 10px; color: #6b7280;">
+            <b>Last Signal:</b> ${new Date(v.location!.updated_at).toLocaleTimeString()}
+          </p>
+          <div style="margin-top: 10px;">
+            <a href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}" 
+               target="_blank" 
+               rel="noopener noreferrer" 
+               style="display: block; width: 100%; text-align: center; background-color: #2563eb; color: white; font-weight: 600; padding: 6px 0; border-radius: 4px; text-decoration: none; font-size: 12px;">
+              Get Route to Truck
+            </a>
+          </div>
+        </div>
+      `;
+
+      marker.bindPopup(popupHtml);
+
+      // Show vehicle plate permanently on top of the truck pin
+      marker.bindTooltip(v.vehicleNumber, {
+        permanent: true,
+        direction: "top",
+        offset: [0, -18],
+        className: "bg-blue-600 border border-blue-700 text-white font-extrabold px-1.5 py-0.5 rounded shadow-md text-[10px] whitespace-nowrap pointer-events-none",
+      });
+
+      marker.addTo(markersGroup);
+
+      if (isFocused) {
+        focusedMarker = marker;
+      }
+    });
+
+    // Draw history route polyline if provided
+    if (historyRoute && historyRoute.length > 0) {
+      const latlngs = historyRoute.map((pt) => [pt.latitude, pt.longitude] as [number, number]);
+      
+      // Draw driving line path
+      L.polyline(latlngs, {
+        color: "#2563eb",
+        weight: 5,
+        opacity: 0.8,
+        dashArray: "5, 10",
+      }).addTo(markersGroup);
+
+      // Draw START marker pin
+      const startPt = historyRoute[0];
+      const startMarker = L.marker([startPt.latitude, startPt.longitude], {
+        icon: L.divIcon({
+          html: `<div class="h-5 w-10 rounded bg-emerald-600 border border-white text-[9px] text-white font-bold flex items-center justify-center shadow-md">START</div>`,
+          className: "history-start-marker",
+          iconSize: [40, 20],
+          iconAnchor: [20, 10],
+        }),
+      });
+      startMarker.bindPopup(`<b>Route Start:</b> ${new Date(startPt.updated_at).toLocaleTimeString()}`);
+      startMarker.addTo(markersGroup);
+
+      // Draw END marker pin
+      const endPt = historyRoute[historyRoute.length - 1];
+      const endMarker = L.marker([endPt.latitude, endPt.longitude], {
+        icon: L.divIcon({
+          html: `<div class="h-5 w-10 rounded bg-red-600 border border-white text-[9px] text-white font-bold flex items-center justify-center shadow-md">END</div>`,
+          className: "history-end-marker",
+          iconSize: [40, 20],
+          iconAnchor: [20, 10],
+        }),
+      });
+      endMarker.bindPopup(`<b>Route End:</b> ${new Date(endPt.updated_at).toLocaleTimeString()}`);
+      endMarker.addTo(markersGroup);
+    }
+
     // Handle view adjustment
     if (focusedMarker) {
       setTimeout(() => {
         focusedMarker.openPopup();
         map.setView(focusedMarker.getLatLng(), 14);
       }, 100);
-    } else if (customersWithCoordinates.length > 0) {
+    } else if (historyRoute && historyRoute.length > 0) {
+      const routeBounds = L.latLngBounds(historyRoute.map(pt => [pt.latitude, pt.longitude]));
+      if (routeBounds.isValid()) {
+        map.fitBounds(routeBounds, { padding: [50, 50] });
+      }
+    } else if (markersGroup.getBounds().isValid()) {
       map.fitBounds(markersGroup.getBounds(), { padding: [40, 40] });
     }
 
-  }, [leafletLoaded, customers, focusedCustomerId]);
+  }, [leafletLoaded, customers, focusedCustomerId, vehicles, focusedVehicleId, historyRoute]);
 
   // Clean up on unmount
   useEffect(() => {

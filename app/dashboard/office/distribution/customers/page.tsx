@@ -78,6 +78,7 @@ export default function DistributionCustomersPage() {
     businessId: distributionBusinessId, // Locked to Distribution
     latitude: null,
     longitude: null,
+    locationNumber: "",
   });
 
 
@@ -125,8 +126,8 @@ export default function DistributionCustomersPage() {
   };
 
   const handleSaveCustomer = async () => {
-    if (!formData.shopName || !formData.phone || !formData.route) {
-      toast.error("Please fill required fields (Shop, Phone, Route)");
+    if (!formData.shopName) {
+      toast.error("Shop name is required");
       return;
     }
 
@@ -194,6 +195,7 @@ export default function DistributionCustomersPage() {
       businessId: distributionBusinessId,
       latitude: null,
       longitude: null,
+      locationNumber: "",
     });
     setSelectedCustomer(null);
   };
@@ -318,6 +320,7 @@ export default function DistributionCustomersPage() {
                 businessId: distributionBusinessId,
                 latitude: c.latitude ?? null,
                 longitude: c.longitude ?? null,
+                locationNumber: c.locationNumber ?? "",
               });
               setSelectedCustomer(c);
               setIsAddDialogOpen(true);

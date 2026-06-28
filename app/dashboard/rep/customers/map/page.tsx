@@ -4,14 +4,19 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { ArrowLeft, Loader2, Map } from "lucide-react";
 import { toast } from "sonner";
+import { createClient } from "@supabase/supabase-js";
 import dynamic from "next/dynamic";
 
 const CustomerMap = dynamic(() => import("@/components/CustomerMap"), {
   ssr: false,
 });
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 interface Customer {
   id: string;
@@ -30,16 +35,36 @@ interface Customer {
   longitude?: number | null;
 }
 
+interface VehicleLocation {
+  latitude: number;
+  longitude: number;
+  speed: number;
+  heading: number;
+  battery_level: number | null;
+  updated_at: string;
+}
+
+interface Vehicle {
+  id: string;
+  vehicleNumber: string;
+  driverName: string | null;
+  deviceId: string | null;
+  status: string;
+  location: VehicleLocation | null;
+}
+
 function MapContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const focusId = searchParams.get("focus");
+  const focusVehicleId = searchParams.get("focusVehicle");
 
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchMyCustomers = async () => {
+    const fetchMyData = async () => {
       try {
         setLoading(true);
         const storedUser = localStorage.getItem("currentUser");
@@ -65,20 +90,53 @@ function MapContent() {
           return;
         }
 
-        const res = await fetch(`/api/customers?repId=${rid}`);
-        if (!res.ok) throw new Error("Failed to load customers");
+        const [custRes, vehRes] = await Promise.all([
+          fetch(`/api/customers?repId=${rid}`),
+          fetch("/api/vehicles"),
+        ]);
 
-        const data = await res.json();
-        setCustomers(data);
+        if (!custRes.ok) throw new Error("Failed to load customers");
+        if (!vehRes.ok) throw new Error("Failed to load fleet");
+
+        const custData = await custRes.json();
+        const vehData = await vehRes.json();
+
+        setCustomers(custData);
+        setVehicles(vehData);
       } catch (error) {
         console.error(error);
-        toast.error("Failed to load customer locations");
+        toast.error("Failed to load map data");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchMyCustomers();
+    fetchMyData();
+  }, []);
+
+  // Subscribe to real-time coordinates
+  useEffect(() => {
+    const channel = supabase
+      .channel("rep-fleet-updates")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "vehicle_locations" },
+        (payload) => {
+          const newLoc = payload.new as VehicleLocation & { vehicle_id: string };
+          setVehicles((prev) =>
+            prev.map((v) =>
+              v.id === newLoc.vehicle_id
+                ? { ...v, location: newLoc }
+                : v
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   if (loading) {
@@ -92,6 +150,7 @@ function MapContent() {
 
   const shopsWithLocation = customers.filter(c => c.latitude !== null && c.longitude !== null);
   const focusedShop = customers.find(c => c.id === focusId);
+  const focusedVehicle = vehicles.find(v => v.id === focusVehicleId);
 
   return (
     <div className="space-y-4 h-full flex flex-col">
@@ -107,11 +166,14 @@ function MapContent() {
           </Button>
           <div>
             <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2 text-blue-900">
-              <Map className="h-6 w-6 text-blue-600" /> {focusedShop ? focusedShop.shopName : "Shops Location Map"}
+              <Map className="h-6 w-6 text-blue-600" />{" "}
+              {focusedShop ? focusedShop.shopName : focusedVehicle ? `Vehicle ${focusedVehicle.vehicleNumber}` : "Shops Location Map"}
             </h1>
             <p className="text-xs text-muted-foreground">
               {focusedShop
                 ? `Showing location details for ${focusedShop.shopName} (${focusedShop.route || 'General'})`
+                : focusedVehicle
+                ? `Tracking vehicle: ${focusedVehicle.vehicleNumber} — Speed: ${focusedVehicle.location?.speed?.toFixed(0) || '0'} km/h`
                 : `Displaying ${shopsWithLocation.length} of ${customers.length} registered shops`}
             </p>
           </div>
@@ -126,6 +188,8 @@ function MapContent() {
           customers={customers}
           focusedCustomerId={focusId}
           height="calc(100vh - 200px)"
+          vehicles={vehicles}
+          focusedVehicleId={focusVehicleId}
         />
       </div>
     </div>

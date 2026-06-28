@@ -16,6 +16,7 @@ const customerSchema = z.object({
   assignedRepId: z.string().uuid().optional(),
   latitude: z.number().optional().nullable(),
   longitude: z.number().optional().nullable(),
+  locationNumber: z.string().optional(),
 });
 
 // GET: Fetch customers
@@ -88,6 +89,7 @@ export async function GET(request: NextRequest) {
       businessName: c.businesses?.name || "N/A",
       latitude: c.latitude || null,
       longitude: c.longitude || null,
+      locationNumber: c.location_number || "",
     }));
 
     return NextResponse.json(mappedCustomers);
@@ -151,6 +153,7 @@ export async function POST(request: NextRequest) {
         assigned_rep_id: val.assignedRepId || null,
         latitude: val.latitude || null,
         longitude: val.longitude || null,
+        location_number: val.locationNumber || null,
       })
       .select()
       .single();

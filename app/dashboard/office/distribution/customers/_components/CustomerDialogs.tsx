@@ -109,7 +109,7 @@ export function CustomerDialogs({
 
             {/* Phone */}
             <div className="space-y-2">
-              <Label>Phone Number *</Label>
+              <Label>Phone Number</Label>
               <Input
                 value={formData.phone}
                 onChange={(e) =>
@@ -143,10 +143,22 @@ export function CustomerDialogs({
               />
             </div>
 
+            {/* Location Number */}
+            <div className="space-y-2">
+              <Label>Location Number</Label>
+              <Input
+                value={formData.locationNumber ?? ""}
+                onChange={(e) =>
+                  setFormData({ ...formData, locationNumber: e.target.value })
+                }
+                placeholder="e.g. LOC-001"
+              />
+            </div>
+
             {/* Route Dropdown */}
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
-                <MapPin className="w-3 h-3" /> Route / Area *
+                <MapPin className="w-3 h-3" /> Route / Area
               </Label>
               <Select
                 value={formData.route}
