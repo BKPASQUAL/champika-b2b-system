@@ -33,6 +33,79 @@ interface Vehicle {
   location: VehicleLocation | null;
 }
 
+interface StopEvent {
+  latitude: number;
+  longitude: number;
+  startTime: Date;
+  endTime: Date;
+  durationMinutes: number;
+}
+
+function detectStops(points: VehicleLocation[]): StopEvent[] {
+  const stops: StopEvent[] = [];
+  
+  if (points.length === 0) return stops;
+  
+  // If there is only 1 point and it is stationary, treat it as a stop
+  if (points.length === 1 && points[0].speed < 2) {
+    stops.push({
+      latitude: points[0].latitude,
+      longitude: points[0].longitude,
+      startTime: new Date(points[0].updated_at),
+      endTime: new Date(points[0].updated_at),
+      durationMinutes: 0,
+    });
+    return stops;
+  }
+
+  let stationarySegment: VehicleLocation[] = [];
+
+  for (let i = 0; i < points.length; i++) {
+    const pt = points[i];
+    const isStationary = pt.speed < 2;
+
+    if (isStationary) {
+      stationarySegment.push(pt);
+    } else {
+      if (stationarySegment.length > 0) {
+        const first = stationarySegment[0];
+        const last = stationarySegment[stationarySegment.length - 1];
+        const durationMs = new Date(last.updated_at).getTime() - new Date(first.updated_at).getTime();
+        
+        if (durationMs >= 3 * 60 * 1000) { // 3 minutes threshold
+          stops.push({
+            latitude: first.latitude,
+            longitude: first.longitude,
+            startTime: new Date(first.updated_at),
+            endTime: new Date(last.updated_at),
+            durationMinutes: Math.round(durationMs / (60 * 1000)),
+          });
+        }
+        stationarySegment = [];
+      }
+    }
+  }
+
+  // Handle final segment if it was stationary at the end of the day
+  if (stationarySegment.length > 0) {
+    const first = stationarySegment[0];
+    const last = stationarySegment[stationarySegment.length - 1];
+    const durationMs = new Date(last.updated_at).getTime() - new Date(first.updated_at).getTime();
+    
+    if (durationMs >= 3 * 60 * 1000) {
+      stops.push({
+        latitude: first.latitude,
+        longitude: first.longitude,
+        startTime: new Date(first.updated_at),
+        endTime: new Date(last.updated_at),
+        durationMinutes: Math.round(durationMs / (60 * 1000)),
+      });
+    }
+  }
+
+  return stops;
+}
+
 interface CustomerMapProps {
   customers: Customer[];
   focusedCustomerId?: string | null;
@@ -164,6 +237,14 @@ export default function CustomerMap({
     const redIcon = createSvgIcon("#dc2626");
     const truckIcon = createTruckIcon("#3b82f6");
     const activeTruckIcon = createTruckIcon("#ef4444");
+    
+    const stopIcon = L.divIcon({
+      html: `<div style="height: 24px; width: 24px; border-radius: 50%; background-color: #ef4444; border: 2px solid white; color: white; font-size: 11px; font-weight: 900; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.3); font-family: sans-serif; cursor: pointer;">P</div>`,
+      className: "history-stop-icon",
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
+      popupAnchor: [0, -12],
+    });
 
     let focusedMarker: any = null;
 
@@ -309,6 +390,31 @@ export default function CustomerMap({
       });
       endMarker.bindPopup(`<b>Route End:</b> ${new Date(endPt.updated_at).toLocaleTimeString()}`);
       endMarker.addTo(markersGroup);
+
+      // Detect and draw stops (parking segments where speed < 2 km/h for >= 3 minutes)
+      const stops = detectStops(historyRoute);
+      stops.forEach((stop) => {
+        const stopMarker = L.marker([stop.latitude, stop.longitude], {
+          icon: stopIcon,
+        });
+        
+        const durationText = stop.durationMinutes === 0 
+          ? "Stationary/Parked" 
+          : `${stop.durationMinutes} mins`;
+
+        const stopPopupHtml = `
+          <div style="font-family: inherit; font-size: 13px; line-height: 1.4; color: #1f2937; padding: 4px; min-width: 160px;">
+            <h4 style="font-size: 14px; font-weight: 700; color: #ef4444; margin: 0 0 6px 0; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; display: flex; align-items: center; gap: 4px;">
+              🅿️ Parking Stop
+            </h4>
+            <p style="margin: 3px 0;"><b>Duration:</b> ${durationText}</p>
+            <p style="margin: 3px 0;"><b>Arrived:</b> ${stop.startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+            <p style="margin: 3px 0;"><b>Departed:</b> ${stop.endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+          </div>
+        `;
+        stopMarker.bindPopup(stopPopupHtml);
+        stopMarker.addTo(markersGroup);
+      });
     }
 
     // Handle view adjustment
