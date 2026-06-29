@@ -55,6 +55,9 @@ export default function CustomerMap({
   const [mapError, setMapError] = useState<string | null>(null);
   const mapInstanceRef = useRef<any>(null);
   const markersGroupRef = useRef<any>(null);
+  const hasInitialFitBoundsRef = useRef(false);
+  const lastFocusedCustomerIdRef = useRef<string | null>(null);
+  const lastFocusedVehicleIdRef = useRef<string | null>(null);
 
   // 1. Load Leaflet CDN Assets
   useEffect(() => {
@@ -308,18 +311,26 @@ export default function CustomerMap({
     }
 
     // Handle view adjustment
-    if (focusedMarker) {
+    const focusChanged = 
+      focusedCustomerId !== lastFocusedCustomerIdRef.current || 
+      focusedVehicleId !== lastFocusedVehicleIdRef.current;
+
+    if (focusedMarker && focusChanged) {
       setTimeout(() => {
         focusedMarker.openPopup();
         map.setView(focusedMarker.getLatLng(), 14);
       }, 100);
+      lastFocusedCustomerIdRef.current = focusedCustomerId;
+      lastFocusedVehicleIdRef.current = focusedVehicleId;
     } else if (historyRoute && historyRoute.length > 0) {
+      // Always fit bounds when a history route is loaded/changed
       const routeBounds = L.latLngBounds(historyRoute.map(pt => [pt.latitude, pt.longitude]));
       if (routeBounds.isValid()) {
         map.fitBounds(routeBounds, { padding: [50, 50] });
       }
-    } else if (markersGroup.getBounds().isValid()) {
+    } else if (!hasInitialFitBoundsRef.current && markersGroup.getBounds().isValid()) {
       map.fitBounds(markersGroup.getBounds(), { padding: [40, 40] });
+      hasInitialFitBoundsRef.current = true;
     }
 
   }, [leafletLoaded, customers, focusedCustomerId, vehicles, focusedVehicleId, historyRoute]);
