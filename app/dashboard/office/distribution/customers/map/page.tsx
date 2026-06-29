@@ -134,8 +134,10 @@ function MapContent() {
     }
     try {
       setLoadingHistory(true);
-      const start = `${historyDate}T00:00:00.000Z`;
-      const end = `${historyDate}T23:59:59.999Z`;
+      const startObj = new Date(`${historyDate}T00:00:00`);
+      const endObj = new Date(`${historyDate}T23:59:59.999`);
+      const start = isNaN(startObj.getTime()) ? `${historyDate}T00:00:00.000Z` : startObj.toISOString();
+      const end = isNaN(endObj.getTime()) ? `${historyDate}T23:59:59.999Z` : endObj.toISOString();
 
       const res = await fetch(`/api/vehicles/${selectedHistoryVehicleId}/history?start=${start}&end=${end}`);
       if (!res.ok) throw new Error("Failed to load historical route");

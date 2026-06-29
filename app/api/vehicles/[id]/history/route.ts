@@ -33,11 +33,19 @@ export async function GET(
       .eq("vehicle_id", id)
       .gte("updated_at", start)
       .lte("updated_at", end)
-      .order("updated_at", { ascending: true });
+      .order("updated_at", { ascending: true })
+      .range(0, 9999);
 
     if (error) throw error;
 
-    return NextResponse.json(data);
+    let filteredData = data || [];
+    // Downsample if we have too many coordinates to keep the map fast and light
+    if (filteredData.length > 1000) {
+      const step = Math.ceil(filteredData.length / 1000);
+      filteredData = filteredData.filter((_, index) => index % step === 0);
+    }
+
+    return NextResponse.json(filteredData);
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
