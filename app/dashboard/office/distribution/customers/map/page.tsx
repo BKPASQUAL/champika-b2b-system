@@ -61,6 +61,7 @@ function MapContent() {
   const searchParams = useSearchParams();
   const focusId = searchParams.get("focus");
   const focusVehicleId = searchParams.get("focusVehicle");
+  const loadIdParam = searchParams.get("loadId");
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -73,6 +74,11 @@ function MapContent() {
   const [historyDate, setHistoryDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const [historyRoute, setHistoryRoute] = useState<VehicleLocation[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+
+  // Trip selection states
+  const [trips, setTrips] = useState<any[]>([]);
+  const [selectedTripId, setSelectedTripId] = useState<string>("");
+  const [loadingTrips, setLoadingTrips] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -127,6 +133,62 @@ function MapContent() {
     };
   }, []);
 
+  // Helper to normalize lorry numbers (e.g. "CBD-2564" or "CBD 2564" -> "cbd2564")
+  const normalizePlate = (str: string) => (str || "").replace(/[^A-Za-z0-9]/g, "").toLowerCase();
+
+  // Fetch loading sheets list when history mode is active or loadId is passed
+  useEffect(() => {
+    if (!historyMode && !loadIdParam) return;
+    const fetchTrips = async () => {
+      try {
+        setLoadingTrips(true);
+        const res = await fetch("/api/orders/loading/history");
+        if (res.ok) {
+          const data = await res.json();
+          setTrips(data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch history trips:", err);
+      } finally {
+        setLoadingTrips(false);
+      }
+    };
+    fetchTrips();
+  }, [historyMode, loadIdParam]);
+
+  // Handle URL query parameter loadId tracking automatically
+  useEffect(() => {
+    if (!loadIdParam || vehicles.length === 0 || trips.length === 0) return;
+    
+    const targetTrip = trips.find(t => t.id === loadIdParam);
+    if (!targetTrip) return;
+    
+    setHistoryMode(true);
+    if (targetTrip.loadingDate) {
+      setHistoryDate(targetTrip.loadingDate);
+    }
+    
+    const matchingVehicle = vehicles.find(
+      (v) => normalizePlate(v.vehicleNumber) === normalizePlate(targetTrip.lorryNumber)
+    );
+    if (matchingVehicle) {
+      setSelectedHistoryVehicleId(matchingVehicle.id);
+    }
+    
+    setSelectedTripId(targetTrip.id);
+  }, [loadIdParam, vehicles, trips]);
+
+  // Compute filtered trips for vehicle on the selected date
+  const selectedVehicleObj = vehicles.find(v => v.id === selectedHistoryVehicleId);
+  const vehiclePlate = selectedVehicleObj?.vehicleNumber || "";
+  const filteredTrips = trips.filter(t => {
+    if (t.loadingDate !== historyDate) return false;
+    if (vehiclePlate && t.lorryNumber) {
+      return normalizePlate(t.lorryNumber) === normalizePlate(vehiclePlate);
+    }
+    return true;
+  });
+
   const fetchHistoryRoute = async () => {
     if (!selectedHistoryVehicleId) {
       toast.error("Please select a vehicle first.");
@@ -134,18 +196,43 @@ function MapContent() {
     }
     try {
       setLoadingHistory(true);
-      const startObj = new Date(`${historyDate}T00:00:00`);
-      const endObj = new Date(`${historyDate}T23:59:59.999`);
-      const start = isNaN(startObj.getTime()) ? `${historyDate}T00:00:00.000Z` : startObj.toISOString();
-      const end = isNaN(endObj.getTime()) ? `${historyDate}T23:59:59.999Z` : endObj.toISOString();
+      
+      const activeTrip = selectedTripId && selectedTripId !== "full-day"
+        ? trips.find(t => t.id === selectedTripId)
+        : null;
 
+      let start = "";
+      let end = "";
+
+      if (activeTrip) {
+        const tripStart = activeTrip.dispatchedAt || activeTrip.createdAt;
+        if (!tripStart) {
+          toast.error("Trip dispatch time not recorded.");
+          setLoadingHistory(false);
+          return;
+        }
+        start = new Date(tripStart).toISOString();
+        if (activeTrip.status === "Completed" && activeTrip.completedAt) {
+          end = new Date(activeTrip.completedAt).toISOString();
+        } else {
+          // If still In Transit, track live until now
+          end = new Date().toISOString();
+        }
+      } else {
+        const startObj = new Date(`${historyDate}T00:00:00`);
+        const endObj = new Date(`${historyDate}T23:59:59.999`);
+        start = isNaN(startObj.getTime()) ? `${historyDate}T00:00:00.000Z` : startObj.toISOString();
+        end = isNaN(endObj.getTime()) ? `${historyDate}T23:59:59.999Z` : endObj.toISOString();
+      }
+
+      console.log(`[Route Query] Fetching route: start="${start}", end="${end}"`);
       const res = await fetch(`/api/vehicles/${selectedHistoryVehicleId}/history?start=${start}&end=${end}`);
       if (!res.ok) throw new Error("Failed to load historical route");
 
       const data = await res.json();
       setHistoryRoute(data);
       if (data.length === 0) {
-        toast.info("No GPS coordinates recorded for this vehicle on the selected date.");
+        toast.info("No GPS coordinates recorded for this vehicle during the selected timeframe.");
       } else {
         toast.success(`Loaded ${data.length} route coordinates.`);
       }
@@ -156,15 +243,6 @@ function MapContent() {
       setLoadingHistory(false);
     }
   };
-
-  if (loading) {
-    return (
-      <div className="flex flex-col justify-center items-center py-32 space-y-4">
-        <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
-        <p className="text-slate-500 font-medium">Loading Shop Coordinates...</p>
-      </div>
-    );
-  }
 
   const shopsWithLocation = customers.filter(c => c.latitude !== null && c.longitude !== null);
   const focusedShop = customers.find(c => c.id === focusId);
@@ -230,6 +308,7 @@ function MapContent() {
                 onValueChange={(val) => {
                   setSelectedHistoryVehicleId(val);
                   setHistoryRoute([]);
+                  setSelectedTripId("");
                 }}
               >
                 <SelectTrigger className="w-40 h-8 text-xs bg-white">
@@ -250,9 +329,33 @@ function MapContent() {
                 onChange={(e) => {
                   setHistoryDate(e.target.value);
                   setHistoryRoute([]);
+                  setSelectedTripId("");
                 }}
                 className="w-36 h-8 text-xs bg-white"
               />
+
+              {/* Trip selector dropdown */}
+              {selectedHistoryVehicleId && filteredTrips.length > 0 && (
+                <Select
+                  value={selectedTripId || "full-day"}
+                  onValueChange={(val) => {
+                    setSelectedTripId(val);
+                    setHistoryRoute([]);
+                  }}
+                >
+                  <SelectTrigger className="w-44 h-8 text-xs bg-white border-blue-200">
+                    <SelectValue placeholder="Full Day (No Trip)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="full-day">Full Day (No Trip)</SelectItem>
+                    {filteredTrips.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.loadId} ({t.status})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
 
               <Button
                 size="sm"
@@ -275,6 +378,7 @@ function MapContent() {
                   setHistoryMode(false);
                   setHistoryRoute([]);
                   setSelectedHistoryVehicleId("");
+                  setSelectedTripId("");
                 }}
                 className="h-8 w-8 p-0 text-slate-500 hover:text-slate-700"
               >
