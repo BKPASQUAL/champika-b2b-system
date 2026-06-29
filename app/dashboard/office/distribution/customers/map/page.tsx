@@ -373,7 +373,7 @@ function MapContent() {
 
               <Button
                 size="sm"
-                onClick={fetchHistoryRoute}
+                onClick={() => fetchHistoryRoute()}
                 disabled={loadingHistory || !selectedHistoryVehicleId}
                 className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
               >
