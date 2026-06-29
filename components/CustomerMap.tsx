@@ -273,37 +273,38 @@ export default function CustomerMap({
 
     // Draw history route polyline if provided
     if (historyRoute && historyRoute.length > 0) {
-      const latlngs = historyRoute.map((pt) => [pt.latitude, pt.longitude] as [number, number]);
+      const latlngs = historyRoute
+        .filter((pt) => pt.latitude && pt.longitude)
+        .map((pt) => [pt.latitude, pt.longitude] as [number, number]);
       
-      // Draw driving line path
+      // Draw driving line path with a clear solid orange line
       L.polyline(latlngs, {
-        color: "#2563eb",
-        weight: 5,
-        opacity: 0.8,
-        dashArray: "5, 10",
+        color: "#f97316", // Orange
+        weight: 6,
+        opacity: 0.9,
       }).addTo(markersGroup);
 
-      // Draw START marker pin
+      // Draw START marker pin (using inline styles to bypass Tailwind processing inside Leaflet)
       const startPt = historyRoute[0];
       const startMarker = L.marker([startPt.latitude, startPt.longitude], {
         icon: L.divIcon({
-          html: `<div class="h-5 w-10 rounded bg-emerald-600 border border-white text-[9px] text-white font-bold flex items-center justify-center shadow-md">START</div>`,
+          html: `<div style="height: 20px; width: 45px; border-radius: 4px; background-color: #10b981; border: 1px solid white; color: white; font-size: 9px; font-weight: bold; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.25);">START</div>`,
           className: "history-start-marker",
-          iconSize: [40, 20],
-          iconAnchor: [20, 10],
+          iconSize: [45, 20],
+          iconAnchor: [22, 10],
         }),
       });
       startMarker.bindPopup(`<b>Route Start:</b> ${new Date(startPt.updated_at).toLocaleTimeString()}`);
       startMarker.addTo(markersGroup);
 
-      // Draw END marker pin
+      // Draw END marker pin (using inline styles)
       const endPt = historyRoute[historyRoute.length - 1];
       const endMarker = L.marker([endPt.latitude, endPt.longitude], {
         icon: L.divIcon({
-          html: `<div class="h-5 w-10 rounded bg-red-600 border border-white text-[9px] text-white font-bold flex items-center justify-center shadow-md">END</div>`,
+          html: `<div style="height: 20px; width: 45px; border-radius: 4px; background-color: #ef4444; border: 1px solid white; color: white; font-size: 9px; font-weight: bold; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.25);">END</div>`,
           className: "history-end-marker",
-          iconSize: [40, 20],
-          iconAnchor: [20, 10],
+          iconSize: [45, 20],
+          iconAnchor: [22, 10],
         }),
       });
       endMarker.bindPopup(`<b>Route End:</b> ${new Date(endPt.updated_at).toLocaleTimeString()}`);
@@ -315,19 +316,19 @@ export default function CustomerMap({
       focusedCustomerId !== lastFocusedCustomerIdRef.current || 
       focusedVehicleId !== lastFocusedVehicleIdRef.current;
 
-    if (focusedMarker && focusChanged) {
+    if (historyRoute && historyRoute.length > 0) {
+      // Prioritize route bounds if history route is active
+      const routeBounds = L.latLngBounds(historyRoute.map(pt => [pt.latitude, pt.longitude]));
+      if (routeBounds.isValid()) {
+        map.fitBounds(routeBounds, { padding: [50, 50] });
+      }
+    } else if (focusedMarker && focusChanged) {
       setTimeout(() => {
         focusedMarker.openPopup();
         map.setView(focusedMarker.getLatLng(), 14);
       }, 100);
       lastFocusedCustomerIdRef.current = focusedCustomerId;
       lastFocusedVehicleIdRef.current = focusedVehicleId;
-    } else if (historyRoute && historyRoute.length > 0) {
-      // Always fit bounds when a history route is loaded/changed
-      const routeBounds = L.latLngBounds(historyRoute.map(pt => [pt.latitude, pt.longitude]));
-      if (routeBounds.isValid()) {
-        map.fitBounds(routeBounds, { padding: [50, 50] });
-      }
     } else if (!hasInitialFitBoundsRef.current && markersGroup.getBounds().isValid()) {
       map.fitBounds(markersGroup.getBounds(), { padding: [40, 40] });
       hasInitialFitBoundsRef.current = true;
