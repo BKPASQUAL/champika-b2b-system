@@ -16,7 +16,7 @@ const supabase = createClient(
 // 1. Fetch all vehicles with their latest location update
 export async function GET() {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from("vehicles")
       .select(`
         *,
@@ -33,10 +33,36 @@ export async function GET() {
       .order("updated_at", { foreignTable: "vehicle_locations", ascending: false })
       .limit(1, { foreignTable: "vehicle_locations" });
 
+    let { data, error } = await query;
+
+    // Fail-safe fallback if 'ignition' column doesn't exist yet
+    if (error && error.code === "42703") {
+      console.warn("[Fleet API] 'ignition' column missing. Retrying select without 'ignition'...");
+      const retryQuery = supabase
+        .from("vehicles")
+        .select(`
+          *,
+          vehicle_locations (
+            latitude,
+            longitude,
+            speed,
+            heading,
+            battery_level,
+            updated_at
+          )
+        `)
+        .order("updated_at", { foreignTable: "vehicle_locations", ascending: false })
+        .limit(1, { foreignTable: "vehicle_locations" });
+      
+      const res = await retryQuery;
+      data = res.data;
+      error = res.error;
+    }
+
     if (error) throw error;
 
     // Format the result to return location as a single object instead of an array
-    const formatted = data.map((v: any) => {
+    const formatted = (data || []).map((v: any) => {
       const latestLoc = v.vehicle_locations?.[0] || null;
       return {
         id: v.id,

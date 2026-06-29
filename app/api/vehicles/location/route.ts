@@ -191,9 +191,20 @@ async function handleRequest(request: NextRequest) {
       insertPayload.updated_at = parsedUpdatedAt;
     }
 
-    const { error: insertError } = await supabaseAdmin
+    let { error: insertError } = await supabaseAdmin
       .from("vehicle_locations")
       .insert(insertPayload);
+
+    // Fail-safe fallback if 'ignition' column doesn't exist in production database yet
+    if (insertError && insertError.code === "42703") {
+      console.warn("[GPS Webhook] 'ignition' column missing. Retrying insert without 'ignition'...");
+      const fallbackPayload = { ...insertPayload };
+      delete fallbackPayload.ignition;
+      const { error: retryError } = await supabaseAdmin
+        .from("vehicle_locations")
+        .insert(fallbackPayload);
+      insertError = retryError;
+    }
 
     if (insertError) {
       console.error("[GPS Webhook] Database insert error:", insertError.message);
