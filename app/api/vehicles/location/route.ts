@@ -31,6 +31,10 @@ function writeGpsLog(
   responseStatus: number,
   responseBody: any
 ) {
+  // Local file logging is only applicable in local development environment
+  if (process.env.NODE_ENV !== "development") {
+    return;
+  }
   try {
     const logFilePath = path.join(process.cwd(), "public", "gps_logs.txt");
     const timestamp = new Date().toISOString();
