@@ -36,7 +36,6 @@ import {
   Search,
   Users,
   MapPin,
-  Phone,
   Loader2,
   Wallet,
   Filter,
@@ -217,7 +216,7 @@ export default function RepCustomersPage() {
       setRepId(rid);
       setBusinessId(bid);
 
-      const res = await fetch(`/api/customers?repId=${rid}`);
+      const res = await fetch(`/api/customers?businessId=${bid}`);
       if (!res.ok) throw new Error("Failed to load customers");
 
       const data = await res.json();
@@ -332,8 +331,7 @@ export default function RepCustomersPage() {
   const filteredCustomers = customers.filter((c) => {
     const matchesSearch =
       c.shopName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.ownerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.phone.includes(searchQuery);
+      c.ownerName.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesStatus = statusFilter === "all" || c.status === statusFilter;
     const matchesRoute = routeFilter === "all" || c.route === routeFilter;
@@ -501,14 +499,6 @@ export default function RepCustomersPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <Button
-            variant="outline"
-            onClick={() => router.push("/dashboard/rep/customers/map")}
-            className="border-blue-200 text-blue-700 hover:bg-blue-50"
-          >
-            <Map className="h-4 w-4 mr-1.5" />
-            View Map
-          </Button>
           <Button onClick={() => setIsAddOpen(true)}>
             <Plus className="h-4 w-4 mr-1.5" />
             Add Customer
@@ -559,7 +549,7 @@ export default function RepCustomersPage() {
             <div className="relative w-full md:flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search shop, name or phone..."
+                placeholder="Search shop or name..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9"
@@ -649,9 +639,6 @@ export default function RepCustomersPage() {
                   {/* Bottom row: phone / route / outstanding / edit */}
                   <div className="flex items-center justify-between gap-2 pt-1 border-t">
                     <div className="flex flex-col gap-0.5 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Phone className="h-3 w-3" /> {customer.phone}
-                      </span>
                       <span className="flex items-center gap-1">
                         <MapPin className="h-3 w-3" /> {customer.route || "—"}
                       </span>
@@ -777,9 +764,6 @@ export default function RepCustomersPage() {
                               {customer.ownerName && (
                                 <span>{customer.ownerName}</span>
                               )}
-                              <span className="flex items-center gap-0.5">
-                                <Phone className="h-3 w-3" /> {customer.phone}
-                              </span>
                             </div>
                           </div>
                         </div>
