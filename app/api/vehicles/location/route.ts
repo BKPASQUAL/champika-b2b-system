@@ -73,6 +73,7 @@ async function handleRequest(request: NextRequest) {
     let heading = 0;
     let batteryLevel: number | null = null;
     let timestamp: string | null = null;
+    let ignition = false;
 
     console.log(`[GPS Webhook] Incoming request method: ${method}`);
 
@@ -91,6 +92,7 @@ async function handleRequest(request: NextRequest) {
           heading = reqBody.position.course || 0;
           batteryLevel = reqBody.position.attributes?.batteryLevel || null;
           timestamp = reqBody.position.deviceTime || reqBody.position.fixTime || reqBody.position.serverTime || null;
+          ignition = reqBody.position.attributes?.ignition === true || reqBody.position.attributes?.acc === true;
         } else {
           // Flat JSON format
           deviceId = reqBody.deviceId || reqBody.uniqueId || reqBody.id;
@@ -100,6 +102,7 @@ async function handleRequest(request: NextRequest) {
           heading = reqBody.heading || reqBody.course || reqBody.bearing || 0;
           batteryLevel = reqBody.batteryLevel || reqBody.battery || null;
           timestamp = reqBody.timestamp || reqBody.time || reqBody.deviceTime || reqBody.fixTime || null;
+          ignition = reqBody.ignition === true || reqBody.acc === true || reqBody.attributes?.ignition === true || reqBody.attributes?.acc === true;
         }
       } catch (e: any) {
         console.log("[GPS Webhook] JSON parse fallback. Info:", e.message);
@@ -129,8 +132,14 @@ async function handleRequest(request: NextRequest) {
     if (!timestamp) {
       timestamp = searchParams.timestamp || searchParams.time || searchParams.deviceTime || searchParams.fixTime || null;
     }
+    
+    // Parse ignition from query parameters
+    const ignStr = searchParams.ignition || searchParams.acc;
+    if (ignStr) {
+      ignition = ignStr === "true" || ignStr === "1" || ignStr === "on";
+    }
 
-    console.log(`[GPS Webhook] Resolved Values -> IMEI: "${deviceId}", Lat: ${latitude}, Lng: ${longitude}, Speed: ${speed}, Heading: ${heading}, Battery: ${batteryLevel}, Timestamp: ${timestamp}`);
+    console.log(`[GPS Webhook] Resolved Values -> IMEI: "${deviceId}", Lat: ${latitude}, Lng: ${longitude}, Speed: ${speed}, Heading: ${heading}, Battery: ${batteryLevel}, Timestamp: ${timestamp}, Ignition: ${ignition}`);
 
     if (!deviceId || !latitude || !longitude) {
       console.warn("[GPS Webhook] Rejected: Missing required variables (deviceId, latitude, or longitude).");
@@ -176,6 +185,7 @@ async function handleRequest(request: NextRequest) {
       speed: speed * 1.852, // Convert knots to km/h (if from Traccar)
       heading,
       battery_level: batteryLevel,
+      ignition,
     };
     if (parsedUpdatedAt) {
       insertPayload.updated_at = parsedUpdatedAt;

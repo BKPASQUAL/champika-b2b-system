@@ -22,6 +22,7 @@ interface VehicleLocation {
   heading: number;
   battery_level: number | null;
   updated_at: string;
+  ignition?: boolean;
 }
 
 interface Vehicle {
@@ -233,10 +234,21 @@ export default function CustomerMap({
       });
     };
 
+    const getTruckColor = (v: Vehicle, isFocused: boolean) => {
+      if (isFocused) return "#ef4444"; // Red for focus
+      if (!v.location) return "#6b7280"; // Gray if no location
+      
+      const isEngineOn = v.location.ignition === true;
+      const isMoving = v.location.speed > 2;
+      
+      if (isEngineOn) {
+        return isMoving ? "#10b981" : "#f59e0b"; // Green for Moving, Amber for Idling
+      }
+      return "#3b82f6"; // Blue for Parked
+    };
+
     const blueIcon = createSvgIcon("#2563eb");
     const redIcon = createSvgIcon("#dc2626");
-    const truckIcon = createTruckIcon("#3b82f6");
-    const activeTruckIcon = createTruckIcon("#ef4444");
     
     const stopIcon = L.divIcon({
       html: `<div style="height: 24px; width: 24px; border-radius: 50%; background-color: #ef4444; border: 2px solid white; color: white; font-size: 11px; font-weight: 900; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.3); font-family: sans-serif; cursor: pointer;">P</div>`,
@@ -309,8 +321,26 @@ export default function CustomerMap({
       const lng = v.location!.longitude;
       const isFocused = focusedVehicleId === v.id;
 
+      const isEngineOn = v.location!.ignition === true;
+      const isMoving = v.location!.speed > 2;
+      
+      let statusText = "Parked (Engine Off)";
+      let statusColor = "#4b5563"; // Gray
+      if (isEngineOn) {
+        if (isMoving) {
+          statusText = "Moving";
+          statusColor = "#10b981"; // Green
+        } else {
+          statusText = "Idling (Engine On)";
+          statusColor = "#d97706"; // Amber
+        }
+      }
+
+      const truckColor = getTruckColor(v, isFocused);
+      const truckIcon = createTruckIcon(truckColor);
+
       const marker = L.marker([lat, lng], {
-        icon: isFocused ? activeTruckIcon : truckIcon,
+        icon: truckIcon,
       });
 
       const popupHtml = `
@@ -319,6 +349,7 @@ export default function CustomerMap({
             🚚 ${v.vehicleNumber}
           </h4>
           <p style="margin: 3px 0;"><b>Driver:</b> ${v.driverName || "Unassigned"}</p>
+          <p style="margin: 3px 0;"><b>Engine Status:</b> <span style="font-weight: bold; color: ${statusColor};">${statusText}</span></p>
           <p style="margin: 3px 0;"><b>Speed:</b> ${v.location!.speed.toFixed(0)} km/h</p>
           <p style="margin: 3px 0;"><b>IMEI:</b> ${v.deviceId || "N/A"}</p>
           <p style="margin: 3px 0; font-size: 10px; color: #6b7280;">
@@ -338,11 +369,11 @@ export default function CustomerMap({
       marker.bindPopup(popupHtml);
 
       // Show vehicle plate permanently on top of the truck pin
-      marker.bindTooltip(v.vehicleNumber, {
+      marker.bindTooltip(`<div style="background-color: ${truckColor}; color: white; font-weight: 800; padding: 2px 6px; border-radius: 3px; font-size: 10px; border: 1px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3);">${v.vehicleNumber}</div>`, {
         permanent: true,
         direction: "top",
         offset: [0, -18],
-        className: "bg-blue-600 border border-blue-700 text-white font-extrabold px-1.5 py-0.5 rounded shadow-md text-[10px] whitespace-nowrap pointer-events-none",
+        className: "bg-transparent border-none shadow-none p-0 pointer-events-none",
       });
 
       marker.addTo(markersGroup);

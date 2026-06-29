@@ -26,7 +26,8 @@ export async function GET() {
           speed,
           heading,
           battery_level,
-          updated_at
+          updated_at,
+          ignition
         )
       `)
       .order("updated_at", { foreignTable: "vehicle_locations", ascending: false })

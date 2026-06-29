@@ -22,6 +22,7 @@ import {
   User,
   Shield,
   Clock,
+  History,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -32,6 +33,7 @@ interface VehicleLocation {
   heading: number;
   battery_level: number | null;
   updated_at: string;
+  ignition?: boolean;
 }
 
 interface Vehicle {
@@ -295,6 +297,18 @@ export default function VehiclesPage() {
                             <span className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
                               <Clock className="h-2.5 w-2.5" /> {new Date(location.updated_at).toLocaleTimeString()}
                             </span>
+                            <span className="mt-1 flex items-center gap-1">
+                              <span className={`h-1.5 w-1.5 rounded-full ${
+                                location.ignition === true 
+                                  ? (location.speed > 2 ? "bg-emerald-500 animate-pulse" : "bg-amber-500") 
+                                  : "bg-slate-400"
+                              }`} />
+                              <span className="text-[10px] font-semibold text-slate-500">
+                                {location.ignition === true 
+                                  ? (location.speed > 2 ? "Engine: Running (Going)" : "Engine: On (Idling)") 
+                                  : "Engine: Off (Parked)"}
+                              </span>
+                            </span>
                           </div>
                         ) : (
                           <span className="text-slate-400 italic">No coordinates received</span>
@@ -323,17 +337,30 @@ export default function VehiclesPage() {
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           {location && (
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-8 w-8 text-blue-600 hover:text-blue-700"
-                              title="Locate on Map"
-                              onClick={() =>
-                                router.push(`/dashboard/office/distribution/customers/map?focusVehicle=${v.id}`)
-                              }
-                            >
-                              <MapPin className="h-4 w-4" />
-                            </Button>
+                            <>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 text-blue-600 hover:text-blue-700"
+                                title="Locate on Map"
+                                onClick={() =>
+                                  router.push(`/dashboard/office/distribution/customers/map?focusVehicle=${v.id}`)
+                                }
+                              >
+                                <MapPin className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 text-amber-600 hover:text-amber-700"
+                                title="View Route History"
+                                onClick={() =>
+                                  router.push(`/dashboard/office/distribution/customers/map?focusVehicle=${v.id}&history=true`)
+                                }
+                              >
+                                <History className="h-4 w-4" />
+                              </Button>
+                            </>
                           )}
                           <Button
                             size="icon"

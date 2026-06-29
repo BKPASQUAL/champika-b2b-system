@@ -62,6 +62,7 @@ function MapContent() {
   const focusId = searchParams.get("focus");
   const focusVehicleId = searchParams.get("focusVehicle");
   const loadIdParam = searchParams.get("loadId");
+  const historyParam = searchParams.get("history");
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -189,8 +190,9 @@ function MapContent() {
     return true;
   });
 
-  const fetchHistoryRoute = async () => {
-    if (!selectedHistoryVehicleId) {
+  const fetchHistoryRoute = async (overrideVehicleId?: string) => {
+    const vehicleId = overrideVehicleId || selectedHistoryVehicleId;
+    if (!vehicleId) {
       toast.error("Please select a vehicle first.");
       return;
     }
@@ -226,7 +228,7 @@ function MapContent() {
       }
 
       console.log(`[Route Query] Fetching route: start="${start}", end="${end}"`);
-      const res = await fetch(`/api/vehicles/${selectedHistoryVehicleId}/history?start=${start}&end=${end}`);
+      const res = await fetch(`/api/vehicles/${vehicleId}/history?start=${start}&end=${end}`);
       if (!res.ok) throw new Error("Failed to load historical route");
 
       const data = await res.json();
@@ -243,6 +245,18 @@ function MapContent() {
       setLoadingHistory(false);
     }
   };
+
+  // Automatically trigger history mode and load route if history=true and focusVehicle is present
+  useEffect(() => {
+    if (!loading && historyParam === "true" && focusVehicleId && vehicles.length > 0) {
+      const match = vehicles.find(v => v.id === focusVehicleId);
+      if (match) {
+        setHistoryMode(true);
+        setSelectedHistoryVehicleId(focusVehicleId);
+        fetchHistoryRoute(focusVehicleId);
+      }
+    }
+  }, [loading, historyParam, focusVehicleId, vehicles]);
 
   const shopsWithLocation = customers.filter(c => c.latitude !== null && c.longitude !== null);
   const focusedShop = customers.find(c => c.id === focusId);
