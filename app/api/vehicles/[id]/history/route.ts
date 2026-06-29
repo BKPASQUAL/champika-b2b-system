@@ -27,23 +27,40 @@ export async function GET(
       return NextResponse.json({ error: "Missing start or end query parameters" }, { status: 400 });
     }
 
-    const { data, error } = await supabase
+    let data: any[] | null = null;
+    let error: any = null;
+
+    const query = supabase
       .from("vehicle_locations")
-      .select("latitude, longitude, speed, heading, updated_at")
+      .select("latitude, longitude, speed, heading, updated_at, ignition")
       .eq("vehicle_id", id)
       .gte("updated_at", start)
       .lte("updated_at", end)
       .order("updated_at", { ascending: true })
       .range(0, 9999);
 
+    const firstRes = await query;
+    data = firstRes.data;
+    error = firstRes.error;
+
+    // Fail-safe retry if ignition column is not defined yet in database
+    if (error && error.code === "42703") {
+      const retryQuery = supabase
+        .from("vehicle_locations")
+        .select("latitude, longitude, speed, heading, updated_at")
+        .eq("vehicle_id", id)
+        .gte("updated_at", start)
+        .lte("updated_at", end)
+        .order("updated_at", { ascending: true })
+        .range(0, 9999);
+      const res = await retryQuery;
+      data = res.data;
+      error = res.error;
+    }
+
     if (error) throw error;
 
-    let filteredData = data || [];
-    // Downsample if we have too many coordinates to keep the map fast and light
-    if (filteredData.length > 1000) {
-      const step = Math.ceil(filteredData.length / 1000);
-      filteredData = filteredData.filter((_, index) => index % step === 0);
-    }
+    const filteredData = data || [];
 
     return NextResponse.json(filteredData);
   } catch (error: any) {
