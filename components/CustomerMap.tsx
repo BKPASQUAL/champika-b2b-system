@@ -541,20 +541,33 @@ export default function CustomerMap({
     if (!pt || !pt.latitude || !pt.longitude) return;
 
     const heading = pt.heading || 0;
-    // Rotate 90 degrees backward because SVG icon points East (right) by default
-    const rotation = heading - 90;
+    // Rotate directly since SVG car icon points North (Up) by default
+    const rotation = heading;
 
     const replayIcon = L.divIcon({
       html: `
-        <div style="transform: rotate(${rotation}deg); transition: transform 0.15s ease-out; display: flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 50%; background-color: rgba(139, 92, 246, 0.95); border: 2.5px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.4); padding: 4px;">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" style="width: 24px; height: 24px;">
-            <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />
+        <div style="transform: rotate(${rotation}deg); transition: transform 0.15s ease-out; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px;">
+          <!-- SVG Top View Covered Lorry/Truck facing North (Up) -->
+          <svg viewBox="0 0 24 24" fill="#2563eb" style="width: 38px; height: 38px; filter: drop-shadow(0px 2.5px 4.5px rgba(0,0,0,0.45));">
+            <!-- Cabin -->
+            <path d="M7 2c-1.1 0-2 .9-2 2v6h14V4c0-1.1-.9-2-2-2H7z" fill="#2563eb" />
+            <!-- Windshield -->
+            <path d="M8 3.5h8v2.5H8V3.5z" fill="#93c5fd" opacity="0.95" />
+            <!-- Side Mirrors -->
+            <rect x="4.2" y="5.2" width="0.8" height="2" rx="0.3" fill="#1e3a8a" />
+            <rect x="19" y="5.2" width="0.8" height="2" rx="0.3" fill="#1e3a8a" />
+            <!-- Covered Cargo Container Box -->
+            <rect x="5" y="9" width="14" height="13" rx="1.2" fill="#1d4ed8" />
+            <!-- Roof Ridges -->
+            <rect x="7" y="10.2" width="1.2" height="10.5" fill="#3b82f6" opacity="0.75" />
+            <rect x="11.4" y="10.2" width="1.2" height="10.5" fill="#3b82f6" opacity="0.75" />
+            <rect x="15.8" y="10.2" width="1.2" height="10.5" fill="#3b82f6" opacity="0.75" />
           </svg>
         </div>
       `,
-      className: "replay-truck-navigation-icon",
-      iconSize: [42, 42],
-      iconAnchor: [21, 21],
+      className: "replay-car-navigation-icon",
+      iconSize: [40, 40],
+      iconAnchor: [20, 20],
     });
 
     if (!replayMarkerRef.current) {
