@@ -677,6 +677,16 @@ export default function CustomerMap({
                 <Compass className="w-3 h-3 text-slate-500" style={{ transform: `rotate(${historyRoute[replayIndex]?.heading}deg)`, transition: 'transform 0.15s ease-out' }} />
               </span>
             </div>
+            <div className="flex items-center gap-1">
+              <span className="text-slate-400 font-medium">🔑 Engine:</span>
+              <span className={`font-mono px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                historyRoute[replayIndex]?.ignition 
+                  ? "bg-green-50 text-green-700 border border-green-200/40" 
+                  : "bg-slate-100 text-slate-600 border border-slate-200/40"
+              }`}>
+                {historyRoute[replayIndex]?.ignition ? "ON" : "OFF"}
+              </span>
+            </div>
           </div>
 
           {/* Media Controls */}
