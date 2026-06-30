@@ -135,6 +135,10 @@ export default function CustomerMap({
   const lastFocusedCustomerIdRef = useRef<string | null>(null);
   const lastFocusedVehicleIdRef = useRef<string | null>(null);
 
+  // Map Layer selection
+  const [mapLayerType, setMapLayerType] = useState<"streets" | "satellite" | "hybrid">("streets");
+  const tileLayerRef = useRef<any>(null);
+
   // Playback control states
   const [isReplaying, setIsReplaying] = useState(false);
   const [replayIndex, setReplayIndex] = useState(0);
@@ -212,9 +216,10 @@ export default function CustomerMap({
         zoomControl: true,
       }).setView(initialCenter, initialZoom);
 
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      tileLayerRef.current = L.tileLayer("https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}", {
+        maxZoom: 20,
+        subdomains: ["mt0", "mt1", "mt2", "mt3"],
+        attribution: "&copy; Google Maps",
       }).addTo(mapInstanceRef.current);
 
       markersGroupRef.current = L.featureGroup().addTo(mapInstanceRef.current);
@@ -582,6 +587,20 @@ export default function CustomerMap({
 
   }, [leafletLoaded, historyRoute, replayIndex]);
 
+  // Change Google Maps tile type dynamically
+  useEffect(() => {
+    if (leafletLoaded && mapInstanceRef.current && tileLayerRef.current) {
+      const L = (window as any).L;
+      if (L) {
+        let lyrs = "m";
+        if (mapLayerType === "satellite") lyrs = "s";
+        if (mapLayerType === "hybrid") lyrs = "y";
+
+        tileLayerRef.current.setUrl(`https://{s}.google.com/vt/lyrs=${lyrs}&x={x}&y={y}&z={z}`);
+      }
+    }
+  }, [leafletLoaded, mapLayerType]);
+
   // Clean up on unmount
   useEffect(() => {
     return () => {
@@ -615,6 +634,23 @@ export default function CustomerMap({
   return (
     <div className="w-full rounded-lg border border-slate-200 shadow-inner overflow-hidden relative group/map flex flex-col justify-end" style={{ height }}>
       <div ref={mapContainerRef} className="w-full h-full" style={{ zIndex: 1 }} />
+
+      {/* Floating Map Type Selector */}
+      <div className="absolute top-4 right-4 z-[999] bg-white/95 backdrop-blur-md border border-slate-200/80 rounded-lg shadow-md p-1 flex gap-1 text-[10px] font-bold text-slate-600 transition-opacity">
+        {(["streets", "satellite", "hybrid"] as const).map((type) => (
+          <button
+            key={type}
+            onClick={() => setMapLayerType(type)}
+            className={`px-2.5 py-1.5 rounded transition-all capitalize ${
+              mapLayerType === type 
+                ? "bg-blue-600 text-white shadow-sm" 
+                : "hover:text-slate-900 hover:bg-slate-50"
+            }`}
+          >
+            {type === "streets" ? "Google Map" : type === "hybrid" ? "Hybrid" : "Satellite"}
+          </button>
+        ))}
+      </div>
 
       {/* Floating Replay Controls HUD */}
       {historyRoute && historyRoute.length > 0 && (
