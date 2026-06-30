@@ -59,6 +59,17 @@ Response: ${responseStatus} - ${JSON.stringify(responseBody)}
   }
 }
 
+function parseBoolean(val: any): boolean {
+  if (val === undefined || val === null) return false;
+  if (typeof val === "boolean") return val;
+  if (typeof val === "number") return val === 1;
+  if (typeof val === "string") {
+    const s = val.toLowerCase().trim();
+    return s === "true" || s === "1" || s === "on" || s === "yes";
+  }
+  return false;
+}
+
 async function handleRequest(request: NextRequest) {
   const method = request.method;
   const searchParams = Object.fromEntries(request.nextUrl.searchParams.entries());
@@ -78,6 +89,7 @@ async function handleRequest(request: NextRequest) {
     let batteryLevel: number | null = null;
     let timestamp: string | null = null;
     let ignition = false;
+    let isValid = true;
 
     console.log(`[GPS Webhook] Incoming request method: ${method}`);
 
@@ -96,7 +108,13 @@ async function handleRequest(request: NextRequest) {
           heading = reqBody.position.course || 0;
           batteryLevel = reqBody.position.attributes?.batteryLevel || null;
           timestamp = reqBody.position.deviceTime || reqBody.position.fixTime || reqBody.position.serverTime || null;
-          ignition = reqBody.position.attributes?.ignition === true || reqBody.position.attributes?.acc === true;
+          
+          const rawIgnition = reqBody.position.attributes?.ignition !== undefined 
+            ? reqBody.position.attributes.ignition 
+            : reqBody.position.attributes?.acc;
+          ignition = parseBoolean(rawIgnition);
+          
+          isValid = reqBody.position.valid !== false;
         } else {
           // Flat JSON format
           deviceId = reqBody.deviceId || reqBody.uniqueId || reqBody.id;
@@ -106,7 +124,13 @@ async function handleRequest(request: NextRequest) {
           heading = reqBody.heading || reqBody.course || reqBody.bearing || 0;
           batteryLevel = reqBody.batteryLevel || reqBody.battery || null;
           timestamp = reqBody.timestamp || reqBody.time || reqBody.deviceTime || reqBody.fixTime || null;
-          ignition = reqBody.ignition === true || reqBody.acc === true || reqBody.attributes?.ignition === true || reqBody.attributes?.acc === true;
+          
+          const rawIgnition = reqBody.ignition !== undefined 
+            ? reqBody.ignition 
+            : (reqBody.acc !== undefined ? reqBody.acc : (reqBody.attributes?.ignition || reqBody.attributes?.acc));
+          ignition = parseBoolean(rawIgnition);
+          
+          isValid = reqBody.valid !== false && reqBody.valid !== "false" && reqBody.valid !== 0 && reqBody.valid !== "0";
         }
       } catch (e: any) {
         console.log("[GPS Webhook] JSON parse fallback. Info:", e.message);
@@ -140,14 +164,29 @@ async function handleRequest(request: NextRequest) {
     // Parse ignition from query parameters
     const ignStr = searchParams.ignition || searchParams.acc;
     if (ignStr) {
-      ignition = ignStr === "true" || ignStr === "1" || ignStr === "on";
+      ignition = parseBoolean(ignStr);
     }
 
-    console.log(`[GPS Webhook] Resolved Values -> IMEI: "${deviceId}", Lat: ${latitude}, Lng: ${longitude}, Speed: ${speed}, Heading: ${heading}, Battery: ${batteryLevel}, Timestamp: ${timestamp}, Ignition: ${ignition}`);
+    // Parse valid flag from query parameters
+    const validStr = searchParams.valid;
+    if (validStr !== undefined) {
+      isValid = validStr === "true" || validStr === "1" || validStr === "yes";
+    }
+
+    // Convert speed unit from knots (Traccar) to km/h (1 knot = 1.852 km/h)
+    speed = speed * 1.852;
+
+    console.log(`[GPS Webhook] Resolved Values -> IMEI: "${deviceId}", Lat: ${latitude}, Lng: ${longitude}, Speed: ${speed.toFixed(1)} km/h, Heading: ${heading}, Battery: ${batteryLevel}, Timestamp: ${timestamp}, Ignition: ${ignition}, Valid: ${isValid}`);
 
     if (!deviceId || !latitude || !longitude) {
       console.warn("[GPS Webhook] Rejected: Missing required variables (deviceId, latitude, or longitude).");
       return returnResponse(400, { error: "Missing deviceId, latitude, or longitude" });
+    }
+
+    // Drop coordinates that are invalid (satellite lock lost) with 200 OK so Traccar doesn't retry
+    if (!isValid) {
+      console.warn(`[GPS Webhook] Discarded: Position is marked as invalid by GPS device for IMEI: "${deviceId}"`);
+      return returnResponse(200, { message: "Ignored invalid coordinate (no satellite lock)" });
     }
 
     // 3. Find vehicle mapping by deviceId (IMEI)
