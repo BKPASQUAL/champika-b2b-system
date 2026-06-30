@@ -114,7 +114,7 @@ export default function StockAdjustmentPage() {
         const [productsRes, fullProductsRes, stockRes, packRes] = await Promise.all([
           fetch(`/api/inventory?businessId=${BUSINESS_IDS.CHAMPIKA_DISTRIBUTION}`),
           fetch("/api/products?active=true"),
-          fetch(`/api/inventory/${locationId}?businessId=${BUSINESS_IDS.CHAMPIKA_DISTRIBUTION}`),
+          fetch(`/api/inventory/${locationId}?businessId=${BUSINESS_IDS.CHAMPIKA_DISTRIBUTION}&includeAll=true`),
           fetch("/api/settings/categories?type=pack_size"),
         ]);
         const productsData = await productsRes.json();
@@ -159,7 +159,7 @@ export default function StockAdjustmentPage() {
   }, [locationId]);
 
   const selectedProduct = allProducts.find((p) => p.id === selectedProductId);
-  const currentStock = selectedProductId ? locationStocks[selectedProductId] || 0 : 0;
+  const currentStock = selectedProductId ? (locationStocks[selectedProductId] ?? 0) : 0;
 
   const getUnitSize = (unitOfMeasure?: string) => {
     if (!unitOfMeasure) return 1;
@@ -436,7 +436,7 @@ export default function StockAdjustmentPage() {
                 </div>
                 <div>
                   <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Current Stock</span>
-                  <div className="text-2xl font-bold text-slate-800 leading-none">
+                  <div className={cn("text-2xl font-bold leading-none", selectedProductId && currentStock < 0 ? "text-red-600" : "text-slate-800")}>
                     {selectedProductId ? currentStock : "—"}
                   </div>
                 </div>
