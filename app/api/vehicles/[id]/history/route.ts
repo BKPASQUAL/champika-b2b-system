@@ -27,38 +27,54 @@ export async function GET(
       return NextResponse.json({ error: "Missing start or end query parameters" }, { status: 400 });
     }
 
-    let data: any[] | null = null;
-    let error: any = null;
+    let data: any[] = [];
+    let page = 0;
+    const pageSize = 1000;
+    let hasMore = true;
 
-    const query = supabase
-      .from("vehicle_locations")
-      .select("latitude, longitude, speed, heading, updated_at, ignition")
-      .eq("vehicle_id", id)
-      .gte("updated_at", start)
-      .lte("updated_at", end)
-      .order("updated_at", { ascending: true })
-      .range(0, 9999);
+    while (hasMore && data.length < 10000) {
+      const rangeStart = page * pageSize;
+      const rangeEnd = rangeStart + pageSize - 1;
 
-    const firstRes = await query;
-    data = firstRes.data;
-    error = firstRes.error;
-
-    // Fail-safe retry if ignition column is not defined yet in database
-    if (error && error.code === "42703") {
-      const retryQuery = supabase
+      const query = supabase
         .from("vehicle_locations")
-        .select("latitude, longitude, speed, heading, updated_at")
+        .select("latitude, longitude, speed, heading, updated_at, ignition")
         .eq("vehicle_id", id)
         .gte("updated_at", start)
         .lte("updated_at", end)
         .order("updated_at", { ascending: true })
-        .range(0, 9999);
-      const res = await retryQuery;
-      data = res.data;
-      error = res.error;
-    }
+        .range(rangeStart, rangeEnd);
 
-    if (error) throw error;
+      const firstRes = await query;
+      let pageData: any[] | null = firstRes.data;
+      let error = firstRes.error;
+
+      // Fail-safe retry if ignition column is not defined yet in database
+      if (error && error.code === "42703") {
+        const retryQuery = supabase
+          .from("vehicle_locations")
+          .select("latitude, longitude, speed, heading, updated_at")
+          .eq("vehicle_id", id)
+          .gte("updated_at", start)
+          .lte("updated_at", end)
+          .order("updated_at", { ascending: true })
+          .range(rangeStart, rangeEnd);
+        const res = await retryQuery;
+        pageData = res.data;
+        error = res.error;
+      }
+
+      if (error) throw error;
+
+      if (pageData && pageData.length > 0) {
+        data = data.concat(pageData);
+        hasMore = pageData.length === pageSize;
+      } else {
+        hasMore = false;
+      }
+
+      page++;
+    }
 
     const filteredData = data || [];
 
