@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Compass } from "lucide-react";
 
 interface Customer {
   id: string;
@@ -114,6 +114,7 @@ interface CustomerMapProps {
   vehicles?: Vehicle[];
   focusedVehicleId?: string | null;
   historyRoute?: VehicleLocation[];
+  focusedStop?: { latitude: number; longitude: number } | null;
 }
 
 export default function CustomerMap({
@@ -123,6 +124,7 @@ export default function CustomerMap({
   vehicles = [],
   focusedVehicleId = null,
   historyRoute = [],
+  focusedStop = null,
 }: CustomerMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const [leafletLoaded, setLeafletLoaded] = useState(false);
@@ -133,11 +135,23 @@ export default function CustomerMap({
   const lastFocusedCustomerIdRef = useRef<string | null>(null);
   const lastFocusedVehicleIdRef = useRef<string | null>(null);
 
+  // Playback control states
+  const [isReplaying, setIsReplaying] = useState(false);
+  const [replayIndex, setReplayIndex] = useState(0);
+  const [replaySpeed, setReplaySpeed] = useState(1);
+  const replayIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const replayMarkerRef = useRef<any>(null);
+
+  // Reset playback if route changes
+  useEffect(() => {
+    setIsReplaying(false);
+    setReplayIndex(0);
+  }, [historyRoute]);
+
   // 1. Load Leaflet CDN Assets
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    // Check if Leaflet script already exists
     if ((window as any).L) {
       setLeafletLoaded(true);
       return;
@@ -168,7 +182,6 @@ export default function CustomerMap({
       };
       document.body.appendChild(script);
     } else {
-      // Script is loading or loaded
       const checkInterval = setInterval(() => {
         if ((window as any).L) {
           setLeafletLoaded(true);
@@ -213,7 +226,7 @@ export default function CustomerMap({
     // Clear previous markers
     markersGroup.clearLayers();
 
-    // SVG Marker templates (custom inline SVG icons so we don't depend on CDN image loading)
+    // SVG Marker templates
     const createSvgIcon = (color: string) => {
       return L.divIcon({
         html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="${color}" class="w-8 h-8 drop-shadow-md"><path fill-rule="evenodd" d="M11.54 22.351l.07.04.028.016a.76.76 0 00.723 0l.028-.015.071-.041a16.975 16.975 0 001.144-.742 19.58 19.58 0 002.683-2.282c1.944-1.99 3.963-4.98 3.963-8.827a8.25 8.25 0 00-16.5 0c0 3.846 2.02 6.837 3.963 8.827a19.58 19.58 0 002.682 2.282 16.975 16.975 0 001.145.742zM12 13.5a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd" /></svg>`,
@@ -235,16 +248,16 @@ export default function CustomerMap({
     };
 
     const getTruckColor = (v: Vehicle, isFocused: boolean) => {
-      if (isFocused) return "#ef4444"; // Red for focus
-      if (!v.location) return "#6b7280"; // Gray if no location
+      if (isFocused) return "#ef4444";
+      if (!v.location) return "#6b7280";
       
       const isEngineOn = v.location.ignition === true;
       const isMoving = v.location.speed > 2;
       
       if (isEngineOn) {
-        return isMoving ? "#10b981" : "#f59e0b"; // Green for Moving, Amber for Idling
+        return isMoving ? "#10b981" : "#f59e0b";
       }
-      return "#3b82f6"; // Blue for Parked
+      return "#3b82f6";
     };
 
     const blueIcon = createSvgIcon("#2563eb");
@@ -296,7 +309,6 @@ export default function CustomerMap({
 
       marker.bindPopup(popupHtml);
       
-      // Show shop name permanently on top of the marker pin
       marker.bindTooltip(customer.shopName, {
         permanent: true,
         direction: "top",
@@ -325,14 +337,14 @@ export default function CustomerMap({
       const isMoving = v.location!.speed > 2;
       
       let statusText = "Parked (Engine Off)";
-      let statusColor = "#4b5563"; // Gray
+      let statusColor = "#4b5563";
       if (isEngineOn) {
         if (isMoving) {
           statusText = "Moving";
-          statusColor = "#10b981"; // Green
+          statusColor = "#10b981";
         } else {
           statusText = "Idling (Engine On)";
-          statusColor = "#d97706"; // Amber
+          statusColor = "#d97706";
         }
       }
 
@@ -368,7 +380,6 @@ export default function CustomerMap({
 
       marker.bindPopup(popupHtml);
 
-      // Show vehicle plate permanently on top of the truck pin
       marker.bindTooltip(`<div style="background-color: ${truckColor}; color: white; font-weight: 800; padding: 2px 6px; border-radius: 3px; font-size: 10px; border: 1px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3);">${v.vehicleNumber}</div>`, {
         permanent: true,
         direction: "top",
@@ -385,18 +396,21 @@ export default function CustomerMap({
 
     // Draw history route polyline if provided
     if (historyRoute && historyRoute.length > 0) {
-      const latlngs = historyRoute
-        .filter((pt) => pt.latitude && pt.longitude)
-        .map((pt) => [pt.latitude, pt.longitude] as [number, number]);
-      
-      // Draw driving line path with a clear solid orange line
-      L.polyline(latlngs, {
-        color: "#f97316", // Orange
-        weight: 6,
-        opacity: 0.9,
-      }).addTo(markersGroup);
+      // Draw driving line path with dynamic color segments (red for speeding > 60 km/h)
+      for (let i = 0; i < historyRoute.length - 1; i++) {
+        const pt1 = historyRoute[i];
+        const pt2 = historyRoute[i + 1];
+        if (pt1.latitude && pt1.longitude && pt2.latitude && pt2.longitude) {
+          const isSpeeding = pt1.speed > 60 || pt2.speed > 60;
+          L.polyline([[pt1.latitude, pt1.longitude], [pt2.latitude, pt2.longitude]], {
+            color: isSpeeding ? "#ef4444" : "#f97316",
+            weight: 6,
+            opacity: 0.95,
+          }).addTo(markersGroup);
+        }
+      }
 
-      // Draw START marker pin (using inline styles to bypass Tailwind processing inside Leaflet)
+      // Draw START marker pin
       const startPt = historyRoute[0];
       const startMarker = L.marker([startPt.latitude, startPt.longitude], {
         icon: L.divIcon({
@@ -409,7 +423,7 @@ export default function CustomerMap({
       startMarker.bindPopup(`<b>Route Start:</b> ${new Date(startPt.updated_at).toLocaleTimeString()}`);
       startMarker.addTo(markersGroup);
 
-      // Draw END marker pin (using inline styles)
+      // Draw END marker pin
       const endPt = historyRoute[historyRoute.length - 1];
       const endMarker = L.marker([endPt.latitude, endPt.longitude], {
         icon: L.divIcon({
@@ -422,7 +436,7 @@ export default function CustomerMap({
       endMarker.bindPopup(`<b>Route End:</b> ${new Date(endPt.updated_at).toLocaleTimeString()}`);
       endMarker.addTo(markersGroup);
 
-      // Detect and draw stops (parking segments where speed < 2 km/h for >= 3 minutes)
+      // Detect and draw stops
       const stops = detectStops(historyRoute);
       stops.forEach((stop) => {
         const stopMarker = L.marker([stop.latitude, stop.longitude], {
@@ -454,7 +468,6 @@ export default function CustomerMap({
       focusedVehicleId !== lastFocusedVehicleIdRef.current;
 
     if (historyRoute && historyRoute.length > 0) {
-      // Prioritize route bounds if history route is active
       const routeBounds = L.latLngBounds(historyRoute.map(pt => [pt.latitude, pt.longitude]));
       if (routeBounds.isValid()) {
         map.fitBounds(routeBounds, { padding: [50, 50] });
@@ -473,9 +486,95 @@ export default function CustomerMap({
 
   }, [leafletLoaded, customers, focusedCustomerId, vehicles, focusedVehicleId, historyRoute]);
 
+  // Center/zoom on stop location when selected from sidebar
+  useEffect(() => {
+    if (leafletLoaded && mapInstanceRef.current && focusedStop) {
+      const L = (window as any).L;
+      if (L) {
+        mapInstanceRef.current.setView([focusedStop.latitude, focusedStop.longitude], 16);
+      }
+    }
+  }, [leafletLoaded, focusedStop]);
+
+  // Playback engine loop Effect
+  useEffect(() => {
+    if (!isReplaying || historyRoute.length === 0) {
+      if (replayIntervalRef.current) {
+        clearInterval(replayIntervalRef.current);
+      }
+      return;
+    }
+
+    const intervalTime = Math.max(20, Math.min(500, 300 / replaySpeed));
+
+    replayIntervalRef.current = setInterval(() => {
+      setReplayIndex((prev) => {
+        if (prev >= historyRoute.length - 1) {
+          setIsReplaying(false);
+          return prev;
+        }
+        return prev + 1;
+      });
+    }, intervalTime);
+
+    return () => {
+      if (replayIntervalRef.current) {
+        clearInterval(replayIntervalRef.current);
+      }
+    };
+  }, [isReplaying, replaySpeed, historyRoute]);
+
+  // Update replaying marker on map
+  useEffect(() => {
+    if (!leafletLoaded || !mapInstanceRef.current || !historyRoute || historyRoute.length === 0) {
+      if (replayMarkerRef.current) {
+        replayMarkerRef.current.remove();
+        replayMarkerRef.current = null;
+      }
+      return;
+    }
+
+    const L = (window as any).L;
+    if (!L) return;
+
+    const pt = historyRoute[replayIndex];
+    if (!pt || !pt.latitude || !pt.longitude) return;
+
+    const heading = pt.heading || 0;
+    // Rotate 90 degrees backward because SVG icon points East (right) by default
+    const rotation = heading - 90;
+
+    const replayIcon = L.divIcon({
+      html: `
+        <div style="transform: rotate(${rotation}deg); transition: transform 0.15s ease-out; display: flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 50%; background-color: rgba(139, 92, 246, 0.95); border: 2.5px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.4); padding: 4px;">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" style="width: 24px; height: 24px;">
+            <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />
+          </svg>
+        </div>
+      `,
+      className: "replay-truck-navigation-icon",
+      iconSize: [42, 42],
+      iconAnchor: [21, 21],
+    });
+
+    if (!replayMarkerRef.current) {
+      replayMarkerRef.current = L.marker([pt.latitude, pt.longitude], { icon: replayIcon }).addTo(mapInstanceRef.current);
+    } else {
+      replayMarkerRef.current.setLatLng([pt.latitude, pt.longitude]);
+      replayMarkerRef.current.setIcon(replayIcon);
+    }
+
+    // Follow the vehicle by panning map automatically
+    mapInstanceRef.current.panTo([pt.latitude, pt.longitude]);
+
+  }, [leafletLoaded, historyRoute, replayIndex]);
+
   // Clean up on unmount
   useEffect(() => {
     return () => {
+      if (replayIntervalRef.current) {
+        clearInterval(replayIntervalRef.current);
+      }
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
@@ -501,8 +600,109 @@ export default function CustomerMap({
   }
 
   return (
-    <div className="w-full rounded-lg border border-slate-200 shadow-inner overflow-hidden">
-      <div ref={mapContainerRef} style={{ width: "100%", height, zIndex: 1 }} />
+    <div className="w-full rounded-lg border border-slate-200 shadow-inner overflow-hidden relative group/map flex flex-col justify-end" style={{ height }}>
+      <div ref={mapContainerRef} className="w-full h-full" style={{ zIndex: 1 }} />
+
+      {/* Floating Replay Controls HUD */}
+      {historyRoute && historyRoute.length > 0 && (
+        <div className="absolute bottom-4 left-4 right-4 z-[999] bg-white/95 backdrop-blur-md border border-slate-200/80 rounded-xl shadow-lg p-3.5 flex flex-col md:flex-row items-center gap-4 transition-all">
+          
+          {/* Telemetry info HUD */}
+          <div className="flex items-center gap-3 shrink-0 text-slate-800 text-[11px] font-bold border-b md:border-b-0 md:border-r border-slate-200/85 pb-2 md:pb-0 md:pr-4 w-full md:w-auto justify-between md:justify-start">
+            <div className="flex items-center gap-1">
+              <span className="text-slate-400 font-medium">🕒 Time:</span>
+              <span className="font-mono text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded">
+                {new Date(historyRoute[replayIndex]?.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-slate-400 font-medium">⚡ Speed:</span>
+              <span className="font-mono text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                {historyRoute[replayIndex]?.speed.toFixed(0)} <span className="text-[9px] text-slate-500 font-normal">km/h</span>
+              </span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-slate-400 font-medium">🧭 Course:</span>
+              <span className="font-mono text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded flex items-center gap-1">
+                {historyRoute[replayIndex]?.heading}°
+                <Compass className="w-3 h-3 text-slate-500" style={{ transform: `rotate(${historyRoute[replayIndex]?.heading}deg)`, transition: 'transform 0.15s ease-out' }} />
+              </span>
+            </div>
+          </div>
+
+          {/* Media Controls */}
+          <div className="flex items-center gap-2 shrink-0">
+            {isReplaying ? (
+              <button 
+                onClick={() => setIsReplaying(false)} 
+                className="bg-amber-500 hover:bg-amber-600 text-white font-bold p-2.5 rounded-lg shadow-sm hover:scale-105 transition-transform"
+                title="Pause Replay"
+              >
+                <svg className="w-4 h-4 fill-white" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+              </button>
+            ) : (
+              <button 
+                onClick={() => {
+                  if (replayIndex >= historyRoute.length - 1) {
+                    setReplayIndex(0);
+                  }
+                  setIsReplaying(true);
+                }} 
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold p-2.5 rounded-lg shadow-sm hover:scale-105 transition-transform"
+                title="Play Replay"
+              >
+                <svg className="w-4 h-4 fill-white" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              </button>
+            )}
+
+            <button 
+              onClick={() => {
+                setIsReplaying(false);
+                setReplayIndex(0);
+              }} 
+              className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold p-2.5 rounded-lg shadow-sm"
+              title="Stop & Reset"
+            >
+              <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>
+            </button>
+          </div>
+
+          {/* Progress Slider */}
+          <div className="flex-1 w-full flex items-center gap-2">
+            <span className="text-[10px] text-slate-400 font-mono">0%</span>
+            <input 
+              type="range"
+              min="0"
+              max={historyRoute.length - 1}
+              value={replayIndex}
+              onChange={(e) => {
+                setIsReplaying(false);
+                setReplayIndex(parseInt(e.target.value));
+              }}
+              className="flex-1 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600 outline-none"
+            />
+            <span className="text-[10px] text-slate-400 font-mono">
+              {Math.round((replayIndex / (historyRoute.length - 1)) * 100)}%
+            </span>
+          </div>
+
+          {/* Replay speed */}
+          <div className="flex items-center gap-1 shrink-0 bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-[10px] font-bold text-slate-600">
+            {[1, 5, 10, 50].map((spd) => (
+              <button
+                key={spd}
+                onClick={() => setReplaySpeed(spd)}
+                className={`px-2 py-1 rounded transition-colors ${
+                  replaySpeed === spd ? "bg-white text-blue-900 shadow-sm border border-slate-200/50" : "hover:text-slate-900"
+                }`}
+              >
+                {spd}x
+              </button>
+            ))}
+          </div>
+
+        </div>
+      )}
     </div>
   );
 }
