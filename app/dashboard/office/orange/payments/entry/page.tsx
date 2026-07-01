@@ -68,7 +68,7 @@ interface Customer { id: string; name: string;   phone?: string;
 }
 interface Bank { id: string; bank_code: string; bank_name: string; }
 interface CompanyAccount { id: string; account_name: string; account_type: string; account_number?: string | null; }
-interface PendingInvoice { id: string; invoiceNo: string; date: string; totalAmount: number; paidAmount: number; balance: number; }
+interface PendingInvoice { id: string; invoiceNo: string; manualInvoiceNo?: string; date: string; totalAmount: number; paidAmount: number; balance: number; }
 interface InvoiceSettlement { invoiceId: string; selected: boolean; settleAmount: number; }
 type PaymentMethod = "cash" | "bank" | "cheque";
 
@@ -157,7 +157,7 @@ export default function OrangePaymentEntryPage() {
         const data = await res.json();
         const filtered: PendingInvoice[] = data
           .filter((inv: any) => inv.customerId === customerId && inv.orderStatus === "Delivered" && inv.status !== "Paid" && (inv.dueAmount ?? 0) > 0)
-          .map((inv: any) => ({ id: inv.orderId || inv.id, invoiceNo: inv.invoiceNo, date: inv.date || (inv.createdAt?.split("T")[0] ?? ""), totalAmount: inv.totalAmount ?? 0, paidAmount: inv.paidAmount ?? 0, balance: inv.dueAmount ?? 0 }));
+          .map((inv: any) => ({ id: inv.orderId || inv.id, invoiceNo: inv.invoiceNo, manualInvoiceNo: inv.manualInvoiceNo || undefined, date: inv.date || (inv.createdAt?.split("T")[0] ?? ""), totalAmount: inv.totalAmount ?? 0, paidAmount: inv.paidAmount ?? 0, balance: inv.dueAmount ?? 0 }));
         setPendingInvoices(filtered);
         const map: Record<string, InvoiceSettlement> = {};
         filtered.forEach((inv) => { map[inv.id] = { invoiceId: inv.id, selected: false, settleAmount: 0 }; });
@@ -402,6 +402,7 @@ export default function OrangePaymentEntryPage() {
                     <TableRow>
                       <TableHead className="w-10"></TableHead>
                       <TableHead>Invoice No</TableHead>
+                      <TableHead>Manual Ref</TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead className="text-right">Total</TableHead>
                       <TableHead className="text-right">Paid</TableHead>
@@ -417,6 +418,7 @@ export default function OrangePaymentEntryPage() {
                         <TableRow key={inv.id} className={cn(isSelected && "bg-orange-50")}>
                           <TableCell><Checkbox checked={isSelected} onCheckedChange={() => toggleInvoice(inv.id, inv)} className="data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500" /></TableCell>
                           <TableCell className="font-medium font-mono text-sm">{inv.invoiceNo}</TableCell>
+                          <TableCell className="font-mono text-sm text-muted-foreground">{inv.manualInvoiceNo || "—"}</TableCell>
                           <TableCell>{inv.date ? new Date(inv.date).toLocaleDateString() : "—"}</TableCell>
                           <TableCell className="text-right">{formatCurrency(inv.totalAmount)}</TableCell>
                           <TableCell className="text-right text-muted-foreground">{formatCurrency(inv.paidAmount)}</TableCell>
@@ -441,7 +443,7 @@ export default function OrangePaymentEntryPage() {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <Checkbox checked={isSelected} onCheckedChange={() => toggleInvoice(inv.id, inv)} className="data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500" />
-                          <div><p className="font-semibold font-mono text-sm">{inv.invoiceNo}</p><p className="text-xs text-muted-foreground">{inv.date ? new Date(inv.date).toLocaleDateString() : "—"}</p></div>
+                          <div><p className="font-semibold font-mono text-sm">{inv.invoiceNo}</p>{inv.manualInvoiceNo && <p className="text-xs font-mono text-muted-foreground">{inv.manualInvoiceNo}</p>}<p className="text-xs text-muted-foreground">{inv.date ? new Date(inv.date).toLocaleDateString() : "—"}</p></div>
                         </div>
                         <span className="font-bold text-orange-600 text-sm">{formatCurrency(inv.balance)}</span>
                       </div>
