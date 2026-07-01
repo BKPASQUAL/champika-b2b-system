@@ -107,6 +107,21 @@ function detectStops(points: VehicleLocation[]): StopEvent[] {
   return stops;
 }
 
+function getDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371e3; // metres
+  const phi1 = lat1 * Math.PI/180;
+  const phi2 = lat2 * Math.PI/180;
+  const deltaPhi = (lat2-lat1) * Math.PI/180;
+  const deltaLambda = (lon2-lon1) * Math.PI/180;
+
+  const a = Math.sin(deltaPhi/2) * Math.sin(deltaPhi/2) +
+            Math.cos(phi1) * Math.cos(phi2) *
+            Math.sin(deltaLambda/2) * Math.sin(deltaLambda/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+  return R * c;
+}
+
 interface CustomerMapProps {
   customers: Customer[];
   focusedCustomerId?: string | null;
@@ -402,17 +417,48 @@ export default function CustomerMap({
 
     // Draw history route polyline if provided
     if (historyRoute && historyRoute.length > 0) {
+      // Filter out duplicate GPS drift points while the vehicle is parked
+      const filteredPathPoints: any[] = [];
+      let lastPoint: any | null = null;
+
+      for (const pt of historyRoute) {
+        if (!pt.latitude || !pt.longitude) continue;
+        
+        if (!lastPoint) {
+          filteredPathPoints.push(pt);
+          lastPoint = pt;
+          continue;
+        }
+
+        const distance = getDistanceMeters(lastPoint.latitude, lastPoint.longitude, pt.latitude, pt.longitude);
+        const speed = pt.speed || 0;
+
+        // Keep the point if vehicle moved > 15 meters, or is moving (> 3 km/h), or engine status changed
+        if (distance > 15 || speed > 3 || pt.ignition !== lastPoint.ignition) {
+          filteredPathPoints.push(pt);
+          lastPoint = pt;
+        }
+      }
+
+      // Add the final point to ensure the line ends exactly at the last coordinate
+      const finalPt = historyRoute[historyRoute.length - 1];
+      if (finalPt && finalPt.latitude && finalPt.longitude && lastPoint && lastPoint !== finalPt) {
+        filteredPathPoints.push(finalPt);
+      }
+
       // Draw driving line path with dynamic color segments (red for speeding > 60 km/h)
-      for (let i = 0; i < historyRoute.length - 1; i++) {
-        const pt1 = historyRoute[i];
-        const pt2 = historyRoute[i + 1];
-        if (pt1.latitude && pt1.longitude && pt2.latitude && pt2.longitude) {
-          const isSpeeding = pt1.speed > 60 || pt2.speed > 60;
-          L.polyline([[pt1.latitude, pt1.longitude], [pt2.latitude, pt2.longitude]], {
-            color: isSpeeding ? "#ef4444" : "#f97316",
-            weight: 6,
-            opacity: 0.95,
-          }).addTo(markersGroup);
+      if (filteredPathPoints.length > 1) {
+        for (let i = 0; i < filteredPathPoints.length - 1; i++) {
+          const pt1 = filteredPathPoints[i];
+          const pt2 = filteredPathPoints[i + 1];
+          if (pt1.latitude && pt1.longitude && pt2.latitude && pt2.longitude) {
+            const isSpeeding = pt1.speed > 60 || pt2.speed > 60;
+            L.polyline([[pt1.latitude, pt1.longitude], [pt2.latitude, pt2.longitude]], {
+              color: isSpeeding ? "#ef4444" : "#f97316",
+              weight: 6,
+              opacity: 0.95,
+            }).addTo(markersGroup);
+          }
         }
       }
 
