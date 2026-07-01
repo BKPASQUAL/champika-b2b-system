@@ -138,7 +138,23 @@ export const generateInvoiceHTML = async (
         <td style="vertical-align:top;text-align:right;width:40%;">
           <table style="margin-left:auto;border-collapse:collapse;">
             <tr>
-              ${isFirst && qrDataUrl ? `<td style="vertical-align:top;padding-right:10px;"><img src="${qrDataUrl}" style="width:70px;height:70px;display:block;" /></td>` : ""}
+              ${isFirst ? `
+              <td style="vertical-align:top;padding-top:6px;padding-right:15px;">
+                <div style="display:inline-flex;align-items:center;border:2px solid #000;border-radius:8px;padding:6px 10px;background:#fff;">
+                  <div style="position:relative;display:flex;align-items:center;justify-content:center;width:42px;height:42px;margin-right:10px;">
+                    <svg viewBox="0 0 100 100" style="width:100%;height:100%;position:absolute;">
+                      <circle cx="50" cy="50" r="45" fill="none" stroke="#000" stroke-width="2.5" stroke-dasharray="6 3" />
+                      <circle cx="50" cy="8" r="3.5" fill="#000" />
+                    </svg>
+                    <span style="font-size:20px;font-weight:900;color:#000;">26</span>
+                  </div>
+                  <div style="text-align:left;border-left:1.5px solid #000;padding-left:10px;line-height:1.25;">
+                    <div style="font-size:11px;font-weight:800;letter-spacing:1.5px;color:#000;text-transform:uppercase;">YEARS OF</div>
+                    <div style="font-size:10px;font-weight:800;letter-spacing:1.5px;color:#000;text-transform:uppercase;margin-top:-2px;">EXCELLENCE</div>
+                    <div style="font-size:8px;color:#555;font-weight:700;letter-spacing:0.5px;margin-top:1px;">SINCE 2000</div>
+                  </div>
+                </div>
+              </td>` : ""}
               <td style="vertical-align:top;text-align:right;">
                 <div style="font-size:18px;font-weight:700;color:#000;letter-spacing:0.5px;">${invoiceNoDisplay}</div>
                 ${invoice.manualInvoiceNo ? `<div style="font-size:12px;font-weight:600;color:#444;margin-top:2px;">Book No: ${invoice.manualInvoiceNo}</div>` : ""}
@@ -330,8 +346,8 @@ export const generateHalfPageInvoiceHTML = async (
       <td style="vertical-align:top;text-align:right;width:38%;">
         <table style="margin-left:auto;border-collapse:collapse;">
           <tr>
-            ${isFirst && divisionKey === "retail" ? `
-            <td style="vertical-align:middle;padding-right:15px;">
+            ${isFirst ? `
+            <td style="vertical-align:top;padding-top:6px;padding-right:15px;">
               <div style="display:inline-flex;align-items:center;border:1.5px solid #000;border-radius:6px;padding:4px 8px;background:#fff;">
                 <div style="position:relative;display:flex;align-items:center;justify-content:center;width:32px;height:32px;margin-right:8px;">
                   <svg viewBox="0 0 100 100" style="width:100%;height:100%;position:absolute;">
