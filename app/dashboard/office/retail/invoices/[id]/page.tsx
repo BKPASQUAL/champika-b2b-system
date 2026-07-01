@@ -49,9 +49,10 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { printInvoice, downloadInvoice } from "../print-utils";
+import { printInvoice, printHalfPageInvoice, downloadInvoice } from "../print-utils";
 import { shareInvoice } from "@/app/lib/invoice-print";
 import { CancelInvoiceButton } from "@/components/ui/CancelInvoiceButton";
 
@@ -376,7 +377,17 @@ export default function RetailViewInvoicePage({
               onClick={() => printInvoice(id)}
             >
               <Printer className="w-4 h-4 sm:mr-2 text-muted-foreground" />
-              <span className="hidden sm:inline">Print</span>
+              <span>Print A4</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="bg-background"
+              onClick={() => printHalfPageInvoice(id)}
+            >
+              <Printer className="w-4 h-4 sm:mr-2 text-muted-foreground" />
+              <span>Print A5</span>
             </Button>
 
             {/* Share PDF Button */}

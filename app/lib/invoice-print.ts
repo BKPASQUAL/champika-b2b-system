@@ -9,7 +9,9 @@
 import { toast } from "sonner";
 import {
   generateInvoiceHTML,
+  generateHalfPageInvoiceHTML,
   getDocumentWrapper,
+  getHalfPageDocumentWrapper,
   DIVISIONS,
 } from "./invoice-html";
 
@@ -67,6 +69,38 @@ export const printInvoice = async (
     printHTML(
       getDocumentWrapper(
         await generateInvoiceHTML(data, divisionKey),
+        data.invoiceNo || "Invoice"
+      )
+    );
+  } catch {
+    toast.error("Failed to print invoice");
+  }
+};
+
+// ── Half-page (A5) print ────────────────────────────────────────────────────
+export const printHalfPageInvoice = async (
+  invoiceOrId: string | any,
+  divisionKey: keyof typeof DIVISIONS = "retail"
+) => {
+  try {
+    let data = invoiceOrId;
+    if (typeof invoiceOrId === "string") {
+      const tid = toast.loading("Loading invoice...");
+      try {
+        const res = await fetch(`/api/invoices/${invoiceOrId}`);
+        if (!res.ok) throw new Error();
+        data = await res.json();
+        toast.dismiss(tid);
+      } catch {
+        toast.dismiss(tid);
+        toast.error("Failed to load invoice for printing");
+        return;
+      }
+    }
+    if (!data) return;
+    printHTML(
+      getHalfPageDocumentWrapper(
+        await generateHalfPageInvoiceHTML(data, divisionKey),
         data.invoiceNo || "Invoice"
       )
     );

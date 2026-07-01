@@ -240,3 +240,216 @@ export const getDocumentWrapper = (content: string, title: string) => `
   </head>
   <body>${content}</body>
   </html>`;
+
+// ── Half-page invoice (2-ply carbon paper on A4) ────────────────────────────
+// Prints on the TOP HALF of A4 only. The 2-ply carbon paper makes the copy.
+// Same visual design as the full-page invoice, proportionally scaled to ~138mm.
+export const generateHalfPageInvoiceHTML = async (
+  invoice: any,
+  divisionKey: keyof typeof DIVISIONS = "retail",
+  baseUrl = ""
+): Promise<string> => {
+  const cfg = DIVISIONS[divisionKey] ?? DIVISIONS.retail;
+
+  const shopName     = invoice.customer?.shop     || invoice.shopName     || invoice.customer?.name || "Unknown";
+  const customerName = invoice.customer?.name     || invoice.customerName || shopName;
+  const address      = invoice.customer?.address  || invoice.address      || "";
+  const phone        = invoice.customer?.phone    || invoice.phone        || "";
+  const route        = invoice.customer?.route    || invoice.route        || "";
+  const salesRep     = invoice.salesRep           || invoice.salesRepName || "-";
+  const items        = invoice.items              || [];
+  const notes        = (invoice.notes || "").replace(/created via rep portal/gi, "").trim();
+
+  const subTotal      = items.reduce((s: number, i: any) => s + (i.total || 0), 0);
+  const grandTotal    = invoice.grandTotal || invoice.totalAmount || 0;
+  const extraDiscount = Math.max(0, subTotal - grandTotal);
+
+  const ITEMS_PER_HALF = 8;
+  const chunks: any[][] = [];
+  for (let i = 0; i < items.length; i += ITEMS_PER_HALF) {
+    chunks.push(items.slice(i, i + ITEMS_PER_HALF));
+  }
+  const totalPages = chunks.length;
+
+  const makeTableHeader = () => `
+    <table style="width:100%;border-collapse:collapse;margin-bottom:4px;">
+      <thead>
+        <tr style="border-top:2px solid #000;border-bottom:2px solid #000;background:#f0f0f0;">
+          <th style="padding:4px 5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:center;width:4%;">#</th>
+          <th style="padding:4px 5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:left;width:14%;">Item Code</th>
+          <th style="padding:4px 5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:left;width:29%;">Description</th>
+          <th style="padding:4px 5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:right;width:13%;">Price</th>
+          <th style="padding:4px 5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:center;width:7%;">Qty</th>
+          <th style="padding:4px 5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:center;width:7%;">Unit</th>
+          <th style="padding:4px 5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:center;width:7%;">Free</th>
+          <th style="padding:4px 5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:center;width:7%;">Disc.</th>
+          <th style="padding:4px 5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:right;width:12%;">Total</th>
+        </tr>
+      </thead>`;
+
+  const sheets = chunks.map((chunk, pageIdx) => {
+    const isFirst = pageIdx === 0;
+    const isLast  = pageIdx === totalPages - 1;
+    const pageNo  = pageIdx + 1;
+    const globalStart = pageIdx * ITEMS_PER_HALF;
+
+    const invoiceNoDisplay = totalPages > 1
+      ? `${invoice.invoiceNo || "-"} (${pageNo}/${totalPages})`
+      : invoice.invoiceNo || "-";
+
+    const chunkRows = chunk.map((item: any, idx: number) => {
+      const gi = globalStart + idx;
+      return `
+        <tr style="${gi < items.length - 1 ? "border-bottom:1px solid #e8e8e8;" : ""}">
+          <td style="padding:4px 5px;font-size:12px;color:#777;text-align:center;vertical-align:middle;">${gi + 1}</td>
+          <td style="padding:4px 5px;font-size:12px;color:#555;vertical-align:middle;">${item.sku || "-"}</td>
+          <td style="padding:4px 5px;font-size:12px;color:#111;font-weight:500;vertical-align:middle;">${item.productName || item.name || "-"}</td>
+          <td style="padding:4px 5px;font-size:12px;color:#111;text-align:right;white-space:nowrap;vertical-align:middle;">LKR ${fmt(item.unitPrice || item.price)}</td>
+          <td style="padding:4px 5px;font-size:12px;font-weight:700;color:#111;text-align:center;vertical-align:middle;">${item.quantity}</td>
+          <td style="padding:4px 5px;font-size:12px;color:#555;text-align:center;vertical-align:middle;">${item.unit || "Pcs"}</td>
+          <td style="padding:4px 5px;font-size:12px;text-align:center;color:#111;vertical-align:middle;">${(item.freeQuantity || item.free || 0) > 0 ? (item.freeQuantity || item.free) : "-"}</td>
+          <td style="padding:4px 5px;font-size:12px;text-align:center;color:#777;vertical-align:middle;">${item.discountPercent > 0 ? "-" + item.discountPercent + "%" : "-"}</td>
+          <td style="padding:4px 5px;font-size:12px;font-weight:700;color:#111;text-align:right;white-space:nowrap;vertical-align:middle;">LKR ${fmt(item.total)}</td>
+        </tr>`;
+    }).join("");
+
+    const halfContent = `
+<div class="half-invoice" style="width:100%;height:138mm;padding:10px 22px 8px 14px;background:#fff;font-family:${FONT_STACK};color:#111;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;">
+
+  <table style="width:100%;border-collapse:collapse;margin-bottom:0;">
+    <tr>
+      <td style="vertical-align:middle;width:38%;">
+        <div style="font-size:22px;font-weight:800;color:#000;letter-spacing:-0.3px;line-height:1.1;">CHAMPIKA HARDWARE</div>
+        <div style="font-size:8px;color:#333;margin-top:1px;line-height:1.5;">
+          ${cfg.division}<br>${cfg.address}<br>Tel: ${cfg.tel}
+        </div>
+      </td>
+
+      <td style="width:24%;"></td>
+
+      <td style="vertical-align:top;text-align:right;width:38%;">
+        <table style="margin-left:auto;border-collapse:collapse;">
+          <tr>
+            ${isFirst && divisionKey === "retail" ? `
+            <td style="vertical-align:middle;padding-right:15px;">
+              <div style="display:inline-flex;align-items:center;border:1.5px solid #000;border-radius:6px;padding:4px 8px;background:#fff;">
+                <div style="position:relative;display:flex;align-items:center;justify-content:center;width:32px;height:32px;margin-right:8px;">
+                  <svg viewBox="0 0 100 100" style="width:100%;height:100%;position:absolute;">
+                    <circle cx="50" cy="50" r="45" fill="none" stroke="#000" stroke-width="2.5" stroke-dasharray="6 3" />
+                    <circle cx="50" cy="8" r="3.5" fill="#000" />
+                  </svg>
+                  <span style="font-size:15px;font-weight:900;color:#000;">26</span>
+                </div>
+                <div style="text-align:left;border-left:1px solid #000;padding-left:8px;line-height:1.2;">
+                  <div style="font-size:9px;font-weight:800;letter-spacing:1.2px;color:#000;text-transform:uppercase;">YEARS OF</div>
+                  <div style="font-size:8px;font-weight:800;letter-spacing:1.2px;color:#000;text-transform:uppercase;margin-top:-2px;">EXCELLENCE</div>
+                  <div style="font-size:7px;color:#555;font-weight:700;letter-spacing:0.5px;margin-top:1px;">SINCE 2000</div>
+                </div>
+              </div>
+            </td>` : ""}
+            <td style="vertical-align:top;text-align:right;">
+              <div style="font-size:14px;font-weight:700;color:#000;letter-spacing:0.5px;">${invoiceNoDisplay}</div>
+              ${invoice.manualInvoiceNo ? `<div style="font-size:9px;font-weight:600;color:#444;margin-top:1px;">Book No: ${invoice.manualInvoiceNo}</div>` : ""}
+              <div style="font-size:9px;color:#333;margin-top:1px;line-height:1.5;">
+                ${formatDate(invoice.date || invoice.createdAt)}<br>${salesRep}
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+
+  <div style="border-top:1.5px solid #bbb;margin:5px 0 6px;"></div>
+
+  ${isFirst ? `
+  <div style="margin-bottom:6px;">
+    <div style="font-size:12px;font-weight:700;color:#000;">${shopName}</div>
+    ${customerName && customerName !== shopName ? `<div style="font-size:11px;color:#555;">${customerName}</div>` : ""}
+    ${address ? `<div style="font-size:11px;color:#333;">${address}${route ? ", " + route : ""}</div>` : ""}
+    ${phone ? `<div style="font-size:11px;color:#333;">${phone}</div>` : ""}
+  </div>` : `
+  <div style="margin-bottom:4px;">
+    <div style="font-size:11px;font-weight:600;color:#000;">${shopName}${customerName && customerName !== shopName ? ` — ${customerName}` : ""}</div>
+  </div>`}
+
+  ${makeTableHeader()}
+      <tbody>${chunkRows}</tbody>
+    </table>
+
+  ${isLast ? `
+  <table style="width:100%;border-collapse:collapse;margin-top:4px;margin-bottom:4px;">
+    <tr>
+      <td style="width:55%;">
+        ${notes ? `<div style="font-size:9px;color:#555;line-height:1.5;">${notes}</div>` : ""}
+      </td>
+      <td style="width:45%;vertical-align:top;padding-left:12px;">
+        <table style="width:100%;border-collapse:collapse;">
+          <tr>
+            <td style="padding:3px 0;font-size:11px;color:#333;">Subtotal</td>
+            <td style="padding:3px 0;font-size:11px;color:#000;text-align:right;white-space:nowrap;">LKR ${fmt(subTotal)}</td>
+          </tr>
+          ${extraDiscount > 1 ? `<tr>
+            <td style="padding:3px 0;font-size:11px;color:#333;">Extra Discount</td>
+            <td style="padding:3px 0;font-size:11px;color:#000;text-align:right;white-space:nowrap;">- LKR ${fmt(extraDiscount)}</td>
+          </tr>` : ""}
+          <tr>
+            <td style="padding:4px 0 0;border-top:1.5px solid #bbb;"></td>
+            <td style="border-top:1.5px solid #bbb;"></td>
+          </tr>
+          <tr>
+            <td style="padding:3px 0;font-size:12px;font-weight:700;color:#000;">Net Total</td>
+            <td style="padding:3px 0;font-size:14px;font-weight:800;color:#000;text-align:right;white-space:nowrap;">LKR ${fmt(grandTotal)}</td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+
+  <table style="width:100%;border-collapse:collapse;margin-top:16px;margin-bottom:4px;">
+    <tr>
+      <td style="width:55%;"></td>
+      <td style="width:45%;text-align:center;padding-top:5px;border-top:1.5px solid #555;">
+        <div style="font-size:10px;color:#333;font-weight:600;margin-top:2px;">Customer Signature &amp; Stamp</div>
+      </td>
+    </tr>
+  </table>` : `
+  <div style="margin-top:8px;text-align:right;font-size:10px;color:#777;font-style:italic;">
+    Continued on next page (${pageNo}/${totalPages})…
+  </div>`}
+
+  <div style="flex:1;"></div>
+
+  <div style="border-top:1px solid #ddd;padding-top:5px;text-align:center;font-size:10px;color:#777;">
+    Thank you for your business!
+  </div>
+</div>`;
+
+    return `
+<div class="a4-sheet" style="page-break-after:always;width:210mm;height:297mm;background:#fff;box-sizing:border-box;">
+  ${halfContent}
+</div>`;
+  });
+
+  return sheets.join("");
+};
+
+export const getHalfPageDocumentWrapper = (content: string, title: string) => `
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <title>${title}</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { font-family: ${FONT_STACK}; margin: 0; padding: 0; background: #fff; width: 794px; }
+      @media print {
+        @page { size: A4 portrait; margin: 0; }
+        html, body { width: 210mm; margin: 0 auto; padding: 0; }
+        body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .a4-sheet { page-break-after: always; width: 210mm !important; height: 297mm !important; }
+        .a4-sheet:last-child { page-break-after: auto; }
+      }
+    </style>
+  </head>
+  <body>${content}</body>
+  </html>`;
