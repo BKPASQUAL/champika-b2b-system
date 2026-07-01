@@ -134,6 +134,7 @@ export default function CustomerMap({
   const hasInitialFitBoundsRef = useRef(false);
   const lastFocusedCustomerIdRef = useRef<string | null>(null);
   const lastFocusedVehicleIdRef = useRef<string | null>(null);
+  const lastHistoryRouteRef = useRef<string>("");
 
   // Map Layer selection
   const [mapLayerType, setMapLayerType] = useState<"streets" | "satellite" | "hybrid">("streets");
@@ -472,11 +473,17 @@ export default function CustomerMap({
       focusedCustomerId !== lastFocusedCustomerIdRef.current || 
       focusedVehicleId !== lastFocusedVehicleIdRef.current;
 
-    if (historyRoute && historyRoute.length > 0) {
+    const routeSerialized = historyRoute && historyRoute.length > 0 
+      ? `${historyRoute.length}-${historyRoute[0].updated_at}-${historyRoute[historyRoute.length - 1].updated_at}`
+      : "";
+    const routeChanged = routeSerialized !== lastHistoryRouteRef.current;
+
+    if (historyRoute && historyRoute.length > 0 && routeChanged) {
       const routeBounds = L.latLngBounds(historyRoute.map(pt => [pt.latitude, pt.longitude]));
       if (routeBounds.isValid()) {
         map.fitBounds(routeBounds, { padding: [50, 50] });
       }
+      lastHistoryRouteRef.current = routeSerialized;
     } else if (focusedMarker && focusChanged) {
       setTimeout(() => {
         focusedMarker.openPopup();
@@ -484,7 +491,7 @@ export default function CustomerMap({
       }, 100);
       lastFocusedCustomerIdRef.current = focusedCustomerId;
       lastFocusedVehicleIdRef.current = focusedVehicleId;
-    } else if (!hasInitialFitBoundsRef.current && markersGroup.getBounds().isValid()) {
+    } else if (!hasInitialFitBoundsRef.current && markersGroup.getBounds().isValid() && !focusedVehicleId && !focusedCustomerId) {
       map.fitBounds(markersGroup.getBounds(), { padding: [40, 40] });
       hasInitialFitBoundsRef.current = true;
     }
