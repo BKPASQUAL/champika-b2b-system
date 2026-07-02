@@ -44,67 +44,97 @@ interface StopEvent {
 
 function detectStops(points: VehicleLocation[]): StopEvent[] {
   const stops: StopEvent[] = [];
-  
-  if (points.length === 0) return stops;
-  
-  // If there is only 1 point and it is stationary, treat it as a stop
-  if (points.length === 1 && points[0].speed < 2) {
-    stops.push({
-      latitude: points[0].latitude,
-      longitude: points[0].longitude,
-      startTime: new Date(points[0].updated_at),
-      endTime: new Date(points[0].updated_at),
-      durationMinutes: 0,
-    });
-    return stops;
-  }
+  if (points.length < 2) return stops;
 
-  let stationarySegment: VehicleLocation[] = [];
+  let stopStartPoint: VehicleLocation | null = null;
 
-  for (let i = 0; i < points.length; i++) {
+  for (let i = 0; i < points.length - 1; i++) {
     const pt = points[i];
-    const isStationary = pt.speed < 2;
-
+    const nextPt = points[i + 1];
+    
+    const isStationary = pt.speed < 2 || pt.ignition === false;
+    
     if (isStationary) {
-      stationarySegment.push(pt);
-    } else {
-      if (stationarySegment.length > 0) {
-        const first = stationarySegment[0];
-        const last = stationarySegment[stationarySegment.length - 1];
-        const durationMs = new Date(last.updated_at).getTime() - new Date(first.updated_at).getTime();
+      if (!stopStartPoint) {
+        stopStartPoint = pt;
+      }
+      
+      const timeDiffMs = new Date(nextPt.updated_at).getTime() - new Date(pt.updated_at).getTime();
+      const nextIsStationary = nextPt.speed < 2 || nextPt.ignition === false;
+      
+      // If next point is moving and there was no significant time gap, resolve the stop here
+      if (!nextIsStationary && timeDiffMs < 3 * 60 * 1000) {
+        const stopEndPt = pt;
+        const durationMs = new Date(stopEndPt.updated_at).getTime() - new Date(stopStartPoint.updated_at).getTime();
         
-        if (durationMs >= 3 * 60 * 1000) { // 3 minutes threshold
+        if (durationMs >= 3 * 60 * 1000) {
           stops.push({
-            latitude: first.latitude,
-            longitude: first.longitude,
-            startTime: new Date(first.updated_at),
-            endTime: new Date(last.updated_at),
+            latitude: stopStartPoint.latitude,
+            longitude: stopStartPoint.longitude,
+            startTime: new Date(stopStartPoint.updated_at),
+            endTime: new Date(stopEndPt.updated_at),
             durationMinutes: Math.round(durationMs / (60 * 1000)),
           });
         }
-        stationarySegment = [];
+        stopStartPoint = null;
+      }
+    } else {
+      if (stopStartPoint) {
+        const stopEndPt = points[i - 1] || stopStartPoint;
+        const durationMs = new Date(stopEndPt.updated_at).getTime() - new Date(stopStartPoint.updated_at).getTime();
+        
+        if (durationMs >= 3 * 60 * 1000) {
+          stops.push({
+            latitude: stopStartPoint.latitude,
+            longitude: stopStartPoint.longitude,
+            startTime: new Date(stopStartPoint.updated_at),
+            endTime: new Date(stopEndPt.updated_at),
+            durationMinutes: Math.round(durationMs / (60 * 1000)),
+          });
+        }
+        stopStartPoint = null;
       }
     }
   }
 
-  // Handle final segment if it was stationary at the end of the day
-  if (stationarySegment.length > 0) {
-    const first = stationarySegment[0];
-    const last = stationarySegment[stationarySegment.length - 1];
-    const durationMs = new Date(last.updated_at).getTime() - new Date(first.updated_at).getTime();
-    
+  // Handle final segment at the end of the day
+  const lastPt = points[points.length - 1];
+  if (stopStartPoint && lastPt) {
+    const durationMs = new Date(lastPt.updated_at).getTime() - new Date(stopStartPoint.updated_at).getTime();
     if (durationMs >= 3 * 60 * 1000) {
       stops.push({
-        latitude: first.latitude,
-        longitude: first.longitude,
-        startTime: new Date(first.updated_at),
-        endTime: new Date(last.updated_at),
+        latitude: stopStartPoint.latitude,
+        longitude: stopStartPoint.longitude,
+        startTime: new Date(stopStartPoint.updated_at),
+        endTime: new Date(lastPt.updated_at),
         durationMinutes: Math.round(durationMs / (60 * 1000)),
       });
     }
   }
 
-  return stops;
+  // Deduplicate and merge overlapping or very close stops (within 50 meters and 5 minutes)
+  const finalStops: StopEvent[] = [];
+  stops.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+  
+  for (const stop of stops) {
+    if (finalStops.length === 0) {
+      finalStops.push(stop);
+      continue;
+    }
+    
+    const lastStop = finalStops[finalStops.length - 1];
+    const timeGapMin = (stop.startTime.getTime() - lastStop.endTime.getTime()) / (60 * 1000);
+    const distMeters = getDistanceMeters(lastStop.latitude, lastStop.longitude, stop.latitude, stop.longitude);
+    
+    if (timeGapMin < 5 && distMeters < 50) {
+      lastStop.endTime = stop.endTime;
+      lastStop.durationMinutes = Math.round((lastStop.endTime.getTime() - lastStop.startTime.getTime()) / (60 * 1000));
+    } else {
+      finalStops.push(stop);
+    }
+  }
+
+  return finalStops;
 }
 
 function getDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
