@@ -24,6 +24,7 @@ import {
   ShieldAlert,
   Warehouse,
   ArrowRightLeft,
+  ScrollText,
 } from "lucide-react";
 
 interface RetailNavItem {
@@ -66,6 +67,12 @@ export const retailOfficeNavItems: RetailNavSection[] = [
         href: "/dashboard/office/retail/walkin-sales",
         icon: Store,
         description: "Quick POS for walk-in customers",
+      },
+      {
+        name: "Quotations",
+        href: "/dashboard/office/retail/quotations",
+        icon: ScrollText,
+        description: "Create and manage retail quotations",
       },
       {
         name: "Invoices",

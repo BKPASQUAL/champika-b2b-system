@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Plus,
@@ -117,9 +117,15 @@ interface CurrentItemState {
 
 export default function CreateRetailInvoicePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const quotationId = searchParams.get("quotationId");
+
   const [loading, setLoading] = useState(true);
   const [stockLoading, setStockLoading] = useState(false);
   const [retailOutOfStockOverride, setRetailOutOfStockOverride] = useState(false);
+
+  // If navigated from a quotation, track it so we can mark it Converted on save
+  const [fromQuotation, setFromQuotation] = useState<{ id: string; quotationNo: string } | null>(null);
 
   // Business Context
   const [businessId, setBusinessId] = useState<string | null>(null);
@@ -400,6 +406,45 @@ export default function CreateRetailInvoicePage() {
         }
 
         await fetchRepStock(user.id, isOverrideEnabled);
+
+        // Pre-fill from quotation if navigated via ?quotationId=...
+        if (quotationId) {
+          try {
+            const qRes = await fetch(`/api/quotations/${quotationId}`);
+            if (qRes.ok) {
+              const q = await qRes.json();
+              if (q.status === "Converted") {
+                toast.warning(`Quotation ${q.quotationNo} was already converted to an invoice.`);
+              } else {
+                setFromQuotation({ id: q.id, quotationNo: q.quotationNo });
+                setCustomerId(q.customerId);
+                setPaymentType(q.paymentType || "Cash");
+                setExtraDiscount(q.extraDiscountPercent || 0);
+                setItems(
+                  (q.items || []).map((item: any, idx: number) => ({
+                    id: `quo-${idx}-${Date.now()}`,
+                    productId: item.productId,
+                    sku: item.sku,
+                    productName: item.productName,
+                    quantity: item.quantity,
+                    freeQuantity: item.freeQuantity || 0,
+                    unit: item.unit,
+                    mrp: item.mrp,
+                    unitPrice: item.unitPrice,
+                    discountPercent: item.discountPercent || 0,
+                    discountAmount: item.discountAmount || 0,
+                    total: item.total,
+                    supplier: item.supplier || "",
+                    retailOnly: item.retailOnly || false,
+                  }))
+                );
+                toast.info(`Pre-filled from quotation ${q.quotationNo}`);
+              }
+            }
+          } catch {
+            // non-fatal — quotation pre-fill failed, user can still create invoice manually
+          }
+        }
       } catch (error) {
         console.error("Error fetching data:", error);
         toast.error("Failed to load data");
@@ -409,7 +454,7 @@ export default function CreateRetailInvoicePage() {
     };
 
     fetchInitialData();
-  }, [router]);
+  }, [router, quotationId]);
 
   const handleCreateProduct = async () => {
     if (!newProduct.name.trim()) {
@@ -686,6 +731,19 @@ export default function CreateRetailInvoicePage() {
 
       toast.success("Invoice Created Successfully!");
 
+      // Mark source quotation as Converted
+      if (fromQuotation) {
+        fetch(`/api/quotations/${fromQuotation.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            status: "Converted",
+            converted_invoice_id: data.data.id,
+            converted_at: new Date().toISOString(),
+          }),
+        }).catch(() => {});
+      }
+
       if (action === "save") {
         router.push("/dashboard/office/retail/invoices");
       } else if (action === "print") {
@@ -860,6 +918,17 @@ export default function CreateRetailInvoicePage() {
   return (
     <div className={cn("mx-auto", isLandscape ? "space-y-3 pb-4" : "space-y-4 pb-28 xl:pb-6")}>
 
+      {/* Quotation Pre-fill Banner */}
+      {fromQuotation && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-blue-800 text-sm flex items-center gap-3 shadow-sm">
+          <ArrowLeft className="h-5 w-5 shrink-0 text-blue-500 rotate-180" />
+          <div>
+            <span className="font-bold">Converting Quotation {fromQuotation.quotationNo}</span>
+            <span className="text-blue-600 ml-2 text-xs">Items pre-filled. Review, then save or print to finalise.</span>
+          </div>
+        </div>
+      )}
+
       {/* Out of Stock Override Banner */}
       {retailOutOfStockOverride && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-amber-800 text-xs sm:text-sm flex items-start gap-3 shadow-sm">
@@ -888,7 +957,7 @@ export default function CreateRetailInvoicePage() {
             Walk-in Sale
           </h1>
           <p className="text-muted-foreground text-xs sm:text-sm mt-0.5 hidden sm:block">
-            {businessName} · Create a new walk-in sale
+            {businessName} · {fromQuotation ? `Converting quotation ${fromQuotation.quotationNo} to invoice` : "Create a new walk-in sale"}
           </p>
         </div>
         {/* Desktop action buttons */}
