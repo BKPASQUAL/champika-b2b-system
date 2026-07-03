@@ -638,7 +638,7 @@ export default function CreateRetailInvoicePage() {
     if (editingItemId === id) resetCurrentItem();
   };
 
-  const handleSaveAction = async (action: "save" | "print" | "download") => {
+  const handleSaveAction = async (action: "save" | "print" | "printHalf" | "download") => {
     if (!customerId) {
       toast.error("Please select a customer.");
       return;
@@ -691,6 +691,10 @@ export default function CreateRetailInvoicePage() {
       } else if (action === "print") {
         router.push(
           `/dashboard/office/retail/invoices/${data.data.id}?print=true`
+        );
+      } else if (action === "printHalf") {
+        router.push(
+          `/dashboard/office/retail/invoices/${data.data.id}?print=half`
         );
       } else if (action === "download") {
         router.push(
@@ -905,7 +909,16 @@ export default function CreateRetailInvoicePage() {
             disabled={items.length === 0 || loading}
           >
             {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Printer className="w-4 h-4 mr-2" />}
-            Print
+            Print A4
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleSaveAction("printHalf")}
+            disabled={items.length === 0 || loading}
+          >
+            {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Printer className="w-4 h-4 mr-2" />}
+            Print A5
           </Button>
           <Button
             size="sm"
@@ -1775,7 +1788,7 @@ export default function CreateRetailInvoicePage() {
 
               {/* Quick action buttons in sidebar */}
               {isDesktopScreen ? (
-                <div className="grid grid-cols-2 gap-2 pt-1">
+                <div className="grid grid-cols-3 gap-2 pt-1">
                   <Button
                     variant="outline"
                     size="sm"
@@ -1783,8 +1796,18 @@ export default function CreateRetailInvoicePage() {
                     disabled={items.length === 0 || loading}
                     className="h-10 text-xs font-medium"
                   >
-                    {loading ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Printer className="w-3.5 h-3.5 mr-1.5" />}
-                    Print
+                    {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Printer className="w-3.5 h-3.5 mr-1" />}
+                    A4
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleSaveAction("printHalf")}
+                    disabled={items.length === 0 || loading}
+                    className="h-10 text-xs font-medium"
+                  >
+                    {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Printer className="w-3.5 h-3.5 mr-1" />}
+                    A5
                   </Button>
                   <Button
                     size="sm"
@@ -1792,12 +1815,12 @@ export default function CreateRetailInvoicePage() {
                     disabled={items.length === 0 || loading}
                     className="h-10 bg-green-600 hover:bg-green-700 text-xs font-bold"
                   >
-                    {loading ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1.5" />}
+                    {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1" />}
                     Save
                   </Button>
                 </div>
               ) : (
-                <div className="grid grid-cols-3 gap-1.5 pt-1">
+                <div className="grid grid-cols-4 gap-1.5 pt-1">
                   <Button
                     variant="outline"
                     size="sm"
@@ -1805,7 +1828,7 @@ export default function CreateRetailInvoicePage() {
                     disabled={items.length === 0 || loading}
                     className="h-10 text-xs font-medium px-1"
                   >
-                    {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3 mr-1 shrink-0" />}
+                    {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3 mr-0.5 shrink-0" />}
                     <span>PDF</span>
                   </Button>
                   <Button
@@ -1815,8 +1838,18 @@ export default function CreateRetailInvoicePage() {
                     disabled={items.length === 0 || loading}
                     className="h-10 text-xs font-medium px-1"
                   >
-                    {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Printer className="w-3 h-3 mr-1 shrink-0" />}
-                    <span>Print</span>
+                    {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Printer className="w-3 h-3 mr-0.5 shrink-0" />}
+                    <span>A4</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleSaveAction("printHalf")}
+                    disabled={items.length === 0 || loading}
+                    className="h-10 text-xs font-medium px-1"
+                  >
+                    {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Printer className="w-3 h-3 mr-0.5 shrink-0" />}
+                    <span>A5</span>
                   </Button>
                   <Button
                     size="sm"
@@ -1824,7 +1857,7 @@ export default function CreateRetailInvoicePage() {
                     disabled={items.length === 0 || loading}
                     className="h-10 bg-green-600 hover:bg-green-700 text-xs font-bold px-1 text-white"
                   >
-                    {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3 mr-1 shrink-0" />}
+                    {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3 mr-0.5 shrink-0" />}
                     <span>Save</span>
                   </Button>
                 </div>
@@ -1868,7 +1901,7 @@ export default function CreateRetailInvoicePage() {
             />
           </div>
 
-          {/* Print (icon only on small) */}
+          {/* Print A4 */}
           <Button
             variant="outline"
             size="sm"
@@ -1877,7 +1910,19 @@ export default function CreateRetailInvoicePage() {
             className="h-10 shrink-0"
           >
             <Printer className="w-4 h-4" />
-            <span className="hidden sm:inline ml-1.5">Print</span>
+            <span className="ml-1 text-xs">A4</span>
+          </Button>
+
+          {/* Print A5 */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleSaveAction("printHalf")}
+            disabled={items.length === 0 || loading}
+            className="h-10 shrink-0"
+          >
+            <Printer className="w-4 h-4" />
+            <span className="ml-1 text-xs">A5</span>
           </Button>
 
           {/* Save */}

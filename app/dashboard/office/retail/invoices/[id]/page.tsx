@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, use } from "react";
+import React, { useState, useEffect, useRef, use } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
@@ -115,6 +115,7 @@ export default function RetailViewInvoicePage({
 
   // Share state
   const [sharing, setSharing] = useState(false);
+  const printTriggeredRef = useRef(false);
 
   const fetchInvoice = async (silent = false) => {
     if (!silent) setLoading(true);
@@ -155,8 +156,12 @@ export default function RetailViewInvoicePage({
   // Auto-trigger print or download when redirected from "Save & Print / Save & Download"
   useEffect(() => {
     if (loading || !invoice) return;
+    if (printTriggeredRef.current) return;
+    printTriggeredRef.current = true;
     if (searchParams.get("print") === "true") {
       printInvoice(id);
+    } else if (searchParams.get("print") === "half") {
+      printHalfPageInvoice(id);
     } else if (searchParams.get("download") === "true") {
       downloadInvoice(id);
     }
