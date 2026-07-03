@@ -25,6 +25,8 @@ import {
   Warehouse,
   ArrowRightLeft,
   ScrollText,
+  Truck,
+  CreditCard,
 } from "lucide-react";
 
 interface RetailNavItem {
@@ -138,6 +140,29 @@ export const retailOfficeNavItems: RetailNavSection[] = [
       //   icon: PackageCheck,
       //   description: "Request stock from main warehouse",
       // },
+    ],
+  },
+  {
+    title: "Suppliers",
+    items: [
+      {
+        name: "Supplier List",
+        href: "/dashboard/office/retail/suppliers",
+        icon: Truck,
+        description: "Manage retail suppliers",
+      },
+      {
+        name: "Purchases",
+        href: "/dashboard/office/retail/purchases",
+        icon: ShoppingCart,
+        description: "Retail supplier purchase bills",
+      },
+      {
+        name: "Payments Out",
+        href: "/dashboard/office/retail/suppliers/payments",
+        icon: CreditCard,
+        description: "Record supplier payments",
+      },
     ],
   },
   {
