@@ -44,7 +44,8 @@ export async function GET(
             selling_price,
             cost_price,
             actual_cost_price,
-            supplier_name
+            supplier_name,
+            retail_only
           )
         `,
         )

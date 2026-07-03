@@ -660,40 +660,65 @@ export async function POST(request: NextRequest) {
     }
 
     // 9. Deduct Stock
-    const { data: assignments } = await supabaseAdmin
-      .from("location_assignments")
-      .select("location_id")
-      .eq("user_id", val.salesRepId);
+    //
+    // RETAIL portal: deduct from Retail warehouse locations first,
+    //   then fall back to Main Warehouse for any remainder.
+    // All other portals: deduct from the rep's assigned locations,
+    //   falling back to Main Warehouse if none assigned.
 
-    const assignedLocationIds = assignments
-      ? assignments.map((a) => a.location_id)
-      : [];
+    const isRetailInvoice = resolvedBusinessId === BUSINESS_IDS.CHAMPIKA_RETAIL;
 
-    // Fetch Main Warehouse ID as fallback if no assignments exist
+    let assignedLocationIds: string[] = [];
     let mainWarehouseId: string | null = null;
-    if (assignedLocationIds.length === 0) {
+    let retailLocationIds: string[] = [];
+
+    if (isRetailInvoice) {
+      // Fetch all locations owned by the Retail business (primary pool)
+      const { data: retailLocs } = await supabaseAdmin
+        .from("locations")
+        .select("id")
+        .eq("business_id", BUSINESS_IDS.CHAMPIKA_RETAIL);
+      retailLocationIds = (retailLocs ?? []).map((l: any) => l.id);
+
+      // Main Warehouse is the overflow fallback
       const { data: mainLoc } = await supabaseAdmin
         .from("locations")
         .select("id")
         .is("business_id", null)
         .eq("name", "Main Warehouse")
         .maybeSingle();
-
       mainWarehouseId = mainLoc?.id || null;
-      if (!mainWarehouseId) {
-        const { data: anyLoc } = await supabaseAdmin
+    } else {
+      // Non-retail: use rep's assigned locations
+      const { data: assignments } = await supabaseAdmin
+        .from("location_assignments")
+        .select("location_id")
+        .eq("user_id", val.salesRepId);
+      assignedLocationIds = (assignments ?? []).map((a: any) => a.location_id);
+
+      if (assignedLocationIds.length === 0) {
+        const { data: mainLoc } = await supabaseAdmin
           .from("locations")
           .select("id")
-          .limit(1)
+          .is("business_id", null)
+          .eq("name", "Main Warehouse")
           .maybeSingle();
-        mainWarehouseId = anyLoc?.id || null;
+        mainWarehouseId = mainLoc?.id || null;
+        if (!mainWarehouseId) {
+          const { data: anyLoc } = await supabaseAdmin
+            .from("locations")
+            .select("id")
+            .limit(1)
+            .maybeSingle();
+          mainWarehouseId = anyLoc?.id || null;
+        }
       }
     }
 
     for (const item of val.items) {
       const totalQty = item.quantity + item.freeQuantity;
 
-      // Global Stock
+      // Global product stock (always deducted)
       const { data: product } = await supabaseAdmin
         .from("products")
         .select("stock_quantity")
@@ -703,15 +728,79 @@ export async function POST(request: NextRequest) {
       if (product) {
         await supabaseAdmin
           .from("products")
-          .update({
-            stock_quantity: (product.stock_quantity || 0) - totalQty,
-          })
+          .update({ stock_quantity: (product.stock_quantity || 0) - totalQty })
           .eq("id", item.productId);
       }
 
-      // Location Stock — deduct from assigned locations, or all locations if none assigned
-      {
-        let remainingToDeduct = totalQty;
+      let remainingToDeduct = totalQty;
+
+      if (isRetailInvoice) {
+        // --- RETAIL: deduct Retail warehouse locations first ---
+        if (retailLocationIds.length > 0) {
+          const { data: retailStocks } = await supabaseAdmin
+            .from("product_stocks")
+            .select("id, quantity")
+            .eq("product_id", item.productId)
+            .in("location_id", retailLocationIds)
+            .gt("quantity", 0)
+            .order("quantity", { ascending: false });
+
+          for (const stockRec of retailStocks ?? []) {
+            if (remainingToDeduct <= 0) break;
+            const deduct = Math.min(stockRec.quantity, remainingToDeduct);
+            await supabaseAdmin
+              .from("product_stocks")
+              .update({ quantity: stockRec.quantity - deduct, last_updated: new Date().toISOString() })
+              .eq("id", stockRec.id);
+            remainingToDeduct -= deduct;
+          }
+        }
+
+        // --- RETAIL: overflow → Main Warehouse ---
+        if (remainingToDeduct > 0 && mainWarehouseId) {
+          const { data: mainStock } = await supabaseAdmin
+            .from("product_stocks")
+            .select("id, quantity")
+            .eq("product_id", item.productId)
+            .eq("location_id", mainWarehouseId)
+            .maybeSingle();
+
+          if (mainStock) {
+            await supabaseAdmin
+              .from("product_stocks")
+              .update({ quantity: Number(mainStock.quantity) - remainingToDeduct, last_updated: new Date().toISOString() })
+              .eq("id", mainStock.id);
+          } else {
+            await supabaseAdmin
+              .from("product_stocks")
+              .insert({ product_id: item.productId, location_id: mainWarehouseId, quantity: -remainingToDeduct });
+          }
+          remainingToDeduct = 0;
+        }
+
+        // Edge case: no retail location exists yet — write to first retail location or create record
+        if (remainingToDeduct > 0 && retailLocationIds.length > 0) {
+          const firstRetailLocId = retailLocationIds[0];
+          const { data: existing } = await supabaseAdmin
+            .from("product_stocks")
+            .select("id, quantity")
+            .eq("product_id", item.productId)
+            .eq("location_id", firstRetailLocId)
+            .maybeSingle();
+
+          if (existing) {
+            await supabaseAdmin
+              .from("product_stocks")
+              .update({ quantity: Number(existing.quantity) - remainingToDeduct, last_updated: new Date().toISOString() })
+              .eq("id", existing.id);
+          } else {
+            await supabaseAdmin
+              .from("product_stocks")
+              .insert({ product_id: item.productId, location_id: firstRetailLocId, quantity: -remainingToDeduct });
+          }
+        }
+      } else {
+        // --- NON-RETAIL: original location logic ---
         const targetLocationIds = assignedLocationIds.length > 0
           ? assignedLocationIds
           : (mainWarehouseId ? [mainWarehouseId] : []);
@@ -725,19 +814,14 @@ export async function POST(request: NextRequest) {
             .gt("quantity", 0)
             .order("quantity", { ascending: false });
 
-          if (locationStocks) {
-            for (const stockRec of locationStocks) {
-              if (remainingToDeduct <= 0) break;
-              const available = stockRec.quantity;
-              const deduct = Math.min(available, remainingToDeduct);
-
-              await supabaseAdmin
-                .from("product_stocks")
-                .update({ quantity: available - deduct })
-                .eq("id", stockRec.id);
-
-              remainingToDeduct -= deduct;
-            }
+          for (const stockRec of locationStocks ?? []) {
+            if (remainingToDeduct <= 0) break;
+            const deduct = Math.min(stockRec.quantity, remainingToDeduct);
+            await supabaseAdmin
+              .from("product_stocks")
+              .update({ quantity: stockRec.quantity - deduct })
+              .eq("id", stockRec.id);
+            remainingToDeduct -= deduct;
           }
 
           if (remainingToDeduct > 0) {
@@ -752,19 +836,12 @@ export async function POST(request: NextRequest) {
             if (existingStock) {
               await supabaseAdmin
                 .from("product_stocks")
-                .update({
-                  quantity: Number(existingStock.quantity) - remainingToDeduct,
-                  last_updated: new Date().toISOString(),
-                })
+                .update({ quantity: Number(existingStock.quantity) - remainingToDeduct, last_updated: new Date().toISOString() })
                 .eq("id", existingStock.id);
             } else {
               await supabaseAdmin
                 .from("product_stocks")
-                .insert({
-                  product_id: item.productId,
-                  location_id: targetLocationId,
-                  quantity: -remainingToDeduct,
-                });
+                .insert({ product_id: item.productId, location_id: targetLocationId, quantity: -remainingToDeduct });
             }
           }
         }

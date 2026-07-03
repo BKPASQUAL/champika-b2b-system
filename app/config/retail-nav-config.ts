@@ -22,6 +22,8 @@ import {
   Banknote,
   BookOpen,
   ShieldAlert,
+  Warehouse,
+  ArrowRightLeft,
 } from "lucide-react";
 
 interface RetailNavItem {
@@ -98,6 +100,18 @@ export const retailOfficeNavItems: RetailNavSection[] = [
         href: "/dashboard/office/retail/products",
         icon: BookOpen,
         description: "View retail products and pricing",
+      },
+      {
+        name: "Stock Control",
+        href: "/dashboard/office/retail/inventory",
+        icon: Warehouse,
+        description: "Monitor stock levels and locations",
+      },
+      {
+        name: "Stock Transfer",
+        href: "/dashboard/office/retail/inventory/transfer",
+        icon: ArrowRightLeft,
+        description: "Move stock between locations",
       },
       {
         name: "Retail Stock",
