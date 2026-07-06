@@ -115,6 +115,117 @@ interface CurrentItemState {
   stockAvailable: number;
 }
 
+const FIXED_SUPPLIERS = [
+  { id: "orange-orel", name: "Orange (Orel Corporation)" },
+  { id: "sierra-cables", name: "Sierra Cables" },
+  { id: "wireman", name: "Wireman" }
+];
+
+const getSupplierCleanName = (name?: string | null) => {
+  if (!name) return "General";
+  const s = name.toLowerCase();
+  if (s.includes("sierra")) return "Sierra Cables";
+  if (s.includes("wireman")) return "Wireman";
+  if (s.includes("orange")) return "Orange";
+  if (s.includes("chint")) return "Chint";
+  if (s.includes("kelani")) return "Kelani";
+  if (s.includes("acl")) return "ACL";
+  if (s.includes("polycrome") || s.includes("polycreme")) return "Polycrome";
+  return name;
+};
+
+const getSupplierColorStyles = (supplier?: string | null) => {
+  if (!supplier) {
+    return {
+      dot: "⚪",
+      bgActive: "bg-slate-800 hover:bg-slate-900 text-white border-slate-800 shadow-sm",
+      borderInactive: "border-slate-200 text-slate-700 hover:bg-slate-50",
+      badge: "bg-slate-100 text-slate-700 border-slate-200",
+      borderLeft: "border-l-slate-300",
+      hoverBg: "hover:bg-slate-50",
+    };
+  }
+  const s = supplier.toLowerCase();
+  if (s.includes("sierra")) {
+    return {
+      dot: "🟣",
+      bgActive: "bg-purple-600 hover:bg-purple-700 text-white border-purple-600 shadow-sm",
+      borderInactive: "border-purple-200 text-purple-700 hover:bg-purple-50",
+      badge: "bg-purple-100 text-purple-700 border-purple-200",
+      borderLeft: "border-l-purple-500",
+      hoverBg: "hover:bg-purple-50/50",
+    };
+  }
+  if (s.includes("wireman")) {
+    return {
+      dot: "🔴",
+      bgActive: "bg-red-600 hover:bg-red-700 text-white border-red-600 shadow-sm",
+      borderInactive: "border-red-200 text-red-700 hover:bg-red-50",
+      badge: "bg-red-100 text-red-700 border-red-200",
+      borderLeft: "border-l-red-500",
+      hoverBg: "hover:bg-red-50/50",
+    };
+  }
+  if (s.includes("orange")) {
+    return {
+      dot: "🟠",
+      bgActive: "bg-orange-500 hover:bg-orange-600 text-white border-orange-500 shadow-sm",
+      borderInactive: "border-orange-200 text-orange-700 hover:bg-orange-50",
+      badge: "bg-orange-100 text-orange-700 border-orange-200",
+      borderLeft: "border-l-orange-500",
+      hoverBg: "hover:bg-orange-50/50",
+    };
+  }
+  if (s.includes("chint")) {
+    return {
+      dot: "🔵",
+      bgActive: "bg-blue-600 hover:bg-blue-700 text-white border-blue-600 shadow-sm",
+      borderInactive: "border-blue-200 text-blue-700 hover:bg-blue-50",
+      badge: "bg-blue-100 text-blue-700 border-blue-200",
+      borderLeft: "border-l-blue-500",
+      hoverBg: "hover:bg-blue-50/50",
+    };
+  }
+  if (s.includes("kelani")) {
+    return {
+      dot: "🟢",
+      bgActive: "bg-green-600 hover:bg-green-700 text-white border-green-600 shadow-sm",
+      borderInactive: "border-green-200 text-green-700 hover:bg-green-50",
+      badge: "bg-green-100 text-green-700 border-green-200",
+      borderLeft: "border-l-green-500",
+      hoverBg: "hover:bg-green-50/50",
+    };
+  }
+  if (s.includes("acl")) {
+    return {
+      dot: "🟡",
+      bgActive: "bg-amber-500 hover:bg-amber-600 text-white border-amber-500 shadow-sm",
+      borderInactive: "border-amber-200 text-amber-700 hover:bg-amber-50",
+      badge: "bg-amber-100 text-amber-700 border-amber-200",
+      borderLeft: "border-l-amber-500",
+      hoverBg: "hover:bg-amber-50/50",
+    };
+  }
+  if (s.includes("polycrome") || s.includes("polycreme")) {
+    return {
+      dot: "🟤",
+      bgActive: "bg-amber-800 hover:bg-amber-900 text-white border-amber-800 shadow-sm",
+      borderInactive: "border-amber-200 text-amber-850 hover:bg-amber-50",
+      badge: "bg-amber-100 text-amber-850 border-amber-200",
+      borderLeft: "border-l-amber-700",
+      hoverBg: "hover:bg-amber-50/50",
+    };
+  }
+  return {
+    dot: "⚪",
+    bgActive: "bg-slate-800 hover:bg-slate-900 text-white border-slate-800 shadow-sm",
+    borderInactive: "border-slate-200 text-slate-700 hover:bg-slate-50",
+    badge: "bg-slate-100 text-slate-700 border-slate-200",
+    borderLeft: "border-l-slate-300",
+    hoverBg: "hover:bg-slate-50",
+  };
+};
+
 export default function CreateRetailInvoicePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -136,6 +247,7 @@ export default function CreateRetailInvoicePage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
+  const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([]);
 
   // NEW: State to store the ID of the Walk-in customer found in the database
   const [guestCustomerId, setGuestCustomerId] = useState<string | null>(null);
@@ -157,7 +269,7 @@ export default function CreateRetailInvoicePage() {
   const [productOpen, setProductOpen] = useState(false);
 
   // Supplier filter state
-  const [supplierFilter, setSupplierFilter] = useState<"all" | "sierra" | "wireman" | "orange" | "retail" | "other">("all");
+  const [supplierFilter, setSupplierFilter] = useState<string>("all");
 
   // New Product Modal States
   const [isAddProductOpen, setIsAddProductOpen] = useState(false);
@@ -304,9 +416,16 @@ export default function CreateRetailInvoicePage() {
         setBusinessName(resolvedBusinessName);
         setUserId(user.id);
 
-        const customersRes = await fetch(`/api/customers?businessId=${BUSINESS_IDS.CHAMPIKA_RETAIL}`);
+        const [customersRes, suppliersRes, settingSuppliersRes] = await Promise.all([
+          fetch(`/api/customers?businessId=${BUSINESS_IDS.CHAMPIKA_RETAIL}`),
+          fetch("/api/suppliers").catch(() => null),
+          fetch("/api/settings/categories?type=supplier").catch(() => null),
+        ]);
         const customersData = await customersRes.json();
+        const suppliersData = suppliersRes && suppliersRes.ok ? await suppliersRes.json() : [];
+        const settingSuppliersData = settingSuppliersRes && settingSuppliersRes.ok ? await settingSuppliersRes.json() : [];
 
+        setSuppliers([...suppliersData, ...settingSuppliersData]);
         setAllCustomers(customersData);
 
         const retailCustomers = customersData.filter((c: any) => {
@@ -784,23 +903,28 @@ export default function CreateRetailInvoicePage() {
     (p) => !items.some((i) => i.productId === p.id) || p.id === currentItem.productId
   );
 
+  const combinedSuppliers = React.useMemo(() => {
+    const rawList = [...FIXED_SUPPLIERS, ...suppliers];
+    const cleaned: { id: string; name: string }[] = [];
+    const seen = new Set<string>();
+
+    rawList.forEach((sup) => {
+      const cleanName = getSupplierCleanName(sup.name);
+      if (!seen.has(cleanName)) {
+        seen.add(cleanName);
+        cleaned.push({
+          id: sup.id || cleanName,
+          name: cleanName
+        });
+      }
+    });
+    return cleaned;
+  }, [suppliers]);
+
   const filteredAvailableProducts = availableProducts.filter((product) => {
     if (supplierFilter === "all") return true;
     if (supplierFilter === "retail") return product.retailOnly === true;
-
-    const sup = (product.supplier || "").toLowerCase();
-    if (supplierFilter === "sierra") return sup.includes("sierra") && !product.retailOnly;
-    if (supplierFilter === "wireman") return sup.includes("wireman") && !product.retailOnly;
-    if (supplierFilter === "orange") return sup.includes("orange") && !product.retailOnly;
-    if (supplierFilter === "other") {
-      return (
-        !sup.includes("sierra") &&
-        !sup.includes("wireman") &&
-        !sup.includes("orange") &&
-        !product.retailOnly
-      );
-    }
-    return true;
+    return !!product.supplier && getSupplierCleanName(product.supplier) === supplierFilter;
   });
 
   // --- Filtering Logic for New Product Dialog ---
@@ -1211,64 +1335,46 @@ export default function CreateRetailInvoicePage() {
                       </Button>
                       <Button
                         type="button"
-                        variant={supplierFilter === "sierra" ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setSupplierFilter("sierra")}
-                        className={cn(
-                          "h-8 text-xs font-semibold rounded-full border-purple-200 text-purple-700 hover:bg-purple-50 transition-all duration-200",
-                          supplierFilter === "sierra" && "bg-purple-600 text-white border-purple-600 hover:bg-purple-700 hover:text-white shadow-sm"
-                        )}
-                      >
-                        🟣 Sierra Cables
-                      </Button>
-                      <Button
-                        type="button"
-                        variant={supplierFilter === "wireman" ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setSupplierFilter("wireman")}
-                        className={cn(
-                          "h-8 text-xs font-semibold rounded-full border-red-200 text-red-700 hover:bg-red-50 transition-all duration-200",
-                          supplierFilter === "wireman" && "bg-red-600 text-white border-red-600 hover:bg-red-700 hover:text-white shadow-sm"
-                        )}
-                      >
-                        🔴 Wireman
-                      </Button>
-                      <Button
-                        type="button"
-                        variant={supplierFilter === "orange" ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setSupplierFilter("orange")}
-                        className={cn(
-                          "h-8 text-xs font-semibold rounded-full border-orange-200 text-orange-700 hover:bg-orange-50 transition-all duration-200",
-                          supplierFilter === "orange" && "bg-orange-500 text-white border-orange-500 hover:bg-orange-600 hover:text-white shadow-sm"
-                        )}
-                      >
-                        🟠 Orange
-                      </Button>
-                      <Button
-                        type="button"
                         variant={supplierFilter === "retail" ? "default" : "outline"}
                         size="sm"
                         onClick={() => setSupplierFilter("retail")}
                         className={cn(
-                          "h-8 text-xs font-semibold rounded-full border-emerald-200 text-emerald-700 hover:bg-emerald-50 transition-all duration-200",
+                          "h-8 text-xs font-semibold rounded-full border-emerald-200 text-emerald-700 hover:bg-emerald-50 transition-all duration-200 shrink-0",
                           supplierFilter === "retail" && "bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700 hover:text-white shadow-sm"
                         )}
                       >
                         🛍️ Retail Only
                       </Button>
-                      <Button
-                        type="button"
-                        variant={supplierFilter === "other" ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setSupplierFilter("other")}
-                        className={cn(
-                          "h-8 text-xs font-semibold rounded-full border-slate-200 text-slate-700 hover:bg-slate-50 transition-all duration-200",
-                          supplierFilter === "other" && "bg-slate-600 text-white border-slate-600 hover:bg-slate-700 hover:text-white shadow-sm"
-                        )}
-                      >
-                        ⚪ Other Suppliers
-                      </Button>
+                      {combinedSuppliers
+                        .filter((sup) => {
+                          const name = getSupplierCleanName(sup.name);
+                          return (
+                            name === "Sierra Cables" ||
+                            name === "Wireman" ||
+                            name === "Orange" ||
+                            name === "ACL" ||
+                            name === "Polycrome"
+                          );
+                        })
+                        .map((sup) => {
+                          const styles = getSupplierColorStyles(sup.name);
+                          const isSelected = supplierFilter === sup.name;
+                          return (
+                            <Button
+                              key={sup.id || sup.name}
+                              type="button"
+                              variant={isSelected ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => setSupplierFilter(sup.name)}
+                              className={cn(
+                                "h-8 text-xs font-semibold rounded-full transition-all duration-200 shrink-0",
+                                isSelected ? styles.bgActive : cn("bg-white", styles.borderInactive)
+                              )}
+                            >
+                              {styles.dot} {getSupplierCleanName(sup.name)}
+                            </Button>
+                          );
+                        })}
                     </div>
 
                     <Popover open={productOpen} onOpenChange={setProductOpen}>
@@ -1305,36 +1411,20 @@ export default function CreateRetailInvoicePage() {
                             </CommandEmpty>
                             <CommandGroup>
                               {filteredAvailableProducts.map((product) => {
-                                const isSierra = (product.supplier || "").toLowerCase().includes("sierra");
-                                const isWireman = (product.supplier || "").toLowerCase().includes("wireman");
-                                const isOrange = (product.supplier || "").toLowerCase().includes("orange");
+                                const cleanSupplier = getSupplierCleanName(product.supplier);
+                                const styles = getSupplierColorStyles(product.supplier);
                                 const isRetailOnly = product.retailOnly;
 
-                                let borderClass = "border-l-4 border-slate-300";
-                                let bgHoverClass = "hover:bg-slate-50";
-                                let supplierLabelName = "Retail/Other";
-                                let badgeColor = "bg-slate-100 text-slate-700 border-slate-200";
+                                let borderClass = styles.borderLeft ? cn("border-l-4", styles.borderLeft) : "border-l-4 border-slate-300";
+                                let bgHoverClass = styles.hoverBg || "hover:bg-slate-50";
+                                let supplierLabelName = cleanSupplier;
+                                let badgeColor = styles.badge;
 
                                 if (isRetailOnly) {
                                   borderClass = "border-l-4 border-emerald-500";
                                   bgHoverClass = "hover:bg-emerald-50/50";
                                   supplierLabelName = "Retail Only";
                                   badgeColor = "bg-emerald-100 text-emerald-800 border-emerald-200";
-                                } else if (isSierra) {
-                                  borderClass = "border-l-4 border-purple-500";
-                                  bgHoverClass = "hover:bg-purple-50/50";
-                                  supplierLabelName = "Sierra";
-                                  badgeColor = "bg-purple-100 text-purple-700 border-purple-200";
-                                } else if (isWireman) {
-                                  borderClass = "border-l-4 border-red-500";
-                                  bgHoverClass = "hover:bg-red-50/50";
-                                  supplierLabelName = "Wireman";
-                                  badgeColor = "bg-red-100 text-red-700 border-red-200";
-                                } else if (isOrange) {
-                                  borderClass = "border-l-4 border-orange-500";
-                                  bgHoverClass = "hover:bg-orange-50/50";
-                                  supplierLabelName = "Orange";
-                                  badgeColor = "bg-orange-100 text-orange-700 border-orange-200";
                                 }
 
                                 return (
@@ -1587,18 +1677,18 @@ export default function CreateRetailInvoicePage() {
               ) : (
                 <div className="space-y-2">
                   {items.map((item, idx) => {
-                    const isSierra = (item.supplier || "").toLowerCase().includes("sierra");
-                    const isWireman = (item.supplier || "").toLowerCase().includes("wireman");
-                    const isOrange = (item.supplier || "").toLowerCase().includes("orange");
+                    const cleanSupplier = getSupplierCleanName(item.supplier);
+                    const styles = getSupplierColorStyles(item.supplier);
                     const isRetailOnly = item.retailOnly;
 
-                    let leftBorder = "border-l-4 border-l-slate-200";
-                    let supplierLabel = "";
-                    let supplierBadgeCls = "bg-slate-100 text-slate-600 border-slate-200";
-                    if (isRetailOnly) { leftBorder = "border-l-4 border-l-emerald-500"; supplierLabel = "Retail Only"; supplierBadgeCls = "bg-emerald-100 text-emerald-700 border-emerald-200"; }
-                    else if (isSierra) { leftBorder = "border-l-4 border-l-purple-500"; supplierLabel = "Sierra"; supplierBadgeCls = "bg-purple-100 text-purple-700 border-purple-200"; }
-                    else if (isWireman) { leftBorder = "border-l-4 border-l-red-500"; supplierLabel = "Wireman"; supplierBadgeCls = "bg-red-100 text-red-700 border-red-200"; }
-                    else if (isOrange) { leftBorder = "border-l-4 border-l-orange-500"; supplierLabel = "Orange"; supplierBadgeCls = "bg-orange-100 text-orange-700 border-orange-200"; }
+                    let leftBorder = styles.borderLeft ? cn("border-l-4", styles.borderLeft) : "border-l-4 border-l-slate-200";
+                    let supplierLabel = cleanSupplier;
+                    let supplierBadgeCls = styles.badge;
+                    if (isRetailOnly) {
+                      leftBorder = "border-l-4 border-l-emerald-500";
+                      supplierLabel = "Retail Only";
+                      supplierBadgeCls = "bg-emerald-100 text-emerald-700 border-emerald-200";
+                    }
 
                     const isEditing = editingItemId === item.id;
 
