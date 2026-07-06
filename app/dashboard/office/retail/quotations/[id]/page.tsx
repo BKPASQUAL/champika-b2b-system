@@ -14,6 +14,7 @@ import {
   Calendar,
   Package,
   CreditCard,
+  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -191,6 +192,9 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
             <>
               <Button variant="outline" size="sm" onClick={() => setShowDeleteDialog(true)} className="text-destructive hover:text-destructive">
                 <Trash2 className="w-4 h-4 mr-2" /> Delete
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => router.push(`/dashboard/office/retail/quotations/${id}/edit`)}>
+                <Pencil className="w-4 h-4 mr-2" /> Edit
               </Button>
               <Button
                 size="sm"

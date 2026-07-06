@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, use } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -99,13 +99,13 @@ interface CurrentItemState {
   currentStock: number;
 }
 
-export default function CreateQuotationPage() {
+export default function EditQuotationPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const router = useRouter();
+
   const [loading, setLoading] = useState(true);
-  const [stockLoading, setStockLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const [businessId] = useState(BUSINESS_IDS.CHAMPIKA_RETAIL);
   const [businessName, setBusinessName] = useState("");
   const [userId, setUserId] = useState<string | null>(null);
 
@@ -113,6 +113,7 @@ export default function CreateQuotationPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [guestCustomerId, setGuestCustomerId] = useState<string | null>(null);
 
+  const [quotationNo, setQuotationNo] = useState("");
   const [customerId, setCustomerId] = useState<string | null>(null);
   const [quotationDate, setQuotationDate] = useState(new Date().toISOString().split("T")[0]);
   const [paymentType, setPaymentType] = useState("Cash");
@@ -143,10 +144,33 @@ export default function CreateQuotationPage() {
         setBusinessName(user.businessName ?? BUSINESS_NAMES[BUSINESS_IDS.CHAMPIKA_RETAIL]);
         setUserId(user.id);
 
-        const [customersRes, productsRes] = await Promise.all([
+        const [quotationRes, customersRes, productsRes] = await Promise.all([
+          fetch(`/api/quotations/${id}`),
           fetch(`/api/customers?businessId=${BUSINESS_IDS.CHAMPIKA_RETAIL}`),
           fetch(`/api/rep/stock?userId=${user.id}&includeOutOfStock=true`),
         ]);
+
+        if (!quotationRes.ok) throw new Error("Quotation not found");
+        const q = await quotationRes.json();
+
+        if (q.status === "Converted") {
+          toast.error("Cannot edit a converted quotation");
+          router.push(`/dashboard/office/retail/quotations/${id}`);
+          return;
+        }
+
+        setQuotationNo(q.quotationNo);
+        setCustomerId(q.customerId);
+        setQuotationDate(q.date);
+        setPaymentType(q.paymentType);
+        setNotes(q.notes || "");
+        setExtraDiscount(q.extraDiscountPercent || 0);
+        setItems(
+          (q.items || []).map((item: any) => ({
+            ...item,
+            id: item.id || Date.now().toString() + Math.random(),
+          }))
+        );
 
         const customersData = await customersRes.json();
         const productsData = await productsRes.json();
@@ -159,7 +183,7 @@ export default function CreateQuotationPage() {
           const n = (c.shop_name || c.shopName || c.name || "").toLowerCase();
           return n.includes("walk-in") || n.includes("guest");
         });
-        if (guest) { setGuestCustomerId(guest.id); setCustomerId(guest.id); }
+        if (guest) setGuestCustomerId(guest.id);
 
         setCustomers(retailCustomers.map((c: any) => ({
           id: c.id,
@@ -180,14 +204,15 @@ export default function CreateQuotationPage() {
             retailOnly: p.retailOnly ?? p.retail_only ?? false,
           })));
         }
-      } catch {
-        toast.error("Failed to load data");
+      } catch (err: any) {
+        toast.error(err.message || "Failed to load quotation");
+        router.push("/dashboard/office/retail/quotations");
       } finally {
         setLoading(false);
       }
     };
     init();
-  }, [router]);
+  }, [id, router]);
 
   const handleProductSelect = (productId: string) => {
     const product = products.find((p) => p.id === productId);
@@ -259,12 +284,11 @@ export default function CreateQuotationPage() {
 
     setSaving(true);
     try {
-      const res = await fetch("/api/quotations", {
-        method: "POST",
+      const res = await fetch(`/api/quotations/${id}`, {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           customerId,
-          businessId,
           salesRepId: userId,
           items: items.map((i) => ({
             productId: i.productId, sku: i.sku, productName: i.productName,
@@ -284,12 +308,12 @@ export default function CreateQuotationPage() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to create quotation");
+      if (!res.ok) throw new Error(data.error || "Failed to update quotation");
 
-      toast.success(`Quotation ${data.data.quotation_no} saved!`);
-      router.push(`/dashboard/office/retail/quotations/${data.data.id}`);
+      toast.success("Quotation updated!");
+      router.push(`/dashboard/office/retail/quotations/${id}`);
     } catch (err: any) {
-      toast.error(err.message || "Failed to save quotation");
+      toast.error(err.message || "Failed to update quotation");
     } finally {
       setSaving(false);
     }
@@ -326,12 +350,12 @@ export default function CreateQuotationPage() {
     <div className="space-y-4 pb-28 xl:pb-6 mx-auto">
       {/* Desktop header */}
       <div className="hidden xl:flex items-center gap-3 mb-6">
-        <Button variant="ghost" size="icon" className="shrink-0" onClick={() => router.push("/dashboard/office/retail/quotations")}>
+        <Button variant="ghost" size="icon" className="shrink-0" onClick={() => router.push(`/dashboard/office/retail/quotations/${id}`)}>
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight">Create Quotation</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">{businessName} · New quotation (no stock deducted until converted)</p>
+          <h1 className="text-2xl font-bold tracking-tight">Edit Quotation</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">{businessName} · {quotationNo}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -341,7 +365,7 @@ export default function CreateQuotationPage() {
             className="bg-green-600 hover:bg-green-700"
           >
             {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-            Save Quotation
+            Update Quotation
           </Button>
         </div>
       </div>
@@ -352,11 +376,11 @@ export default function CreateQuotationPage() {
           {/* Details */}
           <Card>
             <CardHeader className="pb-0 flex flex-row items-center gap-3">
-              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 xl:hidden" onClick={() => router.push("/dashboard/office/retail/quotations")}>
+              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 xl:hidden" onClick={() => router.push(`/dashboard/office/retail/quotations/${id}`)}>
                 <ArrowLeft className="w-4 h-4 text-slate-500" />
               </Button>
               <div className="flex-1">
-                <CardTitle className="text-base">Quotation Details</CardTitle>
+                <CardTitle className="text-base">Edit — {quotationNo}</CardTitle>
                 <p className="text-xs text-amber-600 mt-0.5">Stock is NOT deducted until this quotation is converted to a bill.</p>
               </div>
             </CardHeader>
@@ -417,16 +441,16 @@ export default function CreateQuotationPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>Notes</Label>
-                  <Input placeholder="Optional note for this quotation..." value={notes} onChange={(e) => setNotes(e.target.value)} className="h-11" />
+                  <Input placeholder="Optional note..." value={notes} onChange={(e) => setNotes(e.target.value)} className="h-11" />
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Add Products */}
+          {/* Add / Edit Products */}
           <Card>
             <CardHeader className="pb-0">
-              <CardTitle className="text-base">Add Products</CardTitle>
+              <CardTitle className="text-base">Products</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 pt-3">
               {/* Supplier filter */}
@@ -447,7 +471,7 @@ export default function CreateQuotationPage() {
               {/* Product search */}
               <Popover open={productOpen} onOpenChange={setProductOpen}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" role="combobox" className="w-full justify-between" disabled={stockLoading}>
+                  <Button variant="outline" role="combobox" className="w-full justify-between">
                     {currentItem.productId ? products.find((p) => p.id === currentItem.productId)?.name : "Select Product"}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
@@ -497,7 +521,7 @@ export default function CreateQuotationPage() {
                 </PopoverContent>
               </Popover>
 
-              {/* Qty + Free Qty + Unit + Stock */}
+              {/* Qty + Free + Unit + Stock */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-semibold text-muted-foreground uppercase">Quantity</Label>
@@ -558,7 +582,7 @@ export default function CreateQuotationPage() {
             </CardContent>
           </Card>
 
-          {/* Items Table */}
+          {/* Items list */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Quotation Items</CardTitle>
@@ -670,7 +694,7 @@ export default function CreateQuotationPage() {
               </div>
               <Button onClick={handleSave} disabled={items.length === 0 || saving} className="w-full h-11 bg-green-600 hover:bg-green-700 font-bold">
                 {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileText className="w-4 h-4 mr-2" />}
-                Save Quotation
+                Update Quotation
               </Button>
             </CardContent>
           </Card>
@@ -693,7 +717,7 @@ export default function CreateQuotationPage() {
           </div>
           <Button size="sm" onClick={handleSave} disabled={items.length === 0 || saving} className="h-10 bg-green-600 hover:bg-green-700 font-bold shrink-0">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 sm:mr-1.5" />}
-            <span className="hidden sm:inline ml-1.5">Save Quotation</span>
+            <span className="hidden sm:inline ml-1.5">Update</span>
           </Button>
         </div>
       </div>

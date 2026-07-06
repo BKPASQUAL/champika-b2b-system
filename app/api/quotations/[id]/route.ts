@@ -83,6 +83,55 @@ export async function GET(
   }
 }
 
+// PUT: full update of an Active quotation (items, totals, customer, date, etc.)
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+
+    const { data: existing } = await supabaseAdmin
+      .from("quotations")
+      .select("status")
+      .eq("id", id)
+      .single();
+
+    if (!existing) return NextResponse.json({ error: "Quotation not found" }, { status: 404 });
+    if (existing.status === "Converted") {
+      return NextResponse.json({ error: "Cannot edit a converted quotation" }, { status: 400 });
+    }
+
+    const body = await request.json();
+    const {
+      customerId, invoiceDate, paymentType, notes,
+      items, subTotal, extraDiscountPercent, extraDiscountAmount, grandTotal,
+    } = body;
+
+    const { error } = await supabaseAdmin
+      .from("quotations")
+      .update({
+        customer_id: customerId,
+        invoice_date: invoiceDate,
+        payment_type: paymentType,
+        notes: notes || null,
+        items,
+        sub_total: subTotal,
+        extra_discount_percent: extraDiscountPercent,
+        extra_discount_amount: extraDiscountAmount,
+        grand_total: grandTotal,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+
+    if (error) throw error;
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error("Quotation PUT error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
 // PATCH: update quotation status (e.g. mark as Converted after invoice creation)
 export async function PATCH(
   request: NextRequest,
