@@ -145,7 +145,7 @@ export default function CreateQuotationPage() {
 
         const [customersRes, productsRes] = await Promise.all([
           fetch(`/api/customers?businessId=${BUSINESS_IDS.CHAMPIKA_RETAIL}`),
-          fetch(`/api/rep/stock?userId=${user.id}&includeOutOfStock=true`),
+          fetch(`/api/products?active=true`),
         ]);
 
         const customersData = await customersRes.json();
@@ -170,14 +170,16 @@ export default function CreateQuotationPage() {
 
         if (Array.isArray(productsData)) {
           setProducts(productsData.map((p: any) => ({
-            id: p.id, sku: p.sku, name: p.name,
-            selling_price: p.selling_price || 0,
-            retail_price: p.retail_price ?? null,
+            id: p.id,
+            sku: p.sku || "N/A",
+            name: p.name,
+            selling_price: p.sellingPrice || 0,
+            retail_price: p.retailPrice ?? null,
             mrp: p.mrp || 0,
-            stock_quantity: p.stock_quantity || 0,
-            unit_of_measure: p.unit_of_measure || "unit",
+            stock_quantity: p.stock || 0,
+            unit_of_measure: p.unitOfMeasure || "unit",
             supplier: p.supplier || "",
-            retailOnly: p.retailOnly ?? p.retail_only ?? false,
+            retailOnly: p.retailOnly ?? false,
           })));
         }
       } catch {
@@ -365,9 +367,9 @@ export default function CreateQuotationPage() {
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
                     <Label>Customer <span className="text-red-500">*</span></Label>
-                    {guestCustomerId && customerId !== guestCustomerId && (
-                      <Button variant="secondary" size="sm" className="h-6 text-xs bg-blue-100 text-blue-700 hover:bg-blue-200" onClick={() => { setCustomerId(guestCustomerId); setCustomerOpen(false); }}>
-                        Select Walk-in
+                    {guestCustomerId && (
+                      <Button variant="secondary" size="sm" className="h-6 text-xs bg-blue-100 text-blue-700 hover:bg-blue-200" onClick={() => { setCustomerId(guestCustomerId); setCustomerOpen(false); toast.success("Selected Walk-in Customer"); }}>
+                        Walk-in / Guest
                       </Button>
                     )}
                   </div>
