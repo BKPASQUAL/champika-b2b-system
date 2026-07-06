@@ -4,7 +4,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Loader2, Map, History, Play, X } from "lucide-react";
+import { ArrowLeft, Loader2, Map, History, Play, X, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
 import { createClient } from "@supabase/supabase-js";
@@ -67,6 +67,7 @@ function MapContent() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showNamesAlways, setShowNamesAlways] = useState(true);
   const distributionBusinessId = BUSINESS_IDS.CHAMPIKA_DISTRIBUTION;
 
   // History states
@@ -300,6 +301,28 @@ function MapContent() {
 
         {/* Action Controls */}
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            onClick={() => setShowNamesAlways(!showNamesAlways)}
+            variant="outline"
+            className={`text-xs gap-1.5 transition-all ${
+              showNamesAlways 
+                ? "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:text-blue-800" 
+                : "text-slate-600 border-slate-200 hover:bg-slate-50"
+            }`}
+          >
+            {showNamesAlways ? (
+              <>
+                <Eye className="w-3.5 h-3.5" />
+                <span>Names: Always Show</span>
+              </>
+            ) : (
+              <>
+                <EyeOff className="w-3.5 h-3.5" />
+                <span>Names: Show on Hover</span>
+              </>
+            )}
+          </Button>
+
           {!historyMode ? (
             <>
               <Button
@@ -411,6 +434,7 @@ function MapContent() {
           vehicles={vehicles}
           focusedVehicleId={focusVehicleId}
           historyRoute={historyRoute}
+          showNamesAlways={showNamesAlways}
         />
       </div>
     </div>

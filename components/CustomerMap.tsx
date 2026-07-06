@@ -160,6 +160,7 @@ interface CustomerMapProps {
   focusedVehicleId?: string | null;
   historyRoute?: VehicleLocation[];
   focusedStop?: { latitude: number; longitude: number } | null;
+  showNamesAlways?: boolean;
 }
 
 export default function CustomerMap({
@@ -170,6 +171,7 @@ export default function CustomerMap({
   focusedVehicleId = null,
   historyRoute = [],
   focusedStop = null,
+  showNamesAlways = true,
 }: CustomerMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const [leafletLoaded, setLeafletLoaded] = useState(false);
@@ -361,7 +363,7 @@ export default function CustomerMap({
       marker.bindPopup(popupHtml);
       
       marker.bindTooltip(customer.shopName, {
-        permanent: true,
+        permanent: showNamesAlways,
         direction: "top",
         offset: [0, -32],
         className: "bg-white/95 border border-blue-200 text-blue-900 font-bold px-1.5 py-0.5 rounded shadow-md text-[10px] whitespace-nowrap pointer-events-none",
@@ -483,10 +485,19 @@ export default function CustomerMap({
           const pt2 = filteredPathPoints[i + 1];
           if (pt1.latitude && pt1.longitude && pt2.latitude && pt2.longitude) {
             const isSpeeding = pt1.speed > 60 || pt2.speed > 60;
+            // 1. Thicker underlay shadow line for visibility contrast
             L.polyline([[pt1.latitude, pt1.longitude], [pt2.latitude, pt2.longitude]], {
-              color: isSpeeding ? "#ef4444" : "#f97316",
+              color: isSpeeding ? "#fca5a5" : "#fed7aa",
               weight: 6,
-              opacity: 0.95,
+              opacity: 0.5,
+            }).addTo(markersGroup);
+
+            // 2. Thinner dashed foreground line (small breaks in the line)
+            L.polyline([[pt1.latitude, pt1.longitude], [pt2.latitude, pt2.longitude]], {
+              color: isSpeeding ? "#dc2626" : "#ea580c",
+              weight: 3,
+              opacity: 1.0,
+              dashArray: "6, 6",
             }).addTo(markersGroup);
           }
         }
@@ -572,7 +583,7 @@ export default function CustomerMap({
       hasInitialFitBoundsRef.current = true;
     }
 
-  }, [leafletLoaded, customers, focusedCustomerId, vehicles, focusedVehicleId, historyRoute]);
+  }, [leafletLoaded, customers, focusedCustomerId, vehicles, focusedVehicleId, historyRoute, showNamesAlways]);
 
   // Center/zoom on stop location when selected from sidebar
   useEffect(() => {
