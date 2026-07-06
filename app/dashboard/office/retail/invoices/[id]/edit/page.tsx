@@ -143,6 +143,7 @@ export default function EditRetailInvoicePage({
   const [invoiceDate, setInvoiceDate] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [paymentType, setPaymentType] = useState<string>("Cash");
+  const [cashPaidAmount, setCashPaidAmount] = useState<number | "">(0);
   const [changeReason, setChangeReason] = useState(""); // Audit Log
 
   // Items State
@@ -262,6 +263,7 @@ export default function EditRetailInvoicePage({
             ? invoice.payments[0].method
             : "Cash"
         );
+        setCashPaidAmount(invoice.paidAmount || 0);
         setExtraDiscount(invoice.extraDiscountPercent || 0);
 
         // 6. Populate Items
@@ -420,8 +422,7 @@ export default function EditRetailInvoicePage({
       grandTotal: grandTotal,
       orderStatus: "Delivered", // Standard retail status
       paymentType: paymentType,
-      paymentStatus: paymentType === "Cash" ? "Paid" : "Unpaid",
-      paidAmount: paymentType === "Cash" ? grandTotal : 0,
+      paidAmount: paymentType === "Cash" ? (cashPaidAmount === "" ? 0 : Number(cashPaidAmount)) : null,
       notes: "",
       changeReason: changeReason || "Updated invoice details", // Optional reason
       userId: userId, // For Audit
@@ -1107,6 +1108,40 @@ export default function EditRetailInvoicePage({
                   <span className="text-2xl font-bold text-green-600">LKR {grandTotal.toLocaleString()}</span>
                 </div>
               </div>
+
+              {paymentType === "Cash" && (
+                <div className="border-t pt-4 space-y-3">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold">Cash Received (LKR)</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max={grandTotal}
+                      value={cashPaidAmount}
+                      onChange={(e) =>
+                        setCashPaidAmount(e.target.value === "" ? "" : Number(e.target.value))
+                      }
+                      className="font-semibold"
+                      placeholder={grandTotal.toString()}
+                    />
+                  </div>
+                  {(() => {
+                    const paid = cashPaidAmount === "" ? 0 : Number(cashPaidAmount);
+                    const balance = grandTotal - paid;
+                    return balance > 0 ? (
+                      <div className="flex justify-between text-sm font-semibold text-amber-600">
+                        <span>Balance Due:</span>
+                        <span>LKR {balance.toLocaleString()}</span>
+                      </div>
+                    ) : (
+                      <div className="flex justify-between text-sm font-semibold text-green-600">
+                        <span>Status:</span>
+                        <span>Fully Paid</span>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
             </CardContent>
           </Card>
 

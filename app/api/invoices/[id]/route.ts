@@ -34,6 +34,7 @@ const updateInvoiceSchema = z.object({
   isDraft: z.boolean().optional(),
   changeReason: z.string().optional().nullable(),
   isIncorrect: z.boolean().optional(),
+  paidAmount: z.number().optional().nullable(),
 });
 
 export async function GET(
@@ -235,6 +236,22 @@ export async function PATCH(
       );
     }
 
+    // Pre-compute the final paid amount once — used in both invoice update and customer balance sections.
+    // If the caller provides an explicit paidAmount (e.g. retail edit), use it capped at grandTotal.
+    // Otherwise fall back to the existing auto-detection logic (within-100 threshold = fully paid).
+    const oldPaid = Number(currentInvoice.paid_amount) || 0;
+    let computedFinalPaid: number;
+    if (val.paidAmount !== null && val.paidAmount !== undefined) {
+      computedFinalPaid = Math.min(Math.max(0, Number(val.paidAmount)), val.grandTotal);
+    } else {
+      const autoFullyPaid = (val.grandTotal - oldPaid) < 100;
+      computedFinalPaid = autoFullyPaid ? val.grandTotal : oldPaid;
+    }
+    const computedIsFullyPaid = (val.grandTotal - computedFinalPaid) < 100;
+    const computedAdjustedPaid = computedIsFullyPaid ? val.grandTotal : computedFinalPaid;
+    const computedStatus =
+      computedAdjustedPaid <= 0 ? "Unpaid" : computedIsFullyPaid ? "Paid" : "Partial";
+
     // Duplicate manual invoice number check — only if the value is being changed.
     // Skipping when unchanged prevents false conflicts when duplicate invoices share
     // the same manual_invoice_no.
@@ -402,26 +419,16 @@ export async function PATCH(
       .eq("id", currentInvoice.order_id);
 
     // Update Invoice
-    const paid = Number(currentInvoice.paid_amount) || 0;
-    const isFullyPaid = (val.grandTotal - paid) < 100;
-    const finalPaidAmount = isFullyPaid ? val.grandTotal : paid;
-    const finalStatus =
-      finalPaidAmount <= 0
-        ? "Unpaid"
-        : isFullyPaid
-        ? "Paid"
-        : "Partial";
-
     const invoiceUpdateFields: any = {
       customer_id: val.customerId,
       total_amount: val.grandTotal,
-      paid_amount: finalPaidAmount,
-      status: finalStatus,
+      paid_amount: computedAdjustedPaid,
+      status: computedStatus,
       ...(val.manual_invoice_no !== undefined && { manual_invoice_no: val.manual_invoice_no }),
       ...(val.isIncorrect !== undefined && { is_incorrect: val.isIncorrect }),
     };
 
-    if (isFullyPaid) {
+    if (computedIsFullyPaid) {
       invoiceUpdateFields.is_incorrect = false;
     }
 
@@ -608,10 +615,10 @@ export async function PATCH(
       .single();
 
     if (currentCustomer) {
-      const paid = Number(currentInvoice.paid_amount) || 0;
-      const isFullyPaid = (val.grandTotal - paid) < 100;
-      const finalPaidAmount = isFullyPaid ? val.grandTotal : paid;
-      const autoPayCredit = finalPaidAmount - paid;
+      // autoPayCredit = how much more credit the customer gets from the new paid amount vs the old.
+      // Formula: newBalance = existingBalance + newGrandTotal - autoPayCredit
+      //          = existingBalance + (newGrandTotal - newPaid) [i.e. only the unpaid portion added]
+      const autoPayCredit = computedAdjustedPaid - oldPaid;
 
       await supabaseAdmin
         .from("customers")
