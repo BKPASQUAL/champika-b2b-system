@@ -14,6 +14,8 @@ import {
   Pencil,
   X,
   FileText,
+  Printer,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -255,7 +257,7 @@ export default function CreateQuotationPage() {
     resetCurrentItem();
   };
 
-  const handleSave = async () => {
+  const handleSave = async (action: "save" | "print" | "download" = "save") => {
     if (!customerId) { toast.error("Please select a customer"); return; }
     if (items.length === 0) { toast.error("Please add at least one item"); return; }
 
@@ -289,7 +291,14 @@ export default function CreateQuotationPage() {
       if (!res.ok) throw new Error(data.error || "Failed to create quotation");
 
       toast.success(`Quotation ${data.data.quotation_no} saved!`);
-      router.push(`/dashboard/office/retail/quotations/${data.data.id}`);
+      
+      let redirect = `/dashboard/office/retail/quotations/${data.data.id}`;
+      if (action === "print") {
+        redirect += "?print=true";
+      } else if (action === "download") {
+        redirect += "?download=true";
+      }
+      router.push(redirect);
     } catch (err: any) {
       toast.error(err.message || "Failed to save quotation");
     } finally {
@@ -337,8 +346,26 @@ export default function CreateQuotationPage() {
         </div>
         <div className="flex items-center gap-2">
           <Button
+            variant="outline"
             size="sm"
-            onClick={handleSave}
+            onClick={() => handleSave("download")}
+            disabled={items.length === 0 || saving}
+          >
+            {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+            Save & Download
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleSave("print")}
+            disabled={items.length === 0 || saving}
+          >
+            {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Printer className="w-4 h-4 mr-2" />}
+            Save & Print
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => handleSave("save")}
             disabled={items.length === 0 || saving}
             className="bg-green-600 hover:bg-green-700"
           >
@@ -670,7 +697,7 @@ export default function CreateQuotationPage() {
                 <p className="text-2xl font-black text-amber-700">LKR {grandTotal.toLocaleString()}</p>
                 {items.length > 0 && <p className="text-[11px] text-amber-600 mt-1">{items.length} product{items.length !== 1 ? "s" : ""}</p>}
               </div>
-              <Button onClick={handleSave} disabled={items.length === 0 || saving} className="w-full h-11 bg-green-600 hover:bg-green-700 font-bold">
+              <Button onClick={() => handleSave("save")} disabled={items.length === 0 || saving} className="w-full h-11 bg-green-600 hover:bg-green-700 font-bold">
                 {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileText className="w-4 h-4 mr-2" />}
                 Save Quotation
               </Button>
@@ -693,7 +720,7 @@ export default function CreateQuotationPage() {
             <Label className="text-xs text-muted-foreground whitespace-nowrap">Extra %</Label>
             <Input type="number" min="0" max="100" placeholder="0" value={extraDiscount} onChange={(e) => setExtraDiscount(Number(e.target.value))} className="w-16 h-9 text-sm text-center" />
           </div>
-          <Button size="sm" onClick={handleSave} disabled={items.length === 0 || saving} className="h-10 bg-green-600 hover:bg-green-700 font-bold shrink-0">
+          <Button size="sm" onClick={() => handleSave("save")} disabled={items.length === 0 || saving} className="h-10 bg-green-600 hover:bg-green-700 font-bold shrink-0">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 sm:mr-1.5" />}
             <span className="hidden sm:inline ml-1.5">Save Quotation</span>
           </Button>

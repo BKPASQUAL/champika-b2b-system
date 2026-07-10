@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, use } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Loader2,
@@ -15,7 +15,12 @@ import {
   Package,
   CreditCard,
   Pencil,
+  Printer,
+  Download,
+  Share2,
 } from "lucide-react";
+import { printQuotation, printHalfPageQuotation, downloadQuotation } from "../print-utils";
+import { shareQuotation } from "@/app/lib/quotation-print";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -87,11 +92,32 @@ interface Quotation {
 export default function QuotationViewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [quotation, setQuotation] = useState<Quotation | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const autoActionTriggeredRef = React.useRef(false);
+
+  // Auto-trigger print or download when redirected from creation page
+  useEffect(() => {
+    if (loading || !quotation) return;
+    if (autoActionTriggeredRef.current) return;
+    autoActionTriggeredRef.current = true;
+    const act = searchParams.get("print");
+    if (act === "true") {
+      printQuotation(id);
+    } else if (act === "half") {
+      printHalfPageQuotation(id);
+    } else if (searchParams.get("download") === "true") {
+      downloadQuotation(id);
+    }
+  }, [loading, quotation, id, searchParams]);
+
+  const handleSharePdf = () =>
+    shareQuotation(id, "retail", quotation?.quotationNo || "", setSharing);
 
   useEffect(() => {
     const fetchQuotation = async () => {
@@ -188,6 +214,44 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
               View Invoice {quotation.convertedInvoiceNo}
             </Button>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => printQuotation(id)}
+          >
+            <Printer className="w-4 h-4 mr-2 text-muted-foreground" />
+            <span>Print A4</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => printHalfPageQuotation(id)}
+          >
+            <Printer className="w-4 h-4 mr-2 text-muted-foreground" />
+            <span>Print A5</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => downloadQuotation(id)}
+          >
+            <Download className="w-4 h-4 mr-2 text-muted-foreground" />
+            <span>Download PDF</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="bg-green-50 border-green-200 text-green-700 hover:bg-green-100 hover:text-green-800"
+            onClick={handleSharePdf}
+            disabled={sharing}
+          >
+            {sharing ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Share2 className="w-4 h-4 mr-2" />
+            )}
+            <span>{sharing ? "Sharing…" : "Share"}</span>
+          </Button>
           {isActive && (
             <>
               <Button variant="outline" size="sm" onClick={() => setShowDeleteDialog(true)} className="text-destructive hover:text-destructive">
