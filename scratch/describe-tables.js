@@ -17,7 +17,7 @@ const supabaseServiceRoleKey = envVars["SUPABASE_SERVICE_ROLE_KEY"];
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
 
 async function main() {
-  const tables = ["products", "suppliers", "product_stocks", "commission_rules", "purchases", "purchase_items"];
+  const tables = ["products", "suppliers", "product_stocks", "commission_rules", "purchases", "purchase_items", "orders", "order_items"];
   for (const table of tables) {
     console.log(`\n--- Structure of table: ${table} ---`);
     const { data, error } = await supabaseAdmin

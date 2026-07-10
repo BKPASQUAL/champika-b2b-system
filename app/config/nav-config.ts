@@ -27,6 +27,7 @@ import {
   Store,
   Send,
   BarChart3,
+  TrendingUp,
   Undo2,
   ArrowRightLeft,
   HardDrive,
@@ -184,6 +185,11 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           name: "Supplier Analytics",
           href: "/dashboard/admin/reports/suppliers",
           icon: Factory,
+        },
+        {
+          name: "China Order Prediction",
+          href: "/dashboard/admin/reports/suppliers/prediction",
+          icon: TrendingUp,
         },
         {
           name: "Rep Analytics",

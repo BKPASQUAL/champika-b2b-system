@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -384,13 +385,21 @@ export default function SupplierAnalyticsPage() {
           </div>
         ) : (
           <>
-            {/* Header */}
-            <div>
-              <h1 className="text-xl md:text-2xl font-bold leading-tight">{current.name}</h1>
-              <p className="text-xs md:text-sm text-muted-foreground mt-1">
-                {current.productCount} products · {current.customerCount} customers · {current.invoiceCount} invoices
-              </p>
-            </div>
+             {/* Header */}
+             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+               <div>
+                 <h1 className="text-xl md:text-2xl font-bold leading-tight">{current.name}</h1>
+                 <p className="text-xs md:text-sm text-muted-foreground mt-1">
+                   {current.productCount} products · {current.customerCount} customers · {current.invoiceCount} invoices
+                 </p>
+               </div>
+               <Button asChild size="sm" className="gap-2 shrink-0">
+                 <Link href="/dashboard/admin/reports/suppliers/prediction">
+                   <TrendingUp className="h-4 w-4" />
+                   Order Prediction Report
+                 </Link>
+               </Button>
+             </div>
 
             {/* KPI Cards — Restructured into Stock and Financial Rows */}
             <div className="space-y-4">
