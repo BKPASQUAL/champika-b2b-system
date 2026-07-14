@@ -34,6 +34,8 @@ import {
   CheckCircle2,
   AlertCircle,
   Boxes,
+  FolderPlus,
+  Folder,
 } from "lucide-react";
 import { toast } from "sonner";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
@@ -80,6 +82,12 @@ export default function DistributionApprovedOrdersPage() {
   const [assignOrderIds, setAssignOrderIds] = useState<string[]>([]);
   const [pickedLorry, setPickedLorry] = useState<string>("");
   const [assignBusy, setAssignBusy] = useState(false);
+  const [folderBusy, setFolderBusy] = useState(false);
+
+  const [assignFolderOpen, setAssignFolderOpen] = useState(false);
+  const [assignFolderGroupId, setAssignFolderGroupId] = useState<string>("");
+  const [pickedFolderLorry, setPickedFolderLorry] = useState<string>("");
+  const [assignFolderBusy, setAssignFolderBusy] = useState(false);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -108,9 +116,14 @@ export default function DistributionApprovedOrdersPage() {
 
   const groupByLorry = useMemo(() => {
     const m: Record<string, LorryGroup> = {};
-    for (const g of groups) m[g.lorryNumber] = g;
+    for (const g of groups) if (g.lorryNumber) m[g.lorryNumber] = g;
     return m;
   }, [groups]);
+
+  const folderGroups = useMemo(
+    () => groups.filter((g) => !g.lorryNumber),
+    [groups]
+  );
 
   const unassignedOrders = useMemo(
     () =>
@@ -201,6 +214,65 @@ export default function DistributionApprovedOrdersPage() {
     }
   };
 
+  const handleCreateFolder = async (orderIds: string[]) => {
+    setFolderBusy(true);
+    try {
+      const res = await fetch("/api/loading-groups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderIds }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Failed to create folder");
+
+      const user = getUserBusinessContext();
+      await Promise.all(
+        orderIds.map((id) =>
+          fetch(`/api/orders/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "Processing", userId: user?.id }),
+          })
+        )
+      );
+
+      toast.success(`Folder ${result.loadId} created with ${orderIds.length} order(s).`);
+      setSelectedOrderIds([]);
+      await fetchAll();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setFolderBusy(false);
+    }
+  };
+
+  const openAssignLorryToFolder = (groupId: string) => {
+    setAssignFolderGroupId(groupId);
+    setPickedFolderLorry("");
+    setAssignFolderOpen(true);
+  };
+
+  const handleConfirmAssignLorryToFolder = async () => {
+    if (!pickedFolderLorry) { toast.error("Please select a lorry."); return; }
+    setAssignFolderBusy(true);
+    try {
+      const res = await fetch(`/api/loading-groups/${assignFolderGroupId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lorryNumber: pickedFolderLorry }),
+      });
+      if (!res.ok) throw new Error("Failed to assign lorry");
+
+      toast.success(`Folder assigned to ${pickedFolderLorry}.`);
+      setAssignFolderOpen(false);
+      await fetchAll();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setAssignFolderBusy(false);
+    }
+  };
+
   const handleRemoveOrder = async (groupId: string, order: LorryOrder) => {
     if (order.status === "Checking" || order.status === "Loading" || order.status === "Dispatched" || order.status === "Delivered") {
       toast.error(`Cannot remove order while it is ${order.status}. This can only be changed in the Loading section.`);
@@ -288,14 +360,30 @@ export default function DistributionApprovedOrdersPage() {
                   Approved Orders ({unassignedOrders.length})
                 </h2>
                 {selectedOrderIds.length > 0 && (
-                  <Button
-                    size="sm"
-                    className="h-8 text-xs gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white animate-in fade-in zoom-in duration-200"
-                    onClick={() => openAssign(selectedOrderIds)}
-                  >
-                    <Truck className="h-3.5 w-3.5" />
-                    Assign Selected ({selectedOrderIds.length})
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs gap-1.5 border-slate-300 animate-in fade-in zoom-in duration-200"
+                      disabled={folderBusy}
+                      onClick={() => handleCreateFolder(selectedOrderIds)}
+                    >
+                      {folderBusy ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <FolderPlus className="h-3.5 w-3.5" />
+                      )}
+                      Create Folder ({selectedOrderIds.length})
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="h-8 text-xs gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white animate-in fade-in zoom-in duration-200"
+                      onClick={() => openAssign(selectedOrderIds)}
+                    >
+                      <Truck className="h-3.5 w-3.5" />
+                      Assign Selected ({selectedOrderIds.length})
+                    </Button>
+                  </div>
                 )}
               </div>
 
@@ -543,6 +631,91 @@ export default function DistributionApprovedOrdersPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Folders (groups not yet assigned to a lorry) */}
+          <Card className="border-0 sm:border shadow-none sm:shadow-sm bg-transparent sm:bg-card">
+            <CardHeader className="px-0 sm:px-4 pb-2 pt-4">
+              <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+                Folders ({folderGroups.length})
+              </h2>
+            </CardHeader>
+            <CardContent className="px-0 sm:px-4 pt-0 space-y-3">
+              {folderGroups.length === 0 ? (
+                <div className="rounded-xl border-2 border-dashed border-slate-200 py-8 flex flex-col items-center justify-center gap-2 text-muted-foreground bg-slate-50">
+                  <Folder className="h-8 w-8 opacity-20" />
+                  <p className="text-xs">No folders yet</p>
+                </div>
+              ) : (
+                folderGroups.map((group) => {
+                  const expanded = expandedGroups.has(group.id);
+                  const orderCount = group.orders.length;
+
+                  return (
+                    <div key={group.id} className="rounded-xl border bg-card shadow-sm overflow-hidden">
+                      <div className="px-4 py-3 flex items-center justify-between gap-2 bg-linear-to-r from-indigo-600 to-indigo-500 text-white">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Folder className="h-4 w-4 shrink-0 text-white" />
+                          <span className="font-bold text-sm truncate">{group.loadId}</span>
+                        </div>
+                        <Badge className="text-xs shrink-0 border bg-white/20 text-white border-white/30">
+                          {orderCount} orders
+                        </Badge>
+                      </div>
+
+                      <div className="px-4 py-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-muted-foreground font-medium">
+                            LKR {group.totalAmount.toLocaleString()}
+                          </span>
+                          <button
+                            onClick={() => toggleExpand(group.id)}
+                            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                            {expanded ? "Hide" : "Show"}
+                          </button>
+                        </div>
+
+                        {expanded && (
+                          <div className="space-y-1.5 pt-1 border-t">
+                            {group.orders.map((o) => (
+                              <div key={o.id} className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                  <div className="min-w-0">
+                                    <p className="font-mono text-xs font-semibold truncate text-indigo-700">{o.invoiceNo}</p>
+                                    <p className="text-xs text-muted-foreground truncate">{o.shopName}</p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <span className="text-xs font-medium">{o.totalAmount.toLocaleString()}</span>
+                                  <button
+                                    onClick={() => handleRemoveOrder(group.id, o)}
+                                    className="text-red-400 hover:text-red-600 transition-colors"
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="w-full h-8 text-xs gap-1.5 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                          onClick={() => openAssignLorryToFolder(group.id)}
+                        >
+                          <Truck className="h-3.5 w-3.5" /> Assign Lorry
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
 
@@ -600,6 +773,70 @@ export default function DistributionApprovedOrdersPage() {
               className="bg-teal-600 hover:bg-teal-700 text-white"
             >
               {assignBusy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Assign Lorry
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Assign Lorry to Folder Dialog */}
+      <Dialog open={assignFolderOpen} onOpenChange={setAssignFolderOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Truck className="h-5 w-5 text-indigo-600" />
+              Assign Lorry to Folder
+            </DialogTitle>
+            <DialogDescription>
+              This folder will move to the Lorries panel once a lorry is assigned.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 max-h-72 overflow-y-auto">
+            {lorries.map((lorry) => {
+              const group = groupByLorry[lorry.name];
+              const taken = !!group && group.orders.length > 0;
+              const isSelected = pickedFolderLorry === lorry.name;
+              return (
+                <button
+                  key={lorry.id}
+                  disabled={taken}
+                  onClick={() => setPickedFolderLorry(lorry.name)}
+                  className={`w-full text-left rounded-xl border p-3 transition-all ${
+                    taken
+                      ? "border-slate-100 bg-slate-50 opacity-60 cursor-not-allowed"
+                      : isSelected
+                      ? "border-indigo-500 bg-indigo-50 ring-1 ring-indigo-400"
+                      : "border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Truck className={`h-4 w-4 shrink-0 ${isSelected ? "text-indigo-600" : "text-slate-400"}`} />
+                      <span className={`font-semibold text-sm ${isSelected ? "text-indigo-700" : "text-slate-700"}`}>
+                        {lorry.name}
+                      </span>
+                    </div>
+                    {taken && (
+                      <Badge className="bg-slate-100 text-slate-500 border-slate-200 border text-xs">
+                        <PackageCheck className="h-3 w-3 mr-1" />
+                        already has a load
+                      </Badge>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignFolderOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleConfirmAssignLorryToFolder}
+              disabled={assignFolderBusy || !pickedFolderLorry}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white"
+            >
+              {assignFolderBusy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Assign Lorry
             </Button>
           </DialogFooter>

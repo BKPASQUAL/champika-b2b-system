@@ -36,7 +36,8 @@
       "Bash(curl -s \"http://localhost:3000/api/invoices?businessId=a3ca43f3-06d4-4871-852c-3a40cfdbf023\" -o \"C:/Users/USER/AppData/Local/Temp/claude/c--Projects-champika-b2b-system/f921e2c8-f38a-475e-b4cc-fe70275dda0d/scratchpad/retail_invoices.json\")",
       "Bash(node -e ' *)",
       "Bash(npx tsc *)",
-      "Bash(grep \"reports/sales\" /tmp_tsc2.txt)"
+      "Bash(grep \"reports/sales\" /tmp_tsc2.txt)",
+      "Bash(node scratch/check-rpc.js)"
     ],
     "additionalDirectories": [
       "c:\\Projects\\champika-b2b-system\\app\\api\\payments\\[id]",

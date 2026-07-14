@@ -37,6 +37,7 @@ import {
   Printer,
   RefreshCw,
   PackageCheck,
+  Folder,
 } from "lucide-react";
 import {
   Table,
@@ -140,13 +141,16 @@ export default function DistributionCheckingOrdersPage() {
     return m;
   }, [groups]);
 
-  const lorryNumbers = useMemo(() => {
-    const seen = new Set<string>();
+  const groupKeys = useMemo(() => {
+    const seen = new Map<string, LorryGroup>();
     for (const o of orders) {
-      const ln = lorryMap[o.id]?.lorryNumber;
-      if (ln) seen.add(ln);
+      const g = lorryMap[o.id];
+      if (g) {
+        const key = g.lorryNumber || g.loadId;
+        if (!seen.has(key)) seen.set(key, g);
+      }
     }
-    return [...seen].sort();
+    return [...seen.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [orders, lorryMap]);
 
   const setFilter = (val: string) => {
@@ -157,7 +161,11 @@ export default function DistributionCheckingOrdersPage() {
   const filteredOrders = useMemo(() => {
     const q = searchQuery.toLowerCase();
     return orders.filter((order) => {
-      if (lorryFilter !== "all" && lorryMap[order.id]?.lorryNumber !== lorryFilter) return false;
+      if (lorryFilter !== "all") {
+        const g = lorryMap[order.id];
+        const key = g ? g.lorryNumber || g.loadId : null;
+        if (key !== lorryFilter) return false;
+      }
       return (
         !q ||
         (order.invoiceNo && order.invoiceNo.toLowerCase().includes(q)) ||
@@ -334,7 +342,7 @@ export default function DistributionCheckingOrdersPage() {
             </Button>
           </div>
 
-          {lorryNumbers.length > 0 && (
+          {groupKeys.length > 0 && (
             <div className="flex items-center gap-1.5 flex-wrap">
               <button
                 onClick={() => setFilter("all")}
@@ -346,18 +354,18 @@ export default function DistributionCheckingOrdersPage() {
               >
                 All
               </button>
-              {lorryNumbers.map((ln) => (
+              {groupKeys.map(([key, g]) => (
                 <button
-                  key={ln}
-                  onClick={() => setFilter(lorryFilter === ln ? "all" : ln)}
+                  key={key}
+                  onClick={() => setFilter(lorryFilter === key ? "all" : key)}
                   className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-all ${
-                    lorryFilter === ln
+                    lorryFilter === key
                       ? "bg-teal-600 text-white border-teal-600"
                       : "bg-white text-teal-700 border-teal-200 hover:border-teal-400 hover:bg-teal-50"
                   }`}
                 >
-                  <Truck className="h-3 w-3" />
-                  {ln}
+                  {g.lorryNumber ? <Truck className="h-3 w-3" /> : <Folder className="h-3 w-3" />}
+                  {key}
                 </button>
               ))}
             </div>
@@ -423,8 +431,14 @@ export default function DistributionCheckingOrdersPage() {
                             </div>
                             {lorryGroup && (
                               <div className="flex items-center gap-1 mt-1">
-                                <Truck className="h-3 w-3 text-teal-600" />
-                                <span className="text-xs font-medium text-teal-700">{lorryGroup.lorryNumber}</span>
+                                {lorryGroup.lorryNumber ? (
+                                  <Truck className="h-3 w-3 text-teal-600" />
+                                ) : (
+                                  <Folder className="h-3 w-3 text-indigo-600" />
+                                )}
+                                <span className={`text-xs font-medium ${lorryGroup.lorryNumber ? "text-teal-700" : "text-indigo-700"}`}>
+                                  {lorryGroup.lorryNumber || lorryGroup.loadId}
+                                </span>
                               </div>
                             )}
                           </div>
@@ -485,7 +499,7 @@ export default function DistributionCheckingOrdersPage() {
                   <TableHead className="w-[100px]">Date</TableHead>
                   <TableHead>Invoice No</TableHead>
                   <TableHead>Customer / Shop</TableHead>
-                  <TableHead>Lorry</TableHead>
+                  <TableHead>Lorry / Folder</TableHead>
                   <TableHead>Sales Rep</TableHead>
                   <TableHead className="text-right">Items</TableHead>
                   <TableHead className="text-right">Total Amount</TableHead>
@@ -540,8 +554,14 @@ export default function DistributionCheckingOrdersPage() {
                         <TableCell>
                           {lorryGroup ? (
                             <div className="flex items-center gap-1.5">
-                              <Truck className="h-3.5 w-3.5 text-teal-600 shrink-0" />
-                              <span className="text-xs font-semibold text-teal-700">{lorryGroup.lorryNumber}</span>
+                              {lorryGroup.lorryNumber ? (
+                                <Truck className="h-3.5 w-3.5 text-teal-600 shrink-0" />
+                              ) : (
+                                <Folder className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+                              )}
+                              <span className={`text-xs font-semibold ${lorryGroup.lorryNumber ? "text-teal-700" : "text-indigo-700"}`}>
+                                {lorryGroup.lorryNumber || lorryGroup.loadId}
+                              </span>
                             </div>
                           ) : (
                             <span className="text-xs text-muted-foreground">—</span>

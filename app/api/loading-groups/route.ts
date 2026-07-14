@@ -143,9 +143,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { lorryNumber, driverId, helperName, orderIds, businessId } = body;
 
-    if (!lorryNumber || !orderIds?.length) {
+    if (!orderIds?.length) {
       return NextResponse.json(
-        { error: "lorryNumber and orderIds are required" },
+        { error: "orderIds are required" },
         { status: 400 }
       );
     }
@@ -161,7 +161,7 @@ export async function POST(request: NextRequest) {
       .from("loading_sheets")
       .insert({
         load_id: loadIdStr,
-        lorry_number: lorryNumber,
+        lorry_number: lorryNumber || null,
         driver_id: driverId || null,
         helper_name: helperName || null,
         loading_date: new Date().toISOString().split("T")[0],
