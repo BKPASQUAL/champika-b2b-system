@@ -451,9 +451,7 @@ export function ChequeManagementPage({
   const [businessId, setBusinessId] = useState<string | null>(defaultBusinessId ?? null);
 
   useEffect(() => {
-    if (!defaultBusinessId) return;   // admin — no context override
-    const user = getUserBusinessContext();
-    setBusinessId(user?.businessId ?? defaultBusinessId);
+    setBusinessId(defaultBusinessId ?? null);
   }, [defaultBusinessId]);
 
   const paymentsUrl = businessId

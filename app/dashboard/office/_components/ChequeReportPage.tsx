@@ -2,7 +2,6 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
-import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -155,9 +154,7 @@ export function ChequeReportPage({
 
   const [businessId, setBusinessId] = useState<string | null>(defaultBusinessId ?? null);
   useEffect(() => {
-    if (!defaultBusinessId) return;
-    const user = getUserBusinessContext();
-    setBusinessId(user?.businessId ?? defaultBusinessId);
+    setBusinessId(defaultBusinessId ?? null);
   }, [defaultBusinessId]);
 
   const paymentsUrl = businessId
