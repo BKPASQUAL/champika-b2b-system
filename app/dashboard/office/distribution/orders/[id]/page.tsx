@@ -731,7 +731,7 @@ export default function ViewOrderPage({
                   <ArrowRightLeft className="w-4 h-4 mr-2" /> Move Stage
                 </Button>
               )}
-              {order.status === "Loading" && !isCancelPending && (
+              {["Processing", "Checking", "Loading"].includes(order.status) && !isCancelPending && (
                 <Button
                   variant="outline"
                   size="sm"

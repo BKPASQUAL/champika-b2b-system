@@ -22,12 +22,14 @@ import {
   Trash2,
   FileText,
   Printer,
+  XCircle,
 } from "lucide-react";
 import { printOrder } from "@/app/lib/order-html";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Card,
   CardContent,
@@ -55,6 +57,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -117,6 +127,10 @@ export default function ProcessOrderPage({
     title: "",
     description: "",
   });
+
+  // --- Cancellation Request State ---
+  const [showCancelRequestDialog, setShowCancelRequestDialog] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
 
   const fetchOrder = async () => {
     try {
@@ -285,6 +299,43 @@ export default function ProcessOrderPage({
     }
   };
 
+  const cancelRequestReason = order?.notes
+    ? order.notes.match(/\[CANCEL_REQUEST:\s*(.*?)\]/)?.[1]
+    : null;
+  const isCancelPending = !!cancelRequestReason;
+
+  const handleRequestCancel = async () => {
+    if (!cancelReason.trim()) {
+      toast.error("Please provide a reason for cancellation");
+      return;
+    }
+    setProcessing(true);
+    try {
+      const user = getUserBusinessContext();
+      const res = await fetch(`/api/orders/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "request_cancel",
+          reason: cancelReason,
+          userId: user?.id || currentUser?.id,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to request cancellation");
+
+      toast.success("Cancellation request submitted successfully");
+      setShowCancelRequestDialog(false);
+      setCancelReason("");
+      fetchOrder();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to request cancellation");
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center py-16">
@@ -322,6 +373,18 @@ export default function ProcessOrderPage({
             <Printer className="w-4 h-4 sm:mr-2" />
             <span className="hidden sm:inline">Print</span>
           </Button>
+          {!isCancelPending && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="shrink-0 bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 hover:text-orange-800"
+              onClick={() => setShowCancelRequestDialog(true)}
+              disabled={processing}
+            >
+              <XCircle className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">Request Cancellation</span>
+            </Button>
+          )}
           <div className="grid grid-cols-4 gap-1 sm:gap-3 bg-slate-50 px-2 py-2 sm:p-3 rounded-lg border border-slate-100 flex-1 min-w-0">
             <div className="flex items-center gap-1 sm:gap-2 min-w-0">
               <div className="hidden sm:flex p-1.5 bg-white rounded-md border shadow-sm text-slate-500 shrink-0">
@@ -362,6 +425,18 @@ export default function ProcessOrderPage({
           </div>
         </div>
       </div>
+
+      {isCancelPending && (
+        <div className="mt-4 flex items-start gap-3 bg-amber-50 border border-amber-300 rounded-lg p-4 text-amber-800 shadow-sm">
+          <AlertTriangle className="h-5 w-5 shrink-0 text-amber-500 mt-0.5" />
+          <div>
+            <h4 className="font-semibold text-amber-900">Cancellation request pending Admin approval</h4>
+            <p className="text-sm text-amber-800 mt-1">
+              <strong>Reason:</strong> {cancelRequestReason}
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3 mt-4">
         {/* --- LEFT COLUMN: Picking List --- */}
@@ -701,7 +776,7 @@ export default function ProcessOrderPage({
                 size="lg"
                 className="w-full h-12 text-base font-semibold shadow-lg"
                 onClick={handleCompleteProcessing}
-                disabled={processing || isEditing}
+                disabled={processing || isEditing || isCancelPending}
               >
                 {processing ? (
                   <Loader2 className="w-5 h-5 mr-2 animate-spin" />
@@ -786,13 +861,60 @@ export default function ProcessOrderPage({
             size="lg"
             className="w-full h-11 font-semibold"
             onClick={handleCompleteProcessing}
-            disabled={processing}
+            disabled={processing || isCancelPending}
           >
             {processing ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <CheckCircle2 className="w-5 h-5 mr-2" />}
             Complete Packing
           </Button>
         )}
       </div>
+
+      {/* --- Request Cancellation Dialog --- */}
+      <Dialog open={showCancelRequestDialog} onOpenChange={(open) => { setShowCancelRequestDialog(open); if (!open) setCancelReason(""); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-orange-600">
+              <XCircle className="h-5 w-5" />
+              Request Cancellation for Order #{order.orderId}
+            </DialogTitle>
+            <DialogDescription>
+              Please provide a reason for requesting order/invoice cancellation. An admin must accept this request before the cancellation is finalized.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2 space-y-2">
+            <Label htmlFor="cancel-reason">Reason for Cancellation</Label>
+            <textarea
+              id="cancel-reason"
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              placeholder="e.g., Customer requested changes, delivery details incorrect..."
+              className="w-full min-h-[100px] border border-slate-200 rounded-md p-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent resize-none"
+              required
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => { setShowCancelRequestDialog(false); setCancelReason(""); }}
+              disabled={processing}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleRequestCancel}
+              disabled={processing || !cancelReason.trim()}
+              className="bg-orange-600 hover:bg-orange-700 text-white"
+            >
+              {processing ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <XCircle className="w-4 h-4 mr-2" />
+              )}
+              Submit Request
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

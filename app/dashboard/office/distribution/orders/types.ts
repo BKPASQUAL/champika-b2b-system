@@ -26,6 +26,7 @@ export interface Order {
   status: OrderStatus;
   lockedBy?: string | null;
   lockedAt?: string | null;
+  notes?: string | null;
 }
 
 export type SortField =

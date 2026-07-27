@@ -48,9 +48,12 @@ export async function GET(request: NextRequest) {
       )
       .order(dbSortColumn, { ascending });
 
-    // Apply Status Filter if provided
+    // Apply Status Filter if provided (comma-separated list of statuses supported)
     if (status) {
-      query = query.filter("status::text", "eq", status);
+      const statuses = status.split(",").map((s) => s.trim()).filter(Boolean);
+      query = statuses.length > 1
+        ? query.in("status", statuses)
+        : query.filter("status::text", "eq", statuses[0]);
     }
 
     // Apply Business Filter if provided

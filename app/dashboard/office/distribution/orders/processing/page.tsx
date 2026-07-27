@@ -114,7 +114,11 @@ export default function DistributionProcessingOrdersPage() {
         fetch("/api/loading-groups"),
         fetch("/api/settings/categories?type=lorry"),
       ]);
-      if (ordersRes.ok) setOrders(await ordersRes.json());
+      if (ordersRes.ok) {
+        const fetchedOrders: Order[] = await ordersRes.json();
+        // Hide orders with a pending cancellation request - they're awaiting Admin approval
+        setOrders(fetchedOrders.filter((o) => !o.notes?.includes("[CANCEL_REQUEST:")));
+      }
       if (groupsRes.ok) setGroups(await groupsRes.json());
       if (lorryRes.ok) setLorries(await lorryRes.json());
     } catch {

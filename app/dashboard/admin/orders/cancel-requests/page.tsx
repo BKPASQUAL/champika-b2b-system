@@ -60,12 +60,12 @@ export default function CancelRequestsPage() {
   const [processing, setProcessing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Fetch orders in Loading status
+  // Fetch orders in Processing, Checking, or Loading status
   const {
     data: orders = [],
     loading,
     refetch: refetchOrders,
-  } = useCachedFetch<Order[]>("/api/orders?status=Loading", [], () =>
+  } = useCachedFetch<Order[]>("/api/orders?status=Processing,Checking,Loading", [], () =>
     toast.error("Failed to load orders")
   );
 

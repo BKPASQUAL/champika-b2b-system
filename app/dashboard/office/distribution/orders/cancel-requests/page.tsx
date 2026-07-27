@@ -61,13 +61,13 @@ export default function DistributionCancelRequestsPage() {
   const [processing, setProcessing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Fetch orders in Loading status for distribution business
+  // Fetch orders in Processing, Checking, or Loading status for distribution business
   const {
     data: orders = [],
     loading,
     refetch: refetchOrders,
   } = useCachedFetch<Order[]>(
-    `/api/orders?status=Loading&businessId=${distributionBusinessId}`,
+    `/api/orders?status=Processing,Checking,Loading&businessId=${distributionBusinessId}`,
     [],
     () => toast.error("Failed to load orders")
   );

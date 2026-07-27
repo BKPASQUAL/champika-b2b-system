@@ -456,9 +456,9 @@ export async function PATCH(
         return NextResponse.json({ error: "Order not found" }, { status: 404 });
       }
 
-      if (order.status !== "Loading") {
+      if (!["Processing", "Checking", "Loading"].includes(order.status)) {
         return NextResponse.json(
-          { error: `Cancellation can only be requested in the Loading stage. Current status is: ${order.status}` },
+          { error: `Cancellation can only be requested during Processing, Checking, or Loading. Current status is: ${order.status}` },
           { status: 400 }
         );
       }
