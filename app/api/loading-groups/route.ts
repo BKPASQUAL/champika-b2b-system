@@ -103,8 +103,27 @@ export async function GET(request: NextRequest) {
       (g: any) => (ordersMap[g.id] ?? []).some((o: any) => RE_DISPATCH_STATUSES.includes(o.status))
     );
 
+    // Folders (Draft sheets with no lorry assigned) that ended up with zero
+    // orders (all removed/reassigned) are stale - delete them outright.
+    const emptyFolderIds = (groups ?? [])
+      .filter((g: any) => !g.lorry_number && (ordersMap[g.id] ?? []).length === 0)
+      .map((g: any) => g.id);
+
+    if (emptyFolderIds.length > 0) {
+      await supabaseAdmin.from("loading_sheets").delete().in("id", emptyFolderIds);
+    }
+
+    // Remaining folders auto-disappear once every order inside them has been
+    // Delivered - there's nothing left to act on.
+    const activeDraftGroups = (groups ?? []).filter((g: any) => {
+      if (emptyFolderIds.includes(g.id)) return false;
+      if (g.lorry_number) return true;
+      const groupOrders = ordersMap[g.id] ?? [];
+      return !groupOrders.every((o: any) => o.status === "Delivered");
+    });
+
     const result = [
-      ...(groups ?? []).map((g: any) => ({
+      ...activeDraftGroups.map((g: any) => ({
         id: g.id,
         loadId: g.load_id,
         lorryNumber: g.lorry_number,

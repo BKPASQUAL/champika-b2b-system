@@ -15,6 +15,25 @@ export async function DELETE(
       .eq("load_id", id);
 
     if (error) throw error;
+
+    // If this was the last order in a lorry-less folder, delete the now-empty folder
+    const { data: sheet } = await supabaseAdmin
+      .from("loading_sheets")
+      .select("lorry_number")
+      .eq("id", id)
+      .single();
+
+    if (sheet && !sheet.lorry_number) {
+      const { count } = await supabaseAdmin
+        .from("orders")
+        .select("*", { count: "exact", head: true })
+        .eq("load_id", id);
+
+      if (!count) {
+        await supabaseAdmin.from("loading_sheets").delete().eq("id", id);
+      }
+    }
+
     return NextResponse.json({ message: "Order removed from group" });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
