@@ -125,6 +125,9 @@ export function InvoiceTable({
     ].includes(status);
   };
 
+  const canPrint = (status: string) =>
+    ["Loading", "In Transit", "Delivered"].includes(status);
+
   if (loading) {
     return (
       <div className="flex justify-center items-center py-16">
@@ -221,13 +224,21 @@ export function InvoiceTable({
                   variant="ghost"
                   size="icon-sm"
                   onClick={() => handleDownload(invoice.id)}
-                  disabled={downloadingId === invoice.id}
-                  title="Print Invoice"
+                  disabled={downloadingId === invoice.id || !canPrint(invoice.orderStatus)}
+                  title={
+                    canPrint(invoice.orderStatus)
+                      ? "Print Invoice"
+                      : "Printing is only available once the order reaches Loading, In Transit, or Delivered"
+                  }
                 >
                   {downloadingId === invoice.id ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
-                    <Printer className="w-4 h-4 text-muted-foreground" />
+                    <Printer
+                      className={`w-4 h-4 ${
+                        canPrint(invoice.orderStatus) ? "text-muted-foreground" : "opacity-30"
+                      }`}
+                    />
                   )}
                 </Button>
               </div>
@@ -381,13 +392,21 @@ export function InvoiceTable({
                         variant="ghost"
                         size="icon-sm"
                         onClick={() => handleDownload(invoice.id)}
-                        disabled={downloadingId === invoice.id}
-                        title="Print Invoice"
+                        disabled={downloadingId === invoice.id || !canPrint(invoice.orderStatus)}
+                        title={
+                          canPrint(invoice.orderStatus)
+                            ? "Print Invoice"
+                            : "Printing is only available once the order reaches Loading, In Transit, or Delivered"
+                        }
                       >
                         {downloadingId === invoice.id ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
                         ) : (
-                          <Printer className="w-4 h-4 text-muted-foreground" />
+                          <Printer
+                            className={`w-4 h-4 ${
+                              canPrint(invoice.orderStatus) ? "text-muted-foreground" : "opacity-30"
+                            }`}
+                          />
                         )}
                       </Button>
                     </div>

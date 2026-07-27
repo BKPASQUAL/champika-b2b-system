@@ -731,6 +731,12 @@ export default function ViewOrderPage({
                 variant="outline"
                 size="sm"
                 onClick={() => printOrder(order, items)}
+                disabled={!["Loading", "In Transit", "Delivered"].includes(order.status)}
+                title={
+                  !["Loading", "In Transit", "Delivered"].includes(order.status)
+                    ? "Printing is only available once the order reaches Loading, In Transit, or Delivered"
+                    : undefined
+                }
               >
                 <Printer className="w-4 h-4 mr-2" /> Print
               </Button>

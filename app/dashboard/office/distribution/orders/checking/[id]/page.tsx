@@ -382,7 +382,18 @@ export default function CheckOrderPage({
 
         {/* Header Actions & Stats */}
         <div className="flex items-center gap-2 lg:w-auto">
-          <Button variant="outline" size="sm" className="shrink-0" onClick={() => printOrder(order, items)}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={() => printOrder(order, items)}
+            disabled={!["Loading", "In Transit", "Delivered"].includes(order.status)}
+            title={
+              !["Loading", "In Transit", "Delivered"].includes(order.status)
+                ? "Printing is only available once the order reaches Loading, In Transit, or Delivered"
+                : undefined
+            }
+          >
             <Printer className="w-4 h-4 sm:mr-2" />
             <span className="hidden sm:inline">Print</span>
           </Button>
