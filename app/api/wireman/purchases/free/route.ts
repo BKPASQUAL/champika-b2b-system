@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { BUSINESS_PO_PREFIXES } from "@/app/config/business-constants";
 
 export const dynamic = "force-dynamic";
 
@@ -11,12 +12,23 @@ export async function POST(request: NextRequest) {
     const businessId = "094b649e-be59-4e2b-b709-7e36ad1ef280";
 
     // --- 1. Get Main Warehouse Location (Like Standard Purchase) ---
-    let { data: location } = await supabaseAdmin
-      .from("locations")
-      .select("id")
-      .is("business_id", null)
-      .eq("name", "Main Warehouse")
-      .maybeSingle();
+    const [locationResult, lastPurchaseResult] = await Promise.all([
+      supabaseAdmin
+        .from("locations")
+        .select("id")
+        .is("business_id", null)
+        .eq("name", "Main Warehouse")
+        .maybeSingle(),
+      supabaseAdmin
+        .from("purchases")
+        .select("purchase_id")
+        .eq("business_id", businessId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+
+    let location = locationResult.data;
 
     // Create Main Warehouse if it doesn't exist
     if (!location) {
@@ -29,11 +41,20 @@ export async function POST(request: NextRequest) {
       location = newLocation;
     }
 
+    // Generate a proper sequential PO number, same scheme as regular purchases
+    const businessPrefix = BUSINESS_PO_PREFIXES[businessId] || "X";
+    let nextId = 1001;
+    if (lastPurchaseResult.data?.purchase_id) {
+      const match = lastPurchaseResult.data.purchase_id.match(/(\d+)$/);
+      if (match) nextId = parseInt(match[1]) + 1;
+    }
+    const purchaseId = `${businessPrefix}PO-${nextId}`;
+
     // --- 2. Create Purchase Record ---
     const { data: purchase, error: purchaseError } = await supabaseAdmin
       .from("purchases")
       .insert({
-        purchase_id: invoiceNo,
+        purchase_id: purchaseId,
         invoice_no: invoiceNo,
         supplier_id: supplierId,
         business_id: businessId,
