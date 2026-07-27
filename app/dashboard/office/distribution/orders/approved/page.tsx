@@ -89,6 +89,11 @@ export default function DistributionApprovedOrdersPage() {
   const [pickedFolderLorry, setPickedFolderLorry] = useState<string>("");
   const [assignFolderBusy, setAssignFolderBusy] = useState(false);
 
+  const [addToFolderOpen, setAddToFolderOpen] = useState(false);
+  const [addToFolderOrderIds, setAddToFolderOrderIds] = useState<string[]>([]);
+  const [pickedFolderId, setPickedFolderId] = useState<string>("");
+  const [addToFolderBusy, setAddToFolderBusy] = useState(false);
+
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
@@ -246,6 +251,45 @@ export default function DistributionApprovedOrdersPage() {
     }
   };
 
+  const openAddToFolder = (orderIds: string[]) => {
+    setAddToFolderOrderIds(orderIds);
+    setPickedFolderId("");
+    setAddToFolderOpen(true);
+  };
+
+  const handleConfirmAddToFolder = async () => {
+    if (!pickedFolderId) { toast.error("Please select a folder."); return; }
+    setAddToFolderBusy(true);
+    try {
+      const res = await fetch(`/api/loading-groups/${pickedFolderId}/orders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderIds: addToFolderOrderIds }),
+      });
+      if (!res.ok) throw new Error("Failed to add orders to folder");
+
+      const user = getUserBusinessContext();
+      await Promise.all(
+        addToFolderOrderIds.map((id) =>
+          fetch(`/api/orders/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "Processing", userId: user?.id }),
+          })
+        )
+      );
+
+      toast.success(`${addToFolderOrderIds.length} order(s) added to folder.`);
+      setSelectedOrderIds([]);
+      setAddToFolderOpen(false);
+      await fetchAll();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setAddToFolderBusy(false);
+    }
+  };
+
   const openAssignLorryToFolder = (groupId: string) => {
     setAssignFolderGroupId(groupId);
     setPickedFolderLorry("");
@@ -375,6 +419,22 @@ export default function DistributionApprovedOrdersPage() {
                       )}
                       Create Folder ({selectedOrderIds.length})
                     </Button>
+                    {folderGroups.length > 0 && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 text-xs gap-1.5 border-indigo-300 text-indigo-700 hover:bg-indigo-50 animate-in fade-in zoom-in duration-200"
+                        disabled={addToFolderBusy}
+                        onClick={() => openAddToFolder(selectedOrderIds)}
+                      >
+                        {addToFolderBusy ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Folder className="h-3.5 w-3.5" />
+                        )}
+                        Add to Folder ({selectedOrderIds.length})
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       className="h-8 text-xs gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white animate-in fade-in zoom-in duration-200"
@@ -838,6 +898,63 @@ export default function DistributionApprovedOrdersPage() {
             >
               {assignFolderBusy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Assign Lorry
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Orders to Existing Folder Dialog */}
+      <Dialog open={addToFolderOpen} onOpenChange={setAddToFolderOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Folder className="h-5 w-5 text-indigo-600" />
+              Add to Existing Folder
+            </DialogTitle>
+            <DialogDescription>
+              Add the selected invoice(s) into one of your existing folders.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 max-h-72 overflow-y-auto">
+            {folderGroups.map((group) => {
+              const isSelected = pickedFolderId === group.id;
+              return (
+                <button
+                  key={group.id}
+                  onClick={() => setPickedFolderId(group.id)}
+                  className={`w-full text-left rounded-xl border p-3 transition-all ${
+                    isSelected
+                      ? "border-indigo-500 bg-indigo-50 ring-1 ring-indigo-400"
+                      : "border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Folder className={`h-4 w-4 shrink-0 ${isSelected ? "text-indigo-600" : "text-slate-400"}`} />
+                      <span className={`font-semibold text-sm ${isSelected ? "text-indigo-700" : "text-slate-700"}`}>
+                        {group.loadId}
+                      </span>
+                    </div>
+                    <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200 border text-xs">
+                      <PackageCheck className="h-3 w-3 mr-1" />
+                      {group.orders.length} orders
+                    </Badge>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddToFolderOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleConfirmAddToFolder}
+              disabled={addToFolderBusy || !pickedFolderId}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white"
+            >
+              {addToFolderBusy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Add to Folder
             </Button>
           </DialogFooter>
         </DialogContent>
