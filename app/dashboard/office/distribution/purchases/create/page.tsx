@@ -217,6 +217,55 @@ export default function CreateDistributionPurchasePage() {
     loadData();
   }, []);
 
+  // Prefill from localStorage for prediction flow
+  useEffect(() => {
+    if (loadingData || products.length === 0 || suppliers.length === 0) return;
+
+    const prefillDataStr = localStorage.getItem("champika_prefill_purchase");
+    if (prefillDataStr) {
+      try {
+        const prefillData = JSON.parse(prefillDataStr);
+        if (prefillData.supplierId) {
+          const foundSup = suppliers.find((s) => s.id === prefillData.supplierId);
+          if (foundSup) {
+            setSupplierId(foundSup.id);
+          }
+        }
+        if (prefillData.items && Array.isArray(prefillData.items)) {
+          const mappedItems = prefillData.items.map((item: any, index: number) => {
+            const prod = products.find((p) => p.id === item.productId);
+            const qty = Number(item.quantity) || 0;
+            const costPrice = Number(item.costPrice) || Number(prod?.costPrice) || 0;
+            const sellingPrice = Number(item.sellingPrice) || Number(prod?.sellingPrice) || 0;
+            const mrp = Number(item.mrp) || Number(prod?.mrp) || 0;
+
+            return {
+              id: `prefill-${index}-${Date.now()}`,
+              productId: item.productId,
+              sku: item.sku || prod?.sku || "",
+              productName: item.name || prod?.name || "Unknown Product",
+              quantity: qty,
+              freeQuantity: 0,
+              unit: item.unit || prod?.unitOfMeasure || "Pcs",
+              mrp: mrp,
+              sellingPrice: sellingPrice,
+              unitPrice: costPrice,
+              discountPercent: 0,
+              discountAmount: 0,
+              finalPrice: costPrice,
+              total: costPrice * qty,
+            };
+          });
+          setItems(mappedItems);
+          toast.success(`Prefilled ${mappedItems.length} items from prediction report!`);
+        }
+        localStorage.removeItem("champika_prefill_purchase");
+      } catch (err) {
+        console.error("Failed to parse prefill purchase data:", err);
+      }
+    }
+  }, [loadingData, products, suppliers]);
+
   // --- Close Dropdown on Click Outside ---
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {

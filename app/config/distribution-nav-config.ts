@@ -145,6 +145,12 @@ export const distributionNavItems: DistNavSection[] = [
         href: "/dashboard/office/distribution/suppliers/payments",
         icon: Banknote,
       },
+      {
+        name: "Order Prediction",
+        href: "/dashboard/office/distribution/suppliers/prediction",
+        icon: TrendingUp,
+        description: "Forecast demand and predict supplier orders",
+      },
     ],
   },
   {
