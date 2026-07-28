@@ -169,28 +169,59 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { count } = await supabaseAdmin
+    // Derive the next number from the highest existing load_id suffix for this
+    // year - a plain row count breaks once rows can be deleted (empty folders
+    // are auto-removed), since count can drop below a number already in use.
+    const year = new Date().getFullYear();
+    const prefix = `LOAD-${year}-`;
+
+    const { data: existingSheets } = await supabaseAdmin
       .from("loading_sheets")
-      .select("*", { count: "exact", head: true });
+      .select("load_id")
+      .ilike("load_id", `${prefix}%`);
 
-    const nextId = (count || 0) + 1001;
-    const loadIdStr = `LOAD-${new Date().getFullYear()}-${nextId}`;
+    const maxSuffix = (existingSheets ?? []).reduce((max: number, s: any) => {
+      const n = parseInt(String(s.load_id).slice(prefix.length), 10);
+      return Number.isFinite(n) && n > max ? n : max;
+    }, 1000);
 
-    const { data: sheet, error: sheetErr } = await supabaseAdmin
-      .from("loading_sheets")
-      .insert({
-        load_id: loadIdStr,
-        lorry_number: lorryNumber || null,
-        driver_id: driverId || null,
-        helper_name: helperName || null,
-        loading_date: new Date().toISOString().split("T")[0],
-        status: "Draft",
-        ...(businessId ? { business_id: businessId } : {}),
-      })
-      .select()
-      .single();
+    let nextId = maxSuffix + 1;
+    let sheet: any = null;
+    let sheetErr: any = null;
 
-    if (sheetErr) throw sheetErr;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const loadIdStr = `${prefix}${nextId}`;
+      const res = await supabaseAdmin
+        .from("loading_sheets")
+        .insert({
+          load_id: loadIdStr,
+          lorry_number: lorryNumber || null,
+          driver_id: driverId || null,
+          helper_name: helperName || null,
+          loading_date: new Date().toISOString().split("T")[0],
+          status: "Draft",
+          ...(businessId ? { business_id: businessId } : {}),
+        })
+        .select()
+        .single();
+
+      if (!res.error) {
+        sheet = res.data;
+        sheetErr = null;
+        break;
+      }
+
+      if (res.error.code === "23505") {
+        nextId += 1;
+        sheetErr = res.error;
+        continue;
+      }
+
+      sheetErr = res.error;
+      break;
+    }
+
+    if (sheetErr || !sheet) throw sheetErr ?? new Error("Failed to create loading sheet");
 
     const { error: ordErr } = await supabaseAdmin
       .from("orders")
@@ -200,7 +231,7 @@ export async function POST(request: NextRequest) {
     if (ordErr) throw ordErr;
 
     return NextResponse.json(
-      { id: sheet.id, loadId: loadIdStr },
+      { id: sheet.id, loadId: sheet.load_id },
       { status: 201 }
     );
   } catch (error: any) {

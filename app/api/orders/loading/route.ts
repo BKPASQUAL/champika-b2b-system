@@ -89,29 +89,59 @@ export async function POST(request: NextRequest) {
     // Validate payload
     const val = createLoadSchema.parse(body);
 
-    // Generate Load ID
-    const { count } = await supabaseAdmin
+    // Generate Load ID - derive from the highest existing suffix for this year
+    // rather than a row count, since count can drop below a number already in
+    // use once loading_sheets rows can be deleted (empty folders auto-remove).
+    const year = new Date().getFullYear();
+    const prefix = `LOAD-${year}-`;
+
+    const { data: existingSheets } = await supabaseAdmin
       .from("loading_sheets")
-      .select("*", { count: "exact", head: true });
+      .select("load_id")
+      .ilike("load_id", `${prefix}%`);
 
-    const nextId = (count || 0) + 1001;
-    const loadIdStr = `LOAD-${new Date().getFullYear()}-${nextId}`;
+    const maxSuffix = (existingSheets ?? []).reduce((max: number, s: any) => {
+      const n = parseInt(String(s.load_id).slice(prefix.length), 10);
+      return Number.isFinite(n) && n > max ? n : max;
+    }, 1000);
 
-    // Insert Loading Sheet
-    const { data: loadData, error: loadError } = await supabaseAdmin
-      .from("loading_sheets")
-      .insert({
-        load_id: loadIdStr,
-        lorry_number: val.lorryNumber,
-        driver_id: val.driverId,
-        helper_name: val.helperName,
-        loading_date: val.date,
-        status: "In Transit",
-      })
-      .select()
-      .single();
+    let nextId = maxSuffix + 1;
+    let loadData: any = null;
+    let loadError: any = null;
 
-    if (loadError) throw loadError;
+    // Insert Loading Sheet (retry with the next number on a rare id collision)
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const loadIdStr = `${prefix}${nextId}`;
+      const res = await supabaseAdmin
+        .from("loading_sheets")
+        .insert({
+          load_id: loadIdStr,
+          lorry_number: val.lorryNumber,
+          driver_id: val.driverId,
+          helper_name: val.helperName,
+          loading_date: val.date,
+          status: "In Transit",
+        })
+        .select()
+        .single();
+
+      if (!res.error) {
+        loadData = res.data;
+        loadError = null;
+        break;
+      }
+
+      if (res.error.code === "23505") {
+        nextId += 1;
+        loadError = res.error;
+        continue;
+      }
+
+      loadError = res.error;
+      break;
+    }
+
+    if (loadError || !loadData) throw loadError ?? new Error("Failed to create loading sheet");
 
     // Fetch previous statuses & associated invoices before updating
     const { data: previousOrders } = await supabaseAdmin
@@ -164,7 +194,7 @@ export async function POST(request: NextRequest) {
               new_status: "In Transit",
             },
             changed_by: activeUserId,
-            change_reason: `Assigned to loading sheet ${loadIdStr} and status set to In Transit`,
+            change_reason: `Assigned to loading sheet ${loadData.load_id} and status set to In Transit`,
             changed_at: new Date().toISOString(),
           });
         }
@@ -172,7 +202,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { message: "Load sheet created successfully", loadId: loadIdStr },
+      { message: "Load sheet created successfully", loadId: loadData.load_id },
       { status: 201 }
     );
   } catch (error: any) {
