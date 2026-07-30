@@ -13,21 +13,6 @@ export async function GET(request: NextRequest) {
     const fromDate = searchParams.get("from") || firstDay;
     const toDate = searchParams.get("to") || lastDay;
 
-    // Calculate rolling 12 months start date
-    const rollingStart = new Date(now.getFullYear(), now.getMonth() - 11, 1);
-    const rollingStartStr = rollingStart.toISOString().split("T")[0]; // YYYY-MM-DD
-    const minFromDate = fromDate < rollingStartStr ? fromDate : rollingStartStr;
-
-    // Generate rolling 12 month keys in chronological order
-    const rollingMonths: string[] = [];
-    const tempDate = new Date(rollingStart);
-    while (tempDate <= now) {
-      const y = tempDate.getFullYear();
-      const m = String(tempDate.getMonth() + 1).padStart(2, '0');
-      rollingMonths.push(`${y}-${m}`);
-      tempDate.setMonth(tempDate.getMonth() + 1);
-    }
-
     const COUNTED_STATUSES = ["Delivered", "Completed"];
 
     // 1. All invoices in the period — revenue source (matches Sierra Agency page)
@@ -41,7 +26,7 @@ export async function GET(request: NextRequest) {
           rep:profiles!orders_sales_rep_id_fkey (id, full_name)
         )
       `)
-      .gte("order.order_date", minFromDate)
+      .gte("order.order_date", fromDate)
       .lte("order.order_date", toDate);
 
     if (allInvError) throw allInvError;
@@ -62,7 +47,7 @@ export async function GET(request: NextRequest) {
             rep:profiles!orders_sales_rep_id_fkey (id, full_name)
           )
         `)
-        .gte("order.order_date", minFromDate)
+        .gte("order.order_date", fromDate)
         .lte("order.order_date", toDate)
         .range(itemsStart, itemsStart + itemsLimit - 1);
 
@@ -71,30 +56,6 @@ export async function GET(request: NextRequest) {
       orderItems.push(...batch);
       if (batch.length < itemsLimit) break;
       itemsStart += itemsLimit;
-    }
-
-    // 2b. Purchase items in date range
-    const purchaseItems: any[] = [];
-    let purchasesStart = 0;
-    const purchasesLimit = 1000;
-    while (true) {
-      const { data: batch, error: purchasesError } = await supabaseAdmin
-        .from("purchase_items")
-        .select(`
-          id, quantity, free_quantity, total_cost,
-          purchase:purchases!inner (
-            id, purchase_id, purchase_date, status, business_id
-          )
-        `)
-        .gte("purchase.purchase_date", minFromDate.split("T")[0])
-        .lte("purchase.purchase_date", toDate.split("T")[0])
-        .range(purchasesStart, purchasesStart + purchasesLimit - 1);
-
-      if (purchasesError) throw purchasesError;
-      if (!batch || batch.length === 0) break;
-      purchaseItems.push(...batch);
-      if (batch.length < purchasesLimit) break;
-      purchasesStart += purchasesLimit;
     }
 
     type ProductEntry = {
@@ -136,23 +97,12 @@ export async function GET(request: NextRequest) {
       customerMap: Record<string, CustomerEntry>;
       repMap: Record<string, RepEntry>;
       invoiceList: InvoiceEntry[];
-      months: Record<string, { month: string; salesQty: number; salesAmount: number; purchaseQty: number; purchaseAmount: number }>;
     };
 
     const businessMap: Record<string, BusinessEntry> = {};
 
     const ensureBusiness = (bizId: string) => {
       if (!businessMap[bizId]) {
-        const months: Record<string, any> = {};
-        rollingMonths.forEach(m => {
-          months[m] = {
-            month: m,
-            salesQty: 0,
-            salesAmount: 0,
-            purchaseQty: 0,
-            purchaseAmount: 0
-          };
-        });
         businessMap[bizId] = {
           id: bizId,
           name: BUSINESS_NAMES[bizId as keyof typeof BUSINESS_NAMES] || "Unknown",
@@ -164,7 +114,6 @@ export async function GET(request: NextRequest) {
           totalFreeQty: 0,
           totalFreeCost: 0,
           productMap: {}, customerMap: {}, repMap: {}, invoiceList: [],
-          months
         };
       }
     };
@@ -172,8 +121,6 @@ export async function GET(request: NextRequest) {
     Object.values(BUSINESS_IDS).forEach((id) => ensureBusiness(id));
 
     // Pass 1 — invoices: build revenue, invoicedOrderIds, invoiceList, dueAmount
-    const allInvoicedOrderIds = new Set<string>();
-
     (allInvoices || []).forEach((inv: any) => {
       const order = inv.order;
       if (!order || !COUNTED_STATUSES.includes(order.status)) return;
@@ -181,8 +128,6 @@ export async function GET(request: NextRequest) {
       // Filter out inter-branch invoices
       const shopName = (order.customer?.shop_name || "").toLowerCase();
       if (shopName.includes("champika hardware")) return;
-
-      allInvoicedOrderIds.add(order.order_id);
 
       const bizId = order.business_id;
       if (!bizId) return;
@@ -192,47 +137,43 @@ export async function GET(request: NextRequest) {
 
       const amount = Number(inv.total_amount) || 0;
       const due = Number(inv.due_amount) || 0;
+
+      biz.totalRevenue += amount;
+      biz.invoicedOrderIds.add(order.order_id);
+
+      if (["Unpaid", "Partial", "Overdue"].includes(inv.status)) {
+        biz.dueAmount += due;
+      }
+
       const date = (order.order_date || order.created_at || "").split("T")[0];
+      biz.invoiceList.push({
+        invoiceId: inv.id,
+        orderId: order.order_id,
+        invoiceNo: inv.manual_invoice_no || inv.invoice_no || order.order_id,
+        customer: order.customer?.shop_name || "Unknown",
+        date,
+        amount,
+        due,
+        paymentStatus: inv.status || "Unpaid",
+      });
 
-      // KPIs and invoices tab: filter strictly by user's selected fromDate/toDate
-      const inSelectedRange = date >= fromDate.split("T")[0] && date <= toDate.split("T")[0];
-      if (inSelectedRange) {
-        biz.totalRevenue += amount;
-        biz.invoicedOrderIds.add(order.order_id);
-
-        if (["Unpaid", "Partial", "Overdue"].includes(inv.status)) {
-          biz.dueAmount += due;
-        }
-
-        biz.invoiceList.push({
-          invoiceId: inv.id,
-          orderId: order.order_id,
-          invoiceNo: inv.manual_invoice_no || inv.invoice_no || order.order_id,
-          customer: order.customer?.shop_name || "Unknown",
-          date,
-          amount,
-          due,
-          paymentStatus: inv.status || "Unpaid",
-        });
-
-        // Representatives aggregation in Pass 1
-        const repId = order.sales_rep_id || "direct";
-        const repName = order.rep?.full_name || "Direct Sales";
-        if (!biz.repMap[repId]) {
-          biz.repMap[repId] = {
-            id: repId,
-            name: repName,
-            revenue: 0,
-            cost: 0,
-            profit: 0,
-            dueAmount: 0,
-            invoiceCount: 0,
-          };
-        }
-        biz.repMap[repId].invoiceCount += 1;
-        if (["Unpaid", "Partial", "Overdue"].includes(inv.status)) {
-          biz.repMap[repId].dueAmount += due;
-        }
+      // Representatives aggregation in Pass 1
+      const repId = order.sales_rep_id || "direct";
+      const repName = order.rep?.full_name || "Direct Sales";
+      if (!biz.repMap[repId]) {
+        biz.repMap[repId] = {
+          id: repId,
+          name: repName,
+          revenue: 0,
+          cost: 0,
+          profit: 0,
+          dueAmount: 0,
+          invoiceCount: 0,
+        };
+      }
+      biz.repMap[repId].invoiceCount += 1;
+      if (["Unpaid", "Partial", "Overdue"].includes(inv.status)) {
+        biz.repMap[repId].dueAmount += due;
       }
     });
 
@@ -249,118 +190,79 @@ export async function GET(request: NextRequest) {
       const biz = businessMap[bizId];
 
       // Only count items whose order has an invoice
-      if (!allInvoicedOrderIds.has(order.order_id)) return;
+      if (!biz.invoicedOrderIds.has(order.order_id)) return;
 
       const qty = Number(item.quantity) || 0;
+      const freeQty = Number(item.free_quantity) || 0;
       const itemRevenue = Number(item.total_price) || 0;
       const cost = qty * (Number(item.actual_unit_cost) || 0);
-      const freeQty = Number(item.free_quantity) || 0;
       const freeCost = freeQty * (Number(item.actual_unit_cost) || 0);
       const pendingClaim = item.claim_status !== "Approved" ? freeCost : 0;
 
-      const orderDate = order.order_date || order.created_at || "";
-      const dateStr = orderDate.split("T")[0];
-      const monthKey = dateStr.slice(0, 7);
-
-      // Monthly sales accumulation (rolling 12 months)
-      if (biz.months[monthKey]) {
-        biz.months[monthKey].salesQty += qty;
-        biz.months[monthKey].salesAmount += itemRevenue;
+      const oid = order.order_id;
+      if (!orderProfitMap[oid]) {
+        orderProfitMap[oid] = { revenue: 0, cost: 0, freeQty: 0, freeCost: 0, pendingClaimCost: 0 };
       }
+      orderProfitMap[oid].revenue += itemRevenue;
+      orderProfitMap[oid].cost += cost;
+      orderProfitMap[oid].freeQty += freeQty;
+      orderProfitMap[oid].freeCost += freeCost;
+      orderProfitMap[oid].pendingClaimCost += pendingClaim;
 
-      // Rest of the aggregation: filter strictly by selected range
-      const inSelectedRange = dateStr >= fromDate.split("T")[0] && dateStr <= toDate.split("T")[0];
-      // Only count for detail maps if it matches the selected date range and is in invoicedOrderIds
-      if (inSelectedRange && biz.invoicedOrderIds.has(order.order_id)) {
-        const oid = order.order_id;
-        if (!orderProfitMap[oid]) {
-          orderProfitMap[oid] = { revenue: 0, cost: 0, freeQty: 0, freeCost: 0, pendingClaimCost: 0 };
-        }
-        orderProfitMap[oid].revenue += itemRevenue;
-        orderProfitMap[oid].cost += cost;
-        orderProfitMap[oid].freeQty += freeQty;
-        orderProfitMap[oid].freeCost += freeCost;
-        orderProfitMap[oid].pendingClaimCost += pendingClaim;
+      biz.totalCost += cost;
+      biz.totalUnits += qty;
+      biz.totalFreeQty += freeQty;
+      biz.totalFreeCost += freeCost;
+      biz.pendingClaimCost += pendingClaim;
 
-        biz.totalCost += cost;
-        biz.totalUnits += qty;
-        biz.totalFreeQty += freeQty;
-        biz.totalFreeCost += freeCost;
-        biz.pendingClaimCost += pendingClaim;
+      if (order.customer?.id) biz.customerCountSet.add(order.customer.id);
 
-        if (order.customer?.id) biz.customerCountSet.add(order.customer.id);
-
-        // Products
-        const pid = item.product?.id;
-        if (pid) {
-          if (!biz.productMap[pid]) {
-            biz.productMap[pid] = {
-              id: pid, name: item.product.name || "", sku: item.product.sku || "",
-              unitsSold: 0, revenue: 0, cost: 0, profit: 0,
-            };
-          }
-          biz.productMap[pid].unitsSold += qty;
-          biz.productMap[pid].revenue += itemRevenue;
-          biz.productMap[pid].cost += cost;
-          biz.productMap[pid].profit += itemRevenue - cost;
-        }
-
-        // Customers
-        const cId = order.customer?.id || "unknown";
-        const cName = order.customer?.shop_name || "Unknown";
-        if (!biz.customerMap[cId]) {
-          biz.customerMap[cId] = {
-            id: cId, name: cName, revenue: 0, cost: 0, profit: 0,
-            dueAmount: 0, orderSet: new Set(),
+      // Products
+      const pid = item.product?.id;
+      if (pid) {
+        if (!biz.productMap[pid]) {
+          biz.productMap[pid] = {
+            id: pid, name: item.product.name || "", sku: item.product.sku || "",
+            unitsSold: 0, revenue: 0, cost: 0, profit: 0,
           };
         }
-        biz.customerMap[cId].revenue += itemRevenue;
-        biz.customerMap[cId].cost += cost;
-        biz.customerMap[cId].profit += itemRevenue - cost;
-        biz.customerMap[cId].orderSet.add(order.order_id);
-
-        // Representatives aggregation in Pass 2
-        const repId = order.sales_rep_id || "direct";
-        const repName = order.rep?.full_name || "Direct Sales";
-        if (!biz.repMap[repId]) {
-          biz.repMap[repId] = {
-            id: repId,
-            name: repName,
-            revenue: 0,
-            cost: 0,
-            profit: 0,
-            dueAmount: 0,
-            invoiceCount: 0,
-          };
-        }
-        biz.repMap[repId].revenue += itemRevenue;
-        biz.repMap[repId].cost += cost;
-        biz.repMap[repId].profit += itemRevenue - cost;
+        biz.productMap[pid].unitsSold += qty;
+        biz.productMap[pid].revenue += itemRevenue;
+        biz.productMap[pid].cost += cost;
+        biz.productMap[pid].profit += itemRevenue - cost;
       }
-    });
 
-    // Pass 2b — Aggregate purchases
-    (purchaseItems || []).forEach((item: any) => {
-      const purchase = item.purchase;
-      if (!purchase || purchase.status === "Draft") return;
-      const bizId = purchase.business_id;
-      if (!bizId) return;
-
-      const qty = (Number(item.quantity) || 0) + (Number(item.free_quantity) || 0);
-      const amount = Number(item.total_cost) || 0;
-      const purchaseDate = purchase.purchase_date;
-      if (!purchaseDate) return;
-
-      const dateStr = purchaseDate.split("T")[0];
-      const monthKey = dateStr.slice(0, 7);
-
-      ensureBusiness(bizId);
-      const biz = businessMap[bizId];
-
-      if (biz.months[monthKey]) {
-        biz.months[monthKey].purchaseQty += qty;
-        biz.months[monthKey].purchaseAmount += amount;
+      // Customers
+      const cId = order.customer?.id || "unknown";
+      const cName = order.customer?.shop_name || "Unknown";
+      if (!biz.customerMap[cId]) {
+        biz.customerMap[cId] = {
+          id: cId, name: cName, revenue: 0, cost: 0, profit: 0,
+          dueAmount: 0, orderSet: new Set(),
+        };
       }
+      biz.customerMap[cId].revenue += itemRevenue;
+      biz.customerMap[cId].cost += cost;
+      biz.customerMap[cId].profit += itemRevenue - cost;
+      biz.customerMap[cId].orderSet.add(order.order_id);
+
+      // Representatives aggregation in Pass 2
+      const repId = order.sales_rep_id || "direct";
+      const repName = order.rep?.full_name || "Direct Sales";
+      if (!biz.repMap[repId]) {
+        biz.repMap[repId] = {
+          id: repId,
+          name: repName,
+          revenue: 0,
+          cost: 0,
+          profit: 0,
+          dueAmount: 0,
+          invoiceCount: 0,
+        };
+      }
+      biz.repMap[repId].revenue += itemRevenue;
+      biz.repMap[repId].cost += cost;
+      biz.repMap[repId].profit += itemRevenue - cost;
     });
 
     // Attach customer due amounts from invoice pass
@@ -429,16 +331,6 @@ export async function GET(request: NextRequest) {
         (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
       );
 
-      const monthList = Object.values(biz.months).map((m: any) => {
-        const [year, month] = m.month.split("-");
-        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-        const label = `${monthNames[parseInt(month) - 1]} ${year}`;
-        return {
-          ...m,
-          monthLabel: label
-        };
-      });
-
       return {
         id: biz.id,
         name: biz.name,
@@ -459,7 +351,6 @@ export async function GET(request: NextRequest) {
         customers,
         reps,
         invoices,
-        months: monthList,
       };
     }).sort((a, b) => b.totalRevenue - a.totalRevenue);
 
@@ -468,16 +359,6 @@ export async function GET(request: NextRequest) {
     const allCustomersMap: Record<string, any> = {};
     const allRepsMap: Record<string, any> = {};
     const allInvoicesList: any[] = [];
-    const overallMonthsMap: Record<string, any> = {};
-    rollingMonths.forEach(m => {
-      overallMonthsMap[m] = {
-        month: m,
-        salesQty: 0,
-        salesAmount: 0,
-        purchaseQty: 0,
-        purchaseAmount: 0
-      };
-    });
 
     businesses.forEach((biz) => {
       biz.products.forEach((p: any) => {
@@ -513,26 +394,6 @@ export async function GET(request: NextRequest) {
         }
       });
       allInvoicesList.push(...biz.invoices);
-
-      biz.months.forEach((m: any) => {
-        const key = m.month;
-        if (overallMonthsMap[key]) {
-          overallMonthsMap[key].salesQty += m.salesQty;
-          overallMonthsMap[key].salesAmount += m.salesAmount;
-          overallMonthsMap[key].purchaseQty += m.purchaseQty;
-          overallMonthsMap[key].purchaseAmount += m.purchaseAmount;
-        }
-      });
-    });
-
-    const overallMonths = Object.values(overallMonthsMap).map((m: any) => {
-      const [year, month] = m.month.split("-");
-      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-      const label = `${monthNames[parseInt(month) - 1]} ${year}`;
-      return {
-        ...m,
-        monthLabel: label
-      };
     });
 
     const overallProducts = Object.values(allProductsMap)
@@ -577,7 +438,6 @@ export async function GET(request: NextRequest) {
       customers: overallCustomers,
       reps: overallReps,
       invoices: overallInvoices,
-      months: overallMonths,
     };
 
     return NextResponse.json({ overall, businesses });
