@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -57,6 +56,7 @@ import {
   FileText,
   ShoppingBag,
   Menu,
+  Building2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { TablePagination } from "@/components/ui/TablePagination";
@@ -171,6 +171,7 @@ export default function SupplierAnalyticsPage() {
   const [selectedSupplier, setSelectedSupplier] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [detailTab, setDetailTab] = useState<"products" | "customers" | "invoices" | "businesses">("products");
 
   const PER_PAGE = 10;
   const [productPage, setProductPage] = useState(1);
@@ -240,6 +241,15 @@ export default function SupplierAnalyticsPage() {
       inv.invoiceNo.toLowerCase().includes(q) ||
       inv.customer.toLowerCase().includes(q) ||
       inv.date.includes(q)
+    );
+  }, [current, search]);
+
+  const filteredBusinesses = useMemo(() => {
+    if (!current) return [];
+    const q = search.toLowerCase();
+    if (!q) return current.businesses || [];
+    return (current.businesses || []).filter((b: any) =>
+      b.name.toLowerCase().includes(q)
     );
   }, [current, search]);
 
@@ -568,43 +578,63 @@ export default function SupplierAnalyticsPage() {
               </Card>
             </div>
 
-            {/* Tabs: Products | Customers | Invoices */}
+            {/* Detail Tabs: Products / Customers / Invoices / Businesses */}
             <Card>
-              <CardHeader className="pb-3 px-3 md:px-6">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                  <CardTitle className="text-sm truncate">{current.name} — Details</CardTitle>
-                  <div className="relative w-full sm:w-60">
-                    <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
+              <CardHeader className="pb-0 px-4 pt-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex gap-1 flex-wrap">
+                    <Button
+                      variant={detailTab === "products" ? "default" : "ghost"}
+                      size="sm"
+                      className="h-8 text-xs"
+                      onClick={() => { setDetailTab("products"); setSearch(""); }}
+                    >
+                      <ShoppingBag className="h-3 w-3 mr-1" />
+                      Products ({filteredProducts.length})
+                    </Button>
+                    <Button
+                      variant={detailTab === "customers" ? "default" : "ghost"}
+                      size="sm"
+                      className="h-8 text-xs"
+                      onClick={() => { setDetailTab("customers"); setSearch(""); }}
+                    >
+                      <Users className="h-3 w-3 mr-1" />
+                      Customers ({filteredCustomers.length})
+                    </Button>
+                    <Button
+                      variant={detailTab === "invoices" ? "default" : "ghost"}
+                      size="sm"
+                      className="h-8 text-xs"
+                      onClick={() => { setDetailTab("invoices"); setSearch(""); }}
+                    >
+                      <FileText className="h-3 w-3 mr-1" />
+                      Invoices ({filteredInvoices.length})
+                    </Button>
+                    <Button
+                      variant={detailTab === "businesses" ? "default" : "ghost"}
+                      size="sm"
+                      className="h-8 text-xs"
+                      onClick={() => { setDetailTab("businesses"); setSearch(""); }}
+                    >
+                      <Building2 className="h-3 w-3 mr-1" />
+                      Businesses ({filteredBusinesses.length})
+                    </Button>
+                  </div>
+                  <div className="relative w-full sm:w-44">
+                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
                     <Input
                       placeholder="Search…"
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
-                      className="pl-7 h-8 text-xs"
+                      className="h-8 text-xs pl-7"
                     />
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="p-0">
-                <Tabs defaultValue="products">
-                  <div className="overflow-x-auto">
-                    <TabsList className="mx-3 md:mx-4 mb-2 flex w-max min-w-full sm:w-auto">
-                      <TabsTrigger value="products" className="text-xs gap-1 whitespace-nowrap">
-                        <ShoppingBag className="h-3 w-3" />
-                        Products ({filteredProducts.length})
-                      </TabsTrigger>
-                      <TabsTrigger value="customers" className="text-xs gap-1 whitespace-nowrap">
-                        <Users className="h-3 w-3" />
-                        Customers ({filteredCustomers.length})
-                      </TabsTrigger>
-                      <TabsTrigger value="invoices" className="text-xs gap-1 whitespace-nowrap">
-                        <FileText className="h-3 w-3" />
-                        Invoices ({filteredInvoices.length})
-                      </TabsTrigger>
-                    </TabsList>
-                  </div>
-
-                  {/* Products Tab */}
-                  <TabsContent value="products" className="mt-0">
+              <CardContent className="px-0 pt-3">
+                {/* Products Tab */}
+                {detailTab === "products" && (
+                  <>
                     {/* Mobile card list */}
                     <div className="sm:hidden divide-y">
                       {pagedProducts.length === 0 ? (
@@ -746,10 +776,12 @@ export default function SupplierAnalyticsPage() {
                       totalItems={filteredProducts.length}
                       itemsPerPage={PER_PAGE}
                     />
-                  </TabsContent>
+                  </>
+                )}
 
-                  {/* Customers Tab */}
-                  <TabsContent value="customers" className="mt-0">
+                {/* Customers Tab */}
+                {detailTab === "customers" && (
+                  <>
                     {/* Mobile card list */}
                     <div className="sm:hidden divide-y">
                       {pagedCustomers.length === 0 ? (
@@ -837,10 +869,12 @@ export default function SupplierAnalyticsPage() {
                       totalItems={filteredCustomers.length}
                       itemsPerPage={PER_PAGE}
                     />
-                  </TabsContent>
+                  </>
+                )}
 
-                  {/* Invoices Tab */}
-                  <TabsContent value="invoices" className="mt-0">
+                {/* Invoices Tab */}
+                {detailTab === "invoices" && (
+                  <>
                     {/* Mobile card list */}
                     <div className="sm:hidden divide-y">
                       {pagedInvoices.length === 0 ? (
@@ -941,8 +975,108 @@ export default function SupplierAnalyticsPage() {
                       totalItems={filteredInvoices.length}
                       itemsPerPage={PER_PAGE}
                     />
-                  </TabsContent>
-                </Tabs>
+                  </>
+                )}
+
+                {/* Businesses Tab */}
+                {detailTab === "businesses" && (
+                  <>
+                    {/* Mobile card list */}
+                    <div className="sm:hidden divide-y">
+                      {filteredBusinesses.length === 0 ? (
+                        <p className="text-center py-10 text-sm text-muted-foreground">No businesses found.</p>
+                      ) : (
+                        filteredBusinesses.map((b: any, i: number) => (
+                          <div key={b.id || i} className="p-3 space-y-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-xs text-muted-foreground shrink-0">{i + 1}.</span>
+                                <Badge variant="outline" className={`text-xs border ${getBusinessBadge(b.name)}`}>
+                                  {b.name || "—"}
+                                </Badge>
+                              </div>
+                              <Badge variant={b.margin >= 20 ? "default" : "secondary"} className="text-[10px] shrink-0">
+                                {b.margin.toFixed(1)}%
+                              </Badge>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div>
+                                <p className="text-[10px] text-muted-foreground">Invoices</p>
+                                <p className="font-medium">{b.invoiceCount}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-muted-foreground">Revenue</p>
+                                <p className="font-medium">LKR {fmt(b.revenue)}</p>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div>
+                                <p className="text-[10px] text-muted-foreground">Cost</p>
+                                <p className="font-medium text-muted-foreground">LKR {fmt(b.cost)}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-muted-foreground">Profit</p>
+                                <p className={`font-semibold ${b.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                                  LKR {fmt(b.profit)}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    {/* Desktop table */}
+                    <div className="hidden sm:block overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-8">#</TableHead>
+                            <TableHead>Business Unit</TableHead>
+                            <TableHead className="text-right">Invoices</TableHead>
+                            <TableHead className="text-right">Revenue</TableHead>
+                            <TableHead className="text-right">Cost</TableHead>
+                            <TableHead className="text-right">Profit</TableHead>
+                            <TableHead className="text-right">Margin</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredBusinesses.map((b: any, i: number) => (
+                            <TableRow key={b.id || i} className="text-xs hover:bg-muted/30">
+                              <TableCell className="text-muted-foreground">{i + 1}</TableCell>
+                              <TableCell className="font-medium">
+                                <Badge variant="outline" className={`text-xs font-semibold border ${getBusinessBadge(b.name)}`}>
+                                  {b.name || "—"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right">{b.invoiceCount}</TableCell>
+                              <TableCell className="text-right text-blue-700 font-semibold">
+                                LKR {fmt(b.revenue)}
+                              </TableCell>
+                              <TableCell className="text-right text-muted-foreground">
+                                LKR {fmt(b.cost)}
+                              </TableCell>
+                              <TableCell className={`text-right font-semibold ${b.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                                LKR {fmt(b.profit)}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Badge variant={b.margin >= 20 ? "default" : "secondary"} className="text-[10px]">
+                                  {b.margin.toFixed(1)}%
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          {filteredBusinesses.length === 0 && (
+                            <TableRow>
+                              <TableCell colSpan={7} className="text-center h-20 text-muted-foreground text-sm">
+                                No business data found.
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           </>

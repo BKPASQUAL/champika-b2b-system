@@ -224,6 +224,33 @@ export async function GET(request: NextRequest) {
         margin: inv.revenue > 0 ? (inv.profit / inv.revenue) * 100 : 0,
       })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
+      // Aggregate business breakdown for this supplier
+      const businessMapForSupplier: Record<string, any> = {};
+      invoiceList.forEach((inv) => {
+        const bId = inv.businessId || "unknown";
+        const bName = inv.businessName || "Unknown Business";
+        
+        if (!businessMapForSupplier[bId]) {
+          businessMapForSupplier[bId] = {
+            id: bId,
+            name: bName,
+            revenue: 0,
+            cost: 0,
+            profit: 0,
+            invoiceCount: 0
+          };
+        }
+        businessMapForSupplier[bId].revenue += inv.revenue;
+        businessMapForSupplier[bId].cost += inv.cost;
+        businessMapForSupplier[bId].profit += inv.profit;
+        businessMapForSupplier[bId].invoiceCount += 1;
+      });
+
+      const businessList = Object.values(businessMapForSupplier).map((b: any) => ({
+        ...b,
+        margin: b.revenue > 0 ? (b.profit / b.revenue) * 100 : 0
+      })).sort((a, b) => b.revenue - a.revenue);
+
       const totalStock = Object.values(data.products).reduce((s, p) => s + p.stockQty, 0);
       const totalStockCostValue = Object.values(data.products).reduce((s, p) => s + p.stockCostValue, 0);
       const totalStockSellingValue = Object.values(data.products).reduce((s, p) => s + p.stockSellingValue, 0);
@@ -257,6 +284,7 @@ export async function GET(request: NextRequest) {
         products: productList,
         customers: customerList,
         invoices: invoiceList,
+        businesses: businessList,
       };
     }).sort((a, b) => b.totalRevenue - a.totalRevenue);
 
