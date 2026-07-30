@@ -171,7 +171,7 @@ export default function SupplierAnalyticsPage() {
   const [selectedSupplier, setSelectedSupplier] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [detailTab, setDetailTab] = useState<"products" | "customers" | "invoices" | "businesses">("products");
+  const [detailTab, setDetailTab] = useState<"products" | "customers" | "invoices" | "businesses" | "months">("products");
 
   const PER_PAGE = 10;
   const [productPage, setProductPage] = useState(1);
@@ -619,16 +619,27 @@ export default function SupplierAnalyticsPage() {
                       <Building2 className="h-3 w-3 mr-1" />
                       Businesses ({filteredBusinesses.length})
                     </Button>
+                    <Button
+                      variant={detailTab === "months" ? "default" : "ghost"}
+                      size="sm"
+                      className="h-8 text-xs"
+                      onClick={() => { setDetailTab("months"); setSearch(""); }}
+                    >
+                      <Calendar className="h-3 w-3 mr-1" />
+                      Monthly Breakdown
+                    </Button>
                   </div>
-                  <div className="relative w-full sm:w-44">
-                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
-                    <Input
-                      placeholder="Search…"
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      className="h-8 text-xs pl-7"
-                    />
-                  </div>
+                  {detailTab !== "months" && (
+                    <div className="relative w-full sm:w-44">
+                      <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                      <Input
+                        placeholder="Search…"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="h-8 text-xs pl-7"
+                      />
+                    </div>
+                  )}
                 </div>
               </CardHeader>
               <CardContent className="px-0 pt-3">
@@ -1076,6 +1087,69 @@ export default function SupplierAnalyticsPage() {
                       </Table>
                     </div>
                   </>
+                )}
+
+                {/* Months Tab */}
+                {detailTab === "months" && (
+                  <div className="p-4 space-y-6">
+                    {/* Visual Chart Comparison */}
+                    <div className="h-72 bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                      <h3 className="text-xs font-semibold text-slate-500 mb-4 flex items-center gap-1.5">
+                        <TrendingUp className="h-4 w-4 text-blue-500" /> Rolling 12-Month Sales vs Purchases (LKR)
+                      </h3>
+                      <ResponsiveContainer width="100%" height="90%">
+                        <BarChart data={current.months || []}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                          <XAxis dataKey="monthLabel" tick={{ fontSize: 9, fill: "#64748b" }} tickLine={false} />
+                          <YAxis tick={{ fontSize: 9, fill: "#64748b" }} tickLine={false} tickFormatter={(v) => `LKR ${(v / 1000).toFixed(0)}k`} />
+                          <Tooltip 
+                            formatter={(v: any) => `LKR ${fmt(v)}`}
+                            contentStyle={{ backgroundColor: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "11px" }}
+                          />
+                          <Legend wrapperStyle={{ fontSize: 9, paddingTop: "10px" }} />
+                          <Bar dataKey="salesAmount" fill="#3b82f6" name="Sales Amount" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="purchaseAmount" fill="#10b981" name="Purchase Amount" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    {/* Table View */}
+                    <div className="overflow-x-auto border rounded-xl bg-white shadow-sm">
+                      <Table>
+                        <TableHeader className="bg-slate-50/50">
+                          <TableRow>
+                            <TableHead className="font-semibold text-slate-800 text-xs py-3 px-4">Month</TableHead>
+                            <TableHead className="text-right font-semibold text-slate-800 text-xs py-3 px-4">Sales Amount</TableHead>
+                            <TableHead className="text-right font-semibold text-slate-800 text-xs py-3 px-4">Purchase Amount</TableHead>
+                            <TableHead className="text-right font-semibold text-slate-800 text-xs py-3 px-4">Difference</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {(current.months || []).length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={4} className="text-center py-10 text-xs text-muted-foreground">
+                                No monthly trend data found.
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            current.months.map((m: any) => {
+                              const diff = m.salesAmount - m.purchaseAmount;
+                              return (
+                                <TableRow key={m.month} className="hover:bg-slate-50/30 text-xs border-b border-slate-100 last:border-0">
+                                  <TableCell className="font-semibold text-slate-700 py-3 px-4">{m.monthLabel}</TableCell>
+                                  <TableCell className="text-right font-mono text-blue-600 font-bold py-3 px-4">LKR {fmt(m.salesAmount)}</TableCell>
+                                  <TableCell className="text-right font-mono text-emerald-600 font-bold py-3 px-4">LKR {fmt(m.purchaseAmount)}</TableCell>
+                                  <TableCell className={`text-right font-mono font-bold py-3 px-4 ${diff >= 0 ? "text-green-600" : "text-rose-600"}`}>
+                                    {diff < 0 ? "-" : "+"}LKR {fmt(Math.abs(diff))}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
                 )}
               </CardContent>
             </Card>

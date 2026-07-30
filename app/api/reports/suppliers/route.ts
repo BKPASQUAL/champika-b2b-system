@@ -13,6 +13,21 @@ export async function GET(request: NextRequest) {
     const fromDate = searchParams.get("from") || firstDay;
     const toDate = searchParams.get("to") || lastDay;
 
+    // Calculate rolling 12 months start date
+    const rollingStart = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+    const rollingStartStr = rollingStart.toISOString().split("T")[0]; // YYYY-MM-DD
+    const minFromDate = fromDate < rollingStartStr ? fromDate : rollingStartStr;
+
+    // Generate rolling 12 month keys in chronological order
+    const rollingMonths: string[] = [];
+    const tempDate = new Date(rollingStart);
+    while (tempDate <= now) {
+      const y = tempDate.getFullYear();
+      const m = String(tempDate.getMonth() + 1).padStart(2, '0');
+      rollingMonths.push(`${y}-${m}`);
+      tempDate.setMonth(tempDate.getMonth() + 1);
+    }
+
     // 1. All products with current stock — range-based pagination to prevent truncation
     const products: any[] = [];
     let productsStart = 0;
@@ -49,7 +64,7 @@ export async function GET(request: NextRequest) {
             invoices (invoice_no, manual_invoice_no)
           )
         `)
-        .gte("order.order_date", fromDate)
+        .gte("order.order_date", minFromDate)
         .lte("order.order_date", toDate)
         .range(itemsStart, itemsStart + itemsLimit - 1);
 
@@ -58,6 +73,31 @@ export async function GET(request: NextRequest) {
       orderItems.push(...batch);
       if (batch.length < itemsLimit) break;
       itemsStart += itemsLimit;
+    }
+
+    // 2b. Purchase items in date range
+    const purchaseItems: any[] = [];
+    let purchasesStart = 0;
+    const purchasesLimit = 1000;
+    while (true) {
+      const { data: batch, error: purchasesError } = await supabaseAdmin
+        .from("purchase_items")
+        .select(`
+          id, quantity, free_quantity, total_cost,
+          product:products (id, name, sku, supplier_name),
+          purchase:purchases!inner (
+            id, purchase_id, purchase_date, status, supplier_id, business_id
+          )
+        `)
+        .gte("purchase.purchase_date", minFromDate.split("T")[0])
+        .lte("purchase.purchase_date", toDate.split("T")[0])
+        .range(purchasesStart, purchasesStart + purchasesLimit - 1);
+
+      if (purchasesError) throw purchasesError;
+      if (!batch || batch.length === 0) break;
+      purchaseItems.push(...batch);
+      if (batch.length < purchasesLimit) break;
+      purchasesStart += purchasesLimit;
     }
 
     // 3. Supplier → products stock map
@@ -80,12 +120,25 @@ export async function GET(request: NextRequest) {
       products: Record<string, ProductEntry>;
       customers: Record<string, CustomerEntry>;
       invoices: Record<string, InvoiceEntry>;
+      months: Record<string, { month: string; salesQty: number; salesAmount: number; purchaseQty: number; purchaseAmount: number }>;
     };
 
     const supplierMap: Record<string, SupplierEntry> = {};
 
     const ensureSupplier = (name: string) => {
-      if (!supplierMap[name]) supplierMap[name] = { products: {}, customers: {}, invoices: {} };
+      if (!supplierMap[name]) {
+        const months: Record<string, any> = {};
+        rollingMonths.forEach(m => {
+          months[m] = {
+            month: m,
+            salesQty: 0,
+            salesAmount: 0,
+            purchaseQty: 0,
+            purchaseAmount: 0
+          };
+        });
+        supplierMap[name] = { products: {}, customers: {}, invoices: {}, months };
+      }
     };
 
     // Seed product stock data
@@ -123,6 +176,24 @@ export async function GET(request: NextRequest) {
       const order = item.order;
       if (!pid || !order) return;
 
+      const orderDate = order.order_date || order.created_at || "";
+      const dateStr = orderDate.split("T")[0];
+      const monthKey = dateStr.slice(0, 7);
+
+      ensureSupplier(supplier);
+
+      // Monthly sales accumulation (rolling 12 months)
+      if (supplierMap[supplier].months[monthKey]) {
+        const qty = Number(item.quantity) || 0;
+        const revenue = Number(item.total_price) || 0;
+        supplierMap[supplier].months[monthKey].salesQty += qty;
+        supplierMap[supplier].months[monthKey].salesAmount += revenue;
+      }
+
+      // KPIs and detail tables: filter strictly by selected date range
+      const inSelectedRange = orderDate >= fromDate && orderDate <= toDate;
+      if (!inSelectedRange) return;
+
       // Skip ghost/duplicate orders without successfully created invoices
       const invoices = order.invoices;
       const hasInvoice = Array.isArray(invoices) ? invoices.length > 0 : !!invoices;
@@ -133,8 +204,6 @@ export async function GET(request: NextRequest) {
       const revenue = Number(item.total_price) || 0;
       const cost = qty * (Number(item.actual_unit_cost) || 0);
       const profit = revenue - cost;
-
-      ensureSupplier(supplier);
 
       // Product aggregation
       if (!supplierMap[supplier].products[pid]) {
@@ -170,7 +239,7 @@ export async function GET(request: NextRequest) {
       const oid = order.order_id;
       const inv = Array.isArray(order.invoices) ? order.invoices[0] : order.invoices;
       const invoiceNo = inv?.manual_invoice_no || inv?.invoice_no || oid;
-      const date = (order.order_date || order.created_at || "").split("T")[0];
+      const date = dateStr;
       const businessId = order.business_id;
       const businessName = businessId ? (BUSINESS_NAMES[businessId as keyof typeof BUSINESS_NAMES] || "Unknown Business") : "Unknown Business";
 
@@ -188,6 +257,27 @@ export async function GET(request: NextRequest) {
       // Count unique orders per customer
       if (!supplierMap[supplier].customers[cId].orders) {
         supplierMap[supplier].customers[cId].orders = 0;
+      }
+    });
+
+    // 4b. Aggregate purchases
+    (purchaseItems || []).forEach((item: any) => {
+      const purchase = item.purchase;
+      if (!purchase || purchase.status === "Draft") return;
+      const supplier = item.product?.supplier_name || "Unknown Supplier";
+      const qty = (Number(item.quantity) || 0) + (Number(item.free_quantity) || 0);
+      const amount = Number(item.total_cost) || 0;
+      const purchaseDate = purchase.purchase_date;
+      if (!purchaseDate) return;
+
+      const dateStr = purchaseDate.split("T")[0];
+      const monthKey = dateStr.slice(0, 7);
+
+      ensureSupplier(supplier);
+
+      if (supplierMap[supplier].months[monthKey]) {
+        supplierMap[supplier].months[monthKey].purchaseQty += qty;
+        supplierMap[supplier].months[monthKey].purchaseAmount += amount;
       }
     });
 
@@ -264,6 +354,16 @@ export async function GET(request: NextRequest) {
       const netProfit = totalProfit - pendingClaimCost;
       const netMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
 
+      const monthList = Object.values(data.months).map((m: any) => {
+        const [year, month] = m.month.split("-");
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const label = `${monthNames[parseInt(month) - 1]} ${year}`;
+        return {
+          ...m,
+          monthLabel: label
+        };
+      });
+
       return {
         name,
         productCount: productList.length,
@@ -285,6 +385,7 @@ export async function GET(request: NextRequest) {
         customers: customerList,
         invoices: invoiceList,
         businesses: businessList,
+        months: monthList,
       };
     }).sort((a, b) => b.totalRevenue - a.totalRevenue);
 
