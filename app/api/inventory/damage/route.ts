@@ -19,12 +19,13 @@ export async function GET(request: NextRequest) {
         reason, 
         created_at, 
         business_id,
+        customer_id,
+        customers (shop_name),
         products (name, sku),
         locations (name),
         profiles (full_name)
       `
       )
-      .is("customer_id", null) // Filter for internal damages only
       .eq("return_type", "Damage")
       .order("created_at", { ascending: false });
 

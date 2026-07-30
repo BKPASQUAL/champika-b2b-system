@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, use } from "react";
+import React, { useState, useEffect, use, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Card,
@@ -39,6 +39,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Separator } from "@/components/ui/separator";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   ArrowLeft,
   Loader2,
   CheckCircle2,
@@ -53,6 +58,7 @@ import {
   Package,
   TrendingDown,
   ClipboardList,
+  Undo2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -60,6 +66,19 @@ import { ExpenseFormDialog } from "@/app/dashboard/admin/expenses/_components/Ex
 import { ExpenseFormData } from "@/app/dashboard/admin/expenses/types";
 import { cn } from "@/lib/utils";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
+
+interface ReconcileReturnItem {
+  id: string;
+  returnNumber: string;
+  productId: string;
+  productName: string;
+  sku: string;
+  quantity: number;
+  returnType: "Good" | "Damage";
+  price: number;
+  totalValue: number;
+  createdAt: string;
+}
 
 interface OrderItem {
   id: string;
@@ -71,6 +90,7 @@ interface OrderItem {
   originalAmount: number;
   status: string;
   paymentStatus: string;
+  returns?: ReconcileReturnItem[];
 }
 
 interface ExpenseItem {
@@ -184,6 +204,7 @@ export default function OfficeReconcileLoadPage({
             originalAmount,
             status: o.status,
             paymentStatus: "Credit",
+            returns: o.returns || [],
           };
         })
       );
@@ -219,6 +240,26 @@ export default function OfficeReconcileLoadPage({
       ...prev,
       [orderId]: { ...prev[orderId], [field]: value },
     }));
+  };
+
+  const handleToggleReturnType = async (returnId: string, currentType: "Good" | "Damage") => {
+    if (loadDetails?.status === "Completed") {
+      toast.info("Load is completed. Returns cannot be modified.");
+      return;
+    }
+    const newType = currentType === "Good" ? "Damage" : "Good";
+    try {
+      const res = await fetch(`/api/inventory/returns/${returnId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ return_type: newType }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success(`Marked item as ${newType}`);
+      fetchData();
+    } catch {
+      toast.error("Failed to update return type");
+    }
   };
 
   const handleEditInvoice = (invoiceId: string | null) => {
@@ -293,6 +334,15 @@ export default function OfficeReconcileLoadPage({
   // Derived values
   const isCompleted = loadDetails?.status === "Completed";
   const isUserMissing = !currentUser?.id;
+
+  // Consolidate returns
+  const allReturns = useMemo(() => {
+    const list: any[] = [];
+    orders.forEach((o) => {
+      if (o.returns) list.push(...o.returns);
+    });
+    return list;
+  }, [orders]);
   const totalDispatchedValue = orders.reduce((sum, o) => sum + o.originalAmount, 0);
   const totalFinalValue = orders.reduce((sum, o) => sum + o.currentAmount, 0);
   const totalExpenses = loadExpenses.reduce((sum, e) => sum + e.amount, 0);
@@ -491,8 +541,8 @@ export default function OfficeReconcileLoadPage({
         {/* ── Main Two-Column Layout ── */}
         <div className="grid gap-5 md:grid-cols-3">
 
-          {/* Left: Expenses */}
-          <div className="md:col-span-1">
+          {/* Left: Expenses & Returns Summary */}
+          <div className="md:col-span-1 space-y-5">
             <Card className="md:sticky md:top-4">
               <CardHeader className="flex flex-row items-center justify-between pb-3">
                 <div>
@@ -568,6 +618,89 @@ export default function OfficeReconcileLoadPage({
                 )}
               </CardContent>
             </Card>
+
+            {/* Lorry Returns Summary Card */}
+            {allReturns.length > 0 && (
+              <Card className="md:sticky md:top-[380px]">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center justify-between text-orange-950 font-bold">
+                    <span className="flex items-center gap-1.5">
+                      <Undo2 className="w-5 h-5 text-orange-600" />
+                      Lorry Returns Summary
+                    </span>
+                    <Badge variant="outline" className="text-xs bg-orange-50 text-orange-700 border-orange-200">
+                      Shop by Shop
+                    </Badge>
+                  </CardTitle>
+                  <CardDescription className="text-xs mt-0.5">
+                    Click Good / Damage buttons to set item condition before closing load
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
+                    {orders
+                      .filter((o) => o.returns && o.returns.length > 0)
+                      .map((o) => (
+                        <div key={o.id} className="p-3 rounded-xl border border-orange-100 bg-orange-50/20 space-y-2">
+                          <div className="flex justify-between items-center border-b border-orange-100 pb-1.5">
+                            <div>
+                              <span className="font-bold text-xs text-slate-900 block truncate max-w-[180px]">
+                                {o.customer}
+                              </span>
+                              <span className="text-[10px] text-orange-700 font-mono">
+                                Invoice: {o.invoiceNo}
+                              </span>
+                            </div>
+                            <span className="text-xs font-bold font-mono text-orange-700">
+                              LKR {o.returns?.reduce((s, r) => s + r.totalValue, 0).toLocaleString()}
+                            </span>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            {o.returns?.map((ret) => {
+                              const isGood = ret.returnType === "Good";
+                              return (
+                                <div key={ret.id} className="p-2 rounded-lg bg-white border border-slate-200 flex items-center justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <p className="font-semibold text-xs text-slate-800 truncate" title={ret.productName}>
+                                      {ret.productName}
+                                    </p>
+                                    <p className="text-[10px] text-muted-foreground font-mono">
+                                      {ret.sku} · {ret.quantity} Pcs · LKR {ret.totalValue.toLocaleString()}
+                                    </p>
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={isCompleted}
+                                    onClick={() => handleToggleReturnType(ret.id, ret.returnType)}
+                                    className={cn(
+                                      "h-6 text-[10px] font-bold px-2 shrink-0 transition-all",
+                                      isGood
+                                        ? "bg-green-50 text-green-700 border-green-300 hover:bg-green-100"
+                                        : "bg-red-50 text-red-700 border-red-300 hover:bg-red-100"
+                                    )}
+                                    title="Click to toggle condition"
+                                  >
+                                    {isGood ? "✓ Good Stock" : "⚠ Damage"}
+                                  </Button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                  <Separator className="opacity-50" />
+                  <div className="flex justify-between items-center px-1">
+                    <span className="text-sm font-semibold">Total Returns Value</span>
+                    <span className="font-mono text-sm font-bold text-orange-600">
+                      LKR {allReturns.reduce((sum: number, r: any) => sum + r.totalValue, 0).toLocaleString()}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Right: Order Table */}
@@ -588,6 +721,7 @@ export default function OfficeReconcileLoadPage({
                       <TableRow className="bg-slate-50 hover:bg-slate-50">
                         <TableHead className="pl-4 min-w-[110px]">Invoice</TableHead>
                         <TableHead className="min-w-[130px]">Customer</TableHead>
+                        <TableHead className="min-w-[100px]">Returns</TableHead>
                         <TableHead className="min-w-[150px]">Delivery Status</TableHead>
                         <TableHead className="text-right min-w-[90px]">Amount (LKR)</TableHead>
                         <TableHead className="text-right w-[65px]">Diff</TableHead>
@@ -629,6 +763,43 @@ export default function OfficeReconcileLoadPage({
                               >
                                 {order.customer}
                               </span>
+                            </TableCell>
+
+                            {/* Returns */}
+                            <TableCell>
+                              {order.returns && order.returns.length > 0 ? (
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <Button variant="outline" size="sm" className="h-7 text-xs border-orange-200 bg-orange-50/30 text-orange-850 hover:bg-orange-100 flex items-center gap-1">
+                                      <Undo2 className="w-3 h-3 text-orange-600" />
+                                      {order.returns.length} Return{order.returns.length !== 1 ? "s" : ""}
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-80 p-3" align="start">
+                                    <div className="space-y-2">
+                                      <h4 className="font-bold text-xs text-orange-800 uppercase tracking-wider flex items-center gap-1 border-b pb-1">
+                                        <Undo2 className="w-3.5 h-3.5" /> Return Details
+                                      </h4>
+                                      <div className="space-y-1.5 max-h-[200px] overflow-y-auto pr-1">
+                                        {order.returns.map((ret) => (
+                                          <div key={ret.id} className="text-xs flex justify-between gap-2 border-b border-slate-100 pb-1 last:border-0">
+                                            <div className="min-w-0">
+                                              <p className="font-semibold text-slate-800 truncate">{ret.productName}</p>
+                                              <p className="text-[10px] text-muted-foreground font-mono">{ret.sku} · {ret.returnType}</p>
+                                            </div>
+                                            <div className="text-right shrink-0">
+                                              <p className="font-semibold">{ret.quantity} unit{ret.quantity !== 1 ? "s" : ""}</p>
+                                              <p className="text-[10px] text-orange-600 font-bold">LKR {ret.totalValue.toLocaleString()}</p>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </PopoverContent>
+                                </Popover>
+                              ) : (
+                                <span className="text-muted-foreground text-xs">—</span>
+                              )}
                             </TableCell>
 
                             {/* Delivery Status */}

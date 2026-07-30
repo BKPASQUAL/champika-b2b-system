@@ -138,7 +138,7 @@ export default function DamageHistoryPage() {
                       <TableCell>
                         <div className="flex items-center gap-1">
                           <MapPin className="w-3 h-3 text-muted-foreground" />
-                          {item.locations?.name}
+                          {item.locations?.name || item.customers?.shop_name || "Customer Return"}
                         </div>
                       </TableCell>
                       <TableCell>

@@ -17,6 +17,7 @@ import {
   MapPin,
   Clock,
   Pencil,
+  Undo2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -265,8 +266,35 @@ export default function EditOrderPage({
     supplier: "",
   });
 
+  // Returns State
+  const [returnItems, setReturnItems] = useState<{
+    id: string;
+    productId: string;
+    sku: string;
+    productName: string;
+    quantity: number;
+    returnType: "Good" | "Damage" | "Exchange";
+    unit: string;
+    price: number;
+    totalValue: number;
+    supplier?: string;
+  }[]>([]);
+  const [editingReturnId, setEditingReturnId] = useState<string | null>(null);
+  const [returnProductOpen, setReturnProductOpen] = useState(false);
+  const [currentReturnItem, setCurrentReturnItem] = useState({
+    productId: "",
+    sku: "",
+    quantity: "",
+    returnType: "Exchange" as "Good" | "Damage" | "Exchange",
+    unit: "",
+    price: 0,
+    supplier: "",
+  });
+
   const qtyInputRef = useRef<HTMLInputElement>(null);
+  const returnQtyInputRef = useRef<HTMLInputElement>(null);
   const addProductCardRef = useRef<HTMLDivElement>(null);
+  const addReturnCardRef = useRef<HTMLDivElement>(null);
 
   // --- Fetch Data on Mount ---
   useEffect(() => {
@@ -344,6 +372,24 @@ export default function EditOrderPage({
               discountAmount: item.discountAmount || 0,
               total: item.total || 0,
               supplier: item.supplier || "",
+            }))
+          );
+        }
+
+        // Map return items if available
+        if (invoiceData.returns) {
+          setReturnItems(
+            invoiceData.returns.map((r: any) => ({
+              id: r.id || Math.random().toString(),
+              productId: r.productId,
+              sku: r.sku,
+              productName: r.productName,
+              quantity: r.quantity,
+              returnType: r.returnType || "Exchange",
+              unit: r.unit || "unit",
+              price: r.price || 0,
+              totalValue: (r.quantity || 0) * (r.price || 0),
+              supplier: r.supplier || "",
             }))
           );
         }
@@ -559,6 +605,119 @@ export default function EditOrderPage({
     });
   };
 
+  // --- Returns Handlers ---
+  const handleReturnProductSelect = (productId: string) => {
+    const product = products.find((p) => p.id === productId);
+    if (!product) return;
+    setCurrentReturnItem({
+      productId: product.id,
+      sku: product.sku,
+      quantity: "",
+      returnType: "Exchange",
+      unit: product.unit_of_measure,
+      price: product.selling_price || 0,
+      supplier: product.supplier || "",
+    });
+    setReturnProductOpen(false);
+    setTimeout(() => returnQtyInputRef.current?.focus({ preventScroll: true }), 100);
+  };
+
+  const handleAddReturnItem = () => {
+    const qty = parseFloat(currentReturnItem.quantity);
+    if (!currentReturnItem.productId) {
+      toast.error("Please select a return product");
+      return;
+    }
+    if (!qty || qty <= 0) {
+      toast.error("Return quantity must be greater than 0");
+      return;
+    }
+
+    const product = products.find((p) => p.id === currentReturnItem.productId);
+    if (!product) return;
+
+    const totalValue = qty * currentReturnItem.price;
+
+    const newReturn = {
+      id: editingReturnId || Date.now().toString(),
+      productId: currentReturnItem.productId,
+      sku: product.sku,
+      productName: product.name,
+      quantity: qty,
+      returnType: currentReturnItem.returnType,
+      unit: product.unit_of_measure,
+      price: currentReturnItem.price,
+      totalValue,
+      supplier: product.supplier,
+    };
+
+    if (editingReturnId) {
+      setReturnItems(returnItems.map((r) => (r.id === editingReturnId ? newReturn : r)));
+      setEditingReturnId(null);
+      toast.success("Return item updated");
+    } else {
+      setReturnItems([...returnItems, newReturn]);
+      toast.success("Return item added");
+    }
+
+    setCurrentReturnItem({
+      productId: "",
+      sku: "",
+      quantity: "",
+      returnType: "Exchange",
+      unit: "",
+      price: 0,
+      supplier: "",
+    });
+  };
+
+  const handleRemoveReturnItem = (returnId: string) => {
+    setReturnItems((prev) => prev.filter((r) => r.id !== returnId));
+    if (editingReturnId === returnId) {
+      setEditingReturnId(null);
+      setCurrentReturnItem({
+        productId: "",
+        sku: "",
+        quantity: "",
+        returnType: "Exchange",
+        unit: "",
+        price: 0,
+        supplier: "",
+      });
+    }
+    toast.info("Return item removed");
+  };
+
+  const handleEditReturnItem = (item: any) => {
+    setEditingReturnId(item.id);
+    setCurrentReturnItem({
+      productId: item.productId,
+      sku: item.sku,
+      quantity: item.quantity.toString(),
+      returnType: item.returnType || "Exchange",
+      unit: item.unit,
+      price: item.price || 0,
+      supplier: item.supplier || "",
+    });
+    if (typeof window !== "undefined") {
+      addReturnCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    setTimeout(() => returnQtyInputRef.current?.focus({ preventScroll: true }), 100);
+  };
+
+  const handleCancelReturnEdit = () => {
+    setEditingReturnId(null);
+    setCurrentReturnItem({
+      productId: "",
+      sku: "",
+      quantity: "",
+      returnType: "Exchange",
+      unit: "",
+      price: 0,
+      supplier: "",
+    });
+  };
+
 
   // --- Create New Customer ---
   const handleCreateCustomer = async () => {
@@ -632,6 +791,13 @@ export default function EditOrderPage({
       invoiceDate: orderDate,
       orderStatus: "Pending",
       items,
+      returnItems: returnItems.map((ri) => ({
+        id: ri.id,
+        productId: ri.productId,
+        quantity: ri.quantity,
+        returnType: ri.returnType,
+        price: ri.price,
+      })),
       subTotal: subtotal,
       extraDiscountPercent: extraDiscPercVal,
       extraDiscountAmount: extraDiscountAmount,
@@ -1352,6 +1518,251 @@ export default function EditOrderPage({
               </div>
             </CardContent>
           </Card>
+
+          {/* 4. Customer Returns Section */}
+          <div ref={addReturnCardRef} className="scroll-mt-4 w-full">
+            <Card className={cn("w-full min-w-0 overflow-hidden transition-all border-orange-200 bg-white shadow-xs rounded-xl", editingReturnId ? "border-orange-500 border-2" : "")}>
+              <CardHeader className="pb-3 border-b border-orange-100 bg-orange-50/30">
+                <CardTitle className="text-base flex items-center gap-1.5 text-orange-950 font-bold">
+                  <Undo2 className="w-5 h-5 text-orange-600" />
+                  {editingReturnId ? "Edit Return Item" : "Add Customer Returns"}
+                </CardTitle>
+                <CardDescription className="text-xs text-orange-600/90 font-medium">
+                  Select items being returned by the customer for exchange or refund
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-4 sm:p-6 space-y-4">
+                {/* Return Product Row */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-800">Return Product</Label>
+                  <Popover open={returnProductOpen} onOpenChange={setReturnProductOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={returnProductOpen}
+                        className="w-full justify-between bg-white text-left font-normal h-10 text-sm border-orange-200/80 hover:bg-orange-50/40"
+                      >
+                        <span className="truncate">
+                          {currentReturnItem.productId
+                            ? products.find((p) => p.id === currentReturnItem.productId)?.name
+                            : "Select Product to Return"}
+                        </span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50 text-orange-500" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      className="w-[var(--radix-popover-trigger-width)] p-0"
+                      align="start"
+                    >
+                      <Command>
+                        <CommandInput placeholder="Search return product..." />
+                        <CommandList>
+                          <CommandEmpty>No product found.</CommandEmpty>
+                          <CommandGroup>
+                            {products.map((product) => (
+                              <CommandItem
+                                key={product.id}
+                                value={`${product.name} ${product.sku}`}
+                                onSelect={() => handleReturnProductSelect(product.id)}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4 shrink-0 text-orange-600",
+                                    currentReturnItem.productId === product.id
+                                      ? "opacity-100"
+                                      : "opacity-0"
+                                  )}
+                                />
+                                <div className="flex flex-col">
+                                  <span className="font-medium text-xs sm:text-sm text-slate-900">{product.name}</span>
+                                  <span className="text-[10px] sm:text-xs text-muted-foreground font-mono">
+                                    {product.sku} · Price: LKR {product.selling_price.toLocaleString()}
+                                  </span>
+                                </div>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                {/* Return Type, Quantity, Value (LKR), Total Return */}
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  {/* Return Type */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-800">Return Type</Label>
+                    <Select
+                      value={currentReturnItem.returnType}
+                      onValueChange={(val: "Good" | "Damage" | "Exchange") =>
+                        setCurrentReturnItem({ ...currentReturnItem, returnType: val })
+                      }
+                      disabled={!currentReturnItem.productId}
+                    >
+                      <SelectTrigger className="w-full h-10 text-xs border-orange-200/80 bg-white">
+                        <SelectValue placeholder="Return Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {/* <SelectItem value="Good">Good Return</SelectItem> */}
+                        {/* <SelectItem value="Damage">Damage Return</SelectItem> */}
+                        <SelectItem value="Exchange">Exchange Return</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Quantity */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-800">Quantity</Label>
+                    <Input
+                      ref={returnQtyInputRef}
+                      type="number"
+                      min="0.001"
+                      placeholder="Qty"
+                      value={currentReturnItem.quantity}
+                      onChange={(e) =>
+                        setCurrentReturnItem({ ...currentReturnItem, quantity: e.target.value })
+                      }
+                      disabled={!currentReturnItem.productId}
+                      className="h-10 text-xs border-orange-200/80 bg-white"
+                    />
+                  </div>
+
+                  {/* Return Price / Value */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-800">Value (LKR)</Label>
+                    <Input
+                      type="number"
+                      placeholder="Price"
+                      value={currentReturnItem.price || ""}
+                      onChange={(e) =>
+                        setCurrentReturnItem({ ...currentReturnItem, price: Number(e.target.value) })
+                      }
+                      disabled={!currentReturnItem.productId}
+                      className="h-10 text-xs border-orange-200/80 bg-white"
+                    />
+                  </div>
+
+                  {/* Total Value Preview */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-800">Total Return</Label>
+                    <Input
+                      readOnly
+                      value={((parseFloat(currentReturnItem.quantity) || 0) * currentReturnItem.price).toFixed(2)}
+                      className="h-10 text-xs border-orange-200/80 bg-slate-50 font-bold text-slate-900"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  {editingReturnId && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleCancelReturnEdit}
+                      className="border-orange-200 text-orange-700 hover:bg-orange-50 h-10 px-4"
+                    >
+                      Cancel
+                    </Button>
+                  )}
+                  <Button
+                    onClick={handleAddReturnItem}
+                    className="w-full bg-[#f97316] hover:bg-[#ea580c] text-white font-semibold h-10 rounded-lg flex items-center justify-center gap-2 text-sm shadow-xs transition-colors"
+                    disabled={!currentReturnItem.productId}
+                  >
+                    {editingReturnId ? (
+                      <>
+                        <Save className="w-4 h-4 mr-2" /> Update Return
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4 mr-2" /> Add Return Item
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* 5. Customer Returned Goods Table */}
+          {returnItems.length > 0 && (
+            <Card className="w-full min-w-0 overflow-hidden border-orange-200 bg-orange-50/5">
+              <CardHeader className="pb-1 sm:pb-2">
+                <CardTitle className="text-base sm:text-lg font-bold text-orange-800 flex items-center gap-2">
+                  <Undo2 className="w-5 h-5 text-orange-600" />
+                  Customer Returned Goods ({returnItems.length})
+                </CardTitle>
+                <CardDescription className="text-xs sm:text-sm text-orange-600/80">
+                  Items returned or exchanged for this order
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-0 sm:p-6 sm:pt-0">
+                <div className="border border-orange-100 rounded-lg overflow-x-auto bg-white shadow-2xs">
+                  <Table>
+                    <TableHeader className="bg-orange-50/40">
+                      <TableRow>
+                        <TableHead className="w-10 pl-4">#</TableHead>
+                        <TableHead>Product</TableHead>
+                        <TableHead className="text-center w-28">Type</TableHead>
+                        <TableHead className="text-center w-24 pr-4">Qty</TableHead>
+                        <TableHead className="w-16 text-center"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {returnItems.map((item, idx) => (
+                        <TableRow key={item.id}>
+                          <TableCell className="pl-4 text-muted-foreground">{idx + 1}</TableCell>
+                          <TableCell>
+                            <div className="font-semibold text-slate-900">{item.productName}</div>
+                            <div className="text-xs text-muted-foreground font-mono">{item.sku}</div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <span
+                              className={cn(
+                                "text-[10px] font-bold px-2.5 py-0.5 rounded-full border uppercase tracking-wider",
+                                item.returnType === "Good"
+                                  ? "bg-green-50 text-green-700 border-green-200"
+                                  : item.returnType === "Exchange"
+                                  ? "bg-blue-50 text-blue-700 border-blue-200"
+                                  : "bg-red-50 text-red-700 border-red-200"
+                              )}
+                            >
+                              {item.returnType}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-center font-semibold pr-4">
+                            {item.quantity} {item.unit}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <div className="flex items-center gap-1 justify-end">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-blue-600 hover:bg-blue-50"
+                                onClick={() => handleEditReturnItem(item)}
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-red-500 hover:bg-red-50"
+                                onClick={() => handleRemoveReturnItem(item.id)}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* ── RIGHT COLUMN — Summary (desktop sidebar) ── */}

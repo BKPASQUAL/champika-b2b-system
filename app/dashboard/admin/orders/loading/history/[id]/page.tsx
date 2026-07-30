@@ -53,8 +53,12 @@ import { toast } from "sonner";
 import {
   downloadLoadingSheet,
   printLoadingSheet,
+  downloadReturnsSummarySheet,
+  printReturnsSummarySheet,
 } from "../print-loading-sheet";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { cn } from "@/lib/utils";
+import { Undo2 } from "lucide-react";
 
 
 interface OrderDetail {
@@ -404,6 +408,14 @@ export default function LoadingSheetDetailPage({
           <Button variant="outline" onClick={handleEditClick}>
             <Edit className="w-4 h-4 mr-2" /> Edit
           </Button>
+          <Button variant="outline" onClick={() => printReturnsSummarySheet(loadingSheet.id)} className="border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 hover:text-orange-800">
+            <Printer className="w-4 h-4 mr-2 text-orange-600" />
+            Print Returns Summary
+          </Button>
+          <Button variant="outline" onClick={() => downloadReturnsSummarySheet(loadingSheet.id)} className="border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 hover:text-orange-800">
+            <Undo2 className="w-4 h-4 mr-2 text-orange-600" />
+            Download Returns Summary
+          </Button>
           <Button variant="outline" onClick={handleDownload} disabled={downloading}>
             {downloading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
             Download
@@ -563,6 +575,125 @@ export default function LoadingSheetDetailPage({
           </div>
         </CardContent>
       </Card>
+
+      {/* Customer Exchange & Return Items Summary Card */}
+      {(() => {
+        const shopReturnsMap: Record<string, any[]> = {};
+        let totalReturnCount = 0;
+
+        (loadingSheet.orders || []).forEach((order: any) => {
+          const shopName = order.customer?.shopName || "Unknown Shop";
+          const returns = order.returns || [];
+          if (returns.length > 0) {
+            if (!shopReturnsMap[shopName]) {
+              shopReturnsMap[shopName] = [];
+            }
+            returns.forEach((ret: any) => {
+              shopReturnsMap[shopName].push(ret);
+              totalReturnCount++;
+            });
+          }
+        });
+
+        const shopNames = Object.keys(shopReturnsMap);
+        if (shopNames.length === 0) return null;
+
+        return (
+          <Card className="border-l-4 border-l-orange-500 shadow-sm overflow-hidden mt-6">
+            <CardHeader className="bg-orange-50/50 pb-3 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-lg font-bold text-orange-900 flex items-center gap-2">
+                  <Undo2 className="w-5 h-5 text-orange-600" />
+                  Customer Exchange & Return Items Summary ({totalReturnCount})
+                </CardTitle>
+                <p className="text-xs text-orange-700 mt-0.5">
+                  Summary of exchange and return items grouped by shop name.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => printReturnsSummarySheet(loadingSheet.id)}
+                  className="bg-white border-orange-300 text-orange-700 hover:bg-orange-100"
+                >
+                  <Printer className="w-4 h-4 mr-2 text-orange-600" />
+                  Print Returns Summary
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => downloadReturnsSummarySheet(loadingSheet.id)}
+                  className="bg-white border-orange-300 text-orange-700 hover:bg-orange-100"
+                >
+                  <Download className="w-4 h-4 mr-2 text-orange-600" />
+                  Download PDF
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-4 space-y-6">
+              {shopNames.map((shopName, sIdx) => {
+                const items = shopReturnsMap[shopName];
+                return (
+                  <div key={shopName} className="border rounded-lg overflow-hidden bg-white shadow-2xs">
+                    {/* Shop Name Header Topic */}
+                    <div className="bg-orange-100/70 border-b px-4 py-2 flex items-center justify-between">
+                      <h4 className="font-bold text-orange-900 text-sm flex items-center gap-2">
+                        <span className="bg-orange-600 text-white text-xs w-5 h-5 rounded-full inline-flex items-center justify-center font-semibold">
+                          {sIdx + 1}
+                        </span>
+                        {shopName}
+                      </h4>
+                      <Badge className="bg-orange-200 text-orange-800 hover:bg-orange-300 border-none text-[10px]">
+                        {items.length} Item(s)
+                      </Badge>
+                    </div>
+
+                    {/* Simple Items Table */}
+                    <Table>
+                      <TableHeader className="bg-slate-50/50">
+                        <TableRow>
+                          <TableHead className="w-10 text-center">#</TableHead>
+                          <TableHead>Item Name</TableHead>
+                          <TableHead className="text-center">SKU / Code</TableHead>
+                          <TableHead className="text-center">Return Type</TableHead>
+                          <TableHead className="text-center pr-4">Qty</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {items.map((ret: any, idx: number) => (
+                          <TableRow key={ret.id || idx} className="hover:bg-slate-50/50">
+                            <TableCell className="text-center text-xs text-muted-foreground">{idx + 1}</TableCell>
+                            <TableCell className="font-semibold text-sm text-slate-900">{ret.productName}</TableCell>
+                            <TableCell className="text-center font-mono text-xs text-slate-600">{ret.sku || "-"}</TableCell>
+                            <TableCell className="text-center">
+                              <span
+                                className={cn(
+                                  "text-[10px] font-bold px-2.5 py-0.5 rounded-full border uppercase tracking-wider",
+                                  ret.returnType === "Good"
+                                    ? "bg-green-50 text-green-700 border-green-200"
+                                    : ret.returnType === "Exchange"
+                                    ? "bg-blue-50 text-blue-700 border-blue-200"
+                                    : "bg-red-50 text-red-700 border-red-200"
+                                )}
+                              >
+                                {ret.returnType}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-center font-bold text-sm text-slate-900 pr-4">
+                              {ret.quantity} {ret.unit || ""}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* Remove Order — Stage Picker Dialog */}
       <Dialog open={!!removeTarget} onOpenChange={(open) => { if (!open) setRemoveTarget(null); }}>

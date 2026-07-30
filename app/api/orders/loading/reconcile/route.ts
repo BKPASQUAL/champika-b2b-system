@@ -161,8 +161,106 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 2. Close the Load Sheet
+    // 2. Close the Load Sheet & Reconcile Returned Items Inventory
     if (closeLoad) {
+      try {
+        const { data: loadSheet } = await supabaseAdmin
+          .from("loading_sheets")
+          .select("id, orders(id, invoice_no, customer_id)")
+          .eq("id", loadId)
+          .single();
+
+        if (loadSheet && loadSheet.orders) {
+          const invoiceNos = (loadSheet.orders as any[])
+            .map((o) => o.invoice_no)
+            .filter(Boolean);
+
+          if (invoiceNos.length > 0) {
+            const orConditions = invoiceNos.map((invNo) => `reason.ilike.%${invNo}%`).join(",");
+            const { data: returnRecords } = await supabaseAdmin
+              .from("inventory_returns")
+              .select("id, product_id, location_id, quantity, return_type, reason")
+              .or(orConditions);
+
+            if (returnRecords && returnRecords.length > 0) {
+              for (const ret of returnRecords) {
+                const qty = Number(ret.quantity) || 0;
+                if (qty <= 0 || !ret.product_id) continue;
+
+                if (ret.return_type === "Good") {
+                  // Add back to current sellable stock
+                  const { data: prod } = await supabaseAdmin
+                    .from("products")
+                    .select("stock_quantity")
+                    .eq("id", ret.product_id)
+                    .single();
+
+                  if (prod) {
+                    await supabaseAdmin
+                      .from("products")
+                      .update({ stock_quantity: (prod.stock_quantity || 0) + qty })
+                      .eq("id", ret.product_id);
+                  }
+
+                  if (ret.location_id) {
+                    const { data: locStock } = await supabaseAdmin
+                      .from("product_stocks")
+                      .select("id, quantity")
+                      .eq("product_id", ret.product_id)
+                      .eq("location_id", ret.location_id)
+                      .maybeSingle();
+
+                    if (locStock) {
+                      await supabaseAdmin
+                        .from("product_stocks")
+                        .update({ quantity: (locStock.quantity || 0) + qty })
+                        .eq("id", locStock.id);
+                    }
+                  }
+                } else if (ret.return_type === "Damage") {
+                  // Increment damaged stock in Damage Control
+                  const { data: prod } = await supabaseAdmin
+                    .from("products")
+                    .select("damaged_quantity")
+                    .eq("id", ret.product_id)
+                    .single();
+
+                  if (prod) {
+                    await supabaseAdmin
+                      .from("products")
+                      .update({ damaged_quantity: (prod.damaged_quantity || 0) + qty })
+                      .eq("id", ret.product_id);
+                  }
+
+                  if (ret.location_id) {
+                    const { data: locStock } = await supabaseAdmin
+                      .from("product_stocks")
+                      .select("id, damaged_quantity")
+                      .eq("product_id", ret.product_id)
+                      .eq("location_id", ret.location_id)
+                      .maybeSingle();
+
+                    if (locStock) {
+                      await supabaseAdmin
+                        .from("product_stocks")
+                        .update({ damaged_quantity: (locStock.damaged_quantity || 0) + qty })
+                        .eq("id", locStock.id);
+                    }
+                  }
+
+                  await supabaseAdmin
+                    .from("inventory_returns")
+                    .update({ reason: `${ret.reason || ""} [RECONCILED_DAMAGE]` })
+                    .eq("id", ret.id);
+                }
+              }
+            }
+          }
+        }
+      } catch (stockErr) {
+        console.error("Stock reconciliation error:", stockErr);
+      }
+
       const { error: loadError } = await supabaseAdmin
         .from("loading_sheets")
         .update({ status: "Completed" })

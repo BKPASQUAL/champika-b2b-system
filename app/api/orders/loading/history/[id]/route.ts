@@ -40,6 +40,7 @@ export async function GET(
         orders (
           id,
           order_id,
+          customer_id,
           invoice_no,
           total_amount,
           status,
@@ -127,6 +128,33 @@ export async function GET(
       }
     }
 
+    // B2. Fetch Returns for all customers on this load
+    const customerIds = (loadingSheet.orders ?? [])
+      .map((o: any) => o.customer_id)
+      .filter(Boolean);
+    let returnsList: any[] = [];
+    if (customerIds.length > 0) {
+      const { data: retData } = await supabaseAdmin
+        .from("inventory_returns")
+        .select(`
+          id,
+          return_number,
+          product_id,
+          quantity,
+          return_type,
+          reason,
+          customer_id,
+          created_at,
+          products (
+            name,
+            sku,
+            selling_price
+          )
+        `)
+        .in("customer_id", customerIds);
+      returnsList = retData || [];
+    }
+
     // 3. Format Response
     const formattedResponse = {
       id: loadingSheet.id,
@@ -200,6 +228,23 @@ export async function GET(
                 productName: item.products?.name || "Unknown Product",
                 sku: item.products?.sku || "",
               })) || [],
+            returns: returnsList
+              .filter((r: any) => {
+                const invNo = invoiceDetails?.invoice_no || order.invoice_no;
+                return invNo && invNo !== "N/A" && r.reason && r.reason.toLowerCase().includes(invNo.toLowerCase());
+              })
+              .map((r: any) => ({
+                id: r.id,
+                returnNumber: r.return_number,
+                productId: r.product_id,
+                productName: r.products?.name || "Unknown Product",
+                sku: r.products?.sku || "",
+                quantity: r.quantity,
+                returnType: r.return_type || "Exchange",
+                price: r.products?.selling_price || 0,
+                totalValue: r.quantity * (r.products?.selling_price || 0),
+                createdAt: r.created_at,
+              })),
           };
         }) || [],
     };

@@ -43,6 +43,7 @@ import {
   User,
   MapPin,
   Download,
+  Printer,
   FolderOpen,
   Folder,
   Eye,
@@ -50,7 +51,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingSheetDialog } from "@/app/dashboard/admin/orders/_components/LoadingSheetDialog";
-import { downloadLoadingSummary } from "./print-loading-summary";
+import { downloadLoadingSummary, printLoadingSummary } from "./print-loading-summary";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 
 
@@ -272,10 +273,17 @@ export default function DistributionLoadingOrdersPage() {
             <>
               <Button
                 variant="outline"
+                onClick={() => printLoadingSummary(selectedOrders)}
+                className="animate-in fade-in zoom-in duration-300 bg-white border-slate-200"
+              >
+                <Printer className="w-4 h-4 mr-2" /> Print Summary ({selectedOrders.length})
+              </Button>
+              <Button
+                variant="outline"
                 onClick={() => downloadLoadingSummary(selectedOrders)}
                 className="animate-in fade-in zoom-in duration-300 bg-white border-slate-200"
               >
-                <Download className="w-4 h-4 mr-2" /> Summary ({selectedOrders.length})
+                <Download className="w-4 h-4 mr-2" /> Download Summary ({selectedOrders.length})
               </Button>
               <Button
                 variant="outline"

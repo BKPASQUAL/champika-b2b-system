@@ -41,7 +41,7 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 import { Order, SortField, SortOrder } from "../types";
-import { downloadLoadingSummary } from "../loading/print-loading-summary";
+import { downloadLoadingSummary, printLoadingSummary } from "../loading/print-loading-summary";
 import { printBulkInvoices } from "@/app/lib/invoice-print";
 
 export default function DistributionPendingOrdersPage() {
@@ -242,6 +242,18 @@ export default function DistributionPendingOrdersPage() {
               >
                 <Printer className="w-4 h-4 mr-2" />
                 Print Invoices ({selectedOrders.length})
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() =>
+                  printLoadingSummary(selectedOrders, {
+                    title: "PENDING ORDERS — ITEMS SUMMARY REPORT",
+                  })
+                }
+                className="bg-white border-slate-200"
+              >
+                <Printer className="w-4 h-4 mr-2" />
+                Print Summary ({selectedOrders.length})
               </Button>
               <Button
                 variant="outline"

@@ -19,6 +19,7 @@ import {
   Loader2,
   Truck,
   Share2,
+  Undo2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -149,6 +150,9 @@ export default function RepInvoiceDetailPage({
   const netTotal = invoice.grandTotal || 0;
   const extraDiscountAmount = invoice.extraDiscountAmount || 0;
   const subTotalGross = invoice.items.reduce((sum: number, i: any) => sum + i.total, 0);
+  const returnsDeduction = (invoice.returnsTotal && invoice.returnsTotal > 0)
+    ? invoice.returnsTotal
+    : Math.max(0, subTotalGross - extraDiscountAmount - netTotal);
   const balanceDue = netTotal - totalPaid;
 
   const totalItemsQty = invoice.items.reduce((acc: number, item: any) => acc + item.quantity, 0);
@@ -483,6 +487,63 @@ export default function RepInvoiceDetailPage({
                 )}
               </CardContent>
             </Card>
+
+            {/* Returns Card */}
+            {(invoice.returns && invoice.returns.length > 0) ? (
+              <Card className="shadow-sm border-l-4 border-l-orange-500 overflow-hidden">
+                <CardHeader className="bg-orange-50/50 border-b py-4">
+                  <div className="flex justify-between items-center">
+                    <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                      <Undo2 className="h-5 w-5 text-orange-600" />
+                      Customer Returns
+                    </CardTitle>
+                    <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-200 border-none">
+                      {invoice.returns.length} Return(s)
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-orange-50/30 hover:bg-orange-50/30">
+                          <TableHead className="pl-6">#</TableHead>
+                          <TableHead>Product</TableHead>
+                          <TableHead className="text-center">Type</TableHead>
+                          <TableHead className="text-center pr-6">Qty</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {invoice.returns.map((ret: any, idx: number) => (
+                          <TableRow key={ret.id} className="hover:bg-orange-50/10">
+                            <TableCell className="pl-6 text-muted-foreground">{idx + 1}</TableCell>
+                            <TableCell>
+                              <div className="font-medium text-sm">{ret.productName}</div>
+                              <div className="text-xs font-mono text-muted-foreground">{ret.sku}</div>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <span className={cn(
+                                "text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider",
+                                ret.returnType === "Good"
+                                  ? "bg-green-50 text-green-700 border-green-200"
+                                  : ret.returnType === "Exchange"
+                                  ? "bg-blue-50 text-blue-700 border-blue-200"
+                                  : "bg-red-50 text-red-700 border-red-200"
+                              )}>
+                                {ret.returnType}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-center font-medium pr-6">
+                              {ret.quantity} {ret.unit}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : null}
           </div>
 
           {/* ── RIGHT COLUMN ── */}
@@ -561,6 +622,10 @@ export default function RepInvoiceDetailPage({
                     </span>
                   </div>
                 )}
+
+
+
+
 
                 <Separator className="my-2 bg-slate-100" />
 

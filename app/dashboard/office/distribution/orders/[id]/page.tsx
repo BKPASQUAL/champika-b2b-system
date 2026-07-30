@@ -22,6 +22,7 @@ import {
   ChevronsUpDown,
   ArrowRightLeft,
   FileText,
+  Undo2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -130,11 +131,23 @@ export default function ViewOrderPage({
   const router = useRouter();
   const distributionBusinessId = BUSINESS_IDS.CHAMPIKA_DISTRIBUTION;
 
-  const [order, setOrder] = useState<any>(null);
+  const [order, setOrder] = useState<any | null>(null);
   const [items, setItems] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [unpaidInvoices, setUnpaidInvoices] = useState<any[]>([]);
+  const [returnsList, setReturnsList] = useState<any[]>([]);
+  const [deletedReturnIds, setDeletedReturnIds] = useState<Set<string>>(new Set());
+  const [returnProductOpen, setReturnProductOpen] = useState(false);
+  const [newReturnItem, setNewReturnItem] = useState({
+    productId: "",
+    productName: "",
+    sku: "",
+    unit: "",
+    returnType: "Exchange",
+    quantity: "1",
+    price: "",
+  });
   const [invoicesLoaded, setInvoicesLoaded] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -201,6 +214,20 @@ export default function ViewOrderPage({
           );
         }
       }
+
+      // Fetch returns for this invoice or order
+      let fetchedReturns = data.returns || [];
+      if (data.invoiceId) {
+        const retRes = await fetch(`/api/invoices/${data.invoiceId}/returns`);
+        if (retRes.ok) {
+          const retData = await retRes.json();
+          if (retData && retData.length > 0) {
+            fetchedReturns = retData;
+          }
+        }
+      }
+      setReturnsList(fetchedReturns);
+      setDeletedReturnIds(new Set());
       setInvoicesLoaded(true);
 
       const mappedItems = data.items.map((item: any) => {
@@ -444,6 +471,62 @@ export default function ViewOrderPage({
     toast.info("Item removed. Save changes to apply.");
   };
 
+  // --- Returns Editing Handlers ---
+  const handleReturnQtyChange = (returnId: string, value: string) => {
+    const qty = Math.max(1, parseInt(value) || 1);
+    setReturnsList((prev) =>
+      prev.map((ret) => (ret.id === returnId ? { ...ret, quantity: qty } : ret))
+    );
+  };
+
+  const handleRemoveReturnItem = (returnId: string) => {
+    setReturnsList((prev) => prev.filter((ret) => ret.id !== returnId));
+    setDeletedReturnIds((prev) => new Set(prev).add(returnId));
+    toast.info("Returned item removed. Save changes to apply.");
+  };
+
+  const handleAddReturnItem = () => {
+    if (!newReturnItem.productId) {
+      toast.error("Please select a product to return");
+      return;
+    }
+    const qty = parseInt(newReturnItem.quantity);
+    if (!qty || qty <= 0) {
+      toast.error("Quantity must be greater than 0");
+      return;
+    }
+
+    const newItem = {
+      id: `new-ret-${Date.now()}`,
+      productId: newReturnItem.productId,
+      productName: newReturnItem.productName,
+      sku: newReturnItem.sku,
+      unit: newReturnItem.unit,
+      return_type: newReturnItem.returnType,
+      returnType: newReturnItem.returnType,
+      quantity: qty,
+      price: parseFloat(newReturnItem.price) || 0,
+      isNew: true,
+      products: {
+        name: newReturnItem.productName,
+        sku: newReturnItem.sku,
+        unit_of_measure: newReturnItem.unit,
+      },
+    };
+
+    setReturnsList((prev) => [...prev, newItem]);
+    setNewReturnItem({
+      productId: "",
+      productName: "",
+      sku: "",
+      unit: "",
+      returnType: "Exchange",
+      quantity: "1",
+      price: "",
+    });
+    toast.success("Return item added. Save changes to apply.");
+  };
+
   // --- Save Changes ---
   const saveChanges = async () => {
     if (!order) return;
@@ -462,7 +545,14 @@ export default function ViewOrderPage({
         discountAmount: i.discountAmount,
       }));
 
-    const totalAmount = items.reduce((acc, item) => acc + (item.total || 0), 0);
+    const returnsTotal = returnsList.reduce(
+      (sum, r) => sum + (r.quantity * (r.products?.selling_price || 0)),
+      0
+    );
+    const totalAmount = Math.max(
+      0,
+      items.reduce((acc, item) => acc + (item.total || 0), 0) - returnsTotal
+    );
 
     try {
       const user = getUserBusinessContext();
@@ -474,6 +564,14 @@ export default function ViewOrderPage({
           items: existingItems,
           newItems,
           deletedItemIds: Array.from(deletedItemIds),
+          returnsList: returnsList.map((r) => ({
+            id: r.id,
+            productId: r.productId || r.product_id,
+            quantity: r.quantity,
+            returnType: r.return_type || r.returnType || "Exchange",
+            isNew: r.isNew,
+          })),
+          deletedReturnIds: Array.from(deletedReturnIds),
           totalAmount,
           orderDate: billingDate,
           userId: user?.id,
@@ -628,7 +726,11 @@ export default function ViewOrderPage({
   const totalItemGross = items.reduce((acc, item) => acc + item.price * item.qty, 0);
   const totalItemDiscounts = items.reduce((acc, item) => acc + item.discountAmount, 0);
   const subtotal = items.reduce((acc, item) => acc + item.total, 0);
-  const finalGrandTotal = isEditing ? subtotal : order.totalAmount;
+  const returnsTotal = returnsList.reduce(
+    (sum, r) => sum + (r.quantity * (r.products?.selling_price || 0)),
+    0
+  );
+  const finalGrandTotal = isEditing ? Math.max(0, subtotal) : order.totalAmount;
   const extraDiscountAmount = Math.max(0, subtotal - finalGrandTotal);
   const extraDiscountPercent =
     subtotal > 0 ? (extraDiscountAmount / subtotal) * 100 : 0;
@@ -1362,6 +1464,237 @@ export default function ViewOrderPage({
               </div>
             </CardContent>
           </Card>
+
+          {/* Returned Goods Card */}
+          {(returnsList.length > 0 || isEditing) && (
+            <Card className="border-orange-200 bg-white shadow-xs rounded-xl overflow-hidden">
+              <CardHeader className="pb-3 border-b border-orange-100 bg-orange-50/30">
+                <CardTitle className="text-base flex items-center gap-1.5 text-orange-950 font-bold">
+                  <Undo2 className="w-5 h-5 text-orange-600" />
+                  Add Customer Returns
+                </CardTitle>
+                <CardDescription className="text-xs text-orange-600/90 font-medium">
+                  Select items being returned by the customer for exchange or refund
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-4 sm:p-6 space-y-6">
+                {/* Add Return Form in Edit Mode */}
+                {isEditing && (
+                  <div className="p-4 bg-orange-50/20 border border-orange-200/70 rounded-xl space-y-4">
+                    {/* Return Product Row */}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-bold text-slate-800">Return Product</Label>
+                      <Popover open={returnProductOpen} onOpenChange={setReturnProductOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={returnProductOpen}
+                            className="w-full justify-between bg-white text-left font-normal h-10 text-sm border-orange-200/80 hover:bg-orange-50/40"
+                          >
+                            <span className="truncate">
+                              {newReturnItem.productId
+                                ? products.find((p) => p.id === newReturnItem.productId)?.name
+                                : "Select Product to Return"}
+                            </span>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50 text-orange-500" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="Search product..." />
+                            <CommandList>
+                              <CommandEmpty>No product found.</CommandEmpty>
+                              <CommandGroup>
+                                {products.map((product) => (
+                                  <CommandItem
+                                    key={product.id}
+                                    value={product.name}
+                                    onSelect={() => {
+                                      setNewReturnItem({
+                                        ...newReturnItem,
+                                        productId: product.id,
+                                        productName: product.name,
+                                        sku: product.sku,
+                                        unit: product.unit_of_measure,
+                                        price: String(product.selling_price || 0),
+                                      });
+                                      setReturnProductOpen(false);
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4 text-orange-600",
+                                        newReturnItem.productId === product.id ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    <div className="flex flex-col">
+                                      <span className="font-medium text-xs text-slate-900">{product.name}</span>
+                                      <span className="text-[10px] text-muted-foreground font-mono">{product.sku}</span>
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+
+                    {/* 4 Field Grid Row */}
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                      {/* Return Type */}
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-bold text-slate-800">Return Type</Label>
+                        <Select
+                          value={newReturnItem.returnType}
+                          onValueChange={(val) => setNewReturnItem({ ...newReturnItem, returnType: val })}
+                        >
+                          <SelectTrigger className="w-full h-10 text-xs border-orange-200/80 bg-white">
+                            <SelectValue placeholder="Return Type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Exchange">Exchange Return</SelectItem>
+                            {/* <SelectItem value="Good">Good Return</SelectItem> */}
+                            {/* <SelectItem value="Damage">Damage Return</SelectItem> */}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Quantity */}
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-bold text-slate-800">Quantity</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          placeholder="Qty"
+                          value={newReturnItem.quantity}
+                          onChange={(e) => setNewReturnItem({ ...newReturnItem, quantity: e.target.value })}
+                          className="h-10 text-xs border-orange-200/80 bg-white"
+                        />
+                      </div>
+
+                      {/* Value (LKR) */}
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-bold text-slate-800">Value (LKR)</Label>
+                        <Input
+                          type="number"
+                          placeholder="Price"
+                          value={newReturnItem.price}
+                          onChange={(e) => setNewReturnItem({ ...newReturnItem, price: e.target.value })}
+                          className="h-10 text-xs border-orange-200/80 bg-white"
+                        />
+                      </div>
+
+                      {/* Total Return */}
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-bold text-slate-800">Total Return</Label>
+                        <Input
+                          readOnly
+                          value={(
+                            (parseFloat(newReturnItem.quantity) || 0) *
+                            (parseFloat(newReturnItem.price) || 0)
+                          ).toFixed(2)}
+                          className="h-10 text-xs border-orange-200/80 bg-slate-50 font-bold text-slate-900"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Full Width Orange Add Button */}
+                    <Button
+                      type="button"
+                      onClick={handleAddReturnItem}
+                      className="w-full bg-[#f97316] hover:bg-[#ea580c] text-white font-semibold h-10 rounded-lg flex items-center justify-center gap-2 text-sm shadow-xs transition-colors mt-2"
+                    >
+                      <Plus className="w-4 h-4" /> Add Return Item
+                    </Button>
+                  </div>
+                )}
+
+                {/* Returns Table */}
+                {returnsList.length > 0 ? (
+                  <div className="border border-orange-100 rounded-lg overflow-x-auto bg-white shadow-2xs">
+                    <Table>
+                      <TableHeader className="bg-orange-50/40">
+                        <TableRow>
+                          <TableHead className="w-10 pl-4">#</TableHead>
+                          <TableHead>Product</TableHead>
+                          <TableHead className="text-center w-28">Type</TableHead>
+                          <TableHead className="text-center w-24 pr-4">Qty</TableHead>
+                          {isEditing && <TableHead className="w-12 text-center"></TableHead>}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {returnsList.map((item, idx) => {
+                          const returnType = item.return_type || item.returnType || "Exchange";
+                          const productName = item.products?.name || item.productName || "Unknown Product";
+                          const sku = item.products?.sku || item.sku || "";
+                          const unit = item.products?.unit_of_measure || item.unit || "";
+                          return (
+                            <TableRow key={item.id || idx}>
+                              <TableCell className="pl-4 text-muted-foreground">{idx + 1}</TableCell>
+                              <TableCell>
+                                <div className="font-semibold text-slate-900">{productName}</div>
+                                <div className="text-xs text-muted-foreground font-mono">{sku}</div>
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <span
+                                  className={cn(
+                                    "text-[10px] font-bold px-2.5 py-0.5 rounded-full border uppercase tracking-wider",
+                                    returnType === "Good"
+                                      ? "bg-green-50 text-green-700 border-green-200"
+                                      : returnType === "Exchange"
+                                      ? "bg-blue-50 text-blue-700 border-blue-200"
+                                      : "bg-red-50 text-red-700 border-red-200"
+                                  )}
+                                >
+                                  {returnType}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-center font-semibold pr-4">
+                                {isEditing ? (
+                                  <div className="flex items-center justify-center gap-1">
+                                    <Input
+                                      type="number"
+                                      min="1"
+                                      className="w-20 text-center h-8 border-orange-200"
+                                      value={item.quantity}
+                                      onChange={(e) => handleReturnQtyChange(item.id, e.target.value)}
+                                    />
+                                    <span className="text-xs text-muted-foreground">{unit}</span>
+                                  </div>
+                                ) : (
+                                  <span>
+                                    {item.quantity} {unit}
+                                  </span>
+                                )}
+                              </TableCell>
+                              {isEditing && (
+                                <TableCell className="text-center">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                    onClick={() => handleRemoveReturnItem(item.id)}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <div className="text-xs text-muted-foreground italic text-center py-3 border border-dashed rounded-md bg-white">
+                    No return items added yet. Use the form above to add customer returns/exchanges.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* RIGHT COLUMN */}
@@ -1416,6 +1749,7 @@ export default function ViewOrderPage({
                     <span>- LKR {extraDiscountAmount.toLocaleString()}</span>
                   </div>
                 )}
+
                 <Separator className="border-t-2" />
                 <div className="flex justify-between items-center pt-1">
                   <span className="font-bold text-lg">Grand Total</span>

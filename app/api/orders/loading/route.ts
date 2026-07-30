@@ -46,7 +46,13 @@ export async function GET(request: NextRequest) {
         )
       `
       )
-      .filter("status::text", "eq", "Loading");
+    const statusParam = searchParams.get("status");
+    if (statusParam) {
+      const statuses = statusParam.split(",").map((s) => s.trim()).filter(Boolean);
+      query = query.in("status", statuses);
+    } else {
+      query = query.in("status", ["Loading", "Checking"]);
+    }
 
     // ✅ Filter by Business ID if provided
     if (businessId) {

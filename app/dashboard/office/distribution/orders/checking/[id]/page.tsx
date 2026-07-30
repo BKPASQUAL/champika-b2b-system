@@ -24,6 +24,7 @@ import {
   FileText,
   Printer,
   XCircle,
+  Undo2,
 } from "lucide-react";
 import { printOrder } from "@/app/lib/order-html";
 import { Button } from "@/components/ui/button";
@@ -125,6 +126,11 @@ export default function CheckOrderPage({
   // State to track checked items for QC
   const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
 
+  // --- Returns State & QC ---
+  const [returnsList, setReturnsList] = useState<any[]>([]);
+  const [deletedReturnIds, setDeletedReturnIds] = useState<string[]>([]);
+  const [checkedReturnItems, setCheckedReturnItems] = useState<Record<string, boolean>>({});
+
   // --- Dialog States ---
   const [isConfirmOpen, setIsConfirmOpen] = useState(false); // For "Pass QC"
   const [isSaveConfirmOpen, setIsSaveConfirmOpen] = useState(false); // For "Save Changes"
@@ -146,6 +152,7 @@ export default function CheckOrderPage({
       const data = await res.json();
       setOrder(data);
       setItems(data.items);
+      setReturnsList(data.returns || []);
     } catch (error) {
       toast.error("Could not fetch order data");
     } finally {
@@ -209,6 +216,48 @@ export default function CheckOrderPage({
     toast.info("Item removed. Save changes to apply.");
   };
 
+  // --- Returns Handlers & QC ---
+  const toggleReturnItemCheck = (returnId: string) => {
+    if (isEditing) return;
+    setCheckedReturnItems((prev) => ({
+      ...prev,
+      [returnId]: !prev[returnId],
+    }));
+  };
+
+  const areAllReturnItemsChecked =
+    returnsList.length > 0 &&
+    returnsList.every((ret) => checkedReturnItems[ret.id]);
+
+  const toggleSelectAllReturns = () => {
+    if (isEditing) return;
+    if (areAllReturnItemsChecked) {
+      setCheckedReturnItems({});
+    } else {
+      const allChecked: Record<string, boolean> = {};
+      returnsList.forEach((ret) => {
+        allChecked[ret.id] = true;
+      });
+      setCheckedReturnItems(allChecked);
+    }
+  };
+
+  const handleReturnItemChange = (returnId: string, value: string) => {
+    const numValue = Math.max(1, parseInt(value) || 1);
+    setReturnsList((prev) =>
+      prev.map((ret) => (ret.id === returnId ? { ...ret, quantity: numValue } : ret))
+    );
+  };
+
+  const handleRemoveReturnItem = (returnId: string) => {
+    setReturnsList((prev) => prev.filter((r) => r.id !== returnId));
+    setDeletedReturnIds((prev) => [...prev, returnId]);
+    const newChecked = { ...checkedReturnItems };
+    delete newChecked[returnId];
+    setCheckedReturnItems(newChecked);
+    toast.info("Return item removed. Save changes to apply.");
+  };
+
   const saveOrderChanges = async () => {
     setProcessing(true);
     setIsSaveConfirmOpen(false);
@@ -225,6 +274,8 @@ export default function CheckOrderPage({
           action: "update_items",
           items: items,
           deletedItemIds: deletedItemIds,
+          returnsList: returnsList,
+          deletedReturnIds: deletedReturnIds,
           totalAmount: newTotalAmount,
           userId: user?.id || currentUser?.id,
         }),
@@ -235,6 +286,7 @@ export default function CheckOrderPage({
       toast.success("Order Updated Successfully!");
       setIsEditing(false);
       setDeletedItemIds([]);
+      setDeletedReturnIds([]);
       fetchOrder();
     } catch (error: any) {
       toast.error(error.message || "Failed to save changes");
@@ -246,12 +298,15 @@ export default function CheckOrderPage({
   const cancelEditing = () => {
     setIsEditing(false);
     setDeletedItemIds([]);
+    setDeletedReturnIds([]);
     fetchOrder();
   };
 
   // --- Calculations ---
-  const totalItems = items.length;
-  const checkedCount = Object.values(checkedItems).filter(Boolean).length;
+  const totalItems = items.length + returnsList.length;
+  const checkedCount =
+    Object.values(checkedItems).filter(Boolean).length +
+    Object.values(checkedReturnItems).filter(Boolean).length;
   const progressPercentage =
     totalItems > 0 ? (checkedCount / totalItems) * 100 : 0;
   const areAllItemsChecked = totalItems > 0 && checkedCount === totalItems;
@@ -735,6 +790,152 @@ export default function CheckOrderPage({
               </div>
             </CardContent>
           </Card>
+
+          {/* Customer Returns Card (Separated for QC Checking) */}
+          {returnsList.length > 0 && (
+            <Card className="border-l-4 border-l-orange-500 overflow-hidden shadow-sm">
+              <CardHeader className="bg-orange-50/50 pb-3 border-b">
+                <div className="flex justify-between items-center">
+                  <CardTitle className="text-base sm:text-lg font-bold text-orange-800 flex items-center gap-2">
+                    <Undo2 className="w-5 h-5 text-orange-600" />
+                    Customer Returns / Exchanges (Separated)
+                  </CardTitle>
+                  <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-200 border-none">
+                    {returnsList.length} Item(s)
+                  </Badge>
+                </div>
+                <CardDescription className="text-xs text-orange-700/80">
+                  {isEditing
+                    ? "Adjust quantities or remove returned items for this order."
+                    : "Check off returned or exchange items as you verify them."}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader className="bg-orange-50/30">
+                      <TableRow>
+                        <TableHead className="w-[50px] text-center">
+                          {!isEditing && (
+                            <Checkbox
+                              checked={areAllReturnItemsChecked}
+                              onCheckedChange={toggleSelectAllReturns}
+                              aria-label="Select all returns"
+                              className={cn(
+                                "translate-y-[2px] w-5 h-5 border-2",
+                                areAllReturnItemsChecked
+                                  ? "border-orange-600 bg-orange-600"
+                                  : "border-orange-400"
+                              )}
+                            />
+                          )}
+                        </TableHead>
+                        <TableHead>Product</TableHead>
+                        <TableHead className="text-center">Type</TableHead>
+                        <TableHead className="text-center pr-4">Qty</TableHead>
+                        {isEditing && <TableHead className="w-[50px]"></TableHead>}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {returnsList.map((ret: any, idx: number) => {
+                        const isChecked = checkedReturnItems[ret.id] || false;
+                        return (
+                          <TableRow
+                            key={ret.id}
+                            className={cn(
+                              "transition-colors",
+                              !isEditing && "cursor-pointer",
+                              isChecked && !isEditing
+                                ? "bg-orange-50/40"
+                                : "hover:bg-orange-50/10"
+                            )}
+                            onClick={() => !isEditing && toggleReturnItemCheck(ret.id)}
+                          >
+                            <TableCell className="text-center">
+                              {!isEditing && (
+                                <Checkbox
+                                  checked={isChecked}
+                                  onCheckedChange={() => toggleReturnItemCheck(ret.id)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className={cn(
+                                    "w-6 h-6 border-2",
+                                    isChecked
+                                      ? "border-orange-600 data-[state=checked]:bg-orange-600"
+                                      : "border-orange-300"
+                                  )}
+                                />
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <div
+                                className={cn(
+                                  "font-semibold text-xs sm:text-sm transition-all",
+                                  isChecked && !isEditing
+                                    ? "text-slate-500 line-through decoration-slate-400"
+                                    : "text-slate-900"
+                                )}
+                              >
+                                {ret.productName}
+                              </div>
+                              <div className="text-[10px] font-mono text-muted-foreground">{ret.sku}</div>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <span className={cn(
+                                "text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider",
+                                ret.returnType === "Good"
+                                  ? "bg-green-50 text-green-700 border-green-200"
+                                  : ret.returnType === "Exchange"
+                                  ? "bg-blue-50 text-blue-700 border-blue-200"
+                                  : "bg-red-50 text-red-700 border-red-200"
+                              )}>
+                                {ret.returnType}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-center font-bold text-xs sm:text-sm pr-4">
+                              {isEditing ? (
+                                <div className="flex items-center gap-1 justify-center">
+                                  <Input
+                                    type="number"
+                                    min="1"
+                                    className="w-20 text-center h-8 border-orange-200"
+                                    value={ret.quantity}
+                                    onChange={(e) =>
+                                      handleReturnItemChange(ret.id, e.target.value)
+                                    }
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                  <span className="text-xs text-muted-foreground shrink-0">{ret.unit}</span>
+                                </div>
+                              ) : (
+                                <span className={cn(isChecked && "text-slate-400")}>
+                                  {ret.quantity} {ret.unit}
+                                </span>
+                              )}
+                            </TableCell>
+                            {isEditing && (
+                              <TableCell>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRemoveReturnItem(ret.id);
+                                  }}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </TableCell>
+                            )}
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* --- RIGHT COLUMN: Info & Actions --- */}

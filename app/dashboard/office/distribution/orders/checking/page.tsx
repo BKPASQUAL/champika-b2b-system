@@ -50,7 +50,7 @@ import {
 import { toast } from "sonner";
 import { Order, OrderStatus } from "../types";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
-import { downloadLoadingSummary } from "../loading/print-loading-summary";
+import { downloadLoadingSummary, printLoadingSummary } from "../loading/print-loading-summary";
 import { printBulkInvoices } from "@/app/lib/invoice-print";
 
 interface LorryGroup {
@@ -64,12 +64,14 @@ interface LorryGroup {
 const LOCK_EXPIRE_MS = 30 * 60 * 1000;
 
 const STATUS_OPTIONS_ADMIN: { value: OrderStatus; label: string }[] = [
+  { value: "Loading", label: "Loading" },
   { value: "Processing", label: "Processing" },
   { value: "Approved", label: "Approved" },
   { value: "Pending", label: "Pending" },
 ];
 
 const STATUS_OPTIONS_OFFICE: { value: OrderStatus; label: string }[] = [
+  { value: "Loading", label: "Loading" },
   { value: "Processing", label: "Processing" },
   { value: "Approved", label: "Approved" },
 ];
@@ -294,6 +296,18 @@ export default function DistributionCheckingOrdersPage() {
             >
               <Printer className="w-4 h-4 mr-2" />
               Print Invoices ({selectedOrders.length})
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() =>
+                printLoadingSummary(selectedOrders, {
+                  title: "CHECKING ORDERS — ITEMS SUMMARY REPORT",
+                })
+              }
+              className="bg-white border-slate-200"
+            >
+              <Printer className="w-4 h-4 mr-2" />
+              Print Summary ({selectedOrders.length})
             </Button>
             <Button
               variant="outline"

@@ -112,6 +112,69 @@ export async function POST(
           }
         }
       }
+
+      // Reverse Returns attached to this invoice
+      const { data: invData } = await supabaseAdmin
+        .from("invoices")
+        .select("invoice_no")
+        .eq("id", id)
+        .single();
+
+      if (invData?.invoice_no) {
+        const { data: returnItems } = await supabaseAdmin
+          .from("inventory_returns")
+          .select("id, product_id, quantity, return_type")
+          .ilike("reason", `%[${invData.invoice_no}]%`);
+
+        if (returnItems && returnItems.length > 0) {
+          for (const ret of returnItems) {
+            const qty = Number(ret.quantity) || 0;
+            if (qty <= 0 || !ret.product_id) continue;
+
+            const isDamage = ret.return_type !== "Good";
+            const { data: prod } = await supabaseAdmin
+              .from("products")
+              .select("stock_quantity, damaged_quantity")
+              .eq("id", ret.product_id)
+              .single();
+
+            if (prod) {
+              await supabaseAdmin
+                .from("products")
+                .update({
+                  stock_quantity: (prod.stock_quantity || 0) + qty,
+                  damaged_quantity: isDamage
+                    ? Math.max(0, (prod.damaged_quantity || 0) - qty)
+                    : (prod.damaged_quantity || 0),
+                })
+                .eq("id", ret.product_id);
+            }
+
+            if (locationIds.length > 0) {
+              const { data: locStocks } = await supabaseAdmin
+                .from("product_stocks")
+                .select("id, quantity, damaged_quantity")
+                .eq("product_id", ret.product_id)
+                .in("location_id", locationIds);
+
+              if (locStocks && locStocks.length > 0) {
+                await supabaseAdmin
+                  .from("product_stocks")
+                  .update({
+                    quantity: (locStocks[0].quantity || 0) + qty,
+                    damaged_quantity: isDamage
+                      ? Math.max(0, (locStocks[0].damaged_quantity || 0) - qty)
+                      : (locStocks[0].damaged_quantity || 0),
+                  })
+                  .eq("id", locStocks[0].id);
+              }
+            }
+
+            // Remove/void return record
+            await supabaseAdmin.from("inventory_returns").delete().eq("id", ret.id);
+          }
+        }
+      }
     }
 
     // 7. Reduce customer outstanding balance by the unpaid (due) amount

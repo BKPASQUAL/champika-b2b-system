@@ -21,6 +21,13 @@ const invoiceItemSchema = z.object({
   total: z.number(), // Line total (Qty * Price - Item Discount)
 });
 
+const returnItemInputSchema = z.object({
+  productId: z.string(),
+  quantity: z.number().min(0.001),
+  returnType: z.enum(["Good", "Damage", "Exchange"]),
+  reason: z.string().optional().nullable(),
+});
+
 const invoiceSchema = z.object({
   customerId: z.string().min(1, "Customer is required"),
   salesRepId: z.string().min(1).optional().nullable(),
@@ -30,6 +37,8 @@ const invoiceSchema = z.object({
   // ✅ NEW: Manual Invoice Number Field
   manual_invoice_no: z.string().optional().nullable(),
   items: z.array(invoiceItemSchema).min(1, "At least one item is required"),
+  // ✅ NEW: Returns Field
+  returnItems: z.array(returnItemInputSchema).optional(),
   subTotal: z.number(),
   // ✅ Extra Discount Fields
   extraDiscountPercent: z.number().default(0),
@@ -844,6 +853,102 @@ export async function POST(request: NextRequest) {
                 .insert({ product_id: item.productId, location_id: targetLocationId, quantity: -remainingToDeduct });
             }
           }
+        }
+      }
+    }
+
+    // 9.5 Process Returns if provided
+    const returnLocationId = isRetailInvoice
+      ? (retailLocationIds[0] || mainWarehouseId)
+      : (assignedLocationIds[0] || mainWarehouseId);
+
+    if (val.returnItems && val.returnItems.length > 0 && returnLocationId) {
+      for (let idx = 0; idx < val.returnItems.length; idx++) {
+        const rItem = val.returnItems[idx];
+        const return_number = `RET-${Date.now().toString().slice(-6)}-${idx + 1}`;
+        const return_reason = rItem.reason
+          ? `[${invoiceNo}] ${rItem.reason}`
+          : `[${invoiceNo}] Return from invoice creation`;
+
+        // Create Return Record
+        await supabaseAdmin
+          .from("inventory_returns")
+          .insert({
+            return_number,
+            product_id: rItem.productId,
+            location_id: returnLocationId,
+            business_id: resolvedBusinessId,
+            customer_id: val.customerId,
+            quantity: rItem.quantity,
+            return_type: rItem.returnType,
+            reason: return_reason,
+            returned_by: val.salesRepId,
+            status: "Completed",
+          });
+
+        // Adjust Stock: Reduce Good Stock (for item exchanged out) & Increase Damaged Stock (for damaged item received)
+        const { data: existingStock } = await supabaseAdmin
+          .from("product_stocks")
+          .select("id, quantity, damaged_quantity")
+          .eq("product_id", rItem.productId)
+          .eq("location_id", returnLocationId)
+          .maybeSingle();
+
+        const isDamageReturn = rItem.returnType !== "Good";
+
+        if (existingStock) {
+          await supabaseAdmin
+            .from("product_stocks")
+            .update({
+              quantity: Number(existingStock.quantity || 0) - Number(rItem.quantity),
+              damaged_quantity: isDamageReturn
+                ? Number(existingStock.damaged_quantity || 0) + Number(rItem.quantity)
+                : Number(existingStock.damaged_quantity || 0),
+            })
+            .eq("id", existingStock.id);
+        } else {
+          await supabaseAdmin.from("product_stocks").insert({
+            product_id: rItem.productId,
+            location_id: returnLocationId,
+            quantity: -Number(rItem.quantity),
+            damaged_quantity: isDamageReturn ? Number(rItem.quantity) : 0,
+            last_updated: new Date().toISOString(),
+          });
+        }
+
+        const { data: product } = await supabaseAdmin
+          .from("products")
+          .select("name, stock_quantity, damaged_quantity")
+          .eq("id", rItem.productId)
+          .single();
+
+        if (product) {
+          await supabaseAdmin
+            .from("products")
+            .update({
+              stock_quantity: Number(product.stock_quantity || 0) - Number(rItem.quantity),
+              damaged_quantity: isDamageReturn
+                ? Number(product.damaged_quantity || 0) + Number(rItem.quantity)
+                : Number(product.damaged_quantity || 0),
+            })
+            .eq("id", rItem.productId);
+        }
+
+        if (product) {
+          // Record in Transaction History
+          await supabaseAdmin.from("account_transactions").insert({
+            transaction_type: "INVENTORY_RETURN",
+            description: `Return during invoice creation (${rItem.returnType}): ${rItem.quantity} units of ${product.name}. Invoice: ${invoiceNo}`,
+            amount: 0,
+            transaction_date: new Date().toISOString(),
+            business_id: resolvedBusinessId,
+            metadata: {
+              product_id: rItem.productId,
+              quantity: rItem.quantity,
+              type: rItem.returnType,
+              invoice_no: invoiceNo,
+            },
+          });
         }
       }
     }

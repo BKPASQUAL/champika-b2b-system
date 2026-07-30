@@ -122,7 +122,43 @@ export async function GET(
 
     if (paymentsError) throw paymentsError;
 
-    // 4. Construct Response
+    // 4. Fetch Returns linked to this invoice (tagged via reason containing invoice_no)
+    const invoiceNo = invoice.invoice_no || "";
+    const { data: returnsRaw } = await supabaseAdmin
+      .from("inventory_returns")
+      .select(`
+        id,
+        product_id,
+        quantity,
+        reason,
+        return_type,
+        created_at,
+        products (
+          id,
+          name,
+          sku,
+          unit_of_measure,
+          selling_price
+        )
+      `)
+      .ilike("reason", `%${invoiceNo}%`);
+
+    const returns = (returnsRaw || []).map((r: any) => ({
+      id: r.id,
+      productId: r.product_id,
+      productName: r.products?.name || "Unknown",
+      sku: r.products?.sku || "",
+      unit: r.products?.unit_of_measure || "Unit",
+      quantity: r.quantity,
+      returnType: r.return_type || "Good",
+      price: r.products?.selling_price || 0,
+      totalValue: (r.quantity || 0) * (r.products?.selling_price || 0),
+      createdAt: r.created_at,
+    }));
+
+    const returnsTotal = returns.reduce((sum: number, r: any) => sum + r.totalValue, 0);
+
+    // 5. Construct Response
     const fullInvoice = {
       id: invoice.id,
       orderId: invoice.order_id,
@@ -198,6 +234,10 @@ export async function GET(
 
       // Payments
       payments: payments || [],
+
+      // Returns
+      returns,
+      returnsTotal,
     };
 
     return NextResponse.json(fullInvoice);

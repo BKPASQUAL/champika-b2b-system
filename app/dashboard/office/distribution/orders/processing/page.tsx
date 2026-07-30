@@ -50,7 +50,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Order, OrderStatus } from "../types";
-import { downloadLoadingSummary } from "../loading/print-loading-summary";
+import { downloadLoadingSummary, printLoadingSummary } from "../loading/print-loading-summary";
 import { printBulkInvoices } from "@/app/lib/invoice-print";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 
@@ -324,6 +324,18 @@ export default function DistributionProcessingOrdersPage() {
             >
               <Printer className="w-4 h-4 mr-2" />
               Print Invoices ({selectedOrders.length})
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() =>
+                printLoadingSummary(selectedOrders, {
+                  title: "PROCESSING ORDERS — ITEMS SUMMARY REPORT",
+                })
+              }
+              className="bg-white border-slate-200"
+            >
+              <Printer className="w-4 h-4 mr-2" />
+              Print Summary ({selectedOrders.length})
             </Button>
             <Button
               variant="outline"

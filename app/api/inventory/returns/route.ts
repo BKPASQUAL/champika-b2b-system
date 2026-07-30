@@ -89,58 +89,45 @@ export async function POST(req: Request) {
 
     if (returnError) throw returnError;
 
-    // --- 3. Update Location-Specific Stock (product_stocks) ---
+    // --- 3. Update Damage Control Stock if return is Damaged ---
     const { data: existingStock } = await supabase
       .from("product_stocks")
-      .select("*")
+      .select("id, damaged_quantity")
       .eq("product_id", product_id)
       .eq("location_id", location_id)
-      .single();
+      .maybeSingle();
 
-    if (existingStock) {
-      const updateData: any = {};
-      if (return_type === "Good") {
-        updateData.quantity = Number(existingStock.quantity) + Number(quantity);
+    if (return_type === "Damage") {
+      if (existingStock) {
+        await supabase
+          .from("product_stocks")
+          .update({ damaged_quantity: (existingStock.damaged_quantity || 0) + Number(quantity) })
+          .eq("id", existingStock.id);
       } else {
-        updateData.damaged_quantity =
-          Number(existingStock.damaged_quantity || 0) + Number(quantity);
+        await supabase.from("product_stocks").insert({
+          product_id,
+          location_id,
+          quantity: 0,
+          damaged_quantity: Number(quantity),
+          last_updated: new Date().toISOString(),
+        });
       }
-      await supabase
-        .from("product_stocks")
-        .update(updateData)
-        .eq("id", existingStock.id);
-    } else {
-      await supabase.from("product_stocks").insert({
-        product_id,
-        location_id,
-        quantity: return_type === "Good" ? quantity : 0,
-        damaged_quantity: return_type === "Damage" ? quantity : 0,
-        last_updated: new Date().toISOString(),
-      });
     }
 
-    // --- 4. Update Product Catalog (Master Stock) ---
     const { data: product } = await supabase
       .from("products")
-      .select("name, stock_quantity, damaged_quantity")
+      .select("name, damaged_quantity")
       .eq("id", product_id)
-      .single();
+      .maybeSingle();
 
-    if (product) {
-      const updateProdData: any = {};
-      if (return_type === "Good") {
-        updateProdData.stock_quantity =
-          Number(product.stock_quantity || 0) + Number(quantity);
-      } else {
-        updateProdData.damaged_quantity =
-          Number(product.damaged_quantity || 0) + Number(quantity);
-      }
-
+    if (product && return_type === "Damage") {
       await supabase
         .from("products")
-        .update(updateProdData)
+        .update({ damaged_quantity: (product.damaged_quantity || 0) + Number(quantity) })
         .eq("id", product_id);
+    }
 
+    if (product) {
       // --- 5. Record in Transaction History ---
       await supabase.from("account_transactions").insert({
         transaction_type: "INVENTORY_RETURN",

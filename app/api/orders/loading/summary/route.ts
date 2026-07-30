@@ -70,7 +70,53 @@ export async function GET(request: NextRequest) {
       })),
     }));
 
-    // Build aggregated summary across all invoices
+    // Fetch Customer Returns associated with these invoices
+    const invoiceNos = invoices.map((inv) => inv.invoiceNo).filter(Boolean);
+    let returnsList: any[] = [];
+
+    if (invoiceNos.length > 0) {
+      const orConditions = invoiceNos.map((invNo) => `reason.ilike.%${invNo}%`).join(",");
+      const { data: returnsData, error: returnsErr } = await supabaseAdmin
+        .from("inventory_returns")
+        .select(`
+          id,
+          quantity,
+          return_type,
+          reason,
+          created_at,
+          products (
+            id,
+            name,
+            sku
+          ),
+          customers (
+            shop_name
+          )
+        `)
+        .or(orConditions);
+
+      if (!returnsErr && returnsData) {
+        returnsList = returnsData;
+      }
+    }
+
+    // Format returns list
+    const returns = returnsList.map((ret: any) => {
+      const match = ret.reason?.match(/\[(.*?)\]/);
+      const matchedInvNo = match ? match[1] : "";
+      return {
+        id: ret.id,
+        invoiceNo: matchedInvNo,
+        shopName: ret.customers?.shop_name || "Unknown Shop",
+        productId: ret.products?.id || "",
+        productName: ret.products?.name || "Unknown Product",
+        sku: ret.products?.sku || "-",
+        returnType: ret.return_type || "Exchange",
+        quantity: Number(ret.quantity) || 0,
+      };
+    });
+
+    // Build unified aggregated summary across all invoices & returns
     const summaryMap: Record<
       string,
       {
@@ -79,6 +125,7 @@ export async function GET(request: NextRequest) {
         sku: string;
         totalQuantity: number;
         totalFreeQuantity: number;
+        totalReturnQuantity: number;
       }
     > = {};
 
@@ -92,11 +139,27 @@ export async function GET(request: NextRequest) {
             sku: item.sku,
             totalQuantity: 0,
             totalFreeQuantity: 0,
+            totalReturnQuantity: 0,
           };
         }
         summaryMap[key].totalQuantity += item.quantity;
         summaryMap[key].totalFreeQuantity += item.freeQuantity;
       });
+    });
+
+    returns.forEach((ret: any) => {
+      const key = ret.productId || ret.productName;
+      if (!summaryMap[key]) {
+        summaryMap[key] = {
+          productId: ret.productId || "",
+          productName: ret.productName,
+          sku: ret.sku || "-",
+          totalQuantity: 0,
+          totalFreeQuantity: 0,
+          totalReturnQuantity: 0,
+        };
+      }
+      summaryMap[key].totalReturnQuantity += ret.quantity;
     });
 
     const summary = Object.values(summaryMap).sort((a, b) =>
@@ -108,6 +171,7 @@ export async function GET(request: NextRequest) {
       invoiceCount: invoices.length,
       invoices,
       summary,
+      returns,
     });
   } catch (error: any) {
     console.error("GET /api/orders/loading/summary error:", error);

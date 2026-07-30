@@ -71,6 +71,42 @@ export async function GET(
     const invoiceNumber =
       order.invoice_no || order.invoices?.[0]?.invoice_no || null;
 
+    // Fetch Returns linked to this order/invoice
+    let returns: any[] = [];
+    if (invoiceNumber) {
+      const { data: returnsRaw } = await supabaseAdmin
+        .from("inventory_returns")
+        .select(`
+          id,
+          product_id,
+          quantity,
+          reason,
+          return_type,
+          created_at,
+          products (
+            id,
+            name,
+            sku,
+            unit_of_measure,
+            selling_price
+          )
+        `)
+        .ilike("reason", `%${invoiceNumber}%`);
+
+      returns = (returnsRaw || []).map((r: any) => ({
+        id: r.id,
+        productId: r.product_id,
+        productName: r.products?.name || "Unknown",
+        sku: r.products?.sku || "",
+        unit: r.products?.unit_of_measure || "Unit",
+        quantity: r.quantity,
+        returnType: r.return_type || "Exchange",
+        price: r.products?.selling_price || 0,
+        totalValue: (r.quantity || 0) * (r.products?.selling_price || 0),
+        createdAt: r.created_at,
+      }));
+    }
+
     // Map DB structure to Frontend structure
     const response = {
       id: order.id,
@@ -112,6 +148,9 @@ export async function GET(
         disc: 0,
         total: item.total_price,
       })),
+
+      // Returns
+      returns,
 
       // Total
       totalAmount: order.total_amount,
@@ -316,7 +355,7 @@ export async function PATCH(
 
     // --- SCENARIO 1: UPDATE ORDER ITEMS (EDIT MODE) ---
     if (action === "update_items" && items) {
-      const { newItems = [], deletedItemIds = [], orderDate } = body;
+      const { newItems = [], deletedItemIds = [], orderDate, returnsList = [], deletedReturnIds = [] } = body;
 
       // 1. Fetch current order (need sales_rep_id + customer_id + old total)
       const { data: currentOrder } = await supabaseAdmin
@@ -326,6 +365,59 @@ export async function PATCH(
         .single();
 
       if (!currentOrder) throw new Error("Order data validation failed");
+
+      // Handle deleted return items
+      for (const delRetId of deletedReturnIds) {
+        await supabaseAdmin.from("inventory_returns").delete().eq("id", delRetId);
+      }
+
+      // Handle updated & new return items
+      for (const ret of returnsList) {
+        if (ret.id && !ret.isNew && !String(ret.id).startsWith("new-")) {
+          await supabaseAdmin
+            .from("inventory_returns")
+            .update({
+              quantity: ret.quantity,
+              return_type: ret.returnType || ret.return_type || "Exchange",
+            })
+            .eq("id", ret.id);
+        } else if (ret.productId && ret.quantity > 0) {
+          const { data: inv } = await supabaseAdmin
+            .from("invoices")
+            .select("id, invoice_number")
+            .eq("order_id", id)
+            .maybeSingle();
+
+          await supabaseAdmin.from("inventory_returns").insert({
+            product_id: ret.productId,
+            quantity: ret.quantity,
+            return_type: ret.returnType || ret.return_type || "Exchange",
+            customer_id: currentOrder.customer_id,
+            reason: inv?.invoice_number ? `[${inv.invoice_number}] Order return` : `[ORD-${id}] Order return`,
+            created_at: new Date().toISOString(),
+          });
+
+          // Adjust Stock: Reduce Good Stock & Increase Damaged Stock for return/exchange items
+          const isDamageReturn = (ret.returnType || ret.return_type) !== "Good";
+          const { data: prod } = await supabaseAdmin
+            .from("products")
+            .select("stock_quantity, damaged_quantity")
+            .eq("id", ret.productId)
+            .single();
+
+          if (prod) {
+            await supabaseAdmin
+              .from("products")
+              .update({
+                stock_quantity: (prod.stock_quantity || 0) - Number(ret.quantity),
+                damaged_quantity: isDamageReturn
+                  ? (prod.damaged_quantity || 0) + Number(ret.quantity)
+                  : (prod.damaged_quantity || 0),
+              })
+              .eq("id", ret.productId);
+          }
+        }
+      }
 
       const locationIds = await getRepLocationIds(currentOrder.sales_rep_id);
 
@@ -564,7 +656,7 @@ export async function PATCH(
     if (status) {
       const { data: currentOrder, error: fetchError } = await supabaseAdmin
         .from("orders")
-        .select("status, sales_rep_id")
+        .select("status, sales_rep_id, customer_id")
         .eq("id", id)
         .single();
 
@@ -608,7 +700,7 @@ export async function PATCH(
         }
       }
 
-      if (status === "Cancelled" && currentOrder.status !== "Cancelled") {
+      if ((status === "Cancelled" || status === "Rejected") && currentOrder.status !== "Cancelled" && currentOrder.status !== "Rejected") {
         const locationIds = await getRepLocationIds(currentOrder.sales_rep_id);
 
         const { data: orderItems, error: itemsError } = await supabaseAdmin
@@ -623,6 +715,73 @@ export async function PATCH(
             const restoreQty =
               (Number(item.quantity) || 0) + (Number(item.free_quantity) || 0);
             await restoreStock(item.product_id, restoreQty, locationIds);
+          }
+        }
+
+        // Reverse Returns attached to this order
+        const { data: invData } = await supabaseAdmin
+          .from("invoices")
+          .select("invoice_no")
+          .eq("order_id", id)
+          .maybeSingle();
+
+        const invNo = invData?.invoice_no || "";
+        const orConditions = [
+          `reason.ilike.%ORD-${id}%`,
+          invNo ? `reason.ilike.%${invNo}%` : null,
+          currentOrder.customer_id ? `customer_id.eq.${currentOrder.customer_id}` : null,
+        ].filter(Boolean).join(",");
+
+        const { data: returnItems } = await supabaseAdmin
+          .from("inventory_returns")
+          .select("id, product_id, quantity, return_type")
+          .or(orConditions);
+
+        if (returnItems && returnItems.length > 0) {
+          for (const ret of returnItems) {
+            const qty = Number(ret.quantity) || 0;
+            if (qty <= 0 || !ret.product_id) continue;
+
+            const isDamage = ret.return_type !== "Good";
+            const { data: prod } = await supabaseAdmin
+              .from("products")
+              .select("stock_quantity, damaged_quantity")
+              .eq("id", ret.product_id)
+              .single();
+
+            if (prod) {
+              await supabaseAdmin
+                .from("products")
+                .update({
+                  stock_quantity: (prod.stock_quantity || 0) + qty,
+                  damaged_quantity: isDamage
+                    ? Math.max(0, (prod.damaged_quantity || 0) - qty)
+                    : (prod.damaged_quantity || 0),
+                })
+                .eq("id", ret.product_id);
+            }
+
+            if (locationIds.length > 0) {
+              const { data: locStocks } = await supabaseAdmin
+                .from("product_stocks")
+                .select("id, quantity, damaged_quantity")
+                .eq("product_id", ret.product_id)
+                .in("location_id", locationIds);
+
+              if (locStocks && locStocks.length > 0) {
+                await supabaseAdmin
+                  .from("product_stocks")
+                  .update({
+                    quantity: (locStocks[0].quantity || 0) + qty,
+                    damaged_quantity: isDamage
+                      ? Math.max(0, (locStocks[0].damaged_quantity || 0) - qty)
+                      : (locStocks[0].damaged_quantity || 0),
+                  })
+                  .eq("id", locStocks[0].id);
+              }
+            }
+
+            await supabaseAdmin.from("inventory_returns").delete().eq("id", ret.id);
           }
         }
       }
