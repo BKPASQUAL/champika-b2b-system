@@ -469,3 +469,101 @@ export const getHalfPageDocumentWrapper = (content: string, title: string) => `
   </head>
   <body>${content}</body>
   </html>`;
+
+export const generateReturnsSummaryHTML = (loadingSheet: any): string => {
+  if (!loadingSheet) return "";
+
+  const shopReturnsMap: Record<string, any[]> = {};
+  (loadingSheet.orders || []).forEach((order: any) => {
+    const shopName =
+      order.customer?.shopName || order.customer?.shop || "Unknown Shop";
+    const returns = order.returns || [];
+    if (returns.length > 0) {
+      if (!shopReturnsMap[shopName]) {
+        shopReturnsMap[shopName] = [];
+      }
+      returns.forEach((ret: any) => {
+        shopReturnsMap[shopName].push(ret);
+      });
+    }
+  });
+
+  const shopNames = Object.keys(shopReturnsMap);
+  if (shopNames.length === 0) return "";
+
+  const shopTables = shopNames
+    .map((shopName, shopIdx) => {
+      const items = shopReturnsMap[shopName];
+      const rows = items
+        .map((ret: any, itemIdx: number) => {
+          return `
+        <tr>
+          <td style="padding:5px 6px;font-size:12px;color:#000;text-align:center;vertical-align:middle;border:1px solid #000;">${itemIdx + 1}</td>
+          <td style="padding:5px 6px;font-size:12px;color:#000;font-weight:700;vertical-align:middle;border:1px solid #000;">${ret.productName || "-"}</td>
+          <td style="padding:5px 6px;font-size:12px;color:#000;text-align:center;font-family:monospace;vertical-align:middle;border:1px solid #000;">${ret.sku || "-"}</td>
+          <td style="padding:5px 6px;font-size:12px;color:#000;text-align:center;vertical-align:middle;border:1px solid #000;">${ret.returnType || "Exchange"}</td>
+          <td style="padding:5px 6px;font-size:12px;font-weight:700;color:#000;text-align:center;vertical-align:middle;border:1px solid #000;">
+            ${ret.quantity} ${ret.unit || ret.unitOfMeasure || ""}
+          </td>
+        </tr>`;
+        })
+        .join("");
+
+      return `
+      <div style="margin-top:10px;margin-bottom:14px;">
+        <div style="font-size:13px;font-weight:700;color:#000;margin-bottom:4px;">
+          Shop (${shopIdx + 1}): ${shopName}
+        </div>
+        <table style="width:100%;border-collapse:collapse;border:1.5px solid #000;">
+          <thead>
+            <tr style="background:#f0f0f0;border-bottom:1.5px solid #000;">
+              <th style="padding:5px 6px;font-size:10px;font-weight:700;text-transform:uppercase;color:#000;text-align:center;width:6%;border:1px solid #000;">#</th>
+              <th style="padding:5px 6px;font-size:10px;font-weight:700;text-transform:uppercase;color:#000;text-align:left;width:48%;border:1px solid #000;">Item Name</th>
+              <th style="padding:5px 6px;font-size:10px;font-weight:700;text-transform:uppercase;color:#000;text-align:center;width:20%;border:1px solid #000;">SKU / Code</th>
+              <th style="padding:5px 6px;font-size:10px;font-weight:700;text-transform:uppercase;color:#000;text-align:center;width:14%;border:1px solid #000;">Return Type</th>
+              <th style="padding:5px 6px;font-size:10px;font-weight:700;text-transform:uppercase;color:#000;text-align:center;width:12%;border:1px solid #000;">Qty</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+    })
+    .join("");
+
+  const loadingDateStr = loadingSheet.loadingDate || loadingSheet.createdAt;
+  const formattedDate = loadingDateStr
+    ? new Date(loadingDateStr).toLocaleDateString("en-GB", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      })
+    : "-";
+
+  return `
+  <div class="invoice-page" style="page-break-before:always;page-break-after:always;width:100%;min-height:277mm;padding:12px 20px 20px;background:#fff;font-family:${FONT_STACK};color:#000;box-sizing:border-box;display:flex;flex-direction:column;">
+    <div style="font-size:18px;font-weight:800;color:#000;margin-bottom:10px;">Customer Exchange &amp; Return Items Summary</div>
+
+    <table style="width:100%;border-collapse:collapse;margin-bottom:8px;">
+      <tr>
+        <td style="vertical-align:top;width:50%;font-size:11px;color:#000;line-height:1.4;">
+          <strong>Load Ref:</strong> ${loadingSheet.loadId || "-"}<br>
+          Lorry No: ${loadingSheet.lorryNumber || "-"}
+        </td>
+        <td style="vertical-align:top;text-align:right;width:50%;font-size:11px;color:#000;line-height:1.4;">
+          <strong>Date:</strong> ${formattedDate}<br>
+          Responsible Person: ${loadingSheet.driverName || "-"}
+        </td>
+      </tr>
+    </table>
+
+    <div style="border-top:1.5px solid #000;margin:4px 0 8px;"></div>
+
+    ${shopTables}
+
+    <div style="flex:1;"></div>
+
+    <div style="border-top:1px solid #000;padding-top:8px;text-align:center;font-size:10px;color:#000;">
+      Customer Exchange &amp; Return Items Summary — Champika Hardware
+    </div>
+  </div>`;
+};

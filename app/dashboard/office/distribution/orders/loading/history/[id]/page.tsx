@@ -55,7 +55,7 @@ import {
   downloadReturnsSummarySheet,
   printReturnsSummarySheet,
 } from "@/app/dashboard/admin/orders/loading/history/print-loading-sheet";
-import { printBulkInvoices } from "@/app/dashboard/office/distribution/invoices/print-utils";
+import { printBulkInvoices, generateReturnsSummaryHTML } from "@/app/dashboard/office/distribution/invoices/print-utils";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { cn } from "@/lib/utils";
 import { Undo2 } from "lucide-react";
@@ -873,12 +873,11 @@ export default function DistributionLoadingSheetDetailPage({
               disabled={(selectedPrintIds.length === 0 && !includeReturnsSummary) || printingInvoices}
               onClick={async () => {
                 setPrintingInvoices(true);
-                if (selectedPrintIds.length > 0) {
-                  await printBulkInvoices(selectedPrintIds);
+                let extraHtml = "";
+                if (includeReturnsSummary && loadingSheet) {
+                  extraHtml = generateReturnsSummaryHTML(loadingSheet);
                 }
-                if (includeReturnsSummary) {
-                  await printReturnsSummarySheet(loadingSheet.id);
-                }
+                await printBulkInvoices(selectedPrintIds, "distribution", extraHtml);
                 setPrintingInvoices(false);
                 setPrintInvoicesOpen(false);
               }}

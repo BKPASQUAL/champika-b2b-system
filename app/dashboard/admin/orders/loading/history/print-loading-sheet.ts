@@ -312,36 +312,42 @@ export const downloadReturnsSummarySheet = async (loadId: string) => {
   }
 };
 
-// Function 4: Print Customer Returns & Exchange Items Summary PDF
-export const printReturnsSummarySheet = async (loadId: string) => {
+import { generateReturnsSummaryHTML, getDocumentWrapper } from "@/app/lib/invoice-html";
+
+// Function 4: Print Customer Returns & Exchange Items Summary
+export const printReturnsSummarySheet = async (loadIdOrData: string | any) => {
   try {
-    const result = await generateReturnsPDFContent(loadId);
-    if (!result) return;
-
-    result.doc.autoPrint();
-    const blob = result.doc.output("blob");
-    const blobUrl = URL.createObjectURL(blob);
-
+    let data = loadIdOrData;
+    if (typeof loadIdOrData === "string") {
+      const res = await fetch(`/api/orders/loading/history/${loadIdOrData}`);
+      if (!res.ok) throw new Error("Failed to load loading sheet details");
+      data = await res.json();
+    }
+    const html = generateReturnsSummaryHTML(data);
+    if (!html) {
+      toast.info("No customer returns found for this loading sheet.");
+      return;
+    }
     const iframe = document.createElement("iframe");
-    iframe.style.position = "fixed";
-    iframe.style.width = "0px";
-    iframe.style.height = "0px";
-    iframe.style.border = "none";
-    iframe.src = blobUrl;
-
+    Object.assign(iframe.style, {
+      position: "fixed",
+      right: "0",
+      bottom: "0",
+      width: "0",
+      height: "0",
+      border: "0",
+    });
     document.body.appendChild(iframe);
-
-    iframe.onload = () => {
-      if (iframe.contentWindow) {
-        iframe.contentWindow.focus();
-        iframe.contentWindow.print();
-      }
-    };
-
+    const doc = iframe.contentWindow?.document;
+    if (!doc) return;
+    doc.open();
+    doc.write(getDocumentWrapper(html, `Returns_Summary_${data.loadId || ""}`));
+    doc.close();
     setTimeout(() => {
-      document.body.removeChild(iframe);
-      URL.revokeObjectURL(blobUrl);
-    }, 60000);
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      setTimeout(() => document.body.removeChild(iframe), 2000);
+    }, 500);
   } catch (error) {
     console.error(error);
     toast.error("Failed to print Returns Summary");

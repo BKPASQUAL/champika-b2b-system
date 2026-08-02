@@ -10,13 +10,14 @@ import { toast } from "sonner";
 import {
   generateInvoiceHTML,
   generateHalfPageInvoiceHTML,
+  generateReturnsSummaryHTML,
   getDocumentWrapper,
   getHalfPageDocumentWrapper,
   DIVISIONS,
 } from "./invoice-html";
 
 export type { DivisionConfig } from "./invoice-html";
-export { DIVISIONS };
+export { DIVISIONS, generateInvoiceHTML, generateReturnsSummaryHTML };
 
 // ── iframe print helper ─────────────────────────────────────────────────────
 const printHTML = (htmlContent: string) => {
@@ -41,9 +42,6 @@ const printHTML = (htmlContent: string) => {
     setTimeout(() => document.body.removeChild(iframe), 2000);
   }, 500);
 };
-
-// ── Re-export so callers don't need to import from invoice-html directly ────
-export { generateInvoiceHTML };
 
 // ── Print ───────────────────────────────────────────────────────────────────
 export const printInvoice = async (
@@ -112,31 +110,38 @@ export const printHalfPageInvoice = async (
 // ── Bulk print ──────────────────────────────────────────────────────────────
 export const printBulkInvoices = async (
   invoiceIds: string[],
-  divisionKey: keyof typeof DIVISIONS = "distribution"
+  divisionKey: keyof typeof DIVISIONS = "distribution",
+  extraHtml?: string
 ) => {
-  if (!invoiceIds?.length) {
-    toast.error("No invoices selected");
+  if (!invoiceIds?.length && !extraHtml) {
+    toast.error("No items selected for printing");
     return;
   }
-  const tid = toast.loading(`Preparing ${invoiceIds.length} invoices...`);
+  const count = (invoiceIds?.length || 0) + (extraHtml ? 1 : 0);
+  const tid = toast.loading(`Preparing ${count} document(s)...`);
   try {
-    const invoices = await Promise.all(
-      invoiceIds.map((id) =>
-        fetch(`/api/invoices/${id}`).then((r) => {
-          if (!r.ok) throw new Error();
-          return r.json();
-        })
-      )
-    );
-    const allHtml = (
-      await Promise.all(
-        invoices.map((inv) => generateInvoiceHTML(inv, divisionKey))
-      )
-    ).join("");
-    printHTML(getDocumentWrapper(allHtml, "Bulk Invoices"));
+    let invoicesHtml = "";
+    if (invoiceIds?.length) {
+      const invoices = await Promise.all(
+        invoiceIds.map((id) =>
+          fetch(`/api/invoices/${id}`).then((r) => {
+            if (!r.ok) throw new Error();
+            return r.json();
+          })
+        )
+      );
+      invoicesHtml = (
+        await Promise.all(
+          invoices.map((inv) => generateInvoiceHTML(inv, divisionKey))
+        )
+      ).join("");
+    }
+    const fullHtml = invoicesHtml + (extraHtml || "");
+    printHTML(getDocumentWrapper(fullHtml, "Bulk Invoices"));
     toast.dismiss(tid);
     toast.success("Printing started");
-  } catch {
+  } catch (err) {
+    console.error("printBulkInvoices error:", err);
     toast.dismiss(tid);
     toast.error("Failed to generate bulk print");
   }
