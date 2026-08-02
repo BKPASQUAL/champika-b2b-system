@@ -42,7 +42,8 @@ export async function GET(request: NextRequest) {
           products (
             id,
             name,
-            sku
+            sku,
+            unit_of_measure
           )
         )
       `
@@ -64,6 +65,7 @@ export async function GET(request: NextRequest) {
         productId: item.products?.id || "",
         productName: item.products?.name || "Unknown Product",
         sku: item.products?.sku || "-",
+        unitOfMeasure: item.products?.unit_of_measure || "Pcs",
         quantity: Number(item.quantity) || 0,
         freeQuantity: Number(item.free_quantity) || 0,
         unitPrice: Number(item.unit_price) || 0,
@@ -87,7 +89,8 @@ export async function GET(request: NextRequest) {
           products (
             id,
             name,
-            sku
+            sku,
+            unit_of_measure
           ),
           customers (
             shop_name
@@ -111,6 +114,7 @@ export async function GET(request: NextRequest) {
         productId: ret.products?.id || "",
         productName: ret.products?.name || "Unknown Product",
         sku: ret.products?.sku || "-",
+        unitOfMeasure: ret.products?.unit_of_measure || "Pcs",
         returnType: ret.return_type || "Exchange",
         quantity: Number(ret.quantity) || 0,
       };
@@ -123,6 +127,7 @@ export async function GET(request: NextRequest) {
         productId: string;
         productName: string;
         sku: string;
+        unitOfMeasure: string;
         totalQuantity: number;
         totalFreeQuantity: number;
         totalReturnQuantity: number;
@@ -137,6 +142,7 @@ export async function GET(request: NextRequest) {
             productId: item.productId,
             productName: item.productName,
             sku: item.sku,
+            unitOfMeasure: item.unitOfMeasure || "Pcs",
             totalQuantity: 0,
             totalFreeQuantity: 0,
             totalReturnQuantity: 0,
@@ -154,6 +160,7 @@ export async function GET(request: NextRequest) {
           productId: ret.productId || "",
           productName: ret.productName,
           sku: ret.sku || "-",
+          unitOfMeasure: ret.unitOfMeasure || "Pcs",
           totalQuantity: 0,
           totalFreeQuantity: 0,
           totalReturnQuantity: 0,

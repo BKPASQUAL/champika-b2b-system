@@ -262,7 +262,7 @@ const generateReturnsPDFContent = async (loadId: string) => {
       ret.productName,
       ret.sku || "-",
       ret.returnType || "Exchange",
-      `${ret.quantity}`,
+      `${ret.quantity} ${ret.unit || ret.unitOfMeasure || ""}`.trim(),
     ]);
 
     autoTable(doc, {

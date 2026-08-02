@@ -42,6 +42,7 @@ const generateSummaryPDF = (data: any, reportTitle = "ITEMS SUMMARY REPORT"): js
       idx + 1,
       item.sku || "-",
       item.productName,
+      item.unitOfMeasure || "Pcs",
       totalQty,
     ];
   });
@@ -54,10 +55,10 @@ const generateSummaryPDF = (data: any, reportTitle = "ITEMS SUMMARY REPORT"): js
   }, 0);
 
   autoTable(doc, {
-    head: [["#", "SKU", "Product Name", "Total Qty"]],
+    head: [["#", "SKU", "Product Name", "Pack Size", "Total Qty"]],
     body: summaryRows,
     foot: [
-      ["", "", "GRAND TOTAL", grandTotalQty],
+      ["", "", "GRAND TOTAL", "", grandTotalQty],
     ],
     startY: currentY,
     theme: "grid",
@@ -90,9 +91,10 @@ const generateSummaryPDF = (data: any, reportTitle = "ITEMS SUMMARY REPORT"): js
     },
     columnStyles: {
       0: { cellWidth: 10, halign: "center" },
-      1: { cellWidth: 30 },
+      1: { cellWidth: 28 },
       2: { cellWidth: "auto" },
-      3: { cellWidth: 25, halign: "center", fontStyle: "bold" },
+      3: { cellWidth: 25, halign: "center" },
+      4: { cellWidth: 22, halign: "center", fontStyle: "bold" },
     },
   });
 
