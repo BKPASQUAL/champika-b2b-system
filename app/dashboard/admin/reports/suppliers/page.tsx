@@ -580,63 +580,81 @@ export default function SupplierAnalyticsPage() {
 
             {/* Detail Tabs: Products / Customers / Invoices / Businesses */}
             <Card>
-              <CardHeader className="pb-0 px-4 pt-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex gap-1 flex-wrap">
-                    <Button
-                      variant={detailTab === "products" ? "default" : "ghost"}
-                      size="sm"
-                      className="h-8 text-xs"
+              <CardHeader className="pb-3 px-4 pt-4 border-b">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 overflow-x-auto">
+                  <div className="flex items-center gap-2">
+                    <button
                       onClick={() => { setDetailTab("products"); setSearch(""); }}
+                      className={`px-4 py-2 text-xs font-semibold rounded-xl gap-2 transition-all flex items-center whitespace-nowrap border ${
+                        detailTab === "products"
+                          ? "bg-black text-white border-black shadow-sm"
+                          : "text-gray-800 hover:bg-gray-100/80 border-transparent"
+                      }`}
                     >
-                      <ShoppingBag className="h-3 w-3 mr-1" />
-                      Products ({filteredProducts.length})
-                    </Button>
-                    <Button
-                      variant={detailTab === "customers" ? "default" : "ghost"}
-                      size="sm"
-                      className="h-8 text-xs"
+                      <ShoppingBag className="h-4 w-4 shrink-0" />
+                      <span>Products</span>
+                      <span className="text-sky-500 font-bold ml-0.5">({filteredProducts.length})</span>
+                    </button>
+
+                    <button
                       onClick={() => { setDetailTab("customers"); setSearch(""); }}
+                      className={`px-4 py-2 text-xs font-semibold rounded-xl gap-2 transition-all flex items-center whitespace-nowrap border ${
+                        detailTab === "customers"
+                          ? "bg-black text-white border-black shadow-sm"
+                          : "text-gray-800 hover:bg-gray-100/80 border-transparent"
+                      }`}
                     >
-                      <Users className="h-3 w-3 mr-1" />
-                      Customers ({filteredCustomers.length})
-                    </Button>
-                    <Button
-                      variant={detailTab === "invoices" ? "default" : "ghost"}
-                      size="sm"
-                      className="h-8 text-xs"
+                      <Users className="h-4 w-4 shrink-0" />
+                      <span>Customers</span>
+                      <span className="text-sky-500 font-bold ml-0.5">({filteredCustomers.length})</span>
+                    </button>
+
+                    <button
                       onClick={() => { setDetailTab("invoices"); setSearch(""); }}
+                      className={`px-4 py-2 text-xs font-semibold rounded-xl gap-2 transition-all flex items-center whitespace-nowrap border ${
+                        detailTab === "invoices"
+                          ? "bg-black text-white border-black shadow-sm"
+                          : "text-gray-800 hover:bg-gray-100/80 border-transparent"
+                      }`}
                     >
-                      <FileText className="h-3 w-3 mr-1" />
-                      Invoices ({filteredInvoices.length})
-                    </Button>
-                    <Button
-                      variant={detailTab === "businesses" ? "default" : "ghost"}
-                      size="sm"
-                      className="h-8 text-xs"
+                      <FileText className="h-4 w-4 shrink-0" />
+                      <span>Invoices</span>
+                      <span className="text-sky-500 font-bold ml-0.5">({filteredInvoices.length})</span>
+                    </button>
+
+                    <button
                       onClick={() => { setDetailTab("businesses"); setSearch(""); }}
+                      className={`px-4 py-2 text-xs font-semibold rounded-xl gap-2 transition-all flex items-center whitespace-nowrap border ${
+                        detailTab === "businesses"
+                          ? "bg-black text-white border-black shadow-sm"
+                          : "text-gray-800 hover:bg-gray-100/80 border-transparent"
+                      }`}
                     >
-                      <Building2 className="h-3 w-3 mr-1" />
-                      Businesses ({filteredBusinesses.length})
-                    </Button>
-                    <Button
-                      variant={detailTab === "months" ? "default" : "ghost"}
-                      size="sm"
-                      className="h-8 text-xs"
+                      <Building2 className="h-4 w-4 shrink-0" />
+                      <span>Businesses</span>
+                      <span className="text-sky-500 font-bold ml-0.5">({filteredBusinesses.length})</span>
+                    </button>
+
+                    <button
                       onClick={() => { setDetailTab("months"); setSearch(""); }}
+                      className={`px-4 py-2 text-xs font-semibold rounded-xl gap-2 transition-all flex items-center whitespace-nowrap border ${
+                        detailTab === "months"
+                          ? "bg-black text-white border-black shadow-sm"
+                          : "text-gray-800 hover:bg-gray-100/80 border-transparent"
+                      }`}
                     >
-                      <Calendar className="h-3 w-3 mr-1" />
-                      Monthly Breakdown
-                    </Button>
+                      <Calendar className="h-4 w-4 shrink-0" />
+                      <span>Monthly Breakdown</span>
+                    </button>
                   </div>
                   {detailTab !== "months" && (
-                    <div className="relative w-full sm:w-44">
-                      <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                    <div className="relative w-full sm:w-60 shrink-0">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                       <Input
                         placeholder="Search…"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        className="h-8 text-xs pl-7"
+                        className="h-8 text-xs pl-8 rounded-lg"
                       />
                     </div>
                   )}

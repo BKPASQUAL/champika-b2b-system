@@ -686,55 +686,71 @@ export default function BusinessAnalyticsPage() {
               </Card>
             )}
 
-            {/* Detail Tabs: Invoices / Customers / Products */}
+            {/* Detail Tabs: Invoices / Customers / Products / Reps */}
             <Card>
-              <CardHeader className="pb-0 px-4 pt-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex gap-1 flex-wrap">
-                    <Button
-                      variant={detailTab === "invoices" ? "default" : "ghost"}
-                      size="sm"
-                      className="h-8 text-xs"
+              <CardHeader className="pb-3 px-4 pt-4 border-b">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 overflow-x-auto">
+                  <div className="flex items-center gap-2">
+                    <button
                       onClick={() => { setDetailTab("invoices"); setDetailSearch(""); }}
+                      className={`px-4 py-2 text-xs font-semibold rounded-xl gap-2 transition-all flex items-center whitespace-nowrap border ${
+                        detailTab === "invoices"
+                          ? "bg-black text-white border-black shadow-sm"
+                          : "text-gray-800 hover:bg-gray-100/80 border-transparent"
+                      }`}
                     >
-                      <Receipt className="h-3 w-3 mr-1" />
-                      Invoices ({current.invoices?.length || 0})
-                    </Button>
-                    <Button
-                      variant={detailTab === "customers" ? "default" : "ghost"}
-                      size="sm"
-                      className="h-8 text-xs"
+                      <Receipt className="h-4 w-4 shrink-0" />
+                      <span>Invoices</span>
+                      <span className="text-sky-500 font-bold ml-0.5">({current.invoices?.length || 0})</span>
+                    </button>
+
+                    <button
                       onClick={() => { setDetailTab("customers"); setDetailSearch(""); }}
+                      className={`px-4 py-2 text-xs font-semibold rounded-xl gap-2 transition-all flex items-center whitespace-nowrap border ${
+                        detailTab === "customers"
+                          ? "bg-black text-white border-black shadow-sm"
+                          : "text-gray-800 hover:bg-gray-100/80 border-transparent"
+                      }`}
                     >
-                      <Users className="h-3 w-3 mr-1" />
-                      Customers ({current.customers?.length || 0})
-                    </Button>
-                    <Button
-                      variant={detailTab === "products" ? "default" : "ghost"}
-                      size="sm"
-                      className="h-8 text-xs"
+                      <Users className="h-4 w-4 shrink-0" />
+                      <span>Customers</span>
+                      <span className="text-sky-500 font-bold ml-0.5">({current.customers?.length || 0})</span>
+                    </button>
+
+                    <button
                       onClick={() => { setDetailTab("products"); setDetailSearch(""); }}
+                      className={`px-4 py-2 text-xs font-semibold rounded-xl gap-2 transition-all flex items-center whitespace-nowrap border ${
+                        detailTab === "products"
+                          ? "bg-black text-white border-black shadow-sm"
+                          : "text-gray-800 hover:bg-gray-100/80 border-transparent"
+                      }`}
                     >
-                      <Package className="h-3 w-3 mr-1" />
-                      Products ({current.products?.length || 0})
-                    </Button>
-                    <Button
-                      variant={detailTab === "reps" ? "default" : "ghost"}
-                      size="sm"
-                      className="h-8 text-xs"
+                      <Package className="h-4 w-4 shrink-0" />
+                      <span>Products</span>
+                      <span className="text-sky-500 font-bold ml-0.5">({current.products?.length || 0})</span>
+                    </button>
+
+                    <button
                       onClick={() => { setDetailTab("reps"); setDetailSearch(""); }}
+                      className={`px-4 py-2 text-xs font-semibold rounded-xl gap-2 transition-all flex items-center whitespace-nowrap border ${
+                        detailTab === "reps"
+                          ? "bg-black text-white border-black shadow-sm"
+                          : "text-gray-800 hover:bg-gray-100/80 border-transparent"
+                      }`}
                     >
-                      <Users className="h-3 w-3 mr-1" />
-                      Reps ({current.reps?.length || 0})
-                    </Button>
+                      <Users className="h-4 w-4 shrink-0" />
+                      <span>Reps</span>
+                      <span className="text-sky-500 font-bold ml-0.5">({current.reps?.length || 0})</span>
+                    </button>
                   </div>
-                  <div className="relative w-full sm:w-44">
-                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+
+                  <div className="relative w-full sm:w-60 shrink-0">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                     <Input
                       placeholder="Search..."
                       value={detailSearch}
                       onChange={(e) => setDetailSearch(e.target.value)}
-                      className="h-8 text-xs pl-7"
+                      className="h-8 text-xs pl-8 rounded-lg"
                     />
                   </div>
                 </div>

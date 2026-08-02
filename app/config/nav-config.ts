@@ -436,6 +436,11 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           icon: CreditCard,
         },
         {
+          name: "Sales Analytics",
+          href: "/dashboard/rep/analytics",
+          icon: BarChart3,
+        },
+        {
           name: "Salary",
           href: "/dashboard/rep/salary",
           icon: Banknote,

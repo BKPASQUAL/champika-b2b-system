@@ -54,6 +54,8 @@ import {
   Clock,
   Award,
   Percent,
+  Factory,
+  Package,
 } from "lucide-react";
 import { toast } from "sonner";
 import { TablePagination } from "@/components/ui/TablePagination";
@@ -186,6 +188,8 @@ export default function RepAnalyticsPage() {
   const [commissionRules, setCommissionRules] = useState<any[]>([]);
   const [selectedRepId, setSelectedRepId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [supplierSearch, setSupplierSearch] = useState("");
+  const [categorySearch, setCategorySearch] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const PER_PAGE = 10;
@@ -195,7 +199,7 @@ export default function RepAnalyticsPage() {
     setLoading(true);
     try {
       const { from, to } = getRange(quickSelect, customFrom, customTo);
-      const res = await fetch(`/api/reports/reps?from=${from}&to=${to}`);
+      const res = await fetch(`/api/reports/reps?from=${from}&to=${to}&_t=${Date.now()}`, { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to fetch rep analytics");
       const data = await res.json();
       setReps(data.reps || []);
@@ -222,10 +226,76 @@ export default function RepAnalyticsPage() {
   const handleSelectRep = (id: string) => {
     setSelectedRepId(id);
     setSearch("");
+    setSupplierSearch("");
+    setCategorySearch("");
     setSheetOpen(false);
   };
 
-  const current = reps.find((r) => r.id === selectedRepId);
+  // Overall aggregated rep view (when selectedRepId === "__overall__")
+  const overallCurrent = useMemo(() => {
+    if (!reps.length) return null;
+    const allInvoices = reps.flatMap((r) => r.invoices || []);
+    
+    // Aggregated suppliers across reps
+    const supMap: Record<string, { name: string; sales: number; commission: number; itemsCount: number }> = {};
+    reps.forEach((r) => {
+      (r.commissionBySupplier || []).forEach((s: any) => {
+        if (!supMap[s.name]) {
+          supMap[s.name] = { name: s.name, sales: 0, commission: 0, itemsCount: 0 };
+        }
+        supMap[s.name].sales += s.sales || 0;
+        supMap[s.name].commission += s.commission || 0;
+        supMap[s.name].itemsCount += s.itemsCount || 0;
+      });
+    });
+    const totalRepSales = reps.reduce((sum, r) => sum + (r.totalSales || 0), 0);
+    const combinedSuppliers = Object.values(supMap)
+      .map((s) => ({
+        ...s,
+        rate: s.sales > 0 ? (s.commission / s.sales) * 100 : 0,
+        sharePct: totalRepSales > 0 ? (s.sales / totalRepSales) * 100 : 0,
+      }))
+      .sort((a, b) => b.sales - a.sales);
+
+    // Aggregated categories across reps
+    const catMap: Record<string, { supplier: string; category: string; subCategory: string | null; sales: number; commission: number; itemsCount: number }> = {};
+    reps.forEach((r) => {
+      (r.commissionByCategory || []).forEach((c: any) => {
+        const catKey = `${c.supplier}||${c.category}||${c.subCategory ?? ""}`;
+        if (!catMap[catKey]) {
+          catMap[catKey] = {
+            supplier: c.supplier,
+            category: c.category,
+            subCategory: c.subCategory,
+            sales: 0,
+            commission: 0,
+            itemsCount: 0,
+          };
+        }
+        catMap[catKey].sales += c.sales || 0;
+        catMap[catKey].commission += c.commission || 0;
+        catMap[catKey].itemsCount += c.itemsCount || 0;
+      });
+    });
+    const combinedCategories = Object.values(catMap)
+      .map((c) => ({
+        ...c,
+        rate: c.sales > 0 ? (c.commission / c.sales) * 100 : 0,
+        sharePct: totalRepSales > 0 ? (c.sales / totalRepSales) * 100 : 0,
+      }))
+      .sort((a, b) => b.sales - a.sales);
+
+    return {
+      id: "__overall__",
+      name: "All Reps (Overall)",
+      totalSales: totalRepSales,
+      commissionBySupplier: combinedSuppliers,
+      commissionByCategory: combinedCategories,
+      invoices: allInvoices,
+    };
+  }, [reps]);
+
+  const current = selectedRepId === "__overall__" ? overallCurrent : reps.find((r) => r.id === selectedRepId);
 
   useEffect(() => {
     setInvoicePage(1);
@@ -242,6 +312,27 @@ export default function RepAnalyticsPage() {
         inv.date.includes(q)
     );
   }, [current, search]);
+
+  const filteredSuppliers = useMemo(() => {
+    if (!current?.commissionBySupplier) return [];
+    const q = supplierSearch.toLowerCase();
+    if (!q) return current.commissionBySupplier;
+    return current.commissionBySupplier.filter((s: any) =>
+      s.name.toLowerCase().includes(q)
+    );
+  }, [current, supplierSearch]);
+
+  const filteredCategories = useMemo(() => {
+    if (!current?.commissionByCategory) return [];
+    const q = categorySearch.toLowerCase();
+    if (!q) return current.commissionByCategory;
+    return current.commissionByCategory.filter(
+      (c: any) =>
+        c.supplier.toLowerCase().includes(q) ||
+        c.category.toLowerCase().includes(q) ||
+        (c.subCategory && c.subCategory.toLowerCase().includes(q))
+    );
+  }, [current, categorySearch]);
 
   const pagedInvoices = filteredInvoices.slice(
     (invoicePage - 1) * PER_PAGE,
@@ -849,7 +940,7 @@ export default function RepAnalyticsPage() {
             <Card>
               <CardHeader className="pb-3 px-3 md:px-6">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                  <CardTitle className="text-sm truncate">{current.name} — Invoice Detail</CardTitle>
+                  <CardTitle className="text-sm truncate">{current?.name || "All Reps"} — Invoice Detail</CardTitle>
                   <div className="relative w-full sm:w-60">
                     <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
                     <Input
@@ -864,14 +955,37 @@ export default function RepAnalyticsPage() {
               <CardContent className="p-0">
                 <Tabs defaultValue="invoices">
                   <div className="overflow-x-auto">
-                    <TabsList className="mx-3 md:mx-4 mb-2 flex w-max min-w-full sm:w-auto">
-                      <TabsTrigger value="invoices" className="text-xs gap-1 whitespace-nowrap">
-                        <FileText className="h-3 w-3" />
-                        Invoices ({filteredInvoices.length})
+                    <TabsList className="mx-3 md:mx-4 mb-3 flex h-auto w-fit flex-none items-center justify-start gap-2 bg-transparent p-1">
+                      <TabsTrigger
+                        value="invoices"
+                        className="flex-none data-[state=active]:bg-black data-[state=active]:text-white text-gray-800 hover:bg-gray-100/80 rounded-xl px-4 py-2 text-xs font-semibold gap-2 transition-all flex items-center whitespace-nowrap border border-transparent data-[state=active]:border-black shadow-none data-[state=active]:shadow-sm"
+                      >
+                        <FileText className="h-4 w-4 shrink-0" />
+                        <span>Invoices</span>
+                        <span className="text-sky-500 font-bold ml-0.5">({filteredInvoices.length})</span>
                       </TabsTrigger>
-                      <TabsTrigger value="commission" className="text-xs gap-1 whitespace-nowrap">
-                        <Award className="h-3 w-3" />
-                        Commission Detail
+                      <TabsTrigger
+                        value="suppliers"
+                        className="flex-none data-[state=active]:bg-black data-[state=active]:text-white text-gray-800 hover:bg-gray-100/80 rounded-xl px-4 py-2 text-xs font-semibold gap-2 transition-all flex items-center whitespace-nowrap border border-transparent data-[state=active]:border-black shadow-none data-[state=active]:shadow-sm"
+                      >
+                        <Factory className="h-4 w-4 shrink-0" />
+                        <span>Supplier Sales</span>
+                        <span className="text-sky-500 font-bold ml-0.5">({current.commissionBySupplier?.length || 0})</span>
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="categories"
+                        className="flex-none data-[state=active]:bg-black data-[state=active]:text-white text-gray-800 hover:bg-gray-100/80 rounded-xl px-4 py-2 text-xs font-semibold gap-2 transition-all flex items-center whitespace-nowrap border border-transparent data-[state=active]:border-black shadow-none data-[state=active]:shadow-sm"
+                      >
+                        <Package className="h-4 w-4 shrink-0" />
+                        <span>Category Sales</span>
+                        <span className="text-sky-500 font-bold ml-0.5">({current.commissionByCategory?.length || 0})</span>
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="commission"
+                        className="flex-none data-[state=active]:bg-black data-[state=active]:text-white text-gray-800 hover:bg-gray-100/80 rounded-xl px-4 py-2 text-xs font-semibold gap-2 transition-all flex items-center whitespace-nowrap border border-transparent data-[state=active]:border-black shadow-none data-[state=active]:shadow-sm"
+                      >
+                        <Award className="h-4 w-4 shrink-0" />
+                        <span>Commission Detail</span>
                       </TabsTrigger>
                     </TabsList>
                   </div>
@@ -977,6 +1091,260 @@ export default function RepAnalyticsPage() {
                       totalItems={filteredInvoices.length}
                       itemsPerPage={PER_PAGE}
                     />
+                  </TabsContent>
+
+                  {/* Supplier Sales Tab */}
+                  <TabsContent value="suppliers" className="mt-0 space-y-4 p-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="relative w-full sm:w-64">
+                        <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                        <Input
+                          placeholder="Search suppliers..."
+                          value={supplierSearch}
+                          onChange={(e) => setSupplierSearch(e.target.value)}
+                          className="pl-8 h-8 text-xs"
+                        />
+                      </div>
+                      <Badge variant="outline" className="w-fit text-xs font-semibold">
+                        Rep Supplier Sales Total: LKR {fmt(current.commissionBySupplier?.reduce((sum: number, s: any) => sum + s.sales, 0) || 0)}
+                      </Badge>
+                    </div>
+
+                    {/* Mobile Supplier list */}
+                    <div className="sm:hidden divide-y border rounded-lg overflow-hidden bg-white">
+                      {filteredSuppliers.length === 0 ? (
+                        <p className="text-center py-8 text-sm text-muted-foreground">No suppliers found.</p>
+                      ) : (
+                        filteredSuppliers.map((s: any) => (
+                          <div key={s.name} className="p-3 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <p className="font-semibold text-sm">{s.name}</p>
+                              <RateBadge rate={parseFloat(s.rate.toFixed(1))} />
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 text-xs">
+                              <div>
+                                <p className="text-[10px] text-muted-foreground">Qty Sold</p>
+                                <p className="font-medium">{s.itemsCount ?? 0} pcs</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-muted-foreground">Sales Total</p>
+                                <p className="font-semibold text-primary">LKR {fmt(s.sales)}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-muted-foreground">Commission</p>
+                                <p className="font-semibold text-purple-600">LKR {fmt(s.commission)}</p>
+                              </div>
+                            </div>
+                            <div className="space-y-1 pt-1 border-t">
+                              <div className="flex justify-between text-[10px] text-muted-foreground">
+                                <span>Share of Rep Sales</span>
+                                <span className="font-medium">{s.sharePct ? s.sharePct.toFixed(1) : 0}%</span>
+                              </div>
+                              <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                                <div className="h-full bg-primary rounded-full" style={{ width: `${s.sharePct || 0}%` }} />
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    {/* Desktop Supplier Table */}
+                    <div className="hidden sm:block border rounded-lg overflow-hidden bg-white">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/40">
+                            <TableHead className="font-semibold">Supplier</TableHead>
+                            <TableHead className="text-right font-semibold">Qty Sold</TableHead>
+                            <TableHead className="text-right font-semibold">Total Sales</TableHead>
+                            <TableHead className="text-right font-semibold">Comm. Earned</TableHead>
+                            <TableHead className="text-right font-semibold">Comm. Rate</TableHead>
+                            <TableHead className="w-48 text-right font-semibold">Sales Share</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredSuppliers.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={6} className="text-center h-24 text-muted-foreground text-sm">
+                                No supplier sales data found.
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            filteredSuppliers.map((s: any) => (
+                              <TableRow key={s.name} className="hover:bg-muted/30">
+                                <TableCell className="font-medium text-xs">{s.name}</TableCell>
+                                <TableCell className="text-right text-xs font-mono">{s.itemsCount ?? 0} pcs</TableCell>
+                                <TableCell className="text-right text-xs font-semibold text-foreground">LKR {fmt(s.sales)}</TableCell>
+                                <TableCell className="text-right text-xs font-semibold text-purple-600">LKR {fmt(s.commission)}</TableCell>
+                                <TableCell className="text-right text-xs">
+                                  <RateBadge rate={parseFloat(s.rate.toFixed(1))} />
+                                </TableCell>
+                                <TableCell className="text-right text-xs">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <span className="text-[11px] font-medium w-10 text-right">{(s.sharePct || 0).toFixed(1)}%</span>
+                                    <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
+                                      <div className="h-full bg-primary rounded-full" style={{ width: `${s.sharePct || 0}%` }} />
+                                    </div>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                        {/* Rep Total Row */}
+                        {current.commissionBySupplier?.length > 0 && (
+                          <tfoot className="bg-primary/5 font-bold border-t-2 border-primary/20">
+                            <TableRow>
+                              <TableCell className="text-xs text-primary font-bold">
+                                {current.name}'s Total ({current.commissionBySupplier.length} Suppliers)
+                              </TableCell>
+                              <TableCell className="text-right text-xs font-bold font-mono">
+                                {current.commissionBySupplier.reduce((s: number, r: any) => s + (r.itemsCount || 0), 0)} pcs
+                              </TableCell>
+                              <TableCell className="text-right text-xs font-bold text-primary">
+                                LKR {fmt(current.commissionBySupplier.reduce((s: number, r: any) => s + r.sales, 0))}
+                              </TableCell>
+                              <TableCell className="text-right text-xs font-bold text-purple-700">
+                                LKR {fmt(current.commissionBySupplier.reduce((s: number, r: any) => s + r.commission, 0))}
+                              </TableCell>
+                              <TableCell className="text-right text-xs text-muted-foreground">—</TableCell>
+                              <TableCell className="text-right text-xs font-bold text-primary">100.0%</TableCell>
+                            </TableRow>
+                          </tfoot>
+                        )}
+                      </Table>
+                    </div>
+                  </TabsContent>
+
+                  {/* Category Sales Tab */}
+                  <TabsContent value="categories" className="mt-0 space-y-4 p-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="relative w-full sm:w-64">
+                        <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                        <Input
+                          placeholder="Search category / supplier..."
+                          value={categorySearch}
+                          onChange={(e) => setCategorySearch(e.target.value)}
+                          className="pl-8 h-8 text-xs"
+                        />
+                      </div>
+                      <Badge variant="outline" className="w-fit text-xs font-semibold">
+                        Rep Category Sales Total: LKR {fmt(current.commissionByCategory?.reduce((sum: number, c: any) => sum + c.sales, 0) || 0)}
+                      </Badge>
+                    </div>
+
+                    {/* Mobile Category list */}
+                    <div className="sm:hidden divide-y border rounded-lg overflow-hidden bg-white">
+                      {filteredCategories.length === 0 ? (
+                        <p className="text-center py-8 text-sm text-muted-foreground">No category sales found.</p>
+                      ) : (
+                        filteredCategories.map((c: any, i: number) => (
+                          <div key={i} className="p-3 space-y-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <p className="font-semibold text-sm">{c.category}</p>
+                                {c.subCategory && <p className="text-xs text-muted-foreground">{c.subCategory}</p>}
+                                <p className="text-[10px] text-primary font-medium">{c.supplier}</p>
+                              </div>
+                              <RateBadge rate={parseFloat(c.rate.toFixed(1))} />
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 text-xs">
+                              <div>
+                                <p className="text-[10px] text-muted-foreground">Qty Sold</p>
+                                <p className="font-medium">{c.itemsCount ?? 0} pcs</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-muted-foreground">Sales Total</p>
+                                <p className="font-semibold text-primary">LKR {fmt(c.sales)}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-muted-foreground">Commission</p>
+                                <p className="font-semibold text-purple-600">LKR {fmt(c.commission)}</p>
+                              </div>
+                            </div>
+                            <div className="space-y-1 pt-1 border-t">
+                              <div className="flex justify-between text-[10px] text-muted-foreground">
+                                <span>Share of Rep Sales</span>
+                                <span className="font-medium">{c.sharePct ? c.sharePct.toFixed(1) : 0}%</span>
+                              </div>
+                              <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                                <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${c.sharePct || 0}%` }} />
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    {/* Desktop Category Table */}
+                    <div className="hidden sm:block border rounded-lg overflow-hidden bg-white">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/40">
+                            <TableHead className="font-semibold">Supplier</TableHead>
+                            <TableHead className="font-semibold">Category</TableHead>
+                            <TableHead className="font-semibold">Sub-Category</TableHead>
+                            <TableHead className="text-right font-semibold">Qty Sold</TableHead>
+                            <TableHead className="text-right font-semibold">Total Sales</TableHead>
+                            <TableHead className="text-right font-semibold">Comm. Earned</TableHead>
+                            <TableHead className="text-right font-semibold">Rate</TableHead>
+                            <TableHead className="w-44 text-right font-semibold">Sales Share</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredCategories.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={8} className="text-center h-24 text-muted-foreground text-sm">
+                                No category sales data found.
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            filteredCategories.map((c: any, i: number) => (
+                              <TableRow key={i} className="hover:bg-muted/30">
+                                <TableCell className="text-xs text-muted-foreground">{c.supplier}</TableCell>
+                                <TableCell className="font-medium text-xs">{c.category}</TableCell>
+                                <TableCell className="text-xs text-muted-foreground">{c.subCategory || "—"}</TableCell>
+                                <TableCell className="text-right text-xs font-mono">{c.itemsCount ?? 0} pcs</TableCell>
+                                <TableCell className="text-right text-xs font-semibold text-foreground">LKR {fmt(c.sales)}</TableCell>
+                                <TableCell className="text-right text-xs font-semibold text-purple-600">LKR {fmt(c.commission)}</TableCell>
+                                <TableCell className="text-right text-xs">
+                                  <RateBadge rate={parseFloat(c.rate.toFixed(1))} />
+                                </TableCell>
+                                <TableCell className="text-right text-xs">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <span className="text-[11px] font-medium w-10 text-right">{(c.sharePct || 0).toFixed(1)}%</span>
+                                    <div className="w-20 h-2 bg-muted rounded-full overflow-hidden">
+                                      <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${c.sharePct || 0}%` }} />
+                                    </div>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                        {/* Rep Total Row */}
+                        {current.commissionByCategory?.length > 0 && (
+                          <tfoot className="bg-indigo-50 font-bold border-t-2 border-indigo-200">
+                            <TableRow>
+                              <TableCell colSpan={3} className="text-xs text-indigo-900 font-bold">
+                                {current.name}'s Total ({current.commissionByCategory.length} Categories)
+                              </TableCell>
+                              <TableCell className="text-right text-xs font-bold font-mono">
+                                {current.commissionByCategory.reduce((s: number, r: any) => s + (r.itemsCount || 0), 0)} pcs
+                              </TableCell>
+                              <TableCell className="text-right text-xs font-bold text-indigo-900">
+                                LKR {fmt(current.commissionByCategory.reduce((s: number, r: any) => s + r.sales, 0))}
+                              </TableCell>
+                              <TableCell className="text-right text-xs font-bold text-purple-700">
+                                LKR {fmt(current.commissionByCategory.reduce((s: number, r: any) => s + r.commission, 0))}
+                              </TableCell>
+                              <TableCell className="text-right text-xs text-muted-foreground">—</TableCell>
+                              <TableCell className="text-right text-xs font-bold text-indigo-900">100.0%</TableCell>
+                            </TableRow>
+                          </tfoot>
+                        )}
+                      </Table>
+                    </div>
                   </TabsContent>
 
                   {/* Commission Detail Tab */}

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET(request: NextRequest) {
   try {
@@ -75,17 +76,23 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 4. Order items for per-supplier & per-category commission breakdown (fetch only, aggregate later)
+    // 4. Order items for per-supplier & per-category commission breakdown (batched to prevent URL limit)
     let rawOrderItems: any[] = [];
     if (allOrderIds.length > 0) {
-      const { data: orderItems } = await supabaseAdmin
-        .from("order_items")
-        .select(`
-          order_id, quantity, unit_price, commission_earned,
-          product:products (supplier_name, category, sub_category)
-        `)
-        .in("order_id", allOrderIds);
-      rawOrderItems = orderItems || [];
+      const batchSize = 50;
+      for (let i = 0; i < allOrderIds.length; i += batchSize) {
+        const batch = allOrderIds.slice(i, i + batchSize);
+        const { data: batchItems } = await supabaseAdmin
+          .from("order_items")
+          .select(`
+            order_id, quantity, unit_price, commission_earned,
+            product:products (supplier_name, category, sub_category)
+          `)
+          .in("order_id", batch);
+        if (batchItems && batchItems.length > 0) {
+          rawOrderItems.push(...batchItems);
+        }
+      }
     }
 
     // 5. Pending orders (current state — no date filter)
@@ -101,6 +108,28 @@ export async function GET(request: NextRequest) {
       .from("commission_rules")
       .select("id, supplier_name, category, sub_category, rate")
       .order("supplier_name");
+
+    const findRate = (sup: string, cat: string, subCat: string | null) => {
+      if (!commissionRules || commissionRules.length === 0) return 0;
+      const exact = commissionRules.find(
+        (r) =>
+          r.supplier_name?.toLowerCase() === sup.toLowerCase() &&
+          r.category?.toLowerCase() === cat.toLowerCase() &&
+          (subCat ? r.sub_category?.toLowerCase() === subCat.toLowerCase() : true)
+      );
+      if (exact) return Number(exact.rate) || 0;
+      const matchCat = commissionRules.find(
+        (r) =>
+          r.supplier_name?.toLowerCase() === sup.toLowerCase() &&
+          r.category?.toLowerCase() === cat.toLowerCase()
+      );
+      if (matchCat) return Number(matchCat.rate) || 0;
+      const matchSup = commissionRules.find(
+        (r) => r.supplier_name?.toLowerCase() === sup.toLowerCase()
+      );
+      if (matchSup) return Number(matchSup.rate) || 0;
+      return 0;
+    };
 
     // 7. Build per-rep aggregation
     const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -227,11 +256,11 @@ export async function GET(request: NextRequest) {
       repMap[repId].pendingAmount += Number(o.total_amount || 0);
     });
 
-    // Aggregate per-supplier AND per-category commission (NOW repMap is initialized)
-    type SupplierCommEntry = { name: string; sales: number; commission: number };
+    // Aggregate per-supplier AND per-category commission
+    type SupplierCommEntry = { name: string; sales: number; commission: number; itemsCount: number };
     type CategoryCommEntry = {
       supplier: string; category: string; subCategory: string | null;
-      sales: number; commission: number;
+      sales: number; commission: number; itemsCount: number;
     };
     const repSupplierMap: Record<string, Record<string, SupplierCommEntry>> = {};
     const repCategoryMap: Record<string, Record<string, CategoryCommEntry>> = {};
@@ -242,25 +271,30 @@ export async function GET(request: NextRequest) {
       const supplier = item.product?.supplier_name || "Unknown Supplier";
       const category = item.product?.category || "Uncategorised";
       const subCategory: string | null = item.product?.sub_category || null;
-      const sales = (Number(item.quantity) || 0) * (Number(item.unit_price) || 0);
-      const commission = Number(item.commission_earned) || 0;
+      const qty = Number(item.quantity) || 0;
+      const sales = qty * (Number(item.unit_price) || 0);
+      const earnedComm = Number(item.commission_earned) || 0;
+      const fallbackRate = findRate(supplier, category, subCategory);
+      const commission = earnedComm > 0 ? earnedComm : sales * (fallbackRate / 100);
 
       // By supplier
       if (!repSupplierMap[repId]) repSupplierMap[repId] = {};
       if (!repSupplierMap[repId][supplier]) {
-        repSupplierMap[repId][supplier] = { name: supplier, sales: 0, commission: 0 };
+        repSupplierMap[repId][supplier] = { name: supplier, sales: 0, commission: 0, itemsCount: 0 };
       }
       repSupplierMap[repId][supplier].sales += sales;
       repSupplierMap[repId][supplier].commission += commission;
+      repSupplierMap[repId][supplier].itemsCount += qty;
 
       // By supplier + category + sub_category
       const catKey = `${supplier}||${category}||${subCategory ?? ""}`;
       if (!repCategoryMap[repId]) repCategoryMap[repId] = {};
       if (!repCategoryMap[repId][catKey]) {
-        repCategoryMap[repId][catKey] = { supplier, category, subCategory, sales: 0, commission: 0 };
+        repCategoryMap[repId][catKey] = { supplier, category, subCategory, sales: 0, commission: 0, itemsCount: 0 };
       }
       repCategoryMap[repId][catKey].sales += sales;
       repCategoryMap[repId][catKey].commission += commission;
+      repCategoryMap[repId][catKey].itemsCount += qty;
     });
 
     // Build final results
@@ -271,17 +305,22 @@ export async function GET(request: NextRequest) {
       rep.invoices.sort((a, b) => b.date.localeCompare(a.date));
 
       const commissionBySupplier = Object.values(repSupplierMap[rep.id] || {})
-        .filter((s) => s.sales > 0 || s.commission > 0)
-        .map((s) => ({ ...s, rate: s.sales > 0 ? (s.commission / s.sales) * 100 : 0 }))
-        .sort((a, b) => b.commission - a.commission);
+        .filter((s) => s.sales > 0 || s.commission > 0 || s.itemsCount > 0)
+        .map((s) => ({
+          ...s,
+          rate: s.sales > 0 ? (s.commission / s.sales) * 100 : 0,
+          sharePct: rep.totalSales > 0 ? (s.sales / rep.totalSales) * 100 : 0,
+        }))
+        .sort((a, b) => b.sales - a.sales);
 
       const commissionByCategory = Object.values(repCategoryMap[rep.id] || {})
-        .filter((c) => c.sales > 0 || c.commission > 0)
+        .filter((c) => c.sales > 0 || c.commission > 0 || c.itemsCount > 0)
         .map((c) => ({
           ...c,
           rate: c.sales > 0 ? (c.commission / c.sales) * 100 : 0,
+          sharePct: rep.totalSales > 0 ? (c.sales / rep.totalSales) * 100 : 0,
         }))
-        .sort((a, b) => b.commission - a.commission);
+        .sort((a, b) => b.sales - a.sales);
 
       return {
         id: rep.id,
