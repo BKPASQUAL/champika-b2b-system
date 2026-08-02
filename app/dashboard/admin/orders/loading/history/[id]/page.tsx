@@ -56,6 +56,7 @@ import {
   downloadReturnsSummarySheet,
   printReturnsSummarySheet,
 } from "../print-loading-sheet";
+import { printBulkInvoices } from "@/app/dashboard/office/distribution/invoices/print-utils";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { cn } from "@/lib/utils";
 import { Undo2 } from "lucide-react";
@@ -136,6 +137,11 @@ export default function LoadingSheetDetailPage({
   const [changeLorryBusy, setChangeLorryBusy] = useState(false);
 
   const [stageMoveBusy, setStageMoveBusy] = useState(false);
+
+  const [printingInvoices, setPrintingInvoices] = useState(false);
+  const [printInvoicesOpen, setPrintInvoicesOpen] = useState(false);
+  const [selectedPrintIds, setSelectedPrintIds] = useState<string[]>([]);
+  const [includeReturnsSummary, setIncludeReturnsSummary] = useState(true);
 
   const [editForm, setEditForm] = useState({
     lorryNumber: "",
@@ -407,6 +413,20 @@ export default function LoadingSheetDetailPage({
           </Button>
           <Button variant="outline" onClick={handleEditClick}>
             <Edit className="w-4 h-4 mr-2" /> Edit
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              const allIds = loadingSheet.orders.map((o) => o.invoiceId).filter((x): x is string => !!x);
+              setSelectedPrintIds(allIds);
+              const returnsExist = (loadingSheet.orders || []).some((o: any) => (o.returns || []).length > 0);
+              setIncludeReturnsSummary(returnsExist);
+              setPrintInvoicesOpen(true);
+            }}
+            className="bg-purple-100 text-purple-700 hover:bg-purple-200 border border-purple-200"
+          >
+            <FileText className="w-4 h-4 mr-2" />
+            Print Invoices
           </Button>
           <Button variant="outline" onClick={() => printReturnsSummarySheet(loadingSheet.id)} className="border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 hover:text-orange-800">
             <Printer className="w-4 h-4 mr-2 text-orange-600" />
@@ -879,6 +899,125 @@ export default function LoadingSheetDetailPage({
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleUpdateLoadingSheet} disabled={updating}>
               {updating && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Update
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Print Invoices Selection Dialog */}
+      <Dialog open={printInvoicesOpen} onOpenChange={setPrintInvoicesOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-purple-600" />
+              Print Invoices & Returns Summary
+            </DialogTitle>
+            <DialogDescription>
+              Select items to print. {selectedPrintIds.length + (includeReturnsSummary ? 1 : 0)} item(s) selected.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Select All / Deselect All */}
+          <div className="flex items-center justify-between border-b pb-2">
+            <span className="text-sm font-medium text-muted-foreground">Select Items to Print</span>
+            <button
+              className="text-xs text-purple-600 hover:underline font-medium"
+              onClick={() => {
+                const allIds = loadingSheet.orders.map((o) => o.invoiceId).filter((x): x is string => !!x);
+                const returnsExist = (loadingSheet.orders || []).some((o: any) => (o.returns || []).length > 0);
+                const allInvoicesSelected = selectedPrintIds.length === allIds.length;
+                const allSelected = allInvoicesSelected && (!returnsExist || includeReturnsSummary);
+
+                if (allSelected) {
+                  setSelectedPrintIds([]);
+                  setIncludeReturnsSummary(false);
+                } else {
+                  setSelectedPrintIds(allIds);
+                  setIncludeReturnsSummary(returnsExist);
+                }
+              }}
+            >
+              {selectedPrintIds.length === loadingSheet.orders.filter((o) => o.invoiceId).length &&
+              (!((loadingSheet.orders || []).some((o: any) => (o.returns || []).length > 0)) || includeReturnsSummary)
+                ? "Deselect All"
+                : "Select All"}
+            </button>
+          </div>
+
+          <div className="space-y-2 max-h-72 overflow-y-auto">
+            {/* Customer Exchange & Return Items Summary Option (Shown at top) */}
+            {(loadingSheet.orders || []).some((o: any) => (o.returns || []).length > 0) && (
+              <div
+                onClick={() => setIncludeReturnsSummary((prev) => !prev)}
+                className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 cursor-pointer transition-colors ${
+                  includeReturnsSummary ? "border-orange-400 bg-orange-50/60" : "border-slate-200 hover:border-orange-200 hover:bg-slate-50"
+                }`}
+              >
+                <Checkbox checked={includeReturnsSummary} onCheckedChange={() => {}} onClick={(e) => e.stopPropagation()} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-orange-950 flex items-center gap-1.5">
+                    <Undo2 className="w-4 h-4 text-orange-600 shrink-0" />
+                    Customer Exchange & Return Summary
+                  </p>
+                  <p className="text-xs text-orange-700 font-medium">Summary sheet of customer returns for this loading sheet</p>
+                </div>
+                <Badge className="bg-orange-200 text-orange-800 hover:bg-orange-200 border-none text-[10px] shrink-0">
+                  Returns Summary
+                </Badge>
+              </div>
+            )}
+
+            {loadingSheet.orders.map((order) => {
+              if (!order.invoiceId) return null;
+              const checked = selectedPrintIds.includes(order.invoiceId);
+              return (
+                <div
+                  key={order.id}
+                  onClick={() =>
+                    setSelectedPrintIds((prev) =>
+                      prev.includes(order.invoiceId!)
+                        ? prev.filter((x) => x !== order.invoiceId)
+                        : [...prev, order.invoiceId!]
+                    )
+                  }
+                  className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 cursor-pointer transition-colors ${
+                    checked ? "border-purple-400 bg-purple-50/40" : "border-slate-200 hover:border-purple-200 hover:bg-slate-50"
+                  }`}
+                >
+                  <Checkbox checked={checked} onCheckedChange={() => {}} onClick={(e) => e.stopPropagation()} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold font-mono">{order.invoiceNo}</p>
+                    <p className="text-xs text-muted-foreground truncate">{order.customer.shopName}</p>
+                  </div>
+                  <span className="text-xs font-mono font-bold shrink-0">
+                    {order.totalAmount.toLocaleString()}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPrintInvoicesOpen(false)}>Cancel</Button>
+            <Button
+              disabled={(selectedPrintIds.length === 0 && !includeReturnsSummary) || printingInvoices}
+              onClick={async () => {
+                setPrintingInvoices(true);
+                if (selectedPrintIds.length > 0) {
+                  await printBulkInvoices(selectedPrintIds);
+                }
+                if (includeReturnsSummary) {
+                  await printReturnsSummarySheet(loadingSheet.id);
+                }
+                setPrintingInvoices(false);
+                setPrintInvoicesOpen(false);
+              }}
+              className="bg-purple-600 hover:bg-purple-700 text-white"
+            >
+              {printingInvoices
+                ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                : <Printer className="w-4 h-4 mr-2" />}
+              Print {selectedPrintIds.length + (includeReturnsSummary ? 1 : 0) > 0 ? `(${selectedPrintIds.length + (includeReturnsSummary ? 1 : 0)})` : ""}
             </Button>
           </DialogFooter>
         </DialogContent>
