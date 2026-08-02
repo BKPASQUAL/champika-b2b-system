@@ -257,8 +257,17 @@ export default function ProcessOrderPage({
     setProcessing(true);
     setIsSaveConfirmOpen(false); // Close dialog immediately
 
-    // Recalculate Grand Total
-    const newTotalAmount = items.reduce((acc, item) => acc + item.total, 0);
+    // Recalculate Grand Total (minus non-exchange returns)
+    const returnsDeduction = (returnsList || []).reduce(
+      (sum, r) => {
+        const rType = r.return_type || r.returnType || "Exchange";
+        if (rType === "Exchange") return sum;
+        return sum + (Number(r.quantity) || 0) * (Number(r.price || r.products?.selling_price || r.sellingPrice || 0));
+      },
+      0
+    );
+    const subtotal = (items || []).reduce((acc, item) => acc + (item.total || 0), 0);
+    const newTotalAmount = Math.max(0, subtotal - returnsDeduction);
 
     try {
       const user = getUserBusinessContext();

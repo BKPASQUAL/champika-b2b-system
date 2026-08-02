@@ -8,10 +8,10 @@ export async function GET(
   try {
     const { id } = await params;
 
-    // 1. Get Invoice Number first
+    // 1. Get Invoice Number and order_id first
     const { data: invoice, error: invError } = await supabaseAdmin
       .from("invoices")
-      .select("invoice_no")
+      .select("invoice_no, order_id")
       .eq("id", id)
       .single();
 
@@ -19,9 +19,14 @@ export async function GET(
       return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
     }
 
-    // 2. Fetch Returns containing this invoice number in the reason
-    // Since we store it as "[INV-XXX] Reason", we search using ILIKE
-    const searchPattern = `%[${invoice.invoice_no}]%`;
+    // 2. Fetch Returns containing this invoice number or order ID in the reason
+    const searchConditions: string[] = [];
+    if (invoice.invoice_no) {
+      searchConditions.push(`reason.ilike.%${invoice.invoice_no}%`);
+    }
+    if (invoice.order_id) {
+      searchConditions.push(`reason.ilike.%ORD-${invoice.order_id}%`);
+    }
 
     const { data: returns, error: retError } = await supabaseAdmin
       .from("inventory_returns")
@@ -44,7 +49,7 @@ export async function GET(
         )
       `
       )
-      .ilike("reason", searchPattern)
+      .or(searchConditions.length > 0 ? searchConditions.join(",") : `reason.ilike.%${id}%`)
       .order("created_at", { ascending: false });
 
     if (retError) throw retError;

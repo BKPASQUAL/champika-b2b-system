@@ -536,7 +536,19 @@ export default function ViewOrderPage({
         discountAmount: i.discountAmount,
       }));
 
-    const totalAmount = items.reduce((acc, item) => acc + (item.total || 0), 0);
+    const returnsDeduction = returnsList.reduce(
+      (sum, r) => {
+        const rType = r.return_type || r.returnType || "Exchange";
+        if (rType === "Exchange") return sum;
+        const price = Number(r.price || r.products?.selling_price || r.sellingPrice || 0);
+        return sum + (Number(r.quantity) || 0) * price;
+      },
+      0
+    );
+    const totalAmount = Math.max(
+      0,
+      items.reduce((acc, item) => acc + (item.total || 0), 0) - returnsDeduction
+    );
 
     try {
       const user = getUserBusinessContext();
@@ -734,10 +746,23 @@ export default function ViewOrderPage({
   const totalItemGross = items.reduce((acc, item) => acc + item.price * item.qty, 0);
   const totalItemDiscounts = items.reduce((acc, item) => acc + item.discountAmount, 0);
   const subtotal = items.reduce((acc, item) => acc + item.total, 0);
-  const finalGrandTotal = isEditing ? subtotal : order.totalAmount;
-  const extraDiscountAmount = Math.max(0, subtotal - finalGrandTotal);
+  const returnsTotal = (returnsList || []).reduce(
+    (sum, r) => sum + (Number(r.quantity) || 0) * (Number(r.price || r.products?.selling_price || r.sellingPrice || 0)),
+    0
+  );
+  const returnsDeduction = (returnsList || []).reduce(
+    (sum, r) => {
+      const rType = r.return_type || r.returnType || "Exchange";
+      if (rType === "Exchange") return sum;
+      return sum + (Number(r.quantity) || 0) * (Number(r.price || r.products?.selling_price || r.sellingPrice || 0));
+    },
+    0
+  );
+  const netAmountAfterReturns = Math.max(0, subtotal - returnsDeduction);
+  const finalGrandTotal = isEditing ? netAmountAfterReturns : (order.totalAmount ?? netAmountAfterReturns);
+  const extraDiscountAmount = isEditing ? 0 : Math.max(0, netAmountAfterReturns - finalGrandTotal);
   const extraDiscountPercent =
-    subtotal > 0 ? (extraDiscountAmount / subtotal) * 100 : 0;
+    netAmountAfterReturns > 0 ? (extraDiscountAmount / netAmountAfterReturns) * 100 : 0;
 
   const totalCost = items.reduce(
     (acc, item) => acc + (item.costPrice ?? 0) * (item.qty + item.free),
@@ -1707,6 +1732,18 @@ export default function ViewOrderPage({
                   <span className="text-slate-700 font-medium">Subtotal</span>
                   <span className="font-bold">LKR {subtotal.toLocaleString()}</span>
                 </div>
+                {returnsDeduction > 0 && (
+                  <div className="flex justify-between text-sm text-orange-700 font-medium">
+                    <span>Customer Returns</span>
+                    <span>- LKR {returnsDeduction.toLocaleString()}</span>
+                  </div>
+                )}
+                {returnsTotal > returnsDeduction && (
+                  <div className="flex justify-between text-xs text-blue-600 font-medium">
+                    <span>Exchange Items ({returnsList.filter((r: any) => (r.return_type || r.returnType || "Exchange") === "Exchange").length})</span>
+                    <span>(No bill reduction)</span>
+                  </div>
+                )}
                 {extraDiscountAmount > 0 && (
                   <div className="flex justify-between text-sm text-red-600">
                     <span>
