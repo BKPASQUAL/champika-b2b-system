@@ -78,13 +78,15 @@ export async function GET(
       `,
       )
       .eq("id", id)
-      .single();
+      .maybeSingle();
 
     if (invError) {
       console.error("Invoice fetch error:", invError);
-      throw new Error(invError.message);
+      return NextResponse.json({ error: invError.message }, { status: 500 });
     }
-    if (!invoice) throw new Error("Invoice not found");
+    if (!invoice) {
+      return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+    }
 
     // 2. Fetch Order Items with FULL Product Details
     const { data: items, error: itemsError } = await supabaseAdmin
