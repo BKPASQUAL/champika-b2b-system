@@ -74,6 +74,12 @@ export const sierraOfficeNavItems: SierraNavSection[] = [
         href: "/dashboard/office/sierra/invoices/due",
         icon: AlertCircle,
       },
+      {
+        name: "Manual Invoice Audit",
+        href: "/dashboard/office/sierra/invoices/manual-audit",
+        icon: ClipboardCheck,
+        description: "Audit manual invoice books (50 bills) & check missing numbers",
+      },
     ],
   },
   {

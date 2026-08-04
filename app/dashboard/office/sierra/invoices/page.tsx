@@ -22,6 +22,7 @@ import {
   RefreshCw,
   Filter,
   Printer,
+  ClipboardCheck,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -318,6 +319,15 @@ export default function SierraInvoicesPage() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          <Button
+            variant="outline"
+            onClick={() =>
+              router.push("/dashboard/office/sierra/invoices/manual-audit")
+            }
+          >
+            <ClipboardCheck className="w-4 h-4 mr-2 text-red-600" /> Manual Audit
+          </Button>
 
           <Button
             variant="outline"
