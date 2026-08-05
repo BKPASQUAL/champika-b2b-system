@@ -18,7 +18,13 @@ import {
   Phone,
   Undo2,
   Percent,
+  Flag,
+  AlertOctagon,
+  AlertTriangle,
+  Building2,
+  Check,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -67,8 +73,47 @@ export function InvoiceSearchBar({
   const [searching, setSearching] = useState(false);
   const [result, setResult] = useState<any | null>(null);
   const [returns, setReturns] = useState<any[]>([]);
+  const [otherDueInvoices, setOtherDueInvoices] = useState<any[]>([]);
   const [notFound, setNotFound] = useState(false);
   const [searchedTerm, setSearchedTerm] = useState("");
+
+  const loadInvoiceById = async (invId: string) => {
+    setSearching(true);
+    setResult(null);
+    setReturns([]);
+    setOtherDueInvoices([]);
+    setNotFound(false);
+
+    try {
+      const [detailRes, returnsRes] = await Promise.all([
+        fetch(`/api/invoices/${invId}`),
+        fetch(`/api/invoices/${invId}/returns`),
+      ]);
+      if (!detailRes.ok) throw new Error("detail fetch failed");
+      const detail = await detailRes.json();
+      const returnsData = returnsRes.ok ? await returnsRes.json() : [];
+      setResult(detail);
+      setReturns(returnsData);
+
+      // Fetch other due bills for the customer
+      if (detail.customerId) {
+        const custRes = await fetch(`/api/invoices?customerId=${detail.customerId}`);
+        if (custRes.ok) {
+          const custInvoices: any[] = await custRes.json();
+          const dueInvoices = custInvoices.filter(
+            (inv: any) =>
+              inv.id !== detail.id &&
+              (inv.dueAmount > 0 || (inv.status && inv.status !== "Paid"))
+          );
+          setOtherDueInvoices(dueInvoices);
+        }
+      }
+    } catch {
+      setNotFound(true);
+    } finally {
+      setSearching(false);
+    }
+  };
 
   const handleSearch = async () => {
     const term = query.trim();
@@ -77,6 +122,7 @@ export function InvoiceSearchBar({
     setSearching(true);
     setResult(null);
     setReturns([]);
+    setOtherDueInvoices([]);
     setNotFound(false);
     setSearchedTerm(term);
 
@@ -105,29 +151,14 @@ export function InvoiceSearchBar({
         return;
       }
 
-      const [detailRes, returnsRes] = await Promise.all([
-        fetch(`/api/invoices/${match.id}`),
-        fetch(`/api/invoices/${match.id}/returns`),
-      ]);
-      if (!detailRes.ok) throw new Error("detail fetch failed");
-      const detail = await detailRes.json();
-      const returnsData = returnsRes.ok ? await returnsRes.json() : [];
-      setResult(detail);
-      setReturns(returnsData);
+      await loadInvoiceById(match.id);
     } catch {
       setNotFound(true);
-    } finally {
       setSearching(false);
     }
   };
 
-  const handleInputClick = () => {
-    setQuery("");
-    setResult(null);
-    setReturns([]);
-    setNotFound(false);
-    setSearchedTerm("");
-  };
+
 
   return (
     <div className="space-y-4">
@@ -140,7 +171,6 @@ export function InvoiceSearchBar({
               <Input
                 placeholder="Search by invoice number (e.g. CHD-0001, CHR-0001)…"
                 value={query}
-                onClick={handleInputClick}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleSearch();
@@ -195,6 +225,8 @@ export function InvoiceSearchBar({
         <FullInvoiceDetail
           invoice={result}
           returns={returns}
+          otherDueInvoices={otherDueInvoices}
+          onSelectInvoice={(invId) => loadInvoiceById(invId)}
           portalInvoicePath={portalInvoicePath}
         />
       )}
@@ -270,12 +302,73 @@ function OrderStatusBadge({ status }: { status: string }) {
 function FullInvoiceDetail({
   invoice,
   returns,
+  otherDueInvoices = [],
+  onSelectInvoice,
   portalInvoicePath,
 }: {
   invoice: any;
   returns: any[];
+  otherDueInvoices?: any[];
+  onSelectInvoice?: (invId: string) => void;
   portalInvoicePath: string;
 }) {
+  const [togglingAudit, setTogglingAudit] = useState(false);
+  const [isAudited, setIsAudited] = useState(!!invoice.isAudited);
+  const [togglingFlag, setTogglingFlag] = useState(false);
+  const [isIncorrectFlag, setIsIncorrectFlag] = useState(!!invoice.isIncorrect);
+
+  // Sync state if searched invoice changes
+  React.useEffect(() => {
+    setIsAudited(!!invoice.isAudited);
+    setIsIncorrectFlag(!!invoice.isIncorrect);
+  }, [invoice.id, invoice.isAudited, invoice.isIncorrect]);
+
+  const handleToggleAuditedCheck = async () => {
+    const nextVal = !isAudited;
+    setTogglingAudit(true);
+    try {
+      const res = await fetch(`/api/invoices/${invoice.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isAudited: nextVal }),
+      });
+      if (!res.ok) throw new Error("Failed to update audit status");
+      setIsAudited(nextVal);
+      if (nextVal) {
+        toast.success("Invoice marked as Audited & Checked! ✔️");
+      } else {
+        toast.info("Invoice marked as Unaudited.");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update audit status");
+    } finally {
+      setTogglingAudit(false);
+    }
+  };
+
+  const handleToggleAuditFlag = async () => {
+    const nextVal = !isIncorrectFlag;
+    setTogglingFlag(true);
+    try {
+      const res = await fetch(`/api/invoices/${invoice.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isIncorrect: nextVal }),
+      });
+      if (!res.ok) throw new Error("Failed to update flag");
+      setIsIncorrectFlag(nextVal);
+      if (nextVal) {
+        toast.error("Invoice flagged as incorrect / needs audit!");
+      } else {
+        toast.success("Audit flag removed from invoice!");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update audit flag");
+    } finally {
+      setTogglingFlag(false);
+    }
+  };
+
   const items: any[] = invoice.items || [];
   const paymentsList: any[] = invoice.payments || [];
 
@@ -305,7 +398,59 @@ function FullInvoiceDetail({
   const supplierEntries = Object.entries(supplierMap);
 
   return (
-    <div className="min-h-screen bg-muted/40 rounded-lg p-4 sm:p-6 space-y-8">
+    <div className="min-h-screen bg-muted/40 rounded-lg p-4 sm:p-6 space-y-6">
+      {/* ── Audited & Checked Success Banner ─────────────────────────────── */}
+      {isAudited && (
+        <div className="bg-emerald-50 border-2 border-emerald-300 rounded-lg p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-emerald-950 shadow-sm">
+          <div className="flex items-center gap-3">
+            <CheckCircle2 className="h-6 w-6 text-emerald-600 shrink-0" />
+            <div>
+              <h4 className="font-bold text-base text-emerald-900 flex items-center gap-2">
+                ✔️ VERIFIED & AUDITED BY OFFICE STAFF
+              </h4>
+              <p className="text-xs text-emerald-700 mt-0.5">
+                This invoice has been checked and confirmed in system manual audit.
+              </p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleToggleAuditedCheck}
+            disabled={togglingAudit}
+            className="bg-white border-emerald-300 hover:bg-emerald-100 text-emerald-800 font-semibold text-xs shrink-0"
+          >
+            Unmark Audited
+          </Button>
+        </div>
+      )}
+
+      {/* ── Flagged Warning Banner ────────────────────────────────────────── */}
+      {isIncorrectFlag && (
+        <div className="bg-rose-50 border-2 border-rose-300 rounded-lg p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-rose-950 shadow-sm">
+          <div className="flex items-center gap-3">
+            <AlertOctagon className="h-6 w-6 text-rose-600 shrink-0" />
+            <div>
+              <h4 className="font-bold text-base text-rose-900 flex items-center gap-2">
+                🚩 FLAGGED FOR AUDIT / INCORRECT BILL
+              </h4>
+              <p className="text-xs text-rose-700 mt-0.5">
+                This invoice has been flagged by office staff for audit review or correction.
+              </p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleToggleAuditFlag}
+            disabled={togglingFlag}
+            className="bg-white border-rose-300 hover:bg-rose-100 text-rose-800 font-semibold text-xs shrink-0"
+          >
+            Remove Audit Flag
+          </Button>
+        </div>
+      )}
+
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
         <div className="space-y-1">
@@ -320,18 +465,72 @@ function FullInvoiceDetail({
                 </span>
               )}
             <OrderStatusBadge status={invoice.orderStatus || "Pending"} />
+
+            {/* Audited Status Badge */}
+            {isAudited ? (
+              <Badge className="bg-emerald-100 text-emerald-900 border-emerald-300 hover:bg-emerald-100 font-bold text-xs gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Audited & Checked ✔️
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-300 text-xs">
+                ⏳ Awaiting Audit Check
+              </Badge>
+            )}
+
+            {isIncorrectFlag && (
+              <Badge className="bg-rose-100 text-rose-800 border-rose-300 hover:bg-rose-100 font-semibold text-xs">
+                🚩 Flagged / Audit Required
+              </Badge>
+            )}
           </div>
           <p className="text-sm text-muted-foreground">
             Created on {fmtDate(invoice.date || invoice.createdAt)}
           </p>
         </div>
 
-        <Link href={`${portalInvoicePath}/${invoice.id}`}>
-          <Button className="gap-2 shrink-0">
-            <ExternalLink className="h-4 w-4" />
-            Open Full Details
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Main "Mark as Audited / Checked" Button */}
+          <Button
+            variant={isAudited ? "default" : "outline"}
+            onClick={handleToggleAuditedCheck}
+            disabled={togglingAudit}
+            className={`gap-2 shrink-0 font-bold ${
+              isAudited
+                ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                : "border-emerald-500 text-emerald-800 hover:bg-emerald-50"
+            }`}
+          >
+            <Check className="h-4 w-4 stroke-[3]" />
+            {isAudited ? "Audited & Checked ✔️" : "Mark as Audited / Checked"}
           </Button>
-        </Link>
+
+          {/* Flag / Audit Toggle Button */}
+          <Button
+            variant={isIncorrectFlag ? "destructive" : "outline"}
+            onClick={handleToggleAuditFlag}
+            disabled={togglingFlag}
+            className="gap-2 shrink-0 font-semibold border-rose-300"
+          >
+            {isIncorrectFlag ? (
+              <>
+                <AlertOctagon className="h-4 w-4" />
+                Remove Audit Flag
+              </>
+            ) : (
+              <>
+                <Flag className="h-4 w-4 text-rose-600" />
+                Flag as Incorrect
+              </>
+            )}
+          </Button>
+
+          <Link href={`${portalInvoicePath}/${invoice.id}`}>
+            <Button className="gap-2 shrink-0">
+              <ExternalLink className="h-4 w-4" />
+              Open Full Details
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* ── Main 2-column grid ──────────────────────────────────────────────── */}
@@ -392,6 +591,88 @@ function FullInvoiceDetail({
               </CardContent>
             </Card>
           </div>
+
+          {/* ── Customer's Other Outstanding Bills ─────────────────────────────── */}
+          {otherDueInvoices.length > 0 && (
+            <Card className="shadow-sm border-l-4 border-l-amber-500 overflow-hidden bg-gradient-to-r from-amber-50/40 via-white to-orange-50/20">
+              <CardHeader className="bg-amber-50/50 border-b py-3.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <CardTitle className="text-base font-bold flex items-center gap-2 text-amber-950">
+                      <Building2 className="h-5 w-5 text-amber-600" />
+                      Other Outstanding Bills for {invoice.customer?.shop || invoice.customerName}
+                    </CardTitle>
+                    <CardDescription className="text-xs text-amber-800 mt-0.5">
+                      This customer has {otherDueInvoices.length} other pending / unpaid bill(s).
+                    </CardDescription>
+                  </div>
+                  <Badge className="bg-amber-100 text-amber-950 font-mono text-xs px-2.5 py-1 border-amber-300 font-bold self-start sm:self-center">
+                    Total Outstanding: LKR {otherDueInvoices.reduce((sum, inv) => sum + (inv.dueAmount || 0), 0).toLocaleString("en-LK", { minimumFractionDigits: 2 })}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-amber-50/30 hover:bg-amber-50/30 text-xs">
+                        <TableHead className="pl-4">Invoice #</TableHead>
+                        <TableHead>Manual Ref #</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead className="text-right">Total Amount</TableHead>
+                        <TableHead className="text-right">Balance Due</TableHead>
+                        <TableHead className="text-center">Status</TableHead>
+                        <TableHead className="text-right pr-4">Action</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {otherDueInvoices.map((dueInv: any) => (
+                        <TableRow key={dueInv.id} className="hover:bg-amber-50/20 text-xs">
+                          <TableCell className="pl-4 font-mono font-bold text-slate-900">
+                            {dueInv.invoiceNo}
+                          </TableCell>
+                          <TableCell className="font-mono text-slate-600">
+                            {dueInv.manualInvoiceNo ? `#${dueInv.manualInvoiceNo}` : "—"}
+                          </TableCell>
+                          <TableCell className="text-slate-600">{dueInv.date || "—"}</TableCell>
+                          <TableCell className="text-right font-mono text-slate-700">
+                            LKR {Number(dueInv.totalAmount || 0).toLocaleString("en-LK", { minimumFractionDigits: 2 })}
+                          </TableCell>
+                          <TableCell className="text-right font-mono font-bold text-red-600">
+                            LKR {Number(dueInv.dueAmount || 0).toLocaleString("en-LK", { minimumFractionDigits: 2 })}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge
+                              variant="outline"
+                              className={`text-[10px] px-1.5 ${
+                                dueInv.status === "Unpaid"
+                                  ? "bg-red-50 text-red-700 border-red-200"
+                                  : dueInv.status === "Partial"
+                                  ? "bg-amber-50 text-amber-700 border-amber-200"
+                                  : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              }`}
+                            >
+                              {dueInv.status || "Unpaid"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right pr-4">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => onSelectInvoice && onSelectInvoice(dueInv.id)}
+                              className="h-7 text-[11px] font-semibold border-amber-300 text-amber-900 hover:bg-amber-100"
+                            >
+                              View Bill
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Line Items */}
           <Card className="shadow-sm overflow-hidden">

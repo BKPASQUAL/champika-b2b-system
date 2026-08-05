@@ -137,8 +137,12 @@ export async function GET(request: NextRequest) {
       )
       .order("created_at", { ascending: false });
 
+    const customerIdParam = searchParams.get("customerId");
+
     // Step 3: filter invoices to only those belonging to this business's customers
-    if (customerIds !== null) {
+    if (customerIdParam) {
+      query = query.eq("customer_id", customerIdParam);
+    } else if (customerIds !== null) {
       query = query.in("customer_id", customerIds);
     }
 

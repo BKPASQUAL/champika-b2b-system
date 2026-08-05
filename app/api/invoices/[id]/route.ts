@@ -177,6 +177,7 @@ export async function GET(
       paidAmount: invoice.paid_amount,
       dueDate: invoice.due_date || null,
       isIncorrect: invoice.is_incorrect || false,
+      isAudited: invoice.is_audited || false,
 
       // Extra Discount
       extraDiscountPercent: invoice.orders?.extra_discount_percent || 0,
@@ -256,6 +257,28 @@ export async function PATCH(
 
   try {
     const body = await request.json();
+
+    // Lightweight flag update (e.g. toggling isAudited or isIncorrect)
+    if ((typeof body.isAudited === "boolean" || typeof body.isIncorrect === "boolean") && !body.items) {
+      const updateData: any = {};
+      if (typeof body.isAudited === "boolean") updateData.is_audited = body.isAudited;
+      if (typeof body.isIncorrect === "boolean") updateData.is_incorrect = body.isIncorrect;
+
+      const { data: updated, error: flagErr } = await supabaseAdmin
+        .from("invoices")
+        .update(updateData)
+        .eq("id", id)
+        .select("id, is_audited, is_incorrect")
+        .single();
+
+      if (flagErr) return NextResponse.json({ error: flagErr.message }, { status: 500 });
+      return NextResponse.json({
+        message: "Audit status updated",
+        isAudited: updated.is_audited,
+        isIncorrect: updated.is_incorrect,
+      });
+    }
+
     const val = updateInvoiceSchema.parse(body);
 
     // 1. Fetch Current Invoice State (Snapshot for History)

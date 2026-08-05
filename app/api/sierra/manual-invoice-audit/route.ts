@@ -42,6 +42,8 @@ export async function GET(request: NextRequest) {
           paid_amount,
           due_amount,
           status,
+          is_incorrect,
+          is_audited,
           created_at,
           due_date,
           customer_id,
@@ -139,6 +141,8 @@ export async function GET(request: NextRequest) {
           paidAmount: Number(matchedInvoice.paid_amount || 0),
           dueAmount: Number(matchedInvoice.due_amount || 0),
           status: matchedInvoice.status || "Unpaid",
+          isIncorrect: matchedInvoice.is_incorrect || false,
+          isAudited: matchedInvoice.is_audited || false,
         } : null,
       });
     }

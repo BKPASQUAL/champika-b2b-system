@@ -19,6 +19,8 @@ import {
   Receipt,
   Check,
   Clock,
+  Flag,
+  AlertOctagon,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,6 +43,8 @@ interface BillAuditItem {
     paidAmount: number;
     dueAmount: number;
     status: string;
+    isIncorrect?: boolean;
+    isAudited?: boolean;
   } | null;
 }
 
@@ -78,7 +82,7 @@ export default function SierraManualInvoiceAuditPage() {
   const [summary, setSummary] = useState<AuditSummary | null>(null);
   const [bills, setBills] = useState<BillAuditItem[]>([]);
   const [recentBooks, setRecentBooks] = useState<{ label: string; start: number; end: number }[]>([]);
-  const [statusFilter, setStatusFilter] = useState<"all" | "entered" | "missing">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "entered" | "missing" | "audited" | "pending_audit" | "flagged">("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [copiedMissing, setCopiedMissing] = useState<boolean>(false);
 
@@ -99,6 +103,62 @@ export default function SierraManualInvoiceAuditPage() {
       toast.error(err.message || "Error running manual invoice audit");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleToggleAuditedCheck = async (invoiceId: string, currentVal: boolean) => {
+    const nextVal = !currentVal;
+    try {
+      const res = await fetch(`/api/invoices/${invoiceId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isAudited: nextVal }),
+      });
+      if (!res.ok) throw new Error("Failed to update audit check");
+      
+      setBills((prev) =>
+        prev.map((b) =>
+          b.invoice?.id === invoiceId
+            ? { ...b, invoice: { ...b.invoice, isAudited: nextVal } }
+            : b
+        )
+      );
+
+      if (nextVal) {
+        toast.success("Bill marked as Audited & Checked! ✔️");
+      } else {
+        toast.info("Audit check removed");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to toggle audit check");
+    }
+  };
+
+  const handleToggleBillFlag = async (invoiceId: string, currentVal: boolean) => {
+    const nextVal = !currentVal;
+    try {
+      const res = await fetch(`/api/invoices/${invoiceId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isIncorrect: nextVal }),
+      });
+      if (!res.ok) throw new Error("Failed to update audit flag");
+      
+      setBills((prev) =>
+        prev.map((b) =>
+          b.invoice?.id === invoiceId
+            ? { ...b, invoice: { ...b.invoice, isIncorrect: nextVal } }
+            : b
+        )
+      );
+
+      if (nextVal) {
+        toast.error("Invoice flagged for audit / incorrect!");
+      } else {
+        toast.success("Audit flag removed");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to toggle audit flag");
     }
   };
 
@@ -198,12 +258,19 @@ export default function SierraManualInvoiceAuditPage() {
     setTimeout(() => setCopiedMissing(false), 2500);
   };
 
+  const auditedCount = bills.filter((b) => b.isEntered && b.invoice?.isAudited).length;
+  const pendingAuditCount = bills.filter((b) => b.isEntered && !b.invoice?.isAudited).length;
+  const flaggedCount = bills.filter((b) => b.isEntered && b.invoice?.isIncorrect).length;
+
   // Filter bills based on search and tab filter
   const filteredBills = bills.filter((b) => {
     const matchesFilter =
       statusFilter === "all" ||
       (statusFilter === "entered" && b.isEntered) ||
-      (statusFilter === "missing" && !b.isEntered);
+      (statusFilter === "missing" && !b.isEntered) ||
+      (statusFilter === "audited" && b.isEntered && b.invoice?.isAudited) ||
+      (statusFilter === "pending_audit" && b.isEntered && !b.invoice?.isAudited) ||
+      (statusFilter === "flagged" && b.isEntered && b.invoice?.isIncorrect);
 
     const q = searchQuery.trim().toLowerCase();
     const matchesSearch =
@@ -584,6 +651,26 @@ export default function SierraManualInvoiceAuditPage() {
                   Entered ({summary?.enteredCount || 0})
                 </button>
                 <button
+                  onClick={() => setStatusFilter("audited")}
+                  className={`px-3 py-1 text-xs font-semibold rounded-sm transition-all ${
+                    statusFilter === "audited"
+                      ? "bg-emerald-600 text-white shadow-sm font-bold"
+                      : "text-emerald-800 hover:text-emerald-950 font-semibold"
+                  }`}
+                >
+                  Audited ✔️ ({auditedCount})
+                </button>
+                <button
+                  onClick={() => setStatusFilter("pending_audit")}
+                  className={`px-3 py-1 text-xs font-semibold rounded-sm transition-all ${
+                    statusFilter === "pending_audit"
+                      ? "bg-amber-600 text-white shadow-sm font-bold"
+                      : "text-amber-800 hover:text-amber-950 font-semibold"
+                  }`}
+                >
+                  Pending Audit ⏳ ({pendingAuditCount})
+                </button>
+                <button
                   onClick={() => setStatusFilter("missing")}
                   className={`px-3 py-1 text-xs font-semibold rounded-sm transition-all ${
                     statusFilter === "missing"
@@ -592,6 +679,16 @@ export default function SierraManualInvoiceAuditPage() {
                   }`}
                 >
                   Missing ({summary?.missingCount || 0})
+                </button>
+                <button
+                  onClick={() => setStatusFilter("flagged")}
+                  className={`px-3 py-1 text-xs font-semibold rounded-sm transition-all ${
+                    statusFilter === "flagged"
+                      ? "bg-rose-700 text-white shadow-sm font-bold"
+                      : "text-rose-800 hover:text-rose-950 font-semibold"
+                  }`}
+                >
+                  🚩 Flagged ({flaggedCount})
                 </button>
               </div>
 
@@ -615,13 +712,13 @@ export default function SierraManualInvoiceAuditPage() {
               <thead className="bg-slate-50 text-slate-700 uppercase font-semibold text-[11px] tracking-wider border-b">
                 <tr>
                   <th className="py-3 px-4 w-28">Manual Bill #</th>
-                  <th className="py-3 px-4 w-32">Status</th>
+                  <th className="py-3 px-4 w-40">Status</th>
                   <th className="py-3 px-4">System Invoice #</th>
                   <th className="py-3 px-4">Customer Shop / Name</th>
                   <th className="py-3 px-4 w-28">Invoice Date</th>
                   <th className="py-3 px-4 text-right w-36">Amount (Rs.)</th>
                   <th className="py-3 px-4 w-28 text-center">Payment</th>
-                  <th className="py-3 px-4 text-right w-32">Action</th>
+                  <th className="py-3 px-4 text-right w-44">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-sans">
@@ -643,7 +740,13 @@ export default function SierraManualInvoiceAuditPage() {
                     <tr
                       key={item.billNo}
                       className={`hover:bg-slate-50/80 transition-colors ${
-                        !item.isEntered ? "bg-rose-50/20" : ""
+                        item.isEntered && item.invoice?.isAudited
+                          ? "bg-emerald-50/40"
+                          : item.isEntered && item.invoice?.isIncorrect
+                          ? "bg-rose-100/40"
+                          : !item.isEntered
+                          ? "bg-rose-50/20"
+                          : ""
                       }`}
                     >
                       {/* Manual Bill # */}
@@ -653,9 +756,17 @@ export default function SierraManualInvoiceAuditPage() {
 
                       {/* Status */}
                       <td className="py-3 px-4">
-                        {item.isEntered ? (
-                          <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-100 font-medium">
-                            <CheckCircle2 className="w-3 h-3 mr-1 text-emerald-600" /> Entered
+                        {item.isEntered && item.invoice?.isAudited ? (
+                          <Badge className="bg-emerald-100 text-emerald-950 border-emerald-300 hover:bg-emerald-100 font-bold text-xs gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Audited ✔️
+                          </Badge>
+                        ) : item.isEntered && item.invoice?.isIncorrect ? (
+                          <Badge className="bg-rose-100 text-rose-900 border-rose-300 hover:bg-rose-100 font-bold text-xs">
+                            <AlertOctagon className="w-3 h-3 mr-1 text-rose-600" /> Flagged / Audit
+                          </Badge>
+                        ) : item.isEntered ? (
+                          <Badge variant="outline" className="bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-50 font-medium">
+                            <CheckCircle2 className="w-3 h-3 mr-1 text-blue-600" /> Entered (Pending Audit)
                           </Badge>
                         ) : (
                           <Badge className="bg-rose-100 text-rose-800 border-rose-300 hover:bg-rose-100 font-medium">
@@ -716,16 +827,51 @@ export default function SierraManualInvoiceAuditPage() {
                       {/* Action */}
                       <td className="py-3 px-4 text-right">
                         {item.isEntered && item.invoice ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              router.push(`/dashboard/office/sierra/invoices/${item.invoice!.id}`)
-                            }
-                            className="h-8 text-xs font-medium border-slate-300"
-                          >
-                            <Eye className="w-3.5 h-3.5 mr-1" /> View
-                          </Button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            {/* Check Tick Toggle Button */}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                handleToggleAuditedCheck(item.invoice!.id, !!item.invoice!.isAudited)
+                              }
+                              title={item.invoice.isAudited ? "Unmark Audited Check" : "Mark as Audited & Checked ✔️"}
+                              className={`h-8 text-xs font-bold px-2.5 gap-1 ${
+                                item.invoice.isAudited
+                                  ? "bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700 shadow-xs"
+                                  : "border-emerald-500 text-emerald-700 hover:bg-emerald-50"
+                              }`}
+                            >
+                              <Check className="w-3.5 h-3.5 stroke-[3]" />
+                              {item.invoice.isAudited ? "Checked" : "Check"}
+                            </Button>
+
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                router.push(`/dashboard/office/sierra/invoices/${item.invoice!.id}`)
+                              }
+                              className="h-8 text-xs font-medium border-slate-300"
+                            >
+                              <Eye className="w-3.5 h-3.5 mr-1" /> View
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                handleToggleBillFlag(item.invoice!.id, !!item.invoice!.isIncorrect)
+                              }
+                              title={item.invoice.isIncorrect ? "Remove Audit Flag" : "Flag as Incorrect / Needs Audit"}
+                              className={`h-8 text-xs font-semibold px-2 ${
+                                item.invoice.isIncorrect
+                                  ? "bg-rose-100 text-rose-800 border-rose-300 hover:bg-rose-200"
+                                  : "border-slate-300 text-slate-600 hover:text-rose-700 hover:bg-rose-50"
+                              }`}
+                            >
+                              <Flag className={`w-3.5 h-3.5 ${item.invoice.isIncorrect ? "fill-rose-600 text-rose-600" : ""}`} />
+                            </Button>
+                          </div>
                         ) : (
                           <Button
                             variant="outline"
