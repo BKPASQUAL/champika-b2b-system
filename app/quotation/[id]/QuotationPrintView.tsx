@@ -14,11 +14,12 @@ const PDF_WIDTH = 794; // A4 at 96 dpi
 export default function QuotationPrintView({ quotation }: { quotation: any }) {
   const [html, setHtml] = useState<string>("");
   const [scale, setScale] = useState(1);
+  const [showBranding, setShowBranding] = useState<boolean>(true);
 
   // Generate the HTML using the exact same function used by Print & Download
   useEffect(() => {
-    generateQuotationHTML(quotation, "retail").then(setHtml);
-  }, [quotation]);
+    generateQuotationHTML(quotation, "retail", "", showBranding).then(setHtml);
+  }, [quotation, showBranding]);
 
   // Scale the preview to fit narrow screens (like a PDF viewer)
   useEffect(() => {
@@ -41,10 +42,19 @@ export default function QuotationPrintView({ quotation }: { quotation: any }) {
           position: sticky; top: 0; z-index: 20;
           background: #111; padding: 10px 16px;
           display: flex; justify-content: space-between; align-items: center;
-          gap: 8px;
+          gap: 8px; flex-wrap: wrap;
         }
         .top-bar-title { color: #fff; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .top-bar-actions { display: flex; gap: 8px; flex-shrink: 0; }
+        .top-bar-actions { display: flex; gap: 8px; flex-shrink: 0; align-items: center; }
+        .btn-toggle {
+          background: #334155; color: #fff;
+          border: 1px solid #475569; border-radius: 4px;
+          padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
+          white-space: nowrap; transition: all 0.2s;
+        }
+        .btn-toggle.active {
+          background: #047857; border-color: #10b981;
+        }
         .btn-dl {
           background: transparent; color: #fff;
           border: 1.5px solid #fff; border-radius: 4px;
@@ -86,14 +96,21 @@ export default function QuotationPrintView({ quotation }: { quotation: any }) {
         <span className="top-bar-title">Quotation {quotation.quotationNo}</span>
         <div className="top-bar-actions">
           <button
+            className={`btn-toggle ${showBranding ? "active" : ""}`}
+            onClick={() => setShowBranding(!showBranding)}
+            title="Toggle Champika Hardware header branding"
+          >
+            {showBranding ? "✓ Champika Branding" : "Plain Format (No Branding)"}
+          </button>
+          <button
             className="btn-dl"
-            onClick={() => downloadQuotation(quotation, "retail")}
+            onClick={() => downloadQuotation(quotation, "retail", showBranding)}
           >
             Download PDF
           </button>
           <button
             className="btn-print"
-            onClick={() => printQuotation(quotation, "retail")}
+            onClick={() => printQuotation(quotation, "retail", showBranding)}
           >
             Print
           </button>

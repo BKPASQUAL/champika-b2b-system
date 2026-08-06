@@ -37,6 +37,8 @@ export async function GET(
   const { searchParams, origin } = new URL(request.url);
   const divisionKey = (searchParams.get("division") ||
     "retail") as keyof typeof DIVISIONS;
+  const showBrandingParam = searchParams.get("showBranding");
+  const showBranding = showBrandingParam !== "false";
 
   try {
     // ── 1. Fetch quotation ──────────────────────────────────────────────
@@ -105,7 +107,8 @@ export async function GET(
     const quotationHtml = await generateQuotationHTML(
       quotationData,
       divisionKey,
-      origin
+      origin,
+      showBranding
     );
     const fullHtml = getDocumentWrapper(
       quotationHtml,

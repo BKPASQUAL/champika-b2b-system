@@ -49,6 +49,15 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ChevronDown, FileCheck, FileMinus } from "lucide-react";
 
 interface QuotationItem {
   productId: string;
@@ -116,8 +125,8 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
     }
   }, [loading, quotation, id, searchParams]);
 
-  const handleSharePdf = () =>
-    shareQuotation(id, "retail", quotation?.quotationNo || "", setSharing);
+  const handleSharePdf = (showBranding: boolean = true) =>
+    shareQuotation(id, "retail", quotation?.quotationNo || "", setSharing, showBranding);
 
   useEffect(() => {
     const fetchQuotation = async () => {
@@ -214,44 +223,116 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
               View Invoice {quotation.convertedInvoiceNo}
             </Button>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => printQuotation(id)}
-          >
-            <Printer className="w-4 h-4 mr-2 text-muted-foreground" />
-            <span>Print A4</span>
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => printHalfPageQuotation(id)}
-          >
-            <Printer className="w-4 h-4 mr-2 text-muted-foreground" />
-            <span>Print A5</span>
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => downloadQuotation(id)}
-          >
-            <Download className="w-4 h-4 mr-2 text-muted-foreground" />
-            <span>Download PDF</span>
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="bg-green-50 border-green-200 text-green-700 hover:bg-green-100 hover:text-green-800"
-            onClick={handleSharePdf}
-            disabled={sharing}
-          >
-            {sharing ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <Share2 className="w-4 h-4 mr-2" />
-            )}
-            <span>{sharing ? "Sharing…" : "Share"}</span>
-          </Button>
+          {/* Print Menu */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Printer className="w-4 h-4 mr-1.5 text-muted-foreground" />
+                <span>Print</span>
+                <ChevronDown className="w-3.5 h-3.5 ml-1 opacity-70" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel className="text-xs text-muted-foreground">Print Options</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => printQuotation(id, true)} className="cursor-pointer">
+                <FileCheck className="w-4 h-4 mr-2 text-green-600" />
+                <div className="flex flex-col">
+                  <span className="font-semibold text-xs">Print A4 (With Branding)</span>
+                  <span className="text-[10px] text-muted-foreground">Champika Hardware Header</span>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => printQuotation(id, false)} className="cursor-pointer">
+                <FileMinus className="w-4 h-4 mr-2 text-slate-600" />
+                <div className="flex flex-col">
+                  <span className="font-semibold text-xs">Print A4 (Without Branding)</span>
+                  <span className="text-[10px] text-muted-foreground">Plain / Neutral Format</span>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => printHalfPageQuotation(id, true)} className="cursor-pointer">
+                <FileCheck className="w-4 h-4 mr-2 text-green-600" />
+                <div className="flex flex-col">
+                  <span className="font-semibold text-xs">Print A5 (With Branding)</span>
+                  <span className="text-[10px] text-muted-foreground">Champika Hardware Header</span>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => printHalfPageQuotation(id, false)} className="cursor-pointer">
+                <FileMinus className="w-4 h-4 mr-2 text-slate-600" />
+                <div className="flex flex-col">
+                  <span className="font-semibold text-xs">Print A5 (Without Branding)</span>
+                  <span className="text-[10px] text-muted-foreground">Plain / Neutral Format</span>
+                </div>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Download PDF Menu */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Download className="w-4 h-4 mr-1.5 text-muted-foreground" />
+                <span>Download PDF</span>
+                <ChevronDown className="w-3.5 h-3.5 ml-1 opacity-70" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel className="text-xs text-muted-foreground">Download Options</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => downloadQuotation(id, true)} className="cursor-pointer">
+                <FileCheck className="w-4 h-4 mr-2 text-green-600" />
+                <div className="flex flex-col">
+                  <span className="font-semibold text-xs">With Champika Branding</span>
+                  <span className="text-[10px] text-muted-foreground">Full Logo &amp; Header</span>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => downloadQuotation(id, false)} className="cursor-pointer">
+                <FileMinus className="w-4 h-4 mr-2 text-slate-600" />
+                <div className="flex flex-col">
+                  <span className="font-semibold text-xs">Without Branding</span>
+                  <span className="text-[10px] text-muted-foreground">Plain / Neutral Format</span>
+                </div>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Share PDF Menu */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="bg-green-50 border-green-200 text-green-700 hover:bg-green-100 hover:text-green-800"
+                disabled={sharing}
+              >
+                {sharing ? (
+                  <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                ) : (
+                  <Share2 className="w-4 h-4 mr-1.5" />
+                )}
+                <span>{sharing ? "Sharing…" : "Share PDF"}</span>
+                <ChevronDown className="w-3.5 h-3.5 ml-1 opacity-70" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel className="text-xs text-muted-foreground">Share Options</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => handleSharePdf(true)} className="cursor-pointer">
+                <FileCheck className="w-4 h-4 mr-2 text-green-600" />
+                <div className="flex flex-col">
+                  <span className="font-semibold text-xs">Share (With Branding)</span>
+                  <span className="text-[10px] text-muted-foreground">With Champika Header</span>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleSharePdf(false)} className="cursor-pointer">
+                <FileMinus className="w-4 h-4 mr-2 text-slate-600" />
+                <div className="flex flex-col">
+                  <span className="font-semibold text-xs">Share (Without Branding)</span>
+                  <span className="text-[10px] text-muted-foreground">Plain / Neutral Format</span>
+                </div>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           {isActive && (
             <>
               <Button variant="outline" size="sm" onClick={() => setShowDeleteDialog(true)} className="text-destructive hover:text-destructive">

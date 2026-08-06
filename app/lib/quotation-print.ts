@@ -36,7 +36,8 @@ const printHTML = (htmlContent: string) => {
 // ── Print A4 ───────────────────────────────────────────────────────────────────
 export const printQuotation = async (
   quotationOrId: string | any,
-  divisionKey: keyof typeof DIVISIONS = "retail"
+  divisionKey: keyof typeof DIVISIONS = "retail",
+  showBranding: boolean = true
 ) => {
   try {
     let data = quotationOrId;
@@ -56,7 +57,7 @@ export const printQuotation = async (
     if (!data) return;
     printHTML(
       getDocumentWrapper(
-        await generateQuotationHTML(data, divisionKey),
+        await generateQuotationHTML(data, divisionKey, "", showBranding),
         data.quotationNo || "Quotation"
       )
     );
@@ -68,7 +69,8 @@ export const printQuotation = async (
 // ── Print A5 (Half-page) ────────────────────────────────────────────────────
 export const printHalfPageQuotation = async (
   quotationOrId: string | any,
-  divisionKey: keyof typeof DIVISIONS = "retail"
+  divisionKey: keyof typeof DIVISIONS = "retail",
+  showBranding: boolean = true
 ) => {
   try {
     let data = quotationOrId;
@@ -88,7 +90,7 @@ export const printHalfPageQuotation = async (
     if (!data) return;
     printHTML(
       getHalfPageDocumentWrapper(
-        await generateHalfPageQuotationHTML(data, divisionKey),
+        await generateHalfPageQuotationHTML(data, divisionKey, "", showBranding),
         data.quotationNo || "Quotation"
       )
     );
@@ -100,7 +102,8 @@ export const printHalfPageQuotation = async (
 // ── Generate PDF Blob ───────────────────────────────────────────────────────
 export const generateQuotationPdfBlob = async (
   quotationOrId: string | any,
-  divisionKey: keyof typeof DIVISIONS = "retail"
+  divisionKey: keyof typeof DIVISIONS = "retail",
+  showBranding: boolean = true
 ): Promise<{ blob: Blob; filename: string }> => {
   const id =
     typeof quotationOrId === "string"
@@ -113,7 +116,7 @@ export const generateQuotationPdfBlob = async (
     const timer = setTimeout(() => controller.abort(), 20000);
     try {
       const res = await fetch(
-        `/api/quotations/${id}/pdf?division=${divisionKey}`,
+        `/api/quotations/${id}/pdf?division=${divisionKey}&showBranding=${showBranding}`,
         { signal: controller.signal }
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -141,7 +144,7 @@ export const generateQuotationPdfBlob = async (
 
   const quotationNo = data.quotationNo || data.quotation_no || id;
   const filename = `${quotationNo}.pdf`;
-  const html = await generateQuotationHTML(data, divisionKey);
+  const html = await generateQuotationHTML(data, divisionKey, "", showBranding);
   const fullHtml = getDocumentWrapper(html, quotationNo);
 
   const iframe = document.createElement("iframe");
@@ -197,12 +200,13 @@ export const shareQuotation = async (
   id: string,
   divisionKey: keyof typeof DIVISIONS = "retail",
   quotationNo: string,
-  onLoadingChange?: (loading: boolean) => void
+  onLoadingChange?: (loading: boolean) => void,
+  showBranding: boolean = true
 ) => {
   onLoadingChange?.(true);
   const tid = toast.loading("Generating PDF…");
   try {
-    const { blob, filename } = await generateQuotationPdfBlob(id, divisionKey);
+    const { blob, filename } = await generateQuotationPdfBlob(id, divisionKey, showBranding);
     toast.dismiss(tid);
 
     // Desktop fallback
@@ -246,13 +250,15 @@ export const shareQuotation = async (
 // ── Download PDF ────────────────────────────────────────────────────────────
 export const downloadQuotation = async (
   quotationOrId: string | any,
-  divisionKey: keyof typeof DIVISIONS = "retail"
+  divisionKey: keyof typeof DIVISIONS = "retail",
+  showBranding: boolean = true
 ) => {
   const tid = toast.loading("Generating PDF...");
   try {
     const { blob, filename } = await generateQuotationPdfBlob(
       quotationOrId,
-      divisionKey
+      divisionKey,
+      showBranding
     );
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
