@@ -35,6 +35,7 @@ const updateInvoiceSchema = z.object({
   changeReason: z.string().optional().nullable(),
   isIncorrect: z.boolean().optional(),
   paidAmount: z.number().optional().nullable(),
+  unlockToken: z.string().optional().nullable(),
 });
 
 export async function GET(
@@ -708,6 +709,15 @@ export async function PATCH(
         transaction_date: val.invoiceDate,
         business_id: businessId,
       });
+    }
+
+    if (val.unlockToken) {
+      try {
+        await supabaseAdmin
+          .from("invoice_unlock_requests")
+          .update({ status: "used", updated_at: new Date().toISOString() })
+          .eq("unlock_token", val.unlockToken);
+      } catch (e) {}
     }
 
     return NextResponse.json({ message: "Invoice updated successfully" });

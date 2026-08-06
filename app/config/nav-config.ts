@@ -36,6 +36,7 @@ import {
   PenLine,
   CheckCircle2,
   Building2,
+  KeyRound,
 } from "lucide-react";
 
 export type UserRole = "admin" | "office" | "rep" | "delivery";
@@ -128,6 +129,11 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           name: "Due Alerts",
           href: "/dashboard/admin/invoices/due",
           icon: AlertCircle,
+        },
+        {
+          name: "Edit Unlock Requests",
+          href: "/dashboard/admin/invoices/unlock-requests",
+          icon: KeyRound,
         },
       ],
     },

@@ -31,6 +31,7 @@ import {
   AlertTriangle,
   Wrench,
   CheckCircle2,
+  KeyRound,
 } from "lucide-react";
 
 // ── Navigation items ──────────────────────────────────────────────────────────
@@ -312,6 +313,81 @@ function NotificationsSettings() {
   );
 }
 
+// ── Admin One-Time Invoice Unlock PIN Component ────────────────────────────────
+function InvoiceUnlockPinSetting() {
+  const [pin, setPin] = useState("889900");
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/settings/invoice-unlock-pin")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.pin) setPin(data.pin);
+      })
+      .catch(() => null)
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleSave = async () => {
+    if (!pin || pin.trim().length < 4) {
+      toast.error("PIN must be at least 4 digits");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/settings/invoice-unlock-pin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: pin.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update PIN");
+      toast.success("Admin Invoice Unlock PIN updated successfully!");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save PIN");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border-2 border-amber-200 bg-amber-50/60 p-5 space-y-3">
+      <div className="space-y-1">
+        <div className="flex items-center gap-2">
+          <KeyRound className="h-4 w-4 text-amber-700" />
+          <p className="text-sm font-semibold text-gray-800">
+            One-Time Invoice Edit Passcode (Admin PIN)
+          </p>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Staff and Reps use this 6-digit Master Passcode to instantly unlock invoices in Loading, In Transit, or Delivered status for one-time edit authorization.
+        </p>
+      </div>
+
+      <div className="flex items-center gap-3 max-w-sm pt-1">
+        <Input
+          type="text"
+          value={pin}
+          onChange={(e) => setPin(e.target.value)}
+          placeholder="e.g. 889900"
+          className="bg-white font-mono text-lg tracking-widest text-center h-10"
+          maxLength={8}
+          disabled={loading}
+        />
+        <Button
+          onClick={handleSave}
+          disabled={saving || loading}
+          className="gap-2 bg-amber-700 hover:bg-amber-800 text-white shrink-0"
+        >
+          {saving ? <span className="animate-spin">⟳</span> : <Save className="h-4 w-4" />}
+          Save PIN
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 // ── Security Section ──────────────────────────────────────────────────────────
 function SecuritySettings() {
   return (
@@ -322,12 +398,16 @@ function SecuritySettings() {
           <Shield className="h-6 w-6 text-white" />
         </div>
         <div>
-          <h2 className="text-xl font-bold text-gray-900">Access Control</h2>
+          <h2 className="text-xl font-bold text-gray-900">Access Control & Authorization Passcode</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Manage your password and security settings
+            Manage your password and Admin one-time invoice edit PIN
           </p>
         </div>
       </div>
+
+      <Separator />
+
+      <InvoiceUnlockPinSetting />
 
       <Separator />
 
