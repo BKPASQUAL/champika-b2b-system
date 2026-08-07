@@ -85,15 +85,26 @@ export async function POST(request: NextRequest) {
     if (!items || items.length === 0) return NextResponse.json({ error: "At least one item is required" }, { status: 400 });
 
     // Generate quotation number (QUO-0001 format)
-    const { data: existing } = await supabaseAdmin
-      .from("quotations")
-      .select("quotation_no")
-      .ilike("quotation_no", "QUO-%");
+    const [createdRes, noRes] = await Promise.all([
+      supabaseAdmin
+        .from("quotations")
+        .select("quotation_no")
+        .ilike("quotation_no", "QUO-%")
+        .order("created_at", { ascending: false })
+        .limit(500),
+      supabaseAdmin
+        .from("quotations")
+        .select("quotation_no")
+        .ilike("quotation_no", "QUO-%")
+        .order("quotation_no", { ascending: false })
+        .limit(500),
+    ]);
 
+    const combinedQuos = [...(createdRes.data ?? []), ...(noRes.data ?? [])];
     const maxSeq = Math.max(
       0,
-      ...(existing ?? []).map((q: any) => {
-        const parts = (q.quotation_no as string).split("-");
+      ...combinedQuos.map((q: any) => {
+        const parts = ((q.quotation_no as string) || "").split("-");
         const n = parseInt(parts[parts.length - 1], 10);
         return isNaN(n) ? 0 : n;
       })

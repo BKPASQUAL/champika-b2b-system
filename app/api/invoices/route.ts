@@ -257,23 +257,34 @@ export async function POST(request: NextRequest) {
       ? (INVOICE_PREFIXES[resolvedBusinessId] ?? "INV")
       : "INV";
 
-    const getNextInvoiceNo = async (): Promise<string> => {
-      const { data: existing } = await supabaseAdmin
-        .from("invoices")
-        .select("invoice_no")
-        .ilike("invoice_no", `${prefix}-%`);
+    const getNextInvoiceNo = async (offset = 0): Promise<string> => {
+      const [createdRes, noRes] = await Promise.all([
+        supabaseAdmin
+          .from("invoices")
+          .select("invoice_no")
+          .ilike("invoice_no", `${prefix}-%`)
+          .order("created_at", { ascending: false })
+          .limit(500),
+        supabaseAdmin
+          .from("invoices")
+          .select("invoice_no")
+          .ilike("invoice_no", `${prefix}-%`)
+          .order("invoice_no", { ascending: false })
+          .limit(500),
+      ]);
+      const combined = [...(createdRes.data ?? []), ...(noRes.data ?? [])];
       const maxSeq = Math.max(
         0,
-        ...(existing ?? []).map((inv: any) => {
-          const parts = (inv.invoice_no as string).split("-");
+        ...combined.map((inv: any) => {
+          const parts = ((inv.invoice_no as string) || "").split("-");
           const n = parseInt(parts[parts.length - 1], 10);
           return isNaN(n) ? 0 : n;
         })
       );
-      return `${prefix}-${String(maxSeq + 1).padStart(4, "0")}`;
+      return `${prefix}-${String(maxSeq + 1 + offset).padStart(4, "0")}`;
     };
 
-    let invoiceNo = await getNextInvoiceNo();
+    let invoiceNo = await getNextInvoiceNo(0);
     // -------------------------------------------------------------
 
     // 3. Calculate Dates
@@ -567,9 +578,7 @@ export async function POST(request: NextRequest) {
     const finalPaymentStatus = isFullyPaid ? "Paid" : val.paymentStatus;
 
     for (let attempt = 0; attempt < 5; attempt++) {
-      if (attempt > 0) {
-        invoiceNo = await getNextInvoiceNo();
-      }
+      invoiceNo = await getNextInvoiceNo(attempt);
       const result = await supabaseAdmin
         .from("invoices")
         .insert({

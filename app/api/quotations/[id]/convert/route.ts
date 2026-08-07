@@ -28,21 +28,36 @@ export async function POST(
     const businessId = q.business_id || BUSINESS_IDS.CHAMPIKA_RETAIL;
     const finalPaymentType = paymentType || q.payment_type || "Cash";
 
-    // 2. Generate CHR-XXXX invoice number
+    // 2. Helper to generate CHR-XXXX invoice number safely
     const prefix = "CHR";
-    const { data: existingInvs } = await supabaseAdmin
-      .from("invoices")
-      .select("invoice_no")
-      .ilike("invoice_no", `${prefix}-%`);
-    const maxSeq = Math.max(
-      0,
-      ...(existingInvs ?? []).map((inv: any) => {
-        const parts = (inv.invoice_no as string).split("-");
-        const n = parseInt(parts[parts.length - 1], 10);
-        return isNaN(n) ? 0 : n;
-      })
-    );
-    const invoiceNo = `${prefix}-${String(maxSeq + 1).padStart(4, "0")}`;
+    const getNextInvoiceNo = async (offset = 0): Promise<string> => {
+      const [createdRes, noRes] = await Promise.all([
+        supabaseAdmin
+          .from("invoices")
+          .select("invoice_no")
+          .ilike("invoice_no", `${prefix}-%`)
+          .order("created_at", { ascending: false })
+          .limit(500),
+        supabaseAdmin
+          .from("invoices")
+          .select("invoice_no")
+          .ilike("invoice_no", `${prefix}-%`)
+          .order("invoice_no", { ascending: false })
+          .limit(500),
+      ]);
+      const combined = [...(createdRes.data ?? []), ...(noRes.data ?? [])];
+      const maxSeq = Math.max(
+        0,
+        ...combined.map((inv: any) => {
+          const parts = ((inv.invoice_no as string) || "").split("-");
+          const n = parseInt(parts[parts.length - 1], 10);
+          return isNaN(n) ? 0 : n;
+        })
+      );
+      return `${prefix}-${String(maxSeq + 1 + offset).padStart(4, "0")}`;
+    };
+
+    let invoiceNo = await getNextInvoiceNo(0);
 
     const invoiceDate = q.invoice_date || new Date().toISOString().split("T")[0];
     const dueDate = (() => {
@@ -169,21 +184,30 @@ export async function POST(
     const paidAmount = isFullyCash ? q.grand_total : 0;
     const paymentStatus = isFullyCash ? "Paid" : "Unpaid";
 
-    const { data: invoiceData, error: invoiceError } = await supabaseAdmin
-      .from("invoices")
-      .insert({
-        invoice_no: invoiceNo,
-        order_id: orderData.id,
-        customer_id: q.customer_id,
-        total_amount: q.grand_total,
-        paid_amount: paidAmount,
-        status: paymentStatus,
-        due_date: dueDate,
-        created_at: new Date(),
-        is_incorrect: false,
-      })
-      .select()
-      .single();
+    let invoiceData: any = null;
+    let invoiceError: any = null;
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+      invoiceNo = await getNextInvoiceNo(attempt);
+      const result = await supabaseAdmin
+        .from("invoices")
+        .insert({
+          invoice_no: invoiceNo,
+          order_id: orderData.id,
+          customer_id: q.customer_id,
+          total_amount: q.grand_total,
+          paid_amount: paidAmount,
+          status: paymentStatus,
+          due_date: dueDate,
+          created_at: new Date(),
+          is_incorrect: false,
+        })
+        .select()
+        .single();
+      invoiceData = result.data;
+      invoiceError = result.error;
+      if (!invoiceError || invoiceError.code !== "23505") break;
+    }
 
     if (invoiceError) throw invoiceError;
 
