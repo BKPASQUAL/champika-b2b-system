@@ -19,7 +19,9 @@ import {
   User,
   Truck,
   Eye,
+  Share2,
 } from "lucide-react";
+import { toast } from "sonner";
 import {
   Invoice,
   SortField,
@@ -69,6 +71,36 @@ export function InvoiceTable({
     setDownloadingId(id);
     await printInvoice(id);
     setDownloadingId(null);
+  };
+
+  const handleShareInvoice = async (inv: Invoice) => {
+    const fmtNum = (num: number) => num.toLocaleString("en-LK", { minimumFractionDigits: 2 });
+    let msg = `*CHAMPIKA DISTRIBUTION - INVOICE*\n`;
+    msg += `*Invoice No:* ${inv.invoiceNo}\n`;
+    msg += `*Customer:* ${inv.customerName}\n`;
+    msg += `*Date:* ${inv.date}\n`;
+    msg += `*Status:* ${inv.status} (${inv.orderStatus})\n`;
+    msg += `*Total Amount:* LKR ${fmtNum(inv.totalAmount)}\n`;
+    msg += `*Balance Due:* LKR ${fmtNum(inv.dueAmount)}\n\n`;
+    msg += `Thank you for your business!`;
+
+    if (navigator.canShare && navigator.canShare({ text: msg })) {
+      try {
+        await navigator.share({
+          title: `Invoice ${inv.invoiceNo}`,
+          text: msg,
+        });
+        toast.success("Invoice details shared");
+        return;
+      } catch (e: any) {
+        if (e.name !== "AbortError") console.warn("Share failed:", e);
+        else return;
+      }
+    }
+
+    const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+    window.open(waUrl, "_blank");
+    toast.success("Opened WhatsApp with invoice details");
   };
 
   const getSortIcon = (field: SortField) => {
@@ -247,6 +279,14 @@ export function InvoiceTable({
                     />
                   )}
                 </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => handleShareInvoice(invoice)}
+                  title="Share Invoice Details via WhatsApp / Link"
+                >
+                  <Share2 className="w-4 h-4 text-green-600" />
+                </Button>
               </div>
             </div>
           ))
@@ -414,6 +454,14 @@ export function InvoiceTable({
                             }`}
                           />
                         )}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => handleShareInvoice(invoice)}
+                        title="Share Invoice Details via WhatsApp / Link"
+                      >
+                        <Share2 className="w-4 h-4 text-green-600" />
                       </Button>
                     </div>
                   </TableCell>

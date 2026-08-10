@@ -25,6 +25,7 @@ import {
   AlertCircle,
   Printer,
   Receipt,
+  Share2,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -38,7 +39,7 @@ import { BUSINESS_IDS } from "@/app/config/business-constants";
 import { Invoice, SortField, SortOrder } from "./types";
 import { InvoiceTable } from "./_components/InvoiceTable";
 import { InvoiceStats } from "./_components/InvoiceStats";
-import { downloadOutstandingReport, printOutstandingReport } from "./outstanding-report";
+import { downloadOutstandingReport, printOutstandingReport, shareOutstandingReport } from "./outstanding-report";
 
 const NUMBER_WORDS: Record<string, string> = {
   "0": "zero", "1": "one", "2": "two", "3": "three", "4": "four",
@@ -234,6 +235,13 @@ export default function DistributionInvoicesPage() {
               >
                 <Printer className="w-4 h-4 mr-2 text-red-600" />
                 Print Outstanding Report
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => shareOutstandingReport(invoices, repFilter)}
+                className="text-green-700 focus:text-green-700"
+              >
+                <Share2 className="w-4 h-4 mr-2 text-green-600" />
+                Share Outstanding Report
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

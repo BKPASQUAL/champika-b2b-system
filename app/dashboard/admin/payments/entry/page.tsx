@@ -9,10 +9,15 @@ import {
   ReceiptText,
   BanknoteIcon,
   ClipboardCheck,
+  History,
+  Download,
+  Printer,
+  Share2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -47,11 +52,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { BUSINESS_IDS, BUSINESS_NAMES } from "@/app/config/business-constants";
+import {
+  downloadCustomerStatement,
+  printCustomerStatement,
+  shareCustomerStatement,
+  InvoicePaymentRecord,
+} from "@/lib/customer-statement-report";
 
 // ─── Business options for admin selector ───────────────────────────────────────
 const BUSINESS_OPTIONS = Object.entries(BUSINESS_NAMES).map(([id, name]) => ({
@@ -67,6 +85,30 @@ const formatCurrency = (amount: number) => {
     currency: "LKR",
     minimumFractionDigits: 2,
   }).format(amount);
+};
+
+const getInvoiceAgeDays = (dateStr: string): number => {
+  if (!dateStr) return 0;
+  const invDate = new Date(dateStr);
+  const today = new Date();
+  const diffTime = today.getTime() - invDate.getTime();
+  return Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+};
+
+const renderAgeBadge = (days: number) => {
+  let badgeStyle = "bg-green-50 text-green-700 border-green-200";
+  if (days >= 90) {
+    badgeStyle = "bg-red-100 text-red-700 border-red-200 font-semibold";
+  } else if (days >= 60) {
+    badgeStyle = "bg-orange-100 text-orange-700 border-orange-200";
+  } else if (days >= 30) {
+    badgeStyle = "bg-yellow-50 text-yellow-800 border-yellow-200";
+  }
+  return (
+    <Badge variant="outline" className={`${badgeStyle} text-[11px] whitespace-nowrap`}>
+      {days} {days === 1 ? "day" : "days"}
+    </Badge>
+  );
 };
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -95,10 +137,12 @@ interface CompanyAccount {
 interface PendingInvoice {
   id: string;
   orderNumber: string;
+  invoiceNo?: string;
   date: string;
   totalAmount: number;
   paidAmount: number;
   balance: number;
+  payments?: InvoicePaymentRecord[];
 }
 
 interface InvoiceSettlement {
@@ -166,6 +210,7 @@ export default function AdminPaymentEntryPage() {
   const [settlements, setSettlements] = useState<
     Record<string, InvoiceSettlement>
   >({});
+  const [historyModalInvoice, setHistoryModalInvoice] = useState<PendingInvoice | null>(null);
 
   // ── Data fetching ─────────────────────────────────────────────────────────────
 
@@ -276,19 +321,54 @@ export default function AdminPaymentEntryPage() {
     setPendingInvoices([]);
     setSettlements({});
     try {
-      // Use the orders API and filter by customer_id
-      const res = await fetch(`/api/orders/unpaid/by-customer?customer_id=${customerId}`);
+      const payQs = new URLSearchParams();
+      if (selectedBusinessId) payQs.set("businessId", selectedBusinessId);
+      const [res, payRes] = await Promise.all([
+        fetch(`/api/orders/unpaid/by-customer?customer_id=${customerId}`),
+        fetch(`/api/payments?${payQs.toString()}`),
+      ]);
+
+      const paymentsData = payRes.ok ? await payRes.json() : [];
+      const paymentMap: Record<string, InvoicePaymentRecord[]> = {};
+      (paymentsData || []).forEach((p: any) => {
+        if (p.is_cancelled) return;
+        const invId = p.invoice_id || p.invoices?.id;
+        const orderId = p.order_id || p.orders?.id;
+        const invNo = p.invoices?.invoice_no || p.orders?.order_number;
+        const keys = [invId, orderId, invNo].filter(Boolean);
+        keys.forEach((key) => {
+          if (!paymentMap[key]) paymentMap[key] = [];
+          // Avoid duplicate push if key appears multiple times
+          if (!paymentMap[key].some((exist) => exist.id === p.id)) {
+            paymentMap[key].push({
+              id: p.id,
+              paymentDate: p.payment_date,
+              amount: p.amount,
+              method: p.payment_method || p.method || "cash",
+              chequeNo: p.cheque_number || p.cheque_no || null,
+              chequeStatus: p.cheque_status || null,
+            });
+          }
+        });
+      });
+
       if (res.ok) {
         const data = await res.json();
         const orders: any[] = data.orders ?? [];
-        const invoices: PendingInvoice[] = orders.map((o) => ({
-          id: o.id,
-          orderNumber: o.order_number,
-          date: o.order_date ?? o.date ?? "",
-          totalAmount: o.total_amount ?? 0,
-          paidAmount: o.paid_amount ?? 0,
-          balance: o.balance ?? 0,
-        }));
+        const invoices: PendingInvoice[] = orders.map((o) => {
+          const key = o.id || o.order_number;
+          const history = paymentMap[key] || paymentMap[o.id] || paymentMap[o.order_number] || [];
+          return {
+            id: o.id,
+            orderNumber: o.order_number,
+            invoiceNo: o.order_number,
+            date: o.order_date ?? o.date ?? "",
+            totalAmount: o.total_amount ?? 0,
+            paidAmount: o.paid_amount ?? 0,
+            balance: o.balance ?? 0,
+            payments: history,
+          };
+        });
         setPendingInvoices(invoices);
         const map: Record<string, InvoiceSettlement> = {};
         invoices.forEach((inv) => {
@@ -313,14 +393,20 @@ export default function AdminPaymentEntryPage() {
               o.status !== "Cancelled" &&
               (o.status === "Delivered" || o.status === "Completed" || o.paymentStatus === "Unpaid" || o.paymentStatus === "Partial")
           );
-          const invoices: PendingInvoice[] = filtered.map((o: any) => ({
-            id: o.id,
-            orderNumber: o.invoiceNo || o.orderId || o.order_number || o.id,
-            date: o.date || o.order_date || o.createdAt?.split("T")[0] || "",
-            totalAmount: o.totalAmount ?? 0,
-            paidAmount: o.paidAmount ?? 0,
-            balance: o.dueAmount ?? (o.totalAmount - (o.paidAmount ?? 0)),
-          }));
+          const invoices: PendingInvoice[] = filtered.map((o: any) => {
+            const key = o.id || o.invoiceNo || o.orderId;
+            const history = paymentMap[key] || paymentMap[o.id] || [];
+            return {
+              id: o.id,
+              orderNumber: o.invoiceNo || o.orderId || o.order_number || o.id,
+              invoiceNo: o.invoiceNo || o.orderId || o.order_number || o.id,
+              date: o.date || o.order_date || o.createdAt?.split("T")[0] || "",
+              totalAmount: o.totalAmount ?? 0,
+              paidAmount: o.paidAmount ?? 0,
+              balance: o.dueAmount ?? (o.totalAmount - (o.paidAmount ?? 0)),
+              payments: history,
+            };
+          });
           setPendingInvoices(invoices);
           const map: Record<string, InvoiceSettlement> = {};
           invoices.forEach((inv) => {
@@ -882,12 +968,95 @@ export default function AdminPaymentEntryPage() {
       {/* ── SECTION 2: Pending Invoices ─────────────────────────────────── */}
       <Card>
         <CardHeader className="pb-3">
-          <StepBadge step={2} label="Pending Invoices" />
-          <CardDescription>
-            {selectedCustomerId
-              ? "Select invoices to settle with this payment"
-              : "Select a customer above to load their pending invoices"}
-          </CardDescription>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <StepBadge step={2} label="Pending Invoices" />
+              <CardDescription className="mt-1">
+                {selectedCustomerId
+                  ? `Select invoices to settle (${pendingInvoices.length} outstanding)`
+                  : "Select a customer above to load their pending invoices"}
+              </CardDescription>
+            </div>
+            {selectedCustomerId && pendingInvoices.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    downloadCustomerStatement(
+                      selectedCustomer?.name || "Customer",
+                      pendingInvoices.map((inv) => ({
+                        id: inv.id,
+                        invoiceNo: inv.orderNumber || inv.invoiceNo || inv.id,
+                        date: inv.date,
+                        totalAmount: inv.totalAmount,
+                        paidAmount: inv.paidAmount,
+                        balance: inv.balance,
+                        payments: inv.payments,
+                      })),
+                      selectedBusinessId
+                        ? BUSINESS_NAMES[selectedBusinessId as keyof typeof BUSINESS_NAMES]
+                        : "CHAMPIKA HARDWARE & DISTRIBUTION"
+                    )
+                  }
+                  title="Download Single Customer Outstanding PDF Statement"
+                  className="text-xs text-blue-700 border-blue-200 hover:bg-blue-50"
+                >
+                  <Download className="w-3.5 h-3.5 mr-1 text-blue-600" /> PDF Statement
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    printCustomerStatement(
+                      selectedCustomer?.name || "Customer",
+                      pendingInvoices.map((inv) => ({
+                        id: inv.id,
+                        invoiceNo: inv.orderNumber || inv.invoiceNo || inv.id,
+                        date: inv.date,
+                        totalAmount: inv.totalAmount,
+                        paidAmount: inv.paidAmount,
+                        balance: inv.balance,
+                        payments: inv.payments,
+                      })),
+                      selectedBusinessId
+                        ? BUSINESS_NAMES[selectedBusinessId as keyof typeof BUSINESS_NAMES]
+                        : "CHAMPIKA HARDWARE & DISTRIBUTION"
+                    )
+                  }
+                  title="Print Single Customer Outstanding Statement"
+                  className="text-xs"
+                >
+                  <Printer className="w-3.5 h-3.5 mr-1 text-gray-600" /> Print
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    shareCustomerStatement(
+                      selectedCustomer?.name || "Customer",
+                      pendingInvoices.map((inv) => ({
+                        id: inv.id,
+                        invoiceNo: inv.orderNumber || inv.invoiceNo || inv.id,
+                        date: inv.date,
+                        totalAmount: inv.totalAmount,
+                        paidAmount: inv.paidAmount,
+                        balance: inv.balance,
+                        payments: inv.payments,
+                      })),
+                      selectedBusinessId
+                        ? BUSINESS_NAMES[selectedBusinessId as keyof typeof BUSINESS_NAMES]
+                        : "CHAMPIKA HARDWARE & DISTRIBUTION"
+                    )
+                  }
+                  title="Share Outstanding Statement via WhatsApp / Link"
+                  className="text-xs text-green-700 border-green-200 hover:bg-green-50"
+                >
+                  <Share2 className="w-3.5 h-3.5 mr-1 text-green-600" /> Share
+                </Button>
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {!selectedCustomerId ? (
@@ -914,9 +1083,11 @@ export default function AdminPaymentEntryPage() {
                       <TableHead className="w-10"></TableHead>
                       <TableHead>Invoice No</TableHead>
                       <TableHead>Date</TableHead>
+                      <TableHead className="text-center">Age (Days)</TableHead>
                       <TableHead className="text-right">Total</TableHead>
                       <TableHead className="text-right">Paid</TableHead>
                       <TableHead className="text-right">Balance</TableHead>
+                      <TableHead className="text-center">History</TableHead>
                       <TableHead className="text-right w-40">
                         Settle Amount
                       </TableHead>
@@ -926,6 +1097,9 @@ export default function AdminPaymentEntryPage() {
                     {pendingInvoices.map((inv) => {
                       const s = settlements[inv.id];
                       const isSelected = s?.selected ?? false;
+                      const ageDays = getInvoiceAgeDays(inv.date);
+                      const paymentCount = inv.payments?.length || 0;
+
                       return (
                         <TableRow
                           key={inv.id}
@@ -940,12 +1114,15 @@ export default function AdminPaymentEntryPage() {
                           <TableCell className="font-medium font-mono text-sm">
                             {inv.orderNumber}
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                             {inv.date
                               ? new Date(inv.date).toLocaleDateString()
                               : "—"}
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-center">
+                            {renderAgeBadge(ageDays)}
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
                             {formatCurrency(inv.totalAmount)}
                           </TableCell>
                           <TableCell className="text-right text-muted-foreground">
@@ -953,6 +1130,22 @@ export default function AdminPaymentEntryPage() {
                           </TableCell>
                           <TableCell className="text-right font-semibold text-orange-600">
                             {formatCurrency(inv.balance)}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setHistoryModalInvoice(inv)}
+                              className="h-7 px-2 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-100/50 gap-1"
+                              title="View Payment History"
+                            >
+                              <History className="w-3.5 h-3.5" />
+                              {paymentCount > 0 ? (
+                                <span className="font-semibold text-blue-700">{paymentCount}</span>
+                              ) : (
+                                <span>0</span>
+                              )}
+                            </Button>
                           </TableCell>
                           <TableCell className="text-right">
                             <Input
@@ -985,6 +1178,8 @@ export default function AdminPaymentEntryPage() {
                 {pendingInvoices.map((inv) => {
                   const s = settlements[inv.id];
                   const isSelected = s?.selected ?? false;
+                  const ageDays = getInvoiceAgeDays(inv.date);
+
                   return (
                     <div
                       key={inv.id}
@@ -1002,9 +1197,10 @@ export default function AdminPaymentEntryPage() {
                             onCheckedChange={() => toggleInvoice(inv.id, inv)}
                           />
                           <div>
-                            <p className="font-semibold font-mono text-sm">
-                              {inv.orderNumber}
-                            </p>
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold font-mono text-sm">{inv.orderNumber}</span>
+                              {renderAgeBadge(ageDays)}
+                            </div>
                             <p className="text-xs text-muted-foreground">
                               {inv.date
                                 ? new Date(inv.date).toLocaleDateString()
@@ -1022,8 +1218,17 @@ export default function AdminPaymentEntryPage() {
                           {formatCurrency(inv.totalAmount)}
                         </span>
                         <span className="text-muted-foreground">Paid:</span>
-                        <span className="text-right">
+                        <span className="text-right flex items-center justify-end gap-1">
                           {formatCurrency(inv.paidAmount)}
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => setHistoryModalInvoice(inv)}
+                            className="h-5 w-5 p-0 text-blue-600"
+                            title="History"
+                          >
+                            <History className="w-3 h-3" />
+                          </Button>
                         </span>
                       </div>
                       {isSelected && (
@@ -1055,6 +1260,74 @@ export default function AdminPaymentEntryPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* ── Payment History Dialog Modal ── */}
+      <Dialog
+        open={!!historyModalInvoice}
+        onOpenChange={(open) => !open && setHistoryModalInvoice(null)}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-blue-900">
+              <History className="w-5 h-5 text-blue-600" />
+              Payment History — {historyModalInvoice?.orderNumber || historyModalInvoice?.invoiceNo}
+            </DialogTitle>
+            <DialogDescription>
+              Customer: <span className="font-semibold text-foreground">{selectedCustomer?.name}</span>
+            </DialogDescription>
+          </DialogHeader>
+
+          {historyModalInvoice && (
+            <div className="space-y-4 pt-2">
+              <div className="grid grid-cols-3 gap-2 p-3 bg-slate-50 border rounded-lg text-xs">
+                <div>
+                  <p className="text-muted-foreground">Invoice Total</p>
+                  <p className="font-semibold text-sm">{formatCurrency(historyModalInvoice.totalAmount)}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Total Paid</p>
+                  <p className="font-semibold text-sm text-green-700">{formatCurrency(historyModalInvoice.paidAmount)}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Balance Due</p>
+                  <p className="font-semibold text-sm text-orange-600">{formatCurrency(historyModalInvoice.balance)}</p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Previous Payments ({historyModalInvoice.payments?.length || 0})
+                </p>
+                {!historyModalInvoice.payments || historyModalInvoice.payments.length === 0 ? (
+                  <div className="py-6 text-center text-xs text-muted-foreground border rounded-md bg-muted/20">
+                    No previous partial payments recorded for this invoice yet.
+                  </div>
+                ) : (
+                  <div className="border rounded-md divide-y max-h-60 overflow-y-auto">
+                    {historyModalInvoice.payments.map((p, idx) => (
+                      <div key={p.id || idx} className="p-2.5 text-xs flex items-center justify-between hover:bg-slate-50">
+                        <div>
+                          <p className="font-medium">
+                            {p.paymentDate ? new Date(p.paymentDate).toLocaleDateString("en-GB") : "—"}
+                          </p>
+                          <p className="text-muted-foreground text-[11px] mt-0.5">
+                            Method: <span className="capitalize font-semibold text-slate-700">{p.method}</span>
+                            {p.chequeNo && ` (Cheque #${p.chequeNo})`}
+                            {p.chequeStatus && ` • Status: ${p.chequeStatus}`}
+                          </p>
+                        </div>
+                        <span className="font-bold text-green-700 text-sm">
+                          {formatCurrency(p.amount)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* ── SECTION 3: Summary & Submit ─────────────────────────────────── */}
       {selectedCustomerId && totalAmount > 0 && (

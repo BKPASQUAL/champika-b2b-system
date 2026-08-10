@@ -241,3 +241,67 @@ export function printOutstandingReport(invoices: Invoice[], repFilter: string = 
 
   toast.success(`Print ready – ${outstanding.length} outstanding bill${outstanding.length > 1 ? "s" : ""}`);
 }
+
+export async function shareOutstandingReport(invoices: Invoice[], repFilter: string = "all") {
+  const outstanding = invoices.filter(
+    (inv) => inv.status !== "Paid" && inv.orderStatus !== "Cancelled" && inv.dueAmount > 0 && (repFilter === "all" || inv.salesRepName === repFilter)
+  );
+  if (outstanding.length === 0) { toast.info("No outstanding bills found"); return; }
+
+  const totalDue = outstanding.reduce((sum, inv) => sum + inv.dueAmount, 0);
+
+  // Group by customer
+  const grouped: Record<string, Invoice[]> = {};
+  outstanding.forEach((inv) => {
+    if (!grouped[inv.customerName]) grouped[inv.customerName] = [];
+    grouped[inv.customerName].push(inv);
+  });
+  const sortedCustomers = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
+
+  let msg = `*CHAMPIKA DISTRIBUTION - OUTSTANDING REPORT*\n`;
+  if (repFilter !== "all") msg += `Rep: *${repFilter}*\n`;
+  msg += `*Total Outstanding:* LKR ${fmt(totalDue)}\n`;
+  msg += `*Total Outstanding Invoices:* ${outstanding.length}\n`;
+  msg += `*Total Customers:* ${sortedCustomers.length}\n\n`;
+
+  sortedCustomers.forEach((cust) => {
+    const invs = grouped[cust];
+    const custDue = invs.reduce((s, i) => s + i.dueAmount, 0);
+    msg += `👤 *${cust}* (LKR ${fmt(custDue)}):\n`;
+    invs.forEach((inv) => {
+      const days = inv.date
+        ? Math.max(0, Math.floor((new Date().getTime() - new Date(inv.date).getTime()) / (1000 * 60 * 60 * 24)))
+        : 0;
+      msg += `   • ${inv.invoiceNo} (${inv.date}, ${days} days): LKR ${fmt(inv.dueAmount)}\n`;
+    });
+    msg += `\n`;
+  });
+
+  const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+
+  const doc = buildDoc(outstanding, repFilter);
+  const blob = doc.output("blob");
+  const date = new Date().toISOString().split("T")[0];
+  const file = new File([blob], `Outstanding_Report_${date}.pdf`, { type: "application/pdf" });
+
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({
+        title: `Outstanding Report - Champika Distribution`,
+        text: `Outstanding Report (${outstanding.length} bills, Total Due: LKR ${fmt(totalDue)})`,
+        files: [file],
+      });
+      toast.success("Outstanding report shared");
+      return;
+    } catch (e: any) {
+      if (e.name !== "AbortError") {
+        console.warn("File share failed, falling back to WhatsApp:", e);
+      } else {
+        return;
+      }
+    }
+  }
+
+  window.open(waUrl, "_blank");
+  toast.success("Opened WhatsApp with outstanding report summary");
+}
