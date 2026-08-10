@@ -3,10 +3,11 @@
 import React, { useState, useMemo } from "react";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -41,7 +42,7 @@ import {
   Check,
   X,
   ArrowLeft,
-  ArrowRight,
+  CheckSquare,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Order } from "../types";
@@ -55,10 +56,13 @@ export default function CancelRequestsPage() {
   const [showInvoiceSheet, setShowInvoiceSheet] = useState(false);
   const [showAcceptCancelDialog, setShowAcceptCancelDialog] = useState(false);
   const [showRejectCancelRequestDialog, setShowRejectCancelRequestDialog] = useState(false);
+  const [showBulkAcceptCancelDialog, setShowBulkAcceptCancelDialog] = useState(false);
+  const [showBulkRejectCancelRequestDialog, setShowBulkRejectCancelRequestDialog] = useState(false);
   const [invoiceDetails, setInvoiceDetails] = useState<any>(null);
   const [loadingInvoice, setLoadingInvoice] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
 
   // Fetch orders in Processing, Checking, or Loading status
   const {
@@ -88,10 +92,31 @@ export default function CancelRequestsPage() {
         invoiceMatch ||
         order.orderId.toLowerCase().includes(q) ||
         order.shopName.toLowerCase().includes(q) ||
-        order.customerName.toLowerCase().includes(q)
+        (order.customerName && order.customerName.toLowerCase().includes(q))
       );
     });
   }, [cancelRequests, searchQuery]);
+
+  // Multi-select handlers
+  const toggleSelectAll = () => {
+    if (selectedOrders.length === filteredRequests.length) {
+      setSelectedOrders([]);
+    } else {
+      setSelectedOrders(filteredRequests.map((o) => o.id));
+    }
+  };
+
+  const toggleSelectOrder = (id: string) => {
+    setSelectedOrders((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const selectedTotal = useMemo(() => {
+    return filteredRequests
+      .filter((o) => selectedOrders.includes(o.id))
+      .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+  }, [filteredRequests, selectedOrders]);
 
   const openInvoiceSheet = async (order: Order) => {
     if (!order.invoiceId) {
@@ -177,6 +202,96 @@ export default function CancelRequestsPage() {
     }
   };
 
+  const handleBulkAcceptCancel = async () => {
+    if (selectedOrders.length === 0) return;
+    setProcessing(true);
+    let successCount = 0;
+    let failCount = 0;
+    const user = getUserBusinessContext();
+
+    const selectedList = filteredRequests.filter((o) => selectedOrders.includes(o.id));
+
+    for (const order of selectedList) {
+      if (!order.invoiceId) {
+        failCount++;
+        continue;
+      }
+      const cancelRequestReason = order.notes
+        ? order.notes.match(/\[CANCEL_REQUEST:\s*(.*?)\]/)?.[1]
+        : "Cancellation request approved";
+
+      try {
+        const res = await fetch(`/api/invoices/${order.invoiceId}/cancel`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: user?.id,
+            reason: `Bulk cancel request accepted: ${cancelRequestReason}`,
+          }),
+        });
+        if (res.ok) {
+          successCount++;
+        } else {
+          failCount++;
+        }
+      } catch {
+        failCount++;
+      }
+    }
+
+    if (successCount > 0) {
+      toast.success(`Successfully cancelled ${successCount} order(s) & invoice(s)`);
+    }
+    if (failCount > 0) {
+      toast.error(`Failed to cancel ${failCount} order(s)`);
+    }
+
+    setShowBulkAcceptCancelDialog(false);
+    setSelectedOrders([]);
+    refetchOrders();
+    setProcessing(false);
+  };
+
+  const handleBulkRejectCancelRequest = async () => {
+    if (selectedOrders.length === 0) return;
+    setProcessing(true);
+    let successCount = 0;
+    let failCount = 0;
+    const user = getUserBusinessContext();
+
+    for (const orderId of selectedOrders) {
+      try {
+        const res = await fetch(`/api/orders/${orderId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "reject_cancel_request",
+            userId: user?.id,
+          }),
+        });
+        if (res.ok) {
+          successCount++;
+        } else {
+          failCount++;
+        }
+      } catch {
+        failCount++;
+      }
+    }
+
+    if (successCount > 0) {
+      toast.success(`Successfully rejected ${successCount} cancellation request(s)`);
+    }
+    if (failCount > 0) {
+      toast.error(`Failed to reject ${failCount} request(s)`);
+    }
+
+    setShowBulkRejectCancelRequestDialog(false);
+    setSelectedOrders([]);
+    refetchOrders();
+    setProcessing(false);
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center py-16">
@@ -210,18 +325,79 @@ export default function CancelRequestsPage() {
         </div>
       </div>
 
-      {/* Search and Filters */}
+      {/* Search and Filters & Selection Toolbar */}
       <Card className="border-0 sm:border shadow-none sm:shadow-sm bg-transparent sm:bg-card">
-        <CardHeader className="px-0 sm:px-6 pb-2 pt-2">
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search Invoice, Order ID or Shop..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 bg-white border-slate-200"
-            />
+        <CardHeader className="px-0 sm:px-6 pb-3 pt-2 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="relative max-w-md w-full">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search Invoice, Order ID or Shop..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 bg-white border-slate-200"
+              />
+            </div>
+            {filteredRequests.length > 0 && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={toggleSelectAll}
+                  className="text-xs font-semibold border-amber-200 text-amber-900 hover:bg-amber-50"
+                >
+                  <CheckSquare className="w-3.5 h-3.5 mr-1.5 text-amber-600" />
+                  {selectedOrders.length === filteredRequests.length
+                    ? "Deselect All"
+                    : `Select All (${filteredRequests.length})`}
+                </Button>
+              </div>
+            )}
           </div>
+
+          {/* Bulk Action Bar */}
+          {selectedOrders.length > 0 && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-amber-500/10 border border-amber-300 rounded-lg p-3 animate-in fade-in slide-in-from-top-1 duration-200">
+              <div className="flex items-center gap-2">
+                <Badge className="bg-amber-600 text-white font-bold">
+                  {selectedOrders.length} Selected
+                </Badge>
+                <span className="text-xs font-semibold text-amber-900">
+                  Total: <span className="font-mono text-amber-950 font-bold">LKR {selectedTotal.toLocaleString()}</span>
+                </span>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-amber-900 border-amber-300 hover:bg-amber-100 text-xs font-semibold"
+                  onClick={() => setShowBulkRejectCancelRequestDialog(true)}
+                  disabled={processing}
+                >
+                  <X className="w-3.5 h-3.5 mr-1 text-amber-700" />
+                  Reject Selected ({selectedOrders.length})
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-orange-600 hover:bg-orange-700 text-white text-xs font-semibold"
+                  onClick={() => setShowBulkAcceptCancelDialog(true)}
+                  disabled={processing}
+                >
+                  <Check className="w-3.5 h-3.5 mr-1" />
+                  Accept Selected ({selectedOrders.length})
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-xs text-muted-foreground hover:text-slate-900 h-8"
+                  onClick={() => setSelectedOrders([])}
+                  disabled={processing}
+                >
+                  Clear
+                </Button>
+              </div>
+            </div>
+          )}
         </CardHeader>
 
         <CardContent className="px-0 sm:px-6 pt-0">
@@ -239,14 +415,23 @@ export default function CancelRequestsPage() {
                 const cancelReason = order.notes
                   ? order.notes.match(/\[CANCEL_REQUEST:\s*(.*?)\]/)?.[1]
                   : "No reason provided";
+                const isSelected = selectedOrders.includes(order.id);
                 return (
                   <div
                     key={order.id}
-                    className="bg-white border border-amber-200 rounded-xl p-4 shadow-sm flex flex-col gap-3 transition-all duration-200 hover:border-amber-400"
+                    className={`bg-white border rounded-xl p-4 shadow-sm flex flex-col gap-3 transition-all duration-200 ${
+                      isSelected
+                        ? "border-amber-500 bg-amber-50/30 ring-1 ring-amber-400"
+                        : "border-amber-200 hover:border-amber-400"
+                    }`}
                   >
                     <div>
                       <div className="flex items-center justify-between mb-1">
                         <div className="flex items-center gap-2">
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleSelectOrder(order.id)}
+                          />
                           <div className="flex items-center gap-1 font-mono font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded text-xs">
                             <FileText className="h-3 w-3" />
                             {order.invoiceNo || "N/A"}
@@ -269,7 +454,7 @@ export default function CancelRequestsPage() {
                         </p>
                         <p className="text-xs text-muted-foreground flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
-                          {new Date(order.date).toLocaleDateString()}
+                          {order.date ? new Date(order.date).toLocaleDateString() : ""}
                         </p>
                         <p className="text-xs text-muted-foreground flex items-center gap-1">
                           <User className="h-3 w-3" />
@@ -325,6 +510,16 @@ export default function CancelRequestsPage() {
             <Table>
               <TableHeader className="bg-amber-50/40">
                 <TableRow className="border-amber-100">
+                  <TableHead className="w-[40px] px-3">
+                    <Checkbox
+                      checked={
+                        filteredRequests.length > 0 &&
+                        selectedOrders.length === filteredRequests.length
+                      }
+                      onCheckedChange={toggleSelectAll}
+                      aria-label="Select all"
+                    />
+                  </TableHead>
                   <TableHead className="w-[110px]">Date</TableHead>
                   <TableHead>Invoice No</TableHead>
                   <TableHead>Customer / Shop</TableHead>
@@ -338,7 +533,7 @@ export default function CancelRequestsPage() {
                 {filteredRequests.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={7}
+                      colSpan={8}
                       className="text-center py-12 text-muted-foreground"
                     >
                       <div className="flex flex-col items-center justify-center py-4">
@@ -353,13 +548,25 @@ export default function CancelRequestsPage() {
                     const cancelReason = order.notes
                       ? order.notes.match(/\[CANCEL_REQUEST:\s*(.*?)\]/)?.[1]
                       : "No reason provided";
+                    const isSelected = selectedOrders.includes(order.id);
                     return (
                       <TableRow
                         key={order.id}
-                        className="hover:bg-amber-50/10 border-amber-50"
+                        className={
+                          isSelected
+                            ? "bg-amber-100/50 border-amber-200"
+                            : "hover:bg-amber-50/10 border-amber-50"
+                        }
                       >
+                        <TableCell className="px-3">
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleSelectOrder(order.id)}
+                            aria-label={`Select order ${order.orderId}`}
+                          />
+                        </TableCell>
                         <TableCell className="whitespace-nowrap text-muted-foreground text-xs font-medium">
-                          {new Date(order.date).toLocaleDateString()}
+                          {order.date ? new Date(order.date).toLocaleDateString() : ""}
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-col">
@@ -378,7 +585,7 @@ export default function CancelRequestsPage() {
                               {order.shopName}
                             </span>
                             <span className="text-xs text-muted-foreground">
-                              {order.customerName}
+                              {order.customerName || ""}
                             </span>
                           </div>
                         </TableCell>
@@ -432,7 +639,7 @@ export default function CancelRequestsPage() {
         </CardContent>
       </Card>
 
-      {/* Accept Cancellation Dialog */}
+      {/* Accept Cancellation Dialog (Single) */}
       <AlertDialog open={showAcceptCancelDialog} onOpenChange={setShowAcceptCancelDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -464,7 +671,7 @@ export default function CancelRequestsPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Reject Cancellation Request Dialog */}
+      {/* Reject Cancellation Request Dialog (Single) */}
       <AlertDialog open={showRejectCancelRequestDialog} onOpenChange={setShowRejectCancelRequestDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -487,6 +694,71 @@ export default function CancelRequestsPage() {
                 </>
               ) : (
                 "Reject Request"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Accept Cancellation Dialog */}
+      <AlertDialog open={showBulkAcceptCancelDialog} onOpenChange={setShowBulkAcceptCancelDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-orange-600">
+              <AlertTriangle className="h-5 w-5 animate-bounce" />
+              Accept Bulk Cancellation Requests ({selectedOrders.length})
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to accept cancellation requests for <strong>{selectedOrders.length}</strong> selected orders? This will cancel the associated invoices, restore inventory, and adjust customer balances. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={processing} onClick={() => setShowBulkAcceptCancelDialog(false)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkAcceptCancel}
+              disabled={processing}
+              className="bg-orange-600 hover:bg-orange-700 text-white"
+            >
+              {processing ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                `Yes, Cancel ${selectedOrders.length} Order(s) & Invoice(s)`
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Reject Cancellation Request Dialog */}
+      <AlertDialog open={showBulkRejectCancelRequestDialog} onOpenChange={setShowBulkRejectCancelRequestDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reject Bulk Cancellation Requests ({selectedOrders.length})</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to reject cancellation requests for <strong>{selectedOrders.length}</strong> selected orders? The orders will return to their active Loading state.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={processing} onClick={() => setShowBulkRejectCancelRequestDialog(false)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkRejectCancelRequest}
+              disabled={processing}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {processing ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                `Reject ${selectedOrders.length} Request(s)`
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
