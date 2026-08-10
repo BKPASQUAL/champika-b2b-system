@@ -36,6 +36,9 @@ import {
   Clock,
   Archive,
   Store, // ✅ Added for Branch Icon
+  Eye,
+  FileText,
+  ShoppingCart,
 } from "lucide-react";
 import {
   BarChart,
@@ -71,6 +74,12 @@ interface Transaction {
   businessName?: string;
   businessId?: string;
   reference: string;
+  invoiceId?: string | null;
+  invoiceNo?: string | null;
+  orderId?: string | null;
+  orderDbId?: string | null;
+  purchaseId?: string | null;
+  purchaseRef?: string | null;
   notes: string;
   buyingPrice: number;
   sellingPrice: number;
@@ -151,8 +160,38 @@ export default function WiremanProductDetailsPage({
   }
 
   if (!product || !analytics) return <div>Product not found</div>;
-
   const allTransactions: Transaction[] = analytics.allTransactions || [];
+
+  const handleViewTransaction = (tx: Transaction) => {
+    const currentPath = typeof window !== "undefined" ? window.location.pathname : "";
+    let prefix = "/dashboard/office/orange";
+    if (currentPath.includes("/admin")) prefix = "/dashboard/admin";
+    else if (currentPath.includes("/office/distribution")) prefix = "/dashboard/office/distribution";
+    else if (currentPath.includes("/office/orange")) prefix = "/dashboard/office/orange";
+    else if (currentPath.includes("/office/sierra")) prefix = "/dashboard/office/sierra";
+    else if (currentPath.includes("/office/wireman")) prefix = "/dashboard/office/wireman";
+    else if (currentPath.includes("/office/retail")) prefix = "/dashboard/office/retail";
+
+    if (tx.type === "SALE") {
+      if (tx.invoiceId) {
+        router.push(`${prefix}/invoices/${tx.invoiceId}`);
+      } else if (tx.orderDbId || tx.orderId) {
+        router.push(`${prefix}/orders/${tx.orderDbId || tx.orderId}`);
+      } else {
+        toast.info(`Invoice Reference: ${tx.reference || tx.invoiceNo || "N/A"}`);
+      }
+    } else if (tx.type === "PURCHASE" || tx.type === "FREE ISSUE") {
+      if (tx.purchaseId) {
+        router.push(`${prefix}/purchases/${tx.purchaseId}`);
+      } else {
+        toast.info(`Purchase Reference: ${tx.reference || "N/A"}`);
+      }
+    } else if (tx.type === "RETURN" || tx.type === "DAMAGE") {
+      router.push(`${prefix}/inventory/returns`);
+    } else {
+      toast.info(`Adjustment: ${tx.notes || tx.reference || "Manual Stock Change"}`);
+    }
+  };
 
   const totalTransactionPages = Math.ceil(
     allTransactions.length / ITEMS_PER_PAGE,
@@ -292,17 +331,60 @@ export default function WiremanProductDetailsPage({
                   <div className="text-center py-8 text-muted-foreground text-sm">No transactions found.</div>
                 ) : (
                   paginatedTransactions.map((transaction) => (
-                    <div key={transaction.id} className="border rounded-lg p-3 space-y-2">
+                    <div key={transaction.id} className="border rounded-lg p-3 space-y-2 bg-card">
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-muted-foreground">{transaction.date}</span>
-                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                          transaction.type === "SALE" ? "bg-black text-white" :
-                          transaction.type === "PURCHASE" ? "bg-green-100 text-green-700" :
-                          transaction.type === "FREE ISSUE" ? "bg-green-100 text-green-700" :
-                          transaction.type === "RETURN" ? "bg-blue-100 text-blue-700" :
-                          transaction.type === "DAMAGE" ? "bg-red-100 text-red-700" :
-                          "bg-gray-100 text-gray-700"
-                        }`}>{transaction.type}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                            transaction.type === "SALE" ? "bg-black text-white" :
+                            transaction.type === "PURCHASE" ? "bg-green-100 text-green-700" :
+                            transaction.type === "FREE ISSUE" ? "bg-green-100 text-green-700" :
+                            transaction.type === "RETURN" ? "bg-blue-100 text-blue-700" :
+                            transaction.type === "DAMAGE" ? "bg-red-100 text-red-700" :
+                            "bg-gray-100 text-gray-700"
+                          }`}>{transaction.type}</span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-6 text-[10px] px-2 gap-1 text-blue-600 border-blue-200 bg-blue-50"
+                            onClick={() => handleViewTransaction(transaction)}
+                          >
+                            <Eye className="h-3 w-3" />
+                            View
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5 text-xs pt-1 border-t">
+                        <span className="text-muted-foreground text-[11px]">Invoice / Ref:</span>
+                        {transaction.invoiceNo && (
+                          <button
+                            onClick={() => {
+                              if (transaction.invoiceId) router.push(`/dashboard/office/orange/invoices/${transaction.invoiceId}?fromProduct=${id}`);
+                              else toast.info(`Invoice: ${transaction.invoiceNo}`);
+                            }}
+                            className="font-mono font-semibold text-blue-600 hover:underline flex items-center gap-1 text-[11px] bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200"
+                            title="View Invoice"
+                          >
+                            <FileText className="h-3 w-3 text-blue-500" />
+                            Inv: {transaction.invoiceNo}
+                          </button>
+                        )}
+                        {transaction.orderId && (
+                          <button
+                            onClick={() => {
+                              if (transaction.orderDbId || transaction.orderId) router.push(`/dashboard/office/orange/orders/${transaction.orderDbId || transaction.orderId}?fromProduct=${id}`);
+                              else toast.info(`Order: ${transaction.orderId}`);
+                            }}
+                            className="font-mono text-slate-700 hover:text-blue-600 hover:underline flex items-center gap-1 text-[11px] bg-slate-100 px-1.5 py-0.5 rounded"
+                            title="View Order"
+                          >
+                            <ShoppingCart className="h-3 w-3 text-slate-500" />
+                            Ord: {transaction.orderId}
+                          </button>
+                        )}
+                        {!transaction.invoiceNo && !transaction.orderId && (
+                          <span className="text-muted-foreground text-[11px] font-mono">{transaction.reference || "-"}</span>
+                        )}
                       </div>
                       <div className="flex justify-between items-center">
                         <div className="text-sm">
@@ -334,10 +416,11 @@ export default function WiremanProductDetailsPage({
                           )}
                         </div>
                       )}
-                      <div className="flex justify-between text-[11px] text-muted-foreground border-t pt-1">
-                        <span>{transaction.reference}</span>
-                        {transaction.notes && transaction.notes !== "-" && <span>{transaction.notes}</span>}
-                      </div>
+                      {transaction.notes && transaction.notes !== "-" && (
+                        <div className="text-[11px] text-muted-foreground border-t pt-1">
+                          <span>{transaction.notes}</span>
+                        </div>
+                      )}
                     </div>
                   ))
                 )}
@@ -352,32 +435,35 @@ export default function WiremanProductDetailsPage({
                       Date
                     </TableHead>
                     {/* ✅ Added Branch Column */}
-                    <TableHead className="w-[120px] text-center">
+                    <TableHead className="w-[110px] text-center">
                       Branch
                     </TableHead>
-                    <TableHead className="w-[120px] text-center">
+                    <TableHead className="w-[100px] text-center">
                       Type
+                    </TableHead>
+                    <TableHead className="w-[140px] text-center">
+                      Invoice / Order
                     </TableHead>
                     <TableHead className="w-[80px] text-center">
                       Quantity
                     </TableHead>
+                    {/* ✅ Stock Column */}
                     <TableHead className="w-[80px] text-center font-bold text-black">
                       Stock
                     </TableHead>
                     {/* ✅ Renamed Party to Customer */}
-                    <TableHead className="w-[150px] text-center">
+                    <TableHead className="w-[140px] text-center">
                       Customer
                     </TableHead>
-                    <TableHead className="w-[100px] text-center">
+                    <TableHead className="w-[90px] text-center">
                       Buy Price
                     </TableHead>
-                    <TableHead className="w-[100px] text-center">
+                    <TableHead className="w-[90px] text-center">
                       Sell Price
                     </TableHead>
-                    <TableHead className="w-[120px] text-center">
-                      Reference
+                    <TableHead className="w-[80px] text-center">
+                      Action
                     </TableHead>
-                    <TableHead className="w-[150px]">Notes</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -393,7 +479,7 @@ export default function WiremanProductDetailsPage({
                   ) : (
                     paginatedTransactions.map((transaction) => (
                       <TableRow key={transaction.id}>
-                        <TableCell className="text-muted-foreground whitespace-nowrap text-center">
+                        <TableCell className="text-muted-foreground whitespace-nowrap text-center text-xs">
                           {transaction.date}
                         </TableCell>
 
@@ -459,6 +545,45 @@ export default function WiremanProductDetailsPage({
                             )}
                           </div>
                         </TableCell>
+                        <TableCell className="text-center text-xs whitespace-nowrap">
+                          <div className="flex flex-col gap-1 items-center justify-center">
+                            {transaction.invoiceNo && (
+                              <button
+                                onClick={() => {
+                                  if (transaction.invoiceId) {
+                                    router.push(`/dashboard/office/orange/invoices/${transaction.invoiceId}?fromProduct=${id}`);
+                                  } else {
+                                    toast.info(`Invoice: ${transaction.invoiceNo}`);
+                                  }
+                                }}
+                                className="inline-flex items-center gap-1 font-semibold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 text-[11px]"
+                                title="View Invoice"
+                              >
+                                <FileText className="h-3 w-3 text-blue-500" />
+                                <span className="font-mono">Inv: {transaction.invoiceNo}</span>
+                              </button>
+                            )}
+                            {transaction.orderId && (
+                              <button
+                                onClick={() => {
+                                  if (transaction.orderDbId || transaction.orderId) {
+                                    router.push(`/dashboard/office/orange/orders/${transaction.orderDbId || transaction.orderId}?fromProduct=${id}`);
+                                  } else {
+                                    toast.info(`Order: ${transaction.orderId}`);
+                                  }
+                                }}
+                                className="inline-flex items-center gap-1 font-medium text-slate-700 hover:text-blue-600 hover:underline cursor-pointer bg-slate-100 hover:bg-slate-200 px-1.5 py-0.5 rounded text-[10px]"
+                                title="View Order"
+                              >
+                                <ShoppingCart className="h-3 w-3 text-slate-500" />
+                                <span className="font-mono">Ord: {transaction.orderId}</span>
+                              </button>
+                            )}
+                            {!transaction.invoiceNo && !transaction.orderId && (
+                              <span className="text-muted-foreground font-mono text-xs">{transaction.reference || "-"}</span>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell className="text-center">
                           <div className="flex flex-col items-center">
                             <span
@@ -487,9 +612,9 @@ export default function WiremanProductDetailsPage({
                         {/* Customer / Party */}
                         <TableCell className="text-center">
                           <div className="flex items-center justify-center gap-2">
-                            <User className="h-3 w-3 text-muted-foreground" />
+                            <User className="h-3 w-3 text-muted-foreground shrink-0" />
                             <span
-                              className="truncate max-w-[140px]"
+                              className="truncate max-w-[130px]"
                               title={transaction.customer}
                             >
                               {transaction.customer || "-"}
@@ -509,11 +634,17 @@ export default function WiremanProductDetailsPage({
                             : "-"}
                         </TableCell>
 
-                        <TableCell className="text-muted-foreground text-center">
-                          {transaction.reference}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {transaction.notes}
+                        <TableCell className="text-center">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs gap-1 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                            onClick={() => handleViewTransaction(transaction)}
+                            title="View details"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                            View
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))

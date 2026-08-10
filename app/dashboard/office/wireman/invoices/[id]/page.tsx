@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, use } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Printer,
@@ -108,6 +108,8 @@ export default function WiremanViewInvoicePage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const fromProduct = searchParams?.get("fromProduct");
 
   const [loading, setLoading] = useState(true);
   const [invoice, setInvoice] = useState<any>(null);
@@ -265,9 +267,13 @@ export default function WiremanViewInvoicePage({
                 variant="outline"
                 size="icon"
                 className="h-8 w-8 rounded-full bg-background hover:bg-slate-100"
-                onClick={() =>
-                  router.push("/dashboard/office/wireman/invoices")
-                }
+                onClick={() => {
+                  if (fromProduct) {
+                    router.push(`/dashboard/office/wireman/products/${fromProduct}`);
+                  } else {
+                    router.back();
+                  }
+                }}
               >
                 <ArrowLeft className="w-4 h-4" />
               </Button>

@@ -37,6 +37,9 @@ import {
   MapPin,
   Building2,
   Layers, // Icon for Stock Balance
+  Eye,
+  FileText,
+  ShoppingCart,
 } from "lucide-react";
 import {
   BarChart,
@@ -81,6 +84,12 @@ interface Transaction {
   buyingPrice?: number;
   sellingPrice?: number;
   reference?: string;
+  invoiceId?: string | null;
+  invoiceNo?: string | null;
+  orderId?: string | null;
+  orderDbId?: string | null;
+  purchaseId?: string | null;
+  purchaseRef?: string | null;
   notes?: string;
   quantity: number;
   customer?: string;
@@ -243,6 +252,36 @@ export default function ProductDetailsPage({
 
   const allTransactions: Transaction[] = analytics.allTransactions || [];
 
+  const handleViewTransaction = (tx: Transaction) => {
+    const currentPath = typeof window !== "undefined" ? window.location.pathname : "";
+    let prefix = "/dashboard/office/distribution";
+    if (currentPath.includes("/admin")) prefix = "/dashboard/admin";
+    else if (currentPath.includes("/office/orange")) prefix = "/dashboard/office/orange";
+    else if (currentPath.includes("/office/sierra")) prefix = "/dashboard/office/sierra";
+    else if (currentPath.includes("/office/wireman")) prefix = "/dashboard/office/wireman";
+    else if (currentPath.includes("/office/retail")) prefix = "/dashboard/office/retail";
+
+    if (tx.type === "SALE") {
+      if (tx.invoiceId) {
+        router.push(`${prefix}/invoices/${tx.invoiceId}`);
+      } else if (tx.orderDbId || tx.orderId) {
+        router.push(`${prefix}/orders/${tx.orderDbId || tx.orderId}`);
+      } else {
+        toast.info(`Invoice Reference: ${tx.reference || tx.invoiceNo || "N/A"}`);
+      }
+    } else if (tx.type === "PURCHASE" || tx.type === "FREE ISSUE") {
+      if (tx.purchaseId) {
+        router.push(`${prefix}/purchases/${tx.purchaseId}`);
+      } else {
+        toast.info(`Purchase Reference: ${tx.reference || "N/A"}`);
+      }
+    } else if (tx.type === "RETURN" || tx.type === "DAMAGE") {
+      router.push(`${prefix}/inventory/returns`);
+    } else {
+      toast.info(`Adjustment: ${tx.notes || tx.reference || "Manual Stock Change"}`);
+    }
+  };
+
   const totalTransactionPages = Math.ceil(
     allTransactions.length / ITEMS_PER_PAGE
   );
@@ -388,17 +427,60 @@ export default function ProductDetailsPage({
                       <div className="text-center py-8 text-muted-foreground text-sm">No transactions found.</div>
                     ) : (
                       paginatedTransactions.map((transaction) => (
-                        <div key={transaction.id} className="border rounded-lg p-3 space-y-2">
+                        <div key={transaction.id} className="border rounded-lg p-3 space-y-2 bg-card">
                           <div className="flex items-center justify-between">
                             <span className="text-xs text-muted-foreground">{transaction.date}</span>
-                            <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                              transaction.type === "SALE" ? "bg-black text-white" :
-                              transaction.type === "PURCHASE" ? "bg-green-100 text-green-700" :
-                              transaction.type === "FREE ISSUE" ? "bg-green-100 text-green-700" :
-                              transaction.type === "RETURN" ? "bg-blue-100 text-blue-700" :
-                              transaction.type === "DAMAGE" ? "bg-red-100 text-red-700" :
-                              "bg-gray-100 text-gray-700"
-                            }`}>{transaction.type}</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                                transaction.type === "SALE" ? "bg-black text-white" :
+                                transaction.type === "PURCHASE" ? "bg-green-100 text-green-700" :
+                                transaction.type === "FREE ISSUE" ? "bg-green-100 text-green-700" :
+                                transaction.type === "RETURN" ? "bg-blue-100 text-blue-700" :
+                                transaction.type === "DAMAGE" ? "bg-red-100 text-red-700" :
+                                "bg-gray-100 text-gray-700"
+                              }`}>{transaction.type}</span>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-6 text-[10px] px-2 gap-1 text-blue-600 border-blue-200 bg-blue-50"
+                                onClick={() => handleViewTransaction(transaction)}
+                              >
+                                <Eye className="h-3 w-3" />
+                                View
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1.5 text-xs pt-1 border-t">
+                            <span className="text-muted-foreground text-[11px]">Invoice / Ref:</span>
+                            {transaction.invoiceNo && (
+                              <button
+                                onClick={() => {
+                                  if (transaction.invoiceId) router.push(`/dashboard/office/distribution/invoices/${transaction.invoiceId}?fromProduct=${id}`);
+                                  else toast.info(`Invoice: ${transaction.invoiceNo}`);
+                                }}
+                                className="font-mono font-semibold text-blue-600 hover:underline flex items-center gap-1 text-[11px] bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200"
+                                title="View Invoice"
+                              >
+                                <FileText className="h-3 w-3 text-blue-500" />
+                                Inv: {transaction.invoiceNo}
+                              </button>
+                            )}
+                            {transaction.orderId && (
+                              <button
+                                onClick={() => {
+                                  if (transaction.orderDbId || transaction.orderId) router.push(`/dashboard/office/distribution/orders/${transaction.orderDbId || transaction.orderId}?fromProduct=${id}`);
+                                  else toast.info(`Order: ${transaction.orderId}`);
+                                }}
+                                className="font-mono text-slate-700 hover:text-blue-600 hover:underline flex items-center gap-1 text-[11px] bg-slate-100 px-1.5 py-0.5 rounded"
+                                title="View Order"
+                              >
+                                <ShoppingCart className="h-3 w-3 text-slate-500" />
+                                Ord: {transaction.orderId}
+                              </button>
+                            )}
+                            {!transaction.invoiceNo && !transaction.orderId && (
+                              <span className="text-muted-foreground text-[11px] font-mono">{transaction.reference || "-"}</span>
+                            )}
                           </div>
                           <div className="flex justify-between items-center">
                             <div className="text-sm">
@@ -412,7 +494,7 @@ export default function ProductDetailsPage({
                             </div>
                             <div className="text-sm">
                               <span className="text-muted-foreground text-xs">Stock </span>
-                              <span className="font-bold font-mono">{transaction.currentStock}</span>
+                              <span className="font-bold font-mono">{transaction.currentStock ?? transaction.stockAfter}</span>
                             </div>
                           </div>
                           {transaction.customer && transaction.customer !== "-" && (
@@ -436,10 +518,11 @@ export default function ProductDetailsPage({
                               )}
                             </div>
                           )}
-                          <div className="flex justify-between text-[11px] text-muted-foreground border-t pt-1">
-                            <span>{transaction.reference}</span>
-                            {transaction.notes && transaction.notes !== "-" && <span>{transaction.notes}</span>}
-                          </div>
+                          {transaction.notes && transaction.notes !== "-" && (
+                            <div className="text-[11px] text-muted-foreground border-t pt-1">
+                              <span>{transaction.notes}</span>
+                            </div>
+                          )}
                         </div>
                       ))
                     )}
@@ -450,24 +533,22 @@ export default function ProductDetailsPage({
                   <Table className="w-full">
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-[15%]">Date</TableHead>
-                        <TableHead className="w-[15%]">Type</TableHead>
-                        <TableHead className="w-[10%] text-right">
-                          Qty
-                        </TableHead>
-                        <TableHead className="w-[15%] text-right bg-muted/20">
-                          Balance
-                        </TableHead>
-                        <TableHead className="w-[18%] pl-6">Party</TableHead>
-                        <TableHead className="w-[18%]">Business</TableHead>
-                        <TableHead className="w-[18%]">Location</TableHead>
+                        <TableHead className="w-[12%]">Date</TableHead>
+                        <TableHead className="w-[12%]">Type</TableHead>
+                        <TableHead className="w-[15%]">Invoice / Ref</TableHead>
+                        <TableHead className="w-[8%] text-right">Qty</TableHead>
+                        <TableHead className="w-[10%] text-right bg-muted/20">Balance</TableHead>
+                        <TableHead className="w-[15%] pl-4">Party</TableHead>
+                        <TableHead className="w-[14%]">Business</TableHead>
+                        <TableHead className="w-[14%]">Location</TableHead>
+                        <TableHead className="w-[8%] text-center">Action</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {paginatedTransactions.length === 0 ? (
                         <TableRow>
                           <TableCell
-                            colSpan={7}
+                            colSpan={9}
                             className="text-center h-24 text-muted-foreground"
                           >
                             No transactions found.
@@ -476,7 +557,7 @@ export default function ProductDetailsPage({
                       ) : (
                         paginatedTransactions.map((transaction) => (
                           <TableRow key={transaction.id}>
-                            <TableCell className="text-muted-foreground whitespace-nowrap">
+                            <TableCell className="text-muted-foreground whitespace-nowrap text-xs">
                               {transaction.date}
                             </TableCell>
                             <TableCell>
@@ -512,6 +593,45 @@ export default function ProductDetailsPage({
                                 </Badge>
                               )}
                             </TableCell>
+                            <TableCell className="text-xs whitespace-nowrap">
+                              <div className="flex flex-col gap-1 items-start">
+                                {transaction.invoiceNo && (
+                                  <button
+                                    onClick={() => {
+                                      if (transaction.invoiceId) {
+                                        router.push(`/dashboard/office/distribution/invoices/${transaction.invoiceId}?fromProduct=${id}`);
+                                      } else {
+                                        toast.info(`Invoice: ${transaction.invoiceNo}`);
+                                      }
+                                    }}
+                                    className="inline-flex items-center gap-1 font-semibold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 text-[11px]"
+                                    title="View Invoice"
+                                  >
+                                    <FileText className="h-3 w-3 text-blue-500" />
+                                    <span className="font-mono">Inv: {transaction.invoiceNo}</span>
+                                  </button>
+                                )}
+                                {transaction.orderId && (
+                                  <button
+                                    onClick={() => {
+                                      if (transaction.orderDbId || transaction.orderId) {
+                                        router.push(`/dashboard/office/distribution/orders/${transaction.orderDbId || transaction.orderId}?fromProduct=${id}`);
+                                      } else {
+                                        toast.info(`Order: ${transaction.orderId}`);
+                                      }
+                                    }}
+                                    className="inline-flex items-center gap-1 font-medium text-slate-700 hover:text-blue-600 hover:underline cursor-pointer bg-slate-100 hover:bg-slate-200 px-1.5 py-0.5 rounded text-[10px]"
+                                    title="View Order"
+                                  >
+                                    <ShoppingCart className="h-3 w-3 text-slate-500" />
+                                    <span className="font-mono">Ord: {transaction.orderId}</span>
+                                  </button>
+                                )}
+                                {!transaction.invoiceNo && !transaction.orderId && (
+                                  <span className="text-muted-foreground font-mono text-xs">{transaction.reference || "-"}</span>
+                                )}
+                              </div>
+                            </TableCell>
                             <TableCell
                               className={`font-semibold text-right ${
                                 transaction.quantity < 0
@@ -523,15 +643,13 @@ export default function ProductDetailsPage({
                               {transaction.quantity}
                             </TableCell>
                             <TableCell className="text-right font-mono text-slate-600 bg-muted/20">
-                              {transaction.stockAfter !== undefined
-                                ? transaction.stockAfter
-                                : "-"}
+                              {transaction.currentStock ?? transaction.stockAfter ?? "-"}
                             </TableCell>
-                            <TableCell className="pl-6">
+                            <TableCell className="pl-4">
                               <div className="flex items-center gap-2">
-                                <User className="h-3 w-3 text-muted-foreground" />
+                                <User className="h-3 w-3 text-muted-foreground shrink-0" />
                                 <span
-                                  className="truncate max-w-[150px]"
+                                  className="truncate max-w-[130px]"
                                   title={transaction.customer}
                                 >
                                   {transaction.customer || "-"}
@@ -539,7 +657,7 @@ export default function ProductDetailsPage({
                               </div>
                             </TableCell>
                             <TableCell>
-                              <span className="text-xs font-medium text-muted-foreground block truncate max-w-[140px]" title={transaction.businessName}>
+                              <span className="text-xs font-medium text-muted-foreground block truncate max-w-[120px]" title={transaction.businessName}>
                                 {transaction.businessName || "-"}
                               </span>
                               {transaction.repName && transaction.repName !== "-" && (
@@ -548,14 +666,26 @@ export default function ProductDetailsPage({
                             </TableCell>
                             <TableCell className="font-medium text-slate-700">
                               <div className="flex items-center gap-2">
-                                <MapPin className="h-3 w-3 text-muted-foreground" />
+                                <MapPin className="h-3 w-3 text-muted-foreground shrink-0" />
                                 <span
-                                  className="truncate max-w-[180px]"
+                                  className="truncate max-w-[130px]"
                                   title={transaction.location}
                                 >
                                   {transaction.location}
                                 </span>
                               </div>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-xs gap-1 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                                onClick={() => handleViewTransaction(transaction)}
+                                title="View details"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                                View
+                              </Button>
                             </TableCell>
                           </TableRow>
                         ))

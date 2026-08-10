@@ -33,10 +33,13 @@ export async function GET(
         `
         id, quantity, free_quantity, unit_price, total_price, created_at, commission_earned, actual_unit_cost,
         order:orders!inner (
-          order_id, status, created_at, business_id,
+          id, order_id, status, created_at, business_id,
           customer:customers (shop_name),
           rep:profiles!orders_sales_rep_id_fkey (full_name),
-          load:loading_sheets (lorry_number)
+          load:loading_sheets (lorry_number),
+          invoices (
+            id, invoice_no, manual_invoice_no
+          )
         ),
         product:products (cost_price)
       `,
@@ -54,7 +57,7 @@ export async function GET(
         `
         id, quantity, free_quantity, unit_cost, total_cost, created_at, selling_price,
         purchase:purchases!inner (
-          purchase_id, invoice_no, status, purchase_date, business_id,
+          id, purchase_id, invoice_no, status, purchase_date, business_id,
           supplier:suppliers (name)
         )
       `,
@@ -99,6 +102,12 @@ export async function GET(
       const freeQty = Number(item.free_quantity) || 0;
       const realChange = -(qty + freeQty); // Sales reduce stock
 
+      const invoiceObj = item.order?.invoices?.find((i: any) => i.manual_invoice_no) || item.order?.invoices?.[0];
+      const invoiceId = invoiceObj?.id || null;
+      const rawInvoiceNo = invoiceObj?.manual_invoice_no || invoiceObj?.invoice_no || null;
+      const orderId = item.order?.order_id || null;
+      const displayRef = rawInvoiceNo || orderId || "-";
+
       history.push({
         id: item.id,
         date: item.created_at.split("T")[0],
@@ -109,7 +118,11 @@ export async function GET(
         realChange: realChange,
         customer: item.order.customer?.shop_name || "Unknown",
         repName: item.order.rep?.full_name || "-",
-        reference: item.order.order_id,
+        reference: displayRef,
+        invoiceId: invoiceId,
+        invoiceNo: rawInvoiceNo,
+        orderId: orderId,
+        orderDbId: item.order.id,
         location: item.order.load?.lorry_number || "Direct / Main",
         status: item.order.status,
         notes: "-",
@@ -128,6 +141,9 @@ export async function GET(
       const freeQty = Number(item.free_quantity) || 0;
       const realChange = qty + freeQty; // Purchases add to stock
 
+      const purchaseRef = item.purchase?.invoice_no || item.purchase?.purchase_id || "-";
+      const purchaseId = item.purchase?.id || item.purchase?.purchase_id || null;
+
       history.push({
         id: item.id,
         date: item.purchase?.purchase_date || item.created_at.split("T")[0],
@@ -138,7 +154,9 @@ export async function GET(
         realChange: realChange,
         customer: item.purchase?.supplier?.name || "Unknown",
         repName: "-",
-        reference: item.purchase?.invoice_no || item.purchase?.purchase_id || "-",
+        reference: purchaseRef,
+        purchaseId: purchaseId,
+        purchaseRef: purchaseRef,
         location: "Main Warehouse",
         status: item.purchase?.status || "Completed",
         notes: isFree ? "Free Issue" : "-",
@@ -221,7 +239,8 @@ export async function GET(
 
       return {
         ...tx,
-        currentStock: stockAfterTx, // ✅ This is what we show in the table
+        currentStock: stockAfterTx, // ✅ Current balance after tx
+        stockAfter: stockAfterTx,
       };
     });
 

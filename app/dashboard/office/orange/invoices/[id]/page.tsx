@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, use } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Printer,
@@ -105,6 +105,8 @@ export default function OrangeViewInvoicePage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const fromProduct = searchParams?.get("fromProduct");
 
   const [loading, setLoading] = useState(true);
   const [invoice, setInvoice] = useState<any>(null);
@@ -261,7 +263,13 @@ export default function OrangeViewInvoicePage({
                 variant="outline"
                 size="icon"
                 className="h-8 w-8 rounded-full bg-background"
-                onClick={() => router.push("/dashboard/office/orange/invoices")}
+                onClick={() => {
+                  if (fromProduct) {
+                    router.push(`/dashboard/office/orange/products/${fromProduct}`);
+                  } else {
+                    router.back();
+                  }
+                }}
               >
                 <ArrowLeft className="w-4 h-4" />
               </Button>

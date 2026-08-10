@@ -180,7 +180,7 @@ export function InvoiceTable({
                   <div className="flex items-center justify-between px-3 py-2 bg-muted/30">
                     <div className="flex items-center gap-2 min-w-0">
                       <FileText className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                      <span className="font-mono text-xs font-semibold truncate">{invoice.invoiceNo}</span>
+                      <span className="font-mono text-xs font-semibold truncate">{invoice.manualInvoiceNo || invoice.invoiceNo}</span>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       {renderPaymentBadge(invoice.status)}
@@ -397,7 +397,7 @@ export function InvoiceTable({
                     <TableCell className="whitespace-nowrap text-xs text-muted-foreground font-medium">
                       {new Date(invoice.date).toLocaleDateString()}
                     </TableCell>
-                    <TableCell className="font-mono text-xs">{invoice.invoiceNo}</TableCell>
+                    <TableCell className="font-mono text-xs">{invoice.manualInvoiceNo || invoice.invoiceNo}</TableCell>
                     <TableCell>
                       <div className="font-medium text-sm leading-tight">{invoice.customerName}</div>
                       <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">

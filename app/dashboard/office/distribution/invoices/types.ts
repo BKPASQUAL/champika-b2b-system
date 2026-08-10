@@ -15,6 +15,7 @@ export type OrderStatus =
 export interface Invoice {
   id: string;
   invoiceNo: string;
+  manualInvoiceNo?: string | null;
   date: string;
   createdAt?: string;
   customerId: string;

@@ -193,7 +193,7 @@ export async function GET(request: NextRequest) {
 
       return {
         id: inv.id,
-        invoiceNo: inv.invoice_no,
+        invoiceNo: inv.manual_invoice_no || inv.invoice_no,
         manualInvoiceNo: inv.manual_invoice_no, // ✅ Explicitly Mapped
         orderId: inv.order_id,
         date: inv.orders?.order_date

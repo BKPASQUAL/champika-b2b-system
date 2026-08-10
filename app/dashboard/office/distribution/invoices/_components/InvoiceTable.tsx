@@ -191,7 +191,7 @@ export function InvoiceTable({
               {/* Top row: Invoice # + Date */}
               <div className="flex items-center justify-between">
                 <span className="font-mono text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
-                  {invoice.invoiceNo}
+                  {invoice.manualInvoiceNo || invoice.invoiceNo}
                 </span>
                 <span className="text-xs text-muted-foreground">
                   {new Date(invoice.date).toLocaleDateString()}
@@ -375,7 +375,7 @@ export function InvoiceTable({
                     {new Date(invoice.date).toLocaleDateString()}
                   </TableCell>
                   <TableCell className="font-mono text-xs">
-                    {invoice.invoiceNo}
+                    {invoice.manualInvoiceNo || invoice.invoiceNo}
                   </TableCell>
                   <TableCell>
                     <div className="font-medium text-sm">
