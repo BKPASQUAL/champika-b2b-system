@@ -1,4 +1,4 @@
-// app/dashboard/office/distribution/customers/_components/CustomerTable.tsx
+import { useRouter } from "next/navigation";
 import {
   Table,
   TableBody,
@@ -23,6 +23,7 @@ import {
   AlertOctagon,
   Map,
   Navigation,
+  Eye,
 } from "lucide-react";
 import { Customer, SortField, SortOrder, CustomerStatus } from "../types";
 import { TablePagination } from "@/components/ui/TablePagination";
@@ -54,6 +55,8 @@ export function CustomerTable({
   totalPages,
   onPageChange,
 }: CustomerTableProps) {
+  const router = useRouter();
+
   const getSortIcon = (field: SortField) => {
     if (sortField !== field)
       return <ArrowUpDown className="w-4 h-4 ml-1 opacity-40" />;
@@ -154,13 +157,19 @@ export function CustomerTable({
                   {/* Customer Name & Phone */}
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-3">
-                      <Avatar className="h-9 w-9 bg-blue-100 text-blue-700">
+                      <Avatar
+                        className="h-9 w-9 bg-blue-100 text-blue-700 cursor-pointer"
+                        onClick={() => router.push(`/dashboard/office/distribution/customers/${customer.id}`)}
+                      >
                         <AvatarFallback>
                           {customer.shopName.substring(0, 2).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex flex-col">
-                        <span className="font-medium text-sm">
+                        <span
+                          className="font-semibold text-sm text-blue-900 hover:underline cursor-pointer"
+                          onClick={() => router.push(`/dashboard/office/distribution/customers/${customer.id}`)}
+                        >
                           {customer.shopName}
                         </span>
                         <div className="text-xs text-muted-foreground flex flex-col">
@@ -206,6 +215,15 @@ export function CustomerTable({
                   {/* Actions */}
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        title="View Full Profile & History"
+                        onClick={() => router.push(`/dashboard/office/distribution/customers/${customer.id}`)}
+                        className="text-blue-600 h-8 w-8 hover:text-blue-700 hover:bg-blue-50/50"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </Button>
                       {customer.latitude && customer.longitude && (
                         <>
                           <Button
@@ -260,3 +278,4 @@ export function CustomerTable({
     </>
   );
 }
+

@@ -1,3 +1,4 @@
+import { useRouter } from "next/navigation";
 import {
   Table,
   TableBody,
@@ -23,6 +24,7 @@ import {
   AlertOctagon,
   Building2,
   Users,
+  Eye,
 } from "lucide-react";
 import { Customer, SortField, SortOrder, CustomerStatus } from "../types";
 import { TablePagination } from "@/components/ui/TablePagination";
@@ -59,6 +61,8 @@ export function CustomerTable({
   totalPages,
   onPageChange,
 }: CustomerTableProps) {
+  const router = useRouter();
+
   const getSortIcon = (field: SortField) => {
     if (sortField !== field)
       return <ArrowUpDown className="w-3 h-3 ml-1 opacity-40" />;
@@ -122,13 +126,16 @@ export function CustomerTable({
                 <CardContent className="p-0">
                   {/* Header strip */}
                   <div className="flex items-center justify-between px-3 py-2 bg-muted/30">
-                    <div className="flex items-center gap-2 min-w-0">
+                    <div
+                      className="flex items-center gap-2 min-w-0 cursor-pointer"
+                      onClick={() => router.push(`/dashboard/admin/customers/${customer.id}`)}
+                    >
                       <Avatar className={`h-7 w-7 shrink-0 ${theme?.bgClass || "bg-gray-100"} ${theme?.textClass || "text-gray-600"}`}>
                         <AvatarFallback className="text-[10px] font-bold">
                           {customer.shopName.substring(0, 2).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
-                      <span className="font-semibold text-sm truncate">{customer.shopName}</span>
+                      <span className="font-semibold text-sm truncate text-blue-900 hover:underline">{customer.shopName}</span>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       {renderStatusBadge(customer.status)}
@@ -176,6 +183,14 @@ export function CustomerTable({
 
                   {/* Footer actions */}
                   <div className="border-t px-3 py-1.5 flex items-center justify-end gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => router.push(`/dashboard/admin/customers/${customer.id}`)}
+                      title="View Full Profile & History"
+                    >
+                      <Eye className="w-4 h-4 text-blue-600" />
+                    </Button>
                     <Button variant="ghost" size="icon-sm" onClick={() => onEdit(customer)} title="Edit">
                       <Edit className="w-4 h-4" />
                     </Button>
@@ -228,11 +243,19 @@ export function CustomerTable({
                   <TableRow key={customer.id} className={theme?.bgClass?.replace("-100", "-50") || ""}>
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-3">
-                        <Avatar className={`h-9 w-9 ${theme?.bgClass || "bg-gray-100"} ${theme?.textClass || "text-gray-600"}`}>
+                        <Avatar
+                          className={`h-9 w-9 cursor-pointer ${theme?.bgClass || "bg-gray-100"} ${theme?.textClass || "text-gray-600"}`}
+                          onClick={() => router.push(`/dashboard/admin/customers/${customer.id}`)}
+                        >
                           <AvatarFallback>{customer.shopName.substring(0, 2).toUpperCase()}</AvatarFallback>
                         </Avatar>
                         <div className="flex flex-col">
-                          <span className="font-medium text-sm">{customer.shopName}</span>
+                          <span
+                            className="font-semibold text-sm text-blue-900 hover:underline cursor-pointer"
+                            onClick={() => router.push(`/dashboard/admin/customers/${customer.id}`)}
+                          >
+                            {customer.shopName}
+                          </span>
                           <div className="text-xs text-muted-foreground flex flex-col">
                             <span className="flex items-center gap-1">
                               <Phone className="w-3 h-3" /> {customer.phone}
@@ -264,11 +287,19 @@ export function CustomerTable({
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button variant="ghost" size="icon-sm" onClick={() => onEdit(customer)}>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => router.push(`/dashboard/admin/customers/${customer.id}`)}
+                          title="View Full Profile & History"
+                        >
+                          <Eye className="w-4 h-4 text-blue-600" />
+                        </Button>
+                        <Button variant="ghost" size="icon-sm" onClick={() => onEdit(customer)} title="Edit">
                           <Edit className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="icon-sm" onClick={() => onDelete(customer)}>
+                        <Button variant="ghost" size="icon-sm" onClick={() => onDelete(customer)} title="Delete">
                           <Trash2 className="w-4 h-4 text-destructive" />
                         </Button>
                       </div>
@@ -284,3 +315,4 @@ export function CustomerTable({
     </>
   );
 }
+
