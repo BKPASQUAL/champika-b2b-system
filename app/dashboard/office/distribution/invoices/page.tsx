@@ -75,11 +75,10 @@ export default function DistributionInvoicesPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [repFilter, setRepFilter] = useState("all");
 
-  // Sort & Pagination
   const [sortField, setSortField] = useState<SortField>("createdAt");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   const {
     data: rawInvoices = [],
@@ -335,6 +334,12 @@ export default function DistributionInvoicesPage() {
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={setCurrentPage}
+            totalItems={sortedInvoices.length}
+            itemsPerPage={itemsPerPage}
+            onItemsPerPageChange={(newLimit) => {
+              setItemsPerPage(newLimit);
+              setCurrentPage(1);
+            }}
           />
         </CardContent>
       </Card>

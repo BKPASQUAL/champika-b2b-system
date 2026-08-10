@@ -108,55 +108,74 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    let query = supabaseAdmin
-      .from("invoices")
-      .select(
-        `
-        *,
-        customers (
-          shop_name,
-          owner_name,
-          business_id
-        ),
-        orders!inner (
-          status,
-          order_date,
-          business_id,
-          sales_rep_id,
-          profiles!orders_sales_rep_id_fkey (
-            full_name
-          ),
-          order_items (
-            quantity,
-            free_quantity,
-            actual_unit_cost,
-            total_price
-          )
-        )
-      `,
-      )
-      .order("created_at", { ascending: false });
-
     const customerIdParam = searchParams.get("customerId");
 
-    // Step 3: filter invoices to only those belonging to this business's customers
-    if (customerIdParam) {
-      query = query.eq("customer_id", customerIdParam);
-    } else if (customerIds !== null) {
-      query = query.in("customer_id", customerIds);
+    // Chunked fetching to bypass Supabase PostgREST default 1000-row cap
+    let rawInvoices: any[] = [];
+    let page = 0;
+    const pageSize = 1000;
+    let hasMore = true;
+
+    while (hasMore) {
+      let query = supabaseAdmin
+        .from("invoices")
+        .select(
+          `
+          *,
+          customers (
+            shop_name,
+            owner_name,
+            business_id
+          ),
+          orders!inner (
+            status,
+            order_date,
+            business_id,
+            sales_rep_id,
+            profiles!orders_sales_rep_id_fkey (
+              full_name
+            ),
+            order_items (
+              quantity,
+              free_quantity,
+              actual_unit_cost,
+              total_price
+            )
+          )
+        `
+        )
+        .order("created_at", { ascending: false })
+        .range(page * pageSize, (page + 1) * pageSize - 1);
+
+      // Filter invoices to only those belonging to this business's customers
+      if (customerIdParam) {
+        query = query.eq("customer_id", customerIdParam);
+      } else if (customerIds !== null) {
+        query = query.in("customer_id", customerIds);
+      }
+
+      // Filter by the precise set of order IDs allowed for this rep
+      if (repOrderIds !== null) {
+        query = query.in("order_id", repOrderIds);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        rawInvoices.push(...data);
+        if (data.length < pageSize) {
+          hasMore = false;
+        } else {
+          page++;
+        }
+      } else {
+        hasMore = false;
+      }
     }
-
-    // Step 4: filter by the precise set of order IDs allowed for this rep
-    if (repOrderIds !== null) {
-      query = query.in("order_id", repOrderIds);
-    }
-
-    const { data, error } = await query;
-
-    if (error) throw error;
 
     // Map to frontend format
-    const invoices = data.map((inv: any) => {
+    const invoices = rawInvoices.map((inv: any) => {
       const repName = inv.orders?.profiles?.full_name || "Unknown";
       const orderStatus = inv.orders?.status || "Pending";
       const bId = inv.orders?.business_id ?? inv.customers?.business_id ?? null;

@@ -15,21 +15,31 @@ export async function GET(request: NextRequest) {
 
     const COUNTED_STATUSES = ["Delivered", "Completed"];
 
-    // 1. All invoices in the period — revenue source (matches Sierra Agency page)
-    const { data: allInvoices, error: allInvError } = await supabaseAdmin
-      .from("invoices")
-      .select(`
-        id, invoice_no, manual_invoice_no, total_amount, due_amount, status,
-        order:orders!inner (
-          order_id, status, created_at, order_date, business_id, sales_rep_id,
-          customer:customers (id, shop_name),
-          rep:profiles!orders_sales_rep_id_fkey (id, full_name)
-        )
-      `)
-      .gte("order.order_date", fromDate)
-      .lte("order.order_date", toDate);
+    // 1. All invoices in the period — revenue source (matches Sierra Agency page) with pagination
+    const allInvoices: any[] = [];
+    let invStart = 0;
+    const invLimit = 1000;
+    while (true) {
+      const { data: batch, error: allInvError } = await supabaseAdmin
+        .from("invoices")
+        .select(`
+          id, invoice_no, manual_invoice_no, total_amount, due_amount, status,
+          order:orders!inner (
+            order_id, status, created_at, order_date, business_id, sales_rep_id,
+            customer:customers (id, shop_name),
+            rep:profiles!orders_sales_rep_id_fkey (id, full_name)
+          )
+        `)
+        .gte("order.order_date", fromDate)
+        .lte("order.order_date", toDate)
+        .range(invStart, invStart + invLimit - 1);
 
-    if (allInvError) throw allInvError;
+      if (allInvError) throw allInvError;
+      if (!batch || batch.length === 0) break;
+      allInvoices.push(...batch);
+      if (batch.length < invLimit) break;
+      invStart += invLimit;
+    }
 
     // 2. Order items — cost + product + customer detail (filtered to invoiced orders only) with pagination
     const orderItems: any[] = [];

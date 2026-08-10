@@ -28,53 +28,71 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const businessId = searchParams.get("businessId");
 
-    // Build query with nested joins to get Customer, Order, and Business details
-    let query = supabaseAdmin
-      .from("payments")
-      .select(
-        `
-        *,
-        customers (
-          id,
-          shop_name
-        ),
-        invoices!inner (
-          id,
-          invoice_no,
-          orders!inner (
-            id,
-            order_id,
-            business_id,
-            businesses (
-              name
-            )
-          )
-        ),
-        bank_codes (
-          id,
-          bank_name,
-          bank_code
-        ),
-        bank_accounts (
-          id,
-          account_name,
-          account_type
-        )
-      `
-      )
-      .order("payment_date", { ascending: false });
+    // Chunked fetching to bypass Supabase PostgREST default 1000-row cap
+    let rawPayments: any[] = [];
+    let page = 0;
+    const pageSize = 1000;
+    let hasMore = true;
 
-    // Filter by Business ID if provided (via the nested orders relation)
-    if (businessId) {
-      query = query.eq("invoices.orders.business_id", businessId);
+    while (hasMore) {
+      let query = supabaseAdmin
+        .from("payments")
+        .select(
+          `
+          *,
+          customers (
+            id,
+            shop_name
+          ),
+          invoices!inner (
+            id,
+            invoice_no,
+            orders!inner (
+              id,
+              order_id,
+              business_id,
+              businesses (
+                name
+              )
+            )
+          ),
+          bank_codes (
+            id,
+            bank_name,
+            bank_code
+          ),
+          bank_accounts (
+            id,
+            account_name,
+            account_type
+          )
+        `
+        )
+        .order("payment_date", { ascending: false })
+        .range(page * pageSize, (page + 1) * pageSize - 1);
+
+      // Filter by Business ID if provided (via the nested orders relation)
+      if (businessId) {
+        query = query.eq("invoices.orders.business_id", businessId);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        rawPayments.push(...data);
+        if (data.length < pageSize) {
+          hasMore = false;
+        } else {
+          page++;
+        }
+      } else {
+        hasMore = false;
+      }
     }
 
-    const { data, error } = await query;
-
-    if (error) throw error;
-
     // Map database results to the frontend 'Payment' interface
-    const formattedPayments = data.map((p: any) => {
+    const formattedPayments = rawPayments.map((p: any) => {
       const customerObj = Array.isArray(p.customers)
         ? p.customers[0]
         : p.customers;

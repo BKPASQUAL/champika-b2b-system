@@ -43,6 +43,9 @@ interface InvoiceTableProps {
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
+  totalItems?: number;
+  itemsPerPage?: number;
+  onItemsPerPageChange?: (itemsPerPage: number) => void;
 }
 
 export function InvoiceTable({
@@ -56,6 +59,9 @@ export function InvoiceTable({
   currentPage,
   totalPages,
   onPageChange,
+  totalItems,
+  itemsPerPage,
+  onItemsPerPageChange,
 }: InvoiceTableProps) {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
@@ -422,6 +428,9 @@ export function InvoiceTable({
         currentPage={currentPage}
         totalPages={totalPages}
         onPageChange={onPageChange}
+        totalItems={totalItems}
+        itemsPerPage={itemsPerPage}
+        onItemsPerPageChange={onItemsPerPageChange}
       />
     </>
   );

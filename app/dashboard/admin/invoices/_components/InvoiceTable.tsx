@@ -58,6 +58,9 @@ interface InvoiceTableProps {
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
+  totalItems?: number;
+  itemsPerPage?: number;
+  onItemsPerPageChange?: (itemsPerPage: number) => void;
 }
 
 const PAYMENT_STYLES: Record<PaymentStatus, string> = {
@@ -97,6 +100,9 @@ export function InvoiceTable({
   currentPage,
   totalPages,
   onPageChange,
+  totalItems,
+  itemsPerPage,
+  onItemsPerPageChange,
 }: InvoiceTableProps) {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [confirmDeleteInvoice, setConfirmDeleteInvoice] = useState<Invoice | null>(null);
@@ -133,7 +139,14 @@ export function InvoiceTable({
     ["Loading", "In Transit", "Delivered", "Completed", "Cancelled"].includes(status);
 
   const pagination = (
-    <TablePagination currentPage={currentPage} totalPages={totalPages} onPageChange={onPageChange} />
+    <TablePagination
+      currentPage={currentPage}
+      totalPages={totalPages}
+      onPageChange={onPageChange}
+      totalItems={totalItems}
+      itemsPerPage={itemsPerPage}
+      onItemsPerPageChange={onItemsPerPageChange}
+    />
   );
 
   if (loading) {

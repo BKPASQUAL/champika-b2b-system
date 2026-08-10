@@ -70,7 +70,7 @@ export default function InvoicesPage() {
     const val = getStoredValue(STORAGE_KEYS.page, "1");
     return parseInt(val, 10) || 1;
   });
-  const itemsPerPage = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   const {
     data: rawInvoices = [],
@@ -373,6 +373,12 @@ export default function InvoicesPage() {
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={setCurrentPage}
+            totalItems={sortedInvoices.length}
+            itemsPerPage={itemsPerPage}
+            onItemsPerPageChange={(newLimit) => {
+              setItemsPerPage(newLimit);
+              setCurrentPage(1);
+            }}
           />
         </CardContent>
       </Card>
