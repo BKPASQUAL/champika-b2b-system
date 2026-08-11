@@ -123,6 +123,8 @@ export default function CreateInvoicePage() {
   // Items State
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [extraDiscount, setExtraDiscount] = useState<number>(0);
+  const [paymentMethod, setPaymentMethod] = useState<string>("");
+  const [cashDiscount, setCashDiscount] = useState<number>(0);
 
   // Draft restore state
   const [draftRestoreOpen, setDraftRestoreOpen] = useState(false);
@@ -367,6 +369,24 @@ export default function CreateInvoicePage() {
     setItems(items.filter((item) => item.id !== id));
   };
 
+  // --- Totals Calculation ---
+  const subtotal = items.reduce((sum, item) => sum + item.total, 0);
+  const totalItemDiscount = items.reduce(
+    (sum, item) => sum + item.discountAmount,
+    0
+  );
+  const grossTotal = items.reduce(
+    (sum, item) => sum + item.unitPrice * item.quantity,
+    0
+  );
+
+  const extraDiscountAmount = (subtotal * extraDiscount) / 100;
+  const subtotalAfterExtra = Math.max(0, subtotal - extraDiscountAmount);
+
+  const cashDiscPercVal = paymentMethod === "Cash & Discount" ? cashDiscount : 0;
+  const cashDiscountAmount = (subtotalAfterExtra * cashDiscPercVal) / 100;
+  const grandTotal = Math.max(0, subtotalAfterExtra - cashDiscountAmount);
+
   const handleSaveInvoice = async () => {
     if (!customerId) {
       toast.error("Please select a customer.");
@@ -378,6 +398,10 @@ export default function CreateInvoicePage() {
     }
     if (items.length === 0) {
       toast.error("Please add items to the invoice.");
+      return;
+    }
+    if (!paymentMethod) {
+      toast.error("Please select a payment method / payment terms.");
       return;
     }
 
@@ -394,8 +418,14 @@ export default function CreateInvoicePage() {
       subTotal: subtotal,
       extraDiscountPercent: extraDiscount,
       extraDiscountAmount: extraDiscountAmount,
+      paymentMethod,
+      cashDiscountPercent: cashDiscount,
+      cashDiscountAmount: cashDiscountAmount,
       grandTotal: grandTotal,
       orderStatus,
+      status: "Unpaid",
+      paidAmount: 0,
+      dueAmount: grandTotal,
       performedByName: currentUser?.name ?? null,
       performedByEmail: currentUser?.email ?? null,
     };
@@ -422,20 +452,6 @@ export default function CreateInvoicePage() {
       setLoading(false);
     }
   };
-
-  // --- Totals Calculation ---
-  const subtotal = items.reduce((sum, item) => sum + item.total, 0);
-  const totalItemDiscount = items.reduce(
-    (sum, item) => sum + item.discountAmount,
-    0
-  );
-  const grossTotal = items.reduce(
-    (sum, item) => sum + item.unitPrice * item.quantity,
-    0
-  );
-
-  const extraDiscountAmount = (subtotal * extraDiscount) / 100;
-  const grandTotal = subtotal - extraDiscountAmount;
 
   const availableProducts = products.filter(
     (p) => !items.some((i) => i.productId === p.id)
@@ -677,21 +693,48 @@ export default function CreateInvoicePage() {
                 </div>
               </div>
 
-              {/* Added Order Status Selection */}
-              <div className="space-y-2">
-                <Label>Order Status</Label>
-                <Select value={orderStatus} onValueChange={setOrderStatus}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Pending">Pending</SelectItem>
-                    <SelectItem value="Processing">Processing</SelectItem>
-                    <SelectItem value="Checking">Checking</SelectItem>
-                    <SelectItem value="Loading">Loading</SelectItem>
-                    <SelectItem value="Delivered">Delivered</SelectItem>
-                  </SelectContent>
-                </Select>
+              {/* Order Status & Payment Terms (Same Line) */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Order Status</Label>
+                  <Select value={orderStatus} onValueChange={setOrderStatus}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Pending">Pending</SelectItem>
+                      <SelectItem value="Processing">Processing</SelectItem>
+                      <SelectItem value="Checking">Checking</SelectItem>
+                      <SelectItem value="Loading">Loading</SelectItem>
+                      <SelectItem value="Delivered">Delivered</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Payment Method / Credit Terms</Label>
+                  <Select
+                    value={paymentMethod}
+                    onValueChange={(val) => {
+                      setPaymentMethod(val);
+                      if (val !== "Cash & Discount") setCashDiscount(0);
+                    }}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select Payment Terms" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Cash Only">Cash Only</SelectItem>
+                      <SelectItem value="Cash & Discount">Cash & Discount</SelectItem>
+                      <SelectItem value="15 Days Credit">15 Days Credit</SelectItem>
+                      <SelectItem value="30 Days Credit">30 Days Credit</SelectItem>
+                      <SelectItem value="45 Days Credit">45 Days Credit</SelectItem>
+                      <SelectItem value="60 Days Credit">60 Days Credit</SelectItem>
+                      <SelectItem value="Cheque">Cheque</SelectItem>
+                      <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </CardContent>
           </Card>

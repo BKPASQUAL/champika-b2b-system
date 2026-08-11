@@ -60,6 +60,7 @@ import { cn } from "@/lib/utils";
 import { CancelInvoiceButton } from "@/components/ui/CancelInvoiceButton";
 import { WhatsAppShareDialog } from "@/components/ui/WhatsAppShareDialog";
 import { DocumentAttachments } from "@/components/ui/DocumentAttachments";
+import { InvoicePdfPreviewCard } from "@/components/ui/InvoicePdfPreviewCard";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -86,6 +87,8 @@ interface ReturnRecord {
   created_at: string;
   quantity: number;
   return_type: string;
+  returnType?: string;
+  price?: number;
   reason: string;
   products: {
     name: string;
@@ -289,11 +292,16 @@ Thank you for your business! 🙏`;
   if (!invoice) return null;
 
   // --- Calculations ---
-
-  // 1. Total Refunded Value
-  const totalRefunded = returns.reduce((acc, r) => {
-    return acc + r.quantity * (r.products?.selling_price || 0);
+  const returnsList = returns || [];
+  const returnsDeduction = returnsList.reduce((acc, r) => {
+    const rType = r.return_type || r.returnType || "Exchange";
+    if (rType === "Exchange") return acc;
+    return acc + r.quantity * (r.products?.selling_price || r.price || 0);
   }, 0);
+  const returnsTotal = returnsList.reduce((acc, r) => {
+    return acc + r.quantity * (r.products?.selling_price || r.price || 0);
+  }, 0);
+  const totalRefunded = returnsTotal;
 
   // 2. Payments
   const paymentsList: PaymentRecord[] = invoice.payments || [];
@@ -302,12 +310,17 @@ Thank you for your business! 🙏`;
   // 3. Current Invoice Total (Net Amount from DB)
   const netTotal = invoice.grandTotal;
 
-  // 4. Gross Total (Net + Returns) (This acts as the Invoice Total BEFORE Returns)
-  const grossTotal = netTotal + totalRefunded;
+  // 4. Gross Total (Net + ReturnsDeduction)
+  const grossTotal = netTotal + returnsDeduction;
 
   // 5. Original Items Total (Before Extra Discount)
-  const extraDiscountAmt = invoice.extraDiscountAmount || 0;
-  const originalItemsTotal = grossTotal + extraDiscountAmt;
+  const extraDiscountAmt = Number(invoice.extraDiscountAmount || 0);
+  const cashDiscountAmt = Number(invoice.cashDiscountAmount || 0);
+  const itemsSubtotal = (invoice.items || []).reduce(
+    (acc: number, item: any) => acc + (Number(item.total) || 0),
+    0
+  );
+  const originalItemsTotal = itemsSubtotal > 0 ? itemsSubtotal : grossTotal + extraDiscountAmt + cashDiscountAmt;
 
   // 6. Balance Due (Net Total - Paid)
   const balanceDue = netTotal - totalPaid;
@@ -945,6 +958,13 @@ Thank you for your business! 🙏`;
                 </div>
                 <Separator />
                 <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Payment Terms</span>
+                  <Badge variant="outline" className="font-semibold bg-blue-50 text-blue-700 border-blue-200">
+                    {invoice.paymentMethod || "Cash Only"}
+                  </Badge>
+                </div>
+                <Separator />
+                <div className="flex justify-between items-center">
                   <span className="text-sm font-medium">Payment Status</span>
                   <Badge
                     variant={
@@ -989,12 +1009,28 @@ Thank you for your business! 🙏`;
                 {extraDiscountAmt > 0 && (
                   <div className="flex justify-between text-sm text-red-600">
                     <span className="flex items-center gap-1">
-                      <Percent className="w-3 h-3" /> Discount (
+                      <Percent className="w-3 h-3" /> Extra Discount (
                       {invoice.extraDiscountPercent}%)
                     </span>
                     <span className="font-medium font-mono">
                       - LKR{" "}
                       {extraDiscountAmt.toLocaleString("en-LK", {
+                        minimumFractionDigits: 2,
+                      })}
+                    </span>
+                  </div>
+                )}
+
+                {/* 2b. Cash Discount (If Any) */}
+                {(invoice.cashDiscountAmount || 0) > 0 && (
+                  <div className="flex justify-between text-sm text-emerald-600">
+                    <span className="flex items-center gap-1">
+                      <Percent className="w-3 h-3" /> Cash Discount (
+                      {invoice.cashDiscountPercent}%)
+                    </span>
+                    <span className="font-medium font-mono">
+                      - LKR{" "}
+                      {(invoice.cashDiscountAmount || 0).toLocaleString("en-LK", {
                         minimumFractionDigits: 2,
                       })}
                     </span>
@@ -1017,17 +1053,26 @@ Thank you for your business! 🙏`;
                 </div>
 
                 {/* 4. Returns */}
-                <div className="flex justify-between text-sm text-orange-600">
-                  <span className="flex items-center gap-1">
-                    <Undo2 className="w-3 h-3" /> Returns
-                  </span>
-                  <span className="font-medium font-mono">
-                    - LKR{" "}
-                    {totalRefunded.toLocaleString("en-LK", {
-                      minimumFractionDigits: 2,
-                    })}
-                  </span>
-                </div>
+                {returnsDeduction > 0 && (
+                  <div className="flex justify-between text-sm text-orange-600">
+                    <span className="flex items-center gap-1">
+                      <Undo2 className="w-3 h-3" /> Returns
+                    </span>
+                    <span className="font-medium font-mono">
+                      - LKR{" "}
+                      {returnsDeduction.toLocaleString("en-LK", {
+                        minimumFractionDigits: 2,
+                      })}
+                    </span>
+                  </div>
+                )}
+
+                {returnsTotal > returnsDeduction && (
+                  <div className="flex justify-between text-xs text-blue-600 font-medium pt-0.5">
+                    <span>Exchange Items ({returnsList.filter((r: any) => (r.return_type || r.returnType || "Exchange") === "Exchange").length})</span>
+                    <span>(No bill reduction)</span>
+                  </div>
+                )}
 
                 <Separator className="my-2" />
 

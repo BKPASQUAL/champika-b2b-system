@@ -258,6 +258,8 @@ export default function CreateOrderPage() {
   // Items State
   const [items, setItems] = useState<OrderItem[]>([]);
   const [extraDiscount, setExtraDiscount] = useState<string>("");
+  const [paymentMethod, setPaymentMethod] = useState<string>("");
+  const [cashDiscount, setCashDiscount] = useState<string>("");
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
 
   // Returns State
@@ -774,7 +776,11 @@ export default function CreateOrderPage() {
 
   const extraDiscPercVal = parseFloat(extraDiscount) || 0;
   const extraDiscountAmount = (subtotal * extraDiscPercVal) / 100;
-  const grandTotal = Math.max(0, subtotal - extraDiscountAmount);
+  const subtotalAfterExtra = Math.max(0, subtotal - extraDiscountAmount);
+
+  const cashDiscPercVal = paymentMethod === "Cash & Discount" ? (parseFloat(cashDiscount) || 0) : 0;
+  const cashDiscountAmount = (subtotalAfterExtra * cashDiscPercVal) / 100;
+  const grandTotal = Math.max(0, subtotalAfterExtra - cashDiscountAmount);
 
   // Current item live totals
   const qtyNum = parseFloat(currentItem.quantity) || 0;
@@ -792,6 +798,10 @@ export default function CreateOrderPage() {
       toast.error("Please add items to the order.");
       return;
     }
+    if (!paymentMethod) {
+      toast.error("Please select a payment method / payment terms.");
+      return;
+    }
     if (!currentUser?.id) {
       toast.error("User session invalid. Please re-login.");
       return;
@@ -806,6 +816,12 @@ export default function CreateOrderPage() {
       businessId: userBusinessId,
       invoiceDate: orderDate,
       orderStatus: "Pending",
+      paymentType: "Cash",
+      paymentMethod,
+      cashDiscountPercent: cashDiscPercVal,
+      cashDiscountAmount: cashDiscountAmount,
+      paymentStatus: "Unpaid",
+      paidAmount: 0,
       items,
       returnItems: returnItems.map((ri) => ({
         productId: ri.productId,
@@ -1192,12 +1208,40 @@ export default function CreateOrderPage() {
                   <Package className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground shrink-0" />
                   <div className="flex flex-col min-w-0">
                     <span className="text-[10px] sm:text-xs text-muted-foreground uppercase">
-                      Status
+                      Status (Default)
                     </span>
                     <span className="font-medium text-xs sm:text-sm text-yellow-600 truncate">
-                      Pending
+                      Unpaid / Pending
                     </span>
                   </div>
+                </div>
+              </div>
+
+              {/* Payment Method & Terms */}
+              <div className="grid grid-cols-1 gap-3 sm:gap-4 pt-1">
+                <div className="space-y-2">
+                  <Label className="text-xs sm:text-sm font-semibold">Payment Method / Credit Terms</Label>
+                  <Select
+                    value={paymentMethod}
+                    onValueChange={(val) => {
+                      setPaymentMethod(val);
+                      if (val !== "Cash & Discount") setCashDiscount("");
+                    }}
+                  >
+                    <SelectTrigger className="w-full text-sm">
+                      <SelectValue placeholder="Select Payment Terms" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Cash Only">Cash Only</SelectItem>
+                      <SelectItem value="Cash & Discount">Cash & Discount</SelectItem>
+                      <SelectItem value="15 Days Credit">15 Days Credit</SelectItem>
+                      <SelectItem value="30 Days Credit">30 Days Credit</SelectItem>
+                      <SelectItem value="45 Days Credit">45 Days Credit</SelectItem>
+                      <SelectItem value="60 Days Credit">60 Days Credit</SelectItem>
+                      <SelectItem value="Cheque">Cheque</SelectItem>
+                      <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </CardContent>
@@ -2050,23 +2094,55 @@ export default function CreateOrderPage() {
 
 
               <div className="border-t pt-4 space-y-3">
-                <div className="space-y-2">
-                  <Label className="text-xs">Extra Discount %</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="100"
-                    placeholder="0%"
-                    value={extraDiscount}
-                    onChange={(e) => setExtraDiscount(e.target.value)}
-                  />
-                </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Extra Discount:</span>
-                  <span className="text-destructive">
-                    - LKR {extraDiscountAmount.toLocaleString()}
-                  </span>
+                  <span className="text-muted-foreground">Terms:</span>
+                  <span className="font-semibold text-blue-700">{paymentMethod}</span>
                 </div>
+                <div className={cn("grid gap-2", paymentMethod === "Cash & Discount" ? "grid-cols-2" : "grid-cols-1")}>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Extra Disc %</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      placeholder="0%"
+                      value={extraDiscount}
+                      onChange={(e) => setExtraDiscount(e.target.value)}
+                    />
+                  </div>
+                  {paymentMethod === "Cash & Discount" && (
+                    <div className="space-y-1">
+                      <Label className="text-xs text-emerald-700 font-semibold">Cash Disc %</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="100"
+                        placeholder="0%"
+                        value={cashDiscount}
+                        onChange={(e) => setCashDiscount(e.target.value)}
+                        className="border-emerald-300 focus:border-emerald-500"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {extraDiscountAmount > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Extra Discount:</span>
+                    <span className="text-destructive">
+                      - LKR {extraDiscountAmount.toLocaleString()}
+                    </span>
+                  </div>
+                )}
+
+                {cashDiscountAmount > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Cash Discount:</span>
+                    <span className="text-destructive">
+                      - LKR {cashDiscountAmount.toLocaleString()}
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="border-t pt-4">

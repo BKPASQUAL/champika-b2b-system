@@ -59,6 +59,7 @@ import { downloadInvoice, printInvoice } from "../print-utils";
 import { shareInvoice } from "@/app/lib/invoice-print";
 import { DocumentAttachments } from "@/components/ui/DocumentAttachments";
 import { CancelInvoiceButton } from "@/components/ui/CancelInvoiceButton";
+import { InvoicePdfPreviewCard } from "@/components/ui/InvoicePdfPreviewCard";
 
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -237,17 +238,29 @@ export default function DistributionViewInvoicePage({
   if (!invoice) return null;
 
   // --- Calculations ---
-  const totalRefunded = returns.reduce((acc, r) => {
-    return acc + r.quantity * (r.products?.selling_price || 0);
+  const returnsList = returns || [];
+  const returnsDeduction = returnsList.reduce((acc: number, r: any) => {
+    const rType = r.return_type || r.returnType || "Exchange";
+    if (rType === "Exchange") return acc;
+    return acc + (Number(r.quantity) || 0) * (Number(r.products?.selling_price || r.price || 0));
   }, 0);
+  const returnsTotal = returnsList.reduce((acc: number, r: any) => {
+    return acc + (Number(r.quantity) || 0) * (Number(r.products?.selling_price || r.price || 0));
+  }, 0);
+  const totalRefunded = returnsTotal;
 
   const paymentsList: PaymentRecord[] = invoice.payments || [];
   // Use the DB-stored paidAmount (correctly updated on cheque reversals) as the authoritative value
   const totalPaid = Number(invoice.paidAmount ?? 0);
 
   const netTotal = invoice.grandTotal;
-  const extraDiscountAmount = invoice.extraDiscountAmount || 0;
-  const subTotalGross = netTotal + totalRefunded + extraDiscountAmount;
+  const extraDiscountAmount = Number(invoice.extraDiscountAmount || 0);
+  const cashDiscountAmount = Number(invoice.cashDiscountAmount || 0);
+  const itemsSubtotal = (invoice.items || []).reduce(
+    (acc: number, item: any) => acc + (Number(item.total) || 0),
+    0
+  );
+  const subTotalGross = itemsSubtotal > 0 ? itemsSubtotal : netTotal + returnsDeduction + extraDiscountAmount + cashDiscountAmount;
   const balanceDue = netTotal - totalPaid;
 
   const totalItemsQty = invoice.items.reduce(
@@ -894,6 +907,13 @@ export default function DistributionViewInvoicePage({
                 </div>
                 <Separator />
                 <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Payment Terms</span>
+                  <Badge variant="outline" className="font-semibold bg-blue-50 text-blue-700 border-blue-200">
+                    {invoice.paymentMethod || "Cash Only"}
+                  </Badge>
+                </div>
+                <Separator />
+                <div className="flex justify-between items-center">
                   <span className="text-sm font-medium">Payment Status</span>
                   <Badge
                     variant={
@@ -938,7 +958,7 @@ export default function DistributionViewInvoicePage({
                 {extraDiscountAmount > 0 && (
                   <div className="flex justify-between text-sm text-red-600">
                     <span className="flex items-center gap-1">
-                      <Percent className="w-3 h-3" /> Discount (
+                      <Percent className="w-3 h-3" /> Extra Discount (
                       {invoice.extraDiscountPercent}%)
                     </span>
                     <span className="font-medium font-mono">
@@ -950,17 +970,41 @@ export default function DistributionViewInvoicePage({
                   </div>
                 )}
 
-                <div className="flex justify-between text-sm text-orange-600">
-                  <span className="flex items-center gap-1">
-                    <Undo2 className="w-3 h-3" /> Returns
-                  </span>
-                  <span className="font-medium font-mono">
-                    - LKR{" "}
-                    {totalRefunded.toLocaleString("en-LK", {
-                      minimumFractionDigits: 2,
-                    })}
-                  </span>
-                </div>
+                {(invoice.cashDiscountAmount || 0) > 0 && (
+                  <div className="flex justify-between text-sm text-emerald-600">
+                    <span className="flex items-center gap-1">
+                      <Percent className="w-3 h-3" /> Cash Discount (
+                      {invoice.cashDiscountPercent}%)
+                    </span>
+                    <span className="font-medium font-mono">
+                      - LKR{" "}
+                      {(invoice.cashDiscountAmount || 0).toLocaleString("en-LK", {
+                        minimumFractionDigits: 2,
+                      })}
+                    </span>
+                  </div>
+                )}
+
+                {returnsDeduction > 0 && (
+                  <div className="flex justify-between text-sm text-orange-600">
+                    <span className="flex items-center gap-1">
+                      <Undo2 className="w-3 h-3" /> Returns
+                    </span>
+                    <span className="font-medium font-mono">
+                      - LKR{" "}
+                      {returnsDeduction.toLocaleString("en-LK", {
+                        minimumFractionDigits: 2,
+                      })}
+                    </span>
+                  </div>
+                )}
+
+                {returnsTotal > returnsDeduction && (
+                  <div className="flex justify-between text-xs text-blue-600 font-medium pt-0.5">
+                    <span>Exchange Items ({returnsList.filter((r: any) => (r.return_type || r.returnType || "Exchange") === "Exchange").length})</span>
+                    <span>(No bill reduction)</span>
+                  </div>
+                )}
 
                 <Separator className="my-2 bg-slate-100" />
 

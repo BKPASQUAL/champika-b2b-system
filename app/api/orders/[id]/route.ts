@@ -113,6 +113,21 @@ export async function GET(
       createdAt: r.created_at,
     }));
 
+    let paymentMethod = "";
+    let cashDiscountPercent = 0;
+    let cashDiscountAmount = 0;
+
+    if (order.notes) {
+      const pmMatch = order.notes.match(/\[PAYMENT_METHOD:([^\]]+)\]/);
+      if (pmMatch) paymentMethod = pmMatch[1];
+
+      const cdpMatch = order.notes.match(/\[CASH_DISCOUNT_PERCENT:([\d.]+)\]/);
+      if (cdpMatch) cashDiscountPercent = parseFloat(cdpMatch[1]);
+
+      const cdaMatch = order.notes.match(/\[CASH_DISCOUNT_AMOUNT:([\d.]+)\]/);
+      if (cdaMatch) cashDiscountAmount = parseFloat(cdaMatch[1]);
+    }
+
     // Map DB structure to Frontend structure
     const response = {
       id: order.id,
@@ -122,6 +137,9 @@ export async function GET(
       date: order.order_date,
       status: order.status,
       paymentStatus: order.invoices?.[0]?.status || "Unpaid",
+      paymentMethod,
+      cashDiscountPercent,
+      cashDiscountAmount,
       salesRep: order.profiles?.full_name || "Unknown",
       salesRepId: order.sales_rep_id,
       customerId: order.customer_id,

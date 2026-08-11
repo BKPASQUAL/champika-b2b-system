@@ -46,6 +46,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { printInvoice, downloadInvoice, shareInvoice } from "@/app/lib/invoice-print";
 import { CancelInvoiceButton } from "@/components/ui/CancelInvoiceButton";
+import { InvoicePdfPreviewCard } from "@/components/ui/InvoicePdfPreviewCard";
 
 interface PaymentRecord {
   id: string;
@@ -148,11 +149,21 @@ export default function RepInvoiceDetailPage({
   const paymentsList: PaymentRecord[] = invoice.payments || [];
   const totalPaid = paymentsList.reduce((acc, p) => acc + Number(p.amount), 0);
   const netTotal = invoice.grandTotal || 0;
-  const extraDiscountAmount = invoice.extraDiscountAmount || 0;
-  const subTotalGross = invoice.items.reduce((sum: number, i: any) => sum + i.total, 0);
-  const returnsDeduction = (invoice.returnsTotal && invoice.returnsTotal > 0)
-    ? invoice.returnsTotal
-    : Math.max(0, subTotalGross - extraDiscountAmount - netTotal);
+  const extraDiscountAmount = Number(invoice.extraDiscountAmount || 0);
+  const cashDiscountAmount = Number(invoice.cashDiscountAmount || 0);
+
+  const returnsList = invoice.returns || [];
+  const returnsDeduction = returnsList.reduce((acc: number, r: any) => {
+    const rType = r.return_type || r.returnType || "Exchange";
+    if (rType === "Exchange") return acc;
+    return acc + (Number(r.quantity) || 0) * (Number(r.price || r.products?.selling_price || r.totalValue || 0));
+  }, 0);
+  const returnsTotal = returnsList.reduce((acc: number, r: any) => {
+    return acc + (Number(r.quantity) || 0) * (Number(r.price || r.products?.selling_price || r.totalValue || 0));
+  }, 0);
+
+  const itemsSubtotal = (invoice.items || []).reduce((sum: number, i: any) => sum + (Number(i.total) || 0), 0);
+  const subTotalGross = itemsSubtotal > 0 ? itemsSubtotal : netTotal + returnsDeduction + extraDiscountAmount + cashDiscountAmount;
   const balanceDue = netTotal - totalPaid;
 
   const totalItemsQty = invoice.items.reduce((acc: number, item: any) => acc + item.quantity, 0);
@@ -580,6 +591,13 @@ export default function RepInvoiceDetailPage({
                 </div>
                 <Separator />
                 <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Payment Terms</span>
+                  <Badge variant="outline" className="font-semibold bg-blue-50 text-blue-700 border-blue-200">
+                    {invoice.paymentMethod || "Cash Only"}
+                  </Badge>
+                </div>
+                <Separator />
+                <div className="flex justify-between items-center">
                   <span className="text-sm font-medium">Payment Status</span>
                   <Badge
                     variant={balanceDue <= 0 ? "default" : totalPaid > 0 ? "secondary" : "destructive"}
@@ -615,11 +633,40 @@ export default function RepInvoiceDetailPage({
                 {extraDiscountAmount > 0 && (
                   <div className="flex justify-between text-sm text-red-600">
                     <span className="flex items-center gap-1">
-                      <Percent className="w-3 h-3" /> Discount ({invoice.extraDiscountPercent}%)
+                      <Percent className="w-3 h-3" /> Extra Discount ({invoice.extraDiscountPercent}%)
                     </span>
                     <span className="font-medium font-mono">
                       - LKR {extraDiscountAmount.toLocaleString("en-LK", { minimumFractionDigits: 2 })}
                     </span>
+                  </div>
+                )}
+
+                {cashDiscountAmount > 0 && (
+                  <div className="flex justify-between text-sm text-emerald-600">
+                    <span className="flex items-center gap-1">
+                      <Percent className="w-3 h-3" /> Cash Discount ({invoice.cashDiscountPercent}%)
+                    </span>
+                    <span className="font-medium font-mono">
+                      - LKR {cashDiscountAmount.toLocaleString("en-LK", { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                )}
+
+                {returnsDeduction > 0 && (
+                  <div className="flex justify-between text-sm text-orange-600">
+                    <span className="flex items-center gap-1">
+                      <Undo2 className="w-3 h-3" /> Returns
+                    </span>
+                    <span className="font-medium font-mono">
+                      - LKR {returnsDeduction.toLocaleString("en-LK", { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                )}
+
+                {returnsTotal > returnsDeduction && (
+                  <div className="flex justify-between text-xs text-blue-600 font-medium pt-0.5">
+                    <span>Exchange Items ({returnsList.filter((r: any) => (r.return_type || r.returnType || "Exchange") === "Exchange").length})</span>
+                    <span>(No bill reduction)</span>
                   </div>
                 )}
 

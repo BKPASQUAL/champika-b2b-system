@@ -28,6 +28,9 @@ const updateInvoiceSchema = z.object({
   grandTotal: z.number(),
   extraDiscountPercent: z.number().default(0),
   extraDiscountAmount: z.number().default(0),
+  paymentMethod: z.string().optional().nullable(),
+  cashDiscountPercent: z.number().optional().default(0),
+  cashDiscountAmount: z.number().optional().default(0),
   notes: z.string().optional().nullable(),
   manual_invoice_no: z.string().optional().nullable(),
   userId: z.string().optional().nullable(),
@@ -163,7 +166,28 @@ export async function GET(
 
     const returnsTotal = returns.reduce((sum: number, r: any) => sum + r.totalValue, 0);
 
-    // 5. Construct Response
+    // 5. Parse Payment Method & Cash Discount metadata from notes
+    const rawNotes = invoice.orders?.notes || "";
+    let paymentMethod = "Cash Only";
+    let cashDiscountPercent = 0;
+    let cashDiscountAmount = 0;
+
+    const pmMatch = rawNotes.match(/\[PAYMENT_METHOD:([^\]]+)\]/);
+    if (pmMatch) paymentMethod = pmMatch[1];
+
+    const cdpMatch = rawNotes.match(/\[CASH_DISCOUNT_PERCENT:([\d.]+)\]/);
+    if (cdpMatch) cashDiscountPercent = parseFloat(cdpMatch[1]);
+
+    const cdaMatch = rawNotes.match(/\[CASH_DISCOUNT_AMOUNT:([\d.]+)\]/);
+    if (cdaMatch) cashDiscountAmount = parseFloat(cdaMatch[1]);
+
+    const cleanNotes = rawNotes
+      .replace(/\[PAYMENT_METHOD:[^\]]+\]/g, "")
+      .replace(/\[CASH_DISCOUNT_PERCENT:[\d.]+\]/g, "")
+      .replace(/\[CASH_DISCOUNT_AMOUNT:[\d.]+\]/g, "")
+      .trim();
+
+    // Construct Response
     const fullInvoice = {
       id: invoice.id,
       orderId: invoice.order_id,
@@ -175,7 +199,10 @@ export async function GET(
       customerId: invoice.customer_id,
       salesRepId: invoice.orders?.sales_rep_id,
       orderStatus: invoice.orders?.status,
-      notes: invoice.orders?.notes,
+      notes: cleanNotes,
+      paymentMethod,
+      cashDiscountPercent,
+      cashDiscountAmount,
       grandTotal: invoice.total_amount,
       paidAmount: invoice.paid_amount,
       dueDate: invoice.due_date || null,
@@ -472,6 +499,22 @@ export async function PATCH(
 
     // --- APPLY NEW DATA ---
 
+    // Clean old payment tags from notes if any
+    let updatedNotes = val.notes || (currentInvoice.orders as any)?.notes || "";
+    if (val.paymentMethod) {
+      const cleanBase = updatedNotes
+        .replace(/\[PAYMENT_METHOD:[^\]]+\]/g, "")
+        .replace(/\[CASH_DISCOUNT_PERCENT:[\d.]+\]/g, "")
+        .replace(/\[CASH_DISCOUNT_AMOUNT:[\d.]+\]/g, "")
+        .trim();
+
+      const pmTag = `[PAYMENT_METHOD:${val.paymentMethod}]`;
+      const cdpTag = val.cashDiscountPercent ? `[CASH_DISCOUNT_PERCENT:${val.cashDiscountPercent}]` : "";
+      const cdaTag = val.cashDiscountAmount ? `[CASH_DISCOUNT_AMOUNT:${val.cashDiscountAmount}]` : "";
+
+      updatedNotes = `${pmTag}${cdpTag}${cdaTag}${cleanBase ? "\n" + cleanBase : ""}`;
+    }
+
     // Update Order
     await supabaseAdmin
       .from("orders")
@@ -481,7 +524,7 @@ export async function PATCH(
         order_date: val.invoiceDate,
         status: newStatus,
         total_amount: val.grandTotal,
-        notes: val.notes,
+        notes: updatedNotes,
         // ✅ Update Extra Discount
         extra_discount_percent: val.extraDiscountPercent,
         extra_discount_amount: val.extraDiscountAmount,

@@ -58,7 +58,10 @@ const invoiceSchema = z.object({
     ])
     .default("Pending"),
   // Payment Fields
-  paymentType: z.enum(["Cash", "Credit", "Cheque"]).default("Cash"),
+  paymentType: z.string().default("Cash"),
+  paymentMethod: z.string().optional().nullable(),
+  cashDiscountPercent: z.number().default(0),
+  cashDiscountAmount: z.number().default(0),
   paymentStatus: z
     .enum(["Paid", "Unpaid", "Partial", "Overdue"])
     .default("Unpaid"),
@@ -320,6 +323,14 @@ export async function POST(request: NextRequest) {
     // 4. Create Order Record
     const orderId = `ORD-${Date.now()}`;
 
+    let combinedNotes = val.notes || "";
+    if (val.paymentMethod) {
+      combinedNotes = `[PAYMENT_METHOD:${val.paymentMethod}]` + combinedNotes;
+    }
+    if (val.cashDiscountPercent > 0 || val.cashDiscountAmount > 0) {
+      combinedNotes = `[CASH_DISCOUNT_PERCENT:${val.cashDiscountPercent}][CASH_DISCOUNT_AMOUNT:${val.cashDiscountAmount}]` + combinedNotes;
+    }
+
     const { data: orderData, error: orderError } = await supabaseAdmin
       .from("orders")
       .insert({
@@ -329,7 +340,7 @@ export async function POST(request: NextRequest) {
         order_date: invoiceDate,
         status: val.orderStatus,
         total_amount: val.grandTotal,
-        notes: val.notes || null,
+        notes: combinedNotes || null,
         created_by: val.userId || val.salesRepId,
         business_id: resolvedBusinessId,
         extra_discount_percent: val.extraDiscountPercent,

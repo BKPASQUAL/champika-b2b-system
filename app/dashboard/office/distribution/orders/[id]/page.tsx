@@ -752,7 +752,9 @@ export default function ViewOrderPage({
   );
   const netAmountAfterReturns = Math.max(0, subtotal - returnsDeduction);
   const finalGrandTotal = isEditing ? netAmountAfterReturns : (order.totalAmount ?? netAmountAfterReturns);
-  const extraDiscountAmount = isEditing ? 0 : Math.max(0, netAmountAfterReturns - finalGrandTotal);
+  const cashDiscountAmt = Number(order?.cashDiscountAmount || 0);
+  const totalDiff = Math.max(0, netAmountAfterReturns - finalGrandTotal);
+  const extraDiscountAmount = isEditing ? 0 : Math.max(0, totalDiff - cashDiscountAmt);
   const extraDiscountPercent =
     netAmountAfterReturns > 0 ? (extraDiscountAmount / netAmountAfterReturns) * 100 : 0;
 
@@ -976,6 +978,9 @@ export default function ViewOrderPage({
                         className="ml-1 text-[10px] h-5"
                       >
                         {order.paymentStatus}
+                      </Badge>
+                      <Badge variant="outline" className="ml-1.5 text-[10px] h-5 border-blue-300 text-blue-700 bg-blue-50 font-semibold">
+                        {order?.paymentMethod || "Cash Only"}
                       </Badge>
                     </div>
                   </div>
@@ -1784,6 +1789,19 @@ export default function ViewOrderPage({
                     <span>- LKR {extraDiscountAmount.toLocaleString()}</span>
                   </div>
                 )}
+                {(order?.cashDiscountAmount || 0) > 0 && (
+                  <div className="flex justify-between text-sm text-emerald-600 font-medium">
+                    <span>
+                      Cash Discount{" "}
+                      {(order?.cashDiscountPercent || 0) > 0 && (
+                        <span className="text-xs ml-1 bg-emerald-50 px-1 rounded text-emerald-700">
+                          ({order.cashDiscountPercent}%)
+                        </span>
+                      )}
+                    </span>
+                    <span>- LKR {(order.cashDiscountAmount || 0).toLocaleString()}</span>
+                  </div>
+                )}
 
                 <Separator className="border-t-2" />
                 <div className="flex justify-between items-center pt-1">
@@ -1791,6 +1809,10 @@ export default function ViewOrderPage({
                   <span className="font-bold text-2xl text-blue-600">
                     LKR {finalGrandTotal.toLocaleString()}
                   </span>
+                </div>
+                <div className="flex justify-between text-xs text-muted-foreground pt-1">
+                  <span>Payment Terms</span>
+                  <span className="font-semibold text-slate-800">{order?.paymentMethod || "Cash Only"}</span>
                 </div>
               </div>
 

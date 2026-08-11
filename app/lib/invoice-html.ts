@@ -65,12 +65,34 @@ export const generateInvoiceHTML = async (
   const route        = invoice.customer?.route    || invoice.route        || "";
   const salesRep     = invoice.salesRep           || invoice.salesRepName || "-";
   const items        = invoice.items              || [];
-  // Strip auto-generated internal note so it never appears on printed invoices
-  const notes        = (invoice.notes || "").replace(/created via rep portal/gi, "").trim();
+  const rawNotes     = (invoice.notes || "").replace(/created via rep portal/gi, "").trim();
+
+  let paymentMethod = invoice.paymentMethod || "";
+  let cashDiscountPercent = invoice.cashDiscountPercent || 0;
+  let cashDiscountAmount = invoice.cashDiscountAmount || 0;
+
+  if (!paymentMethod && rawNotes) {
+    const pmMatch = rawNotes.match(/\[PAYMENT_METHOD:([^\]]+)\]/);
+    if (pmMatch) paymentMethod = pmMatch[1];
+  }
+  if (!cashDiscountPercent && rawNotes) {
+    const cdpMatch = rawNotes.match(/\[CASH_DISCOUNT_PERCENT:([\d.]+)\]/);
+    if (cdpMatch) cashDiscountPercent = parseFloat(cdpMatch[1]);
+  }
+  if (!cashDiscountAmount && rawNotes) {
+    const cdaMatch = rawNotes.match(/\[CASH_DISCOUNT_AMOUNT:([\d.]+)\]/);
+    if (cdaMatch) cashDiscountAmount = parseFloat(cdaMatch[1]);
+  }
+
+  const notes = rawNotes
+    .replace(/\[PAYMENT_METHOD:[^\]]+\]/g, "")
+    .replace(/\[CASH_DISCOUNT_PERCENT:[\d.]+\]/g, "")
+    .replace(/\[CASH_DISCOUNT_AMOUNT:[\d.]+\]/g, "")
+    .trim();
 
   const subTotal    = items.reduce((s: number, i: any) => s + (i.total || 0), 0);
   const grandTotal  = invoice.grandTotal || invoice.totalAmount || 0;
-  const extraDiscount = Math.max(0, subTotal - grandTotal);
+  const extraDiscount = Math.max(0, subTotal - grandTotal - cashDiscountAmount);
 
 
   const ITEMS_PER_PAGE = 17;
@@ -161,7 +183,8 @@ export const generateInvoiceHTML = async (
                 <div style="font-size:18px;font-weight:700;color:#000;letter-spacing:0.5px;">${invoiceNoDisplay}</div>
                 ${invoice.manualInvoiceNo ? `<div style="font-size:12px;font-weight:600;color:#444;margin-top:2px;">Book No: ${invoice.manualInvoiceNo}</div>` : ""}
                 <div style="font-size:11px;color:#333;margin-top:2px;line-height:1.5;">
-                  ${formatDate(invoice.date || invoice.createdAt)}<br>${salesRep}
+                  Date: ${formatDate(invoice.date || invoice.createdAt)}<br>
+                  ${salesRep}
                 </div>
               </td>
             </tr>
@@ -173,15 +196,35 @@ export const generateInvoiceHTML = async (
     <div style="border-top:1.5px solid #bbb;margin:10px 0 12px;"></div>
 
     ${isFirst ? `
-    <div style="margin-bottom:12px;">
-      <div style="font-size:13px;font-weight:700;color:#000;">${shopName}</div>
-      ${customerName && customerName !== shopName ? `<div style="font-size:12px;color:#555;">${customerName}</div>` : ""}
-      ${address ? `<div style="font-size:12px;color:#333;">${address}${route ? ", " + route : ""}</div>` : ""}
-      ${phone ? `<div style="font-size:12px;color:#333;">${phone}</div>` : ""}
-    </div>` : `
-    <div style="margin-bottom:8px;">
-      <div style="font-size:12px;font-weight:600;color:#000;">${shopName}${customerName && customerName !== shopName ? ` — ${customerName}` : ""}</div>
-    </div>`}
+    <table style="width:100%;border-collapse:collapse;margin-bottom:12px;">
+      <tr>
+        <td style="vertical-align:top;width:60%;">
+          <div style="font-size:13px;font-weight:700;color:#000;">${shopName}</div>
+          ${customerName && customerName !== shopName ? `<div style="font-size:12px;color:#555;">${customerName}</div>` : ""}
+          ${address ? `<div style="font-size:12px;color:#333;">${address}${route ? ", " + route : ""}</div>` : ""}
+          ${phone ? `<div style="font-size:12px;color:#333;">${phone}</div>` : ""}
+        </td>
+        <td style="vertical-align:top;padding-top:1px;text-align:right;width:40%;">
+          ${paymentMethod ? `
+          <div style="font-size:13px;font-weight:800;color:#000;text-transform:uppercase;letter-spacing:0.3px;">
+            Terms: ${paymentMethod}
+          </div>` : ""}
+        </td>
+      </tr>
+    </table>` : `
+    <table style="width:100%;border-collapse:collapse;margin-bottom:8px;">
+      <tr>
+        <td style="vertical-align:top;width:60%;">
+          <div style="font-size:12px;font-weight:600;color:#000;">${shopName}${customerName && customerName !== shopName ? ` — ${customerName}` : ""}</div>
+        </td>
+        <td style="vertical-align:top;padding-top:1px;text-align:right;width:40%;">
+          ${paymentMethod ? `
+          <div style="font-size:12px;font-weight:800;color:#000;text-transform:uppercase;">
+            Terms: ${paymentMethod}
+          </div>` : ""}
+        </td>
+      </tr>
+    </table>`}
 
     ${makeTableHeader()}
       <tbody>${chunkRows}</tbody>
@@ -202,6 +245,10 @@ export const generateInvoiceHTML = async (
             ${extraDiscount > 1 ? `<tr>
               <td style="padding:5px 0;font-size:12px;color:#333;">Extra Discount</td>
               <td style="padding:5px 0;font-size:12px;color:#000;text-align:right;white-space:nowrap;">- LKR ${fmt(extraDiscount)}</td>
+            </tr>` : ""}
+            ${cashDiscountAmount > 0 ? `<tr>
+              <td style="padding:5px 0;font-size:12px;color:#333;">Cash Discount ${cashDiscountPercent > 0 ? `(${cashDiscountPercent}%)` : ""}</td>
+              <td style="padding:5px 0;font-size:12px;color:#000;text-align:right;white-space:nowrap;">- LKR ${fmt(cashDiscountAmount)}</td>
             </tr>` : ""}
             <tr>
               <td style="padding:6px 0 0;border-top:1.5px solid #bbb;"></td>
@@ -276,11 +323,34 @@ export const generateHalfPageInvoiceHTML = async (
   const route        = invoice.customer?.route    || invoice.route        || "";
   const salesRep     = invoice.salesRep           || invoice.salesRepName || "-";
   const items        = invoice.items              || [];
-  const notes        = (invoice.notes || "").replace(/created via rep portal/gi, "").trim();
+  const rawNotes     = (invoice.notes || "").replace(/created via rep portal/gi, "").trim();
+
+  let paymentMethod = invoice.paymentMethod || "";
+  let cashDiscountPercent = invoice.cashDiscountPercent || 0;
+  let cashDiscountAmount = invoice.cashDiscountAmount || 0;
+
+  if (!paymentMethod && rawNotes) {
+    const pmMatch = rawNotes.match(/\[PAYMENT_METHOD:([^\]]+)\]/);
+    if (pmMatch) paymentMethod = pmMatch[1];
+  }
+  if (!cashDiscountPercent && rawNotes) {
+    const cdpMatch = rawNotes.match(/\[CASH_DISCOUNT_PERCENT:([\d.]+)\]/);
+    if (cdpMatch) cashDiscountPercent = parseFloat(cdpMatch[1]);
+  }
+  if (!cashDiscountAmount && rawNotes) {
+    const cdaMatch = rawNotes.match(/\[CASH_DISCOUNT_AMOUNT:([\d.]+)\]/);
+    if (cdaMatch) cashDiscountAmount = parseFloat(cdaMatch[1]);
+  }
+
+  const notes = rawNotes
+    .replace(/\[PAYMENT_METHOD:[^\]]+\]/g, "")
+    .replace(/\[CASH_DISCOUNT_PERCENT:[\d.]+\]/g, "")
+    .replace(/\[CASH_DISCOUNT_AMOUNT:[\d.]+\]/g, "")
+    .trim();
 
   const subTotal      = items.reduce((s: number, i: any) => s + (i.total || 0), 0);
   const grandTotal    = invoice.grandTotal || invoice.totalAmount || 0;
-  const extraDiscount = Math.max(0, subTotal - grandTotal);
+  const extraDiscount = Math.max(0, subTotal - grandTotal - cashDiscountAmount);
 
   const ITEMS_PER_HALF = 8;
   const chunks: any[][] = [];
@@ -371,7 +441,8 @@ export const generateHalfPageInvoiceHTML = async (
               <div style="font-size:14px;font-weight:700;color:#000;letter-spacing:0.5px;">${invoiceNoDisplay}</div>
               ${invoice.manualInvoiceNo ? `<div style="font-size:9px;font-weight:600;color:#444;margin-top:1px;">Book No: ${invoice.manualInvoiceNo}</div>` : ""}
               <div style="font-size:9px;color:#333;margin-top:1px;line-height:1.5;">
-                ${formatDate(invoice.date || invoice.createdAt)}<br>${salesRep}
+                Date: ${formatDate(invoice.date || invoice.createdAt)}<br>
+                ${salesRep}
               </div>
             </td>
           </tr>
@@ -383,15 +454,35 @@ export const generateHalfPageInvoiceHTML = async (
   <div style="border-top:1.5px solid #bbb;margin:5px 0 6px;"></div>
 
   ${isFirst ? `
-  <div style="margin-bottom:6px;">
-    <div style="font-size:12px;font-weight:700;color:#000;">${shopName}</div>
-    ${customerName && customerName !== shopName ? `<div style="font-size:11px;color:#555;">${customerName}</div>` : ""}
-    ${address ? `<div style="font-size:11px;color:#333;">${address}${route ? ", " + route : ""}</div>` : ""}
-    ${phone ? `<div style="font-size:11px;color:#333;">${phone}</div>` : ""}
-  </div>` : `
-  <div style="margin-bottom:4px;">
-    <div style="font-size:11px;font-weight:600;color:#000;">${shopName}${customerName && customerName !== shopName ? ` — ${customerName}` : ""}</div>
-  </div>`}
+  <table style="width:100%;border-collapse:collapse;margin-bottom:6px;">
+    <tr>
+      <td style="vertical-align:top;width:60%;">
+        <div style="font-size:12px;font-weight:700;color:#000;">${shopName}</div>
+        ${customerName && customerName !== shopName ? `<div style="font-size:11px;color:#555;">${customerName}</div>` : ""}
+        ${address ? `<div style="font-size:11px;color:#333;">${address}${route ? ", " + route : ""}</div>` : ""}
+        ${phone ? `<div style="font-size:11px;color:#333;">${phone}</div>` : ""}
+      </td>
+      <td style="vertical-align:top;padding-top:1px;text-align:right;width:40%;">
+        ${paymentMethod ? `
+        <div style="font-size:12px;font-weight:800;color:#000;text-transform:uppercase;">
+          Terms: ${paymentMethod}
+        </div>` : ""}
+      </td>
+    </tr>
+  </table>` : `
+  <table style="width:100%;border-collapse:collapse;margin-bottom:4px;">
+    <tr>
+      <td style="vertical-align:top;width:60%;">
+        <div style="font-size:11px;font-weight:600;color:#000;">${shopName}${customerName && customerName !== shopName ? ` — ${customerName}` : ""}</div>
+      </td>
+      <td style="vertical-align:top;padding-top:1px;text-align:right;width:40%;">
+        ${paymentMethod ? `
+        <div style="font-size:11px;font-weight:800;color:#000;text-transform:uppercase;">
+          Terms: ${paymentMethod}
+        </div>` : ""}
+      </td>
+    </tr>
+  </table>`}
 
   ${makeTableHeader()}
       <tbody>${chunkRows}</tbody>

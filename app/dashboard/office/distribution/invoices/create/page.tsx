@@ -142,8 +142,10 @@ export default function CreateDistributionInvoicePage() {
   // Items State
   const [items, setItems] = useState<InvoiceItem[]>([]);
 
-  // ✅ Extra Discount (String for empty default)
+  // ✅ Extra Discount & Payment Terms (String for empty default)
   const [extraDiscount, setExtraDiscount] = useState<string>("");
+  const [paymentMethod, setPaymentMethod] = useState<string>("");
+  const [cashDiscount, setCashDiscount] = useState<string>("");
 
   // Popover States
   const [customerOpen, setCustomerOpen] = useState(false);
@@ -421,10 +423,14 @@ export default function CreateDistributionInvoicePage() {
     0
   );
 
-  // Parse Extra Discount Percent
+  // Parse Extra Discount & Cash Discount Percent
   const extraDiscPercVal = parseFloat(extraDiscount) || 0;
   const extraDiscountAmount = (subtotal * extraDiscPercVal) / 100;
-  const grandTotal = Math.max(0, subtotal - extraDiscountAmount);
+  const subtotalAfterExtra = Math.max(0, subtotal - extraDiscountAmount);
+
+  const cashDiscPercVal = paymentMethod === "Cash & Discount" ? (parseFloat(cashDiscount) || 0) : 0;
+  const cashDiscountAmount = (subtotalAfterExtra * cashDiscPercVal) / 100;
+  const grandTotal = Math.max(0, subtotalAfterExtra - cashDiscountAmount);
 
   // --- Save Invoice ---
   const handleSaveAction = async (action: "save" | "print" | "download") => {
@@ -438,6 +444,10 @@ export default function CreateDistributionInvoicePage() {
     }
     if (items.length === 0) {
       toast.error("Please add items to the invoice.");
+      return;
+    }
+    if (!paymentMethod) {
+      toast.error("Please select a payment method / payment terms.");
       return;
     }
 
@@ -454,6 +464,9 @@ export default function CreateDistributionInvoicePage() {
       subTotal: subtotal,
       extraDiscountPercent: extraDiscPercVal,
       extraDiscountAmount: extraDiscountAmount,
+      paymentMethod,
+      cashDiscountPercent: cashDiscPercVal,
+      cashDiscountAmount: cashDiscountAmount,
       grandTotal: grandTotal,
       orderStatus,
       status: "Unpaid", // Default payment status
@@ -766,21 +779,48 @@ export default function CreateDistributionInvoicePage() {
                 </div>
               </div>
 
-              {/* Order Status Selection */}
-              <div className="space-y-2">
-                <Label>Order Status</Label>
-                <Select value={orderStatus} onValueChange={setOrderStatus}>
-                  <SelectTrigger className="w-1/2">
-                    <SelectValue placeholder="Select Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Pending">Pending</SelectItem>
-                    <SelectItem value="Processing">Processing</SelectItem>
-                    <SelectItem value="Checking">Checking</SelectItem>
-                    <SelectItem value="Loading">Loading</SelectItem>
-                    <SelectItem value="Delivered">Delivered</SelectItem>
-                  </SelectContent>
-                </Select>
+              {/* Order Status & Payment Terms (Same Line) */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Order Status</Label>
+                  <Select value={orderStatus} onValueChange={setOrderStatus}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Pending">Pending</SelectItem>
+                      <SelectItem value="Processing">Processing</SelectItem>
+                      <SelectItem value="Checking">Checking</SelectItem>
+                      <SelectItem value="Loading">Loading</SelectItem>
+                      <SelectItem value="Delivered">Delivered</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Payment Method / Credit Terms</Label>
+                  <Select
+                    value={paymentMethod}
+                    onValueChange={(val) => {
+                      setPaymentMethod(val);
+                      if (val !== "Cash & Discount") setCashDiscount("");
+                    }}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select Payment Terms" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Cash Only">Cash Only</SelectItem>
+                      <SelectItem value="Cash & Discount">Cash & Discount</SelectItem>
+                      <SelectItem value="15 Days Credit">15 Days Credit</SelectItem>
+                      <SelectItem value="30 Days Credit">30 Days Credit</SelectItem>
+                      <SelectItem value="45 Days Credit">45 Days Credit</SelectItem>
+                      <SelectItem value="60 Days Credit">60 Days Credit</SelectItem>
+                      <SelectItem value="Cheque">Cheque</SelectItem>
+                      <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -1185,23 +1225,55 @@ export default function CreateDistributionInvoicePage() {
               </div>
 
               <div className="border-t pt-4 space-y-3">
-                <div className="space-y-2">
-                  <Label className="text-xs">Extra Discount %</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="100"
-                    placeholder="0%" // ✅ Empty placeholder
-                    value={extraDiscount}
-                    onChange={(e) => setExtraDiscount(e.target.value)} // Keep as string
-                  />
-                </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Extra Discount:</span>
-                  <span className="text-destructive">
-                    - LKR {extraDiscountAmount.toLocaleString()}
-                  </span>
+                  <span className="text-muted-foreground">Terms:</span>
+                  <span className="font-semibold text-blue-700">{paymentMethod}</span>
                 </div>
+                <div className={cn("grid gap-2", paymentMethod === "Cash & Discount" ? "grid-cols-2" : "grid-cols-1")}>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Extra Disc %</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      placeholder="0%"
+                      value={extraDiscount}
+                      onChange={(e) => setExtraDiscount(e.target.value)}
+                    />
+                  </div>
+                  {paymentMethod === "Cash & Discount" && (
+                    <div className="space-y-1">
+                      <Label className="text-xs text-emerald-700 font-semibold">Cash Disc %</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="100"
+                        placeholder="0%"
+                        value={cashDiscount}
+                        onChange={(e) => setCashDiscount(e.target.value)}
+                        className="border-emerald-300 focus:border-emerald-500"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {extraDiscountAmount > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Extra Discount:</span>
+                    <span className="text-destructive">
+                      - LKR {extraDiscountAmount.toLocaleString()}
+                    </span>
+                  </div>
+                )}
+
+                {cashDiscountAmount > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Cash Discount:</span>
+                    <span className="text-destructive">
+                      - LKR {cashDiscountAmount.toLocaleString()}
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="border-t pt-4">
