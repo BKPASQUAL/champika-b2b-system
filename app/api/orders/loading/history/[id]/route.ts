@@ -46,11 +46,13 @@ export async function GET(
           status,
           created_at,
           customers (
+            id,
             shop_name,
             owner_name,
             phone,
             address,
-            route
+            route,
+            outstanding_balance
           ),
           profiles!orders_sales_rep_id_fkey (
             full_name
@@ -155,6 +157,80 @@ export async function GET(
       returnsList = retData || [];
     }
 
+    // B3. Fetch Unpaid Invoices for all customers on this load
+    let customerOutstandingMap: Record<
+      string,
+      { totalOutstanding: number; unpaidInvoices: any[] }
+    > = {};
+
+    if (customerIds.length > 0) {
+      const { data: unpaidInvoices } = await supabaseAdmin
+        .from("invoices")
+        .select(
+          `
+          id,
+          invoice_no,
+          manual_invoice_no,
+          total_amount,
+          paid_amount,
+          due_amount,
+          status,
+          created_at,
+          due_date,
+          customer_id,
+          orders (
+            status
+          )
+        `
+        )
+        .in("customer_id", customerIds)
+        .neq("status", "Paid")
+        .order("created_at", { ascending: false });
+
+      (unpaidInvoices || []).forEach((inv: any) => {
+        const cId = inv.customer_id;
+        if (!cId) return;
+        const ordStatus = Array.isArray(inv.orders)
+          ? inv.orders[0]?.status
+          : inv.orders?.status;
+        const isDelivered =
+          ordStatus === "Delivered" ||
+          inv.status === "Delivered" ||
+          (!ordStatus && inv.status !== "Cancelled");
+        const isNotCancelled =
+          ordStatus !== "Cancelled" && inv.status !== "Cancelled";
+
+        // Include only delivered & non-cancelled invoices
+        if (!isDelivered || !isNotCancelled) return;
+
+        if (!customerOutstandingMap[cId]) {
+          customerOutstandingMap[cId] = {
+            totalOutstanding: 0,
+            unpaidInvoices: [],
+          };
+        }
+        const due = Number(
+          inv.due_amount != null
+            ? inv.due_amount
+            : Math.max(0, (inv.total_amount || 0) - (inv.paid_amount || 0))
+        );
+        if (due <= 0) return;
+
+        customerOutstandingMap[cId].totalOutstanding += due;
+        customerOutstandingMap[cId].unpaidInvoices.push({
+          id: inv.id,
+          invoiceNo: inv.invoice_no || inv.manual_invoice_no || "N/A",
+          totalAmount: Number(inv.total_amount || 0),
+          paidAmount: Number(inv.paid_amount || 0),
+          dueAmount: due,
+          status: inv.status || "Unpaid",
+          orderStatus: ordStatus || inv.status || "Delivered",
+          createdAt: inv.created_at,
+          dueDate: inv.due_date,
+        });
+      });
+    }
+
     // 3. Format Response
     const formattedResponse = {
       id: loadingSheet.id,
@@ -196,6 +272,11 @@ export async function GET(
           const invoiceDetails = invoicesMap[order.id];
           const currentTotal = order.total_amount || 0;
           const originalTotal = invoiceDetails?.original_amount ?? currentTotal;
+          const custId = order.customer_id || order.customers?.id || "";
+          const custOutstanding = customerOutstandingMap[custId] || {
+            totalOutstanding: 0,
+            unpaidInvoices: [],
+          };
 
           return {
             id: order.id,
@@ -211,11 +292,15 @@ export async function GET(
             status: order.status,
             createdAt: order.created_at,
             customer: {
+              id: custId,
               shopName: order.customers?.shop_name || "Unknown",
               ownerName: order.customers?.owner_name || "",
               phone: order.customers?.phone || "",
               address: order.customers?.address || "",
               route: order.customers?.route || "",
+              outstandingBalance: Number(order.customers?.outstanding_balance || 0),
+              unpaidInvoices: custOutstanding.unpaidInvoices,
+              calculatedOutstanding: custOutstanding.totalOutstanding,
             },
             salesRep: {
               name: salesRepProfile?.full_name || "Not Assigned",

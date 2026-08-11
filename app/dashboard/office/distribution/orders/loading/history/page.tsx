@@ -15,6 +15,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Table,
   TableBody,
   TableCell,
@@ -38,11 +44,15 @@ import {
   ChevronUp,
   ChevronLeft,
   FileText,
+  Share2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   downloadLoadingSheet,
   printLoadingSheet,
+  printLoadingOutstandingReport,
+  downloadLoadingOutstandingReport,
+  shareLoadingOutstandingReport,
 } from "@/app/dashboard/admin/orders/loading/history/print-loading-sheet";
 
 interface OrderRow {
@@ -311,12 +321,30 @@ export default function DistributionDeliveryHistoryPage() {
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end items-center gap-1">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50" title="Customer Outstanding PDF Options" onClick={(e) => e.stopPropagation()}>
+                                    <FileText className="w-4 h-4 text-red-600" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-56">
+                                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); printLoadingOutstandingReport(load.id); }} className="cursor-pointer gap-2 text-red-700 focus:text-red-800 focus:bg-red-50">
+                                    <Printer className="w-4 h-4 text-red-600" /> Print Outstanding PDF
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); downloadLoadingOutstandingReport(load.id); }} className="cursor-pointer gap-2 text-red-700 focus:text-red-800 focus:bg-red-50">
+                                    <Download className="w-4 h-4 text-red-600" /> Download Outstanding PDF
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); shareLoadingOutstandingReport(load.id); }} className="cursor-pointer gap-2 text-red-700 focus:text-red-800 focus:bg-red-50">
+                                    <Share2 className="w-4 h-4 text-red-600" /> Share Outstanding PDF
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                               <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                                onClick={(e) => handlePrint(e, load.id)} disabled={printingId === load.id || downloadingId === load.id} title="Print Sheet">
+                                onClick={(e) => handlePrint(e, load.id)} disabled={printingId === load.id || downloadingId === load.id} title="Print Loading Sheet">
                                 {printingId === load.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
                               </Button>
                               <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-                                onClick={(e) => handleDownload(e, load.id)} disabled={printingId === load.id || downloadingId === load.id} title="Download PDF">
+                                onClick={(e) => handleDownload(e, load.id)} disabled={printingId === load.id || downloadingId === load.id} title="Download Loading Sheet PDF">
                                 {downloadingId === load.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                               </Button>
                               <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-muted-foreground transition-colors ml-1" />

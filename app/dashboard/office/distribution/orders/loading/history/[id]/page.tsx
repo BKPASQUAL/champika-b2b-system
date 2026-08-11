@@ -24,6 +24,12 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Table,
   TableBody,
   TableCell,
@@ -47,6 +53,9 @@ import {
   Truck,
   ArrowRight,
   FileText,
+  Share2,
+  AlertCircle,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -54,6 +63,9 @@ import {
   printLoadingSheet,
   downloadReturnsSummarySheet,
   printReturnsSummarySheet,
+  downloadLoadingOutstandingReport,
+  printLoadingOutstandingReport,
+  shareLoadingOutstandingReport,
 } from "@/app/dashboard/admin/orders/loading/history/print-loading-sheet";
 import { printBulkInvoices, generateReturnsSummaryHTML } from "@/app/dashboard/office/distribution/invoices/print-utils";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
@@ -414,6 +426,41 @@ export default function DistributionLoadingSheetDetailPage({
             <Undo2 className="w-4 h-4 mr-2 text-orange-600" />
             Download Returns Summary
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                className="border-red-200 bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800 gap-1.5"
+              >
+                <FileText className="w-4 h-4 text-red-600" />
+                <span>Outstanding PDF</span>
+                <ChevronDown className="w-3.5 h-3.5 text-red-600 ml-0.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem
+                onClick={() => printLoadingOutstandingReport(loadingSheet.id)}
+                className="cursor-pointer gap-2 text-red-700 focus:text-red-800 focus:bg-red-50"
+              >
+                <Printer className="w-4 h-4 text-red-600" />
+                <span>Print Outstanding PDF</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => downloadLoadingOutstandingReport(loadingSheet.id)}
+                className="cursor-pointer gap-2 text-red-700 focus:text-red-800 focus:bg-red-50"
+              >
+                <Download className="w-4 h-4 text-red-600" />
+                <span>Download Outstanding PDF</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => shareLoadingOutstandingReport(loadingSheet.id)}
+                className="cursor-pointer gap-2 text-red-700 focus:text-red-800 focus:bg-red-50"
+              >
+                <Share2 className="w-4 h-4 text-red-600" />
+                <span>Share Outstanding PDF</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button variant="outline" onClick={handleDownload} disabled={downloading}>
             {downloading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
             Download Sheet
@@ -426,7 +473,7 @@ export default function DistributionLoadingSheetDetailPage({
       </div>
 
       {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Sent Value (Original)</CardTitle></CardHeader>
           <CardContent><div className="text-2xl font-bold">Rs. {totalSentValue.toLocaleString()}</div></CardContent>
@@ -441,6 +488,41 @@ export default function DistributionLoadingSheetDetailPage({
             <div className={`text-2xl font-bold ${totalDiff > 0 ? "text-green-700" : totalDiff < 0 ? "text-red-700" : ""}`}>
               {totalDiff > 0 ? "+" : ""}{totalDiff !== 0 ? "Rs. " + totalDiff.toLocaleString() : "-"}
             </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-red-50/50 border-red-200">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-sm font-medium text-red-700">Customer Outstanding</CardTitle>
+            <AlertCircle className="w-4 h-4 text-red-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-700">
+              Rs. {
+                // Calculate unique customer total delivered outstanding
+                Object.values(
+                  loadingSheet.orders.reduce((acc: Record<string, number>, o: any) => {
+                    const cId = o.customer?.id || o.customer?.shopName;
+                    if (cId && o.customer?.calculatedOutstanding) {
+                      acc[cId] = o.customer.calculatedOutstanding;
+                    }
+                    return acc;
+                  }, {})
+                ).reduce((sum, val) => sum + val, 0).toLocaleString("en-LK", { minimumFractionDigits: 2 })
+              }
+            </div>
+            <p className="text-xs text-red-600 mt-1">
+              {
+                Object.values(
+                  loadingSheet.orders.reduce((acc: Record<string, number>, o: any) => {
+                    const cId = o.customer?.id || o.customer?.shopName;
+                    if (cId && (o.customer?.calculatedOutstanding || 0) > 0) {
+                      acc[cId] = 1;
+                    }
+                    return acc;
+                  }, {})
+                ).length
+              } customer(s) with delivered unpaid invoices
+            </p>
           </CardContent>
         </Card>
       </div>
