@@ -956,13 +956,17 @@ Thank you for your business! 🙏`;
                     {invoice.date}
                   </div>
                 </div>
-                <Separator />
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium">Payment Terms</span>
-                  <Badge variant="outline" className="font-semibold bg-blue-50 text-blue-700 border-blue-200">
-                    {invoice.paymentMethod || "Cash Only"}
-                  </Badge>
-                </div>
+                {invoice.paymentMethod ? (
+                  <>
+                    <Separator />
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium">Payment Terms</span>
+                      <Badge variant="outline" className="font-semibold bg-blue-50 text-blue-700 border-blue-200">
+                        {invoice.paymentMethod}
+                      </Badge>
+                    </div>
+                  </>
+                ) : null}
                 <Separator />
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-medium">Payment Status</span>

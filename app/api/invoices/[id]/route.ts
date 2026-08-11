@@ -168,7 +168,7 @@ export async function GET(
 
     // 5. Parse Payment Method & Cash Discount metadata from notes
     const rawNotes = invoice.orders?.notes || "";
-    let paymentMethod = "Cash Only";
+    let paymentMethod = "";
     let cashDiscountPercent = 0;
     let cashDiscountAmount = 0;
 

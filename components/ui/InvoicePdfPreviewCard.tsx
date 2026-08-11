@@ -22,7 +22,7 @@ export function InvoicePdfPreviewCard({
   invoiceId,
   invoiceNo = "",
   divisionKey = "distribution",
-  paymentMethod = "Cash Only",
+  paymentMethod = "",
   cashDiscountPercent = 0,
   cashDiscountAmount = 0,
   paymentStatus = "Unpaid",
@@ -96,10 +96,12 @@ export function InvoicePdfPreviewCard({
 
         {/* Terms & Status Bar */}
         <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-slate-800 mt-2 text-xs">
-          <div className="flex items-center gap-1.5 bg-slate-800 px-3 py-1 rounded-full text-slate-200">
-            <CreditCard className="w-3.5 h-3.5 text-blue-400" />
-            <span>Terms: <strong className="text-white">{paymentMethod}</strong></span>
-          </div>
+          {paymentMethod ? (
+            <div className="flex items-center gap-1.5 bg-slate-800 px-3 py-1 rounded-full text-slate-200">
+              <CreditCard className="w-3.5 h-3.5 text-blue-400" />
+              <span>Terms: <strong className="text-white">{paymentMethod}</strong></span>
+            </div>
+          ) : null}
           {cashDiscountAmount > 0 && (
             <Badge variant="outline" className="bg-emerald-950/80 border-emerald-700 text-emerald-300 font-mono">
               Cash Disc: -LKR {cashDiscountAmount.toLocaleString()}{cashDiscountPercent > 0 ? ` (${cashDiscountPercent}%)` : ""}

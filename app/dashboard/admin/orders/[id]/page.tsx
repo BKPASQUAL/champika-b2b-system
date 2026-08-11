@@ -996,9 +996,11 @@ export default function ViewOrderPage({
                       >
                         {order.paymentStatus}
                       </Badge>
-                      <Badge variant="outline" className="ml-1.5 text-[10px] h-5 border-blue-300 text-blue-700 bg-blue-50 font-semibold">
-                        {order?.paymentMethod || "Cash Only"}
-                      </Badge>
+                      {order?.paymentMethod ? (
+                        <Badge variant="outline" className="ml-1.5 text-[10px] h-5 border-blue-300 text-blue-700 bg-blue-50 font-semibold">
+                          {order.paymentMethod}
+                        </Badge>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -1787,10 +1789,12 @@ export default function ViewOrderPage({
                     LKR {finalGrandTotal.toLocaleString()}
                   </span>
                 </div>
-                <div className="flex justify-between text-xs text-muted-foreground pt-1">
-                  <span>Payment Terms</span>
-                  <span className="font-semibold text-slate-800">{order?.paymentMethod || "Cash Only"}</span>
-                </div>
+                {order?.paymentMethod ? (
+                  <div className="flex justify-between text-xs text-muted-foreground pt-1">
+                    <span>Payment Terms</span>
+                    <span className="font-semibold text-slate-800">{order.paymentMethod}</span>
+                  </div>
+                ) : null}
               </div>
 
               {totalCost > 0 && (
