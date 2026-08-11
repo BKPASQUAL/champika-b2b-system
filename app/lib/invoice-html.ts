@@ -205,7 +205,7 @@ export const generateInvoiceHTML = async (
           ${phone ? `<div style="font-size:12px;color:#333;">${phone}</div>` : ""}
         </td>
         <td style="vertical-align:top;padding-top:1px;text-align:right;width:40%;">
-          ${paymentMethod ? `
+          ${divisionKey !== "retail" && paymentMethod ? `
           <div style="font-size:13px;font-weight:800;color:#000;text-transform:uppercase;letter-spacing:0.3px;">
             Terms: ${paymentMethod}
           </div>` : ""}
@@ -218,7 +218,7 @@ export const generateInvoiceHTML = async (
           <div style="font-size:12px;font-weight:600;color:#000;">${shopName}${customerName && customerName !== shopName ? ` — ${customerName}` : ""}</div>
         </td>
         <td style="vertical-align:top;padding-top:1px;text-align:right;width:40%;">
-          ${paymentMethod ? `
+          ${divisionKey !== "retail" && paymentMethod ? `
           <div style="font-size:12px;font-weight:800;color:#000;text-transform:uppercase;">
             Terms: ${paymentMethod}
           </div>` : ""}
@@ -463,7 +463,7 @@ export const generateHalfPageInvoiceHTML = async (
         ${phone ? `<div style="font-size:11px;color:#333;">${phone}</div>` : ""}
       </td>
       <td style="vertical-align:top;padding-top:1px;text-align:right;width:40%;">
-        ${paymentMethod ? `
+        ${divisionKey !== "retail" && paymentMethod ? `
         <div style="font-size:12px;font-weight:800;color:#000;text-transform:uppercase;">
           Terms: ${paymentMethod}
         </div>` : ""}
@@ -476,7 +476,7 @@ export const generateHalfPageInvoiceHTML = async (
         <div style="font-size:11px;font-weight:600;color:#000;">${shopName}${customerName && customerName !== shopName ? ` — ${customerName}` : ""}</div>
       </td>
       <td style="vertical-align:top;padding-top:1px;text-align:right;width:40%;">
-        ${paymentMethod ? `
+        ${divisionKey !== "retail" && paymentMethod ? `
         <div style="font-size:11px;font-weight:800;color:#000;text-transform:uppercase;">
           Terms: ${paymentMethod}
         </div>` : ""}
