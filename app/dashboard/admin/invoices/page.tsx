@@ -21,6 +21,7 @@ import {
   Plus,
   RefreshCw,
   Filter,
+  Printer,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -33,6 +34,7 @@ import { toast } from "sonner";
 import { Invoice, SortField, SortOrder } from "./types";
 import { InvoiceTable } from "./_components/InvoiceTable";
 import { InvoiceStats } from "./_components/InvoiceStats";
+import { downloadOutstandingReport, printOutstandingReport } from "./outstanding-report";
 
 const STORAGE_KEYS = {
   search: "admin_invoices_search",
@@ -284,9 +286,14 @@ export default function InvoicesPage() {
                 Export Excel
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => toast.info("Export PDF coming soon")}
+                onClick={() => downloadOutstandingReport(invoices, repFilter)}
               >
-                <FileText className="w-4 h-4 mr-2 text-red-600" /> Export PDF
+                <FileText className="w-4 h-4 mr-2 text-red-600" /> Outstanding (PDF)
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => printOutstandingReport(invoices, repFilter)}
+              >
+                <Printer className="w-4 h-4 mr-2 text-red-600" /> Print Outstanding
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

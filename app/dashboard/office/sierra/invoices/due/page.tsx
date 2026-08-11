@@ -32,19 +32,17 @@ import {
   AlertOctagon,
   CalendarDays,
   ArrowUpRight,
-  CreditCard,
   RefreshCw,
   Printer,
+  Download,
   Loader2,
+  Flame,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
 import { toast } from "sonner";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import { downloadOutstandingReport, printOutstandingReport } from "../outstanding-report";
 
-// --- Types ---
 interface OverdueInvoice {
   id: string;
   orderId: string;
@@ -54,8 +52,12 @@ interface OverdueInvoice {
   phone: string;
   invoiceDate: string;
   dueAmount: number;
+  totalAmount: number;
+  paidAmount: number;
   daysOverdue: number;
   status: string;
+  orderStatus: string;
+  salesRepName: string;
 }
 
 export default function SierraDueAlertsPage() {
@@ -93,14 +95,18 @@ export default function SierraDueAlertsPage() {
           phone: inv.customer?.phone || inv.phone || "",
           invoiceDate: createdDate.toISOString().split("T")[0],
           dueAmount: inv.dueAmount || 0,
+          totalAmount: inv.totalAmount || 0,
+          paidAmount: inv.paidAmount || 0,
           daysOverdue,
           status: inv.status,
+          orderStatus: inv.orderStatus || "Delivered",
+          salesRepName: inv.salesRepName || "Unknown",
         };
       })
       .filter((inv: OverdueInvoice) => inv.daysOverdue > 0 && inv.dueAmount > 0);
   }, [rawInvoices]);
 
-  // --- Filter Logic ---
+  // Filter Logic: 45+, 60+, 90+
   const filteredInvoices = invoices.filter((inv) => {
     const matchesSearch =
       inv.invoiceNo.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -108,22 +114,21 @@ export default function SierraDueAlertsPage() {
       inv.customerName.toLowerCase().includes(searchQuery.toLowerCase());
 
     let matchesAge = true;
-    if (ageFilter === "30+") matchesAge = inv.daysOverdue >= 30;
+    if (ageFilter === "45+") matchesAge = inv.daysOverdue >= 45;
     if (ageFilter === "60+") matchesAge = inv.daysOverdue >= 60;
     if (ageFilter === "90+") matchesAge = inv.daysOverdue >= 90;
 
     return matchesSearch && matchesAge;
   });
 
-  // Sort by aging (most overdue first)
   const sortedInvoices = [...filteredInvoices].sort(
-    (a, b) => b.daysOverdue - a.daysOverdue,
+    (a, b) => b.daysOverdue - a.daysOverdue
   );
 
-  // --- Stats Calculations ---
+  // Stats Calculations (45+, 60+, 90+)
   const totalOverdue = invoices.reduce((sum, inv) => sum + inv.dueAmount, 0);
-  const overdue30 = invoices
-    .filter((inv) => inv.daysOverdue >= 30 && inv.daysOverdue < 60)
+  const overdue45 = invoices
+    .filter((inv) => inv.daysOverdue >= 45 && inv.daysOverdue < 60)
     .reduce((sum, inv) => sum + inv.dueAmount, 0);
   const overdue60 = invoices
     .filter((inv) => inv.daysOverdue >= 60 && inv.daysOverdue < 90)
@@ -132,169 +137,39 @@ export default function SierraDueAlertsPage() {
     .filter((inv) => inv.daysOverdue >= 90)
     .reduce((sum, inv) => sum + inv.dueAmount, 0);
 
-  // --- Badge Logic ---
+  // 3 Color Themes + New 90+ Days Critical Icon
   const getAgingBadge = (days: number) => {
     if (days >= 90) {
       return (
-        <Badge className="bg-red-100 hover:bg-red-200 text-red-700 border-none justify-center px-2 py-1">
-          <AlertTriangle className="w-3 h-3 mr-1" />
-          {days} days
+        <Badge className="bg-red-100 hover:bg-red-200 text-red-800 border border-red-300 font-bold justify-center px-2.5 py-1 animate-pulse">
+          <Flame className="w-3.5 h-3.5 mr-1 text-red-600 fill-red-500" />
+          <AlertOctagon className="w-3.5 h-3.5 mr-1 text-red-600" />
+          {days} Days (90+ Critical)
         </Badge>
       );
     }
     if (days >= 60) {
       return (
-        <Badge className="bg-orange-100 hover:bg-orange-200 text-orange-700 border-none justify-center px-2 py-1">
-          <AlertTriangle className="w-3 h-3 mr-1" />
-          {days} days
+        <Badge className="bg-orange-100 hover:bg-orange-200 text-orange-800 border border-orange-300 justify-center px-2.5 py-1">
+          <AlertTriangle className="w-3.5 h-3.5 mr-1 text-orange-600" />
+          {days} Days (60+)
         </Badge>
       );
     }
-    if (days >= 30) {
+    if (days >= 45) {
       return (
-        <Badge className="bg-yellow-100 hover:bg-yellow-200 text-yellow-700 border-none justify-center px-2 py-1">
-          <AlertTriangle className="w-3 h-3 mr-1" />
-          {days} days
+        <Badge className="bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300 justify-center px-2.5 py-1">
+          <Clock className="w-3.5 h-3.5 mr-1 text-amber-600" />
+          {days} Days (45+)
         </Badge>
       );
     }
     return (
-      <Badge className="bg-amber-100 hover:bg-amber-200 text-amber-700 border-none justify-center px-2 py-1">
-        <AlertTriangle className="w-3 h-3 mr-1" />
-        {days} days
+      <Badge variant="outline" className="text-muted-foreground justify-center px-2.5 py-1">
+        <Clock className="w-3.5 h-3.5 mr-1" />
+        {days} Days
       </Badge>
     );
-  };
-
-  const handlePrintReport = () => {
-    try {
-      const doc = new jsPDF();
-
-      // Title
-      doc.setFontSize(18);
-      doc.text("Sierra Distribution", 14, 20);
-
-      doc.setFontSize(14);
-      doc.setTextColor(220, 38, 38);
-      doc.text("Outstanding Bills (Grouped by Customer)", 14, 28);
-
-      doc.setFontSize(10);
-      doc.setTextColor(100);
-      doc.text(
-        `Generated: ${new Date().toLocaleDateString()}, ${new Date().toLocaleTimeString()}`,
-        14,
-        34,
-      );
-      doc.text(`Total Outstanding Bills: ${sortedInvoices.length}`, 14, 40);
-
-      // Group Invoices by Customer
-      const groupedInvoices: { [key: string]: OverdueInvoice[] } = {};
-      sortedInvoices.forEach((inv) => {
-        const customerKey = inv.shopName
-          ? `${inv.shopName} - ${inv.customerName}`
-          : inv.customerName;
-        if (!groupedInvoices[customerKey]) {
-          groupedInvoices[customerKey] = [];
-        }
-        groupedInvoices[customerKey].push(inv);
-      });
-
-      // Sort Customer Keys Alphabetically
-      const sortedCustomerKeys = Object.keys(groupedInvoices).sort((a, b) =>
-        a.localeCompare(b),
-      );
-
-      // Build Table Data with Group Headers
-      const tableData: any[] = [];
-
-      sortedCustomerKeys.forEach((customerKey) => {
-        const customerInvoices = groupedInvoices[customerKey];
-        const customerTotalDue = customerInvoices.reduce(
-          (sum, inv) => sum + inv.dueAmount,
-          0,
-        );
-
-        // Add Customer Header Row
-        tableData.push([
-          {
-            content: `${customerKey} (Total Due: LKR ${customerTotalDue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`,
-            colSpan: 5,
-            styles: {
-              fillColor: [240, 240, 240], // Light Gray Background
-              textColor: [50, 50, 50],
-              fontStyle: "bold",
-              halign: "left",
-            },
-          },
-        ]);
-
-        // Add Invoice Rows
-        customerInvoices.forEach((inv) => {
-          tableData.push([
-            new Date(inv.invoiceDate).toLocaleDateString(),
-            inv.invoiceNo,
-            inv.dueAmount.toLocaleString(undefined, {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            }), // This is the "Total" in the screenshot
-            "0", // Paid Amount is 0 for these overdue invoices
-            inv.dueAmount.toLocaleString(undefined, {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            }), // Due Amount
-            "UNPAID", // Status
-          ]);
-        });
-      });
-
-      autoTable(doc, {
-        startY: 45,
-        head: [
-          [
-            "Date",
-            "Invoice No",
-            "Total (LKR)",
-            "Paid (LKR)",
-            "Due (LKR)",
-            "Status",
-          ],
-        ],
-        body: tableData,
-        theme: "plain",
-        headStyles: {
-          fillColor: [220, 38, 38], // Red theme
-          textColor: [255, 255, 255],
-          fontStyle: "bold",
-        },
-        styles: {
-          fontSize: 9,
-          cellPadding: 3,
-          lineColor: [220, 220, 220],
-          lineWidth: 0.1,
-        },
-        columnStyles: {
-          2: { halign: "right" },
-          3: { halign: "right" },
-          4: { halign: "right" },
-          5: { halign: "center" },
-        },
-        didParseCell: function (data) {
-          // If it's a customer header row, align it correctly
-          const rawRow = data.row.raw as any[];
-          if (rawRow && rawRow[0] && rawRow[0].colSpan === 5) {
-            data.cell.styles.fillColor = [240, 240, 240];
-            data.cell.styles.textColor = [50, 50, 50];
-            data.cell.styles.fontStyle = "bold";
-          }
-        },
-      });
-
-      doc.save("Due_Invoices_Report.pdf");
-      toast.success("PDF report generated successfully");
-    } catch (error) {
-      console.error("Error generating PDF:", error);
-      toast.error("Failed to generate PDF report");
-    }
   };
 
   return (
@@ -305,7 +180,7 @@ export default function SierraDueAlertsPage() {
             Due Alerts <AlertTriangle className="text-red-600 h-6 w-6" />
           </h1>
           <p className="text-muted-foreground mt-1">
-            Track and manage overdue customer payments.
+            Track and manage overdue customer payments (Sierra Agency).
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -320,21 +195,29 @@ export default function SierraDueAlertsPage() {
           </Button>
           <Button
             variant="outline"
-            className="hidden md:flex bg-white"
-            onClick={handlePrintReport}
+            className="bg-white"
+            onClick={() => downloadOutstandingReport(rawInvoices as any)}
           >
-            <Printer className="w-4 h-4 mr-2" />
+            <Download className="w-4 h-4 mr-2 text-red-600" />
+            Download PDF
+          </Button>
+          <Button
+            variant="outline"
+            className="bg-white"
+            onClick={() => printOutstandingReport(rawInvoices as any)}
+          >
+            <Printer className="w-4 h-4 mr-2 text-red-600" />
             Print Report
           </Button>
         </div>
       </div>
 
-      {/* Stats Grid */}
+      {/* Stats Grid: All Outstanding, 45+ Days, 60+ Days, 90+ Days Critical */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card className="border-l-4 border-l-blue-500 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total Overdue
+              Total Outstanding
             </CardTitle>
             <ArrowUpRight className="w-4 h-4 text-blue-500" />
           </CardHeader>
@@ -343,58 +226,62 @@ export default function SierraDueAlertsPage() {
               LKR {(totalOverdue / 1000).toFixed(1)}k
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              All outstanding bills
+              All {invoices.length} outstanding bills
             </p>
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-yellow-500 bg-yellow-50/20 shadow-sm">
+        {/* 45+ Days Card - Amber Theme */}
+        <Card className="border-l-4 border-l-amber-500 bg-amber-50/30 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              30+ Days
+            <CardTitle className="text-sm font-medium text-amber-900">
+              45+ Days Overdue
             </CardTitle>
-            <Clock className="w-4 h-4 text-yellow-600" />
+            <Clock className="w-4 h-4 text-amber-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-700">
-              LKR {(overdue30 / 1000).toFixed(1)}k
+            <div className="text-2xl font-bold text-amber-700">
+              LKR {(overdue45 / 1000).toFixed(1)}k
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Action required
+            <p className="text-xs text-amber-800 mt-1 font-medium">
+              Amber Theme • Action required
             </p>
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-orange-500 bg-orange-50/20 shadow-sm">
+        {/* 60+ Days Card - Orange Theme */}
+        <Card className="border-l-4 border-l-orange-500 bg-orange-50/30 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              60+ Days
+            <CardTitle className="text-sm font-medium text-orange-900">
+              60+ Days Overdue
             </CardTitle>
-            <AlertOctagon className="w-4 h-4 text-orange-600" />
+            <AlertTriangle className="w-4 h-4 text-orange-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-orange-700">
               LKR {(overdue60 / 1000).toFixed(1)}k
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Serious concern
+            <p className="text-xs text-orange-800 mt-1 font-medium">
+              Orange Theme • High concern
             </p>
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-red-600 bg-red-50/30 shadow-sm">
+        {/* 90+ Days Card - Dark Red Critical Theme with New Icon */}
+        <Card className="border-l-4 border-l-red-600 bg-red-50/40 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              90+ Days
+            <CardTitle className="text-sm font-bold text-red-900 flex items-center gap-1.5">
+              <Flame className="w-4 h-4 text-red-600 fill-red-500" />
+              90+ Days Critical
             </CardTitle>
-            <AlertTriangle className="w-4 h-4 text-red-600" />
+            <AlertOctagon className="w-4 h-4 text-red-600 animate-bounce" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-700">
+            <div className="text-2xl font-black text-red-700">
               LKR {(overdue90 / 1000).toFixed(1)}k
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Critical status
+            <p className="text-xs text-red-800 mt-1 font-bold flex items-center gap-1">
+              🚨 Critical Alert • Urgent Action Required
             </p>
           </CardContent>
         </Card>
@@ -415,14 +302,14 @@ export default function SierraDueAlertsPage() {
             </div>
             <div className="flex items-center gap-2">
               <Select value={ageFilter} onValueChange={setAgeFilter}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Filter by Age" />
+                <SelectTrigger className="w-[190px]">
+                  <SelectValue placeholder="Filter by Aging" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Overdue</SelectItem>
-                  <SelectItem value="30+">30+ Days</SelectItem>
-                  <SelectItem value="60+">60+ Days</SelectItem>
-                  <SelectItem value="90+">90+ Days</SelectItem>
+                  <SelectItem value="all">All Outstanding</SelectItem>
+                  <SelectItem value="45+">45+ Days Overdue</SelectItem>
+                  <SelectItem value="60+">60+ Days Overdue</SelectItem>
+                  <SelectItem value="90+">🚨 90+ Days Critical</SelectItem>
                 </SelectContent>
               </Select>
               <Button variant="outline" size="icon">
@@ -439,7 +326,7 @@ export default function SierraDueAlertsPage() {
                   <TableHead>Invoice No</TableHead>
                   <TableHead>Customer / Shop</TableHead>
                   <TableHead>Bill Date</TableHead>
-                  <TableHead className="text-center">Days Overdue</TableHead>
+                  <TableHead className="text-center">Aging & Theme</TableHead>
                   <TableHead className="text-right">Due Amount</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -469,7 +356,10 @@ export default function SierraDueAlertsPage() {
                   sortedInvoices.map((invoice) => (
                     <TableRow
                       key={invoice.id}
-                      className="hover:bg-red-50/10 transition-colors"
+                      className={cn(
+                        "hover:bg-red-50/20 transition-colors",
+                        invoice.daysOverdue >= 90 && "bg-red-50/30 font-medium"
+                      )}
                     >
                       <TableCell className="font-medium font-mono text-xs text-muted-foreground">
                         {invoice.invoiceNo}
@@ -520,7 +410,7 @@ export default function SierraDueAlertsPage() {
                             className="h-8 w-8"
                             onClick={() =>
                               router.push(
-                                `/dashboard/office/sierra/invoices/${invoice.id}`,
+                                `/dashboard/office/sierra/invoices/${invoice.id}`
                               )
                             }
                             title="View Invoice"
@@ -537,12 +427,10 @@ export default function SierraDueAlertsPage() {
           </div>
         </CardContent>
       </Card>
-
     </div>
   );
 }
 
-// Helper Component for Empty State
 function CheckCircle2({ className }: { className?: string }) {
   return (
     <svg

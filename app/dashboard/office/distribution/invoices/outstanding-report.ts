@@ -1,4 +1,3 @@
-// app/dashboard/office/distribution/invoices/outstanding-report.ts
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { toast } from "sonner";
@@ -14,56 +13,134 @@ const fmt = (amount: number) =>
   });
 
 const COLOR = {
-  headerBg:     [220, 38,   38 ] as [number, number, number], // Sierra Red
-  headerText:   [255, 255, 255] as [number, number, number],
-  custBg:       [240, 240, 240] as [number, number, number], // Lighter gray background for customers
-  custText:     [50,  50,  50 ] as [number, number, number], // Dark gray customer text
-  overdueHigh:  [254, 249, 195] as [number, number, number], // Yellow background
-  overdueText:  [161, 98,  7  ] as [number, number, number], // Amber text
-  overdueXHigh: [254, 226, 226] as [number, number, number], // Red background
-  overdueXText: [185, 28,  28 ] as [number, number, number], // Dark red text
-  grandBg:      [255, 237, 213] as [number, number, number],
-  grandText:    [124, 45,  18 ] as [number, number, number],
-  divider:      [200, 200, 200] as [number, number, number],
-  titleOrange:  [220, 38,  38 ] as [number, number, number], // Sierra Red for subtitle
-  bodyText:     [50,  50,  50 ] as [number, number, number],
-  mutedText:    [120, 120, 120] as [number, number, number], // Softer gray for metadata
+  headerBg:      [220, 38,   38 ] as [number, number, number],
+  headerText:    [255, 255, 255] as [number, number, number],
+  custBg:        [240, 240, 240] as [number, number, number],
+  custText:      [50,  50,  50 ] as [number, number, number],
+
+  // 3 Color Themes for Aging Buckets:
+  overdue45Bg:   [254, 249, 195] as [number, number, number], // Yellow/Amber
+  overdue45Text: [161, 98,  7  ] as [number, number, number],
+
+  overdue60Bg:   [254, 215, 170] as [number, number, number], // Orange
+  overdue60Text: [194, 65,  12 ] as [number, number, number],
+
+  overdue90Bg:   [254, 226, 226] as [number, number, number], // Dark Red Critical
+  overdue90Text: [185, 28,  28 ] as [number, number, number],
+
+  grandBg:       [255, 237, 213] as [number, number, number],
+  grandText:     [124, 45,  18 ] as [number, number, number],
+  divider:       [200, 200, 200] as [number, number, number],
+  titleOrange:   [220, 38,  38 ] as [number, number, number],
+  bodyText:      [50,  50,  50 ] as [number, number, number],
+  mutedText:     [120, 120, 120] as [number, number, number],
 };
 
-// Left margin and table start Y
-const M = 15;   // 15mm left/right margin perfectly centers an 180mm table on 210mm A4
-const START_Y = 46; // table starts after header
+const M = 15;
 
 function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth  = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
+  const today = new Date();
 
-  // ── Header ────────────────────────────────────────────────────────────────
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(20);
-  doc.setTextColor(50, 50, 50); // Dark gray/black for main title
-  doc.text(COMPANY_NAME, M, 20);
+  // ── Header Title ──────────────────────────────────────────────────────────
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(18);
+  doc.setTextColor(50, 50, 50);
+  doc.text(COMPANY_NAME, M, 16);
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(14); // Professional subtitle size
+  doc.setFontSize(12);
   doc.setTextColor(...COLOR.titleOrange);
   const subtitle =
     repFilter !== "all"
       ? `Outstanding Bills (Grouped by Customer) — ${repFilter}`
       : "Outstanding Bills (Grouped by Customer)";
-  doc.text(subtitle, M, 28);
+  doc.text(subtitle, M, 23);
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9); // Refined metadata size
+  doc.setFontSize(8.5);
   doc.setTextColor(...COLOR.mutedText);
   doc.text(
-    `Generated: ${new Date().toLocaleDateString()}, ${new Date().toLocaleTimeString()}`,
-    M, 36
+    `Generated: ${new Date().toLocaleDateString("en-GB")}, ${new Date().toLocaleTimeString()}`,
+    M, 29
   );
-  doc.text(`Total Outstanding Bills: ${outstanding.length}`, M, 42);
 
-  // ── Group by Customer ─────────────────────────────────────────────────────
+  // ── Aging Summary Calculation ─────────────────────────────────────────────
+  let totalDue = 0;
+  let due45 = 0;
+  let due60 = 0;
+  let due90 = 0;
+
+  let count45 = 0;
+  let count60 = 0;
+  let count90 = 0;
+
+  outstanding.forEach((inv) => {
+    totalDue += inv.dueAmount;
+    const days = Math.floor(
+      (today.getTime() - new Date(inv.date).getTime()) / (1000 * 60 * 60 * 24)
+    );
+    if (days >= 90) {
+      due90 += inv.dueAmount;
+      count90++;
+    } else if (days >= 60) {
+      due60 += inv.dueAmount;
+      count60++;
+    } else if (days >= 45) {
+      due45 += inv.dueAmount;
+      count45++;
+    }
+  });
+
+  // ── Aging Breakdown Summary Table ─────────────────────────────────────────
+  autoTable(doc, {
+    startY: 32,
+    margin: { left: M, right: M },
+    head: [["Summary Category", "Bills Count", "Outstanding Amount (LKR)"]],
+    body: [
+      ["All Outstanding Bills", outstanding.length.toString(), fmt(totalDue)],
+      ["45+ Days Overdue (Amber Theme)", count45.toString(), fmt(due45)],
+      ["60+ Days Overdue (Orange Theme)", count60.toString(), fmt(due60)],
+      ["90+ Days Overdue (Critical Red)", count90.toString(), fmt(due90)],
+    ],
+    theme: "grid",
+    headStyles: {
+      fillColor: [60, 60, 60],
+      textColor: [255, 255, 255],
+      fontStyle: "bold",
+      fontSize: 8,
+      cellPadding: 1.5,
+    },
+    styles: {
+      fontSize: 7.5,
+      cellPadding: 1.5,
+    },
+    columnStyles: {
+      0: { cellWidth: 80, fontStyle: "bold" },
+      1: { cellWidth: 35, halign: "center" },
+      2: { cellWidth: 65, halign: "right", fontStyle: "bold" },
+    },
+    didParseCell(data) {
+      if (data.section === "body") {
+        if (data.row.index === 1) {
+          data.cell.styles.fillColor = COLOR.overdue45Bg;
+          data.cell.styles.textColor = COLOR.overdue45Text;
+        } else if (data.row.index === 2) {
+          data.cell.styles.fillColor = COLOR.overdue60Bg;
+          data.cell.styles.textColor = COLOR.overdue60Text;
+        } else if (data.row.index === 3) {
+          data.cell.styles.fillColor = COLOR.overdue90Bg;
+          data.cell.styles.textColor = COLOR.overdue90Text;
+          data.cell.styles.fontStyle = "bold";
+        }
+      }
+    },
+  });
+
+  const finalSummaryY = (doc as any).lastAutoTable.finalY + 5;
+
+  // ── Group Bills by Customer ────────────────────────────────────────────────
   const grouped: Record<string, Invoice[]> = {};
   outstanding.forEach((inv) => {
     if (!grouped[inv.customerName]) grouped[inv.customerName] = [];
@@ -76,7 +153,6 @@ function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
   let grandTotal = 0;
   let grandPaid  = 0;
   let grandDue   = 0;
-  const today = new Date();
 
   sortedCustomers.forEach((customer) => {
     const rows = grouped[customer].sort(
@@ -114,7 +190,7 @@ function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
         fmt(inv.totalAmount),
         fmt(inv.paidAmount),
         fmt(inv.dueAmount),
-        inv.status.toUpperCase(),
+        (inv.status || "UNPAID").toUpperCase(),
       ]);
     });
   });
@@ -133,7 +209,7 @@ function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
   ]);
 
   autoTable(doc, {
-    startY: START_Y,
+    startY: finalSummaryY,
     margin: { left: M, right: M },
     head: [["Date", "Invoice No", "Days", "Total (LKR)", "Paid (LKR)", "Due (LKR)", "Status"]],
     body: tableData,
@@ -155,14 +231,13 @@ function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
       overflow: "linebreak",
     },
     columnStyles: {
-      // Total widths = 180mm perfectly centers with 15mm left/right margins on 210mm A4
-      0: { halign: "left",   cellWidth: 24 },  // Date
-      1: { halign: "center", cellWidth: 24 },  // Invoice No
-      2: { halign: "center", cellWidth: 18 },  // Days
-      3: { halign: "right",  cellWidth: 34 },  // Total
-      4: { halign: "right",  cellWidth: 28 },  // Paid
-      5: { halign: "right",  cellWidth: 30, fontStyle: "bold" }, // Due
-      6: { halign: "center", cellWidth: 22 },  // Status
+      0: { halign: "left",   cellWidth: 24 },
+      1: { halign: "center", cellWidth: 24 },
+      2: { halign: "center", cellWidth: 20 },
+      3: { halign: "right",  cellWidth: 34 },
+      4: { halign: "right",  cellWidth: 26 },
+      5: { halign: "right",  cellWidth: 30, fontStyle: "bold" },
+      6: { halign: "center", cellWidth: 22 },
     },
     didParseCell(data) {
       const raw = data.row.raw as any[];
@@ -171,17 +246,21 @@ function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
       const days   = Number(raw[2]);
       const status = String(raw[6]);
 
-      if (days >= 60) {
-        data.cell.styles.fillColor = COLOR.overdueXHigh;
-        data.cell.styles.textColor = COLOR.overdueXText;
+      if (days >= 90) {
+        data.cell.styles.fillColor = COLOR.overdue90Bg;
+        data.cell.styles.textColor = COLOR.overdue90Text;
+        data.cell.styles.fontStyle = "bold";
+      } else if (days >= 60) {
+        data.cell.styles.fillColor = COLOR.overdue60Bg;
+        data.cell.styles.textColor = COLOR.overdue60Text;
       } else if (days >= 45) {
-        data.cell.styles.fillColor = COLOR.overdueHigh;
-        data.cell.styles.textColor = COLOR.overdueText;
+        data.cell.styles.fillColor = COLOR.overdue45Bg;
+        data.cell.styles.textColor = COLOR.overdue45Text;
       }
 
       if (data.column.index === 6) {
-        if (status === "PARTIAL")      data.cell.styles.textColor = [180, 83, 9];
-        else if (status === "UNPAID")  data.cell.styles.textColor = [185, 28, 28];
+        if (status.includes("PARTIAL")) data.cell.styles.textColor = [180, 83, 9];
+        else if (status.includes("UNPAID")) data.cell.styles.textColor = [185, 28, 28];
       }
     },
     didDrawPage(_data) {
@@ -220,7 +299,6 @@ export function printOutstandingReport(invoices: Invoice[], repFilter: string = 
   const blob = doc.output("blob");
   const url  = URL.createObjectURL(blob);
 
-  // Print via hidden iframe — stays on same page, no navigation
   const existing = document.getElementById("__print_frame__");
   if (existing) existing.remove();
 
@@ -250,7 +328,6 @@ export async function shareOutstandingReport(invoices: Invoice[], repFilter: str
 
   const totalDue = outstanding.reduce((sum, inv) => sum + inv.dueAmount, 0);
 
-  // Group by customer
   const grouped: Record<string, Invoice[]> = {};
   outstanding.forEach((inv) => {
     if (!grouped[inv.customerName]) grouped[inv.customerName] = [];
