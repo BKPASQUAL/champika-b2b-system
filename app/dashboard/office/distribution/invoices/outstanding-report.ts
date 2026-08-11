@@ -40,7 +40,16 @@ const M = 15;
 
 function getOutstandingForRep(invoices: Invoice[], repFilter: string = "all"): Invoice[] {
   const eligible = invoices.filter(
-    (inv) => inv.status !== "Paid" && inv.orderStatus !== "Cancelled" && inv.dueAmount > 0
+    (inv) => {
+      const invSt = inv.status as string;
+      const isDelivered = inv.orderStatus === "Delivered" || invSt === "Delivered" || (!inv.orderStatus && invSt !== "Cancelled");
+      return (
+        inv.status !== "Paid" &&
+        inv.orderStatus !== "Cancelled" &&
+        isDelivered &&
+        inv.dueAmount > 0
+      );
+    }
   );
 
   if (repFilter === "all") {
