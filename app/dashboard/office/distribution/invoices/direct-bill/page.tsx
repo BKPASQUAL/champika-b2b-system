@@ -173,11 +173,19 @@ export default function DirectBillPage() {
     const fetchProducts = async () => {
       setStockLoading(true);
       try {
+        const allowRetailRes = await fetch("/api/settings/distribution-retail-items").catch(() => null);
+        let allowRetail = false;
+        if (allowRetailRes?.ok) {
+          const rd = await allowRetailRes.json();
+          allowRetail = rd.enabled ?? false;
+        }
+
         const res = await fetch("/api/products?active=true");
         if (!res.ok) throw new Error();
         const data = await res.json();
         setProducts(
           data
+            .filter((p: any) => allowRetail || (p.subCategory !== "Retail Exclusive" && !p.retailOnly && !p.retail_only))
             .map((p: any) => ({
               id: p.id,
               sku: p.sku || "N/A",

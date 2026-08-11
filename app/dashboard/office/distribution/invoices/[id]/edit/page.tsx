@@ -473,6 +473,13 @@ export default function DistributionEditInvoicePage({
   // --- 2. Fetch Products: all items when override ON, rep stock when override OFF ---
   useEffect(() => {
     const fetchProducts = async () => {
+      const allowRetailRes = await fetch("/api/settings/distribution-retail-items").catch(() => null);
+      let allowRetail = false;
+      if (allowRetailRes?.ok) {
+        const rd = await allowRetailRes.json();
+        allowRetail = rd.enabled ?? false;
+      }
+
       if (outOfStockOverride) {
         setStockLoading(true);
         try {
@@ -481,6 +488,7 @@ export default function DistributionEditInvoicePage({
           const data = await res.json();
           setProducts(
             data
+              .filter((p: any) => allowRetail || (p.subCategory !== "Retail Exclusive" && !p.retailOnly && !p.retail_only))
               .map((p: any) => ({
                 id: p.id,
                 sku: p.sku || "N/A",
@@ -514,6 +522,7 @@ export default function DistributionEditInvoicePage({
         const data = await res.json();
         setProducts(
           data
+            .filter((p: any) => allowRetail || (p.subCategory !== "Retail Exclusive" && !p.retailOnly && !p.retail_only))
             .map((p: any) => ({
               id: p.id,
               sku: p.sku || "N/A",

@@ -329,9 +329,10 @@ export default function EditOrderPage({
         }
 
         // 2. Fetch Settings, Routes, Suppliers in Parallel
-        const [overrideData, customerCreateData, routesData, suppliersData, settingSuppliersData, invoiceRes] = await Promise.all([
+        const [overrideData, customerCreateData, distRetailData, routesData, suppliersData, settingSuppliersData, invoiceRes] = await Promise.all([
           fetch("/api/settings/invoice-override").then((r) => r.json()).catch(() => ({ enabled: false })),
           fetch("/api/settings/rep-customer-creation").then((r) => r.json()).catch(() => ({ enabled: false })),
+          fetch("/api/settings/distribution-retail-items").then((r) => r.json()).catch(() => ({ enabled: false })),
           fetch("/api/settings/categories?type=route").then((r) => r.json()).catch(() => []),
           fetch("/api/suppliers").then((r) => r.json()).catch(() => []),
           fetch("/api/settings/categories?type=supplier").then((r) => r.json()).catch(() => []),
@@ -395,6 +396,7 @@ export default function EditOrderPage({
         }
 
         const overrideEnabled = overrideData.enabled ?? false;
+        const allowRetail = distRetailData.enabled ?? false;
         setOutOfStockOverride(overrideEnabled);
         setCanCreateCustomer(customerCreateData.enabled ?? false);
         setRoutes(routesData.filter((r: any) => r.name));
@@ -410,6 +412,7 @@ export default function EditOrderPage({
 
         setProducts(
           productsData
+            .filter((p: any) => allowRetail || (p.subCategory !== "Retail Exclusive" && !p.retailOnly && !p.retail_only))
             .map((p: any) => ({
               id: p.id,
               sku: p.sku,
