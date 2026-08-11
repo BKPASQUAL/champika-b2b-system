@@ -9,10 +9,15 @@ import {
   ReceiptText,
   BanknoteIcon,
   Zap,
+  History,
+  Download,
+  Printer,
+  Share2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -47,12 +52,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
 import { invalidatePaymentCaches } from "@/hooks/useCachedFetch";
+import {
+  downloadCustomerStatement,
+  printCustomerStatement,
+  shareCustomerStatement,
+  InvoicePaymentRecord,
+} from "@/lib/customer-statement-report";
 
 // ─── Local Helpers ─────────────────────────────────────────────────────────────
 const formatCurrency = (amount: number) =>
@@ -62,13 +80,44 @@ const formatCurrency = (amount: number) =>
     minimumFractionDigits: 2,
   }).format(amount);
 
+const getInvoiceAgeDays = (dateStr: string): number => {
+  if (!dateStr) return 0;
+  const invDate = new Date(dateStr);
+  const today = new Date();
+  const diffTime = today.getTime() - invDate.getTime();
+  return Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+};
+
+const renderAgeBadge = (days: number) => {
+  let badgeStyle = "bg-green-50 text-green-700 border-green-200";
+  if (days >= 90) {
+    badgeStyle = "bg-red-100 text-red-700 border-red-200 font-semibold";
+  } else if (days >= 60) {
+    badgeStyle = "bg-orange-100 text-orange-700 border-orange-200";
+  } else if (days >= 30) {
+    badgeStyle = "bg-yellow-50 text-yellow-800 border-yellow-200";
+  }
+  return (
+    <Badge variant="outline" className={`${badgeStyle} text-[11px] whitespace-nowrap`}>
+      {days} {days === 1 ? "day" : "days"}
+    </Badge>
+  );
+};
+
 // ─── Types ─────────────────────────────────────────────────────────────────────
-interface Customer { id: string; name: string;   phone?: string;
-  ownerName?: string;
-}
+interface Customer { id: string; name: string; phone?: string; ownerName?: string; }
 interface Bank { id: string; bank_code: string; bank_name: string; }
 interface CompanyAccount { id: string; account_name: string; account_type: string; account_number?: string | null; }
-interface PendingInvoice { id: string; invoiceNo: string; manualInvoiceNo?: string; date: string; totalAmount: number; paidAmount: number; balance: number; }
+interface PendingInvoice {
+  id: string;
+  invoiceNo: string;
+  manualInvoiceNo?: string;
+  date: string;
+  totalAmount: number;
+  paidAmount: number;
+  balance: number;
+  payments?: InvoicePaymentRecord[];
+}
 interface InvoiceSettlement { invoiceId: string; selected: boolean; settleAmount: number; }
 type PaymentMethod = "cash" | "bank" | "cheque";
 
@@ -105,6 +154,7 @@ export default function OrangePaymentEntryPage() {
   const [branchCode, setBranchCode] = useState("");
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const [settlements, setSettlements] = useState<Record<string, InvoiceSettlement>>({});
+  const [historyModalInvoice, setHistoryModalInvoice] = useState<PendingInvoice | null>(null);
 
   useEffect(() => {
     const user = getUserBusinessContext();
@@ -143,8 +193,9 @@ export default function OrangePaymentEntryPage() {
   }, [businessId]);
 
   const availableAccounts = companyAccounts.filter((acc) => {
-    if (paymentMethod === "cash") return acc.account_type === "Cash on Hand";
-    if (paymentMethod === "bank") return acc.account_type === "Savings" || acc.account_type === "Current";
+    const t = (acc.account_type || "").toLowerCase();
+    if (paymentMethod === "cash") return t === "cash" || t === "cash on hand" || t === "wallet";
+    if (paymentMethod === "bank") return t === "bank" || t === "savings" || t === "current";
     return false;
   });
 
@@ -152,12 +203,51 @@ export default function OrangePaymentEntryPage() {
     if (!customerId || !businessId) return;
     setLoadingInvoices(true); setPendingInvoices([]); setSettlements({});
     try {
-      const res = await fetch(`/api/invoices?businessId=${businessId}`);
-      if (res.ok) {
-        const data = await res.json();
-        const filtered: PendingInvoice[] = data
+      const [invRes, payRes] = await Promise.all([
+        fetch(`/api/invoices?businessId=${businessId}`),
+        fetch(`/api/payments?businessId=${businessId}`),
+      ]);
+
+      if (invRes.ok) {
+        const invoicesData = await invRes.json();
+        const paymentsData = payRes.ok ? await payRes.json() : [];
+
+        // Build payment history map per invoice ID
+        const paymentMap: Record<string, InvoicePaymentRecord[]> = {};
+        (paymentsData || []).forEach((p: any) => {
+          if (p.is_cancelled) return;
+          const invId = p.invoice_id || p.invoices?.id;
+          const invNo = p.invoices?.invoice_no || p.orders?.order_number;
+          const key = invId || invNo;
+          if (!key) return;
+          if (!paymentMap[key]) paymentMap[key] = [];
+          paymentMap[key].push({
+            id: p.id,
+            paymentDate: p.payment_date,
+            amount: p.amount,
+            method: p.payment_method || p.method || "cash",
+            chequeNo: p.cheque_number || p.cheque_no || null,
+            chequeStatus: p.cheque_status || null,
+          });
+        });
+
+        const filtered: PendingInvoice[] = invoicesData
           .filter((inv: any) => inv.customerId === customerId && inv.orderStatus === "Delivered" && inv.status !== "Paid" && (inv.dueAmount ?? 0) > 0)
-          .map((inv: any) => ({ id: inv.orderId || inv.id, invoiceNo: inv.invoiceNo, manualInvoiceNo: inv.manualInvoiceNo || undefined, date: inv.date || (inv.createdAt?.split("T")[0] ?? ""), totalAmount: inv.totalAmount ?? 0, paidAmount: inv.paidAmount ?? 0, balance: inv.dueAmount ?? 0 }));
+          .map((inv: any) => {
+            const invKey = inv.orderId || inv.id;
+            const history = paymentMap[invKey] || paymentMap[inv.id] || paymentMap[inv.invoiceNo] || [];
+            return {
+              id: invKey,
+              invoiceNo: inv.invoiceNo,
+              manualInvoiceNo: inv.manualInvoiceNo || undefined,
+              date: inv.date || (inv.createdAt?.split("T")[0] ?? ""),
+              totalAmount: inv.totalAmount ?? 0,
+              paidAmount: inv.paidAmount ?? 0,
+              balance: inv.dueAmount ?? 0,
+              payments: history,
+            };
+          });
+
         setPendingInvoices(filtered);
         const map: Record<string, InvoiceSettlement> = {};
         filtered.forEach((inv) => { map[inv.id] = { invoiceId: inv.id, selected: false, settleAmount: 0 }; });
@@ -378,8 +468,65 @@ export default function OrangePaymentEntryPage() {
       {/* Step 2 */}
       <Card className="border-orange-100">
         <CardHeader className="pb-3">
-          <StepBadge step={2} label="Pending Invoices" />
-          <CardDescription>{selectedCustomerId ? "Select invoices to settle with this payment" : "Select a customer above to load their pending invoices"}</CardDescription>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <StepBadge step={2} label="Pending Invoices" />
+              <CardDescription className="mt-1">
+                {selectedCustomerId
+                  ? `Select invoices to settle (${pendingInvoices.length} outstanding)`
+                  : "Select a customer above to load their pending invoices"}
+              </CardDescription>
+            </div>
+            {selectedCustomerId && pendingInvoices.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    downloadCustomerStatement(
+                      selectedCustomer?.name || "Customer",
+                      pendingInvoices,
+                      "CHAMPIKA ORANGE"
+                    )
+                  }
+                  title="Download Single Customer Outstanding PDF Statement"
+                  className="text-xs text-orange-700 border-orange-200 hover:bg-orange-50"
+                >
+                  <Download className="w-3.5 h-3.5 mr-1 text-orange-600" /> PDF Statement
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    printCustomerStatement(
+                      selectedCustomer?.name || "Customer",
+                      pendingInvoices,
+                      "CHAMPIKA ORANGE"
+                    )
+                  }
+                  title="Print Single Customer Outstanding Statement"
+                  className="text-xs"
+                >
+                  <Printer className="w-3.5 h-3.5 mr-1 text-gray-600" /> Print
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    shareCustomerStatement(
+                      selectedCustomer?.name || "Customer",
+                      pendingInvoices,
+                      "CHAMPIKA ORANGE"
+                    )
+                  }
+                  title="Share Outstanding Statement via WhatsApp / Link"
+                  className="text-xs text-green-700 border-green-200 hover:bg-green-50"
+                >
+                  <Share2 className="w-3.5 h-3.5 mr-1 text-green-600" /> Share
+                </Button>
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {!selectedCustomerId ? (
@@ -396,6 +543,7 @@ export default function OrangePaymentEntryPage() {
             </div>
           ) : (
             <>
+              {/* Desktop Table */}
               <div className="hidden md:block overflow-x-auto">
                 <Table>
                   <TableHeader>
@@ -404,9 +552,11 @@ export default function OrangePaymentEntryPage() {
                       <TableHead>Invoice No</TableHead>
                       <TableHead>Manual Ref</TableHead>
                       <TableHead>Date</TableHead>
+                      <TableHead className="text-center">Age (Days)</TableHead>
                       <TableHead className="text-right">Total</TableHead>
                       <TableHead className="text-right">Paid</TableHead>
                       <TableHead className="text-right">Balance</TableHead>
+                      <TableHead className="text-center">History</TableHead>
                       <TableHead className="text-right w-40">Settle Amount</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -414,15 +564,35 @@ export default function OrangePaymentEntryPage() {
                     {pendingInvoices.map((inv) => {
                       const s = settlements[inv.id];
                       const isSelected = s?.selected ?? false;
+                      const ageDays = getInvoiceAgeDays(inv.date);
+                      const paymentCount = inv.payments?.length || 0;
+
                       return (
                         <TableRow key={inv.id} className={cn(isSelected && "bg-orange-50")}>
                           <TableCell><Checkbox checked={isSelected} onCheckedChange={() => toggleInvoice(inv.id, inv)} className="data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500" /></TableCell>
                           <TableCell className="font-medium font-mono text-sm">{inv.invoiceNo}</TableCell>
                           <TableCell className="font-mono text-sm text-muted-foreground">{inv.manualInvoiceNo || "—"}</TableCell>
-                          <TableCell>{inv.date ? new Date(inv.date).toLocaleDateString() : "—"}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(inv.totalAmount)}</TableCell>
+                          <TableCell className="whitespace-nowrap text-xs text-muted-foreground">{inv.date ? new Date(inv.date).toLocaleDateString() : "—"}</TableCell>
+                          <TableCell className="text-center">{renderAgeBadge(ageDays)}</TableCell>
+                          <TableCell className="text-right font-medium">{formatCurrency(inv.totalAmount)}</TableCell>
                           <TableCell className="text-right text-muted-foreground">{formatCurrency(inv.paidAmount)}</TableCell>
                           <TableCell className="text-right font-semibold text-orange-600">{formatCurrency(inv.balance)}</TableCell>
+                          <TableCell className="text-center">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setHistoryModalInvoice(inv)}
+                              className="h-7 px-2 text-xs text-orange-600 hover:text-orange-800 hover:bg-orange-100/50 gap-1"
+                              title="View Payment History"
+                            >
+                              <History className="w-3.5 h-3.5" />
+                              {paymentCount > 0 ? (
+                                <span className="font-semibold text-orange-700">{paymentCount}</span>
+                              ) : (
+                                <span>0</span>
+                              )}
+                            </Button>
+                          </TableCell>
                           <TableCell className="text-right">
                             <Input type="number" min="0" step="0.01" max={inv.balance} disabled={!isSelected}
                               value={s?.settleAmount || ""} onChange={(e) => updateSettleAmount(inv.id, parseFloat(e.target.value) || 0, inv.balance)}
@@ -434,22 +604,46 @@ export default function OrangePaymentEntryPage() {
                   </TableBody>
                 </Table>
               </div>
+
+              {/* Mobile Card List */}
               <div className="md:hidden space-y-3">
                 {pendingInvoices.map((inv) => {
                   const s = settlements[inv.id];
                   const isSelected = s?.selected ?? false;
+                  const ageDays = getInvoiceAgeDays(inv.date);
+                  const paymentCount = inv.payments?.length || 0;
+
                   return (
                     <div key={inv.id} className={cn("border rounded-lg p-4 space-y-3 transition-colors", isSelected ? "border-orange-400 bg-orange-50" : "bg-card")}>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <Checkbox checked={isSelected} onCheckedChange={() => toggleInvoice(inv.id, inv)} className="data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500" />
-                          <div><p className="font-semibold font-mono text-sm">{inv.invoiceNo}</p>{inv.manualInvoiceNo && <p className="text-xs font-mono text-muted-foreground">{inv.manualInvoiceNo}</p>}<p className="text-xs text-muted-foreground">{inv.date ? new Date(inv.date).toLocaleDateString() : "—"}</p></div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold font-mono text-sm">{inv.invoiceNo}</span>
+                              {renderAgeBadge(ageDays)}
+                            </div>
+                            {inv.manualInvoiceNo && <p className="text-xs font-mono text-muted-foreground">{inv.manualInvoiceNo}</p>}
+                            <p className="text-xs text-muted-foreground">{inv.date ? new Date(inv.date).toLocaleDateString() : "—"}</p>
+                          </div>
                         </div>
                         <span className="font-bold text-orange-600 text-sm">{formatCurrency(inv.balance)}</span>
                       </div>
                       <div className="grid grid-cols-2 gap-1 text-xs border-t pt-2">
                         <span className="text-muted-foreground">Total:</span><span className="text-right">{formatCurrency(inv.totalAmount)}</span>
-                        <span className="text-muted-foreground">Paid:</span><span className="text-right">{formatCurrency(inv.paidAmount)}</span>
+                        <span className="text-muted-foreground">Paid:</span>
+                        <span className="text-right flex items-center justify-end gap-1">
+                          {formatCurrency(inv.paidAmount)}
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => setHistoryModalInvoice(inv)}
+                            className="h-5 w-5 p-0 text-orange-600"
+                            title="History"
+                          >
+                            <History className="w-3 h-3" />
+                          </Button>
+                        </span>
                       </div>
                       {isSelected && (
                         <div className="space-y-1">
@@ -496,6 +690,75 @@ export default function OrangePaymentEntryPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* ── Payment History Dialog Modal ── */}
+      <Dialog
+        open={!!historyModalInvoice}
+        onOpenChange={(open) => !open && setHistoryModalInvoice(null)}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-orange-900">
+              <History className="w-5 h-5 text-orange-600" />
+              Payment History — {historyModalInvoice?.invoiceNo}
+            </DialogTitle>
+            <DialogDescription>
+              Customer: <span className="font-semibold text-foreground">{selectedCustomer?.name}</span>
+            </DialogDescription>
+          </DialogHeader>
+
+          {historyModalInvoice && (
+            <div className="space-y-4 pt-2">
+              <div className="grid grid-cols-3 gap-2 p-3 bg-orange-50/50 border border-orange-100 rounded-lg text-xs">
+                <div>
+                  <p className="text-muted-foreground">Invoice Total</p>
+                  <p className="font-semibold text-sm">{formatCurrency(historyModalInvoice.totalAmount)}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Total Paid</p>
+                  <p className="font-semibold text-sm text-green-700">{formatCurrency(historyModalInvoice.paidAmount)}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Balance Due</p>
+                  <p className="font-semibold text-sm text-orange-600">{formatCurrency(historyModalInvoice.balance)}</p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Previous Payments ({historyModalInvoice.payments?.length || 0})
+                </p>
+                {!historyModalInvoice.payments || historyModalInvoice.payments.length === 0 ? (
+                  <div className="py-6 text-center text-xs text-muted-foreground border rounded-md bg-muted/20">
+                    No previous partial payments recorded for this invoice yet.
+                  </div>
+                ) : (
+                  <div className="border rounded-md divide-y max-h-60 overflow-y-auto">
+                    {historyModalInvoice.payments.map((p, idx) => (
+                      <div key={p.id || idx} className="p-2.5 text-xs flex items-center justify-between hover:bg-slate-50">
+                        <div>
+                          <p className="font-medium">
+                            {p.paymentDate ? new Date(p.paymentDate).toLocaleDateString("en-GB") : "—"}
+                          </p>
+                          <p className="text-muted-foreground text-[11px] mt-0.5">
+                            Method: <span className="capitalize font-semibold text-slate-700">{p.method}</span>
+                            {p.chequeNo && ` (Cheque #${p.chequeNo})`}
+                            {p.chequeStatus && ` • Status: ${p.chequeStatus}`}
+                          </p>
+                        </div>
+                        <span className="font-bold text-green-700 text-sm">
+                          {formatCurrency(p.amount)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+
