@@ -1191,8 +1191,8 @@ export default function CreateOrderPage() {
                 </div>
               </div>
 
-              {/* Rep info row */}
-              <div className="grid grid-cols-2 gap-3 sm:gap-4 pt-1">
+              {/* Rep info & Payment Method row (2 columns) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 pt-1">
                 <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-md border bg-muted/20">
                   <User className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground shrink-0" />
                   <div className="flex flex-col min-w-0">
@@ -1204,21 +1204,7 @@ export default function CreateOrderPage() {
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-md border bg-muted/20">
-                  <Package className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground shrink-0" />
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-[10px] sm:text-xs text-muted-foreground uppercase">
-                      Status (Default)
-                    </span>
-                    <span className="font-medium text-xs sm:text-sm text-yellow-600 truncate">
-                      Unpaid / Pending
-                    </span>
-                  </div>
-                </div>
-              </div>
 
-              {/* Payment Method & Terms */}
-              <div className="grid grid-cols-1 gap-3 sm:gap-4 pt-1">
                 <div className="space-y-2">
                   <Label className="text-xs sm:text-sm font-semibold">Payment Method / Credit Terms</Label>
                   <Select

@@ -1043,7 +1043,7 @@ export default function EditOrderPage({
                 </div>
               </div>
 
-              {/* Rep info & Payment Method */}
+              {/* Rep info & Payment Method row (2 columns) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 pt-1">
                 <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-md border bg-muted/20">
                   <User className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground shrink-0" />
@@ -1056,43 +1056,31 @@ export default function EditOrderPage({
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-md border bg-muted/20">
-                  <Package className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground shrink-0" />
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-[10px] sm:text-xs text-muted-foreground uppercase">
-                      Status
-                    </span>
-                    <span className="font-medium text-xs sm:text-sm text-yellow-600 truncate">
-                      Pending
-                    </span>
-                  </div>
-                </div>
-              </div>
 
-              {/* Payment Method / Credit Terms */}
-              <div className="space-y-2 pt-1">
-                <Label className="text-xs sm:text-sm font-semibold">Payment Method / Credit Terms</Label>
-                <Select
-                  value={paymentMethod}
-                  onValueChange={(val) => {
-                    setPaymentMethod(val);
-                    if (val !== "Cash & Discount") setCashDiscount("");
-                  }}
-                >
-                  <SelectTrigger className="w-full text-sm">
-                    <SelectValue placeholder="Select Payment Terms" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Cash Only">Cash Only</SelectItem>
-                    <SelectItem value="Cash & Discount">Cash & Discount</SelectItem>
-                    <SelectItem value="15 Days Credit">15 Days Credit</SelectItem>
-                    <SelectItem value="30 Days Credit">30 Days Credit</SelectItem>
-                    <SelectItem value="45 Days Credit">45 Days Credit</SelectItem>
-                    <SelectItem value="60 Days Credit">60 Days Credit</SelectItem>
-                    <SelectItem value="Cheque">Cheque</SelectItem>
-                    <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="space-y-2">
+                  <Label className="text-xs sm:text-sm font-semibold">Payment Method / Credit Terms</Label>
+                  <Select
+                    value={paymentMethod}
+                    onValueChange={(val) => {
+                      setPaymentMethod(val);
+                      if (val !== "Cash & Discount") setCashDiscount("");
+                    }}
+                  >
+                    <SelectTrigger className="w-full text-sm">
+                      <SelectValue placeholder="Select Payment Terms" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Cash Only">Cash Only</SelectItem>
+                      <SelectItem value="Cash & Discount">Cash & Discount</SelectItem>
+                      <SelectItem value="15 Days Credit">15 Days Credit</SelectItem>
+                      <SelectItem value="30 Days Credit">30 Days Credit</SelectItem>
+                      <SelectItem value="45 Days Credit">45 Days Credit</SelectItem>
+                      <SelectItem value="60 Days Credit">60 Days Credit</SelectItem>
+                      <SelectItem value="Cheque">Cheque</SelectItem>
+                      <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </CardContent>
           </Card>
