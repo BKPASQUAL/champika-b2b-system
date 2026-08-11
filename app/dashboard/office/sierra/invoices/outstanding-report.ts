@@ -38,6 +38,30 @@ const COLOR = {
 
 const M = 8;
 
+function getOutstandingForRep(invoices: Invoice[], repFilter: string = "all", excludeChampika: boolean = false): Invoice[] {
+  const eligible = invoices.filter(
+    (inv) =>
+      inv.status !== "Paid" &&
+      inv.orderStatus !== "Cancelled" &&
+      inv.dueAmount > 0 &&
+      (!excludeChampika || !(inv.customerName || "").toLowerCase().includes("champika hardware"))
+  );
+
+  if (repFilter === "all") {
+    return eligible;
+  }
+
+  const repCustomerNames = new Set(
+    eligible
+      .filter((inv) => inv.salesRepName === repFilter)
+      .map((inv) => (inv.customerName || "").toLowerCase().trim())
+  );
+
+  return eligible.filter((inv) =>
+    repCustomerNames.has((inv.customerName || "").toLowerCase().trim())
+  );
+}
+
 function buildDoc(outstanding: Invoice[], repFilter: string, excludeChampika: boolean = false): jsPDF {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth  = doc.internal.pageSize.getWidth();
@@ -55,7 +79,7 @@ function buildDoc(outstanding: Invoice[], repFilter: string, excludeChampika: bo
   doc.setTextColor(...COLOR.titleRed);
   const subtitle =
     repFilter !== "all"
-      ? `Outstanding Bills (Grouped by Customer) — ${repFilter}${excludeChampika ? " (Excl. Champika)" : ""}`
+      ? `Outstanding Bills (Grouped by Customer) — Rep: ${repFilter}${excludeChampika ? " (Excl. Champika)" : ""}`
       : `Outstanding Bills (Grouped by Customer)${excludeChampika ? " (Excl. Champika)" : ""}`;
   doc.text(subtitle, M, 23);
 
@@ -245,7 +269,6 @@ function buildDoc(outstanding: Invoice[], repFilter: string, excludeChampika: bo
       const days = Number(raw[2]);
       const status = String(raw[6]);
 
-      // 3 Color Themes for Aging Breakdown
       if (days >= 90) {
         data.cell.styles.fillColor = COLOR.overdue90Bg;
         data.cell.styles.textColor = COLOR.overdue90Text;
@@ -281,14 +304,7 @@ export function downloadOutstandingReport(
   repFilter: string = "all",
   excludeChampika: boolean = false
 ) {
-  const outstanding = invoices.filter(
-    (inv) =>
-      inv.status !== "Paid" &&
-      inv.orderStatus !== "Cancelled" &&
-      inv.dueAmount > 0 &&
-      (repFilter === "all" || inv.salesRepName === repFilter) &&
-      (!excludeChampika || !(inv.customerName || "").toLowerCase().includes("champika hardware"))
-  );
+  const outstanding = getOutstandingForRep(invoices, repFilter, excludeChampika);
   if (outstanding.length === 0) { toast.info("No outstanding bills found"); return; }
   const doc = buildDoc(outstanding, repFilter, excludeChampika);
   const date = new Date().toISOString().split("T")[0];
@@ -303,14 +319,7 @@ export function printOutstandingReport(
   repFilter: string = "all",
   excludeChampika: boolean = false
 ) {
-  const outstanding = invoices.filter(
-    (inv) =>
-      inv.status !== "Paid" &&
-      inv.orderStatus !== "Cancelled" &&
-      inv.dueAmount > 0 &&
-      (repFilter === "all" || inv.salesRepName === repFilter) &&
-      (!excludeChampika || !(inv.customerName || "").toLowerCase().includes("champika hardware"))
-  );
+  const outstanding = getOutstandingForRep(invoices, repFilter, excludeChampika);
   if (outstanding.length === 0) { toast.info("No outstanding bills found"); return; }
 
   const doc = buildDoc(outstanding, repFilter, excludeChampika);

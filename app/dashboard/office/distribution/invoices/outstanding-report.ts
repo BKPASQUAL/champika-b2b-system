@@ -38,6 +38,28 @@ const COLOR = {
 
 const M = 15;
 
+function getOutstandingForRep(invoices: Invoice[], repFilter: string = "all"): Invoice[] {
+  const eligible = invoices.filter(
+    (inv) => inv.status !== "Paid" && inv.orderStatus !== "Cancelled" && inv.dueAmount > 0
+  );
+
+  if (repFilter === "all") {
+    return eligible;
+  }
+
+  // Find all customer names that have at least one bill created by this sales rep
+  const repCustomerNames = new Set(
+    eligible
+      .filter((inv) => inv.salesRepName === repFilter)
+      .map((inv) => (inv.customerName || "").toLowerCase().trim())
+  );
+
+  // Return ALL outstanding bills for those customers/shops across ALL reps
+  return eligible.filter((inv) =>
+    repCustomerNames.has((inv.customerName || "").toLowerCase().trim())
+  );
+}
+
 function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth  = doc.internal.pageSize.getWidth();
@@ -55,7 +77,7 @@ function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
   doc.setTextColor(...COLOR.titleOrange);
   const subtitle =
     repFilter !== "all"
-      ? `Outstanding Bills (Grouped by Customer) — ${repFilter}`
+      ? `Outstanding Bills (Grouped by Customer) — Rep: ${repFilter} (Full Shop Bills)`
       : "Outstanding Bills (Grouped by Customer)";
   doc.text(subtitle, M, 23);
 
@@ -277,9 +299,7 @@ function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
 }
 
 export function downloadOutstandingReport(invoices: Invoice[], repFilter: string = "all") {
-  const outstanding = invoices.filter(
-    (inv) => inv.status !== "Paid" && inv.orderStatus !== "Cancelled" && inv.dueAmount > 0 && (repFilter === "all" || inv.salesRepName === repFilter)
-  );
+  const outstanding = getOutstandingForRep(invoices, repFilter);
   if (outstanding.length === 0) { toast.info("No outstanding bills found"); return; }
   const doc = buildDoc(outstanding, repFilter);
   const date = new Date().toISOString().split("T")[0];
@@ -289,9 +309,7 @@ export function downloadOutstandingReport(invoices: Invoice[], repFilter: string
 }
 
 export function printOutstandingReport(invoices: Invoice[], repFilter: string = "all") {
-  const outstanding = invoices.filter(
-    (inv) => inv.status !== "Paid" && inv.orderStatus !== "Cancelled" && inv.dueAmount > 0 && (repFilter === "all" || inv.salesRepName === repFilter)
-  );
+  const outstanding = getOutstandingForRep(invoices, repFilter);
   if (outstanding.length === 0) { toast.info("No outstanding bills found"); return; }
 
   const doc = buildDoc(outstanding, repFilter);
@@ -321,9 +339,7 @@ export function printOutstandingReport(invoices: Invoice[], repFilter: string = 
 }
 
 export async function shareOutstandingReport(invoices: Invoice[], repFilter: string = "all") {
-  const outstanding = invoices.filter(
-    (inv) => inv.status !== "Paid" && inv.orderStatus !== "Cancelled" && inv.dueAmount > 0 && (repFilter === "all" || inv.salesRepName === repFilter)
-  );
+  const outstanding = getOutstandingForRep(invoices, repFilter);
   if (outstanding.length === 0) { toast.info("No outstanding bills found"); return; }
 
   const totalDue = outstanding.reduce((sum, inv) => sum + inv.dueAmount, 0);
@@ -336,7 +352,7 @@ export async function shareOutstandingReport(invoices: Invoice[], repFilter: str
   const sortedCustomers = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
 
   let msg = `*CHAMPIKA DISTRIBUTION - OUTSTANDING REPORT*\n`;
-  if (repFilter !== "all") msg += `Rep: *${repFilter}*\n`;
+  if (repFilter !== "all") msg += `Rep: *${repFilter}* (Full Shop Outstanding)\n`;
   msg += `*Total Outstanding:* LKR ${fmt(totalDue)}\n`;
   msg += `*Total Outstanding Invoices:* ${outstanding.length}\n`;
   msg += `*Total Customers:* ${sortedCustomers.length}\n\n`;
