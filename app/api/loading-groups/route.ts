@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
         status,
         profiles!loading_sheets_driver_id_fkey (full_name)
       `)
-      .filter("status::text", "eq", "Draft")
+      .eq("status", "Draft")
       .order("created_at", { ascending: false });
 
     if (businessId) {
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
         status,
         profiles!loading_sheets_driver_id_fkey (full_name)
       `)
-      .filter("status::text", "eq", "Completed")
+      .eq("status", "Completed")
       .order("created_at", { ascending: false });
 
     if (businessId) {

@@ -46,12 +46,7 @@ export default function CheckingOrdersPage() {
   const [groups, setGroups] = useState<LorryGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [lorryFilter, setLorryFilter] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return sessionStorage.getItem("checking_lorryFilter") ?? "all";
-    }
-    return "all";
-  });
+  const [lorryFilter, setLorryFilter] = useState<string>("all");
 
   const fetchData = useCallback(async () => {
     setLoading(true);

@@ -50,10 +50,20 @@ export async function GET(request: NextRequest) {
 
     // Apply Status Filter if provided (comma-separated list of statuses supported)
     if (status) {
-      const statuses = status.split(",").map((s) => s.trim()).filter(Boolean);
-      query = statuses.length > 1
-        ? query.in("status", statuses)
-        : query.filter("status::text", "eq", statuses[0]);
+      const rawStatuses = status.split(",").map((s) => s.trim()).filter(Boolean);
+      const validStatuses = Array.from(
+        new Set(
+          rawStatuses.map((s) =>
+            s
+              .split(" ")
+              .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+              .join(" ")
+          )
+        )
+      );
+      if (validStatuses.length > 0) {
+        query = query.in("status", validStatuses);
+      }
     }
 
     // Apply Business Filter if provided
