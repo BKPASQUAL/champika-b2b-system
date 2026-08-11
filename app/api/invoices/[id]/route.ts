@@ -108,7 +108,9 @@ export async function GET(
           brand,
           model_type,
           size_spec,
-          supplier_name
+          supplier_name,
+          retail_only,
+          retail_price
         )
       `,
       )
@@ -212,6 +214,8 @@ export async function GET(
         model: item.products?.model_type || "",
         size: item.products?.size_spec || "",
         supplier: item.products?.supplier_name || "",
+        retailOnly: item.products?.retail_only || false,
+        retailPrice: item.products?.retail_price || null,
 
         // Pricing & Qty
         price: item.unit_price,

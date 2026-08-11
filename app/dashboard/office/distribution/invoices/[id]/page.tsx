@@ -521,7 +521,14 @@ export default function DistributionViewInvoicePage({
                               <Package className="w-4 h-4" />
                             </div>
                             <div>
-                              <p className="font-medium text-sm text-foreground">{item.productName}</p>
+                              <div className="flex items-center gap-1.5">
+                                <p className="font-medium text-sm text-foreground">{item.productName}</p>
+                                {(item.retailOnly || item.retail_only) && (
+                                  <span className="text-[10px] bg-amber-100 text-amber-800 border border-amber-300 rounded px-1 py-0.5 font-semibold">
+                                    Retail
+                                  </span>
+                                )}
+                              </div>
                               <p className="text-xs font-mono text-muted-foreground mt-0.5">{item.sku}</p>
                             </div>
                           </div>
@@ -583,7 +590,14 @@ export default function DistributionViewInvoicePage({
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
-                          <p className="font-semibold text-sm text-foreground leading-snug">{item.productName}</p>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="font-semibold text-sm text-foreground leading-snug">{item.productName}</p>
+                            {(item.retailOnly || item.retail_only) && (
+                              <span className="text-[10px] bg-amber-100 text-amber-800 border border-amber-300 rounded px-1 py-0.5 font-semibold">
+                                Retail
+                              </span>
+                            )}
+                          </div>
                           <span className="font-bold font-mono text-sm text-foreground whitespace-nowrap">
                             LKR {item.total.toLocaleString("en-LK", { minimumFractionDigits: 2 })}
                           </span>

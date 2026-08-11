@@ -410,7 +410,6 @@ export default function EditOrderPage({
 
         setProducts(
           productsData
-            .filter((p: any) => p.subCategory !== "Retail Exclusive")
             .map((p: any) => ({
               id: p.id,
               sku: p.sku,

@@ -519,7 +519,6 @@ export default function CreateOrderPage() {
 
         setProducts(
           productsList
-            .filter((p: any) => p.subCategory !== "Retail Exclusive")
             .map((p: any) => ({
               id: p.id,
               sku: p.sku,

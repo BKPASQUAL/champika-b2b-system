@@ -98,6 +98,8 @@ interface Product {
   sku: string;
   name: string;
   selling_price: number;
+  retail_price?: number | null;
+  retailOnly?: boolean;
   mrp: number;
   stock_quantity: number;
   unit_of_measure: string;
@@ -117,6 +119,7 @@ interface InvoiceItem {
   discountPercent: number;
   discountAmount: number;
   total: number;
+  retailOnly?: boolean;
 }
 
 interface InvoiceHistory {
@@ -449,6 +452,7 @@ export default function DistributionEditInvoicePage({
           discountPercent: item.discountPercent || 0,
           discountAmount: item.discountAmount || 0,
           total: item.total,
+          retailOnly: item.retailOnly || item.retail_only || false,
         }));
         setItems(mappedItems);
 
@@ -477,12 +481,13 @@ export default function DistributionEditInvoicePage({
           const data = await res.json();
           setProducts(
             data
-              .filter((p: any) => p.subCategory !== "Retail Exclusive" && !p.retailOnly)
               .map((p: any) => ({
                 id: p.id,
                 sku: p.sku || "N/A",
                 name: p.name,
                 selling_price: p.sellingPrice || 0,
+                retail_price: p.retailPrice ?? p.retail_price ?? null,
+                retailOnly: p.retailOnly ?? p.retail_only ?? (p.subCategory === "Retail Exclusive"),
                 mrp: p.mrp || 0,
                 stock_quantity: p.stock || 0,
                 unit_of_measure: p.unitOfMeasure || "unit",
@@ -509,12 +514,13 @@ export default function DistributionEditInvoicePage({
         const data = await res.json();
         setProducts(
           data
-            .filter((p: any) => p.subCategory !== "Retail Exclusive" && !p.retail_only)
             .map((p: any) => ({
               id: p.id,
               sku: p.sku || "N/A",
               name: p.name,
               selling_price: p.sellingPrice || p.selling_price || 0,
+              retail_price: p.retailPrice ?? p.retail_price ?? null,
+              retailOnly: p.retailOnly ?? p.retail_only ?? (p.subCategory === "Retail Exclusive"),
               mrp: p.mrp || 0,
               stock_quantity: p.stock || p.stock_quantity || 0,
               unit_of_measure: p.unit || p.unit_of_measure || "unit",
@@ -546,6 +552,10 @@ export default function DistributionEditInvoicePage({
       }
     }
 
+    const defaultUnitPrice = (product.retailOnly || product.retail_price)
+      ? (product.retail_price || product.selling_price)
+      : product.selling_price;
+
     setCurrentItem({
       productId: product.id,
       sku: product.sku,
@@ -553,7 +563,7 @@ export default function DistributionEditInvoicePage({
       freeQuantity: "",
       unit: product.unit_of_measure,
       mrp: product.mrp,
-      unitPrice: product.selling_price,
+      unitPrice: defaultUnitPrice,
       discountPercent: "",
       stockAvailable: product.stock_quantity + bonusStock,
     });
@@ -609,6 +619,7 @@ export default function DistributionEditInvoicePage({
       discountPercent: discPerc,
       discountAmount,
       total,
+      retailOnly: product?.retailOnly,
     };
 
     if (editingItemId) {
@@ -1163,10 +1174,17 @@ export default function DistributionEditInvoicePage({
                                   )}
                                 />
                                 <div className="flex-1">
-                                  <div className="font-medium">{product.name}</div>
+                                  <div className="font-medium flex items-center gap-1.5">
+                                    {product.name}
+                                    {product.retailOnly && (
+                                      <span className="text-[10px] bg-amber-100 text-amber-800 border border-amber-300 rounded px-1 font-semibold">
+                                        Retail
+                                      </span>
+                                    )}
+                                  </div>
                                   <div className="text-xs text-muted-foreground">
                                     {product.sku} • Stock: {product.stock_quantity} • LKR{" "}
-                                    {product.selling_price}
+                                    {(product.retail_price ?? product.selling_price).toLocaleString()}
                                   </div>
                                 </div>
                               </CommandItem>
@@ -1365,6 +1383,11 @@ export default function DistributionEditInvoicePage({
                             <TableCell>
                               <div className="font-medium flex items-center gap-2">
                                 {item.productName}
+                                {item.retailOnly && (
+                                  <span className="text-[10px] bg-amber-100 text-amber-800 border border-amber-300 rounded px-1 py-0.5 font-semibold">
+                                    Retail
+                                  </span>
+                                )}
                                 {isModified && (
                                   <span className="text-[10px] bg-red-100 text-red-600 border border-red-200 rounded px-1 py-0.5 font-semibold">
                                     Modified

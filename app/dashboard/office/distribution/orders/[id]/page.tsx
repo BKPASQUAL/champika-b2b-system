@@ -282,7 +282,6 @@ export default function ViewOrderPage({
           const data = await res.json();
           setProducts(
             data
-              .filter((p: any) => p.subCategory !== "Retail Exclusive" && !p.retailOnly)
               .map((p: any) => ({
                 id: p.id,
                 sku: p.sku || "N/A",
@@ -300,7 +299,6 @@ export default function ViewOrderPage({
           const data = await res.json();
           setProducts(
             data
-              .filter((p: any) => p.subCategory !== "Retail Exclusive" && !p.retail_only)
               .map((p: any) => ({
                 id: p.id,
                 sku: p.sku || "N/A",
