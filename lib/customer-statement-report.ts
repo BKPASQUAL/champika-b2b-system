@@ -120,6 +120,32 @@ function buildDoc(
       fmt(inv.balance),
       inv.balance === 0 ? "PAID" : inv.paidAmount > 0 ? "PARTIAL" : "UNPAID",
     ]);
+
+    // Payment History Sub-rows (ONLY Non-Cheque Payments: Cash, Bank Transfer, etc.)
+    if (inv.payments && inv.payments.length > 0) {
+      const nonChequePayments = inv.payments.filter(
+        (p) => p.method?.toLowerCase() !== "cheque" && !Boolean(p.chequeNo)
+      );
+      nonChequePayments.forEach((p) => {
+        const pDate = p.paymentDate ? new Date(p.paymentDate).toLocaleDateString("en-GB") : "—";
+        const methodStr = p.method.toUpperCase();
+        const detailStr = `     Invoice ${inv.invoiceNo} -- Partial Payment on ${pDate} via ${methodStr}: LKR ${fmt(p.amount)}`;
+
+        tableData.push([
+          {
+            content: detailStr,
+            colSpan: 7,
+            styles: {
+              fillColor: COLOR.paymentSubRowBg,
+              textColor: COLOR.paymentSubRowText,
+              fontStyle: "italic",
+              fontSize: 8,
+              cellPadding: { top: 2, bottom: 2, left: 6, right: 2 },
+            },
+          },
+        ]);
+      });
+    }
   });
 
   // Grand Total Summary Row
@@ -475,6 +501,15 @@ export async function shareCustomerStatement(
       ? Math.max(0, Math.floor((new Date().getTime() - new Date(inv.date).getTime()) / (1000 * 60 * 60 * 24)))
       : 0;
     msg += `• *${inv.invoiceNo}* (${invDate}, ${days} days): Due LKR ${fmt(inv.balance)} (Total LKR ${fmt(inv.totalAmount)})\n`;
+    if (inv.payments && inv.payments.length > 0) {
+      const nonChequePayments = inv.payments.filter(
+        (p) => p.method?.toLowerCase() !== "cheque" && !Boolean(p.chequeNo)
+      );
+      nonChequePayments.forEach((p) => {
+        const pDate = p.paymentDate ? new Date(p.paymentDate).toLocaleDateString("en-GB") : "—";
+        msg += `   - Invoice ${inv.invoiceNo}: Paid LKR ${fmt(p.amount)} on ${pDate} (${p.method.toUpperCase()})\n`;
+      });
+    }
   });
 
   const groupedChequesMap = new Map<string, { invoiceNos: string[]; date: string; chequeNo: string; amount: number; status: string }>();
