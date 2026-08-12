@@ -1289,23 +1289,30 @@ export default function WiremanPaymentEntryPage() {
                   </div>
                 ) : (
                   <div className="border rounded-md divide-y max-h-60 overflow-y-auto">
-                    {historyModalInvoice.payments.map((p, idx) => (
-                      <div key={p.id || idx} className="p-2.5 text-xs flex items-center justify-between hover:bg-slate-50">
-                        <div>
-                          <p className="font-medium">
-                            {p.paymentDate ? new Date(p.paymentDate).toLocaleDateString("en-GB") : "—"}
-                          </p>
-                          <p className="text-muted-foreground text-[11px] mt-0.5">
-                            Method: <span className="capitalize font-semibold text-slate-700">{p.method}</span>
-                            {p.chequeNo && ` (Cheque #${p.chequeNo})`}
-                            {p.chequeStatus && ` • Status: ${p.chequeStatus}`}
-                          </p>
+                    {historyModalInvoice.payments.map((p, idx) => {
+                      const isReturned = p.chequeStatus && ["returned", "bounced"].includes(p.chequeStatus.toLowerCase());
+                      return (
+                        <div key={p.id || idx} className={cn("p-2.5 text-xs flex items-center justify-between hover:bg-slate-50", isReturned && "bg-red-50/60 border-l-2 border-l-red-500")}>
+                          <div>
+                            <p className="font-medium">
+                              {p.paymentDate ? new Date(p.paymentDate).toLocaleDateString("en-GB") : "—"}
+                            </p>
+                            <p className="text-muted-foreground text-[11px] mt-0.5">
+                              Method: <span className="capitalize font-semibold text-slate-700">{p.method}</span>
+                              {p.chequeNo && ` (Cheque #${p.chequeNo})`}
+                              {p.chequeStatus && (
+                                <span className={cn("ml-1 font-semibold", isReturned ? "text-red-700 bg-red-100 px-1.5 py-0.5 rounded border border-red-200" : "text-slate-600")}>
+                                  • Status: {p.chequeStatus}{isReturned ? " [CHEQUE RETURNED]" : ""}
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                          <span className={cn("font-bold text-sm", isReturned ? "text-red-600 line-through" : "text-green-700")}>
+                            {formatCurrency(p.amount)}
+                          </span>
                         </div>
-                        <span className="font-bold text-green-700 text-sm">
-                          {formatCurrency(p.amount)}
-                        </span>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
