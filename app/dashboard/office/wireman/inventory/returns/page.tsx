@@ -36,7 +36,17 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
+  Trash2,
+  RotateCcw,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
@@ -45,6 +55,8 @@ export default function WiremanReturnsPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [returns, setReturns] = useState([]);
+  const [deletingReturn, setDeletingReturn] = useState<any>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Search & Pagination State
   const [searchQuery, setSearchQuery] = useState("");
@@ -116,6 +128,29 @@ export default function WiremanReturnsPage() {
     }
   };
 
+  const handleDeleteReturn = async () => {
+    if (!deletingReturn) return;
+    try {
+      setDeleting(true);
+      const res = await fetch(`/api/inventory/returns/${deletingReturn.id}`, {
+        method: "DELETE",
+      });
+
+      const responseData = await res.json();
+      if (!res.ok) {
+        throw new Error(responseData.error || "Failed to delete return");
+      }
+
+      toast.success("Return record deleted and stock reversed successfully");
+      setDeletingReturn(null);
+      fetchData();
+    } catch (error: any) {
+      toast.error(error.message || "Error deleting return");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -129,7 +164,7 @@ export default function WiremanReturnsPage() {
             >
               <ArrowLeft className="w-4 h-4" />
             </Button>
-            <h1 className="text-3xl font-bold tracking-tight text-red-950">
+            <h1 className="text-3xl font-bold tracking-tight text-blue-950">
               Returns Management (Wireman)
             </h1>
           </div>
@@ -142,7 +177,7 @@ export default function WiremanReturnsPage() {
             <RefreshCw className="w-4 h-4" />
           </Button>
           <Button
-            className="bg-red-600 hover:bg-red-700 text-white"
+            className="bg-blue-600 hover:bg-blue-700 text-white"
             onClick={() =>
               router.push("/dashboard/office/wireman/inventory/returns/create")
             }
@@ -222,7 +257,7 @@ export default function WiremanReturnsPage() {
                 setPage(1);
                 fetchData();
               }}
-              className="bg-red-600 hover:bg-red-700 text-white"
+              className="bg-blue-600 hover:bg-blue-700 text-white"
             >
               <Filter className="w-4 h-4 mr-2" /> Apply
             </Button>
@@ -246,7 +281,7 @@ export default function WiremanReturnsPage() {
           <div className="border rounded-md">
             <Table>
               <TableHeader>
-                <TableRow className="bg-red-50/50">
+                <TableRow className="bg-blue-50/50">
                   <TableHead>Return #</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Product</TableHead>
@@ -255,19 +290,20 @@ export default function WiremanReturnsPage() {
                   <TableHead className="text-right">Qty</TableHead>
                   <TableHead>Reason</TableHead>
                   <TableHead>Processed By</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-16">
+                    <TableCell colSpan={9} className="text-center py-16">
                       <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
                     </TableCell>
                   </TableRow>
                 ) : returns.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={8}
+                      colSpan={9}
                       className="text-center py-8 text-muted-foreground"
                     >
                       No returns found matching your filters.
@@ -317,6 +353,17 @@ export default function WiremanReturnsPage() {
                       <TableCell className="text-xs text-muted-foreground">
                         {r.profiles?.full_name || "System"}
                       </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-red-600 hover:text-red-800 hover:bg-red-50"
+                          title="Delete & Reverse Return"
+                          onClick={() => setDeletingReturn(r)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))
                 )}
@@ -355,6 +402,51 @@ export default function WiremanReturnsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Delete / Reverse Confirmation Dialog */}
+      <Dialog
+        open={!!deletingReturn}
+        onOpenChange={(open) => {
+          if (!open) setDeletingReturn(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <RotateCcw className="h-5 w-5" /> Delete & Reverse Return?
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete return record{" "}
+              <strong className="font-mono">{deletingReturn?.return_number}</strong>?
+              <br />
+              This will automatically reverse {deletingReturn?.quantity} unit(s) of{" "}
+              <strong>{deletingReturn?.products?.name}</strong> from stock.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:justify-end">
+            <Button
+              variant="outline"
+              onClick={() => setDeletingReturn(null)}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteReturn}
+              disabled={deleting}
+            >
+              {deleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Reversing...
+                </>
+              ) : (
+                "Delete & Reverse"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

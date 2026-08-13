@@ -77,8 +77,10 @@ interface Product {
   id: string;
   sku: string;
   name: string;
-  totalPurchased: number;
-  sellingPrice: number;
+  totalPurchased?: number;
+  totalPurchasedQty?: number;
+  sellingPrice?: number;
+  latestUnitPrice?: number;
 }
 
 interface ReturnItem {
@@ -251,9 +253,10 @@ export default function CreateReturnPage() {
     const product = products.find((p) => p.id === currentItem.productId);
     if (!product) return;
 
-    if (currentItem.quantity > product.totalPurchased) {
+    const purchasedQty = product.totalPurchasedQty ?? product.totalPurchased ?? 0;
+    if (purchasedQty > 0 && currentItem.quantity > purchasedQty) {
       toast.warning(
-        `Note: Returning ${currentItem.quantity}, but invoice record shows ${product.totalPurchased}.`
+        `Note: Returning ${currentItem.quantity}, but invoice record shows ${purchasedQty}.`,
       );
     }
 
@@ -618,11 +621,12 @@ export default function CreateReturnPage() {
                           </span>
                           <span className="text-xs text-muted-foreground">
                             Purchased:{" "}
-                            {
-                              products.find(
+                            {(() => {
+                              const found = products.find(
                                 (p) => p.id === currentItem.productId
-                              )?.totalPurchased
-                            }{" "}
+                              );
+                              return found?.totalPurchasedQty ?? found?.totalPurchased ?? 0;
+                            })()}{" "}
                             units
                           </span>
                         </div>
@@ -674,7 +678,7 @@ export default function CreateReturnPage() {
                                 <div className="flex justify-between items-center w-full">
                                   <span className="font-medium">{p.name}</span>
                                   <span className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">
-                                    Qty: {p.totalPurchased}
+                                    Qty: {p.totalPurchasedQty ?? p.totalPurchased ?? 0}
                                   </span>
                                 </div>
                                 <div className="flex justify-between items-center w-full mt-1">
@@ -682,7 +686,7 @@ export default function CreateReturnPage() {
                                     {p.sku}
                                   </span>
                                   <span className="text-xs text-green-600 font-medium">
-                                    LKR {p.sellingPrice.toLocaleString()}
+                                    LKR {(p.latestUnitPrice ?? p.sellingPrice ?? 0).toLocaleString()}
                                   </span>
                                 </div>
                               </div>
