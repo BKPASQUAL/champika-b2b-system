@@ -25,7 +25,10 @@ import {
   Building2,
   Users,
   Eye,
+  FileDown,
 } from "lucide-react";
+import { toast } from "sonner";
+import { downloadCustomerHistoryReport } from "@/app/lib/customer-history-report";
 import { Customer, SortField, SortOrder, CustomerStatus } from "../types";
 import { TablePagination } from "@/components/ui/TablePagination";
 import { BUSINESS_THEMES } from "@/app/config/business-constants";
@@ -62,6 +65,28 @@ export function CustomerTable({
   onPageChange,
 }: CustomerTableProps) {
   const router = useRouter();
+
+  const handleQuickPDFDownload = async (customerId: string, shopName: string) => {
+    const tid = toast.loading(`Generating PDF statement for ${shopName}...`);
+    try {
+      const [resCust, resProds] = await Promise.all([
+        fetch(`/api/customers/${customerId}`),
+        fetch(`/api/customers/${customerId}/purchased-products`),
+      ]);
+      if (!resCust.ok) throw new Error("Failed to load customer profile");
+      const jsonCust = await resCust.json();
+      const jsonProds = resProds.ok ? await resProds.json() : [];
+
+      downloadCustomerHistoryReport({
+        ...jsonCust,
+        purchasedProducts: jsonProds || [],
+      });
+      toast.dismiss(tid);
+    } catch (err: any) {
+      toast.dismiss(tid);
+      toast.error(err.message || "Failed to generate PDF statement");
+    }
+  };
 
   const getSortIcon = (field: SortField) => {
     if (sortField !== field)
@@ -186,6 +211,14 @@ export function CustomerTable({
                     <Button
                       variant="ghost"
                       size="icon-sm"
+                      onClick={() => handleQuickPDFDownload(customer.id, customer.shopName)}
+                      title="Download PDF Statement"
+                    >
+                      <FileDown className="w-4 h-4 text-emerald-600" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
                       onClick={() => router.push(`/dashboard/admin/customers/${customer.id}`)}
                       title="View Full Profile & History"
                     >
@@ -288,6 +321,14 @@ export function CustomerTable({
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => handleQuickPDFDownload(customer.id, customer.shopName)}
+                          title="Download PDF Statement"
+                        >
+                          <FileDown className="w-4 h-4 text-emerald-600" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon-sm"

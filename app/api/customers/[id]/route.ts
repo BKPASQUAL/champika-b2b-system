@@ -74,6 +74,7 @@ export async function GET(
         orders (
           id,
           order_date,
+          status,
           notes
         )
       `)
@@ -104,6 +105,7 @@ export async function GET(
           orders (
             id,
             order_date,
+            status,
             notes
           )
         `)
@@ -129,6 +131,7 @@ export async function GET(
           orders (
             id,
             order_date,
+            status,
             notes
           )
         `)
@@ -155,6 +158,10 @@ export async function GET(
       const dueAmt = inv.due_amount != null ? Number(inv.due_amount) : Math.max(0, totalAmt - paidAmt);
       const invDate = order?.order_date || inv.created_at;
 
+      const invStatus = inv.status || "Unpaid";
+      const isInvCancelled = invStatus.toLowerCase().includes("cancel");
+      const ordStatus = isInvCancelled ? "Cancelled" : (order?.status || invStatus || "Delivered");
+
       return {
         id: inv.id,
         invoiceNo: inv.invoice_no,
@@ -164,7 +171,8 @@ export async function GET(
         totalAmount: totalAmt,
         paidAmount: paidAmt,
         dueAmount: dueAmt,
-        status: inv.status || "Unpaid",
+        status: invStatus,
+        orderStatus: ordStatus,
         dueDate: inv.due_date,
         notes: order?.notes || "",
         createdAt: inv.created_at,

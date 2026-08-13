@@ -48,8 +48,21 @@ import {
   ChevronDown,
   ChevronUp,
   Calendar,
+  Download,
+  Printer,
+  Share2,
+  ReceiptText,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  downloadCustomerHistoryReport,
+  printCustomerHistoryReport,
+} from "@/app/lib/customer-history-report";
+import {
+  downloadCustomerStatement,
+  shareCustomerStatement,
+  StatementInvoice,
+} from "@/lib/customer-statement-report";
 
 interface CustomerDetailPageProps {
   params: Promise<{ id: string }>;
@@ -127,11 +140,55 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
     }
   };
 
-  // Filtered Invoices
-  const filteredInvoices = useMemo(() => {
+  // Delivered & Completed Invoices Filter (Excludes Cancelled, Pending, Processing, Loading, In Transit)
+  const deliveredInvoices = useMemo(() => {
     if (!data?.invoices) return [];
-    const q = invoiceSearch.toLowerCase();
     return data.invoices.filter((inv: any) => {
+      const invSt = String(inv.status || "").toLowerCase().trim();
+      const ordSt = String(inv.orderStatus || "").toLowerCase().trim();
+
+      if (
+        invSt.includes("cancel") ||
+        ordSt.includes("cancel") ||
+        invSt.includes("void") ||
+        ordSt.includes("void") ||
+        invSt.includes("draft") ||
+        ordSt.includes("draft")
+      ) {
+        return false;
+      }
+
+      if (
+        ordSt === "pending" ||
+        ordSt === "processing" ||
+        ordSt === "loading" ||
+        ordSt === "in transit" ||
+        ordSt === "transit"
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [data?.invoices]);
+
+  const deliveredSummary = useMemo(() => {
+    const totalInvoicesCount = deliveredInvoices.length;
+    const totalInvoiced = deliveredInvoices.reduce((sum: number, inv: any) => sum + (inv.totalAmount || 0), 0);
+    const totalPaid = deliveredInvoices.reduce((sum: number, inv: any) => sum + (inv.paidAmount || 0), 0);
+    const totalDue = deliveredInvoices.reduce((sum: number, inv: any) => sum + (inv.dueAmount || 0), 0);
+    return {
+      totalInvoicesCount,
+      totalInvoiced,
+      totalPaid,
+      totalDue,
+    };
+  }, [deliveredInvoices]);
+
+  // Filtered Invoices for UI display
+  const filteredInvoices = useMemo(() => {
+    const q = invoiceSearch.toLowerCase();
+    return deliveredInvoices.filter((inv: any) => {
       return (
         !q ||
         inv.invoiceNo?.toLowerCase().includes(q) ||
@@ -139,7 +196,7 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
         inv.paymentType?.toLowerCase().includes(q)
       );
     });
-  }, [data?.invoices, invoiceSearch]);
+  }, [deliveredInvoices, invoiceSearch]);
 
   // Filtered Cheques
   const filteredCheques = useMemo(() => {
@@ -265,7 +322,111 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
           </div>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (!data || !data.customer) return;
+              const items: StatementInvoice[] = deliveredInvoices
+                .filter((inv: any) => inv.dueAmount > 0 && String(inv.status).toLowerCase() !== "paid")
+                .map((inv: any) => ({
+                  id: inv.id,
+                  invoiceNo: inv.invoiceNo,
+                  date: inv.date,
+                  totalAmount: inv.totalAmount,
+                  paidAmount: inv.paidAmount,
+                  balance: inv.dueAmount,
+                  status: inv.status,
+                  payments: (data?.payments || [])
+                    .filter((p: any) => p.invoiceNo === inv.invoiceNo || p.invoiceId === inv.id)
+                    .map((p: any) => ({
+                      id: p.id,
+                      paymentDate: p.date,
+                      amount: p.amount,
+                      method: p.method,
+                      chequeNo: p.chequeNo,
+                      chequeStatus: p.chequeStatus,
+                    })),
+                }));
+              if (items.length === 0) {
+                toast.info(`No active outstanding bills for ${data.customer.shopName}`);
+                return;
+              }
+              downloadCustomerStatement(data.customer.shopName, items, data.customer.businessName);
+            }}
+            disabled={loading}
+            className="text-xs bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
+          >
+            <ReceiptText className="w-3.5 h-3.5 mr-1.5 text-red-600" /> Outstanding PDF
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (!data || !data.customer) return;
+              const items: StatementInvoice[] = deliveredInvoices
+                .filter((inv: any) => inv.dueAmount > 0 && String(inv.status).toLowerCase() !== "paid")
+                .map((inv: any) => ({
+                  id: inv.id,
+                  invoiceNo: inv.invoiceNo,
+                  date: inv.date,
+                  totalAmount: inv.totalAmount,
+                  paidAmount: inv.paidAmount,
+                  balance: inv.dueAmount,
+                  status: inv.status,
+                  payments: (data?.payments || [])
+                    .filter((p: any) => p.invoiceNo === inv.invoiceNo || p.invoiceId === inv.id)
+                    .map((p: any) => ({
+                      id: p.id,
+                      paymentDate: p.date,
+                      amount: p.amount,
+                      method: p.method,
+                      chequeNo: p.chequeNo,
+                      chequeStatus: p.chequeStatus,
+                    })),
+                }));
+              if (items.length === 0) {
+                toast.info(`No active outstanding bills for ${data.customer.shopName}`);
+                return;
+              }
+              shareCustomerStatement(data.customer.shopName, items, data.customer.businessName);
+            }}
+            disabled={loading}
+            className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+          >
+            <Share2 className="w-3.5 h-3.5 mr-1.5 text-emerald-600" /> Share Statement
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (!data || !data.customer) return;
+              downloadCustomerHistoryReport({
+                ...data,
+                invoices: deliveredInvoices,
+              });
+            }}
+            disabled={loading}
+            className="text-xs bg-white text-slate-800 border-slate-300 hover:bg-slate-50"
+          >
+            <Download className="w-3.5 h-3.5 mr-1.5 text-blue-600" /> Full PDF
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (!data || !data.customer) return;
+              printCustomerHistoryReport({
+                ...data,
+                invoices: deliveredInvoices,
+              });
+            }}
+            disabled={loading}
+            className="text-xs bg-white text-slate-800 border-slate-300 hover:bg-slate-50"
+          >
+            <Printer className="w-3.5 h-3.5 mr-1.5 text-slate-700" /> Print PDF
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -311,17 +472,17 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
         <Card className="border-l-4 border-l-blue-500 shadow-xs">
           <CardHeader className="p-4 pb-2">
             <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
-              <span>Total Invoices</span>
+              <span>Delivered Invoices</span>
               <FileText className="w-4 h-4 text-blue-500" />
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 pt-0 space-y-2">
             <p className="text-2xl font-bold font-mono text-slate-900">
-              LKR {summary.totalInvoiced.toLocaleString()}
+              LKR {deliveredSummary.totalInvoiced.toLocaleString()}
             </p>
             <div className="flex justify-between items-center text-xs pt-1 border-t">
-              <span className="text-muted-foreground">{summary.totalInvoicesCount} Invoice(s)</span>
-              <span className="font-semibold text-emerald-600 font-mono">Paid: LKR {summary.totalPaid.toLocaleString()}</span>
+              <span className="text-muted-foreground">{deliveredSummary.totalInvoicesCount} Delivered Invoice(s)</span>
+              <span className="font-semibold text-emerald-600 font-mono">Paid: LKR {deliveredSummary.totalPaid.toLocaleString()}</span>
             </div>
           </CardContent>
         </Card>
@@ -382,7 +543,7 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
           <Tabs defaultValue="invoices" className="space-y-4">
             <TabsList className="flex flex-wrap h-auto p-1 bg-slate-100 gap-1">
               <TabsTrigger value="invoices" className="text-xs font-semibold">
-                <FileText className="w-3.5 h-3.5 mr-1.5" /> Invoices ({invoices.length})
+                <FileText className="w-3.5 h-3.5 mr-1.5" /> Invoices ({deliveredInvoices.length})
               </TabsTrigger>
               <TabsTrigger value="purchased-products" className="text-xs font-semibold">
                 <ShoppingBag className="w-3.5 h-3.5 mr-1.5 text-orange-600" /> Purchased Products ({purchasedProducts.length})
@@ -413,7 +574,7 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
                     className="pl-9 bg-white text-xs border-slate-200"
                   />
                 </div>
-                <span className="text-xs text-muted-foreground">Showing {filteredInvoices.length} of {invoices.length}</span>
+                <span className="text-xs text-muted-foreground">Showing {filteredInvoices.length} of {deliveredInvoices.length} Delivered Invoice(s)</span>
               </div>
 
               <div className="rounded-lg border bg-white overflow-hidden">
@@ -693,42 +854,71 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
                 <Table>
                   <TableHeader className="bg-slate-50">
                     <TableRow>
-                      <TableHead className="w-[120px]">Date</TableHead>
+                      <TableHead className="w-[110px]">Date</TableHead>
                       <TableHead>Invoice Ref</TableHead>
-                      <TableHead>Payment Method</TableHead>
+                      <TableHead>Method</TableHead>
+                      <TableHead>Cheque No & Date</TableHead>
+                      <TableHead>Status</TableHead>
                       <TableHead className="text-right">Amount</TableHead>
-                      <TableHead>Notes / Details</TableHead>
+                      <TableHead>Notes</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {payments.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                           No payment records found for this customer.
                         </TableCell>
                       </TableRow>
                     ) : (
-                      payments.map((p: any) => (
-                        <TableRow key={p.id} className="hover:bg-slate-50/80">
-                          <TableCell className="text-xs font-medium text-muted-foreground whitespace-nowrap">
-                            {p.date ? new Date(p.date).toLocaleDateString() : ""}
-                          </TableCell>
-                          <TableCell className="font-mono font-bold text-xs text-blue-700">
-                            {p.invoiceNo || "N/A"}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="capitalize text-xs font-semibold bg-slate-50">
-                              {p.method}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right font-mono font-bold text-xs text-emerald-600">
-                            LKR {p.amount.toLocaleString()}
-                          </TableCell>
-                          <TableCell className="text-xs text-slate-600 max-w-[250px] truncate" title={p.notes}>
-                            {p.notes || "-"}
-                          </TableCell>
-                        </TableRow>
-                      ))
+                      payments.map((p: any) => {
+                        const isChq = p.method === "cheque" || Boolean(p.chequeNo);
+                        const chqSt = (p.chequeStatus || (isChq ? "Pending" : "Cleared")).toLowerCase();
+                        let badgeClass = "bg-green-100 text-green-800";
+                        if (isChq) {
+                          if (chqSt === "passed" || chqSt === "cleared") badgeClass = "bg-emerald-100 text-emerald-800";
+                          else if (chqSt === "returned" || chqSt === "bounced") badgeClass = "bg-red-100 text-red-800";
+                          else badgeClass = "bg-amber-100 text-amber-800";
+                        }
+                        return (
+                          <TableRow key={p.id} className="hover:bg-slate-50/80">
+                            <TableCell className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+                              {p.date ? new Date(p.date).toLocaleDateString() : ""}
+                            </TableCell>
+                            <TableCell className="font-mono font-bold text-xs text-blue-700">
+                              {p.invoiceNo || "N/A"}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="capitalize text-xs font-semibold bg-slate-50">
+                                {p.method}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs font-mono">
+                              {p.chequeNo ? (
+                                <div className="flex flex-col">
+                                  <span className="font-bold text-amber-900">{p.chequeNo}</span>
+                                  <span className="text-[10px] text-muted-foreground">
+                                    {p.chequeDate ? new Date(p.chequeDate).toLocaleDateString() : ""}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Badge className={badgeClass}>
+                                {p.chequeStatus || (isChq ? "Pending" : "Cleared")}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right font-mono font-bold text-xs text-emerald-600">
+                              LKR {p.amount.toLocaleString()}
+                            </TableCell>
+                            <TableCell className="text-xs text-slate-600 max-w-[200px] truncate" title={p.notes}>
+                              {p.notes || "-"}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
                     )}
                   </TableBody>
                 </Table>

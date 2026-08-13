@@ -342,3 +342,57 @@ export function printOutstandingReport(invoices: Invoice[], repFilter: string = 
 
   toast.success(`Print ready – ${outstanding.length} outstanding bill${outstanding.length > 1 ? "s" : ""}`);
 }
+
+export function downloadSingleCustomerOutstandingReport(invoices: Invoice[], customerName: string) {
+  const customerInvoices = invoices.filter(
+    (inv) =>
+      (inv.customerName || "").toLowerCase().trim() === (customerName || "").toLowerCase().trim()
+  );
+  const outstanding = getOutstandingForRep(customerInvoices, "all");
+  if (outstanding.length === 0) {
+    toast.info(`No outstanding bills found for ${customerName}`);
+    return;
+  }
+  const doc = buildDoc(outstanding, customerName);
+  const date = new Date().toISOString().split("T")[0];
+  const custSlug = customerName.replace(/[^a-zA-Z0-9_-]/g, "_");
+  doc.save(`Outstanding_Report_${custSlug}_${date}.pdf`);
+  toast.success(`Outstanding report downloaded for ${customerName}`);
+}
+
+export function printSingleCustomerOutstandingReport(invoices: Invoice[], customerName: string) {
+  const customerInvoices = invoices.filter(
+    (inv) =>
+      (inv.customerName || "").toLowerCase().trim() === (customerName || "").toLowerCase().trim()
+  );
+  const outstanding = getOutstandingForRep(customerInvoices, "all");
+  if (outstanding.length === 0) {
+    toast.info(`No outstanding bills found for ${customerName}`);
+    return;
+  }
+
+  const doc = buildDoc(outstanding, customerName);
+  doc.autoPrint();
+  const blob = doc.output("blob");
+  const url = URL.createObjectURL(blob);
+
+  const existing = document.getElementById("___print_frame__");
+  if (existing) existing.remove();
+
+  const iframe = document.createElement("iframe");
+  iframe.id = "___print_frame__";
+  iframe.src = url;
+  iframe.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;border:none;";
+  document.body.appendChild(iframe);
+
+  iframe.onload = () => {
+    iframe.contentWindow?.focus();
+    iframe.contentWindow?.print();
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+      iframe.remove();
+    }, 10000);
+  };
+
+  toast.success(`Print ready for ${customerName}`);
+}
