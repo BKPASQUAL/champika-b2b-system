@@ -79,38 +79,6 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const businessId = searchParams.get("businessId");
     const repId = searchParams.get("repId");
-
-    // Step 1: if filtering by business, get the customer IDs for that business first
-    let customerIds: string[] | null = null;
-    if (businessId) {
-      const { data: customers, error: custError } = await supabaseAdmin
-        .from("customers")
-        .select("id")
-        .eq("business_id", businessId);
-      if (custError) throw custError;
-      customerIds = (customers ?? []).map((c: any) => c.id);
-      // If no customers found for this business, return empty
-      if (customerIds.length === 0) {
-        return NextResponse.json([]);
-      }
-    }
-
-    // Step 2 (rep filter): only show invoices the rep created themselves.
-    let repOrderIds: string[] | null = null;
-    if (repId) {
-      const { data: ownOrders, error: ownErr } = await supabaseAdmin
-        .from("orders")
-        .select("id")
-        .eq("sales_rep_id", repId);
-      if (ownErr) throw ownErr;
-
-      repOrderIds = (ownOrders ?? []).map((o: any) => o.id as string);
-
-      if (repOrderIds.length === 0) {
-        return NextResponse.json([]);
-      }
-    }
-
     const customerIdParam = searchParams.get("customerId");
 
     // Chunked fetching to bypass Supabase PostgREST default 1000-row cap
@@ -125,7 +93,7 @@ export async function GET(request: NextRequest) {
         .select(
           `
           *,
-          customers (
+          customers!inner (
             shop_name,
             owner_name,
             business_id
@@ -150,16 +118,16 @@ export async function GET(request: NextRequest) {
         .order("created_at", { ascending: false })
         .range(page * pageSize, (page + 1) * pageSize - 1);
 
-      // Filter invoices to only those belonging to this business's customers
+      // Filter invoices to only those belonging to this customer or business
       if (customerIdParam) {
         query = query.eq("customer_id", customerIdParam);
-      } else if (customerIds !== null) {
-        query = query.in("customer_id", customerIds);
+      } else if (businessId) {
+        query = query.eq("customers.business_id", businessId);
       }
 
-      // Filter by the precise set of order IDs allowed for this rep
-      if (repOrderIds !== null) {
-        query = query.in("order_id", repOrderIds);
+      // Filter by the sales rep if repId is provided
+      if (repId) {
+        query = query.eq("orders.sales_rep_id", repId);
       }
 
       const { data, error } = await query;

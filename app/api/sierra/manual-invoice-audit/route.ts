@@ -20,44 +20,33 @@ export async function GET(request: NextRequest) {
       endNum = startNum + 499;
     }
 
-    // 1. Fetch Sierra customer IDs
-    const { data: customers, error: custError } = await supabaseAdmin
-      .from("customers")
-      .select("id")
-      .eq("business_id", BUSINESS_IDS.SIERRA_AGENCY);
+    // 1. Fetch Sierra invoices using inner join on customers.business_id
+    const { data, error: invError } = await supabaseAdmin
+      .from("invoices")
+      .select(`
+        id,
+        invoice_no,
+        manual_invoice_no,
+        total_amount,
+        paid_amount,
+        due_amount,
+        status,
+        is_incorrect,
+        is_audited,
+        created_at,
+        due_date,
+        customer_id,
+        customers!inner (
+          shop_name,
+          owner_name,
+          business_id
+        )
+      `)
+      .eq("customers.business_id", BUSINESS_IDS.SIERRA_AGENCY)
+      .order("created_at", { ascending: false });
 
-    if (custError) throw custError;
-
-    const customerIds = (customers ?? []).map((c: any) => c.id);
-
-    let invoices: any[] = [];
-    if (customerIds.length > 0) {
-      const { data, error: invError } = await supabaseAdmin
-        .from("invoices")
-        .select(`
-          id,
-          invoice_no,
-          manual_invoice_no,
-          total_amount,
-          paid_amount,
-          due_amount,
-          status,
-          is_incorrect,
-          is_audited,
-          created_at,
-          due_date,
-          customer_id,
-          customers (
-            shop_name,
-            owner_name
-          )
-        `)
-        .in("customer_id", customerIds)
-        .order("created_at", { ascending: false });
-
-      if (invError) throw invError;
-      invoices = data || [];
-    }
+    if (invError) throw invError;
+    const invoices: any[] = data || [];
 
     // 2. Build lookup maps for fast matching against manual_invoice_no (and fallback invoice_no)
     const exactLookupMap = new Map<string, any>();
