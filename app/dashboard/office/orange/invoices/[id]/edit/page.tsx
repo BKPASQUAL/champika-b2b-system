@@ -539,7 +539,7 @@ export default function OrangeEditInvoicePage({
                           <CommandEmpty>No customer found.</CommandEmpty>
                           <CommandGroup>
                             {customers.map((customer) => (
-                              <CommandItem key={customer.id} value={`${customer.name} ${customer.phone || ""} ${customer.ownerName || ""}`} onSelect={() => { setCustomerId(customer.id); setCustomerOpen(false); }}>
+                              <CommandItem key={customer.id} value={`${customer.id} ${customer.name} ${customer.phone || ""} ${customer.ownerName || ""}`} onSelect={() => { setCustomerId(customer.id); setCustomerOpen(false); }}>
                                 <Check className={cn("mr-2 h-4 w-4", customerId === customer.id ? "opacity-100" : "opacity-0")} />
                                 {customer.name}
                               </CommandItem>

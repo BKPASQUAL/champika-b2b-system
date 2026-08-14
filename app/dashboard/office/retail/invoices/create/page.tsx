@@ -807,7 +807,7 @@ export default function CreateRetailInvoicePage() {
                             {customers.map((customer) => (
                               <CommandItem
                                 key={customer.id}
-                                value={`${customer.name} ${customer.phone || ""} ${customer.ownerName || ""}`}
+                                value={`${customer.id} ${customer.name} ${customer.phone || ""} ${customer.ownerName || ""}`}
                                 onSelect={() => {
                                   setCustomerId(customer.id);
                                   setCustomerOpen(false);
