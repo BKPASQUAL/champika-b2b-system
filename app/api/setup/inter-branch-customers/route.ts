@@ -32,9 +32,9 @@ export async function POST() {
         .select("id")
         .eq("business_id", agency.businessId)
         .ilike("shop_name", customer.name)
-        .maybeSingle();
+        .limit(1);
 
-      if (existing) {
+      if (existing && existing.length > 0) {
         results.push({ agency: agency.name, customer: customer.name, status: "already_exists" });
         continue;
       }

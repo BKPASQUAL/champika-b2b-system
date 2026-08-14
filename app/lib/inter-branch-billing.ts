@@ -15,9 +15,9 @@ export async function ensureCustomerInAgency(
     .select("id")
     .eq("business_id", agencyBusinessId)
     .ilike("shop_name", `%${customerName}%`)
-    .maybeSingle();
+    .limit(1);
 
-  if (existing) return existing.id;
+  if (existing && existing.length > 0) return existing[0].id;
 
   // Auto-create the internal Champika Hardware customer
   const { data: created, error } = await supabaseAdmin
