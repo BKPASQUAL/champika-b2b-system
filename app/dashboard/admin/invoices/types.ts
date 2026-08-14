@@ -14,6 +14,7 @@ export interface Invoice {
   id: string;
   invoiceNo: string;
   manualInvoiceNo?: string | null;
+  receiptNumber?: string | null;
   date: string;
   createdAt?: string;
   customerId: string;

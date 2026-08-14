@@ -105,6 +105,7 @@ interface PaymentRecord {
   amount: number;
   payment_date: string;
   method: string;
+  receipt_number?: string | null;
   cheque_no?: string;
   cheque_status?: string;
   cheque_date?: string;
@@ -875,26 +876,39 @@ Thank you for your business! 🙏`;
                             </Badge>
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">
-                            {pay.method === "Cheque" ? (
-                              <div className="flex flex-col">
-                                <span className="font-mono text-xs font-medium text-foreground">
-                                  {pay.cheque_no}
-                                </span>
-                                <span className="text-[10px]">
-                                  Due:{" "}
-                                  {new Date(
-                                    pay.cheque_date!
-                                  ).toLocaleDateString()}
-                                </span>
-                                {pay.cheque_status && (
-                                  <span className="text-[10px] italic">
-                                    ({pay.cheque_status})
+                            <div className="flex flex-col gap-1">
+                              {pay.receipt_number ? (
+                                <Badge variant="outline" className="font-mono text-[11px] font-bold text-slate-800 bg-slate-100 border-slate-200 w-fit">
+                                  Receipt #{pay.receipt_number}
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="font-sans text-[10px] font-semibold text-amber-800 bg-amber-50 border-amber-200/80 w-fit">
+                                  {pay.method?.toLowerCase() === "bank" ? "Online Bank Transfer" : "Paid on Customer Bill"}
+                                </Badge>
+                              )}
+                              {pay.method === "Cheque" ? (
+                                <div className="flex flex-col">
+                                  <span className="font-mono text-xs font-medium text-foreground">
+                                    Cheque #{pay.cheque_no}
                                   </span>
-                                )}
-                              </div>
-                            ) : (
-                              "-"
-                            )}
+                                  {pay.cheque_date && (
+                                    <span className="text-[10px]">
+                                      Due:{" "}
+                                      {new Date(
+                                        pay.cheque_date
+                                      ).toLocaleDateString()}
+                                    </span>
+                                  )}
+                                  {pay.cheque_status && (
+                                    <span className="text-[10px] italic">
+                                      ({pay.cheque_status})
+                                    </span>
+                                  )}
+                                </div>
+                              ) : !pay.receipt_number ? (
+                                "-"
+                              ) : null}
+                            </div>
                           </TableCell>
                           <TableCell className="text-right pr-6 font-mono font-medium">
                             LKR{" "}

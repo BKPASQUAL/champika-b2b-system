@@ -64,6 +64,8 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { BUSINESS_IDS, BUSINESS_NAMES } from "@/app/config/business-constants";
+import { invalidatePaymentCaches } from "@/hooks/useCachedFetch";
+import { ReceiptNumberInput } from "@/components/receipt-books/ReceiptNumberInput";
 import {
   downloadCustomerStatement,
   printCustomerStatement,
@@ -206,6 +208,11 @@ export default function AdminPaymentEntryPage() {
   // Cash / Bank-only field
   const [selectedAccountId, setSelectedAccountId] = useState("");
 
+  // Receipt details
+  const [receiptNumber, setReceiptNumber] = useState("");
+  const [receiptBookId, setReceiptBookId] = useState<string | undefined>(undefined);
+  const [paidOnCustomerBill, setPaidOnCustomerBill] = useState(false);
+
   // Invoice settlement map
   const [settlements, setSettlements] = useState<
     Record<string, InvoiceSettlement>
@@ -345,6 +352,7 @@ export default function AdminPaymentEntryPage() {
               paymentDate: p.payment_date,
               amount: p.amount,
               method: p.payment_method || p.method || "cash",
+              receiptNumber: p.receipt_number || p.receiptNumber || null,
               chequeNo: p.cheque_number || p.cheque_no || null,
               chequeStatus: p.cheque_status || null,
             });
@@ -494,21 +502,22 @@ export default function AdminPaymentEntryPage() {
     setSelectedCustomerId("");
     setPaymentMethod("cash");
     setPaymentDate(new Date().toISOString().split("T")[0]);
-    setTotalAmount(0);
-    setNotes("");
-    setChequeNumber("");
-    setChequeDate("");
-    setSelectedBankId("");
-    setSelectedAccountId("");
+    setTotalAmount(0); setNotes(""); setChequeNumber(""); setChequeDate(""); setSelectedBankId(""); setSelectedAccountId("");
+    setReceiptNumber(""); setReceiptBookId(undefined);
     setPendingInvoices([]);
     setSettlements({});
   };
 
-  // ── Validation ────────────────────────────────────────────────────────────────
+  const isReceiptOptional = paymentMethod === "bank" || paidOnCustomerBill;
+  const isReceiptRequired = !isReceiptOptional;
 
-  const validate = (): boolean => {
+  const validate = () => {
     if (!selectedCustomerId) {
       toast.error("Please select a customer");
+      return false;
+    }
+    if (isReceiptRequired && !receiptNumber.trim()) {
+      toast.error("Please enter receipt number");
       return false;
     }
     if (totalAmount <= 0) {
@@ -569,6 +578,7 @@ export default function AdminPaymentEntryPage() {
       for (const s of selectedSettlements) {
         const payload = {
           orderId: s.invoiceId,
+          customerId: selectedCustomerId,
           amount: s.settleAmount,
           date: paymentDate,
           method: paymentMethod,
@@ -580,6 +590,8 @@ export default function AdminPaymentEntryPage() {
           chequeNo: paymentMethod === "cheque" ? chequeNumber : null,
           chequeDate: paymentMethod === "cheque" ? chequeDate : null,
           bankId: paymentMethod === "cheque" ? selectedBankId : null,
+          receiptNumber: receiptNumber || undefined,
+          receiptBookId: receiptBookId || undefined,
           performedByName: getUserBusinessContext()?.name ?? null,
           performedByEmail: getUserBusinessContext()?.email ?? null,
         };
@@ -593,8 +605,6 @@ export default function AdminPaymentEntryPage() {
         if (res.ok) {
           successCount++;
         } else {
-          const err = await res.json();
-          console.error("Payment error:", err);
           failCount++;
         }
       }
@@ -770,6 +780,35 @@ export default function AdminPaymentEntryPage() {
                   </Command>
                 </PopoverContent>
               </Popover>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>
+                  Receipt Number {isReceiptRequired ? <span className="text-red-500">*</span> : <span className="text-muted-foreground font-normal text-xs">(Optional)</span>}
+                </Label>
+                <div className="flex items-center space-x-1.5 cursor-pointer">
+                  <Checkbox
+                    id="paidOnCustomerBill"
+                    checked={paidOnCustomerBill}
+                    onCheckedChange={(c) => setPaidOnCustomerBill(!!c)}
+                  />
+                  <label htmlFor="paidOnCustomerBill" className="text-xs text-muted-foreground cursor-pointer font-medium hover:text-foreground">
+                    Paid on Customer Bill
+                  </label>
+                </div>
+              </div>
+              <ReceiptNumberInput
+                value={receiptNumber}
+                onChange={(val, bookId) => {
+                  setReceiptNumber(val);
+                  setReceiptBookId(bookId);
+                }}
+                businessId={selectedBusinessId || undefined}
+                required={isReceiptRequired}
+                hideLabel={true}
+                placeholder={isReceiptOptional ? "Optional (No paper receipt)" : "e.g. 1001"}
+              />
             </div>
 
             {/* Payment Method */}
@@ -1312,8 +1351,13 @@ export default function AdminPaymentEntryPage() {
                             <p className="font-medium">
                               {p.paymentDate ? new Date(p.paymentDate).toLocaleDateString("en-GB") : "—"}
                             </p>
-                            <p className="text-muted-foreground text-[11px] mt-0.5">
+                            <p className="text-muted-foreground text-[11px] mt-0.5 flex flex-wrap items-center gap-1">
                               Method: <span className="capitalize font-semibold text-slate-700">{p.method}</span>
+                              {(p.receiptNumber || p.receipt_number) && (
+                                <span className="font-bold font-mono text-purple-800 bg-purple-100 border border-purple-200 px-1.5 py-0.5 rounded text-[10px]">
+                                  Receipt #{p.receiptNumber || p.receipt_number}
+                                </span>
+                              )}
                               {p.chequeNo && ` (Cheque #${p.chequeNo})`}
                               {p.chequeStatus && (
                                 <span className={cn("ml-1 font-semibold", isReturned ? "text-red-700 bg-red-100 px-1.5 py-0.5 rounded border border-red-200" : "text-slate-600")}>

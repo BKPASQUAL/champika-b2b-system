@@ -134,6 +134,7 @@ interface Payment {
     | null;
   bank_id: string | null;
   deposit_account_id: string | null;
+  receipt_number?: string | null;
   customers?: { name: string };
   orders?: { order_number: string; total_amount: number; business_name?: string } | null;
   banks?: { bank_code: string; bank_name: string };
@@ -694,7 +695,18 @@ export default function PaymentsPage() {
                     <TableRow key={payment.id} className="hover:bg-gray-50/50 transition-colors border-b border-gray-100 last:border-0">
                       <TableCell className="py-3 px-4 text-sm text-gray-600 whitespace-nowrap">{new Date(payment.payment_date).toLocaleDateString()}</TableCell>
                       <TableCell className="py-3 px-4">
-                        <span className="font-mono text-xs text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">{payment.payment_number}</span>
+                        <div className="flex flex-col gap-1">
+                          <span className="font-mono text-xs text-gray-500 bg-gray-100 rounded px-1.5 py-0.5 w-fit">{payment.payment_number}</span>
+                          {payment.receipt_number ? (
+                            <span className="font-mono text-[11px] font-bold text-slate-800 bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5 w-fit">
+                              Receipt #{payment.receipt_number}
+                            </span>
+                          ) : (
+                            <span className="font-sans text-[10px] font-semibold text-amber-800 bg-amber-50 border border-amber-200/80 rounded px-1.5 py-0.5 w-fit">
+                              {payment.payment_method?.toLowerCase() === "bank" ? "Online Bank Transfer" : "Paid on Customer Bill"}
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="py-3 px-4">
                         <span className="text-sm font-semibold text-gray-800">{payment.orders?.order_number || "N/A"}</span>

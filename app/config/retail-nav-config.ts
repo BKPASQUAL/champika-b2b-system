@@ -99,6 +99,12 @@ export const retailOfficeNavItems: RetailNavSection[] = [
         icon: ClipboardCheck,
         description: "Record & settle customer invoices",
       },
+      {
+        name: "Receipt Books",
+        href: "/dashboard/office/retail/receipt-books",
+        icon: BookOpen,
+        description: "Assigned receipt books",
+      },
     ],
   },
   {

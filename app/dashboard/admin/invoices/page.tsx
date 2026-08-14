@@ -89,6 +89,8 @@ export default function InvoicesPage() {
       rawInvoices.map((inv: any) => ({
         id: inv.id,
         invoiceNo: inv.invoiceNo,
+        manualInvoiceNo: inv.manualInvoiceNo,
+        receiptNumber: inv.receiptNumber || null,
         date:
           inv.date ||
           (inv.createdAt
@@ -125,6 +127,8 @@ export default function InvoicesPage() {
   const filteredInvoices = invoices.filter((inv) => {
     const matchesSearch =
       inv.invoiceNo.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (inv.manualInvoiceNo && inv.manualInvoiceNo.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (inv.receiptNumber && inv.receiptNumber.toLowerCase().includes(searchQuery.toLowerCase())) ||
       inv.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       inv.salesRepName.toLowerCase().includes(searchQuery.toLowerCase());
 
@@ -322,7 +326,7 @@ export default function InvoicesPage() {
             <div className="relative w-full md:flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search invoice, customer..."
+                placeholder="Search invoice #, receipt #, customer..."
                 className="pl-9 w-full"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}

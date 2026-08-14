@@ -6,6 +6,7 @@ export type ChequeStatus = "Pending" | "Cleared" | "Bounced" | "Returned" | "Dep
 export interface Payment {
   id: string;
   paymentNumber: string;
+  receiptNumber?: string;
   invoiceId: string;
   invoiceNo: string;
   customerId: string;

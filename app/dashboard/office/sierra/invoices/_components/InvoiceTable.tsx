@@ -262,6 +262,11 @@ export function InvoiceTable({
                         <span className="font-mono text-[10px] md:text-xs font-bold text-foreground bg-slate-100 dark:bg-slate-800 px-1 md:px-2 py-1 rounded w-fit">
                           {invoice.invoiceNo}
                         </span>
+                        {invoice.receiptNumber && (
+                          <span className="font-mono text-[10px] font-bold text-purple-800 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded w-fit">
+                            Receipt #{invoice.receiptNumber}
+                          </span>
+                        )}
                         {invoice.isIncorrect && (
                           <span className="text-[10px] leading-none text-red-600 font-semibold bg-red-50 border border-red-100 px-1.5 py-0.5 rounded w-fit">
                             Incorrect Entry

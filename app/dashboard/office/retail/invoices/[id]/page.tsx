@@ -87,6 +87,7 @@ interface PaymentRecord {
   amount: number;
   payment_date: string;
   method: string;
+  receipt_number?: string | null;
   cheque_no?: string;
   cheque_status?: string;
   cheque_date?: string;
@@ -810,6 +811,15 @@ export default function RetailViewInvoicePage({
                               <div>
                                 <p className="text-[10px] uppercase font-semibold tracking-wider text-muted-foreground">Date</p>
                                 <p className="text-sm font-medium text-slate-800">{new Date(pay.payment_date).toLocaleDateString()}</p>
+                                {pay.receipt_number ? (
+                                  <Badge variant="outline" className="font-mono text-[10px] font-bold text-emerald-800 bg-emerald-50 border-emerald-200 mt-1">
+                                    Receipt #{pay.receipt_number}
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="font-sans text-[9px] font-semibold text-amber-800 bg-amber-50 border-amber-200/80 mt-1">
+                                    {pay.method?.toLowerCase() === "bank" ? "Online Bank Transfer" : "Paid on Customer Bill"}
+                                  </Badge>
+                                )}
                               </div>
                               <Badge variant="secondary" className="font-normal text-xs">{pay.method}</Badge>
                             </div>
@@ -882,12 +892,19 @@ export default function RetailViewInvoicePage({
                                   <Badge variant="secondary" className="font-normal text-xs">{pay.method}</Badge>
                                 </TableCell>
                                 <TableCell className="text-sm text-muted-foreground">
-                                  {isCheque ? (
-                                    <div className="flex flex-col">
-                                      <span className={`font-mono text-xs font-medium ${isReturned ? "line-through text-gray-400" : "text-foreground"}`}>{pay.cheque_no}</span>
-                                      {pay.cheque_date && <span className="text-[10px]">Due: {new Date(pay.cheque_date).toLocaleDateString()}</span>}
-                                    </div>
-                                  ) : "-"}
+                                  <div className="flex flex-col gap-1">
+                                    {pay.receipt_number && (
+                                      <Badge variant="outline" className="font-mono text-[11px] font-bold text-purple-800 bg-purple-50 border-purple-200 w-fit">
+                                        Receipt #{pay.receipt_number}
+                                      </Badge>
+                                    )}
+                                    {isCheque ? (
+                                      <div className="flex flex-col">
+                                        <span className={`font-mono text-xs font-medium ${isReturned ? "line-through text-gray-400" : "text-foreground"}`}>{pay.cheque_no}</span>
+                                        {pay.cheque_date && <span className="text-[10px]">Due: {new Date(pay.cheque_date).toLocaleDateString()}</span>}
+                                      </div>
+                                    ) : !pay.receipt_number ? "-" : null}
+                                  </div>
                                 </TableCell>
                                 <TableCell>
                                   {isCheque && pay.cheque_status ? (

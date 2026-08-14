@@ -23,6 +23,8 @@ import {
   Factory,
   ScrollText,
   Coins,
+  ShieldCheck,
+  BookOpen,
   LucideIcon,
   Store,
   Send,
@@ -124,6 +126,16 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           name: "Payment Entry",
           href: "/dashboard/admin/payments/entry",
           icon: ClipboardCheck,
+        },
+        {
+          name: "Receipt Books",
+          href: "/dashboard/admin/receipt-books",
+          icon: BookOpen,
+        },
+        {
+          name: "Receipt Book Audit",
+          href: "/dashboard/admin/receipt-audit",
+          icon: ShieldCheck,
         },
         {
           name: "Due Alerts",
@@ -429,6 +441,11 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           name: "Product Catalog",
           href: "/dashboard/rep/products",
           icon: Store,
+        },
+        {
+          name: "Receipt Books",
+          href: "/dashboard/rep/receipt-books",
+          icon: BookOpen,
         },
         { name: "My Customers", href: "/dashboard/rep/customers", icon: Users },
         {

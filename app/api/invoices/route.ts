@@ -112,6 +112,13 @@ export async function GET(request: NextRequest) {
               actual_unit_cost,
               total_price
             )
+          ),
+          payments (
+            id,
+            amount,
+            payment_date,
+            receipt_number,
+            is_cancelled
           )
         `
         )
@@ -162,10 +169,14 @@ export async function GET(request: NextRequest) {
         totalProfit += revenue - cost;
       });
 
+      const activePayments = (inv.payments || []).filter((p: any) => !p.is_cancelled && p.receipt_number);
+      const receiptNumbers = Array.from(new Set(activePayments.map((p: any) => p.receipt_number))).join(", ");
+
       return {
         id: inv.id,
         invoiceNo: inv.manual_invoice_no || inv.invoice_no,
         manualInvoiceNo: inv.manual_invoice_no, // ✅ Explicitly Mapped
+        receiptNumber: receiptNumbers || null, // ✅ NEW: Receipt Number(s) for invoice
         orderId: inv.order_id,
         date: inv.orders?.order_date
           ? new Date(inv.orders.order_date).toISOString().split("T")[0]

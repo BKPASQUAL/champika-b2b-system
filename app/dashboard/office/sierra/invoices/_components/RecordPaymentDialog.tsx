@@ -22,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2, CreditCard, Banknote, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
+import { ReceiptNumberInput } from "@/components/receipt-books/ReceiptNumberInput";
 
 interface RecordPaymentDialogProps {
   isOpen: boolean;
@@ -48,6 +49,8 @@ export function RecordPaymentDialog({
   // Method Specific State
   const [depositAccountId, setDepositAccountId] = useState<string>("");
   const [chequeNo, setChequeNo] = useState("");
+  const [receiptNumber, setReceiptNumber] = useState("");
+  const [receiptBookId, setReceiptBookId] = useState<string | undefined>(undefined);
   const [chequeDate, setChequeDate] = useState("");
 
   // 1. Fetch Company Accounts (for depositing Cash/Transfers)
@@ -110,6 +113,8 @@ export function RecordPaymentDialog({
           method === "cash" || method === "bank" ? depositAccountId : null,
         chequeNo: method === "cheque" ? chequeNo : null,
         chequeDate: method === "cheque" ? chequeDate : null,
+        receiptNumber: receiptNumber || undefined,
+        receiptBookId: receiptBookId || undefined,
       };
 
       const res = await fetch("/api/payments", {
@@ -203,6 +208,15 @@ export function RecordPaymentDialog({
               </SelectContent>
             </Select>
           </div>
+
+          <ReceiptNumberInput
+            value={receiptNumber}
+            onChange={(val, bookId) => {
+              setReceiptNumber(val);
+              setReceiptBookId(bookId);
+            }}
+            businessId={BUSINESS_IDS.SIERRA_AGENCY}
+          />
 
           {/* Conditional Fields: Cheque Details */}
           {method === "cheque" && (

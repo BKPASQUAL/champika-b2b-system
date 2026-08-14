@@ -23,6 +23,7 @@ import {
   Printer,
   Tags,
   TrendingUp,
+  BookOpen,
   CheckCircle2,
 } from "lucide-react";
 
@@ -119,6 +120,12 @@ export const distributionNavItems: DistNavSection[] = [
         href: "/dashboard/office/distribution/payments/entry",
         icon: ClipboardCheck,
         description: "Record & settle customer invoices",
+      },
+      {
+        name: "Receipt Books",
+        href: "/dashboard/office/distribution/receipt-books",
+        icon: BookOpen,
+        description: "Assigned receipt books",
       },
       {
         name: "Due Alerts",

@@ -174,9 +174,18 @@ export function PaymentTable({
                     <TableCell className="py-3 px-4 text-sm text-gray-600 whitespace-nowrap">{dateStr}</TableCell>
                     <TableCell className="py-3 px-4">
                       <div className="flex flex-col gap-1">
-                        <span className="font-mono text-xs text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">
+                        <span className="font-mono text-xs text-gray-500 bg-gray-100 rounded px-1.5 py-0.5 w-fit">
                           PAY-{payment.paymentNumber}
                         </span>
+                        {payment.receiptNumber ? (
+                          <span className="font-mono text-[11px] font-bold text-purple-800 bg-purple-100/80 border border-purple-200 rounded px-1.5 py-0.5 w-fit">
+                            Receipt #{payment.receiptNumber}
+                          </span>
+                        ) : (
+                          <span className="font-sans text-[10px] font-semibold text-amber-800 bg-amber-50 border border-amber-200/80 rounded px-1.5 py-0.5 w-fit">
+                            {payment.method?.toLowerCase() === "bank" ? "Online Bank Transfer" : "Paid on Customer Bill"}
+                          </span>
+                        )}
                         {payment.isCancelled && (
                           <span className="inline-flex items-center gap-1 rounded-full bg-red-100 text-red-700 border border-red-200 px-2 py-0.5 text-[10px] font-semibold w-fit">
                             <XCircle className="w-2.5 h-2.5" /> CANCELLED

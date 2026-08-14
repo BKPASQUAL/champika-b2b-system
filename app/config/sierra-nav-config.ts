@@ -18,6 +18,7 @@ import {
   Printer,
   ArrowRightLeft,
   TrendingUp,
+  BookOpen,
   ShieldAlert,
 } from "lucide-react";
 
@@ -68,6 +69,12 @@ export const sierraOfficeNavItems: SierraNavSection[] = [
         href: "/dashboard/office/sierra/payments/entry",
         icon: ClipboardCheck,
         description: "Record & settle customer invoices",
+      },
+      {
+        name: "Receipt Books",
+        href: "/dashboard/office/sierra/receipt-books",
+        icon: BookOpen,
+        description: "Assigned receipt books",
       },
       {
         name: "Due Alerts",

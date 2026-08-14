@@ -71,6 +71,7 @@ export default function SierraPaymentsPage() {
       rawPayments.map((p: any) => ({
         id: p.id,
         paymentNumber: p.payment_number || p.id.substring(0, 8).toUpperCase(),
+        receiptNumber: p.receipt_number || p.receiptNumber || undefined,
         invoiceId: p.invoice_id,
         invoiceNo: p.invoices?.invoice_no || "N/A",
         customerId: p.customer_id,
@@ -105,6 +106,7 @@ export default function SierraPaymentsPage() {
     const matchesSearch =
       p.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.invoiceNo.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (p.receiptNumber && p.receiptNumber.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (p.chequeNo && p.chequeNo.includes(searchQuery));
 
     const matchesMethod = methodFilter === "all" || p.method?.toLowerCase() === methodFilter.toLowerCase();
@@ -185,7 +187,7 @@ export default function SierraPaymentsPage() {
             <div className="relative w-full md:flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search customer, invoice #, or cheque #..."
+                placeholder="Search customer, invoice #, receipt #, or cheque #..."
                 className="pl-9 w-full"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}

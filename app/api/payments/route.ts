@@ -4,20 +4,28 @@ import { z } from "zod";
 import { BUSINESS_NAMES } from "@/app/config/business-constants";
 
 // --- Validation Schema ---
-// ✅ Updated: Added .nullable() to optional fields to allow null values from frontend
 const paymentSchema = z.object({
-  orderId: z.string().min(1, "Order ID is required"),
+  orderId: z.string().optional().nullable(),
+  customerId: z.string().optional().nullable(),
+  payment_number: z.string().optional().nullable(),
+  order_id: z.string().optional().nullable(),
+  customer_id: z.string().optional().nullable(),
+  payment_date: z.string().optional().nullable(),
+  payment_method: z.string().optional().nullable(),
   amount: z.number().min(0.001, "Amount must be greater than 0"),
-  date: z.string(),
-  method: z.enum(["cash", "bank", "cheque", "credit"]),
+  date: z.string().optional().nullable(),
+  method: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
   // Cheque specific
   chequeNo: z.string().optional().nullable(),
   chequeDate: z.string().optional().nullable(),
   bankId: z.string().optional().nullable(),
-  branchCode: z.string().optional().nullable(), // Added branch string
+  branchCode: z.string().optional().nullable(),
   // Deposit specific
   depositAccountId: z.string().optional().nullable(),
+  // Receipt details
+  receiptNumber: z.string().optional().nullable(),
+  receiptBookId: z.string().optional().nullable(),
   // Performer info (logged-in user)
   performedByName: z.string().optional().nullable(),
   performedByEmail: z.string().optional().nullable(),
@@ -28,17 +36,14 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const businessId = searchParams.get("businessId");
 
-    // Chunked fetching to bypass Supabase PostgREST default 1000-row cap
     let rawPayments: any[] = [];
     let page = 0;
     const pageSize = 1000;
     let hasMore = true;
 
     while (hasMore) {
-      let query = supabaseAdmin
-        .from("payments")
-        .select(
-          `
+      const selectClause = businessId
+        ? `
           *,
           customers (
             id,
@@ -52,6 +57,7 @@ export async function GET(request: NextRequest) {
               order_id,
               business_id,
               businesses (
+                id,
                 name
               )
             )
@@ -67,11 +73,43 @@ export async function GET(request: NextRequest) {
             account_type
           )
         `
-        )
+        : `
+          *,
+          customers (
+            id,
+            shop_name
+          ),
+          invoices (
+            id,
+            invoice_no,
+            orders (
+              id,
+              order_id,
+              business_id,
+              businesses (
+                id,
+                name
+              )
+            )
+          ),
+          bank_codes (
+            id,
+            bank_name,
+            bank_code
+          ),
+          bank_accounts (
+            id,
+            account_name,
+            account_type
+          )
+        `;
+
+      let query = supabaseAdmin
+        .from("payments")
+        .select(selectClause)
         .order("payment_date", { ascending: false })
         .range(page * pageSize, (page + 1) * pageSize - 1);
 
-      // Filter by Business ID if provided (via the nested orders relation)
       if (businessId) {
         query = query.eq("invoices.orders.business_id", businessId);
       }
@@ -80,18 +118,14 @@ export async function GET(request: NextRequest) {
       if (error) throw error;
 
       if (data && data.length > 0) {
-        rawPayments.push(...data);
-        if (data.length < pageSize) {
-          hasMore = false;
-        } else {
-          page++;
-        }
+        rawPayments = rawPayments.concat(data);
+        if (data.length < pageSize) hasMore = false;
+        else page++;
       } else {
         hasMore = false;
       }
     }
 
-    // Map database results to the frontend 'Payment' interface
     const formattedPayments = rawPayments.map((p: any) => {
       const customerObj = Array.isArray(p.customers)
         ? p.customers[0]
@@ -114,24 +148,25 @@ export async function GET(request: NextRequest) {
       const orderNumber = invoiceObj?.invoice_no || orderObj?.order_id || "N/A";
       const totalAmount = p.amount;
 
-      return {
+      const paymentObj = {
         id: p.id,
-        payment_number: p.id.substring(0, 8).toUpperCase(),
+        payment_number: p.id ? p.id.substring(0, 8).toUpperCase() : "",
         payment_date: p.payment_date,
-        order_id: orderObj?.id,
-        invoice_id: invoiceObj?.id, // Added for frontend links
+        order_id: orderObj?.id ?? null,
+        invoice_id: invoiceObj?.id ?? null,
         customer_id: p.customer_id,
         amount: p.amount,
         payment_method: p.method,
         reference_number: null,
-        notes: null,
-        cheque_number: p.cheque_no,
-        cheque_date: p.cheque_date,
-        cheque_status: p.cheque_status,
-        is_cancelled: p.is_cancelled ?? false,
-        cancelled_at: p.cancelled_at ?? null,
-        cancelled_reason: p.cancelled_reason ?? null,
-
+        notes: p.notes || null,
+        cheque_number: p.cheque_no || null,
+        cheque_date: p.cheque_date || null,
+        cheque_status: p.cheque_status || null,
+        receipt_number: p.receipt_number || null,
+        receipt_book_id: p.receipt_book_id || null,
+        is_cancelled: Boolean(p.is_cancelled),
+        cancelled_at: p.cancelled_at || null,
+        cancelled_reason: p.cancelled_reason || null,
         customers: {
           name: customerObj?.shop_name || "Unknown",
         },
@@ -139,18 +174,17 @@ export async function GET(request: NextRequest) {
           order_number: orderNumber,
           total_amount: totalAmount,
           business_name: businessName,
+          business_id: orderObj?.business_id || null,
         },
         invoices: {
-          invoice_no: invoiceObj?.invoice_no,
+          invoice_no: invoiceObj?.invoice_no || "",
         },
-        // Mapped for Cheque Bank Display
         banks: bankObj
           ? {
               bank_code: bankObj.bank_code,
               bank_name: bankObj.bank_name,
             }
           : null,
-        // Mapped for Deposit Account Display
         company_accounts: accountObj
           ? {
               account_name: accountObj.account_name,
@@ -158,9 +192,15 @@ export async function GET(request: NextRequest) {
             }
           : null,
       };
+
+      return paymentObj;
     });
 
-    return NextResponse.json(formattedPayments);
+    const finalPayments = businessId
+      ? formattedPayments.filter((p: any) => p.orders?.business_id === businessId)
+      : formattedPayments;
+
+    return NextResponse.json(finalPayments);
   } catch (error: any) {
     console.error("Error fetching payments:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -170,10 +210,63 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    // Parse validates the body against the schema
     const val = paymentSchema.parse(body);
 
-    // 1. Fetch Order, Invoice, and Customer Details
+    const targetOrderId = val.orderId || val.order_id;
+    const targetCustomerId = val.customerId || val.customer_id;
+
+    // Handle Unassigned Customer Payment (No Invoice Linked)
+    if (!targetOrderId) {
+      if (!targetCustomerId) {
+        return NextResponse.json(
+          { error: "Customer ID or Order ID is required" },
+          { status: 400 }
+        );
+      }
+
+      const paymentDate = val.date || val.payment_date || new Date().toISOString().split("T")[0];
+      const paymentMethod = (val.method || val.payment_method || "cash") as any;
+
+      const { data: payment, error: paymentError } = await supabaseAdmin
+        .from("payments")
+        .insert({
+          invoice_id: null,
+          customer_id: targetCustomerId,
+          amount: val.amount,
+          payment_date: paymentDate,
+          method: paymentMethod,
+          cheque_no: paymentMethod === "cheque" ? (val.branchCode ? `${val.chequeNo} (Branch: ${val.branchCode})` : val.chequeNo) : null,
+          cheque_date: paymentMethod === "cheque" ? val.chequeDate : null,
+          cheque_status: paymentMethod === "cheque" ? "Pending" : null,
+          bank_id: paymentMethod === "cheque" ? val.bankId : null,
+          deposit_account_id: (paymentMethod === "cash" || paymentMethod === "bank") ? val.depositAccountId : null,
+          receipt_number: val.receiptNumber || null,
+          receipt_book_id: val.receiptBookId || null,
+        })
+        .select()
+        .single();
+
+      if (paymentError) throw paymentError;
+
+      // Update customer outstanding balance
+      const { data: custData } = await supabaseAdmin
+        .from("customers")
+        .select("outstanding_balance")
+        .eq("id", targetCustomerId)
+        .single();
+
+      if (custData) {
+        const newBal = (custData.outstanding_balance || 0) - val.amount;
+        await supabaseAdmin
+          .from("customers")
+          .update({ outstanding_balance: newBal })
+          .eq("id", targetCustomerId);
+      }
+
+      return NextResponse.json({ message: "Customer payment recorded successfully", data: payment }, { status: 201 });
+    }
+
+    // Fetch Order, Invoice, and Customer Details
     const { data: orderData, error: orderError } = await supabaseAdmin
       .from("orders")
       .select(
@@ -195,7 +288,7 @@ export async function POST(request: NextRequest) {
         )
       `
       )
-      .eq("id", val.orderId)
+      .eq("id", targetOrderId)
       .single();
 
     if (orderError || !orderData) {
@@ -226,55 +319,127 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. Insert into Payments Table
+    const paymentDate = val.date || val.payment_date || new Date().toISOString().split("T")[0];
+    const paymentMethod = (val.method || val.payment_method || "cash") as any;
+
+    // Insert into Payments Table
     const { data: payment, error: paymentError } = await supabaseAdmin
       .from("payments")
       .insert({
         invoice_id: invoice.id,
         customer_id: customer.id,
         amount: val.amount,
-        payment_date: val.date,
-        method: val.method,
-        // Cheque Details
-        cheque_no: val.method === "cheque" ? (val.branchCode ? `${val.chequeNo} (Branch: ${val.branchCode})` : val.chequeNo) : null,
-        cheque_date: val.method === "cheque" ? val.chequeDate : null,
-        cheque_status: val.method === "cheque" ? "Pending" : null,
-        bank_id: val.method === "cheque" ? val.bankId : null, // Store Customer Bank
-        // Deposit Details
+        payment_date: paymentDate,
+        method: paymentMethod,
+        cheque_no: paymentMethod === "cheque" ? (val.branchCode ? `${val.chequeNo} (Branch: ${val.branchCode})` : val.chequeNo) : null,
+        cheque_date: paymentMethod === "cheque" ? val.chequeDate : null,
+        cheque_status: paymentMethod === "cheque" ? "Pending" : null,
+        bank_id: paymentMethod === "cheque" ? val.bankId : null,
         deposit_account_id:
-          val.method === "cash" || val.method === "bank"
+          paymentMethod === "cash" || paymentMethod === "bank"
             ? val.depositAccountId
             : null,
+        receipt_number: val.receiptNumber || null,
+        receipt_book_id: val.receiptBookId || null,
       })
       .select()
       .single();
 
     if (paymentError) throw paymentError;
 
-    // 3. Update Invoice Status and Paid Amount
-    const newPaidAmount = (Number(invoice.paid_amount) || 0) + val.amount;
-    const isFullyPaid = (Number(invoice.total_amount) - newPaidAmount) < 100;
-    const finalPaidAmount = isFullyPaid ? Number(invoice.total_amount) : newPaidAmount;
-    const newStatus = isFullyPaid ? "Paid" : "Partial";
+    // Advance Receipt Book current_number & Audit Log if receipt book is assigned
+    if (val.receiptNumber) {
+      try {
+        let bookIdToUpdate = val.receiptBookId;
+        
+        if (!bookIdToUpdate) {
+          const numericReceipt = parseInt(val.receiptNumber, 10);
+          if (!isNaN(numericReceipt)) {
+            const { data: foundBooks } = await supabaseAdmin
+              .from("receipt_books")
+              .select("id, book_number, current_number, end_number, assigned_to_user_name")
+              .eq("status", "Active")
+              .lte("start_number", numericReceipt)
+              .gte("end_number", numericReceipt)
+              .limit(1);
+            if (foundBooks && foundBooks.length > 0) {
+              bookIdToUpdate = foundBooks[0].id;
+            }
+          }
+        }
 
-    const invoiceUpdateFields: any = {
-      paid_amount: finalPaidAmount,
-      status: newStatus,
-      updated_at: new Date().toISOString(),
-    };
+        if (bookIdToUpdate) {
+          const { data: rbData } = await supabaseAdmin
+            .from("receipt_books")
+            .select("id, book_number, current_number, start_number, end_number, assigned_to_user_id, assigned_to_user_name")
+            .eq("id", bookIdToUpdate)
+            .single();
 
-    if (isFullyPaid) {
-      invoiceUpdateFields.is_incorrect = false;
+          if (rbData) {
+            const numericReceipt = parseInt(val.receiptNumber, 10);
+            let nextNum = rbData.current_number + 1;
+            if (!isNaN(numericReceipt) && numericReceipt >= rbData.start_number && numericReceipt <= rbData.end_number) {
+              nextNum = Math.max(rbData.current_number, numericReceipt + 1);
+            }
+            const isCompleted = nextNum > rbData.end_number;
+
+            await supabaseAdmin
+              .from("receipt_books")
+              .update({
+                current_number: Math.min(nextNum, rbData.end_number + 1),
+                status: isCompleted ? "Completed" : "Active",
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", rbData.id);
+
+            await supabaseAdmin.from("receipt_book_audits").insert({
+              receipt_book_id: rbData.id,
+              action_type: "RECEIPT_ISSUED",
+              book_number: rbData.book_number,
+              receipt_number: val.receiptNumber,
+              assigned_to_new_id: rbData.assigned_to_user_id,
+              assigned_to_new_name: rbData.assigned_to_user_name,
+              performed_by_name: val.performedByName || null,
+              performed_by_email: val.performedByEmail || null,
+              notes: `Issued Receipt #${val.receiptNumber} for Invoice ${invoice.invoice_no} (${customer.shop_name})`,
+            });
+          }
+        }
+      } catch (rbErr) {
+        console.error("Receipt book update warning:", rbErr);
+      }
     }
+
+    // Update Invoice status & paid_amount
+    const newPaidAmount = (Number(invoice.paid_amount) || 0) + val.amount;
+    const finalPaidAmount = Math.min(newPaidAmount, Number(invoice.total_amount));
+    const isFullyPaid = finalPaidAmount >= Number(invoice.total_amount);
+    const newStatus = isFullyPaid ? "Paid" : "Partial";
 
     const { error: invoiceUpdateError } = await supabaseAdmin
       .from("invoices")
-      .update(invoiceUpdateFields)
+      .update({
+        paid_amount: finalPaidAmount,
+        status: newStatus,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", invoice.id);
 
     if (invoiceUpdateError) throw invoiceUpdateError;
 
-    // 4. Update Customer Outstanding Balance
+    // Update order payment status
+    const newOrderStatus = isFullyPaid
+      ? "Paid"
+      : finalPaidAmount > 0
+      ? "Partial"
+      : "Unpaid";
+
+    await supabaseAdmin
+      .from("orders")
+      .update({ payment_status: newOrderStatus })
+      .eq("id", orderData.id);
+
+    // Update customer outstanding balance
     const currentBalance = Number(customer.outstanding_balance) || 0;
     const creditAmount = isFullyPaid ? (Number(invoice.total_amount) - (Number(invoice.paid_amount) || 0)) : val.amount;
     const newBalance = currentBalance - creditAmount;
@@ -288,12 +453,11 @@ export async function POST(request: NextRequest) {
 
     if (customerUpdateError) throw customerUpdateError;
 
-    // 5. Create Account Transaction + Update Balance (For Cash & Bank only)
+    // Account transaction for cash/bank
     if (
-      (val.method === "cash" || val.method === "bank") &&
+      (paymentMethod === "cash" || paymentMethod === "bank") &&
       val.depositAccountId
     ) {
-      // 5a. Insert the account transaction record
       const { error: transactionError } = await supabaseAdmin
         .from("account_transactions")
         .insert({
@@ -305,7 +469,7 @@ export async function POST(request: NextRequest) {
           from_account_id: null,
           amount: val.amount,
           description: `Payment from ${customer.shop_name} - ${invoice.invoice_no}`,
-          transaction_date: val.date,
+          transaction_date: paymentDate,
           reference_no: invoice.invoice_no,
           payment_id: payment.id,
         });
@@ -314,7 +478,6 @@ export async function POST(request: NextRequest) {
         console.error("Error creating account transaction:", transactionError);
       }
 
-      // 5b. Fetch current account balance
       const { data: accountData, error: fetchError } = await supabaseAdmin
         .from("bank_accounts")
         .select("current_balance")
@@ -324,7 +487,6 @@ export async function POST(request: NextRequest) {
       if (fetchError || !accountData) {
         console.error("Error fetching account balance:", fetchError);
       } else {
-        // 5c. Add payment amount to current balance
         const updatedBalance =
           Number(accountData.current_balance || 0) + val.amount;
 
@@ -342,7 +504,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Collect activityRecordId to return to the client for classification modal
     let activityRecordId: string | null = null;
     try {
       const businessId = orderData.business_id ?? null;
@@ -365,7 +526,7 @@ export async function POST(request: NextRequest) {
         performed_by_name: val.performedByName ?? null,
         performed_by_email: val.performedByEmail ?? null,
         metadata: {
-          paymentMethod: val.method,
+          paymentMethod: paymentMethod,
           invoiceId: invoice.id,
           invoiceNo: invoice.invoice_no,
           previousPaidAmount: Number(invoice.paid_amount) || 0,
@@ -389,7 +550,6 @@ export async function POST(request: NextRequest) {
     );
   } catch (error: any) {
     if (error instanceof z.ZodError) {
-      // Return validation errors clearly
       return NextResponse.json(
         { error: error.issues[0].message },
         { status: 400 }

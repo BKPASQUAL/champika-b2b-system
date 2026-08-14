@@ -142,8 +142,10 @@ export function InvoiceSearchBar({
         (inv) =>
           inv.invoiceNo?.toLowerCase() === lower ||
           inv.manualInvoiceNo?.toLowerCase() === lower ||
+          (inv.receiptNumber && inv.receiptNumber.toLowerCase() === lower) ||
           inv.invoiceNo?.toLowerCase().includes(lower) ||
-          inv.manualInvoiceNo?.toLowerCase().includes(lower)
+          inv.manualInvoiceNo?.toLowerCase().includes(lower) ||
+          (inv.receiptNumber && inv.receiptNumber.toLowerCase().includes(lower))
       );
 
       if (!match) {
@@ -169,7 +171,7 @@ export function InvoiceSearchBar({
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
               <Input
-                placeholder="Search by invoice number (e.g. CHD-0001, CHR-0001)…"
+                placeholder="Search by invoice number or receipt number (e.g. CHD-0001, 1001)…"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => {
@@ -983,22 +985,29 @@ function FullInvoiceDetail({
                             </Badge>
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">
-                            {isCheque || pay.cheque_no ? (
-                              <div className="flex flex-col gap-0.5">
-                                {pay.cheque_no && (
-                                  <span className={`font-mono text-xs font-medium ${isVoided ? "line-through text-gray-400" : "text-foreground"}`}>
-                                    {pay.cheque_no}
-                                  </span>
-                                )}
-                                {pay.cheque_date && (
-                                  <span className="text-[10px]">
-                                    Due: {new Date(pay.cheque_date).toLocaleDateString()}
-                                  </span>
-                                )}
-                              </div>
-                            ) : (
-                              "-"
-                            )}
+                            <div className="flex flex-col gap-1">
+                              {pay.receipt_number && (
+                                <Badge variant="outline" className="font-mono text-[11px] font-bold text-purple-800 bg-purple-50 border-purple-200 w-fit">
+                                  Receipt #{pay.receipt_number}
+                                </Badge>
+                              )}
+                              {isCheque || pay.cheque_no ? (
+                                <div className="flex flex-col gap-0.5">
+                                  {pay.cheque_no && (
+                                    <span className={`font-mono text-xs font-medium ${isVoided ? "line-through text-gray-400" : "text-foreground"}`}>
+                                      Cheque #{pay.cheque_no}
+                                    </span>
+                                  )}
+                                  {pay.cheque_date && (
+                                    <span className="text-[10px]">
+                                      Due: {new Date(pay.cheque_date).toLocaleDateString()}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : !pay.receipt_number ? (
+                                "-"
+                              ) : null}
+                            </div>
                           </TableCell>
                           <TableCell>
                             {isCancelled ? (
@@ -1076,6 +1085,17 @@ function FullInvoiceDetail({
                   {invoice.invoiceNo}
                 </span>
               </div>
+              {invoice.receiptNumber && (
+                <>
+                  <Separator />
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Receipt No</span>
+                    <span className="text-sm font-mono font-bold bg-purple-50 text-purple-800 border border-purple-200 px-2 py-0.5 rounded">
+                      {invoice.receiptNumber}
+                    </span>
+                  </div>
+                </>
+              )}
               <Separator />
               <div className="flex justify-between items-center">
                 <span className="text-sm font-medium">Date Issued</span>

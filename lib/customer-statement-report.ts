@@ -8,6 +8,8 @@ export interface InvoicePaymentRecord {
   paymentDate: string;
   amount: number;
   method: string;
+  receiptNumber?: string | null;
+  receipt_number?: string | null;
   chequeNo?: string | null;
   chequeStatus?: string | null;
 }

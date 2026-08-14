@@ -397,7 +397,18 @@ export function InvoiceTable({
                     <TableCell className="whitespace-nowrap text-xs text-muted-foreground font-medium">
                       {new Date(invoice.date).toLocaleDateString()}
                     </TableCell>
-                    <TableCell className="font-mono text-xs">{invoice.manualInvoiceNo || invoice.invoiceNo}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      <div className="flex flex-col gap-1">
+                        <span className="font-mono text-xs font-bold text-foreground bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded w-fit">
+                          {invoice.manualInvoiceNo || invoice.invoiceNo}
+                        </span>
+                        {invoice.receiptNumber && (
+                          <span className="font-mono text-[10px] font-bold text-purple-800 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded w-fit">
+                            Receipt #{invoice.receiptNumber}
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <div className="font-medium text-sm leading-tight">{invoice.customerName}</div>
                       <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">

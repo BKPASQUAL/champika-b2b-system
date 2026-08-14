@@ -17,6 +17,7 @@ import {
   ScrollText,
   Printer,
   ShieldAlert,
+  BookOpen,
 } from "lucide-react";
 
 interface WiremanNavItem {
@@ -65,6 +66,12 @@ export const wiremanOfficeNavItems: WiremanNavSection[] = [
         href: "/dashboard/office/wireman/payments/entry",
         icon: ClipboardCheck,
         description: "Record & settle customer invoices",
+      },
+      {
+        name: "Receipt Books",
+        href: "/dashboard/office/wireman/receipt-books",
+        icon: BookOpen,
+        description: "Assigned receipt books",
       },
       {
         name: "Due Alerts",

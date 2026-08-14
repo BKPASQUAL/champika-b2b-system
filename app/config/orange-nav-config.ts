@@ -20,6 +20,7 @@ import {
   CalendarDays,
   ScrollText,
   Printer,
+  BookOpen,
   Gift,
 } from "lucide-react";
 
@@ -69,6 +70,12 @@ export const orangeOfficeNavItems: OrangeNavSection[] = [
         href: "/dashboard/office/orange/payments/entry",
         icon: ClipboardCheck,
         description: "Record & settle customer invoices",
+      },
+      {
+        name: "Receipt Books",
+        href: "/dashboard/office/orange/receipt-books",
+        icon: BookOpen,
+        description: "Assigned receipt books",
       },
       {
         name: "Due Alerts",

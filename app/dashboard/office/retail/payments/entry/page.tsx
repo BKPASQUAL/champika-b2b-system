@@ -65,6 +65,7 @@ import { cn } from "@/lib/utils";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
 import { invalidatePaymentCaches } from "@/hooks/useCachedFetch";
+import { ReceiptNumberInput } from "@/components/receipt-books/ReceiptNumberInput";
 import {
   downloadCustomerStatement,
   printCustomerStatement,
@@ -147,6 +148,9 @@ export default function RetailPaymentEntryPage() {
   const [selectedBankId, setSelectedBankId] = useState("");
   const [branchCode, setBranchCode] = useState("");
   const [selectedAccountId, setSelectedAccountId] = useState("");
+  const [receiptNumber, setReceiptNumber] = useState("");
+  const [receiptBookId, setReceiptBookId] = useState<string | undefined>(undefined);
+  const [paidOnCustomerBill, setPaidOnCustomerBill] = useState(false);
   const [settlements, setSettlements] = useState<Record<string, InvoiceSettlement>>({});
   const [historyModalInvoice, setHistoryModalInvoice] = useState<PendingInvoice | null>(null);
 
@@ -221,6 +225,7 @@ export default function RetailPaymentEntryPage() {
             paymentDate: p.payment_date,
             amount: p.amount,
             method: p.payment_method || p.method || "cash",
+            receiptNumber: p.receipt_number || p.receiptNumber || null,
             chequeNo: p.cheque_number || p.cheque_no || null,
             chequeStatus: p.cheque_status || null,
           });
@@ -273,11 +278,16 @@ export default function RetailPaymentEntryPage() {
   const resetForm = () => {
     setSelectedCustomerId(""); setPaymentMethod("cash"); setPaymentDate(new Date().toISOString().split("T")[0]);
     setTotalAmount(0); setNotes(""); setChequeNumber(""); setChequeDate(""); setSelectedBankId(""); setBranchCode(""); setSelectedAccountId("");
+    setReceiptNumber(""); setReceiptBookId(undefined);
     setPendingInvoices([]); setSettlements({});
   };
 
+  const isReceiptOptional = paymentMethod === "bank" || paidOnCustomerBill;
+  const isReceiptRequired = !isReceiptOptional;
+
   const validate = () => {
     if (!selectedCustomerId) { toast.error("Please select a customer"); return false; }
+    if (isReceiptRequired && !receiptNumber.trim()) { toast.error("Please enter receipt number"); return false; }
     if (totalAmount <= 0) { toast.error("Please enter a valid amount"); return false; }
     if (paymentMethod === "cheque") {
       if (!chequeNumber.trim()) { toast.error("Please enter cheque number"); return false; }
@@ -286,7 +296,7 @@ export default function RetailPaymentEntryPage() {
     }
     if ((paymentMethod === "cash" || paymentMethod === "bank") && !selectedAccountId) { toast.error("Please select an account"); return false; }
     if (Object.values(settlements).filter((s) => s.selected && s.settleAmount > 0).length === 0) { toast.error("Please select at least one invoice to settle"); return false; }
-    if (totalAllocated > totalAmount) { toast.error("Allocated exceeds payment"); return false; }
+    if (totalAllocated > totalAmount) { toast.error("Allocated exceeds payment amount"); return false; }
     return true;
   };
 
@@ -299,11 +309,11 @@ export default function RetailPaymentEntryPage() {
         const res = await fetch("/api/payments", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ orderId: s.invoiceId, amount: s.settleAmount, date: paymentDate, method: paymentMethod, notes: notes || undefined, depositAccountId: paymentMethod !== "cheque" ? selectedAccountId : null, chequeNo: paymentMethod === "cheque" ? chequeNumber : null, chequeDate: paymentMethod === "cheque" ? chequeDate : null, bankId: paymentMethod === "cheque" ? selectedBankId : null, branchCode: paymentMethod === "cheque" ? branchCode : null, performedByName: getUserBusinessContext()?.name ?? null, performedByEmail: getUserBusinessContext()?.email ?? null }),
+          body: JSON.stringify({ orderId: s.invoiceId, customerId: selectedCustomerId, amount: s.settleAmount, date: paymentDate, method: paymentMethod, notes: notes || undefined, depositAccountId: paymentMethod !== "cheque" ? selectedAccountId : null, chequeNo: paymentMethod === "cheque" ? chequeNumber : null, chequeDate: paymentMethod === "cheque" ? chequeDate : null, bankId: paymentMethod === "cheque" ? selectedBankId : null, branchCode: paymentMethod === "cheque" ? branchCode : null, receiptNumber: receiptNumber || undefined, receiptBookId: receiptBookId || undefined, performedByName: getUserBusinessContext()?.name ?? null, performedByEmail: getUserBusinessContext()?.email ?? null }),
         });
-        if (res.ok) successCount++; else { console.error(await res.json()); failCount++; }
+        if (res.ok) successCount++; else failCount++;
       }
-      if (successCount > 0) { toast.success(`${successCount} invoice${successCount > 1 ? "s" : ""} settled!`); resetForm(); invalidatePaymentCaches(); }
+      if (successCount > 0) { toast.success(`Payment recorded successfully!`); resetForm(); invalidatePaymentCaches(); }
       if (failCount > 0) toast.error(`${failCount} payment(s) failed.`);
     } catch { toast.error("An unexpected error occurred"); } finally { setIsSubmitting(false); }
   };
@@ -358,6 +368,35 @@ export default function RetailPaymentEntryPage() {
                   </Command>
                 </PopoverContent>
               </Popover>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>
+                  Receipt Number {isReceiptRequired ? <span className="text-red-500">*</span> : <span className="text-muted-foreground font-normal text-xs">(Optional)</span>}
+                </Label>
+                <div className="flex items-center space-x-1.5 cursor-pointer">
+                  <Checkbox
+                    id="paidOnCustomerBill"
+                    checked={paidOnCustomerBill}
+                    onCheckedChange={(c) => setPaidOnCustomerBill(!!c)}
+                  />
+                  <label htmlFor="paidOnCustomerBill" className="text-xs text-muted-foreground cursor-pointer font-medium hover:text-foreground">
+                    Paid on Customer Bill
+                  </label>
+                </div>
+              </div>
+              <ReceiptNumberInput
+                value={receiptNumber}
+                onChange={(val, bookId) => {
+                  setReceiptNumber(val);
+                  setReceiptBookId(bookId);
+                }}
+                businessId={businessId || undefined}
+                required={isReceiptRequired}
+                hideLabel={true}
+                placeholder={isReceiptOptional ? "Optional (No paper receipt)" : "e.g. 1001"}
+              />
             </div>
 
             <div className="space-y-2">
@@ -545,7 +584,7 @@ export default function RetailPaymentEntryPage() {
                       const paymentCount = inv.payments?.length || 0;
 
                       return (
-                        <TableRow key={inv.id} className={cn(isSelected && "bg-emerald-50")}>
+                        <TableRow key={inv.id} className={cn(isSelected && "bg-emerald-50/40")}>
                           <TableCell>
                             <Checkbox
                               checked={isSelected}
@@ -773,8 +812,13 @@ export default function RetailPaymentEntryPage() {
                             <p className="font-medium">
                               {p.paymentDate ? new Date(p.paymentDate).toLocaleDateString("en-GB") : "—"}
                             </p>
-                            <p className="text-muted-foreground text-[11px] mt-0.5">
+                            <p className="text-muted-foreground text-[11px] mt-0.5 flex flex-wrap items-center gap-1">
                               Method: <span className="capitalize font-semibold text-slate-700">{p.method}</span>
+                              {(p.receiptNumber || p.receipt_number) && (
+                                <span className="font-bold font-mono text-purple-800 bg-purple-100 border border-purple-200 px-1.5 py-0.5 rounded text-[10px]">
+                                  Receipt #{p.receiptNumber || p.receipt_number}
+                                </span>
+                              )}
                               {p.chequeNo && ` (Cheque #${p.chequeNo})`}
                               {p.chequeStatus && (
                                 <span className={cn("ml-1 font-semibold", isReturned ? "text-red-700 bg-red-100 px-1.5 py-0.5 rounded border border-red-200" : "text-slate-600")}>
