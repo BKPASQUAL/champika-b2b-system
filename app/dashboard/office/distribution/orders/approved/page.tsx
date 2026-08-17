@@ -66,6 +66,7 @@ interface ApprovedOrder {
   salesRep: string;
   totalAmount: number;
   date: string;
+  notes?: string;
 }
 
 export default function DistributionApprovedOrdersPage() {
@@ -102,7 +103,10 @@ export default function DistributionApprovedOrdersPage() {
         fetch("/api/loading-groups"),
         fetch("/api/settings/categories?type=lorry"),
       ]);
-      if (ordersRes.ok) setOrders(await ordersRes.json());
+      if (ordersRes.ok) {
+        const fetchedOrders: ApprovedOrder[] = await ordersRes.json();
+        setOrders(fetchedOrders.filter((o) => !o.notes?.includes("[CANCEL_REQUEST:")));
+      }
       if (groupsRes.ok) setGroups(await groupsRes.json());
       if (lorryRes.ok) setLorries(await lorryRes.json());
     } catch {

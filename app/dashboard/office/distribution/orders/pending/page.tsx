@@ -103,7 +103,8 @@ export default function DistributionPendingOrdersPage() {
           order.customerName.toLowerCase().includes(searchLower);
         const repMatch =
           selectedRep === "all" || order.salesRep === selectedRep;
-        return textMatch && repMatch;
+        const cancelReqMatch = !order.notes?.includes("[CANCEL_REQUEST:");
+        return textMatch && repMatch && cancelReqMatch;
       })
       .sort((a, b) => {
         let cmp = 0;

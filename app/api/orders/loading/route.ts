@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
       const statuses = statusParam.split(",").map((s) => s.trim()).filter(Boolean);
       query = query.in("status", statuses);
     } else {
-      query = query.in("status", ["Approved", "Processing", "Checking", "Loading"]);
+      query = query.in("status", ["Loading"]);
     }
 
     // ✅ Filter by Business ID if provided
