@@ -74,7 +74,8 @@ interface ReconcileReturnItem {
   productName: string;
   sku: string;
   quantity: number;
-  returnType: "Good" | "Damage";
+  returnType: "Good" | "Damage" | "Exchange";
+  actualCondition: "Good" | "Damage" | null;
   price: number;
   totalValue: number;
   createdAt: string;
@@ -242,23 +243,26 @@ export default function OfficeReconcileLoadPage({
     }));
   };
 
-  const handleToggleReturnType = async (returnId: string, currentType: "Good" | "Damage") => {
+  const handleToggleReturnType = async (returnId: string, currentCondition: "Good" | "Damage") => {
     if (loadDetails?.status === "Completed") {
       toast.info("Load is completed. Returns cannot be modified.");
       return;
     }
-    const newType = currentType === "Good" ? "Damage" : "Good";
+    const newCondition = currentCondition === "Good" ? "Damage" : "Good";
     try {
+      // For "Exchange" returns this only sets their physical condition
+      // (actual_condition) — the API keeps return_type as "Exchange" so it
+      // keeps displaying as Exchange everywhere (invoices, this screen).
       const res = await fetch(`/api/inventory/returns/${returnId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ return_type: newType }),
+        body: JSON.stringify({ return_type: newCondition }),
       });
       if (!res.ok) throw new Error();
-      toast.success(`Marked item as ${newType}`);
+      toast.success(`Marked item as ${newCondition}`);
       fetchData();
     } catch {
-      toast.error("Failed to update return type");
+      toast.error("Failed to update return condition");
     }
   };
 
@@ -658,12 +662,19 @@ export default function OfficeReconcileLoadPage({
 
                           <div className="space-y-1.5">
                             {o.returns?.map((ret) => {
-                              const isGood = ret.returnType === "Good";
+                              const isExchange = ret.returnType === "Exchange";
+                              const effectiveCondition = ret.actualCondition || (ret.returnType === "Good" ? "Good" : "Damage");
+                              const isGood = effectiveCondition === "Good";
                               return (
                                 <div key={ret.id} className="p-2 rounded-lg bg-white border border-slate-200 flex items-center justify-between gap-2">
                                   <div className="min-w-0">
                                     <p className="font-semibold text-xs text-slate-800 truncate" title={ret.productName}>
                                       {ret.productName}
+                                      {isExchange && (
+                                        <span className="ml-1.5 text-[9px] font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded px-1 py-0.5 align-middle">
+                                          Exchange
+                                        </span>
+                                      )}
                                     </p>
                                     <p className="text-[10px] text-muted-foreground font-mono">
                                       {ret.sku} · {ret.quantity} Pcs · LKR {ret.totalValue.toLocaleString()}
@@ -673,14 +684,14 @@ export default function OfficeReconcileLoadPage({
                                     size="sm"
                                     variant="outline"
                                     disabled={isCompleted}
-                                    onClick={() => handleToggleReturnType(ret.id, ret.returnType)}
+                                    onClick={() => handleToggleReturnType(ret.id, effectiveCondition)}
                                     className={cn(
                                       "h-6 text-[10px] font-bold px-2 shrink-0 transition-all",
                                       isGood
                                         ? "bg-green-50 text-green-700 border-green-300 hover:bg-green-100"
                                         : "bg-red-50 text-red-700 border-red-300 hover:bg-red-100"
                                     )}
-                                    title="Click to toggle condition"
+                                    title="Click to toggle physical condition"
                                   >
                                     {isGood ? "✓ Good Stock" : "⚠ Damage"}
                                   </Button>

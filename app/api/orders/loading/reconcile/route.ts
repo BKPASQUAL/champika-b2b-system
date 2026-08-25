@@ -183,13 +183,62 @@ export async function POST(request: NextRequest) {
             const orConditions = invoiceNos.map((invNo) => `reason.ilike.%${invNo}%`).join(",");
             const { data: returnRecords } = await supabaseAdmin
               .from("inventory_returns")
-              .select("id, product_id, location_id, quantity, return_type, reason")
+              .select("id, product_id, location_id, quantity, return_type, actual_condition, reason")
               .or(orConditions);
 
             if (returnRecords && returnRecords.length > 0) {
               for (const ret of returnRecords) {
                 const qty = Number(ret.quantity) || 0;
                 if (qty <= 0 || !ret.product_id) continue;
+
+                if (ret.return_type === "Exchange") {
+                  // Exchange returns already had `quantity -= qty` and
+                  // `damaged_quantity += qty` applied when created (they're
+                  // provisionally quarantined as damaged/uninspected) — see
+                  // the "Process Returns" step in app/api/invoices/route.ts.
+                  // If staff later confirm via the Good/Damage toggle that
+                  // the item is actually Good, reverse that provisional
+                  // placement here. If confirmed Damage (or left unset), it's
+                  // already sitting in the right bucket — nothing to add,
+                  // adding again would double-count it.
+                  if (ret.actual_condition === "Good") {
+                    const { data: prod } = await supabaseAdmin
+                      .from("products")
+                      .select("stock_quantity, damaged_quantity")
+                      .eq("id", ret.product_id)
+                      .single();
+
+                    if (prod) {
+                      await supabaseAdmin
+                        .from("products")
+                        .update({
+                          stock_quantity: (prod.stock_quantity || 0) + qty,
+                          damaged_quantity: Math.max(0, (prod.damaged_quantity || 0) - qty),
+                        })
+                        .eq("id", ret.product_id);
+                    }
+
+                    if (ret.location_id) {
+                      const { data: locStock } = await supabaseAdmin
+                        .from("product_stocks")
+                        .select("id, quantity, damaged_quantity")
+                        .eq("product_id", ret.product_id)
+                        .eq("location_id", ret.location_id)
+                        .maybeSingle();
+
+                      if (locStock) {
+                        await supabaseAdmin
+                          .from("product_stocks")
+                          .update({
+                            quantity: (locStock.quantity || 0) + qty,
+                            damaged_quantity: Math.max(0, (locStock.damaged_quantity || 0) - qty),
+                          })
+                          .eq("id", locStock.id);
+                      }
+                    }
+                  }
+                  continue;
+                }
 
                 if (ret.return_type === "Good") {
                   // Add back to current sellable stock

@@ -15,9 +15,29 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid return_type" }, { status: 400 });
     }
 
+    const { data: existing, error: fetchErr } = await supabaseAdmin
+      .from("inventory_returns")
+      .select("return_type")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (fetchErr || !existing) {
+      return NextResponse.json({ error: "Return record not found" }, { status: 404 });
+    }
+
+    // "Exchange" returns must keep displaying as "Exchange" everywhere
+    // (invoices, reconcile screens) — the Good/Damage toggle only records
+    // the item's physical condition in `actual_condition`, it never
+    // overwrites the Exchange label. Non-Exchange rows keep the old
+    // behavior of updating return_type directly.
+    const updatePayload =
+      existing.return_type === "Exchange"
+        ? { actual_condition: return_type }
+        : { return_type };
+
     const { data, error } = await supabaseAdmin
       .from("inventory_returns")
-      .update({ return_type })
+      .update(updatePayload)
       .eq("id", id)
       .select()
       .single();
