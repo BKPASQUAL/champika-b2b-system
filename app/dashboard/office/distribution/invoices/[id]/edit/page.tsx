@@ -133,6 +133,7 @@ interface InvoiceHistory {
 interface ReturnRecord {
   id: string;
   quantity: number;
+  return_type?: "Good" | "Damage" | "Exchange";
   products: { selling_price: number };
 }
 
@@ -720,10 +721,10 @@ export default function DistributionEditInvoicePage({
   const subtotal = items.reduce((sum, item) => sum + item.total, 0);
   const totalItemDiscount = items.reduce((sum, item) => sum + item.discountAmount, 0);
   const grossTotal = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-  const refundTotal = returns.reduce(
-    (acc, r) => acc + r.quantity * (r.products?.selling_price || 0),
-    0
-  );
+  const refundTotal = returns.reduce((acc, r) => {
+    if ((r.return_type || "Exchange") === "Exchange") return acc;
+    return acc + r.quantity * (r.products?.selling_price || 0);
+  }, 0);
   const cashDiscountAmount = paymentMethod === "Cash & Discount" ? (subtotal * (parseFloat(cashDiscount) || 0)) / 100 : 0;
   const totalDiff = (subtotal * (parseFloat(extraDiscount) || 0)) / 100;
   const extraDiscountAmount = Math.max(0, totalDiff - cashDiscountAmount);

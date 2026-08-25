@@ -89,6 +89,7 @@ interface InvoiceItem {
 interface ReturnRecord {
   id: string;
   quantity: number;
+  return_type?: "Good" | "Damage" | "Exchange";
   products: {
     selling_price: number;
   };
@@ -404,11 +405,11 @@ export default function EditInvoicePage({
   // 1. Calculate Subtotal from Items
   const subtotal = items.reduce((sum, item) => sum + item.total, 0);
 
-  // 2. Calculate Refunds from Returns
-  const refundTotal = returns.reduce(
-    (acc, r) => acc + r.quantity * (r.products?.selling_price || 0),
-    0
-  );
+  // 2. Calculate Refunds from Returns (Exchange returns are a stock swap only — they don't reduce the bill)
+  const refundTotal = returns.reduce((acc, r) => {
+    if ((r.return_type || "Exchange") === "Exchange") return acc;
+    return acc + r.quantity * (r.products?.selling_price || 0);
+  }, 0);
 
   // 3. Calculate Extra Discount Amount
   const extraDiscountAmount = (subtotal * extraDiscount) / 100;

@@ -198,7 +198,10 @@ export async function POST(req: Request) {
     }
 
     // --- 6. Financial Updates (Invoice, Order, Customer Balance) ---
-    if (invoice_no || invoice_id) {
+    // "Exchange" returns are a stock swap only — the customer still owes the
+    // full original bill amount, so invoice/order totals and the customer's
+    // outstanding balance must NOT be reduced for this return type.
+    if ((invoice_no || invoice_id) && return_type !== "Exchange") {
       let invoiceQuery = supabaseAdmin
         .from("invoices")
         .select(
