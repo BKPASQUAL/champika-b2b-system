@@ -21,8 +21,7 @@ const supabaseAdmin = createClient(
 );
 
 const CORRECTIONS = [
-  { invoiceNo: "CHD-1038", correctTotal: 159936, newStatus: null },
-  { invoiceNo: "CHD-1041", correctTotal: 37670, newStatus: "Partial" },
+  { invoiceNo: "CHD-1208", correctTotal: 2087.4, newStatus: null },
 ];
 
 async function main() {

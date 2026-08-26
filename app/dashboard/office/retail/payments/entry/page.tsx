@@ -231,8 +231,34 @@ export default function RetailPaymentEntryPage() {
           });
         });
 
+        // Find latest payment date for selected customer
+        let latestCustomerPaymentDate: string | null = null;
+        (paymentsData || []).forEach((p: any) => {
+          if (p.is_cancelled) return;
+          const pCustId = p.customer_id || p.customerId || p.orders?.customer_id;
+          if (pCustId && pCustId === customerId) {
+            const pDate = p.payment_date || p.date;
+            if (pDate) {
+              const dStr = pDate.split("T")[0];
+              if (!latestCustomerPaymentDate || dStr > latestCustomerPaymentDate) {
+                latestCustomerPaymentDate = dStr;
+              }
+            }
+          }
+        });
+
         const filtered: PendingInvoice[] = invoicesData
-          .filter((inv: any) => inv.customerId === customerId && inv.orderStatus === "Delivered" && inv.status !== "Paid" && (inv.dueAmount ?? 0) > 0)
+          .filter((inv: any) => {
+            if (inv.customerId !== customerId || inv.orderStatus !== "Delivered") return false;
+            const isUnpaid = inv.status !== "Paid" && (inv.dueAmount ?? 0) > 0;
+            const invKey = inv.orderId || inv.id;
+            const history = paymentMap[invKey] || paymentMap[inv.id] || paymentMap[inv.invoiceNo] || [];
+            const hasLastPayment = latestCustomerPaymentDate
+              ? history.some((p) => p.paymentDate && p.paymentDate.split("T")[0] === latestCustomerPaymentDate)
+              : false;
+
+            return isUnpaid || hasLastPayment;
+          })
           .map((inv: any) => {
             const invKey = inv.orderId || inv.id;
             const history = paymentMap[invKey] || paymentMap[inv.id] || paymentMap[inv.invoiceNo] || [];
@@ -607,8 +633,14 @@ export default function RetailPaymentEntryPage() {
                           <TableCell className="text-right text-muted-foreground">
                             {formatCurrency(inv.paidAmount)}
                           </TableCell>
-                          <TableCell className="text-right font-semibold text-orange-600">
-                            {formatCurrency(inv.balance)}
+                          <TableCell className="text-right font-semibold">
+                            {inv.balance <= 0 ? (
+                              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 font-semibold gap-1 inline-flex items-center">
+                                <Check className="w-3.5 h-3.5 text-emerald-600" /> PAID
+                              </Badge>
+                            ) : (
+                              <span className="text-orange-600">{formatCurrency(inv.balance)}</span>
+                            )}
                           </TableCell>
                           <TableCell className="text-center">
                             <Button
@@ -681,9 +713,15 @@ export default function RetailPaymentEntryPage() {
                             </p>
                           </div>
                         </div>
-                        <span className="font-bold text-orange-600 text-sm">
-                          {formatCurrency(inv.balance)}
-                        </span>
+                        {inv.balance <= 0 ? (
+                          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 font-semibold gap-1 inline-flex items-center text-xs">
+                            <Check className="w-3.5 h-3.5 text-emerald-600" /> PAID
+                          </Badge>
+                        ) : (
+                          <span className="font-bold text-orange-600 text-sm">
+                            {formatCurrency(inv.balance)}
+                          </span>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-2 gap-1 text-xs border-t pt-2">

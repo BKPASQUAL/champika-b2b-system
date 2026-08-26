@@ -40,6 +40,8 @@ const COLOR = {
   overdueText: [161, 98, 7] as [number, number, number],
   overdueXHigh: [254, 226, 226] as [number, number, number],
   overdueXText: [185, 28, 28] as [number, number, number],
+  paidBg: [240, 253, 244] as [number, number, number], // Emerald-50 light green
+  paidText: [22, 101, 52] as [number, number, number], // Emerald-800 dark green
   paymentSubRowBg: [248, 250, 252] as [number, number, number],
   paymentSubRowText: [71, 85, 105] as [number, number, number],
   grandBg: [254, 243, 199] as [number, number, number],
@@ -53,57 +55,138 @@ const COLOR = {
 const M = 15;
 const START_Y = 56;
 
+export function filterStatementInvoices(rawInvoices: StatementInvoice[]): StatementInvoice[] {
+  if (!rawInvoices || rawInvoices.length === 0) return [];
+
+  // Find the latest payment date across all payments in rawInvoices
+  let latestPaymentDate: string | null = null;
+  rawInvoices.forEach((inv) => {
+    (inv.payments || []).forEach((p) => {
+      if (p.paymentDate) {
+        const dStr = p.paymentDate.split("T")[0];
+        if (!latestPaymentDate || dStr > latestPaymentDate) {
+          latestPaymentDate = dStr;
+        }
+      }
+    });
+  });
+
+  // An invoice is included if:
+  // - It has an active balance > 0 (UNPAID or PARTIAL)
+  // - OR it received a payment on the latest payment date (last payment invoice), even if balance === 0 / PAID
+  return rawInvoices.filter((inv) => {
+    const isOutstanding = inv.balance > 0 && inv.status?.toUpperCase() !== "PAID";
+    let isLastPaymentInvoice = false;
+
+    if (latestPaymentDate && inv.payments && inv.payments.length > 0) {
+      isLastPaymentInvoice = inv.payments.some(
+        (p) => p.paymentDate && p.paymentDate.split("T")[0] === latestPaymentDate
+      );
+    }
+
+    return isOutstanding || isLastPaymentInvoice;
+  });
+}
+
+function parseCompanyAndAgency(companyName: string = "CHAMPIKA HARDWARE") {
+  const mainTitle = "CHAMPIKA HARDWARE";
+  let subAgency = "";
+
+  const cUpper = (companyName || "").toUpperCase();
+  if (cUpper.includes("SIERRA")) {
+    subAgency = "Sierra Agency";
+  } else if (cUpper.includes("DISTRIBUTION")) {
+    subAgency = "Distribution Division";
+  } else if (cUpper.includes("ORANGE")) {
+    subAgency = "Orange Agency";
+  } else if (cUpper.includes("WIREMAN")) {
+    subAgency = "Wireman Agency";
+  } else if (cUpper.includes("RETAIL")) {
+    subAgency = "Retail Division";
+  } else if (cUpper.includes("HARDWARE")) {
+    subAgency = "";
+  } else if (companyName) {
+    subAgency = companyName;
+  }
+
+  return { mainTitle, subAgency };
+}
+
 function buildDoc(
   customerName: string,
   rawInvoices: StatementInvoice[],
-  companyName: string = "CHAMPIKA HARDWARE & DISTRIBUTION"
+  companyName: string = "CHAMPIKA HARDWARE"
 ): jsPDF {
-  // Automatically exclude/remove any fully paid invoices (balance <= 0 or status === "PAID")
-  const invoices = (rawInvoices || []).filter((inv) => inv.balance > 0 && inv.status?.toUpperCase() !== "PAID");
+  const invoices = filterStatementInvoices(rawInvoices);
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const today = new Date();
 
   // ── 1. Header & Title ──────────────────────────────────────────────────────
+  const { mainTitle, subAgency } = parseCompanyAndAgency(companyName);
+
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
+  doc.setFontSize(16);
   doc.setTextColor(...COLOR.titleBlue);
-  doc.text(companyName, M, 18);
+  doc.text(mainTitle, M, 16);
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(12);
-  doc.setTextColor(220, 38, 38);
-  doc.text("CUSTOMER OUTSTANDING STATEMENT", M, 25);
+  let cardY = 32;
+  if (subAgency) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.setTextColor(100, 116, 139); // Muted slate gray
+    doc.text(`(${subAgency})`, M, 21);
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
-  doc.setTextColor(...COLOR.mutedText);
-  doc.text(`Generated: ${today.toLocaleDateString("en-GB")}, ${today.toLocaleTimeString()}`, M, 31);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(220, 38, 38);
+    doc.text("CUSTOMER OUTSTANDING STATEMENT", M, 27);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(...COLOR.mutedText);
+    doc.text(`Generated: ${today.toLocaleDateString("en-GB")}, ${today.toLocaleTimeString()}`, M, 32);
+
+    cardY = 36;
+  } else {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(220, 38, 38);
+    doc.text("CUSTOMER OUTSTANDING STATEMENT", M, 23);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(...COLOR.mutedText);
+    doc.text(`Generated: ${today.toLocaleDateString("en-GB")}, ${today.toLocaleTimeString()}`, M, 28);
+  }
 
   // ── 2. Customer Info Card Box ──────────────────────────────────────────────
   doc.setFillColor(...COLOR.custBg);
-  doc.roundedRect(M, 35, pageWidth - M * 2, 16, 1.5, 1.5, "F");
+  doc.roundedRect(M, cardY, pageWidth - M * 2, 16, 1.5, 1.5, "F");
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
   doc.setTextColor(...COLOR.custText);
-  doc.text(`Customer: ${customerName}`, M + 4, 41);
+  doc.text(`Customer: ${customerName}`, M + 4, cardY + 6);
 
   const totalOutstanding = invoices.reduce((sum, inv) => sum + inv.balance, 0);
   const totalInvoiced = invoices.reduce((sum, inv) => sum + inv.totalAmount, 0);
   const totalPaid = invoices.reduce((sum, inv) => sum + inv.paidAmount, 0);
+  const activeUnpaidCount = invoices.filter((inv) => inv.balance > 0).length;
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
   doc.setTextColor(220, 38, 38);
-  doc.text(`Total Due: LKR ${fmt(totalOutstanding)}`, pageWidth - M - 4, 41, { align: "right" });
+  doc.text(`Total Due: LKR ${fmt(totalOutstanding)}`, pageWidth - M - 4, cardY + 6, { align: "right" });
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(...COLOR.mutedText);
-  doc.text(`Unpaid / Partial Invoices: ${invoices.length}`, M + 4, 47);
-  doc.text(`Total Invoiced: LKR ${fmt(totalInvoiced)} | Paid: LKR ${fmt(totalPaid)}`, pageWidth - M - 4, 47, { align: "right" });
+  doc.text(`Unpaid / Partial Invoices: ${activeUnpaidCount}`, M + 4, cardY + 12);
+  doc.text(`Total Invoiced: LKR ${fmt(totalInvoiced)} | Paid: LKR ${fmt(totalPaid)}`, pageWidth - M - 4, cardY + 12, { align: "right" });
+
+  const START_Y = cardY + 20;
 
   // ── 3. Build Table Data with Payment History Rows ─────────────────────────
   const tableData: any[] = [];
@@ -131,7 +214,8 @@ function buildDoc(
       nonChequePayments.forEach((p) => {
         const pDate = p.paymentDate ? new Date(p.paymentDate).toLocaleDateString("en-GB") : "—";
         const methodStr = p.method.toUpperCase();
-        const detailStr = `     Invoice ${inv.invoiceNo} -- Partial Payment on ${pDate} via ${methodStr}: LKR ${fmt(p.amount)}`;
+        const paymentLabel = inv.balance === 0 ? "Payment" : "Partial Payment";
+        const detailStr = `     Invoice ${inv.invoiceNo} -- ${paymentLabel} on ${pDate} via ${methodStr}: LKR ${fmt(p.amount)}`;
 
         tableData.push([
           {
@@ -237,7 +321,10 @@ function buildDoc(
       const days = parseInt(raw[2] || "0", 10);
       const status = String(raw[6]);
 
-      if (days >= 90) {
+      if (status === "PAID") {
+        data.cell.styles.fillColor = COLOR.paidBg;
+        data.cell.styles.textColor = COLOR.paidText;
+      } else if (days >= 90) {
         data.cell.styles.fillColor = COLOR.overdueXHigh;
         data.cell.styles.textColor = COLOR.overdueXText;
       } else if (days >= 45) {
@@ -246,8 +333,16 @@ function buildDoc(
       }
 
       if (data.column.index === 6) {
-        if (status === "PARTIAL") data.cell.styles.textColor = [180, 83, 9];
-        else if (status === "UNPAID") data.cell.styles.textColor = [185, 28, 28];
+        if (status === "PAID") {
+          data.cell.styles.textColor = [22, 101, 52];
+          data.cell.styles.fontStyle = "bold";
+        } else if (status === "PARTIAL") {
+          data.cell.styles.textColor = [180, 83, 9];
+          data.cell.styles.fontStyle = "bold";
+        } else if (status === "UNPAID") {
+          data.cell.styles.textColor = [185, 28, 28];
+          data.cell.styles.fontStyle = "bold";
+        }
       }
     },
     didDrawPage(_data) {
@@ -430,7 +525,7 @@ export function downloadCustomerStatement(
   rawInvoices: StatementInvoice[],
   companyName?: string
 ) {
-  const invoices = (rawInvoices || []).filter((inv) => inv.balance > 0 && inv.status?.toUpperCase() !== "PAID");
+  const invoices = filterStatementInvoices(rawInvoices);
   if (invoices.length === 0) {
     toast.info("No active outstanding invoices found for statement");
     return;
@@ -447,7 +542,7 @@ export function printCustomerStatement(
   rawInvoices: StatementInvoice[],
   companyName?: string
 ) {
-  const invoices = (rawInvoices || []).filter((inv) => inv.balance > 0 && inv.status?.toUpperCase() !== "PAID");
+  const invoices = filterStatementInvoices(rawInvoices);
   if (invoices.length === 0) {
     toast.info("No active outstanding invoices found for statement");
     return;
@@ -483,16 +578,19 @@ export async function shareCustomerStatement(
   rawInvoices: StatementInvoice[],
   companyName?: string
 ) {
-  const invoices = (rawInvoices || []).filter((inv) => inv.balance > 0 && inv.status?.toUpperCase() !== "PAID");
+  const invoices = filterStatementInvoices(rawInvoices);
   if (invoices.length === 0) {
     toast.info("No active outstanding invoices found for statement");
     return;
   }
   const totalDue = invoices.reduce((sum, i) => sum + i.balance, 0);
 
+  const { mainTitle, subAgency } = parseCompanyAndAgency(companyName);
+  const agencyLabel = subAgency ? ` (${subAgency})` : "";
+
   // WhatsApp text summary
-  let msg = `*Customer Statement - ${customerName}*\n`;
-  msg += `*${companyName || "Champika Hardware"}*\n\n`;
+  let msg = `*${mainTitle}${agencyLabel}*\n`;
+  msg += `*Customer Statement - ${customerName}*\n\n`;
   msg += `*Total Outstanding Balance:* LKR ${fmt(totalDue)}\n`;
   msg += `*Pending Invoices:* ${invoices.length}\n\n`;
   msg += `*Invoice Breakdown:*\n`;
@@ -502,7 +600,8 @@ export async function shareCustomerStatement(
     const days = inv.date
       ? Math.max(0, Math.floor((new Date().getTime() - new Date(inv.date).getTime()) / (1000 * 60 * 60 * 24)))
       : 0;
-    msg += `• *${inv.invoiceNo}* (${invDate}, ${days} days): Due LKR ${fmt(inv.balance)} (Total LKR ${fmt(inv.totalAmount)})\n`;
+    const dueStr = inv.balance === 0 ? "*✅ PAID*" : `Due LKR ${fmt(inv.balance)}`;
+    msg += `• *${inv.invoiceNo}* (${invDate}, ${days} days): ${dueStr} (Total LKR ${fmt(inv.totalAmount)})\n`;
     if (inv.payments && inv.payments.length > 0) {
       const nonChequePayments = inv.payments.filter(
         (p) => p.method?.toLowerCase() !== "cheque" && !Boolean(p.chequeNo)

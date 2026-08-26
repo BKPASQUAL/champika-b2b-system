@@ -328,31 +328,25 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
             size="sm"
             onClick={() => {
               if (!data || !data.customer) return;
-              const items: StatementInvoice[] = deliveredInvoices
-                .filter((inv: any) => inv.dueAmount > 0 && String(inv.status).toLowerCase() !== "paid")
-                .map((inv: any) => ({
-                  id: inv.id,
-                  invoiceNo: inv.invoiceNo,
-                  date: inv.date,
-                  totalAmount: inv.totalAmount,
-                  paidAmount: inv.paidAmount,
-                  balance: inv.dueAmount,
-                  status: inv.status,
-                  payments: (data?.payments || [])
-                    .filter((p: any) => p.invoiceNo === inv.invoiceNo || p.invoiceId === inv.id)
-                    .map((p: any) => ({
-                      id: p.id,
-                      paymentDate: p.date,
-                      amount: p.amount,
-                      method: p.method,
-                      chequeNo: p.chequeNo,
-                      chequeStatus: p.chequeStatus,
-                    })),
-                }));
-              if (items.length === 0) {
-                toast.info(`No active outstanding bills for ${data.customer.shopName}`);
-                return;
-              }
+              const items: StatementInvoice[] = deliveredInvoices.map((inv: any) => ({
+                id: inv.id,
+                invoiceNo: inv.invoiceNo,
+                date: inv.date,
+                totalAmount: inv.totalAmount,
+                paidAmount: inv.paidAmount,
+                balance: inv.dueAmount,
+                status: inv.status,
+                payments: (data?.payments || [])
+                  .filter((p: any) => p.invoiceNo === inv.invoiceNo || p.invoiceId === inv.id)
+                  .map((p: any) => ({
+                    id: p.id,
+                    paymentDate: p.date,
+                    amount: p.amount,
+                    method: p.method,
+                    chequeNo: p.chequeNo,
+                    chequeStatus: p.chequeStatus,
+                  })),
+              }));
               downloadCustomerStatement(data.customer.shopName, items, data.customer.businessName);
             }}
             disabled={loading}
@@ -365,31 +359,25 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
             size="sm"
             onClick={() => {
               if (!data || !data.customer) return;
-              const items: StatementInvoice[] = deliveredInvoices
-                .filter((inv: any) => inv.dueAmount > 0 && String(inv.status).toLowerCase() !== "paid")
-                .map((inv: any) => ({
-                  id: inv.id,
-                  invoiceNo: inv.invoiceNo,
-                  date: inv.date,
-                  totalAmount: inv.totalAmount,
-                  paidAmount: inv.paidAmount,
-                  balance: inv.dueAmount,
-                  status: inv.status,
-                  payments: (data?.payments || [])
-                    .filter((p: any) => p.invoiceNo === inv.invoiceNo || p.invoiceId === inv.id)
-                    .map((p: any) => ({
-                      id: p.id,
-                      paymentDate: p.date,
-                      amount: p.amount,
-                      method: p.method,
-                      chequeNo: p.chequeNo,
-                      chequeStatus: p.chequeStatus,
-                    })),
-                }));
-              if (items.length === 0) {
-                toast.info(`No active outstanding bills for ${data.customer.shopName}`);
-                return;
-              }
+              const items: StatementInvoice[] = deliveredInvoices.map((inv: any) => ({
+                id: inv.id,
+                invoiceNo: inv.invoiceNo,
+                date: inv.date,
+                totalAmount: inv.totalAmount,
+                paidAmount: inv.paidAmount,
+                balance: inv.dueAmount,
+                status: inv.status,
+                payments: (data?.payments || [])
+                  .filter((p: any) => p.invoiceNo === inv.invoiceNo || p.invoiceId === inv.id)
+                  .map((p: any) => ({
+                    id: p.id,
+                    paymentDate: p.date,
+                    amount: p.amount,
+                    method: p.method,
+                    chequeNo: p.chequeNo,
+                    chequeStatus: p.chequeStatus,
+                  })),
+              }));
               shareCustomerStatement(data.customer.shopName, items, data.customer.businessName);
             }}
             disabled={loading}
