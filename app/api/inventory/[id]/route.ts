@@ -50,12 +50,13 @@ export async function GET(
         `,
         )
         .eq("location_id", id)
+        .order("id")
         .range(page * pageSize, (page + 1) * pageSize - 1);
 
       // When includeAll=true (e.g. damage reporting), show all products with a stock record
-      // Otherwise only show products that have stock > 0
+      // Otherwise show products that have non-zero stock or damaged stock
       if (!includeAll) {
-        query = query.or("quantity.gt.0,damaged_quantity.gt.0");
+        query = query.or("quantity.neq.0,damaged_quantity.gt.0");
       }
 
       // ✅ Apply agency supplier filter if requested
@@ -78,19 +79,19 @@ export async function GET(
     // 3. Calculate Stats
     const safeStocks = stocks || [];
 
-    // Total Items = Good + Damaged
-    const totalItems = safeStocks.reduce(
-      (sum, item) => sum + Number(item.quantity),
+    // Total Items = Good (net)
+    const rawItems = safeStocks.reduce(
+      (sum, item) => sum + Number(item.quantity || 0),
       0,
     );
-    const totalDamaged = safeStocks.reduce(
+    const rawDamaged = safeStocks.reduce(
       (sum, item) => sum + Number(item.damaged_quantity || 0),
       0,
     );
 
-    const totalValue = safeStocks.reduce(
+    const rawValue = safeStocks.reduce(
       (sum, item: any) =>
-        sum + Number(item.quantity) * (item.products?.actual_cost_price || item.products?.cost_price || 0),
+        sum + Number(item.quantity || 0) * (item.products?.actual_cost_price || item.products?.cost_price || 0),
       0,
     );
 
@@ -105,12 +106,16 @@ export async function GET(
         damagedQuantity: stockItem.damaged_quantity || 0, // Map damage qty
         lastUpdated: stockItem.last_updated,
         value:
-          Number(stockItem.quantity) * (stockItem.products?.actual_cost_price || stockItem.products?.cost_price || 0),
+          Math.round(
+            Number(stockItem.quantity || 0) *
+              (stockItem.products?.actual_cost_price || stockItem.products?.cost_price || 0) *
+              100,
+          ) / 100,
       })),
       stats: {
-        totalItems,
-        totalDamaged,
-        totalValue,
+        totalItems: Math.round(rawItems * 100) / 100,
+        totalDamaged: Math.round(rawDamaged * 100) / 100,
+        totalValue: Math.round(rawValue * 100) / 100,
       },
     });
   } catch (error: any) {

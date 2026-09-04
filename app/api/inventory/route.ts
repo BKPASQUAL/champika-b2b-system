@@ -41,6 +41,7 @@ export async function GET(request: NextRequest) {
         .select(
           "location_id, quantity, product_id, products!inner(cost_price, actual_cost_price, selling_price, supplier_name)",
         )
+        .order("id")
         .range(stocksPage * pageSize, (stocksPage + 1) * pageSize - 1);
 
       if (locationIds.length > 0) {
@@ -110,11 +111,11 @@ export async function GET(request: NextRequest) {
     const locationStats = locations.map((loc: any) => {
       const locStocks = stocks.filter((s: any) => s.location_id === loc.id);
 
-      const totalItems = locStocks.reduce(
+      const rawItems = locStocks.reduce(
         (sum: number, s: any) => sum + Number(s.quantity),
         0,
       );
-      const totalValue = locStocks.reduce(
+      const rawValue = locStocks.reduce(
         (sum: number, s: any) =>
           sum + Number(s.quantity) * (s.products?.actual_cost_price || s.products?.cost_price || 0),
         0,
@@ -125,8 +126,8 @@ export async function GET(request: NextRequest) {
         name: loc.name,
         // If business is null, it's the Main Warehouse
         business: loc.businesses?.name || "Main Warehouse",
-        totalItems,
-        totalValue,
+        totalItems: Math.round(rawItems * 100) / 100,
+        totalValue: Math.round(rawValue * 100) / 100,
         status: loc.is_active ? "Active" : "Inactive",
       };
     });

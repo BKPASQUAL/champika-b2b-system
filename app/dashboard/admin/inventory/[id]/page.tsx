@@ -26,6 +26,7 @@ import {
   FileDown,
   FileSpreadsheet,
   FileWarning,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -33,8 +34,8 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 
-// Import the settings component
 import { LocationSettingsSheet } from "./_components/LocationSettingsSheet";
+import { TablePagination } from "@/components/ui/TablePagination";
 
 export default function LocationInventoryPage() {
   const params = useParams();
@@ -42,6 +43,12 @@ export default function LocationInventoryPage() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "in_stock" | "zero_stock" | "negative_stock" | "damaged"
+  >("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [reconciling, setReconciling] = useState(false);
 
   const rawId = params?.id;
   const locationId = Array.isArray(rawId) ? rawId[0] : rawId;
@@ -52,7 +59,7 @@ export default function LocationInventoryPage() {
 
       try {
         setLoading(true);
-        const res = await fetch(`/api/inventory/${locationId}`);
+        const res = await fetch(`/api/inventory/${locationId}?includeAll=true`);
         if (!res.ok) throw new Error("Failed to load location data");
         setData(await res.json());
       } catch (error) {
@@ -64,6 +71,11 @@ export default function LocationInventoryPage() {
 
     fetchData();
   }, [locationId]);
+
+  // Reset pagination on search or filter change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter]);
 
   // --- Export Functions ---
 
@@ -134,7 +146,7 @@ export default function LocationInventoryPage() {
 
   // 1. Full Inventory Report
   const handleExportAll = (type: "pdf" | "excel") => {
-    const items = data?.stocks || [];
+    const items = filteredStocks || [];
     if (type === "pdf")
       generatePDF(items, "Location Inventory Report", "Inventory_Report");
     else generateExcel(items, "Inventory", "Inventory_Report");
@@ -161,10 +173,68 @@ export default function LocationInventoryPage() {
     return <div>Location not found</div>;
   }
 
-  const filteredStocks = data.stocks.filter(
-    (s: any) =>
+  const handleReconcileNegative = async () => {
+    if (
+      !confirm(
+        `Are you sure you want to reset all ${negativeStockCount} negative stock item(s) to 0 at ${data?.location?.name || "this location"}?\n\nThis will adjust all negative stock quantities to 0 and record audit entries.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setReconciling(true);
+      const res = await fetch("/api/inventory/reconcile-negative", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          locationId,
+          reason: "Manual bulk reconciliation of negative stock to 0",
+        }),
+      });
+
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Reconciliation failed");
+
+      toast.success(
+        result.message || `Successfully reset ${result.count} items to 0!`
+      );
+
+      // Refetch page data
+      const refreshRes = await fetch(`/api/inventory/${locationId}?includeAll=true`);
+      if (refreshRes.ok) {
+        setData(await refreshRes.json());
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to reset negative stock");
+    } finally {
+      setReconciling(false);
+    }
+  };
+
+  const allStocks = data?.stocks || [];
+  const inStockCount = allStocks.filter((s: any) => Number(s.quantity) > 0).length;
+  const zeroStockCount = allStocks.filter((s: any) => Number(s.quantity) === 0).length;
+  const negativeStockCount = allStocks.filter((s: any) => Number(s.quantity) < 0).length;
+  const damagedStockCount = allStocks.filter((s: any) => Number(s.damagedQuantity) > 0).length;
+
+  const filteredStocks = allStocks.filter((s: any) => {
+    const matchesSearch =
       s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.sku.toLowerCase().includes(searchQuery.toLowerCase())
+      s.sku.toLowerCase().includes(searchQuery.toLowerCase());
+    if (!matchesSearch) return false;
+
+    if (statusFilter === "in_stock") return Number(s.quantity) > 0;
+    if (statusFilter === "zero_stock") return Number(s.quantity) === 0;
+    if (statusFilter === "negative_stock") return Number(s.quantity) < 0;
+    if (statusFilter === "damaged") return Number(s.damagedQuantity) > 0;
+    return true;
+  });
+
+  const totalPages = Math.ceil(filteredStocks.length / itemsPerPage);
+  const paginatedStocks = filteredStocks.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
   );
 
   return (
@@ -205,7 +275,7 @@ export default function LocationInventoryPage() {
               variant="ghost"
               size="sm"
               onClick={() => handleExportAll("pdf")}
-              title="Export All PDF"
+              title="Export Filtered PDF"
             >
               <FileDown className="w-4 h-4 mr-2" /> PDF
             </Button>
@@ -213,7 +283,7 @@ export default function LocationInventoryPage() {
               variant="ghost"
               size="sm"
               onClick={() => handleExportAll("excel")}
-              title="Export All Excel"
+              title="Export Filtered Excel"
             >
               <FileSpreadsheet className="w-4 h-4 mr-2" /> Excel
             </Button>
@@ -240,50 +310,85 @@ export default function LocationInventoryPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
+        <Card
+          className="cursor-pointer hover:border-primary transition-colors"
+          onClick={() => setStatusFilter("all")}
+        >
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Total Value</CardTitle>
             <DollarSign className="w-4 h-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              LKR {data.stats.totalValue.toLocaleString()}
+              LKR{" "}
+              {Number(data.stats.totalValue || 0).toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
             </div>
             <p className="text-xs text-muted-foreground">Current stock worth</p>
           </CardContent>
         </Card>
-        <Card>
+
+        <Card
+          className={`cursor-pointer transition-colors ${
+            statusFilter === "in_stock" ? "border-green-600 ring-1 ring-green-600" : "hover:border-green-500"
+          }`}
+          onClick={() => setStatusFilter("in_stock")}
+        >
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Good Stock</CardTitle>
             <Package className="w-4 h-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{data.stats.totalItems}</div>
-            <p className="text-xs text-muted-foreground">Usable units</p>
+            <div className="text-2xl font-bold">
+              {Number(data.stats.totalItems || 0).toLocaleString(undefined, {
+                maximumFractionDigits: 2,
+              })}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {inStockCount} SKUs available
+            </p>
           </CardContent>
         </Card>
-        <Card>
+
+        <Card
+          className={`cursor-pointer transition-colors ${
+            statusFilter === "zero_stock" ? "border-amber-600 ring-1 ring-amber-600" : "hover:border-amber-500"
+          }`}
+          onClick={() => setStatusFilter("zero_stock")}
+        >
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Zero Stock Items</CardTitle>
+            <AlertTriangle className="w-4 h-4 text-amber-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-amber-600">
+              {zeroStockCount}
+            </div>
+            <p className="text-xs text-muted-foreground">SKUs with 0 quantity (Click to view)</p>
+          </CardContent>
+        </Card>
+
+        <Card
+          className={`cursor-pointer transition-colors ${
+            statusFilter === "damaged" ? "border-red-600 ring-1 ring-red-600" : "hover:border-red-500"
+          }`}
+          onClick={() => setStatusFilter("damaged")}
+        >
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Damaged Stock</CardTitle>
             <AlertTriangle className="w-4 h-4 text-red-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">
-              {data.stats.totalDamaged}
+              {Number(data.stats.totalDamaged || 0).toLocaleString(undefined, {
+                maximumFractionDigits: 2,
+              })}
             </div>
-            <p className="text-xs text-muted-foreground">Unusable units</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">
-              Unique Products
-            </CardTitle>
-            <Package className="w-4 h-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{data.stocks.length}</div>
-            <p className="text-xs text-muted-foreground">SKUs available</p>
+            <p className="text-xs text-muted-foreground">
+              Unusable units ({damagedStockCount} SKUs)
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -291,16 +396,103 @@ export default function LocationInventoryPage() {
       {/* Stock Table */}
       <Card>
         <CardHeader>
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            <CardTitle>Current Inventory</CardTitle>
-            <div className="relative w-full md:w-72">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search products..."
-                className="pl-9"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div>
+                <CardTitle>Current Inventory</CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Use the 1-click filter buttons below to identify 0 stock, negative stock, or damaged stock.
+                </p>
+              </div>
+              <div className="relative w-full md:w-72">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search products..."
+                  className="pl-9"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* 1-Click Stock Status Filter Bar */}
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t">
+              <Button
+                variant={statusFilter === "all" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setStatusFilter("all")}
+                className="h-8 text-xs"
+              >
+                All Products ({allStocks.length})
+              </Button>
+              <Button
+                variant={statusFilter === "in_stock" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setStatusFilter("in_stock")}
+                className={`h-8 text-xs ${
+                  statusFilter === "in_stock"
+                    ? "bg-green-600 hover:bg-green-700 text-white"
+                    : "text-green-700 border-green-200 hover:bg-green-50"
+                }`}
+              >
+                In Stock (&gt;0) ({inStockCount})
+              </Button>
+              <Button
+                variant={statusFilter === "zero_stock" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setStatusFilter("zero_stock")}
+                className={`h-8 text-xs font-semibold ${
+                  statusFilter === "zero_stock"
+                    ? "bg-amber-600 hover:bg-amber-700 text-white"
+                    : "text-amber-700 border-amber-300 hover:bg-amber-50"
+                }`}
+              >
+                <AlertTriangle className="w-3.5 h-3.5 mr-1" />
+                Zero Stock (0) ({zeroStockCount})
+              </Button>
+              <Button
+                variant={statusFilter === "negative_stock" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setStatusFilter("negative_stock")}
+                className={`h-8 text-xs ${
+                  statusFilter === "negative_stock"
+                    ? "bg-red-600 hover:bg-red-700 text-white"
+                    : "text-red-700 border-red-200 hover:bg-red-50"
+                }`}
+              >
+                <AlertTriangle className="w-3.5 h-3.5 mr-1" />
+                Negative Stock (&lt;0) ({negativeStockCount})
+              </Button>
+
+              {negativeStockCount > 0 && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleReconcileNegative}
+                  disabled={reconciling}
+                  className="h-8 text-xs ml-auto font-semibold bg-red-700 hover:bg-red-800 shadow-sm"
+                  title="Bulk reset all negative stock items at this location to 0"
+                >
+                  {reconciling ? (
+                    <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                  )}
+                  Reset {negativeStockCount} Negative Stock(s) to 0
+                </Button>
+              )}
+              <Button
+                variant={statusFilter === "damaged" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setStatusFilter("damaged")}
+                className={`h-8 text-xs ${
+                  statusFilter === "damaged"
+                    ? "bg-orange-600 hover:bg-orange-700 text-white"
+                    : "text-orange-700 border-orange-200 hover:bg-orange-50"
+                }`}
+              >
+                Damaged Stock ({damagedStockCount})
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -321,54 +513,96 @@ export default function LocationInventoryPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredStocks.length === 0 ? (
+                {paginatedStocks.length === 0 ? (
                   <TableRow>
                     <TableCell
                       colSpan={7}
                       className="text-center py-8 text-muted-foreground"
                     >
-                      No stock found at this location.
+                      No stock items found for current filter.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredStocks.map((stock: any) => (
-                    <TableRow key={stock.id}>
-                      <TableCell className="font-mono text-xs">
-                        {stock.sku}
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {stock.name}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="font-normal">
-                          {stock.category}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right font-bold">
-                        {stock.quantity}{" "}
-                        <span className="text-xs font-normal text-muted-foreground">
-                          {stock.unit_of_measure}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right font-bold text-red-600">
-                        {stock.damagedQuantity > 0
-                          ? stock.damagedQuantity
-                          : "-"}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {stock.value.toLocaleString()}
-                      </TableCell>
-                      <TableCell className="text-right text-xs text-muted-foreground">
-                        {stock.lastUpdated
-                          ? format(new Date(stock.lastUpdated), "MMM d, yyyy")
-                          : "-"}
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  paginatedStocks.map((stock: any) => {
+                    const qty = Number(stock.quantity || 0);
+                    return (
+                      <TableRow key={stock.id}>
+                        <TableCell className="font-mono text-xs">
+                          {stock.sku}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {stock.name}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="font-normal">
+                            {stock.category}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right font-bold">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {qty > 0 ? (
+                              <span className="text-green-700">
+                                {qty.toLocaleString(undefined, {
+                                  maximumFractionDigits: 2,
+                                })}
+                              </span>
+                            ) : qty === 0 ? (
+                              <Badge
+                                variant="outline"
+                                className="bg-slate-100 text-slate-700 border-slate-300 font-medium"
+                              >
+                                0 (Out of Stock)
+                              </Badge>
+                            ) : (
+                              <Badge variant="destructive" className="font-medium">
+                                {qty.toLocaleString(undefined, {
+                                  maximumFractionDigits: 2,
+                                })} (Oversold)
+                              </Badge>
+                            )}
+                            <span className="text-xs font-normal text-muted-foreground">
+                              {stock.unit_of_measure}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right font-bold text-red-600">
+                          {stock.damagedQuantity > 0
+                            ? Number(stock.damagedQuantity).toLocaleString(
+                                undefined,
+                                { maximumFractionDigits: 2 }
+                              )
+                            : "-"}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {Number(stock.value || 0).toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </TableCell>
+                        <TableCell className="text-right text-xs text-muted-foreground">
+                          {stock.lastUpdated
+                            ? format(new Date(stock.lastUpdated), "MMM d, yyyy")
+                            : "-"}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
           </div>
+
+          <TablePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={filteredStocks.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={(newSize) => {
+              setItemsPerPage(newSize);
+              setCurrentPage(1);
+            }}
+          />
         </CardContent>
       </Card>
     </div>
