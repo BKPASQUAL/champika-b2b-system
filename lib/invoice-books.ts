@@ -42,19 +42,20 @@ export async function getOrCreateActiveRepBook(
       repName.toLowerCase().includes("direct") ||
       repName.toLowerCase().includes("champika hardware");
 
+    // Direct Rep uses standard continuous sequence (CHD-0060, CHD-0061...) unless a manual book is explicitly assigned.
+    if (isDirectRep) {
+      return null;
+    }
+
     // 3. Find highest end_number across all existing invoice_books to determine next available 1000 range
     const { data: allBooks } = await supabaseAdmin
       .from("invoice_books")
       .select("start_number, end_number");
 
-    let maxEndNum = 1999; // Default starting boundary (so initial range is 2000 - 2999)
-    let has2000Block = false;
+    let maxEndNum = 1999; // Default starting boundary (so initial range for reps is 2000 - 2999)
 
     if (allBooks && allBooks.length > 0) {
       for (const b of allBooks) {
-        if (b.start_number === 2000 || (b.start_number <= 2000 && b.end_number >= 2999)) {
-          has2000Block = true;
-        }
         if (b.end_number && Number(b.end_number) > maxEndNum) {
           maxEndNum = Number(b.end_number);
         }
@@ -62,15 +63,9 @@ export async function getOrCreateActiveRepBook(
     }
 
     // Calculate next 1000-block range start
-    let nextStart = Math.max(2000, Math.floor(maxEndNum / 1000) * 1000 + 1000);
-
-    // If Direct Rep is creating and range 2000-2999 is free, prioritize 2000 for Direct Rep
-    if (isDirectRep && !has2000Block) {
-      nextStart = 2000;
-    }
-
+    const nextStart = Math.max(2000, Math.floor(maxEndNum / 1000) * 1000 + 1000);
     const nextEnd = nextStart + 999;
-    const bookNumber = isDirectRep ? "DIR-AUTO" : `AUTO-${nextStart}`;
+    const bookNumber = `AUTO-${nextStart}`;
     const prefix = "CHD";
 
     // 4. Create and insert new active 1000-bill range book

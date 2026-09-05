@@ -289,7 +289,9 @@ export async function POST(request: NextRequest) {
         ...combined.map((inv: any) => {
           const parts = ((inv.invoice_no as string) || "").split("-");
           const n = parseInt(parts[parts.length - 1], 10);
-          return isNaN(n) ? 0 : n;
+          // Standard business continuous sequence excludes Rep 1000-block ranges (>= 2000)
+          if (isNaN(n) || n >= 2000) return 0;
+          return n;
         })
       );
       return `${prefix}-${String(maxSeq + 1 + offset).padStart(4, "0")}`;
