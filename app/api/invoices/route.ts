@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
 import { BUSINESS_IDS, BUSINESS_NAMES } from "@/app/config/business-constants";
 import { triggerAgencyBillsForInvoice } from "@/app/lib/inter-branch-billing";
+import { getOrCreateActiveRepBook } from "@/lib/invoice-books";
 
 // --- Validation Schemas ---
 
@@ -242,10 +243,7 @@ export async function POST(request: NextRequest) {
     }
 
     // -------------------------------------------------------------
-    // 2. Generate Invoice Number with per-business prefix
-    //    Distribution → CHD-0001 | Retail → CHR-0001
-    //    Orange → OR-0001 | Sierra → SI-0001 | Wireman → WI-0001
-    //    Rep portal (no business) → INV-0001
+    // 2. Generate Invoice Number with per-business prefix or Sales Rep assigned Invoice Book
     // -------------------------------------------------------------
     const INVOICE_PREFIXES: Record<string, string> = {
       [BUSINESS_IDS.CHAMPIKA_DISTRIBUTION]: "CHD",
@@ -258,7 +256,19 @@ export async function POST(request: NextRequest) {
       ? (INVOICE_PREFIXES[resolvedBusinessId] ?? "INV")
       : "INV";
 
+    // Get or Auto-Allocate Active Invoice Book for Sales Rep (Priority: Manual Assigned > Auto 1000 Range)
+    let activeRepBook: any = null;
+    if (val.salesRepId) {
+      activeRepBook = await getOrCreateActiveRepBook(val.salesRepId, resolvedBusinessId);
+    }
+
     const getNextInvoiceNo = async (offset = 0): Promise<string> => {
+      if (activeRepBook) {
+        const nextNum = Number(activeRepBook.current_number) + offset;
+        const bPrefix = activeRepBook.prefix || prefix;
+        return `${bPrefix}-${String(nextNum).padStart(4, "0")}`;
+      }
+
       const [createdRes, noRes] = await Promise.all([
         supabaseAdmin
           .from("invoices")
@@ -610,6 +620,24 @@ export async function POST(request: NextRequest) {
     }
 
     if (invoiceError) throw invoiceError;
+
+    // If invoice was created from an active Rep Invoice Book, update the current_number
+    if (activeRepBook) {
+      const nextCurrent = Number(activeRepBook.current_number) + 1;
+      const isCompleted = nextCurrent > Number(activeRepBook.end_number);
+      try {
+        await supabaseAdmin
+          .from("invoice_books")
+          .update({
+            current_number: nextCurrent,
+            status: isCompleted ? "Completed" : "Active",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", activeRepBook.id);
+      } catch (e: any) {
+        console.error("Error updating invoice_book counter:", e.message);
+      }
+    }
 
     // Log initial creation to invoice_history
     const activeUserId = val.userId || val.salesRepId || null;

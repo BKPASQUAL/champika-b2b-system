@@ -111,6 +111,12 @@ export const distributionNavItems: DistNavSection[] = [
         icon: Receipt,
       },
       {
+        name: "Invoice Books",
+        href: "/dashboard/office/distribution/invoice-books",
+        icon: ScrollText,
+        description: "Assigned rep invoice ranges",
+      },
+      {
         name: "Payments Recv",
         href: "/dashboard/office/distribution/payments",
         icon: Banknote,
