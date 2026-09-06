@@ -10,6 +10,13 @@ import {
 import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 export async function GET(request: NextRequest) {
+  // Verify cron secret to prevent unauthorized public triggers
+  const authHeader = request.headers.get("authorization");
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   // Compute previous month — run on the 1st so "previous month" = last month
   const now = new Date();
   let year = now.getFullYear();

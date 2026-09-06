@@ -160,26 +160,30 @@ export const generateInvoicePdfBlob = async (
       ? invoiceOrId
       : invoiceOrId.id || invoiceOrId._id;
 
-  // ── 1. Try server-side Puppeteer (20 s timeout) ──────────────────────────
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 20000);
+  const disableServerPdf = process.env.NEXT_PUBLIC_DISABLE_SERVER_PDF === "true";
+
+  // ── 1. Try server-side Puppeteer (if not disabled to save Vercel costs) ────
+  if (!disableServerPdf) {
     try {
-      const res = await fetch(
-        `/api/invoices/${id}/pdf?division=${divisionKey}`,
-        { signal: controller.signal }
-      );
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const disposition = res.headers.get("Content-Disposition") || "";
-      const match = disposition.match(/filename="([^"]+)"/);
-      const filename = match ? match[1] : `${id}.pdf`;
-      const blob = await res.blob();
-      return { blob, filename };
-    } finally {
-      clearTimeout(timer);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
+      try {
+        const res = await fetch(
+          `/api/invoices/${id}/pdf?division=${divisionKey}`,
+          { signal: controller.signal }
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const disposition = res.headers.get("Content-Disposition") || "";
+        const match = disposition.match(/filename="([^"]+)"/);
+        const filename = match ? match[1] : `${id}.pdf`;
+        const blob = await res.blob();
+        return { blob, filename };
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch {
+      // Server unavailable or slow — fall through to fast client-side generation
     }
-  } catch {
-    // Server unavailable — fall through to client-side generation
   }
 
   // ── 2. Client-side fallback: html2canvas + jsPDF ─────────────────────────

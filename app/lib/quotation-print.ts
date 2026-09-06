@@ -110,26 +110,30 @@ export const generateQuotationPdfBlob = async (
       ? quotationOrId
       : quotationOrId.id || quotationOrId._id;
 
-  // Try server-side Puppeteer first
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 20000);
+  const disableServerPdf = process.env.NEXT_PUBLIC_DISABLE_SERVER_PDF === "true";
+
+  // Try server-side Puppeteer first (if not disabled to save Vercel costs)
+  if (!disableServerPdf) {
     try {
-      const res = await fetch(
-        `/api/quotations/${id}/pdf?division=${divisionKey}&showBranding=${showBranding}`,
-        { signal: controller.signal }
-      );
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const disposition = res.headers.get("Content-Disposition") || "";
-      const match = disposition.match(/filename="([^"]+)"/);
-      const filename = match ? match[1] : `${id}.pdf`;
-      const blob = await res.blob();
-      return { blob, filename };
-    } finally {
-      clearTimeout(timer);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
+      try {
+        const res = await fetch(
+          `/api/quotations/${id}/pdf?division=${divisionKey}&showBranding=${showBranding}`,
+          { signal: controller.signal }
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const disposition = res.headers.get("Content-Disposition") || "";
+        const match = disposition.match(/filename="([^"]+)"/);
+        const filename = match ? match[1] : `${id}.pdf`;
+        const blob = await res.blob();
+        return { blob, filename };
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch {
+      // Fallback to fast client-side PDF
     }
-  } catch {
-    // Fallback to client-side
   }
 
   // Client-side fallback: html2canvas + jsPDF

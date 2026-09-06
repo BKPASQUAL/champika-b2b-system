@@ -256,14 +256,18 @@ export async function POST(request: NextRequest) {
       ? (INVOICE_PREFIXES[resolvedBusinessId] ?? "INV")
       : "INV";
 
+    // Invoice Books strictly apply ONLY to Champika Distribution portal!
+    // Retail (CHR), Orange (OR), Sierra (SI), Wireman/Ruhunu (WI) use their own sequential invoice numbering.
+    const isDistribution = resolvedBusinessId === BUSINESS_IDS.CHAMPIKA_DISTRIBUTION;
+
     // Get or Auto-Allocate Active Invoice Book for Sales Rep (Priority: Manual Assigned > Auto 1000 Range)
     let activeRepBook: any = null;
-    if (val.salesRepId) {
+    if (isDistribution && val.salesRepId) {
       activeRepBook = await getOrCreateActiveRepBook(val.salesRepId, resolvedBusinessId);
     }
 
     const getNextInvoiceNo = async (offset = 0): Promise<string> => {
-      if (activeRepBook) {
+      if (isDistribution && activeRepBook) {
         const nextNum = Number(activeRepBook.current_number) + offset;
         const bPrefix = activeRepBook.prefix || prefix;
         return `${bPrefix}-${String(nextNum).padStart(4, "0")}`;
@@ -289,8 +293,8 @@ export async function POST(request: NextRequest) {
         ...combined.map((inv: any) => {
           const parts = ((inv.invoice_no as string) || "").split("-");
           const n = parseInt(parts[parts.length - 1], 10);
-          // Standard business continuous sequence excludes Rep 1000-block ranges (>= 2000)
-          if (isNaN(n) || n >= 2000) return 0;
+          // Standard business continuous sequence excludes Rep 1000-block ranges (>= 2000) ONLY for Distribution
+          if (isNaN(n) || (isDistribution && n >= 2000)) return 0;
           return n;
         })
       );
@@ -623,8 +627,8 @@ export async function POST(request: NextRequest) {
 
     if (invoiceError) throw invoiceError;
 
-    // If invoice was created from an active Rep Invoice Book, update the current_number
-    if (activeRepBook) {
+    // If invoice was created from an active Rep Invoice Book in Distribution, update the current_number
+    if (isDistribution && activeRepBook) {
       const nextCurrent = Number(activeRepBook.current_number) + 1;
       const isCompleted = nextCurrent > Number(activeRepBook.end_number);
       try {

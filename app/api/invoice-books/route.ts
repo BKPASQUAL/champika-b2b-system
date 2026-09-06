@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 const createInvoiceBookSchema = z.object({
   bookNumber: z.string().min(1, "Book number is required"),
@@ -88,7 +89,7 @@ export async function POST(request: NextRequest) {
         current_number: val.startNumber,
         assigned_to_user_id: userProfile.id,
         assigned_to_user_name: userName,
-        business_id: val.businessId || null,
+        business_id: val.businessId || BUSINESS_IDS.CHAMPIKA_DISTRIBUTION,
         status: "Active",
         created_by_name: val.performedByName || "Admin",
       })

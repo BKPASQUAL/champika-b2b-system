@@ -134,12 +134,16 @@ export function NotificationBell({
     }
   }, [businessId, today, chequeRoute, supplierPaymentsRoute]);
 
-  // Initial load + event listener + 5-min poll
+  // Initial load + event listener + 5-min poll (only when tab is visible)
   useEffect(() => {
     fetchNotifications();
     const handler = () => fetchNotifications();
     window.addEventListener("b2b:payment-mutated", handler);
-    const interval = setInterval(fetchNotifications, 5 * 60 * 1000);
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        fetchNotifications();
+      }
+    }, 5 * 60 * 1000);
     return () => {
       window.removeEventListener("b2b:payment-mutated", handler);
       clearInterval(interval);

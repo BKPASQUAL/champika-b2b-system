@@ -1,9 +1,14 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 /**
  * Returns an active invoice book for the given salesRepId.
  * If the sales rep does NOT have an active book, automatically allocates a 1000-bill range
  * (e.g., 2000-2999 for 1st rep/Direct, 3000-3999 for 2nd rep, 4000-4999 for 3rd rep, etc.)
+ *
+ * NOTE: Invoice books strictly apply ONLY to the Champika Distribution portal.
+ * Other portals (Retail with CHR, Orange with OR, Sierra with SI, Wireman/Ruhunu with WI)
+ * use their own continuous sequences and MUST NOT use or allocate invoice books.
  */
 export async function getOrCreateActiveRepBook(
   salesRepId: string,
@@ -11,13 +16,24 @@ export async function getOrCreateActiveRepBook(
 ) {
   if (!salesRepId) return null;
 
+  // Invoice books strictly apply ONLY to Champika Distribution portal
+  if (businessId && businessId !== BUSINESS_IDS.CHAMPIKA_DISTRIBUTION) {
+    return null;
+  }
+
   try {
     // 1. Check if rep has an explicit active assigned invoice_book (MANUAL & ASSIGNED PRIORITY)
-    const { data: existingActive, error: searchErr } = await supabaseAdmin
+    let bookQuery = supabaseAdmin
       .from("invoice_books")
       .select("*")
       .eq("assigned_to_user_id", salesRepId)
-      .eq("status", "Active")
+      .eq("status", "Active");
+
+    if (businessId) {
+      bookQuery = bookQuery.eq("business_id", businessId);
+    }
+
+    const { data: existingActive, error: searchErr } = await bookQuery
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -79,7 +95,7 @@ export async function getOrCreateActiveRepBook(
         current_number: nextStart,
         assigned_to_user_id: salesRepId,
         assigned_to_user_name: repName,
-        business_id: businessId || null,
+        business_id: businessId || BUSINESS_IDS.CHAMPIKA_DISTRIBUTION,
         status: "Active",
         created_by_name: "Auto-Allocator",
       })
