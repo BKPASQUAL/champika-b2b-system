@@ -124,7 +124,7 @@ export default function ApprovedOrdersPage() {
   );
 
   const totalAssigned = assignedOrderIds.size;
-  const totalUnassigned = orders.length - totalAssigned;
+  const totalUnassigned = unassignedOrders.length;
 
   const toggleExpand = (lorryName: string) =>
     setExpandedGroups((prev) => {

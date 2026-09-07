@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -116,7 +119,9 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json(formattedOrders);
+    return NextResponse.json(formattedOrders, {
+      headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0" },
+    });
   } catch (error: any) {
     console.error("Error fetching orders:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });

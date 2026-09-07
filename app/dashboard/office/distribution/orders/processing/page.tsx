@@ -47,6 +47,8 @@ import {
   PackageCheck,
   ClipboardCheck,
   Folder,
+  FolderPlus,
+  FolderX,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Order, OrderStatus } from "../types";
@@ -103,6 +105,10 @@ export default function DistributionProcessingOrdersPage() {
   const [pickedLorry, setPickedLorry] = useState("");
   const [assigningLorry, setAssigningLorry] = useState(false);
 
+  const [assignFolderOpen, setAssignFolderOpen] = useState(false);
+  const [pickedFolderId, setPickedFolderId] = useState<string>("");
+  const [folderBusy, setFolderBusy] = useState(false);
+
   const [moveAllCheckingOpen, setMoveAllCheckingOpen] = useState(false);
   const [movingAllChecking, setMovingAllChecking] = useState(false);
 
@@ -110,9 +116,9 @@ export default function DistributionProcessingOrdersPage() {
     setLoading(true);
     try {
       const [ordersRes, groupsRes, lorryRes] = await Promise.all([
-        fetch("/api/orders?status=Processing"),
-        fetch("/api/loading-groups"),
-        fetch("/api/settings/categories?type=lorry"),
+        fetch("/api/orders?status=Processing", { cache: "no-store" }),
+        fetch("/api/loading-groups", { cache: "no-store" }),
+        fetch("/api/settings/categories?type=lorry", { cache: "no-store" }),
       ]);
       if (ordersRes.ok) {
         const fetchedOrders: Order[] = await ordersRes.json();
@@ -149,6 +155,11 @@ export default function DistributionProcessingOrdersPage() {
     for (const g of groups) m[g.lorryNumber] = g;
     return m;
   }, [groups]);
+
+  const folderGroups = useMemo(
+    () => groups.filter((g) => !g.lorryNumber),
+    [groups]
+  );
 
   const groupKeys = useMemo(() => {
     const seen = new Map<string, LorryGroup>();
@@ -287,6 +298,87 @@ export default function DistributionProcessingOrdersPage() {
     }
   };
 
+  const handleAssignToExistingFolder = async () => {
+    if (!pickedFolderId) { toast.error("Please select a folder."); return; }
+    setFolderBusy(true);
+    try {
+      const res = await fetch(`/api/loading-groups/${pickedFolderId}/orders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderIds: selectedOrders }),
+      });
+      if (!res.ok) throw new Error("Failed to assign orders to folder");
+
+      const targetFolder = folderGroups.find((f) => f.id === pickedFolderId);
+      if (targetFolder) {
+        setLorryFilter(targetFolder.loadId);
+        sessionStorage.setItem("processing_lorryFilter", targetFolder.loadId);
+      }
+
+      toast.success(`${selectedOrders.length} order${selectedOrders.length !== 1 ? "s" : ""} added to folder.`);
+      setAssignFolderOpen(false);
+      setSelectedOrders([]);
+      setPickedFolderId("");
+      await fetchData();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setFolderBusy(false);
+    }
+  };
+
+  const handleCreateNewFolder = async () => {
+    setFolderBusy(true);
+    try {
+      const res = await fetch("/api/loading-groups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderIds: selectedOrders }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Failed to create folder");
+
+      if (result.loadId) {
+        setLorryFilter(result.loadId);
+        sessionStorage.setItem("processing_lorryFilter", result.loadId);
+      }
+
+      toast.success(`Folder ${result.loadId} created with ${selectedOrders.length} order(s).`);
+      setAssignFolderOpen(false);
+      setSelectedOrders([]);
+      setPickedFolderId("");
+      await fetchData();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setFolderBusy(false);
+    }
+  };
+
+  const handleRemoveFromFolder = async () => {
+    setFolderBusy(true);
+    try {
+      const res = await fetch("/api/loading-groups/unassign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderIds: selectedOrders }),
+      });
+      if (!res.ok) throw new Error("Failed to remove orders from folder");
+
+      toast.success(`${selectedOrders.length} order${selectedOrders.length !== 1 ? "s" : ""} unassigned from folder.`);
+      setAssignFolderOpen(false);
+      setSelectedOrders([]);
+      setPickedFolderId("");
+      setLorryFilter("all");
+      sessionStorage.setItem("processing_lorryFilter", "all");
+      await fetchData();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setFolderBusy(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center py-16">
@@ -349,6 +441,14 @@ export default function DistributionProcessingOrdersPage() {
             >
               <Download className="w-4 h-4 mr-2" />
               Download Summary ({selectedOrders.length})
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => { setPickedFolderId(""); setAssignFolderOpen(true); }}
+              className="bg-white border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+            >
+              <Folder className="w-4 h-4 mr-2" />
+              Folder ({selectedOrders.length})
             </Button>
             <Button
               variant="outline"
@@ -660,6 +760,118 @@ export default function DistributionProcessingOrdersPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Assign / Change Folder Dialog */}
+      <Dialog open={assignFolderOpen} onOpenChange={setAssignFolderOpen}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Folder className="h-5 w-5 text-indigo-600" />
+              Assign / Change Folder
+            </DialogTitle>
+            <DialogDescription>
+              Organize {selectedOrders.length} selected order{selectedOrders.length !== 1 ? "s" : ""} into a folder batch for picking and packing.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            {/* Action 1: Create Brand New Folder */}
+            <div className="rounded-xl border border-dashed border-indigo-200 bg-indigo-50/40 p-3 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-indigo-900">Create New Folder</p>
+                <p className="text-xs text-muted-foreground">Generate a new LOAD batch for these {selectedOrders.length} order(s)</p>
+              </div>
+              <Button
+                size="sm"
+                onClick={handleCreateNewFolder}
+                disabled={folderBusy}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white shrink-0 text-xs gap-1.5"
+              >
+                {folderBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FolderPlus className="h-3.5 w-3.5" />}
+                + New Folder
+              </Button>
+            </div>
+
+            {/* Existing Folders Selection */}
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                Or Move to Existing Folder
+              </p>
+              {folderGroups.length === 0 ? (
+                <div className="text-center py-6 border rounded-xl border-dashed bg-slate-50 text-muted-foreground text-xs">
+                  No active folders yet. Click &quot;+ New Folder&quot; above to create one.
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                  {folderGroups.map((folder) => {
+                    const isSelected = pickedFolderId === folder.id;
+                    return (
+                      <button
+                        key={folder.id}
+                        type="button"
+                        onClick={() => setPickedFolderId(folder.id)}
+                        className={`w-full text-left rounded-xl border p-3 transition-all flex items-center justify-between gap-2 ${
+                          isSelected
+                            ? "border-indigo-500 bg-indigo-50 ring-1 ring-indigo-400"
+                            : "border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Folder className={`h-4 w-4 shrink-0 ${isSelected ? "text-indigo-600" : "text-slate-400"}`} />
+                          <div>
+                            <p className={`font-semibold text-sm ${isSelected ? "text-indigo-700" : "text-slate-800"}`}>
+                              {folder.loadId}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              LKR {folder.totalAmount.toLocaleString()}
+                            </p>
+                          </div>
+                        </div>
+                        <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200 border text-xs">
+                          <PackageCheck className="h-3 w-3 mr-1" />
+                          {folder.orders.length} order{folder.orders.length !== 1 ? "s" : ""}
+                        </Badge>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Option to Unassign / Remove Folder */}
+            <div className="pt-2 border-t flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">Remove from any assigned folder:</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleRemoveFromFolder}
+                disabled={folderBusy}
+                className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 h-8 gap-1"
+              >
+                <FolderX className="h-3.5 w-3.5" />
+                Unassign Folder
+              </Button>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignFolderOpen(false)} disabled={folderBusy}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAssignToExistingFolder}
+              disabled={folderBusy || !pickedFolderId}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white"
+            >
+              {folderBusy ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Assigning...</>
+              ) : (
+                "Assign to Selected Folder"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Assign Lorry Dialog */}
       <Dialog open={assignLorryOpen} onOpenChange={setAssignLorryOpen}>

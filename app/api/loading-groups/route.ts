@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -54,47 +57,71 @@ export async function GET(request: NextRequest) {
     const { data: completedGroups } = await completedQuery;
 
     const groups = draftGroups ?? [];
-    const allGroupIds = [
-      ...(draftGroups ?? []).map((g: any) => g.id),
-      ...(completedGroups ?? []).map((g: any) => g.id),
-    ];
+    const draftGroupIds = (draftGroups ?? []).map((g: any) => g.id);
+    const completedGroupIds = (completedGroups ?? []).map((g: any) => g.id);
+
+    const ORDER_SELECT = `
+      id,
+      order_id,
+      invoice_no,
+      total_amount,
+      load_id,
+      status,
+      customers (shop_name),
+      invoices (invoice_no, status)
+    `;
 
     let ordersMap: Record<string, any[]> = {};
-    if (allGroupIds.length > 0) {
-      const { data: orders, error: ordErr } = await supabaseAdmin
+
+    // Draft groups (active folders/lorries) need every order regardless of
+    // status - this drives the "all delivered -> hide folder" and stale
+    // Pending cleanup logic below. Scoped to just Draft sheets, this stays
+    // small (only currently in-flight loads, not the full historical set).
+    let draftOrders: any[] = [];
+    if (draftGroupIds.length > 0) {
+      const { data, error: draftOrdErr } = await supabaseAdmin
         .from("orders")
-        .select(`
-          id,
-          order_id,
-          invoice_no,
-          total_amount,
-          load_id,
-          status,
-          customers (shop_name),
-          invoices (invoice_no, status)
-        `)
-        .in("load_id", allGroupIds);
+        .select(ORDER_SELECT)
+        .in("load_id", draftGroupIds);
+      if (draftOrdErr) throw draftOrdErr;
+      draftOrders = data ?? [];
+    }
 
-      if (ordErr) throw ordErr;
+    // Completed groups are only relevant here to detect leftover
+    // re-dispatch orders, so filter to those statuses in the query itself -
+    // pulling every historical Delivered order across all completed sheets
+    // blows past Supabase's default 1000-row cap and silently truncates the
+    // result, which is what made freshly-assigned orders vanish from folders.
+    let completedRedispatchOrders: any[] = [];
+    if (completedGroupIds.length > 0) {
+      const { data, error: completedOrdErr } = await supabaseAdmin
+        .from("orders")
+        .select(ORDER_SELECT)
+        .in("load_id", completedGroupIds)
+        .in("status", RE_DISPATCH_STATUSES);
+      if (completedOrdErr) throw completedOrdErr;
+      completedRedispatchOrders = data ?? [];
+    }
 
-      // Auto-clear load_id for any orders that drifted back to Pending
-      const staleIds = (orders ?? []).filter((o: any) => o.status === "Pending").map((o: any) => o.id);
-      if (staleIds.length > 0) {
-        await supabaseAdmin.from("orders").update({ load_id: null }).in("id", staleIds);
-      }
+    const orders = [...draftOrders, ...completedRedispatchOrders];
 
-      for (const o of (orders ?? []).filter((o: any) => o.status !== "Pending" && o.status !== "Cancelled")) {
-        const key = o.load_id;
-        if (!ordersMap[key]) ordersMap[key] = [];
-        ordersMap[key].push({
-          id: o.id,
-          orderId: o.order_id,
-          invoiceNo: o.invoices?.[0]?.invoice_no || o.invoice_no || "N/A",
-          shopName: (o.customers as any)?.[0]?.shop_name ?? (o.customers as any)?.shop_name ?? "Unknown",
-          totalAmount: o.total_amount,
-          status: o.status,
-        });
-      }
+    // Auto-clear load_id for any orders that drifted back to Pending
+    const staleIds = draftOrders.filter((o: any) => o.status === "Pending").map((o: any) => o.id);
+    if (staleIds.length > 0) {
+      await supabaseAdmin.from("orders").update({ load_id: null }).in("id", staleIds);
+    }
+
+    for (const o of orders.filter((o: any) => o.status !== "Pending" && o.status !== "Cancelled")) {
+      const key = o.load_id;
+      if (!ordersMap[key]) ordersMap[key] = [];
+      ordersMap[key].push({
+        id: o.id,
+        orderId: o.order_id,
+        invoiceNo: o.invoices?.[0]?.invoice_no || o.invoice_no || "N/A",
+        shopName: (o.customers as any)?.[0]?.shop_name ?? (o.customers as any)?.shop_name ?? "Unknown",
+        totalAmount: o.total_amount,
+        status: o.status,
+      });
     }
 
     // Build result from Draft groups (shown as active loading groups)
@@ -150,7 +177,9 @@ export async function GET(request: NextRequest) {
       })),
     ];
 
-    return NextResponse.json(result);
+    return NextResponse.json(result, {
+      headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0" },
+    });
   } catch (error: any) {
     console.error("GET /api/loading-groups error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -189,6 +218,16 @@ export async function POST(request: NextRequest) {
     let sheet: any = null;
     let sheetErr: any = null;
 
+    let targetBusinessId = businessId || null;
+    if (!targetBusinessId && orderIds?.[0]) {
+      const { data: ord } = await supabaseAdmin
+        .from("orders")
+        .select("business_id")
+        .eq("id", orderIds[0])
+        .maybeSingle();
+      targetBusinessId = ord?.business_id || null;
+    }
+
     for (let attempt = 0; attempt < 5; attempt++) {
       const loadIdStr = `${prefix}${nextId}`;
       const res = await supabaseAdmin
@@ -200,7 +239,7 @@ export async function POST(request: NextRequest) {
           helper_name: helperName || null,
           loading_date: new Date().toISOString().split("T")[0],
           status: "Draft",
-          ...(businessId ? { business_id: businessId } : {}),
+          business_id: targetBusinessId,
         })
         .select()
         .single();

@@ -99,9 +99,9 @@ export default function DistributionApprovedOrdersPage() {
     setLoading(true);
     try {
       const [ordersRes, groupsRes, lorryRes] = await Promise.all([
-        fetch("/api/orders?status=Approved"),
-        fetch("/api/loading-groups"),
-        fetch("/api/settings/categories?type=lorry"),
+        fetch("/api/orders?status=Approved", { cache: "no-store" }),
+        fetch("/api/loading-groups", { cache: "no-store" }),
+        fetch("/api/settings/categories?type=lorry", { cache: "no-store" }),
       ]);
       if (ordersRes.ok) {
         const fetchedOrders: ApprovedOrder[] = await ordersRes.json();
@@ -148,7 +148,7 @@ export default function DistributionApprovedOrdersPage() {
   );
 
   const totalAssigned = assignedOrderIds.size;
-  const totalUnassigned = orders.length - totalAssigned;
+  const totalUnassigned = unassignedOrders.length;
 
   const toggleExpand = (lorryName: string) =>
     setExpandedGroups((prev) => {
