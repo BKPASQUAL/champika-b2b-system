@@ -103,7 +103,26 @@ export default function DirectBillPage() {
   const [invoiceDate, setInvoiceDate] = useState(
     new Date().toISOString().split("T")[0]
   );
-  const [invoiceNumber] = useState("CHD-AUTO");
+  const [invoiceNumber, setInvoiceNumber] = useState("Loading...");
+
+  // Fetch next Direct Invoice Number Preview
+  useEffect(() => {
+    const fetchNextNumber = async () => {
+      try {
+        const res = await fetch(`/api/invoices/next-number?businessId=${distributionBusinessId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.invoiceNo) {
+            setInvoiceNumber(data.invoiceNo);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load next invoice number", e);
+        setInvoiceNumber("CHD-AUTO");
+      }
+    };
+    fetchNextNumber();
+  }, [distributionBusinessId]);
 
   // Items State
   const [items, setItems] = useState<InvoiceItem[]>([]);
@@ -327,7 +346,7 @@ export default function DirectBillPage() {
         body: JSON.stringify({
           businessId: distributionBusinessId,
           customerId,
-          salesRepId: currentUserId,
+          salesRepId: null, // Direct Distribution Bill - Not assigned to rep, uses continuous CHD direct sequence
           items,
           invoiceDate,
           subTotal: subtotal,
@@ -392,9 +411,12 @@ export default function DirectBillPage() {
             <Badge className="bg-green-100 text-green-800 border-green-200 text-xs font-semibold">
               Delivered
             </Badge>
+            <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-xs font-semibold">
+              Champika Hardware - Direct
+            </Badge>
           </div>
           <p className="text-muted-foreground mt-1 text-sm">
-            Create a direct distribution bill · order status locked to Delivered
+            Create a direct distribution bill · continuous CHD direct sequence · order status locked to Delivered
           </p>
         </div>
         <Button
@@ -416,9 +438,17 @@ export default function DirectBillPage() {
         <div className="lg:col-span-2 space-y-6">
           {/* 1. Bill Details */}
           <Card>
-            <CardHeader>
-              <CardTitle>Bill Details</CardTitle>
-              <CardDescription>Customer and billing information</CardDescription>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Bill Details</CardTitle>
+                  <CardDescription>Customer and billing information</CardDescription>
+                </div>
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-800 text-xs font-semibold">
+                  <Package className="w-3.5 h-3.5 text-blue-600" />
+                  Direct Distribution
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -431,7 +461,7 @@ export default function DirectBillPage() {
                         variant="outline"
                         role="combobox"
                         aria-expanded={customerOpen}
-                        className="w-full justify-between"
+                        className="w-full justify-between font-normal"
                       >
                         {customerId
                           ? customers.find((c) => c.id === customerId)?.name
@@ -460,7 +490,14 @@ export default function DirectBillPage() {
                                     customerId === customer.id ? "opacity-100" : "opacity-0"
                                   )}
                                 />
-                                {customer.name}
+                                <div>
+                                  <div className="font-medium">{customer.name}</div>
+                                  {(customer.ownerName || customer.phone) && (
+                                    <div className="text-xs text-muted-foreground">
+                                      {customer.ownerName} {customer.phone ? `· ${customer.phone}` : ""}
+                                    </div>
+                                  )}
+                                </div>
                               </CommandItem>
                             ))}
                           </CommandGroup>
@@ -484,8 +521,13 @@ export default function DirectBillPage() {
               {/* Invoice No (auto) + Order Status (locked) */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Invoice No (Auto-generated)</Label>
-                  <Input value={invoiceNumber} disabled className="bg-muted" />
+                  <Label className="flex items-center justify-between">
+                    <span>Invoice No (Direct sequence)</span>
+                    <span className="text-[10px] text-muted-foreground font-normal">Auto-assigned</span>
+                  </Label>
+                  <div className="flex items-center h-10 px-3 rounded-md border bg-slate-50 border-slate-200 font-mono font-semibold text-blue-900 text-sm">
+                    {invoiceNumber}
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label>Order Status</Label>
@@ -497,10 +539,16 @@ export default function DirectBillPage() {
                 </div>
               </div>
 
-              {/* Created by (read-only info) */}
-              <div className="space-y-2">
-                <Label>Created By</Label>
-                <Input value={currentUserName || "Loading..."} disabled className="bg-muted" />
+              {/* Channel / Sales Rep + Created by */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Channel / Sales Rep</Label>
+                  <Input value="Champika Hardware - Direct" disabled className="bg-muted font-medium text-slate-700" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Created By (Operator)</Label>
+                  <Input value={currentUserName || "Loading..."} disabled className="bg-muted" />
+                </div>
               </div>
             </CardContent>
           </Card>

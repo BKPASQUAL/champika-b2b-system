@@ -136,7 +136,7 @@ export default function DistributionInvoiceBooksPage() {
 
   const fetchReps = useCallback(async () => {
     try {
-      const res = await fetch("/api/users?roles=rep,admin,office");
+      const res = await fetch("/api/users?roles=rep");
       if (res.ok) {
         const data = await res.json();
         setReps(data);
