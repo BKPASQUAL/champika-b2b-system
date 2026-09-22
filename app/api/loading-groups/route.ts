@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
     const RE_DISPATCH_STATUSES = ["Processing", "Checking", "Loading"];
 
     // Fetch Draft sheets (for active loading groups)
-    let draftQuery = supabaseAdmin
+    const { data: draftGroups, error } = await supabaseAdmin
       .from("loading_sheets")
       .select(`
         id,
@@ -27,15 +27,10 @@ export async function GET(request: NextRequest) {
       .eq("status", "Draft")
       .order("created_at", { ascending: false });
 
-    if (businessId) {
-      draftQuery = draftQuery.eq("business_id", businessId);
-    }
-
-    const { data: draftGroups, error } = await draftQuery;
     if (error) throw error;
 
     // Also fetch Completed sheets that still have re-dispatch orders (lorry memory)
-    let completedQuery = supabaseAdmin
+    const { data: completedGroups } = await supabaseAdmin
       .from("loading_sheets")
       .select(`
         id,
@@ -49,12 +44,6 @@ export async function GET(request: NextRequest) {
       `)
       .eq("status", "Completed")
       .order("created_at", { ascending: false });
-
-    if (businessId) {
-      completedQuery = completedQuery.eq("business_id", businessId);
-    }
-
-    const { data: completedGroups } = await completedQuery;
 
     const groups = draftGroups ?? [];
     const draftGroupIds = (draftGroups ?? []).map((g: any) => g.id);
@@ -218,16 +207,6 @@ export async function POST(request: NextRequest) {
     let sheet: any = null;
     let sheetErr: any = null;
 
-    let targetBusinessId = businessId || null;
-    if (!targetBusinessId && orderIds?.[0]) {
-      const { data: ord } = await supabaseAdmin
-        .from("orders")
-        .select("business_id")
-        .eq("id", orderIds[0])
-        .maybeSingle();
-      targetBusinessId = ord?.business_id || null;
-    }
-
     for (let attempt = 0; attempt < 5; attempt++) {
       const loadIdStr = `${prefix}${nextId}`;
       const res = await supabaseAdmin
@@ -239,7 +218,6 @@ export async function POST(request: NextRequest) {
           helper_name: helperName || null,
           loading_date: new Date().toISOString().split("T")[0],
           status: "Draft",
-          business_id: targetBusinessId,
         })
         .select()
         .single();
