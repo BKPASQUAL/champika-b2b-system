@@ -85,7 +85,12 @@ export default function DistributionCheckingOrdersPage() {
   const [loading, setLoading] = useState(true);
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [lorryFilter, setLorryFilter] = useState<string>("all");
+  const [lorryFilter, setLorryFilter] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return sessionStorage.getItem("checking_lorryFilter") ?? "all";
+    }
+    return "all";
+  });
 
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
 

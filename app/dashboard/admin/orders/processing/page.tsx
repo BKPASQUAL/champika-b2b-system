@@ -25,6 +25,7 @@ import {
   FileText,
   Lock,
   Truck,
+  Folder,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Order } from "../types";
@@ -94,19 +95,26 @@ export default function ProcessingOrdersPage() {
     return m;
   }, [groups]);
 
-  const lorryNumbers = useMemo(() => {
-    const seen = new Set<string>();
+  const groupKeys = useMemo(() => {
+    const seen = new Map<string, LorryGroup>();
     for (const o of orders) {
-      const ln = lorryMap[o.id]?.lorryNumber;
-      if (ln) seen.add(ln);
+      const g = lorryMap[o.id];
+      if (g) {
+        const key = g.lorryNumber || g.loadId;
+        if (!seen.has(key)) seen.set(key, g);
+      }
     }
-    return [...seen].sort();
+    return [...seen.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [orders, lorryMap]);
 
   const filteredOrders = useMemo(() => {
     const q = searchQuery.toLowerCase();
     return orders.filter((order) => {
-      if (lorryFilter !== "all" && lorryMap[order.id]?.lorryNumber !== lorryFilter) return false;
+      if (lorryFilter !== "all") {
+        const g = lorryMap[order.id];
+        const key = g ? g.lorryNumber || g.loadId : null;
+        if (key !== lorryFilter) return false;
+      }
       return (
         !q ||
         (order.invoiceNo && order.invoiceNo.toLowerCase().includes(q)) ||
@@ -158,8 +166,8 @@ export default function ProcessingOrdersPage() {
             </Button>
           </div>
 
-          {/* Lorry filter pills */}
-          {lorryNumbers.length > 0 && (
+          {/* Lorry / Folder filter pills */}
+          {groupKeys.length > 0 && (
             <div className="flex items-center gap-1.5 flex-wrap">
               <button
                 onClick={() => { setLorryFilter("all"); sessionStorage.setItem("processing_lorryFilter", "all"); }}
@@ -171,18 +179,18 @@ export default function ProcessingOrdersPage() {
               >
                 All
               </button>
-              {lorryNumbers.map((ln) => (
+              {groupKeys.map(([key, g]) => (
                 <button
-                  key={ln}
-                  onClick={() => { const next = lorryFilter === ln ? "all" : ln; setLorryFilter(next); sessionStorage.setItem("processing_lorryFilter", next); }}
+                  key={key}
+                  onClick={() => { const next = lorryFilter === key ? "all" : key; setLorryFilter(next); sessionStorage.setItem("processing_lorryFilter", next); }}
                   className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-all ${
-                    lorryFilter === ln
+                    lorryFilter === key
                       ? "bg-teal-600 text-white border-teal-600"
                       : "bg-white text-teal-700 border-teal-200 hover:border-teal-400 hover:bg-teal-50"
                   }`}
                 >
-                  <Truck className="h-3 w-3" />
-                  {ln}
+                  {g.lorryNumber ? <Truck className="h-3 w-3" /> : <Folder className="h-3 w-3" />}
+                  {key}
                 </button>
               ))}
             </div>

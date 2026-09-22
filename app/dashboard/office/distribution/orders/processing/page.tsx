@@ -369,8 +369,6 @@ export default function DistributionProcessingOrdersPage() {
       setAssignFolderOpen(false);
       setSelectedOrders([]);
       setPickedFolderId("");
-      setLorryFilter("all");
-      sessionStorage.setItem("processing_lorryFilter", "all");
       await fetchData();
     } catch (e: any) {
       toast.error(e.message);
