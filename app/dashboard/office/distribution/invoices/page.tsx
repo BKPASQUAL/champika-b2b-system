@@ -121,7 +121,7 @@ export default function DistributionInvoicesPage() {
   // --- 3. Filter Logic ---
   const filteredInvoices = invoices.filter((inv) => {
     const searchTerms = getSearchTerms(searchQuery);
-    const haystack = [inv.invoiceNo, inv.customerName, inv.salesRepName]
+    const haystack = [inv.invoiceNo, inv.manualInvoiceNo || "", inv.customerName, inv.salesRepName]
       .join(" ").toLowerCase();
     const matchesSearch =
       searchQuery.trim() === "" ||

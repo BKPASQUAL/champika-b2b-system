@@ -147,7 +147,8 @@ export async function GET() {
     // Recent invoices formatted
     const recentInvoicesList = recentInvoices.map((inv: any) => ({
       id: inv.id,
-      invoiceNo: inv.manual_invoice_no || inv.invoice_no,
+      invoiceNo: inv.invoice_no,
+      manualInvoiceNo: inv.manual_invoice_no || null,
       customerName: inv.customers?.shop_name ?? "Unknown",
       salesRepName: (inv.orders as any)?.profiles?.full_name ?? "—",
       amount: inv.total_amount,
