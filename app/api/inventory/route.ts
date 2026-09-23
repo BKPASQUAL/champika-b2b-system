@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
       let stocksQuery = supabaseAdmin
         .from("product_stocks")
         .select(
-          "location_id, quantity, product_id, products!inner(cost_price, actual_cost_price, selling_price, supplier_name)",
+          "location_id, quantity, damaged_quantity, product_id, products!inner(cost_price, actual_cost_price, selling_price, supplier_name)",
         )
         .order("id")
         .range(stocksPage * pageSize, (stocksPage + 1) * pageSize - 1);
@@ -100,10 +100,14 @@ export async function GET(request: NextRequest) {
 
     // Map stocks to products for recalculation
     const productStockMap = new Map<string, number>();
+    const productDamagedMap = new Map<string, number>();
     if (businessId) {
       stocks.forEach((stock: any) => {
-        const current = productStockMap.get(stock.product_id) || 0;
-        productStockMap.set(stock.product_id, current + Number(stock.quantity));
+        const currentGood = productStockMap.get(stock.product_id) || 0;
+        productStockMap.set(stock.product_id, currentGood + Number(stock.quantity || 0));
+
+        const currentDamaged = productDamagedMap.get(stock.product_id) || 0;
+        productDamagedMap.set(stock.product_id, currentDamaged + Number(stock.damaged_quantity || 0));
       });
     }
 
@@ -112,12 +116,16 @@ export async function GET(request: NextRequest) {
       const locStocks = stocks.filter((s: any) => s.location_id === loc.id);
 
       const rawItems = locStocks.reduce(
-        (sum: number, s: any) => sum + Number(s.quantity),
+        (sum: number, s: any) => sum + Number(s.quantity || 0),
+        0,
+      );
+      const rawDamaged = locStocks.reduce(
+        (sum: number, s: any) => sum + Number(s.damaged_quantity || 0),
         0,
       );
       const rawValue = locStocks.reduce(
         (sum: number, s: any) =>
-          sum + Number(s.quantity) * (s.products?.actual_cost_price || s.products?.cost_price || 0),
+          sum + Number(s.quantity || 0) * (s.products?.actual_cost_price || s.products?.cost_price || 0),
         0,
       );
 
@@ -127,18 +135,54 @@ export async function GET(request: NextRequest) {
         // If business is null, it's the Main Warehouse
         business: loc.businesses?.name || "Main Warehouse",
         totalItems: Math.round(rawItems * 100) / 100,
+        totalDamaged: Math.round(rawDamaged * 100) / 100,
         totalValue: Math.round(rawValue * 100) / 100,
         status: loc.is_active ? "Active" : "Inactive",
+        isDamageLocation: false,
       };
     });
+
+    // Compute total damaged across all stocks for this business/portal
+    const totalDamagedItems = stocks.reduce(
+      (sum: number, s: any) => sum + Number(s.damaged_quantity || 0),
+      0,
+    );
+    const totalDamagedValue = stocks.reduce(
+      (sum: number, s: any) =>
+        sum + Number(s.damaged_quantity || 0) * (s.products?.actual_cost_price || s.products?.cost_price || 0),
+      0,
+    );
+
+    // If there are damaged items (or always for tracking), append a dedicated "Damage Location"
+    if (totalDamagedItems > 0) {
+      let businessLabel = "Main Warehouse";
+      if (businessId === BUSINESS_IDS.ORANGE_AGENCY) businessLabel = "Orange Agency";
+      else if (businessId === BUSINESS_IDS.WIREMAN_AGENCY) businessLabel = "Wireman Agency";
+      else if (businessId === BUSINESS_IDS.SIERRA_AGENCY) businessLabel = "Sierra Agency";
+      else if (businessId === BUSINESS_IDS.CHAMPIKA_DISTRIBUTION) businessLabel = "Champika Distribution";
+      else if (businessId === BUSINESS_IDS.CHAMPIKA_RETAIL) businessLabel = "Champika Retail";
+
+      locationStats.push({
+        id: "damage-location",
+        name: "Damage Location (Damaged Items)",
+        business: businessLabel,
+        totalItems: 0,
+        totalDamaged: Math.round(totalDamagedItems * 100) / 100,
+        totalValue: Math.round(totalDamagedValue * 100) / 100,
+        status: "Active",
+        isDamageLocation: true,
+      });
+    }
 
     // B. Process Products (Overwrite global stock with filtered stock)
     const processedProducts = products.map((p: any) => {
       if (businessId) {
         const businessStock = productStockMap.get(p.id) || 0;
+        const businessDamaged = productDamagedMap.get(p.id) || 0;
         return {
           ...p,
           stock_quantity: businessStock,
+          damaged_quantity: businessDamaged,
         };
       }
       return p;

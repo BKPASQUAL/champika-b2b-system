@@ -20,10 +20,12 @@ export async function GET(
 
     if (locError) throw new Error("Location not found");
 
-    // 2. Fetch Stocks for this Location
+    // 2. Determine Business Context
+    const effectiveBusinessId = businessId || location.business_id;
+
+    // 3. Fetch Stocks for this Location
     const includeAll = url.searchParams.get("includeAll") === "true";
 
-    // ✅ Updated: Use !inner join to allow filtering on product fields
     const stocks: any[] = [];
     let page = 0;
     const pageSize = 1000;
@@ -59,12 +61,12 @@ export async function GET(
         query = query.or("quantity.neq.0,damaged_quantity.gt.0");
       }
 
-      // ✅ Apply agency supplier filter if requested
-      if (businessId === BUSINESS_IDS.WIREMAN_AGENCY) {
+      // Apply agency supplier filter if requested or if location belongs to an agency
+      if (effectiveBusinessId === BUSINESS_IDS.WIREMAN_AGENCY) {
         query = query.ilike("products.supplier_name", "%Wireman%");
-      } else if (businessId === BUSINESS_IDS.SIERRA_AGENCY) {
+      } else if (effectiveBusinessId === BUSINESS_IDS.SIERRA_AGENCY) {
         query = query.ilike("products.supplier_name", "%Sierra%");
-      } else if (businessId === BUSINESS_IDS.ORANGE_AGENCY) {
+      } else if (effectiveBusinessId === BUSINESS_IDS.ORANGE_AGENCY) {
         query = query.ilike("products.supplier_name", "%Orange%");
       }
 
@@ -76,10 +78,61 @@ export async function GET(
       page++;
     }
 
-    // 3. Calculate Stats
-    const safeStocks = stocks || [];
+    // When includeAll=true, if some catalog products don't have stock rows yet, merge them
+    let safeStocks = stocks;
+    if (includeAll) {
+      const existingProductIds = new Set(stocks.map((s) => s.products?.id).filter(Boolean));
+      let prodPage = 0;
+      const allProducts: any[] = [];
 
-    // Total Items = Good (net)
+      while (true) {
+        let prodQuery = supabaseAdmin
+          .from("products")
+          .select(
+            `
+            id,
+            sku,
+            name,
+            category,
+            unit_of_measure,
+            selling_price,
+            cost_price,
+            actual_cost_price,
+            supplier_name,
+            retail_only
+          `
+          )
+          .order("name")
+          .range(prodPage * pageSize, (prodPage + 1) * pageSize - 1);
+
+        if (effectiveBusinessId === BUSINESS_IDS.WIREMAN_AGENCY) {
+          prodQuery = prodQuery.ilike("supplier_name", "%Wireman%");
+        } else if (effectiveBusinessId === BUSINESS_IDS.SIERRA_AGENCY) {
+          prodQuery = prodQuery.ilike("supplier_name", "%Sierra%");
+        } else if (effectiveBusinessId === BUSINESS_IDS.ORANGE_AGENCY) {
+          prodQuery = prodQuery.ilike("supplier_name", "%Orange%");
+        }
+
+        const { data: prods, error: prodErr } = await prodQuery;
+        if (prodErr || !prods || prods.length === 0) break;
+        allProducts.push(...prods);
+        if (prods.length < pageSize) break;
+        prodPage++;
+      }
+
+      for (const prod of allProducts) {
+        if (!existingProductIds.has(prod.id)) {
+          safeStocks.push({
+            quantity: 0,
+            damaged_quantity: 0,
+            last_updated: null,
+            products: prod,
+          });
+        }
+      }
+    }
+
+    // 4. Calculate Stats
     const rawItems = safeStocks.reduce(
       (sum, item) => sum + Number(item.quantity || 0),
       0,

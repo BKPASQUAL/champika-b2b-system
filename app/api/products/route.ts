@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 const productSchema = z.object({
   sku: z.string().optional(),
@@ -254,33 +255,59 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (targetLocationId) {
-      const { error: stockError } = await supabaseAdmin
-        .from("product_stocks")
-        .insert({
-          product_id: product.id,
-          location_id: targetLocationId,
-          quantity: val.stock,
-          damaged_quantity: 0,
-        });
-      if (stockError) throw stockError;
-    } else {
-      const { data: mainWarehouse } = await supabaseAdmin
-        .from("locations")
-        .select("id")
-        .is("business_id", null)
-        .maybeSingle();
+    // Fetch all relevant locations to initialize stock records
+    const { data: allLocations } = await supabaseAdmin
+      .from("locations")
+      .select("id, business_id");
 
-      if (mainWarehouse) {
-        const { error: stockError } = await supabaseAdmin
-          .from("product_stocks")
-          .insert({
+    const supplier = (val.supplier || "").toLowerCase();
+    const isOrange = supplier.includes("orange");
+    const isWireman = supplier.includes("wireman");
+    const isSierra = supplier.includes("sierra");
+
+    const primaryLocationId = targetLocationId || allLocations?.find((l) => l.business_id === null)?.id;
+
+    if (allLocations && allLocations.length > 0) {
+      const stockRows: any[] = [];
+
+      for (const loc of allLocations) {
+        const bId = loc.business_id;
+        // Rules for matching locations:
+        // Main Warehouse (null), Distribution, and Retail get all products.
+        // Agencies only get their own matching products.
+        const isAgency =
+          bId === BUSINESS_IDS.ORANGE_AGENCY ||
+          bId === BUSINESS_IDS.WIREMAN_AGENCY ||
+          bId === BUSINESS_IDS.SIERRA_AGENCY;
+
+        let shouldInclude = false;
+        if (!bId || bId === BUSINESS_IDS.CHAMPIKA_DISTRIBUTION || bId === BUSINESS_IDS.CHAMPIKA_RETAIL) {
+          shouldInclude = true;
+        } else if (bId === BUSINESS_IDS.ORANGE_AGENCY && isOrange) {
+          shouldInclude = true;
+        } else if (bId === BUSINESS_IDS.WIREMAN_AGENCY && isWireman) {
+          shouldInclude = true;
+        } else if (bId === BUSINESS_IDS.SIERRA_AGENCY && isSierra) {
+          shouldInclude = true;
+        } else if (!isAgency) {
+          shouldInclude = true;
+        }
+
+        if (shouldInclude) {
+          const isPrimary = loc.id === primaryLocationId;
+          stockRows.push({
             product_id: product.id,
-            location_id: mainWarehouse.id,
-            quantity: val.stock,
+            location_id: loc.id,
+            quantity: isPrimary ? val.stock : 0,
             damaged_quantity: 0,
           });
-        if (stockError) throw stockError;
+        }
+      }
+
+      if (stockRows.length > 0) {
+        await supabaseAdmin
+          .from("product_stocks")
+          .upsert(stockRows, { onConflict: "location_id,product_id" });
       }
     }
 

@@ -333,19 +333,21 @@ export default function InventoryPage() {
           <div className="border rounded-md">
             <Table>
               <TableHeader>
-                <TableRow className="bg-muted/50">
+                <TableRow className="bg-blue-50/50">
                   <TableHead>Location Name</TableHead>
                   <TableHead>Business Entity</TableHead>
                   <TableHead className="text-center">Status</TableHead>
-                  <TableHead className="text-right">Total Items</TableHead>
+                  <TableHead className="text-right">Good Stock</TableHead>
+                  <TableHead className="text-right text-red-600">Damaged Items</TableHead>
                   <TableHead className="text-right">Stock Value</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {data.locations.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={5}
+                      colSpan={7}
                       className="text-center py-4 text-muted-foreground"
                     >
                       No locations found for this business.
@@ -355,15 +357,37 @@ export default function InventoryPage() {
                   data.locations.map((loc: any) => (
                     <TableRow
                       key={loc.id}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() =>
-                        router.push(`/dashboard/office/distribution/inventory/${loc.id}`)
-                      }
+                      className={`cursor-pointer transition-colors ${
+                        loc.isDamageLocation
+                          ? "bg-red-50/40 hover:bg-red-50/70"
+                          : "hover:bg-muted/50"
+                      }`}
+                      onClick={() => {
+                        if (loc.isDamageLocation || loc.id === "damage-location") {
+                          router.push("/dashboard/office/distribution/inventory/damage");
+                        } else {
+                          router.push(
+                            `/dashboard/office/distribution/inventory/${loc.id}`
+                          );
+                        }
+                      }}
                     >
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
-                          <MapPin className="w-4 h-4 text-muted-foreground" />
-                          {loc.name}
+                          {loc.isDamageLocation ? (
+                            <Trash2 className="w-4 h-4 text-red-600" />
+                          ) : (
+                            <MapPin className="w-4 h-4 text-muted-foreground" />
+                          )}
+                          <span
+                            className={
+                              loc.isDamageLocation
+                                ? "font-semibold text-red-700"
+                                : ""
+                            }
+                          >
+                            {loc.name}
+                          </span>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -376,18 +400,30 @@ export default function InventoryPage() {
                         <Badge
                           variant="outline"
                           className={
-                            loc.status === "Active"
+                            loc.isDamageLocation
+                              ? "bg-red-100 text-red-700 border-red-200"
+                              : loc.status === "Active"
                               ? "bg-green-50 text-green-700"
                               : ""
                           }
                         >
-                          {loc.status}
+                          {loc.isDamageLocation ? "Damaged" : loc.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right font-mono">
-                        {Number(loc.totalItems || 0).toLocaleString(undefined, {
-                          maximumFractionDigits: 2,
-                        })}
+                      <TableCell className="text-right font-mono font-bold text-green-700">
+                        {loc.isDamageLocation
+                          ? "-"
+                          : Number(loc.totalItems || 0).toLocaleString(
+                              undefined,
+                              { maximumFractionDigits: 2 }
+                            )}
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-bold text-red-600">
+                        {Number(loc.totalDamaged || 0) > 0
+                          ? Number(loc.totalDamaged).toLocaleString(undefined, {
+                              maximumFractionDigits: 2,
+                            })
+                          : "-"}
                       </TableCell>
                       <TableCell className="text-right font-medium">
                         LKR{" "}
@@ -395,6 +431,55 @@ export default function InventoryPage() {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2,
                         })}
+                      </TableCell>
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                        {loc.isDamageLocation ? (
+                          <div className="flex justify-end gap-1.5">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs border-blue-300 text-blue-700 hover:bg-blue-50"
+                              onClick={() =>
+                                router.push("/dashboard/office/distribution/inventory/damage/adjust")
+                              }
+                            >
+                              Adjust Damaged
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs text-red-700 hover:bg-red-100"
+                              onClick={() =>
+                                router.push("/dashboard/office/distribution/inventory/damage")
+                              }
+                            >
+                              Reports
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex justify-end gap-1.5">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={() =>
+                                router.push(`/dashboard/office/distribution/inventory/${loc.id}/adjust`)
+                              }
+                            >
+                              Adjust
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs text-blue-600"
+                              onClick={() =>
+                                router.push(`/dashboard/office/distribution/inventory/${loc.id}`)
+                              }
+                            >
+                              View
+                            </Button>
+                          </div>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))

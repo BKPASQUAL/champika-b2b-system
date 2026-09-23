@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
         business_id,
         customer_id,
         customers (shop_name),
-        products (name, sku),
+        products!inner (name, sku, cost_price, actual_cost_price, selling_price, supplier_name),
         locations (name),
         profiles (full_name)
       `
@@ -32,6 +32,15 @@ export async function GET(request: NextRequest) {
     // Filter by Business ID if provided
     if (businessId) {
       query = query.eq("business_id", businessId);
+    }
+
+    // Apply strict supplier filtering for agency portals
+    if (businessId === "50a514e1-ee70-4e6d-a698-1630d8ed04e2") { // ORANGE_AGENCY
+      query = query.ilike("products.supplier_name", "%Orange%");
+    } else if (businessId === "094b649e-be59-4e2b-b709-7e36ad1ef280") { // WIREMAN_AGENCY
+      query = query.ilike("products.supplier_name", "%Wireman%");
+    } else if (businessId === "41b55e39-2edb-43ac-9877-dabd23902335") { // SIERRA_AGENCY
+      query = query.ilike("products.supplier_name", "%Sierra%");
     }
 
     const { data, error } = await query;
@@ -104,16 +113,30 @@ export async function POST(request: NextRequest) {
       }
 
       // 1. Get Current Stock
-      const { data: stock, error: stockError } = await supabaseAdmin
+      let { data: stock, error: stockError } = await supabaseAdmin
         .from("product_stocks")
         .select("id, quantity, damaged_quantity")
         .eq("location_id", locationId)
         .eq("product_id", productId)
-        .single();
+        .maybeSingle();
 
-      if (stockError || !stock) {
-        errors.push(`Stock record not found for product ${productId}`);
-        continue;
+      if (!stock) {
+        const { data: newStock, error: stockCreateErr } = await supabaseAdmin
+          .from("product_stocks")
+          .insert({
+            location_id: locationId,
+            product_id: productId,
+            quantity: 0,
+            damaged_quantity: 0,
+          })
+          .select("id, quantity, damaged_quantity")
+          .single();
+
+        if (stockCreateErr || !newStock) {
+          errors.push(`Stock record not found for product ${productId}`);
+          continue;
+        }
+        stock = newStock;
       }
 
       if (Number(stock.quantity) < Number(quantity)) {

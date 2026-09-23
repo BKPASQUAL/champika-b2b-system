@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const val = schema.parse(body);
 
+    let createdLocation: any = null;
+
     // LOGIC: Main Warehouse vs Business Location
     if (val.is_main) {
       // 1. Check if Main Warehouse already exists
@@ -78,7 +81,7 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (error) throw error;
-      return NextResponse.json(data, { status: 201 });
+      createdLocation = data;
     } else {
       // 3. Create Business Location
       if (!val.business_id) {
@@ -95,8 +98,64 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (error) throw error;
-      return NextResponse.json(data, { status: 201 });
+      createdLocation = data;
     }
+
+    // 4. Automatically Seed product_stocks for the New Location
+    if (createdLocation) {
+      const businessId = createdLocation.business_id;
+
+      // Fetch products matching the business / agency rule
+      const allProductIds: string[] = [];
+      let page = 0;
+      const pageSize = 1000;
+
+      while (true) {
+        let prodQuery = supabaseAdmin
+          .from("products")
+          .select("id, supplier_name")
+          .order("id")
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+
+        if (businessId === BUSINESS_IDS.ORANGE_AGENCY) {
+          prodQuery = prodQuery.ilike("supplier_name", "%Orange%");
+        } else if (businessId === BUSINESS_IDS.WIREMAN_AGENCY) {
+          prodQuery = prodQuery.ilike("supplier_name", "%Wireman%");
+        } else if (businessId === BUSINESS_IDS.SIERRA_AGENCY) {
+          prodQuery = prodQuery.ilike("supplier_name", "%Sierra%");
+        }
+        // Distribution, Retail, and Admin (Main Warehouse) get all products
+
+        const { data: prods, error: prodErr } = await prodQuery;
+        if (prodErr || !prods || prods.length === 0) break;
+
+        for (const p of prods) {
+          allProductIds.push(p.id);
+        }
+        if (prods.length < pageSize) break;
+        page++;
+      }
+
+      // Bulk insert product_stocks in chunks of 500
+      if (allProductIds.length > 0) {
+        const chunkSize = 500;
+        for (let i = 0; i < allProductIds.length; i += chunkSize) {
+          const chunk = allProductIds.slice(i, i + chunkSize);
+          const stockRows = chunk.map((productId) => ({
+            location_id: createdLocation.id,
+            product_id: productId,
+            quantity: 0,
+            damaged_quantity: 0,
+          }));
+
+          await supabaseAdmin
+            .from("product_stocks")
+            .upsert(stockRows, { onConflict: "location_id,product_id" });
+        }
+      }
+    }
+
+    return NextResponse.json(createdLocation, { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
