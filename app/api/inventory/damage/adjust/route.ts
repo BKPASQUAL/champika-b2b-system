@@ -66,6 +66,12 @@ export async function POST(request: NextRequest) {
       const previousDamagedQty = Number(stock.damaged_quantity || 0);
       const diff = targetQty - previousDamagedQty;
 
+      // If no change and quantity is 0, skip creating redundant 0-quantity return
+      if (diff === 0 && targetQty === 0) {
+        results.push(productId);
+        continue;
+      }
+
       // 2. Update Location Damaged Stock
       const { error: updateError } = await supabaseAdmin
         .from("product_stocks")
@@ -104,21 +110,28 @@ export async function POST(request: NextRequest) {
         Math.random() * 1000
       )}`;
 
-      const noteText = itemReason || reason || "Damaged Stock Adjustment / Re-adjustment";
+      const noteText = itemReason || reason || "Damaged Stock Adjustment";
       const diffText = diff >= 0 ? `+${diff}` : `${diff}`;
+      // When target is 0 and previous was > 0, log the written-off quantity
+      const loggedQty = targetQty > 0 ? targetQty : (previousDamagedQty > 0 ? previousDamagedQty : 0);
 
-      await supabaseAdmin.from("inventory_returns").insert({
-        return_number: adjNumber,
-        product_id: productId,
-        location_id: locationId,
-        business_id: finalBusinessId || null,
-        customer_id: null,
-        quantity: targetQty,
-        return_type: "Damage",
-        reason: `[Adjustment (${diffText} units)] ${noteText}`.trim(),
-        returned_by: user?.id || null,
-        status: "Completed",
-      });
+      // Only create return record if there is a positive quantity or a meaningful write-off
+      if (loggedQty > 0) {
+        await supabaseAdmin.from("inventory_returns").insert({
+          return_number: adjNumber,
+          product_id: productId,
+          location_id: locationId,
+          business_id: finalBusinessId || null,
+          customer_id: null,
+          quantity: loggedQty,
+          return_type: "Damage",
+          reason: targetQty === 0
+            ? `[Write-off / Cleared (${diffText} units)] ${noteText}`.trim()
+            : `[Adjustment (${diffText} units)] ${noteText}`.trim(),
+          returned_by: user?.id || null,
+          status: "Completed",
+        });
+      }
 
       // 5. Audit Log Entry
       await supabaseAdmin.from("audit_logs").insert({

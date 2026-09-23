@@ -345,6 +345,8 @@ export default function WiremanInventoryPage() {
                       <TableCell className="text-right font-mono font-bold text-red-600">
                         {Number(loc.totalDamaged || 0) > 0
                           ? Number(loc.totalDamaged).toLocaleString()
+                          : loc.isDamageLocation
+                          ? "0"
                           : "-"}
                       </TableCell>
                       <TableCell className="text-right font-medium">

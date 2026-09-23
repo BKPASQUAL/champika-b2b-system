@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   ArrowLeft,
   Plus,
@@ -29,6 +30,8 @@ import {
   RefreshCw,
   Trash2,
   Package,
+  CheckSquare,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
@@ -36,8 +39,6 @@ import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
 import { TablePagination } from "@/components/ui/TablePagination";
-
-const ITEMS_PER_PAGE = 10;
 
 export default function OrangeDamageHistoryPage() {
   const router = useRouter();
@@ -49,24 +50,25 @@ export default function OrangeDamageHistoryPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [hideZeroQty, setHideZeroQty] = useState(false);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery]);
+  }, [searchQuery, hideZeroQty]);
 
-  const filteredDamages = damages.filter(
-    (item) =>
-      (item.products?.name || "")
-        .toLowerCase()
-        .includes(searchQuery.toLowerCase()) ||
+  const zeroQtyCount = damages.filter((d) => Number(d.quantity || 0) === 0).length;
+
+  const filteredDamages = damages.filter((item) => {
+    if (hideZeroQty && Number(item.quantity || 0) === 0) return false;
+    return (
+      (item.products?.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       (item.reason || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (item.return_number || "")
-        .toLowerCase()
-        .includes(searchQuery.toLowerCase()) ||
-      (item.products?.sku || "")
-        .toLowerCase()
-        .includes(searchQuery.toLowerCase())
-  );
+      (item.return_number || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.products?.sku || "").toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  });
 
   const totalDamagedUnits = filteredDamages.reduce(
     (sum, item) => sum + Number(item.quantity || 0),
@@ -81,7 +83,7 @@ export default function OrangeDamageHistoryPage() {
     0
   );
 
-  const { data: inventoryData } = useCachedFetch<any>(
+  const { data: inventoryData, refetch: refetchInventory } = useCachedFetch<any>(
     `/api/inventory?businessId=${BUSINESS_IDS.ORANGE_AGENCY}`,
     null
   );
@@ -99,6 +101,115 @@ export default function OrangeDamageHistoryPage() {
     startIndex + itemsPerPage
   );
 
+  // Selection Logic
+  const allCurrentPageSelected =
+    paginatedDamages.length > 0 &&
+    paginatedDamages.every((item) => selectedIds.includes(item.id));
+
+  const handleToggleSelectAll = () => {
+    if (allCurrentPageSelected) {
+      setSelectedIds((prev) =>
+        prev.filter((id) => !paginatedDamages.some((item) => item.id === id))
+      );
+    } else {
+      const pageIds = paginatedDamages.map((item) => item.id);
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...pageIds])));
+    }
+  };
+
+  const handleToggleSelectOne = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  // Single Delete
+  const handleDeleteSingle = async (id: string, returnNo: string) => {
+    if (!confirm(`Are you sure you want to delete damage record ${returnNo}?`)) return;
+    setIsDeleting(true);
+    try {
+      const res = await fetch(`/api/inventory/damage?id=${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete record");
+      toast.success(`Deleted damage record ${returnNo}`);
+      setSelectedIds((prev) => prev.filter((item) => item !== id));
+      fetchDamages();
+      refetchInventory();
+    } catch (e: any) {
+      toast.error(e.message || "Error deleting record");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Delete Selected
+  const handleDeleteSelected = async () => {
+    if (selectedIds.length === 0) return;
+    if (!confirm(`Are you sure you want to delete ${selectedIds.length} selected damage record(s)?`)) return;
+    setIsDeleting(true);
+    try {
+      const res = await fetch(`/api/inventory/damage`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: selectedIds }),
+      });
+      if (!res.ok) throw new Error("Failed to delete selected records");
+      toast.success(`Successfully deleted ${selectedIds.length} damage record(s)`);
+      setSelectedIds([]);
+      fetchDamages();
+      refetchInventory();
+    } catch (e: any) {
+      toast.error(e.message || "Error deleting records");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Clean Zero Quantity Logs
+  const handleCleanZeroQty = async () => {
+    if (!confirm(`Are you sure you want to remove all ${zeroQtyCount} zero-quantity damage logs?`)) return;
+    setIsDeleting(true);
+    try {
+      const res = await fetch(
+        `/api/inventory/damage?businessId=${BUSINESS_IDS.ORANGE_AGENCY}&action=clear-zero`,
+        { method: "DELETE" }
+      );
+      if (!res.ok) throw new Error("Failed to clean 0-quantity records");
+      toast.success("Successfully cleaned all 0-quantity damage records");
+      fetchDamages();
+      refetchInventory();
+    } catch (e: any) {
+      toast.error(e.message || "Error cleaning logs");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Clear All History Logs
+  const handleClearAll = async () => {
+    if (
+      !confirm(
+        "CAUTION: Are you sure you want to permanently clear ALL damage report history for Orange Agency? Current warehouse stock is not affected."
+      )
+    )
+      return;
+    setIsDeleting(true);
+    try {
+      const res = await fetch(
+        `/api/inventory/damage?businessId=${BUSINESS_IDS.ORANGE_AGENCY}&action=clear-all`,
+        { method: "DELETE" }
+      );
+      if (!res.ok) throw new Error("Failed to clear damage history");
+      toast.success("All damage history records cleared");
+      setSelectedIds([]);
+      fetchDamages();
+      refetchInventory();
+    } catch (e: any) {
+      toast.error(e.message || "Error clearing history");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   // Export PDF
   const handleExportPDF = () => {
     if (filteredDamages.length === 0) return toast.error("No damage data to export");
@@ -107,7 +218,11 @@ export default function OrangeDamageHistoryPage() {
     doc.setFontSize(16);
     doc.text("Orange Agency - Damage Stock Report", 14, 15);
     doc.setFontSize(10);
-    doc.text(`Generated: ${date} | Total Damaged Units: ${totalDamagedUnits} | Total Value: LKR ${totalDamagedValue.toLocaleString()}`, 14, 22);
+    doc.text(
+      `Generated: ${date} | Total Damaged Units: ${totalDamagedUnits} | Total Value: LKR ${totalDamagedValue.toLocaleString()}`,
+      14,
+      22
+    );
 
     const tableRows = filteredDamages.map((item) => {
       const unitCost = Number(item.products?.actual_cost_price || item.products?.cost_price || 0);
@@ -270,14 +385,51 @@ export default function OrangeDamageHistoryPage() {
                 Detailed log of internal product damages with stock values.
               </CardDescription>
             </div>
-            <div className="relative w-full md:w-72">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search report #, product, SKU..."
-                className="pl-9"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
+            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+              {zeroQtyCount > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCleanZeroQty}
+                  disabled={isDeleting}
+                  className="border-amber-300 text-amber-800 hover:bg-amber-50 text-xs"
+                >
+                  <Sparkles className="w-3.5 h-3.5 mr-1 text-amber-600" />
+                  Clean 0-Qty Logs ({zeroQtyCount})
+                </Button>
+              )}
+              {selectedIds.length > 0 && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleDeleteSelected}
+                  disabled={isDeleting}
+                  className="text-xs"
+                >
+                  <Trash2 className="w-3.5 h-3.5 mr-1" />
+                  Delete Selected ({selectedIds.length})
+                </Button>
+              )}
+              {damages.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleClearAll}
+                  disabled={isDeleting}
+                  className="text-xs text-red-600 hover:bg-red-50 hover:text-red-700"
+                >
+                  Clear All History
+                </Button>
+              )}
+              <div className="relative w-full md:w-64">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search report #, product, SKU..."
+                  className="pl-9 h-9 text-sm"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -297,6 +449,13 @@ export default function OrangeDamageHistoryPage() {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-orange-50/50">
+                      <TableHead className="w-10">
+                        <Checkbox
+                          checked={allCurrentPageSelected}
+                          onCheckedChange={handleToggleSelectAll}
+                          aria-label="Select all on page"
+                        />
+                      </TableHead>
                       <TableHead>Report #</TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead>Location</TableHead>
@@ -305,6 +464,7 @@ export default function OrangeDamageHistoryPage() {
                       <TableHead className="text-right">Qty</TableHead>
                       <TableHead className="text-right">Stock Value</TableHead>
                       <TableHead className="text-right">Reported By</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -315,9 +475,20 @@ export default function OrangeDamageHistoryPage() {
                           0
                       );
                       const itemVal = Number(item.quantity || 0) * unitCost;
+                      const isSelected = selectedIds.includes(item.id);
 
                       return (
-                        <TableRow key={item.id}>
+                        <TableRow
+                          key={item.id}
+                          className={isSelected ? "bg-orange-50/60" : ""}
+                        >
+                          <TableCell>
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => handleToggleSelectOne(item.id)}
+                              aria-label={`Select ${item.return_number}`}
+                            />
+                          </TableCell>
                           <TableCell className="font-mono text-xs font-semibold">
                             {item.return_number}
                           </TableCell>
@@ -357,6 +528,18 @@ export default function OrangeDamageHistoryPage() {
                           <TableCell className="text-right text-sm text-muted-foreground">
                             {item.profiles?.full_name || "Admin"}
                           </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              disabled={isDeleting}
+                              onClick={() => handleDeleteSingle(item.id, item.return_number)}
+                              className="h-7 w-7 text-muted-foreground hover:text-red-600 hover:bg-red-50"
+                              title="Delete record"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       );
                     })}
@@ -382,3 +565,4 @@ export default function OrangeDamageHistoryPage() {
     </div>
   );
 }
+

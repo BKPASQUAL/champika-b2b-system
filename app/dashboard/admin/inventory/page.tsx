@@ -404,6 +404,8 @@ export default function InventoryPage() {
                         ? Number(loc.totalDamaged).toLocaleString(undefined, {
                             maximumFractionDigits: 2,
                           })
+                        : loc.isDamageLocation
+                        ? "0"
                         : "-"}
                     </TableCell>
                     <TableCell className="text-right font-medium">

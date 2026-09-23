@@ -153,26 +153,24 @@ export async function GET(request: NextRequest) {
       0,
     );
 
-    // If there are damaged items (or always for tracking), append a dedicated "Damage Location"
-    if (totalDamagedItems > 0) {
-      let businessLabel = "Main Warehouse";
-      if (businessId === BUSINESS_IDS.ORANGE_AGENCY) businessLabel = "Orange Agency";
-      else if (businessId === BUSINESS_IDS.WIREMAN_AGENCY) businessLabel = "Wireman Agency";
-      else if (businessId === BUSINESS_IDS.SIERRA_AGENCY) businessLabel = "Sierra Agency";
-      else if (businessId === BUSINESS_IDS.CHAMPIKA_DISTRIBUTION) businessLabel = "Champika Distribution";
-      else if (businessId === BUSINESS_IDS.CHAMPIKA_RETAIL) businessLabel = "Champika Retail";
+    // Always append dedicated "Damage Location (Damaged Items)" row for continuous tracking
+    let businessLabel = "Main Warehouse";
+    if (businessId === BUSINESS_IDS.ORANGE_AGENCY) businessLabel = "Orange Agency";
+    else if (businessId === BUSINESS_IDS.WIREMAN_AGENCY) businessLabel = "Wireman Agency";
+    else if (businessId === BUSINESS_IDS.SIERRA_AGENCY) businessLabel = "Sierra Agency";
+    else if (businessId === BUSINESS_IDS.CHAMPIKA_DISTRIBUTION) businessLabel = "Champika Distribution";
+    else if (businessId === BUSINESS_IDS.CHAMPIKA_RETAIL) businessLabel = "Champika Retail";
 
-      locationStats.push({
-        id: "damage-location",
-        name: "Damage Location (Damaged Items)",
-        business: businessLabel,
-        totalItems: 0,
-        totalDamaged: Math.round(totalDamagedItems * 100) / 100,
-        totalValue: Math.round(totalDamagedValue * 100) / 100,
-        status: "Active",
-        isDamageLocation: true,
-      });
-    }
+    locationStats.push({
+      id: "damage-location",
+      name: "Damage Location (Damaged Items)",
+      business: businessLabel,
+      totalItems: 0,
+      totalDamaged: Math.round(totalDamagedItems * 100) / 100,
+      totalValue: Math.round(totalDamagedValue * 100) / 100,
+      status: "Active",
+      isDamageLocation: true,
+    });
 
     // B. Process Products (Overwrite global stock with filtered stock)
     const processedProducts = products.map((p: any) => {

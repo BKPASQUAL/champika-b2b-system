@@ -249,3 +249,82 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+// DELETE: Remove Damage History Record(s)
+export async function DELETE(request: NextRequest) {
+  try {
+    const url = new URL(request.url);
+    const id = url.searchParams.get("id");
+    const businessId = url.searchParams.get("businessId");
+    const action = url.searchParams.get("action");
+
+    // 1. Single record delete
+    if (id) {
+      const { error } = await supabaseAdmin
+        .from("inventory_returns")
+        .delete()
+        .eq("id", id)
+        .eq("return_type", "Damage");
+
+      if (error) throw error;
+      return NextResponse.json({ success: true, message: "Damage log deleted" });
+    }
+
+    // 2. Clear 0-qty logs or Clear All for business
+    if (action === "clear-zero" || action === "clear-all") {
+      let query = supabaseAdmin
+        .from("inventory_returns")
+        .delete()
+        .eq("return_type", "Damage");
+
+      if (businessId) {
+        query = query.eq("business_id", businessId);
+      }
+
+      if (action === "clear-zero") {
+        query = query.eq("quantity", 0);
+      }
+
+      const { error } = await query;
+      if (error) throw error;
+      return NextResponse.json({
+        success: true,
+        message: action === "clear-zero" ? "Cleaned all 0-quantity damage records" : "Cleared damage history",
+      });
+    }
+
+    // 3. Batch delete by IDs from body
+    let bodyIds: string[] = [];
+    try {
+      const body = await request.json();
+      if (Array.isArray(body?.ids)) {
+        bodyIds = body.ids;
+      }
+    } catch {
+      // no JSON body
+    }
+
+    if (bodyIds.length > 0) {
+      const { error } = await supabaseAdmin
+        .from("inventory_returns")
+        .delete()
+        .in("id", bodyIds)
+        .eq("return_type", "Damage");
+
+      if (error) throw error;
+      return NextResponse.json({
+        success: true,
+        message: `Deleted ${bodyIds.length} damage records`,
+      });
+    }
+
+    return NextResponse.json(
+      { error: "Please specify an id, ids array, or action (clear-zero, clear-all)" },
+      { status: 400 }
+    );
+  } catch (error: any) {
+    console.error("Damage Delete Error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
