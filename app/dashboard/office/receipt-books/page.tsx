@@ -9,7 +9,9 @@ import {
   Edit,
   Loader2,
   RefreshCw,
+  ShieldCheck,
 } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -250,6 +252,14 @@ export default function OfficeReceiptBooksPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Link href="/dashboard/office/sierra/receipt-books/audit">
+            <Button
+              variant="outline"
+              className="border-purple-300 text-purple-800 hover:bg-purple-50 flex items-center gap-2 shadow-xs"
+            >
+              <ShieldCheck className="h-4 w-4 text-purple-600" /> Receipt Book Audit
+            </Button>
+          </Link>
           <Button
             onClick={() => setAssignModalOpen(true)}
             className="bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-2 shadow"

@@ -318,12 +318,110 @@ function FullInvoiceDetail({
   const [isAudited, setIsAudited] = useState(!!invoice.isAudited);
   const [togglingFlag, setTogglingFlag] = useState(false);
   const [isIncorrectFlag, setIsIncorrectFlag] = useState(!!invoice.isIncorrect);
+  const [receiptAuditMap, setReceiptAuditMap] = useState<Record<string, { isAudited: boolean; isIncorrect: boolean }>>({});
+  const [togglingReceipt, setTogglingReceipt] = useState<string | null>(null);
 
   // Sync state if searched invoice changes
   React.useEffect(() => {
     setIsAudited(!!invoice.isAudited);
     setIsIncorrectFlag(!!invoice.isIncorrect);
   }, [invoice.id, invoice.isAudited, invoice.isIncorrect]);
+
+  // Fetch receipt audit status for any receipts in payments
+  React.useEffect(() => {
+    const paymentsList: any[] = invoice.payments || [];
+    const receiptNums = paymentsList
+      .map((p) => p.receipt_number ? String(p.receipt_number).trim() : null)
+      .filter(Boolean) as string[];
+
+    if (receiptNums.length === 0) return;
+
+    const numValues = receiptNums.map((r) => parseInt(r.replace(/\D/g, ""), 10)).filter((n) => !isNaN(n));
+    if (numValues.length === 0) return;
+
+    const min = Math.min(...numValues);
+    const max = Math.max(...numValues);
+
+    fetch(`/api/receipt-books/audit-details?start=${min}&end=${max}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.items && Array.isArray(data.items)) {
+          const map: Record<string, { isAudited: boolean; isIncorrect: boolean }> = {};
+          data.items.forEach((it: any) => {
+            map[it.receiptNumber] = { isAudited: !!it.isAudited, isIncorrect: !!it.isIncorrect };
+          });
+          setReceiptAuditMap((prev) => ({ ...prev, ...map }));
+        }
+      })
+      .catch(() => {});
+  }, [invoice.id, (invoice.payments || []).length]);
+
+  const handleToggleReceiptAuditCheck = async (receiptNumber: string) => {
+    const current = receiptAuditMap[receiptNumber]?.isAudited || false;
+    const nextVal = !current;
+    setTogglingReceipt(receiptNumber);
+    try {
+      const res = await fetch("/api/receipt-books/audit-details", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          receiptNumber,
+          isAudited: nextVal,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to toggle receipt audit");
+      setReceiptAuditMap((prev) => ({
+        ...prev,
+        [receiptNumber]: {
+          ...prev[receiptNumber],
+          isAudited: nextVal,
+          isIncorrect: nextVal ? false : prev[receiptNumber]?.isIncorrect,
+        },
+      }));
+      if (nextVal) {
+        toast.success(`Receipt #${receiptNumber} marked as Audited & Checked! ✔️`);
+      } else {
+        toast.info(`Receipt #${receiptNumber} audit check removed.`);
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update receipt audit check");
+    } finally {
+      setTogglingReceipt(null);
+    }
+  };
+
+  const handleToggleReceiptFlag = async (receiptNumber: string) => {
+    const current = receiptAuditMap[receiptNumber]?.isIncorrect || false;
+    const nextVal = !current;
+    setTogglingReceipt(receiptNumber);
+    try {
+      const res = await fetch("/api/receipt-books/audit-details", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          receiptNumber,
+          isIncorrect: nextVal,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to flag receipt");
+      setReceiptAuditMap((prev) => ({
+        ...prev,
+        [receiptNumber]: {
+          ...prev[receiptNumber],
+          isIncorrect: nextVal,
+        },
+      }));
+      if (nextVal) {
+        toast.error(`Receipt #${receiptNumber} flagged for audit review!`);
+      } else {
+        toast.success(`Audit flag removed from Receipt #${receiptNumber}`);
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update receipt flag");
+    } finally {
+      setTogglingReceipt(null);
+    }
+  };
 
   const handleToggleAuditedCheck = async () => {
     const nextVal = !isAudited;
@@ -961,8 +1059,10 @@ function FullInvoiceDetail({
                       <TableHead className="pl-6">Date</TableHead>
                       <TableHead>Method</TableHead>
                       <TableHead>Reference / Cheque</TableHead>
+                      <TableHead>Audit Verification</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead className="text-right pr-6">Amount</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead className="text-right pr-6">Audit Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -971,10 +1071,15 @@ function FullInvoiceDetail({
                       const isReturned = !isCancelled && pay.cheque_status === "Returned";
                       const isVoided = isCancelled || isReturned;
                       const isCheque = pay.method?.toLowerCase() === "cheque";
+                      const rNo = pay.receipt_number ? String(pay.receipt_number).trim() : null;
+                      const auditMeta = rNo ? receiptAuditMap[rNo] : null;
+                      const isReceiptAudited = !!auditMeta?.isAudited;
+                      const isReceiptFlagged = !!auditMeta?.isIncorrect;
+
                       return (
                         <TableRow
                           key={pay.id}
-                          className={isCancelled ? "bg-red-50/50 hover:bg-red-50/70 opacity-80" : isReturned ? "bg-red-50/40 hover:bg-red-50/60" : "hover:bg-emerald-50/10"}
+                          className={isCancelled ? "bg-red-50/50 hover:bg-red-50/70 opacity-80" : isReturned ? "bg-red-50/40 hover:bg-red-50/60" : isReceiptAudited ? "bg-emerald-50/20 hover:bg-emerald-50/40" : "hover:bg-emerald-50/10"}
                         >
                           <TableCell className="pl-6 text-sm">
                             {new Date(pay.payment_date).toLocaleDateString()}
@@ -1010,6 +1115,25 @@ function FullInvoiceDetail({
                             </div>
                           </TableCell>
                           <TableCell>
+                            {rNo ? (
+                              isReceiptAudited ? (
+                                <Badge className="bg-emerald-100 text-emerald-900 border-emerald-300 font-bold text-[11px] gap-1 hover:bg-emerald-100">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Audited ✔️
+                                </Badge>
+                              ) : isReceiptFlagged ? (
+                                <Badge className="bg-rose-100 text-rose-800 border-rose-300 font-bold text-[11px] gap-1 hover:bg-rose-100">
+                                  <AlertOctagon className="w-3 h-3 text-rose-600" /> Flagged
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-200 text-[11px]">
+                                  ⏳ Pending Audit
+                                </Badge>
+                              )
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
                             {isCancelled ? (
                               <Badge variant="outline" className="text-[10px] px-1.5 border bg-red-50 text-red-700 border-red-200">
                                 Cancelled
@@ -1031,7 +1155,7 @@ function FullInvoiceDetail({
                               <span className="text-xs text-muted-foreground">—</span>
                             )}
                           </TableCell>
-                          <TableCell className="text-right pr-6 font-mono font-medium">
+                          <TableCell className="text-right font-mono font-medium">
                             <span className={isVoided ? "line-through text-gray-400" : ""}>
                               LKR{" "}
                               {Number(pay.amount).toLocaleString("en-LK", { minimumFractionDigits: 2 })}
@@ -1043,6 +1167,56 @@ function FullInvoiceDetail({
                               <p className="text-[10px] text-red-500 font-medium">Reversed</p>
                             )}
                           </TableCell>
+                          <TableCell className="text-right pr-6">
+                            {rNo ? (
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={togglingReceipt === rNo}
+                                  onClick={() => handleToggleReceiptAuditCheck(rNo)}
+                                  className={`h-7 text-[11px] font-bold px-2 gap-1 ${
+                                    isReceiptAudited
+                                      ? "bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700"
+                                      : "border-emerald-500 text-emerald-700 hover:bg-emerald-50"
+                                  }`}
+                                  title={isReceiptAudited ? "Unmark Receipt Audit Check" : "Mark Receipt as Audited & Checked"}
+                                >
+                                  <Check className="w-3 h-3 stroke-[3]" />
+                                  {isReceiptAudited ? "Checked" : "Check"}
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={togglingReceipt === rNo}
+                                  onClick={() => handleToggleReceiptFlag(rNo)}
+                                  className={`h-7 text-[11px] px-1.5 ${
+                                    isReceiptFlagged
+                                      ? "bg-rose-100 text-rose-800 border-rose-300 hover:bg-rose-200"
+                                      : "border-slate-300 text-slate-500 hover:text-rose-600 hover:bg-rose-50"
+                                  }`}
+                                  title={isReceiptFlagged ? "Remove Audit Flag" : "Flag Receipt for Audit Review"}
+                                >
+                                  <Flag className={`w-3 h-3 ${isReceiptFlagged ? "fill-rose-600 text-rose-600" : ""}`} />
+                                </Button>
+                                <Link
+                                  href={`/dashboard/office/sierra/receipt-books/audit?start=${parseInt(rNo.replace(/\D/g, "") || "1001", 10)}`}
+                                  className="shrink-0"
+                                >
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 text-[10px] px-1.5 text-purple-700 hover:bg-purple-50"
+                                    title="Open in Receipt Book Audit"
+                                  >
+                                    Audit Book
+                                  </Button>
+                                </Link>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
                         </TableRow>
                       );
                     })}
@@ -1050,7 +1224,7 @@ function FullInvoiceDetail({
                   <TableFooter className="bg-emerald-50/30">
                     <TableRow>
                       <TableCell
-                        colSpan={4}
+                        colSpan={5}
                         className="pl-6 text-emerald-700 font-medium text-right"
                       >
                         Total Paid
@@ -1061,6 +1235,7 @@ function FullInvoiceDetail({
                           minimumFractionDigits: 2,
                         })}
                       </TableCell>
+                      <TableCell />
                     </TableRow>
                   </TableFooter>
                 </Table>

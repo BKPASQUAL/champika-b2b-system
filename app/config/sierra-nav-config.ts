@@ -20,6 +20,7 @@ import {
   TrendingUp,
   BookOpen,
   ShieldAlert,
+  ShieldCheck,
 } from "lucide-react";
 
 interface SierraNavItem {
@@ -75,6 +76,12 @@ export const sierraOfficeNavItems: SierraNavSection[] = [
         href: "/dashboard/office/sierra/receipt-books",
         icon: BookOpen,
         description: "Assigned receipt books",
+      },
+      {
+        name: "Receipt Book Audit",
+        href: "/dashboard/office/sierra/receipt-books/audit",
+        icon: ShieldCheck,
+        description: "Audit 50-receipt books & sequence status",
       },
       {
         name: "Due Alerts",
