@@ -39,6 +39,7 @@ import {
   CheckCircle2,
   Building2,
   KeyRound,
+  PackageX,
 } from "lucide-react";
 
 export type UserRole = "admin" | "office" | "rep" | "delivery";
@@ -233,6 +234,11 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           name: "Business Analytics",
           href: "/dashboard/admin/reports/business",
           icon: Building2,
+        },
+        {
+          name: "Non-Moving Items",
+          href: "/dashboard/admin/reports/non-moving",
+          icon: PackageX,
         },
       ],
     },
