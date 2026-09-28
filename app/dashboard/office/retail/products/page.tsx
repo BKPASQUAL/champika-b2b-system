@@ -26,10 +26,31 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { Product, ProductFormData } from "@/app/dashboard/admin/products/types";
 import { ProductDialogs } from "@/app/dashboard/admin/products/_components/ProductDialogs";
+import {
+  generateCostAndPriceReport,
+  generatePriceListReport,
+  exportProductsToExcel,
+} from "@/app/dashboard/admin/products/product-reports";
+import { ProductReportDialog } from "@/app/dashboard/office/distribution/products/_components/ProductReportDialog";
+import {
+  Download,
+  Printer,
+  FileSpreadsheet,
+  SlidersHorizontal,
+  ClipboardList,
+} from "lucide-react";
 
 // ── Number-word search (same as other portals) ──────────────────────────────
 const NUMBER_WORDS: Record<string, string> = {
@@ -116,6 +137,7 @@ export default function RetailProductCatalogPage() {
   // ── Add / Edit dialog ────────────────────────────────────────────────────
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [formData, setFormData] = useState<ProductFormData>(EMPTY_FORM);
 
@@ -284,6 +306,55 @@ export default function RetailProductCatalogPage() {
     }
   };
 
+  // ── Report Handlers ─────────────────────────────────────────────────────
+  const handleCostPricePrint = () => {
+    generateCostAndPriceReport(filteredProducts, {
+      action: "print",
+      categoryFilter,
+      isRetailPortal: true,
+      companyName: "CHAMPIKA HARDWARE - RETAIL",
+      title: "RETAIL PRODUCT COST & SELLING PRICE REPORT (BY SUPPLIER)",
+    });
+  };
+
+  const handleCostPriceDownload = () => {
+    generateCostAndPriceReport(filteredProducts, {
+      action: "download",
+      categoryFilter,
+      isRetailPortal: true,
+      companyName: "CHAMPIKA HARDWARE - RETAIL",
+      title: "RETAIL PRODUCT COST & SELLING PRICE REPORT (BY SUPPLIER)",
+    });
+  };
+
+  const handlePriceListPrint = () => {
+    generatePriceListReport(filteredProducts, {
+      action: "print",
+      categoryFilter,
+      isRetailPortal: true,
+      companyName: "CHAMPIKA HARDWARE - RETAIL",
+      title: "RETAIL PRODUCT PRICE LIST",
+    });
+  };
+
+  const handlePriceListDownload = () => {
+    generatePriceListReport(filteredProducts, {
+      action: "download",
+      categoryFilter,
+      isRetailPortal: true,
+      companyName: "CHAMPIKA HARDWARE - RETAIL",
+      title: "RETAIL PRODUCT PRICE LIST",
+    });
+  };
+
+  const handleExportExcel = () => {
+    exportProductsToExcel(filteredProducts, {
+      categoryFilter,
+      includeCost: true,
+      isRetailPortal: true,
+    });
+  };
+
   // ── Stats ────────────────────────────────────────────────────────────────
   const totalRetailOnly = products.filter((p) => p.retailOnly).length;
   const withRetailPrice = products.filter((p) => p.retailOnly && p.retailPrice).length;
@@ -299,6 +370,48 @@ export default function RetailProductCatalogPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* ── Generate Report Dropdown ── */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="shadow-sm border-purple-200 hover:bg-purple-50 text-purple-800">
+                <Download className="w-4 h-4 mr-2 text-purple-600" />
+                Generate Report
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuLabel className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Cost & Retail Price Reports
+              </DropdownMenuLabel>
+              <DropdownMenuItem onClick={handleCostPricePrint} className="cursor-pointer">
+                <Printer className="w-4 h-4 mr-2 text-purple-600" /> Print Cost & Price Report
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleCostPriceDownload} className="cursor-pointer">
+                <Download className="w-4 h-4 mr-2 text-purple-600" /> Download Cost Report (PDF)
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Retail Price List (Customer)
+              </DropdownMenuLabel>
+              <DropdownMenuItem onClick={handlePriceListPrint} className="cursor-pointer">
+                <Printer className="w-4 h-4 mr-2 text-emerald-600" /> Print Price List
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handlePriceListDownload} className="cursor-pointer">
+                <ClipboardList className="w-4 h-4 mr-2 text-emerald-600" /> Download Price List (PDF)
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleExportExcel} className="cursor-pointer">
+                <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" /> Export to Excel (.xlsx)
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setIsReportDialogOpen(true)} className="cursor-pointer font-medium text-purple-700 bg-purple-50/50">
+                <SlidersHorizontal className="w-4 h-4 mr-2 text-purple-700" /> Custom Report Options...
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <Button variant="outline" size="sm" onClick={fetchData} disabled={l1}>
             <RefreshCw className={`w-4 h-4 mr-2 ${l1 ? "animate-spin" : ""}`} />
             Refresh
@@ -888,6 +1001,16 @@ export default function RetailProductCatalogPage() {
           />
         </div>
       )}
+
+      {/* ── Product Report Dialog ── */}
+      <ProductReportDialog
+        open={isReportDialogOpen}
+        onOpenChange={setIsReportDialogOpen}
+        products={filteredProducts}
+        suppliers={suppliers}
+        categories={categories}
+        isRetailPortal={true}
+      />
     </div>
   );
 }

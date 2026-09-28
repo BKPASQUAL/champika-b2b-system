@@ -55,7 +55,6 @@ const prefetchProductImages = async (products: Product[]): Promise<Record<string
     )
   );
 
-  // Load up to 50 unique images in parallel chunks
   const chunkSize = 15;
   for (let i = 0; i < urlsToFetch.length; i += chunkSize) {
     const chunk = urlsToFetch.slice(i, i + chunkSize);
@@ -106,8 +105,11 @@ export interface ReportOptions {
   supplierFilter?: string;
   categoryFilter?: string;
   stockFilter?: string;
+  channelFilter?: "all" | "distribution" | "retail_only";
   includeImages?: boolean;
   title?: string;
+  isRetailPortal?: boolean;
+  companyName?: string;
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -122,8 +124,13 @@ export const generateCostAndPriceReport = async (
     supplierFilter = "all",
     categoryFilter = "all",
     stockFilter = "all",
+    channelFilter = "all",
     includeImages = true,
-    title = "PRODUCT COST & PRICE LIST (BY SUPPLIER)",
+    isRetailPortal = false,
+    companyName = isRetailPortal ? "CHAMPIKA HARDWARE - RETAIL" : "CHAMPIKA HARDWARE & DISTRIBUTORS",
+    title = isRetailPortal
+      ? "RETAIL PRODUCT COST & PRICE LIST (BY SUPPLIER)"
+      : "PRODUCT COST & PRICE LIST (BY SUPPLIER)",
   } = options;
 
   const toastId = "cost-price-report";
@@ -133,7 +140,6 @@ export const generateCostAndPriceReport = async (
   );
 
   try {
-    // Filter products
     let eligible = products.filter((p) => p.isActive !== false);
 
     if (supplierFilter && supplierFilter !== "all") {
@@ -141,6 +147,11 @@ export const generateCostAndPriceReport = async (
     }
     if (categoryFilter && categoryFilter !== "all") {
       eligible = eligible.filter((p) => p.category?.toLowerCase().trim() === categoryFilter.toLowerCase().trim());
+    }
+    if (channelFilter === "distribution") {
+      eligible = eligible.filter((p) => !p.retailOnly);
+    } else if (channelFilter === "retail_only") {
+      eligible = eligible.filter((p) => Boolean(p.retailOnly));
     }
     if (stockFilter === "in-stock") {
       eligible = eligible.filter((p) => (p.stock || 0) > 0);
@@ -173,7 +184,6 @@ export const generateCostAndPriceReport = async (
       minute: "2-digit",
     });
 
-    // Group products by supplier
     const grouped: Record<string, Product[]> = {};
     eligible.forEach((p) => {
       const sup = p.supplier?.trim() || "Unassigned Supplier";
@@ -183,28 +193,35 @@ export const generateCostAndPriceReport = async (
 
     const supplierNames = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
 
-    // Summary calculations
     const grandTotalItems = eligible.length;
+    const grandDistCount = eligible.filter((p) => !p.retailOnly).length;
+    const grandRetailCount = eligible.filter((p) => Boolean(p.retailOnly)).length;
     const grandTotalStock = eligible.reduce((sum, p) => sum + (Number(p.stock) || 0), 0);
     const grandTotalCostVal = eligible.reduce((sum, p) => sum + (Number(p.stock) || 0) * (Number(p.costPrice) || 0), 0);
-    const grandTotalSellingVal = eligible.reduce((sum, p) => sum + (Number(p.stock) || 0) * (Number(p.sellingPrice) || 0), 0);
+    const grandTotalSellingVal = eligible.reduce((sum, p) => {
+      const sellPrice = (isRetailPortal && Number(p.retailPrice) > 0) ? Number(p.retailPrice) : (Number(p.sellingPrice) || 0);
+      return sum + (Number(p.stock) || 0) * sellPrice;
+    }, 0);
     const grandTotalProfitVal = grandTotalSellingVal - grandTotalCostVal;
 
-    // Header Drawing
+    const scopeLabel =
+      channelFilter === "distribution"
+        ? "Scope: Distribution Items"
+        : channelFilter === "retail_only"
+        ? "Scope: Retail Exclusive Only"
+        : "Scope: All Items (Dist + Retail)";
+
     const drawPageHeader = () => {
-      // Company Name
-      doc.setTextColor(15, 23, 42); // slate-900
+      doc.setTextColor(15, 23, 42);
       doc.setFontSize(15);
       doc.setFont("helvetica", "bold");
-      doc.text("CHAMPIKA HARDWARE & DISTRIBUTORS", marginLeft, 12);
+      doc.text(companyName, marginLeft, 12);
 
-      // Contact info
-      doc.setTextColor(100, 116, 139); // slate-500
+      doc.setTextColor(100, 116, 139);
       doc.setFontSize(7.5);
       doc.setFont("helvetica", "normal");
       doc.text("Pranawatta Road, Wallabada, Boossa | Tel: 0777681663 / 0912234567", marginLeft, 16.5);
 
-      // Document Title on Right
       doc.setTextColor(30, 41, 59);
       doc.setFontSize(11);
       doc.setFont("helvetica", "bold");
@@ -213,10 +230,14 @@ export const generateCostAndPriceReport = async (
       doc.setFontSize(7.5);
       doc.setFont("helvetica", "normal");
       doc.setTextColor(100, 116, 139);
-      doc.text(`Generated: ${todayStr} ${timeStr} | Filter: ${supplierFilter === "all" ? "All Suppliers" : supplierFilter}`, marginRight, 16.5, { align: "right" });
+      doc.text(
+        `Generated: ${todayStr} ${timeStr} | ${supplierFilter === "all" ? "All Suppliers" : `Supplier: ${supplierFilter}`} | ${scopeLabel}`,
+        marginRight,
+        16.5,
+        { align: "right" }
+      );
 
-      // Top dividing line
-      doc.setDrawColor(203, 213, 225); // slate-300
+      doc.setDrawColor(203, 213, 225);
       doc.setLineWidth(0.4);
       doc.line(marginLeft, 19, marginRight, 19);
     };
@@ -225,7 +246,7 @@ export const generateCostAndPriceReport = async (
       doc.setFontSize(7);
       doc.setFont("helvetica", "italic");
       doc.setTextColor(148, 163, 184);
-      doc.text("Champika Hardware — Confidential Product & Cost Valuation Report", marginLeft, pageHeight - 6);
+      doc.text(`${companyName} — Confidential Product & Cost Valuation Report`, marginLeft, pageHeight - 6);
       doc.text(`Page ${pageNum} of ${total}`, marginRight, pageHeight - 6, { align: "right" });
     };
 
@@ -242,19 +263,20 @@ export const generateCostAndPriceReport = async (
 
       const supStock = supplierProducts.reduce((s, p) => s + (Number(p.stock) || 0), 0);
       const supCostVal = supplierProducts.reduce((s, p) => s + (Number(p.stock) || 0) * (Number(p.costPrice) || 0), 0);
-      const supSellingVal = supplierProducts.reduce((s, p) => s + (Number(p.stock) || 0) * (Number(p.sellingPrice) || 0), 0);
+      const supSellingVal = supplierProducts.reduce((s, p) => {
+        const sellPrice = (isRetailPortal && Number(p.retailPrice) > 0) ? Number(p.retailPrice) : (Number(p.sellingPrice) || 0);
+        return s + (Number(p.stock) || 0) * sellPrice;
+      }, 0);
       const supProfit = supSellingVal - supCostVal;
       const supMarginPct = supSellingVal > 0 ? ((supProfit / supSellingVal) * 100).toFixed(1) : "0.0";
 
-      // If near bottom of page, start new page
       if (currentY > pageHeight - 35) {
         doc.addPage();
         drawPageHeader();
         currentY = 22;
       }
 
-      // Supplier Banner Bar
-      doc.setFillColor(30, 41, 59); // slate-800
+      doc.setFillColor(30, 41, 59);
       doc.roundedRect(marginLeft, currentY, marginRight - marginLeft, 6.5, 1, 1, "F");
 
       doc.setTextColor(255, 255, 255);
@@ -265,7 +287,7 @@ export const generateCostAndPriceReport = async (
       doc.setFontSize(7.5);
       doc.setFont("helvetica", "normal");
       doc.text(
-        `Stock: ${fmtInt(supStock)} Pcs  |  Cost Val: LKR ${fmt(supCostVal)}  |  Selling Val: LKR ${fmt(supSellingVal)}  |  Margin: ${supMarginPct}%`,
+        `Stock: ${fmtInt(supStock)} Pcs  |  Cost Val: LKR ${fmt(supCostVal)}  |  ${isRetailPortal ? "Retail Val" : "Selling Val"}: LKR ${fmt(supSellingVal)}  |  Margin: ${supMarginPct}%`,
         marginRight - 3,
         currentY + 4.5,
         { align: "right" }
@@ -275,18 +297,19 @@ export const generateCostAndPriceReport = async (
 
       const tableRows = supplierProducts.map((p, idx) => {
         const cost = Number(p.costPrice) || 0;
-        const sell = Number(p.sellingPrice) || 0;
+        const sell = (isRetailPortal && Number(p.retailPrice) > 0) ? Number(p.retailPrice) : (Number(p.sellingPrice) || 0);
         const mrp = Number(p.mrp) || 0;
         const stock = Number(p.stock) || 0;
         const unitProfit = sell - cost;
         const marginPct = sell > 0 ? ((unitProfit / sell) * 100).toFixed(1) + "%" : "-";
         const stockVal = stock * cost;
+        const typeTag = p.retailOnly ? "[Retail Only]" : "[Distribution]";
 
         return [
           idx + 1,
           p.sku || p.companyCode || "-",
-          "", // Image placeholder
-          p.name || "-",
+          "",
+          `${p.name || "-"}\n${typeTag}`,
           p.category || "-",
           p.unitOfMeasure || "Pcs",
           stock,
@@ -304,12 +327,12 @@ export const generateCostAndPriceReport = async (
             "#",
             "Item Code",
             "Img",
-            "Product Name",
+            "Product Name / Type",
             "Category",
             "Unit",
             "Stock",
             "Cost Price",
-            "Selling Price",
+            isRetailPortal ? "Retail Price" : "Selling Price",
             "MRP",
             "Margin",
             "Stock Cost Value",
@@ -350,7 +373,7 @@ export const generateCostAndPriceReport = async (
           5: { cellWidth: 12, halign: "center" },
           6: { cellWidth: 14, halign: "center", fontStyle: "bold" },
           7: { cellWidth: 24, halign: "right", fontStyle: "bold", textColor: [37, 99, 235] },
-          8: { cellWidth: 24, halign: "right", fontStyle: "bold", textColor: [16, 185, 129] },
+          8: { cellWidth: 24, halign: "right", fontStyle: "bold", textColor: isRetailPortal ? [147, 51, 234] : [16, 185, 129] },
           9: { cellWidth: 22, halign: "right", textColor: [100, 116, 139] },
           10: { cellWidth: 18, halign: "right" },
           11: { cellWidth: 28, halign: "right", fontStyle: "bold" },
@@ -379,7 +402,6 @@ export const generateCostAndPriceReport = async (
       currentY = (doc as any).lastAutoTable.finalY + (sIndex < supplierNames.length - 1 ? 5 : 4);
     });
 
-    // ── GRAND TOTAL SUMMARY SECTION ──
     if (currentY > pageHeight - 32) {
       doc.addPage();
       drawPageHeader();
@@ -387,7 +409,7 @@ export const generateCostAndPriceReport = async (
     }
 
     const summaryY = currentY + 2;
-    doc.setFillColor(241, 245, 249); // slate-100
+    doc.setFillColor(241, 245, 249);
     doc.setDrawColor(148, 163, 184);
     doc.setLineWidth(0.4);
     doc.roundedRect(marginLeft, summaryY, marginRight - marginLeft, 14, 1.5, 1.5, "FD");
@@ -401,7 +423,7 @@ export const generateCostAndPriceReport = async (
     doc.setFont("helvetica", "normal");
     doc.setTextColor(51, 65, 85);
     doc.text(
-      `Total Suppliers: ${supplierNames.length}   |   Catalog Items: ${grandTotalItems}   |   Physical Stock Units: ${fmtInt(grandTotalStock)}`,
+      `Total Suppliers: ${supplierNames.length}  |  Total Items: ${grandTotalItems} (Dist: ${grandDistCount}, Retail: ${grandRetailCount})  |  Stock Units: ${fmtInt(grandTotalStock)}`,
       marginLeft + 4,
       summaryY + 10
     );
@@ -409,13 +431,12 @@ export const generateCostAndPriceReport = async (
     doc.setFont("helvetica", "bold");
     doc.setTextColor(15, 23, 42);
     doc.text(
-      `Total Stock Cost: LKR ${fmt(grandTotalCostVal)}   |   Total Stock Selling: LKR ${fmt(grandTotalSellingVal)}   |   Est. Gross Margin: LKR ${fmt(grandTotalProfitVal)} (${grandTotalSellingVal > 0 ? ((grandTotalProfitVal / grandTotalSellingVal) * 100).toFixed(1) : "0.0"}%)`,
+      `Total Stock Cost: LKR ${fmt(grandTotalCostVal)}   |   Total ${isRetailPortal ? "Retail" : "Selling"} Value: LKR ${fmt(grandTotalSellingVal)}   |   Est. Margin: LKR ${fmt(grandTotalProfitVal)} (${grandTotalSellingVal > 0 ? ((grandTotalProfitVal / grandTotalSellingVal) * 100).toFixed(1) : "0.0"}%)`,
       marginRight - 4,
       summaryY + 8,
       { align: "right" }
     );
 
-    // Number all pages with footers
     const totalPages = (doc as any).internal.getNumberOfPages();
     for (let i = 1; i <= totalPages; i++) {
       doc.setPage(i);
@@ -424,7 +445,8 @@ export const generateCostAndPriceReport = async (
 
     const dateStr = new Date().toISOString().slice(0, 10);
     const supplierSlug = supplierFilter === "all" ? "All_Suppliers" : supplierFilter.replace(/[^a-zA-Z0-9]/g, "_");
-    const fileName = `Product_Cost_Price_Report_${supplierSlug}_${dateStr}.pdf`;
+    const prefix = isRetailPortal ? "Retail_Product_Cost_Price_Report" : "Product_Cost_Price_Report";
+    const fileName = `${prefix}_${supplierSlug}_${dateStr}.pdf`;
 
     if (action === "print") {
       triggerPrintDoc(doc, toastId);
@@ -439,7 +461,7 @@ export const generateCostAndPriceReport = async (
 };
 
 // ══════════════════════════════════════════════════════════════════════════
-// 2. SELLING PRICE LIST REPORT (PORTRAIT / CUSTOMER FACING)
+// 2. SELLING / RETAIL PRICE LIST REPORT (PORTRAIT / CUSTOMER FACING)
 // ══════════════════════════════════════════════════════════════════════════
 export const generatePriceListReport = async (
   products: Product[],
@@ -449,8 +471,11 @@ export const generatePriceListReport = async (
     action = "download",
     supplierFilter = "all",
     categoryFilter = "all",
+    channelFilter = "all",
     includeImages = true,
-    title = "DISTRIBUTION PRODUCTS — PRICE LIST",
+    isRetailPortal = false,
+    companyName = isRetailPortal ? "CHAMPIKA HARDWARE - RETAIL" : "CHAMPIKA HARDWARE",
+    title = isRetailPortal ? "RETAIL PRODUCT PRICE LIST" : "DISTRIBUTION PRODUCTS — PRICE LIST",
   } = options;
 
   const toastId = "price-list-report";
@@ -468,6 +493,11 @@ export const generatePriceListReport = async (
     if (categoryFilter && categoryFilter !== "all") {
       eligible = eligible.filter((p) => p.category?.toLowerCase().trim() === categoryFilter.toLowerCase().trim());
     }
+    if (channelFilter === "distribution") {
+      eligible = eligible.filter((p) => !p.retailOnly);
+    } else if (channelFilter === "retail_only") {
+      eligible = eligible.filter((p) => Boolean(p.retailOnly));
+    }
 
     if (eligible.length === 0) {
       toast.error("No products matching the selected filters", { id: toastId });
@@ -482,11 +512,18 @@ export const generatePriceListReport = async (
     const marginLeft = 14;
     const marginRight = pageWidth - 14;
 
+    const scopeLabel =
+      channelFilter === "distribution"
+        ? "Scope: Distribution"
+        : channelFilter === "retail_only"
+        ? "Scope: Retail Only"
+        : "Scope: All Items";
+
     const drawPageHeader = () => {
       doc.setTextColor(0, 0, 0);
       doc.setFontSize(16);
       doc.setFont("helvetica", "bold");
-      doc.text("CHAMPIKA HARDWARE", pageWidth / 2, 16, { align: "center" });
+      doc.text(companyName, pageWidth / 2, 16, { align: "center" });
 
       doc.setTextColor(60, 60, 60);
       doc.setFontSize(8);
@@ -510,7 +547,7 @@ export const generatePriceListReport = async (
       doc.setFontSize(8);
       doc.setFont("helvetica", "normal");
       doc.setTextColor(80, 80, 80);
-      doc.text(`Date: ${today}  |  ${supplierFilter === "all" ? "All Suppliers" : `Supplier: ${supplierFilter}`}`, marginLeft, 38);
+      doc.text(`Date: ${today}  |  ${supplierFilter === "all" ? "All Suppliers" : `Supplier: ${supplierFilter}`}  |  ${scopeLabel}`, marginLeft, 38);
       doc.text(`Total Products: ${eligible.length}`, marginRight, 38, { align: "right" });
 
       doc.setDrawColor(180, 180, 180);
@@ -523,7 +560,7 @@ export const generatePriceListReport = async (
       doc.setFont("helvetica", "italic");
       doc.setTextColor(130, 130, 130);
       doc.text(`Page ${pageNum} of ${totalPages}`, pageWidth / 2, pageHeight - 8, { align: "center" });
-      doc.text("Champika Hardware — Confidential Price List", marginLeft, pageHeight - 8);
+      doc.text(`${companyName} — Confidential Price List`, marginLeft, pageHeight - 8);
     };
 
     const grouped: Record<string, Product[]> = {};
@@ -562,18 +599,22 @@ export const generatePriceListReport = async (
 
       currentY += 9;
 
-      const tableRows = supplierProducts.map((p, idx) => [
-        idx + 1,
-        p.sku || p.companyCode || "-",
-        "",
-        p.name,
-        p.unitOfMeasure || "-",
-        `LKR ${fmt(p.sellingPrice)}`,
-        p.mrp ? `LKR ${fmt(p.mrp)}` : "-",
-      ]);
+      const tableRows = supplierProducts.map((p, idx) => {
+        const sellPrice = (isRetailPortal && Number(p.retailPrice) > 0) ? Number(p.retailPrice) : (Number(p.sellingPrice) || 0);
+        const typeTag = p.retailOnly ? " [Retail Only]" : "";
+        return [
+          idx + 1,
+          p.sku || p.companyCode || "-",
+          "",
+          `${p.name}${typeTag}`,
+          p.unitOfMeasure || "-",
+          `LKR ${fmt(sellPrice)}`,
+          p.mrp ? `LKR ${fmt(p.mrp)}` : "-",
+        ];
+      });
 
       autoTable(doc, {
-        head: [["#", "Item Code", "Image", "Item Name", "Pack Size", "Selling Price", "MRP"]],
+        head: [["#", "Item Code", "Image", "Item Name / Type", "Pack Size", isRetailPortal ? "Retail Price" : "Selling Price", "MRP"]],
         body: tableRows,
         startY: currentY,
         theme: "plain",
@@ -642,7 +683,8 @@ export const generatePriceListReport = async (
     }
 
     const dateStr = new Date().toISOString().slice(0, 10);
-    const fileName = `Price_List_${dateStr}.pdf`;
+    const prefix = isRetailPortal ? "Retail_Price_List" : "Price_List";
+    const fileName = `${prefix}_${dateStr}.pdf`;
 
     if (action === "print") {
       triggerPrintDoc(doc, toastId);
@@ -657,13 +699,25 @@ export const generatePriceListReport = async (
 };
 
 // ══════════════════════════════════════════════════════════════════════════
-// 3. EXPORT EXCEL (WITH COST & SELLING PRICES)
+// 3. EXPORT EXCEL (WITH CHANNEL, COST, SELLING & RETAIL PRICES)
 // ══════════════════════════════════════════════════════════════════════════
 export const exportProductsToExcel = (
   products: Product[],
-  options: { supplierFilter?: string; categoryFilter?: string; includeCost?: boolean } = {}
+  options: {
+    supplierFilter?: string;
+    categoryFilter?: string;
+    channelFilter?: "all" | "distribution" | "retail_only";
+    includeCost?: boolean;
+    isRetailPortal?: boolean;
+  } = {}
 ) => {
-  const { supplierFilter = "all", categoryFilter = "all", includeCost = true } = options;
+  const {
+    supplierFilter = "all",
+    categoryFilter = "all",
+    channelFilter = "all",
+    includeCost = true,
+    isRetailPortal = false,
+  } = options;
 
   let eligible = products;
   if (supplierFilter !== "all") {
@@ -671,6 +725,11 @@ export const exportProductsToExcel = (
   }
   if (categoryFilter !== "all") {
     eligible = eligible.filter((p) => p.category?.toLowerCase().trim() === categoryFilter.toLowerCase().trim());
+  }
+  if (channelFilter === "distribution") {
+    eligible = eligible.filter((p) => !p.retailOnly);
+  } else if (channelFilter === "retail_only") {
+    eligible = eligible.filter((p) => Boolean(p.retailOnly));
   }
 
   if (eligible.length === 0) {
@@ -681,14 +740,17 @@ export const exportProductsToExcel = (
   const data = eligible.map((p) => {
     const cost = Number(p.costPrice) || 0;
     const sell = Number(p.sellingPrice) || 0;
+    const retail = Number(p.retailPrice) || 0;
     const stock = Number(p.stock) || 0;
-    const profit = sell - cost;
-    const marginPct = sell > 0 ? Number(((profit / sell) * 100).toFixed(2)) : 0;
+    const effectiveSell = (isRetailPortal && retail > 0) ? retail : sell;
+    const profit = effectiveSell - cost;
+    const marginPct = effectiveSell > 0 ? Number(((profit / effectiveSell) * 100).toFixed(2)) : 0;
 
     const row: Record<string, any> = {
       SKU: p.sku || "",
       "Company Code": p.companyCode || "-",
       Name: p.name,
+      Channel: p.retailOnly ? "Retail Only" : "Distribution & Wholesale",
       Category: p.category,
       Supplier: p.supplier,
       Stock: stock,
@@ -699,14 +761,17 @@ export const exportProductsToExcel = (
       row["Cost Price (LKR)"] = cost;
     }
 
-    row["Selling Price (LKR)"] = sell;
+    row["Base Selling Price (LKR)"] = sell;
+    if (isRetailPortal || retail > 0) {
+      row["Retail Price (LKR)"] = retail > 0 ? retail : "-";
+    }
     row["MRP (LKR)"] = p.mrp || 0;
 
     if (includeCost) {
       row["Unit Margin (LKR)"] = profit;
       row["Margin %"] = `${marginPct}%`;
       row["Total Stock Cost (LKR)"] = stock * cost;
-      row["Total Stock Selling (LKR)"] = stock * sell;
+      row["Total Stock Value (LKR)"] = stock * effectiveSell;
     }
 
     row["Status"] = p.isActive ? "Active" : "Inactive";
@@ -717,7 +782,8 @@ export const exportProductsToExcel = (
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Products");
   const dateStr = new Date().toISOString().slice(0, 10);
-  XLSX.writeFile(wb, `products_cost_price_report_${dateStr}.xlsx`);
+  const prefix = isRetailPortal ? "retail_products_report" : "products_cost_price_report";
+  XLSX.writeFile(wb, `${prefix}_${dateStr}.xlsx`);
   toast.success("Excel report exported successfully");
 };
 
