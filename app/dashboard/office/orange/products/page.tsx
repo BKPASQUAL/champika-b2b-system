@@ -15,7 +15,11 @@ import {
   SortOrder,
   ProductFormData,
 } from "./types";
-import { printPriceListReport } from "@/app/dashboard/admin/products/print-price-list";
+import {
+  generateCostAndPriceReport,
+  generatePriceListReport,
+  exportProductsToExcel,
+} from "@/app/dashboard/admin/products/product-reports";
 
 // Import LOCAL Orange Components
 import { ProductStats } from "./_components/ProductStats";
@@ -23,6 +27,7 @@ import { ProductHeader } from "./_components/ProductHeader";
 import { ProductFilters } from "./_components/ProductFilters";
 import { ProductTable } from "./_components/ProductTable";
 import { ProductDialogs } from "./_components/ProductDialogs";
+import { ProductReportDialog } from "@/app/dashboard/office/distribution/products/_components/ProductReportDialog";
 import { SelectionDiscountDialog } from "@/components/SelectionDiscountDialog";
 import { useDiscountFeature } from "@/hooks/useDiscountFeature";
 
@@ -89,6 +94,7 @@ export default function OrangeProductsPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDiscountDialogOpen, setIsDiscountDialogOpen] = useState(false);
+  const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   // Row selection
@@ -280,43 +286,20 @@ export default function OrangeProductsPage() {
     setSelectedProduct(null);
   };
 
-  const generateExcel = () => {
-    if (sortedProducts.length === 0) {
-      toast.error("No data");
-      return;
-    }
-    const data = sortedProducts.map((p) => ({
-      SKU: p.sku,
-      Name: p.name,
-      Category: p.category,
-      Stock: p.stock,
-      Price: p.sellingPrice,
-    }));
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Orange_Products");
-    XLSX.writeFile(wb, "orange_inventory.xlsx");
+  const handleExportExcel = () => {
+    exportProductsToExcel(sortedProducts, {
+      supplierFilter: "Orange (Orel Corporation)",
+      categoryFilter,
+      includeCost: true,
+    });
   };
 
-  const generatePDF = () => {
-    if (sortedProducts.length === 0) {
-      toast.error("No data");
-      return;
-    }
-    const doc = new jsPDF();
-    doc.text("Orange Agency Inventory", 14, 15);
-    autoTable(doc, {
-      head: [["SKU", "Name", "Category", "Stock", "Price"]],
-      body: sortedProducts.map((p) => [
-        p.sku,
-        p.name,
-        p.category,
-        p.stock,
-        p.sellingPrice,
-      ]),
-      startY: 20,
+  const handleExportPDF = () => {
+    generatePriceListReport(sortedProducts, {
+      action: "download",
+      supplierFilter: "Orange (Orel Corporation)",
+      categoryFilter,
     });
-    doc.save("orange_inventory.pdf");
   };
 
   return (
@@ -326,9 +309,39 @@ export default function OrangeProductsPage() {
           resetForm();
           setIsAddDialogOpen(true);
         }}
-        onExportExcel={generateExcel}
-        onExportPDF={generatePDF}
-        onPriceListReport={() => printPriceListReport(sortedProducts)}
+        onExportExcel={handleExportExcel}
+        onExportPDF={handleExportPDF}
+        onPriceListReport={() =>
+          generatePriceListReport(sortedProducts, {
+            action: "download",
+            supplierFilter: "Orange (Orel Corporation)",
+            categoryFilter,
+          })
+        }
+        onPrintPriceListReport={() =>
+          generatePriceListReport(sortedProducts, {
+            action: "print",
+            supplierFilter: "Orange (Orel Corporation)",
+            categoryFilter,
+          })
+        }
+        onCostPriceDownload={() =>
+          generateCostAndPriceReport(sortedProducts, {
+            action: "download",
+            supplierFilter: "Orange (Orel Corporation)",
+            categoryFilter,
+            stockFilter,
+          })
+        }
+        onCostPricePrint={() =>
+          generateCostAndPriceReport(sortedProducts, {
+            action: "print",
+            supplierFilter: "Orange (Orel Corporation)",
+            categoryFilter,
+            stockFilter,
+          })
+        }
+        onOpenReportDialog={() => setIsReportDialogOpen(true)}
       />
 
       <ProductStats products={products} />
@@ -463,6 +476,14 @@ export default function OrangeProductsPage() {
           setSelectAllMode(false);
           fetchData();
         }}
+      />
+
+      <ProductReportDialog
+        open={isReportDialogOpen}
+        onOpenChange={setIsReportDialogOpen}
+        products={sortedProducts}
+        suppliers={[{ id: "orange-orel", name: "Orange (Orel Corporation)" }]}
+        categories={categories}
       />
     </div>
   );

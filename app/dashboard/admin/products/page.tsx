@@ -9,12 +9,17 @@ import autoTable from "jspdf-autotable";
 import { toast } from "sonner";
 
 import { Product, SortField, SortOrder, ProductFormData } from "./types";
-import { printPriceListReport } from "./print-price-list";
+import {
+  generateCostAndPriceReport,
+  generatePriceListReport,
+  exportProductsToExcel,
+} from "./product-reports";
 import { ProductStats } from "./_components/ProductStats";
 import { ProductHeader } from "./_components/ProductHeader";
 import { ProductFilters } from "./_components/ProductFilters";
 import { ProductTable } from "./_components/ProductTable";
 import { ProductDialogs } from "./_components/ProductDialogs";
+import { ProductReportDialog } from "@/app/dashboard/office/distribution/products/_components/ProductReportDialog";
 
 const NUMBER_WORDS: Record<string, string> = {
   "0": "zero", "1": "one", "2": "two", "3": "three", "4": "four",
@@ -87,6 +92,7 @@ export default function ProductsPage() {
   // Dialogs
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   // Form Data
@@ -284,49 +290,20 @@ export default function ProductsPage() {
     setSelectedProduct(null);
   };
 
-  const generateExcel = () => {
-    if (sortedProducts.length === 0) {
-      toast.error("No data to export");
-      return;
-    }
-    const data = sortedProducts.map((p) => ({
-      SKU: p.sku,
-      Name: p.name,
-      Category: p.category,
-      Supplier: p.supplier,
-      Stock: p.stock,
-      Unit: p.unitOfMeasure,
-      MRP: p.mrp,
-      "Selling Price": p.sellingPrice,
-      Status: p.isActive ? "Active" : "Inactive",
-    }));
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Products");
-    XLSX.writeFile(wb, "products.xlsx");
+  const handleExportExcel = () => {
+    exportProductsToExcel(sortedProducts, {
+      supplierFilter,
+      categoryFilter,
+      includeCost: true,
+    });
   };
 
-  const generatePDF = () => {
-    if (sortedProducts.length === 0) {
-      toast.error("No data to export");
-      return;
-    }
-    const doc = new jsPDF();
-    doc.text("Product Catalog", 14, 15);
-    autoTable(doc, {
-      head: [["SKU", "Name", "Category", "Supplier", "Stock", "Unit", "Price"]],
-      body: sortedProducts.map((p) => [
-        p.sku,
-        p.name,
-        p.category,
-        p.supplier,
-        p.stock,
-        p.unitOfMeasure,
-        p.sellingPrice,
-      ]),
-      startY: 20,
+  const handleExportPDF = () => {
+    generatePriceListReport(sortedProducts, {
+      action: "download",
+      supplierFilter,
+      categoryFilter,
     });
-    doc.save("products.pdf");
   };
 
   return (
@@ -336,9 +313,39 @@ export default function ProductsPage() {
           resetForm();
           setIsAddDialogOpen(true);
         }}
-        onExportExcel={generateExcel}
-        onExportPDF={generatePDF}
-        onPriceListReport={() => printPriceListReport(sortedProducts)}
+        onExportExcel={handleExportExcel}
+        onExportPDF={handleExportPDF}
+        onPriceListReport={() =>
+          generatePriceListReport(sortedProducts, {
+            action: "download",
+            supplierFilter,
+            categoryFilter,
+          })
+        }
+        onPrintPriceListReport={() =>
+          generatePriceListReport(sortedProducts, {
+            action: "print",
+            supplierFilter,
+            categoryFilter,
+          })
+        }
+        onCostPriceDownload={() =>
+          generateCostAndPriceReport(sortedProducts, {
+            action: "download",
+            supplierFilter,
+            categoryFilter,
+            stockFilter,
+          })
+        }
+        onCostPricePrint={() =>
+          generateCostAndPriceReport(sortedProducts, {
+            action: "print",
+            supplierFilter,
+            categoryFilter,
+            stockFilter,
+          })
+        }
+        onOpenReportDialog={() => setIsReportDialogOpen(true)}
       />
       <ProductStats products={products} />
 
@@ -423,6 +430,14 @@ export default function ProductsPage() {
         onDeleteConfirm={handleDeleteConfirm}
         categories={categories}
         suppliers={suppliers}
+      />
+
+      <ProductReportDialog
+        open={isReportDialogOpen}
+        onOpenChange={setIsReportDialogOpen}
+        products={sortedProducts}
+        suppliers={suppliers}
+        categories={categories}
       />
     </div>
   );
