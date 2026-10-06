@@ -10,6 +10,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import Link from "next/link";
 import {
   Download,
   Plus,
@@ -19,6 +20,7 @@ import {
   SlidersHorizontal,
   DollarSign,
   ClipboardList,
+  Boxes,
 } from "lucide-react";
 
 interface ProductHeaderProps {
@@ -51,6 +53,12 @@ export function ProductHeader({
         </p>
       </div>
       <div className="flex items-center gap-2">
+        <Link href="/dashboard/office/distribution/products/matrix">
+          <Button variant="outline" className="shadow-sm border-blue-200 text-blue-700 hover:bg-blue-50">
+            <Boxes className="w-4 h-4 mr-2 text-blue-600" /> Matrix Generator
+          </Button>
+        </Link>
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="shadow-sm">

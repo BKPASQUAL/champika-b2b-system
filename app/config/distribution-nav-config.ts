@@ -25,6 +25,7 @@ import {
   TrendingUp,
   BookOpen,
   CheckCircle2,
+  Boxes,
 } from "lucide-react";
 
 interface DistNavItem {
@@ -173,6 +174,12 @@ export const distributionNavItems: DistNavSection[] = [
         name: "Product Catalog",
         href: "/dashboard/office/distribution/products",
         icon: Package,
+      },
+      {
+        name: "Matrix & Variant Builder",
+        href: "/dashboard/office/distribution/products/matrix",
+        icon: Boxes,
+        description: "Generate combinations & multi-supplier pricing grid",
       },
       {
         name: "Bulk Price Update",
