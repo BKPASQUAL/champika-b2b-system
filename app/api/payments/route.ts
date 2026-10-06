@@ -52,9 +52,11 @@ export async function GET(request: NextRequest) {
           invoices!inner (
             id,
             invoice_no,
+            created_at,
             orders!inner (
               id,
               order_id,
+              order_date,
               business_id,
               businesses (
                 id,
@@ -82,9 +84,11 @@ export async function GET(request: NextRequest) {
           invoices (
             id,
             invoice_no,
+            created_at,
             orders (
               id,
               order_id,
+              order_date,
               business_id,
               businesses (
                 id,
@@ -175,9 +179,12 @@ export async function GET(request: NextRequest) {
           total_amount: totalAmount,
           business_name: businessName,
           business_id: orderObj?.business_id || null,
+          order_date: orderObj?.order_date || null,
         },
         invoices: {
           invoice_no: invoiceObj?.invoice_no || "",
+          created_at: invoiceObj?.created_at || null,
+          invoice_date: orderObj?.order_date || invoiceObj?.created_at || p.payment_date || null,
         },
         banks: bankObj
           ? {

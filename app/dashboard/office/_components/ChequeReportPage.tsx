@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +28,7 @@ import {
   ArrowUpDown,
   FileText,
   Loader2,
+  CalendarClock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -299,6 +301,17 @@ export function ChequeReportPage({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            asChild
+            className="gap-1.5 text-xs font-medium border-purple-200 text-purple-700 hover:bg-purple-50"
+          >
+            <Link href="/dashboard/office/sierra/cheques/settlement-report">
+              <CalendarClock className="h-3.5 w-3.5 text-purple-600" />
+              Realization Days Report
+            </Link>
+          </Button>
           <Button
             onClick={handlePrint}
             disabled={selectedCount === 0 || loading}

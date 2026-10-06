@@ -1,13 +1,20 @@
+// app/dashboard/office/orange/customers/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import {
   Download,
   Plus,
   FileSpreadsheet,
+  FileText,
   Search,
   RefreshCw,
+  Printer,
+  Share2,
+  Users,
+  AlertCircle,
+  Wallet,
 } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,16 +30,22 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
-import { BUSINESS_IDS } from "@/app/config/business-constants";
+import { BUSINESS_IDS, INTERNAL_CUSTOMERS } from "@/app/config/business-constants";
 
 // Import local components and types
 import { Customer, SortField, SortOrder, CustomerFormData } from "./types";
 import { CustomerTable } from "./_components/CustomerTable";
 import { CustomerDialogs } from "./_components/CustomerDialogs";
+import {
+  downloadCustomerListPDF,
+  printCustomerListReport,
+  shareCustomerListSummary,
+} from "@/app/lib/customer-list-report";
 
 export default function AgencyCustomersPage() {
   const [currentBusinessId] = useState<string>(BUSINESS_IDS.ORANGE_AGENCY);
@@ -51,6 +64,7 @@ export default function AgencyCustomersPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [routeFilter, setRouteFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [balanceFilter, setBalanceFilter] = useState<"all" | "outstanding" | "zero">("all");
   const [sortField, setSortField] = useState<SortField>("shopName");
   const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
   const [currentPage, setCurrentPage] = useState(1);
@@ -58,9 +72,7 @@ export default function AgencyCustomersPage() {
 
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
-    null
-  );
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
   const [formData, setFormData] = useState<CustomerFormData>({
     shopName: "",
@@ -71,28 +83,41 @@ export default function AgencyCustomersPage() {
     route: "General",
     status: "Active",
     creditLimit: 0,
-    businessId: "",
+    businessId: currentBusinessId,
   });
 
-  // Initialize formData with the resolved businessId
   useEffect(() => {
     setFormData((prev) => ({ ...prev, businessId: currentBusinessId }));
   }, [currentBusinessId]);
 
   // Derived Data
-  const routes = ["all", ...Array.from(new Set(customers.map((c) => c.route)))];
+  const routes = ["all", ...Array.from(new Set(customers.map((c) => c.route || "General")))];
+
+  // KPI Calculations
+  const totalCustomersCount = customers.length;
+  const activeCustomersCount = customers.filter((c) => c.status === "Active").length;
+  const customersWithBalance = customers.filter((c) => (c.outstandingBalance || 0) > 0);
+  const totalOutstanding = customers.reduce((sum, c) => sum + (c.outstandingBalance || 0), 0);
 
   // Filter & Sort
   const filteredCustomers = customers.filter((customer) => {
+    const searchLower = searchQuery.toLowerCase();
     const matchesSearch =
-      customer.shopName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      customer.ownerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      customer.phone.includes(searchQuery);
+      customer.shopName.toLowerCase().includes(searchLower) ||
+      (customer.ownerName && customer.ownerName.toLowerCase().includes(searchLower)) ||
+      (customer.phone && customer.phone.includes(searchQuery));
     const matchesRoute =
       routeFilter === "all" || customer.route === routeFilter;
     const matchesStatus =
       statusFilter === "all" || customer.status === statusFilter;
-    return matchesSearch && matchesRoute && matchesStatus;
+    const matchesBalance =
+      balanceFilter === "all"
+        ? true
+        : balanceFilter === "outstanding"
+        ? (customer.outstandingBalance || 0) > 0
+        : (customer.outstandingBalance || 0) <= 0;
+
+    return matchesSearch && matchesRoute && matchesStatus && matchesBalance;
   });
 
   const sortedCustomers = [...filteredCustomers].sort((a, b) => {
@@ -128,7 +153,6 @@ export default function AgencyCustomersPage() {
       return;
     }
 
-    // Ensure businessId is present
     if (!formData.businessId && currentBusinessId) {
       formData.businessId = currentBusinessId;
     }
@@ -189,38 +213,91 @@ export default function AgencyCustomersPage() {
       route: "General",
       status: "Active",
       creditLimit: 0,
-      businessId: currentBusinessId || "",
+      businessId: currentBusinessId,
     });
     setSelectedCustomer(null);
   };
 
+  const getReportPayload = () => {
+    const listToExport = sortedCustomers.map((c) => ({
+      id: c.id,
+      shopName: c.shopName,
+      ownerName: c.ownerName,
+      phone: c.phone,
+      route: c.route,
+      status: c.status,
+      creditLimit: c.creditLimit,
+      outstandingBalance: c.outstandingBalance,
+      isPinned: INTERNAL_CUSTOMERS.includes(c.shopName),
+    }));
+
+    const filterText = [
+      routeFilter !== "all" ? `Route: ${routeFilter}` : null,
+      statusFilter !== "all" ? `Status: ${statusFilter}` : null,
+      balanceFilter !== "all" ? `Balance: ${balanceFilter}` : null,
+      searchQuery ? `Search: "${searchQuery}"` : null,
+    ]
+      .filter(Boolean)
+      .join(" | ");
+
+    return {
+      agencyName: "Orange Agency",
+      customers: listToExport,
+      filterInfo: filterText || "All Records",
+      primaryColor: [194, 65, 12] as [number, number, number], // Orange-700
+    };
+  };
+
+  const handleExportPDF = () => {
+    if (sortedCustomers.length === 0) {
+      return toast.error("No customer records to export");
+    }
+    downloadCustomerListPDF(getReportPayload());
+  };
+
+  const handlePrintReport = () => {
+    if (sortedCustomers.length === 0) {
+      return toast.error("No customer records to print");
+    }
+    printCustomerListReport(getReportPayload());
+  };
+
+  const handleShareWhatsApp = () => {
+    if (sortedCustomers.length === 0) {
+      return toast.error("No customer records to share");
+    }
+    shareCustomerListSummary(getReportPayload());
+  };
+
   const generateExcel = () => {
-    if (sortedCustomers.length === 0) return;
+    if (sortedCustomers.length === 0) return toast.error("No customer records to export");
     const data = sortedCustomers.map((c) => ({
       Shop: c.shopName,
-      Owner: c.ownerName,
-      Phone: c.phone,
-      Route: c.route,
-      Address: c.address,
-      Status: c.status,
-      "Outstanding (LKR)": c.outstandingBalance,
+      Owner: c.ownerName || "",
+      Phone: c.phone || "",
+      Route: c.route || "General",
+      Address: c.address || "",
+      Status: c.status || "Active",
+      "Credit Limit (LKR)": c.creditLimit || 0,
+      "Outstanding (LKR)": c.outstandingBalance || 0,
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Customers");
+    XLSX.utils.book_append_sheet(wb, ws, "Orange Customers");
     XLSX.writeFile(wb, "orange_customers.xlsx");
+    toast.success("Excel exported successfully");
   };
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-6">
       {/* Page Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-orange-900">
-            Distributors & Shops
+          <h1 className="text-3xl font-bold tracking-tight text-orange-900">
+            Orange Agency
           </h1>
-          <p className="text-muted-foreground text-sm mt-0.5">
-            Manage distribution customer database
+          <p className="text-muted-foreground mt-1">
+            Manage Orange customer database, outstanding balances & statements
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -229,54 +306,173 @@ export default function AgencyCustomersPage() {
             size="icon"
             onClick={fetchCustomers}
             disabled={loading}
-            title="Refresh"
+            title="Refresh Data"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
+
+          {/* Quick Print Button */}
+          <Button
+            variant="outline"
+            onClick={handlePrintReport}
+            disabled={loading || sortedCustomers.length === 0}
+            title="Print Customer List"
+          >
+            <Printer className="w-4 h-4 mr-2 text-slate-700" /> Print
+          </Button>
+
+          {/* Quick Share Button */}
+          <Button
+            variant="outline"
+            onClick={handleShareWhatsApp}
+            disabled={loading || sortedCustomers.length === 0}
+            title="Share Outstanding Summary on WhatsApp"
+          >
+            <Share2 className="w-4 h-4 mr-2 text-green-600" /> Share
+          </Button>
+
+          {/* Export Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Download className="w-4 h-4 mr-1.5" /> Export
+              <Button variant="outline">
+                <Download className="w-4 h-4 mr-2 text-orange-700" /> Export & Reports
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuItem onClick={handleExportPDF}>
+                <FileText className="w-4 h-4 mr-2 text-orange-600" />
+                Export PDF Report
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={generateExcel}>
                 <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" />
-                Export Excel
+                Export Excel (.xlsx)
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handlePrintReport}>
+                <Printer className="w-4 h-4 mr-2 text-blue-600" />
+                Print List Document
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleShareWhatsApp}>
+                <Share2 className="w-4 h-4 mr-2 text-emerald-600" />
+                Share WhatsApp Summary
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* Add Customer Button */}
           <Button
             onClick={() => {
               resetForm();
               setIsAddDialogOpen(true);
             }}
-            className="bg-orange-600 hover:bg-orange-700"
-            size="sm"
+            className="bg-orange-600 hover:bg-orange-700 text-white shadow-sm"
           >
-            <Plus className="w-4 h-4 mr-1.5" /> Add Customer
+            <Plus className="w-4 h-4 mr-2" /> Add Customer
           </Button>
         </div>
       </div>
 
-      <Card>
-        <CardHeader className="pb-3 px-3 sm:px-6">
-          {/* Mobile: search row 1, dropdowns row 2 — Desktop: all one row */}
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            {/* Row 1 (mobile) / Left side (desktop): Search */}
-            <div className="relative w-full sm:flex-1 sm:min-w-0">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+      {/* KPI Summary Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* Total Customers */}
+        <Card className="border-orange-100 shadow-sm bg-gradient-to-br from-white to-orange-50/30">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Total Customers
+              </p>
+              <h3 className="text-2xl font-bold text-slate-900 mt-1">
+                {totalCustomersCount}
+              </h3>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                {activeCustomersCount} Active
+              </p>
+            </div>
+            <div className="h-10 w-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-700">
+              <Users className="h-5 w-5" />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Total Outstanding */}
+        <Card className="border-orange-200 shadow-sm bg-gradient-to-br from-orange-50 to-orange-100/40 col-span-1 md:col-span-2">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-orange-900 uppercase tracking-wider">
+                Total Customer Outstanding
+              </p>
+              <h3 className="text-2xl font-black text-orange-800 mt-1">
+                LKR {totalOutstanding.toLocaleString("en-LK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </h3>
+              <p className="text-[11px] text-orange-700/80 font-medium mt-0.5">
+                Across {customersWithBalance.length} customers with pending balance
+              </p>
+            </div>
+            <div className="h-10 w-10 rounded-full bg-orange-600 text-white flex items-center justify-center shadow-md">
+              <Wallet className="h-5 w-5" />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Outstanding Customers Count */}
+        <Card
+          className={`cursor-pointer transition-all border shadow-sm ${
+            balanceFilter === "outstanding"
+              ? "border-orange-500 bg-orange-50 ring-2 ring-orange-500/20"
+              : "border-slate-200 hover:border-orange-300"
+          }`}
+          onClick={() =>
+            setBalanceFilter((prev) => (prev === "outstanding" ? "all" : "outstanding"))
+          }
+        >
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                With Outstanding
+              </p>
+              <h3 className="text-2xl font-bold text-orange-600 mt-1">
+                {customersWithBalance.length}
+              </h3>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                {balanceFilter === "outstanding" ? "Filtering active (Click to reset)" : "Click to view outs only"}
+              </p>
+            </div>
+            <div className="h-10 w-10 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center">
+              <AlertCircle className="h-5 w-5" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filter and Table Card */}
+      <Card className="shadow-sm">
+        <CardHeader className="pb-3 border-b">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            {/* Search Input */}
+            <div className="flex-1 max-w-sm relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search shop, owner, phone…"
+                placeholder="Search shop, owner, phone..."
                 value={searchQuery}
-                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                className="pl-9 h-9 text-sm w-full"
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="pl-9"
               />
             </div>
-            {/* Row 2 (mobile) / Right side (desktop): Dropdowns + count */}
-            <div className="flex items-center gap-2">
-              <Select value={routeFilter} onValueChange={(v) => { setRouteFilter(v); setCurrentPage(1); }}>
-                <SelectTrigger className="flex-1 sm:flex-none sm:w-[140px] h-9 text-sm">
+
+            {/* Filter Selects */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Route Filter */}
+              <Select
+                value={routeFilter}
+                onValueChange={(val) => {
+                  setRouteFilter(val);
+                  setCurrentPage(1);
+                }}
+              >
+                <SelectTrigger className="w-[160px]">
                   <SelectValue placeholder="Route" />
                 </SelectTrigger>
                 <SelectContent>
@@ -287,23 +483,47 @@ export default function AgencyCustomersPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setCurrentPage(1); }}>
-                <SelectTrigger className="flex-1 sm:flex-none sm:w-[130px] h-9 text-sm">
+
+              {/* Status Filter */}
+              <Select
+                value={statusFilter}
+                onValueChange={(val) => {
+                  setStatusFilter(val);
+                  setCurrentPage(1);
+                }}
+              >
+                <SelectTrigger className="w-[130px]">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="all">All Statuses</SelectItem>
                   <SelectItem value="Active">Active</SelectItem>
                   <SelectItem value="Inactive">Inactive</SelectItem>
+                  <SelectItem value="Blocked">Blocked</SelectItem>
                 </SelectContent>
               </Select>
-              <span className="text-xs text-muted-foreground whitespace-nowrap hidden sm:inline">
-                {sortedCustomers.length} found
-              </span>
+
+              {/* Balance Filter */}
+              <Select
+                value={balanceFilter}
+                onValueChange={(val: any) => {
+                  setBalanceFilter(val);
+                  setCurrentPage(1);
+                }}
+              >
+                <SelectTrigger className="w-[170px]">
+                  <SelectValue placeholder="Balance" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Balances</SelectItem>
+                  <SelectItem value="outstanding">With Outstanding (&gt; 0)</SelectItem>
+                  <SelectItem value="zero">Zero / Settled (0)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-4">
           <CustomerTable
             customers={paginatedCustomers}
             loading={loading}
@@ -320,7 +540,7 @@ export default function AgencyCustomersPage() {
                 route: c.route,
                 status: c.status,
                 creditLimit: c.creditLimit,
-                businessId: currentBusinessId || "",
+                businessId: currentBusinessId,
               });
               setSelectedCustomer(c);
               setIsAddDialogOpen(true);
@@ -332,10 +552,12 @@ export default function AgencyCustomersPage() {
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={setCurrentPage}
+            agencyTitle="Orange Agency"
           />
         </CardContent>
       </Card>
 
+      {/* Customer Create/Edit & Delete Dialogs */}
       <CustomerDialogs
         isAddDialogOpen={isAddDialogOpen}
         setIsAddDialogOpen={setIsAddDialogOpen}

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
+import Link from "next/link";
 import { useCachedFetch, invalidatePaymentCaches, invalidateFinanceCaches } from "@/hooks/useCachedFetch";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,7 @@ import {
   Check,
   AlertCircle,
   Trash2,
+  CalendarClock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -1003,6 +1005,17 @@ export function ChequeManagementPage({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            asChild
+            className="gap-1.5 border-purple-200 text-purple-700 hover:bg-purple-50"
+          >
+            <Link href="/dashboard/office/sierra/cheques/settlement-report">
+              <CalendarClock className="h-4 w-4 text-purple-600" />
+              Realization Days
+            </Link>
+          </Button>
           <Button
             variant="outline"
             size="sm"

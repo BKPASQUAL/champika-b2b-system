@@ -21,6 +21,7 @@ import {
   BookOpen,
   ShieldAlert,
   ShieldCheck,
+  CalendarClock,
 } from "lucide-react";
 
 interface SierraNavItem {
@@ -167,6 +168,12 @@ export const sierraOfficeNavItems: SierraNavSection[] = [
         href: "/dashboard/office/sierra/cheques/report",
         icon: Printer,
         description: "Generate cheque date reports",
+      },
+      {
+        name: "Cheque Realization Days",
+        href: "/dashboard/office/sierra/cheques/settlement-report",
+        icon: CalendarClock,
+        description: "Realization / credit days from bill creation to cheque date",
       },
       {
         name: "Transaction History",
