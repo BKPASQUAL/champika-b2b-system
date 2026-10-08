@@ -5,6 +5,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,6 +54,8 @@ import {
   Search,
   ChevronsUpDown,
   Check,
+  Link as LinkIcon,
+  Unlink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Product } from "../types";
@@ -72,6 +82,7 @@ interface VariantRow {
   companyCode: string;
   existingProductId?: string | null;
   existingSku?: string | null;
+  existingName?: string | null;
 }
 
 interface AttributePrice {
@@ -566,6 +577,125 @@ export default function ProductMatrixGeneratorPage() {
   const [activeGroupFilter, setActiveGroupFilter] = useState<string>("all");
   const [isSaving, setIsSaving] = useState(false);
 
+  // Merge Product Modal State
+  const [mergeTargetRowId, setMergeTargetRowId] = useState<string | null>(null);
+  const [mergeSearchQuery, setMergeSearchQuery] = useState<string>("");
+  const [mergePriceMode, setMergePriceMode] = useState<"keep_matrix" | "import_catalog">("keep_matrix");
+
+  // Target row currently selected for merging
+  const targetMergeRow = useMemo(() => {
+    if (!mergeTargetRowId) return null;
+    return matrixRows.find((r) => r.id === mergeTargetRowId) || null;
+  }, [mergeTargetRowId, matrixRows]);
+
+  // Candidate products for merge search dialog
+  const mergeCandidateProducts = useMemo(() => {
+    if (!targetMergeRow) return [];
+    const q = mergeSearchQuery.toLowerCase().trim();
+    if (!q) {
+      // Smart suggested matches based on base name, brand, or spec
+      const rowBrand = (targetMergeRow.brand || "").toLowerCase();
+      const rowName = (targetMergeRow.name || "").toLowerCase();
+      const baseLower = baseName.toLowerCase().trim();
+      const rowSize = (targetMergeRow.sizeSpec || "").toLowerCase();
+
+      return existingProducts
+        .filter((p) => {
+          const pName = (p.name || "").toLowerCase();
+          const pBrand = (p.brand || "").toLowerCase();
+          const isSelected = targetMergeRow.existingProductId && p.id === targetMergeRow.existingProductId;
+          return (
+            isSelected ||
+            (baseLower && pName.includes(baseLower)) ||
+            (rowBrand && pBrand.includes(rowBrand) && rowSize && pName.includes(rowSize)) ||
+            pName.includes(rowName)
+          );
+        })
+        .slice(0, 40);
+    }
+    return existingProducts
+      .filter((p) => {
+        const name = (p.name || "").toLowerCase();
+        const sku = (p.sku || "").toLowerCase();
+        const brand = (p.brand || "").toLowerCase();
+        const cat = (p.category || "").toLowerCase();
+        const supp = (p.supplier || "").toLowerCase();
+        const code = (p.companyCode || "").toLowerCase();
+        return (
+          name.includes(q) ||
+          sku.includes(q) ||
+          brand.includes(q) ||
+          cat.includes(q) ||
+          supp.includes(q) ||
+          code.includes(q)
+        );
+      })
+      .slice(0, 50);
+  }, [existingProducts, targetMergeRow, mergeSearchQuery, baseName]);
+
+  // Handle merging a matrix row with an existing product
+  const handleLinkProduct = (
+    rowId: string,
+    product: Product,
+    mode: "keep_matrix" | "import_catalog"
+  ) => {
+    setMatrixRows((prev) =>
+      prev.map((r) => {
+        if (r.id !== rowId) return r;
+        const updated: VariantRow = {
+          ...r,
+          existingProductId: product.id,
+          existingSku: product.sku || null,
+          existingName: product.name || null,
+        };
+
+        if (mode === "import_catalog") {
+          // Import existing catalog product's prices, retail flags, and stock
+          if (product.mrp) updated.mrp = product.mrp;
+          if (product.costPrice) updated.costPrice = product.costPrice;
+          if (product.sellingPrice) updated.sellingPrice = product.sellingPrice;
+          if (product.retailPrice) updated.retailPrice = product.retailPrice;
+          if (product.retailOnly !== undefined) updated.retailOnly = product.retailOnly;
+          if (product.stock !== undefined) updated.stock = product.stock;
+          if (product.minStock !== undefined) updated.minStock = product.minStock;
+          if (product.commissionValue !== undefined) updated.commissionValue = product.commissionValue;
+        } else {
+          // Keep current new matrix prices, margins, and stock (will update this SKU on save)
+          if (!updated.stock && product.stock !== undefined) {
+            updated.stock = product.stock;
+          }
+          if (!updated.minStock && product.minStock !== undefined) {
+            updated.minStock = product.minStock;
+          }
+        }
+        return updated;
+      })
+    );
+    toast.success(
+      mode === "keep_matrix"
+        ? `Merged with "${product.name}" (${product.sku}) - New matrix prices & margins will update this SKU!`
+        : `Merged with "${product.name}" (${product.sku}) - Imported current catalog prices!`
+    );
+    setMergeTargetRowId(null);
+    setMergeSearchQuery("");
+  };
+
+  // Handle unlinking a row back to a new product
+  const unmergeRow = (rowId: string) => {
+    setMatrixRows((prev) =>
+      prev.map((r) => {
+        if (r.id !== rowId) return r;
+        return {
+          ...r,
+          existingProductId: null,
+          existingSku: null,
+          existingName: null,
+        };
+      })
+    );
+    toast.info("Unlinked. This item will now be created as a new product.");
+  };
+
   // Bulk Quick Update in Matrix Bar
   const [bulkMrp, setBulkMrp] = useState<string>("");
   const [bulkCost, setBulkCost] = useState<string>("");
@@ -957,9 +1087,10 @@ export default function ProductMatrixGeneratorPage() {
         setCurrentStep(3);
       }
     } else if (currentStep === 3) {
-      // Only upon entering Step 4, detect matches with existing products
+      // Detect matches with existing products for any unlinked rows
       setMatrixRows((prev) =>
         prev.map((r) => {
+          if (r.existingProductId) return r;
           const match = existingProducts.find(
             (p) =>
               p.name.toLowerCase().trim() === r.name.toLowerCase().trim() ||
@@ -972,6 +1103,7 @@ export default function ProductMatrixGeneratorPage() {
             ...r,
             existingProductId: match?.id || null,
             existingSku: match?.sku || null,
+            existingName: match?.name || null,
           };
         })
       );
@@ -2143,13 +2275,46 @@ export default function ProductMatrixGeneratorPage() {
                           </td>
                           <td className="p-2.5">
                             {row.existingProductId ? (
-                              <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 flex items-center gap-1 w-fit">
-                                <GitMerge className="w-2.5 h-2.5" /> SKU: {row.existingSku}
-                              </Badge>
+                              <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-800 px-2 py-0.5 rounded text-[10px] font-medium w-fit">
+                                <GitMerge className="w-3 h-3 text-blue-600 shrink-0" />
+                                <span>
+                                  SKU: <strong>{row.existingSku}</strong>
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setMergeTargetRowId(row.id);
+                                    setMergeSearchQuery(row.existingSku || row.name || "");
+                                  }}
+                                  className="text-blue-700 hover:text-blue-900 underline text-[10px] font-bold ml-1 cursor-pointer"
+                                >
+                                  Change
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => unmergeRow(row.id)}
+                                  className="text-slate-400 hover:text-red-600 p-0.5 rounded hover:bg-blue-100 cursor-pointer"
+                                  title="Unlink"
+                                >
+                                  <X className="w-2.5 h-2.5" />
+                                </button>
+                              </div>
                             ) : (
-                              <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200 w-fit">
-                                + New Product
-                              </Badge>
+                              <div className="flex items-center gap-1">
+                                <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200 w-fit">
+                                  + New
+                                </Badge>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setMergeTargetRowId(row.id);
+                                    setMergeSearchQuery(row.name.replace(/\s+/g, " ").trim());
+                                  }}
+                                  className="text-[10px] font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-1.5 py-0.5 rounded flex items-center gap-0.5 cursor-pointer"
+                                >
+                                  <GitMerge className="w-2.5 h-2.5 text-blue-600" /> Merge
+                                </button>
+                              </div>
                             )}
                           </td>
                           <td className="p-2.5 text-center">
@@ -2349,13 +2514,48 @@ export default function ProductMatrixGeneratorPage() {
 
                         <div className="flex items-center gap-2">
                           {row.existingProductId ? (
-                            <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 flex items-center gap-1">
-                              <GitMerge className="w-2.5 h-2.5" /> SKU: {row.existingSku}
-                            </Badge>
+                            <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-800 px-2 py-0.5 rounded text-[10px] font-medium">
+                              <GitMerge className="w-3 h-3 text-blue-600 shrink-0" />
+                              <span>
+                                SKU: <strong>{row.existingSku}</strong>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setMergeTargetRowId(row.id);
+                                  setMergeSearchQuery(row.existingSku || row.name || "");
+                                }}
+                                className="text-blue-700 hover:text-blue-900 underline text-[10px] font-bold ml-1 cursor-pointer"
+                              >
+                                Change
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => unmergeRow(row.id)}
+                                className="text-slate-400 hover:text-red-600 p-0.5 rounded hover:bg-blue-100 cursor-pointer"
+                                title="Unlink"
+                              >
+                                <X className="w-2.5 h-2.5" />
+                              </button>
+                            </div>
                           ) : (
-                            <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">
-                              + New Product
-                            </Badge>
+                            <div className="flex items-center gap-1">
+                              <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">
+                                + New Product
+                              </Badge>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setMergeTargetRowId(row.id);
+                                  setMergeSearchQuery(row.name.replace(/\s+/g, " ").trim());
+                                }}
+                                className="h-6 px-2 text-[10px] font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 flex items-center gap-1"
+                              >
+                                <GitMerge className="w-3 h-3 text-blue-600" /> Merge
+                              </Button>
+                            </div>
                           )}
 
                           {margin > 0 && (
@@ -2756,15 +2956,52 @@ export default function ProductMatrixGeneratorPage() {
                             }
                             className="h-8 text-xs font-semibold"
                           />
-                          <div className="flex items-center gap-1.5 flex-wrap">
+                          <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
                             {row.existingProductId ? (
-                              <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 flex items-center gap-1">
-                                <GitMerge className="w-2.5 h-2.5" /> Merging into SKU: {row.existingSku}
-                              </Badge>
+                              <div className="flex items-center gap-1.5 bg-blue-50/90 border border-blue-200 text-blue-800 px-2 py-0.5 rounded text-[11px] font-medium shadow-2xs">
+                                <GitMerge className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                <span className="truncate max-w-[210px]" title={row.existingName || row.existingSku || ""}>
+                                  Merging: <strong>{row.existingSku}</strong> {row.existingName ? `(${row.existingName})` : ""}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setMergeTargetRowId(row.id);
+                                    setMergeSearchQuery(row.existingSku || row.name || "");
+                                  }}
+                                  className="text-blue-700 hover:text-blue-900 underline text-[10px] ml-1 font-bold cursor-pointer"
+                                  title="Change linked product"
+                                >
+                                  Change
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => unmergeRow(row.id)}
+                                  className="text-slate-400 hover:text-red-600 p-0.5 rounded hover:bg-blue-100 ml-0.5 cursor-pointer"
+                                  title="Unlink and create as new product"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
                             ) : (
-                              <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">
-                                + New Product
-                              </Badge>
+                              <div className="flex items-center gap-1.5">
+                                <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold">
+                                  + New Product
+                                </Badge>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setMergeTargetRowId(row.id);
+                                    setMergeSearchQuery(row.name.replace(/\s+/g, " ").trim());
+                                  }}
+                                  className="h-6 px-2 text-[11px] font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 hover:text-blue-800 border border-blue-200 flex items-center gap-1 rounded cursor-pointer"
+                                >
+                                  <GitMerge className="w-3 h-3 text-blue-600" />
+                                  Merge with Existing
+                                </Button>
+                              </div>
                             )}
                           </div>
                         </td>
@@ -3015,6 +3252,278 @@ export default function ProductMatrixGeneratorPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* ========================================================= */}
+      {/* DIALOG: MERGE MATRIX VARIANT WITH EXISTING CATALOG ITEM   */}
+      {/* ========================================================= */}
+      <Dialog
+        open={!!mergeTargetRowId}
+        onOpenChange={(open) => {
+          if (!open) {
+            setMergeTargetRowId(null);
+            setMergeSearchQuery("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col p-0 overflow-hidden">
+          <DialogHeader className="p-5 pb-3 border-b bg-slate-50/80">
+            <div className="flex items-center gap-2 text-blue-900">
+              <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center gap-1 items-center justify-center">
+                <GitMerge className="w-4 h-4" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-bold text-slate-900">
+                  Merge Variant with Existing Catalog Product
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-500">
+                  Connect this matrix row to an existing product in your database. All previous invoice and stock history will remain intact.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="p-5 space-y-4 overflow-y-auto flex-1">
+            {/* Target Matrix Variant Summary Card */}
+            {targetMergeRow && (
+              <div className="p-3.5 rounded-xl border bg-blue-50/40 border-blue-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-blue-800">
+                    Matrix Item Being Configured
+                  </span>
+                  {targetMergeRow.existingProductId ? (
+                    <Badge className="bg-blue-600 text-white font-mono text-[10px]">
+                      Currently Linked: {targetMergeRow.existingSku}
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="bg-white text-emerald-700 border-emerald-300 text-[10px]">
+                      Currently: New Product
+                    </Badge>
+                  )}
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <div>
+                    <h4 className="font-bold text-sm text-slate-900">{targetMergeRow.name}</h4>
+                    <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                      <Badge variant="outline" className="text-[10px] bg-white text-slate-800">
+                        {targetMergeRow.brand || "—"}
+                      </Badge>
+                      {targetMergeRow.subBrand && (
+                        <Badge variant="outline" className="text-[10px] bg-violet-50 text-violet-700 border-violet-200">
+                          {targetMergeRow.subBrand}
+                        </Badge>
+                      )}
+                      <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">
+                        {targetMergeRow.sizeSpec || "Standard"}
+                      </Badge>
+                      <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200">
+                        {targetMergeRow.unitOfMeasure || "Pcs"}
+                      </Badge>
+                    </div>
+                  </div>
+
+                  <div className="text-right text-xs shrink-0">
+                    <span className="text-muted-foreground block text-[10px]">Matrix Selling Price:</span>
+                    <span className="font-bold text-sm text-emerald-700 font-mono">
+                      LKR {Number(targetMergeRow.sellingPrice || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Search Input */}
+            <div className="space-y-2">
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <Input
+                  value={mergeSearchQuery}
+                  onChange={(e) => setMergeSearchQuery(e.target.value)}
+                  placeholder="Search existing products by name, SKU, brand, category, supplier..."
+                  className="pl-9 pr-8 h-10 text-xs border-slate-300 focus-visible:ring-blue-500"
+                  autoFocus
+                />
+                {mergeSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setMergeSearchQuery("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Pricing Strategy on Merge Selector */}
+              <div className="p-3 bg-slate-100/90 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
+                <div>
+                  <span className="text-xs font-bold text-slate-900 block">
+                    Pricing &amp; Margin Strategy on Merge:
+                  </span>
+                  <span className="text-[11px] text-slate-500">
+                    {mergePriceMode === "keep_matrix"
+                      ? "Keep your newly configured matrix prices & margins (will update this SKU on save)."
+                      : "Import existing catalog prices from this SKU into the matrix row."}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-300 shadow-2xs shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setMergePriceMode("keep_matrix")}
+                    className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-all cursor-pointer ${
+                      mergePriceMode === "keep_matrix"
+                        ? "bg-blue-600 text-white shadow-2xs"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                    }`}
+                  >
+                    Keep New Prices &amp; Margins
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMergePriceMode("import_catalog")}
+                    className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-all cursor-pointer ${
+                      mergePriceMode === "import_catalog"
+                        ? "bg-blue-600 text-white shadow-2xs"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                    }`}
+                  >
+                    Import Catalog Prices
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Candidate Product List */}
+            <div className="border rounded-xl divide-y max-h-64 overflow-y-auto bg-white shadow-2xs">
+              {mergeCandidateProducts.length === 0 ? (
+                <div className="p-8 text-center text-slate-500 space-y-1">
+                  <Package className="w-8 h-8 text-slate-300 mx-auto" />
+                  <p className="text-xs font-semibold text-slate-700">No matching catalog products found</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Try searching with another keyword or SKU, or keep this item as a new product.
+                  </p>
+                </div>
+              ) : (
+                mergeCandidateProducts.map((p) => {
+                  const isCurrentMatch = targetMergeRow?.existingProductId === p.id;
+                  const catMargin =
+                    p.sellingPrice && p.costPrice && p.sellingPrice > 0
+                      ? Math.round(((p.sellingPrice - p.costPrice) / p.sellingPrice) * 10000) / 100
+                      : 0;
+
+                  return (
+                    <div
+                      key={p.id}
+                      className={`p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 hover:bg-slate-50 transition-colors ${
+                        isCurrentMatch ? "bg-blue-50/70 border-l-4 border-blue-600" : ""
+                      }`}
+                    >
+                      <div className="space-y-1 truncate">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge variant="outline" className="font-mono text-[11px] font-bold bg-slate-100 text-slate-800">
+                            {p.sku}
+                          </Badge>
+                          <span className="font-bold text-xs text-slate-900 truncate">
+                            {p.name}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px] text-muted-foreground flex-wrap">
+                          <span>{p.category}</span>
+                          <span>•</span>
+                          <span>{p.brand || p.supplier || "—"}</span>
+                          <span>•</span>
+                          <span>Unit: {p.unitOfMeasure || "Pcs"}</span>
+                          {p.companyCode && (
+                            <>
+                              <span>•</span>
+                              <span className="font-mono text-slate-500">Code: {p.companyCode}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+                        <div className="text-right text-xs">
+                          <span className="text-[11px] font-bold text-emerald-700 block font-mono">
+                            Sell: LKR {Number(p.sellingPrice || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground block">
+                            Cost: LKR {Number(p.costPrice || 0).toFixed(2)} | Margin: {catMargin}%
+                          </span>
+                        </div>
+
+                        {isCurrentMatch ? (
+                          <div className="flex items-center gap-1.5">
+                            <Badge className="bg-blue-600 text-white text-[11px] font-semibold py-1">
+                              ✓ Linked
+                            </Badge>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                if (targetMergeRow) unmergeRow(targetMergeRow.id);
+                              }}
+                              className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 cursor-pointer"
+                            >
+                              Unlink
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => {
+                              if (targetMergeRow) handleLinkProduct(targetMergeRow.id, p, mergePriceMode);
+                            }}
+                            className="h-8 text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold flex items-center gap-1 cursor-pointer"
+                          >
+                            <GitMerge className="w-3.5 h-3.5" />
+                            {mergePriceMode === "keep_matrix"
+                              ? "Merge & Apply New Prices"
+                              : "Merge & Import Prices"}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="p-3 border-t bg-slate-50 flex items-center justify-between sm:justify-between">
+            <div>
+              {targetMergeRow?.existingProductId && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (targetMergeRow) unmergeRow(targetMergeRow.id);
+                    setMergeTargetRowId(null);
+                  }}
+                  className="text-xs text-red-600 hover:text-red-700 border-red-200 hover:bg-red-50"
+                >
+                  <Unlink className="w-3.5 h-3.5 mr-1" /> Unlink and Create as New Product
+                </Button>
+              )}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setMergeTargetRowId(null);
+                setMergeSearchQuery("");
+              }}
+              className="text-xs"
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
