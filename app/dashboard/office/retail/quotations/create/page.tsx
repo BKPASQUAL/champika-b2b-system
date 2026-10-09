@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -16,6 +16,13 @@ import {
   FileText,
   Printer,
   Download,
+  Share2,
+  Layers,
+  Sparkles,
+  Boxes,
+  CheckCircle2,
+  AlertCircle,
+  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +40,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
   Command,
   CommandEmpty,
@@ -55,6 +63,12 @@ interface Product {
   id: string;
   sku: string;
   name: string;
+  category?: string;
+  brand?: string;
+  subBrand?: string;
+  sizeSpec?: string;
+  subModel?: string;
+  modelType?: string;
   selling_price: number;
   retail_price?: number | null;
   mrp: number;
@@ -71,22 +85,29 @@ interface Customer {
   owner_name: string;
 }
 
-interface QuotationItem {
-  id: string;
+// Brand-specific variant details for a quotation item
+interface BrandVariant {
+  brand: string;
   productId: string;
   sku: string;
   productName: string;
+  unitPrice: number;
+  mrp: number;
+  stock: number;
+  available: boolean;
+}
+
+interface QuotationItem {
+  id: string;
+  baseItemName: string;      // Unified base name e.g. "1/1.13 Blue 100m Roll"
+  sizeSpec: string;          // e.g. "100m"
+  color: string;             // e.g. "Blue"
+  unit: string;              // e.g. "Roll"
   quantity: number;
   freeQuantity: number;
-  unit: string;
-  mrp: number;
-  unitPrice: number;
   discountPercent: number;
-  discountAmount: number;
-  total: number;
-  currentStock: number;
-  supplier?: string;
-  retailOnly?: boolean;
+  primaryBrand: string;      // The brand originally selected
+  brandVariants: Record<string, BrandVariant>; // Orange, ACL, Sierra, Kelani, etc.
 }
 
 interface CurrentItemState {
@@ -99,6 +120,21 @@ interface CurrentItemState {
   unitPrice: number | "";
   discountPercent: number | "";
   currentStock: number;
+}
+
+// Helper to sanitize base item name by stripping brand prefixes
+function extractBaseItemName(productName: string, brand?: string): string {
+  let name = productName.trim();
+  const knownBrands = ["Orange", "ACL", "Sierra", "Kelani", "Ruhunu", "Wireman", "Orel", "Common", "General"];
+  if (brand && brand.trim()) {
+    knownBrands.unshift(brand.trim());
+  }
+
+  for (const b of knownBrands) {
+    const reg = new RegExp(`^${b}\\s+`, "i");
+    name = name.replace(reg, "");
+  }
+  return name.trim() || productName;
 }
 
 export default function CreateQuotationPage() {
@@ -119,6 +155,10 @@ export default function CreateQuotationPage() {
   const [quotationDate, setQuotationDate] = useState(new Date().toISOString().split("T")[0]);
   const [paymentType, setPaymentType] = useState("Cash");
   const [notes, setNotes] = useState("");
+
+  // Mode: Standard vs Multi-Brand Comparative Option Builder
+  const [quotationMode, setQuotationMode] = useState<"standard" | "multi_brand">("standard");
+  const [activeBrandOption, setActiveBrandOption] = useState<string>("all");
 
   const [items, setItems] = useState<QuotationItem[]>([]);
   const [extraDiscount, setExtraDiscount] = useState(0);
@@ -175,6 +215,12 @@ export default function CreateQuotationPage() {
             id: p.id,
             sku: p.sku || "N/A",
             name: p.name,
+            category: p.category || "",
+            brand: p.brand || p.supplier || "",
+            subBrand: p.subBrand || "",
+            sizeSpec: p.sizeSpec || "",
+            subModel: p.subModel || "",
+            modelType: p.modelType || "",
             selling_price: p.sellingPrice || 0,
             retail_price: p.retailPrice ?? null,
             mrp: p.mrp || 0,
@@ -193,6 +239,22 @@ export default function CreateQuotationPage() {
     init();
   }, [router]);
 
+  // Major brand list in catalog
+  const majorBrands = useMemo(() => {
+    const list = ["Orange", "ACL", "Sierra", "Kelani", "Wireman"];
+    const found = new Set<string>();
+    products.forEach((p) => {
+      const b = (p.brand || p.supplier || "").trim();
+      if (b && !b.toLowerCase().includes("retail") && !b.toLowerCase().includes("common")) {
+        const matching = list.find((m) => b.toLowerCase().includes(m.toLowerCase()));
+        if (matching) found.add(matching);
+        else found.add(b);
+      }
+    });
+    return Array.from(found);
+  }, [products]);
+
+  // Handle product selection in form
   const handleProductSelect = (productId: string) => {
     const product = products.find((p) => p.id === productId);
     if (!product) return;
@@ -210,59 +272,293 @@ export default function CreateQuotationPage() {
     setEditingItemId(null);
   };
 
-  const handleEditItem = (itemId: string) => {
-    const item = items.find((i) => i.id === itemId);
-    if (!item) return;
-    setEditingItemId(itemId);
-    setCurrentItem({
-      productId: item.productId, sku: item.sku, quantity: item.quantity,
-      freeQuantity: item.freeQuantity, unit: item.unit, mrp: item.mrp,
-      unitPrice: item.unitPrice, discountPercent: item.discountPercent,
-      currentStock: item.currentStock,
+  // Find all sibling brand variants for a selected product
+  const findBrandVariantsForProduct = (selectedProd: Product): Record<string, BrandVariant> => {
+    const baseName = extractBaseItemName(selectedProd.name, selectedProd.brand);
+    const sizeSpecLower = (selectedProd.sizeSpec || "").toLowerCase().trim();
+    const subModelLower = (selectedProd.subModel || "").toLowerCase().trim();
+    const primaryBrand = selectedProd.brand || selectedProd.supplier || "Standard";
+
+    const variants: Record<string, BrandVariant> = {};
+
+    // 1. Primary selected brand entry
+    variants[primaryBrand] = {
+      brand: primaryBrand,
+      productId: selectedProd.id,
+      sku: selectedProd.sku,
+      productName: selectedProd.name,
+      unitPrice: selectedProd.retail_price ?? selectedProd.selling_price,
+      mrp: selectedProd.mrp || (selectedProd.retail_price ?? selectedProd.selling_price),
+      stock: selectedProd.stock_quantity,
+      available: true,
+    };
+
+    // 2. Scan catalog for equivalent sibling brand products matching same Base Item & Specs
+    products.forEach((p) => {
+      if (p.id === selectedProd.id) return;
+      const pBrand = p.brand || p.supplier || "";
+      if (!pBrand || variants[pBrand]) return; // already populated
+
+      const pBase = extractBaseItemName(p.name, p.brand);
+      const pSize = (p.sizeSpec || "").toLowerCase().trim();
+      const pColor = (p.subModel || "").toLowerCase().trim();
+
+      const sameBase = pBase.toLowerCase() === baseName.toLowerCase() || p.name.toLowerCase().includes(baseName.toLowerCase().split(" ")[0]);
+      const sameSize = sizeSpecLower ? pSize === sizeSpecLower || p.name.toLowerCase().includes(sizeSpecLower) : true;
+      const sameColor = subModelLower ? pColor === subModelLower || p.name.toLowerCase().includes(subModelLower) : true;
+
+      if (sameBase && sameSize && sameColor) {
+        variants[pBrand] = {
+          brand: pBrand,
+          productId: p.id,
+          sku: p.sku,
+          productName: p.name,
+          unitPrice: p.retail_price ?? p.selling_price,
+          mrp: p.mrp || (p.retail_price ?? p.selling_price),
+          stock: p.stock_quantity,
+          available: true,
+        };
+      }
     });
-    window.scrollTo({ top: 0, behavior: "smooth" });
+
+    return variants;
   };
 
+  // Add Item (stores unified Base Item with brand variants)
   const handleAddItem = () => {
     if (!currentItem.productId) { toast.error("Please select a product"); return; }
     const qty = currentItem.quantity === "" ? 0 : currentItem.quantity;
     if (qty <= 0) { toast.error("Quantity must be greater than 0"); return; }
 
-    const product = products.find((p) => p.id === currentItem.productId);
-    if (!product) return;
+    const selectedProd = products.find((p) => p.id === currentItem.productId);
+    if (!selectedProd) return;
 
-    const unitPrice = currentItem.unitPrice === "" ? 0 : currentItem.unitPrice;
-    const mrp = currentItem.mrp === "" ? 0 : currentItem.mrp;
+    const unitPrice = currentItem.unitPrice === "" ? (selectedProd.retail_price ?? selectedProd.selling_price) : currentItem.unitPrice;
+    const mrp = currentItem.mrp === "" ? selectedProd.mrp : currentItem.mrp;
     const freeQty = currentItem.freeQuantity === "" ? 0 : currentItem.freeQuantity;
     const discountPercent = currentItem.discountPercent === "" ? 0 : currentItem.discountPercent;
-    const grossTotal = unitPrice * qty;
-    const discountAmount = (grossTotal * discountPercent) / 100;
 
-    const updatedItem: QuotationItem = {
+    const baseName = extractBaseItemName(selectedProd.name, selectedProd.brand);
+    const primaryBrand = selectedProd.brand || selectedProd.supplier || "Orange";
+    const brandVariants = findBrandVariantsForProduct(selectedProd);
+
+    // Override primary variant price if user customized it
+    if (brandVariants[primaryBrand]) {
+      brandVariants[primaryBrand].unitPrice = unitPrice;
+      brandVariants[primaryBrand].mrp = mrp;
+    }
+
+    const newItem: QuotationItem = {
       id: editingItemId ?? Date.now().toString(),
-      productId: currentItem.productId, sku: product.sku, productName: product.name,
-      unit: product.unit_of_measure, quantity: qty, freeQuantity: freeQty,
-      mrp, unitPrice, discountPercent, discountAmount,
-      total: grossTotal - discountAmount,
-      currentStock: product.stock_quantity,
-      supplier: product.supplier || "", retailOnly: product.retailOnly || false,
+      baseItemName: baseName,
+      sizeSpec: selectedProd.sizeSpec || "",
+      color: selectedProd.subModel || "",
+      unit: selectedProd.unit_of_measure || "Pcs",
+      quantity: qty,
+      freeQuantity: freeQty,
+      discountPercent,
+      primaryBrand,
+      brandVariants,
     };
 
     if (editingItemId) {
-      setItems(items.map((i) => (i.id === editingItemId ? updatedItem : i)));
+      setItems(items.map((i) => (i.id === editingItemId ? newItem : i)));
       toast.success("Item updated");
     } else {
-      setItems([...items, updatedItem]);
+      setItems([...items, newItem]);
+      toast.success(`Added "${baseName}" with ${Object.keys(brandVariants).length} brand option(s)!`);
     }
     resetCurrentItem();
   };
 
+  const handleEditItem = (itemId: string) => {
+    const item = items.find((i) => i.id === itemId);
+    if (!item) return;
+    setEditingItemId(itemId);
+    const primaryVar = item.brandVariants[item.primaryBrand] || Object.values(item.brandVariants)[0];
+    setCurrentItem({
+      productId: primaryVar?.productId || "",
+      sku: primaryVar?.sku || "",
+      quantity: item.quantity,
+      freeQuantity: item.freeQuantity,
+      unit: item.unit,
+      mrp: primaryVar?.mrp || "",
+      unitPrice: primaryVar?.unitPrice || "",
+      discountPercent: item.discountPercent,
+      currentStock: primaryVar?.stock || 0,
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // Distinct Brands found across all quotation items
+  const quotationBrands = useMemo(() => {
+    const set = new Set<string>();
+    items.forEach((item) => {
+      Object.keys(item.brandVariants).forEach((b) => set.add(b));
+    });
+    return Array.from(set);
+  }, [items]);
+
+  // Brand Option Totals (calculates exact quotation total per brand option)
+  const brandOptionSummaries = useMemo(() => {
+    const summaries: Record<string, { brand: string; total: number; availableCount: number; missingCount: number }> = {};
+
+    quotationBrands.forEach((b) => {
+      let bTotal = 0;
+      let avail = 0;
+      let missing = 0;
+
+      items.forEach((item) => {
+        const v = item.brandVariants[b];
+        if (v && v.available) {
+          const gross = v.unitPrice * item.quantity;
+          const disc = (gross * item.discountPercent) / 100;
+          bTotal += gross - disc;
+          avail++;
+        } else {
+          missing++;
+        }
+      });
+
+      summaries[b] = {
+        brand: b,
+        total: bTotal,
+        availableCount: avail,
+        missingCount: missing,
+      };
+    });
+
+    return summaries;
+  }, [quotationBrands, items]);
+
+  // Calculate totals based on active brand option tab (or primary brand total if 'all')
+  const calculatedTotals = useMemo(() => {
+    let sub = 0;
+    let gross = 0;
+    let itemDisc = 0;
+
+    items.forEach((item) => {
+      const activeVar =
+        activeBrandOption === "all"
+          ? (item.brandVariants[item.primaryBrand] || Object.values(item.brandVariants)[0])
+          : item.brandVariants[activeBrandOption];
+
+      if (activeVar) {
+        const g = activeVar.unitPrice * item.quantity;
+        const d = (g * item.discountPercent) / 100;
+        gross += g;
+        itemDisc += d;
+        sub += g - d;
+      }
+    });
+
+    const extraDiscAmount = (sub * extraDiscount) / 100;
+    const grand = sub - extraDiscAmount;
+
+    return {
+      subtotal: sub,
+      grossTotal: gross,
+      totalItemDiscount: itemDisc,
+      extraDiscountAmount: extraDiscAmount,
+      grandTotal: grand,
+    };
+  }, [items, activeBrandOption, extraDiscount]);
+
+  const safeUnitPrice = currentItem.unitPrice === "" ? 0 : currentItem.unitPrice;
+  const safeQty = currentItem.quantity === "" ? 0 : currentItem.quantity;
+  const safeDiscount = currentItem.discountPercent === "" ? 0 : currentItem.discountPercent;
+  const currentLineTotal = safeUnitPrice * safeQty - (safeUnitPrice * safeQty * safeDiscount) / 100;
+
+  const filteredProducts = products.filter((p) => {
+    if (supplierFilter === "all") return true;
+    if (supplierFilter === "retail") return p.retailOnly;
+    const sup = (p.supplier || p.brand || "").toLowerCase();
+    if (supplierFilter === "sierra") return sup.includes("sierra") && !p.retailOnly;
+    if (supplierFilter === "wireman") return sup.includes("wireman") && !p.retailOnly;
+    if (supplierFilter === "orange") return sup.includes("orange") && !p.retailOnly;
+    if (supplierFilter === "other") return !sup.includes("sierra") && !sup.includes("wireman") && !sup.includes("orange") && !p.retailOnly;
+    return false;
+  });
+
+  // Copy WhatsApp Quotation with Multi-Brand Comparison
+  const handleCopyWhatsApp = () => {
+    if (items.length === 0) { toast.error("Please add items first"); return; }
+    const customerObj = customers.find((c) => c.id === customerId);
+    const custName = customerObj ? customerObj.name : "Walk-in Customer";
+
+    let text = `📋 *QUOTATION - CHAMPIKA HARDWARE & ELECTRICALS*\n`;
+    text += `👤 *Customer:* ${custName}\n`;
+    text += `📅 *Date:* ${quotationDate}\n\n`;
+
+    if (quotationBrands.length > 1) {
+      text += `*BRAND OPTIONS & COMPARISON:*\n\n`;
+      quotationBrands.forEach((b, idx) => {
+        const letter = String.fromCharCode(65 + idx);
+        const bInfo = brandOptionSummaries[b];
+        text += `*Option ${letter}: ${b.toUpperCase()}*\n`;
+
+        items.forEach((it) => {
+          const v = it.brandVariants[b];
+          if (v) {
+            const lineTot = (v.unitPrice * it.quantity) * (1 - it.discountPercent / 100);
+            const stockTag = v.stock >= it.quantity ? "✅ In Stock" : `⚠️ Stock: ${v.stock}`;
+            text += ` • ${it.baseItemName} x ${it.quantity} ${it.unit} = LKR ${lineTot.toLocaleString()} (${stockTag})\n`;
+          } else {
+            text += ` • ${it.baseItemName} x ${it.quantity} ${it.unit} = (Not Available)\n`;
+          }
+        });
+
+        text += `👉 *Total ${b}: LKR ${Number(bInfo?.total || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}*\n\n`;
+      });
+    } else {
+      text += `*Items:*\n`;
+      items.forEach((it, idx) => {
+        const v = Object.values(it.brandVariants)[0];
+        const lineTot = v ? (v.unitPrice * it.quantity) * (1 - it.discountPercent / 100) : 0;
+        text += `${idx + 1}. ${it.baseItemName} x ${it.quantity} ${it.unit} = LKR ${lineTot.toLocaleString()}\n`;
+      });
+      text += `\n*TOTAL: LKR ${calculatedTotals.grandTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })}*\n`;
+    }
+
+    text += `\n📌 _${notes || "Prices valid for 7 days. Subject to stock availability."}_`;
+    navigator.clipboard.writeText(text);
+    toast.success("WhatsApp quotation copied to clipboard!");
+  };
+
+  // Save Quotation
   const handleSave = async (action: "save" | "print" | "download" = "save") => {
     if (!customerId) { toast.error("Please select a customer"); return; }
     if (items.length === 0) { toast.error("Please add at least one item"); return; }
 
     setSaving(true);
     try {
+      const activeBrand = activeBrandOption !== "all" ? activeBrandOption : (items[0]?.primaryBrand || "Orange");
+
+      // Extract items for active brand selection
+      const invoiceItems = items.map((i) => {
+        const v = i.brandVariants[activeBrand] || (i.brandVariants[i.primaryBrand] || Object.values(i.brandVariants)[0]);
+        const unitP = v?.unitPrice || 0;
+        const gross = unitP * i.quantity;
+        const disc = (gross * i.discountPercent) / 100;
+        return {
+          productId: v?.productId || "",
+          sku: v?.sku || "",
+          productName: v?.productName || i.baseItemName,
+          quantity: i.quantity,
+          freeQuantity: i.freeQuantity,
+          unit: i.unit,
+          mrp: v?.mrp || unitP,
+          unitPrice: unitP,
+          discountPercent: i.discountPercent,
+          discountAmount: disc,
+          total: gross - disc,
+          brand: activeBrand,
+          supplier: activeBrand,
+        };
+      });
+
+      const brandSuffix = activeBrandOption !== "all" ? ` [Brand Option: ${activeBrandOption.toUpperCase()}]` : "";
+
       const res = await fetch("/api/quotations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -270,20 +566,14 @@ export default function CreateQuotationPage() {
           customerId,
           businessId,
           salesRepId: userId,
-          items: items.map((i) => ({
-            productId: i.productId, sku: i.sku, productName: i.productName,
-            quantity: i.quantity, freeQuantity: i.freeQuantity, unit: i.unit,
-            mrp: i.mrp, unitPrice: i.unitPrice, discountPercent: i.discountPercent,
-            discountAmount: i.discountAmount, total: i.total,
-            supplier: i.supplier, retailOnly: i.retailOnly,
-          })),
+          items: invoiceItems,
           invoiceDate: quotationDate,
-          subTotal: subtotal,
+          subTotal: calculatedTotals.subtotal,
           extraDiscountPercent: extraDiscount,
-          extraDiscountAmount: extraDiscountAmount,
-          grandTotal,
+          extraDiscountAmount: calculatedTotals.extraDiscountAmount,
+          grandTotal: calculatedTotals.grandTotal,
           paymentType,
-          notes: notes || null,
+          notes: `${notes || ""}${brandSuffix}`.trim() || null,
         }),
       });
 
@@ -306,31 +596,6 @@ export default function CreateQuotationPage() {
     }
   };
 
-  // Totals
-  const subtotal = items.reduce((s, i) => s + i.total, 0);
-  const grossTotal = items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
-  const totalItemDiscount = items.reduce((s, i) => s + i.discountAmount, 0);
-  const extraDiscountAmount = (subtotal * extraDiscount) / 100;
-  const grandTotal = subtotal - extraDiscountAmount;
-
-  const safeUnitPrice = currentItem.unitPrice === "" ? 0 : currentItem.unitPrice;
-  const safeQty = currentItem.quantity === "" ? 0 : currentItem.quantity;
-  const safeDiscount = currentItem.discountPercent === "" ? 0 : currentItem.discountPercent;
-  const currentLineTotal = safeUnitPrice * safeQty - (safeUnitPrice * safeQty * safeDiscount) / 100;
-
-  const filteredProducts = products.filter((p) => {
-    if (!items.some((i) => i.productId === p.id) || p.id === currentItem.productId) {
-      if (supplierFilter === "all") return true;
-      if (supplierFilter === "retail") return p.retailOnly;
-      const sup = (p.supplier || "").toLowerCase();
-      if (supplierFilter === "sierra") return sup.includes("sierra") && !p.retailOnly;
-      if (supplierFilter === "wireman") return sup.includes("wireman") && !p.retailOnly;
-      if (supplierFilter === "orange") return sup.includes("orange") && !p.retailOnly;
-      if (supplierFilter === "other") return !sup.includes("sierra") && !sup.includes("wireman") && !sup.includes("orange") && !p.retailOnly;
-    }
-    return false;
-  });
-
   if (loading) return <div className="flex justify-center items-center py-16"><Loader2 className="h-8 w-8 animate-spin text-green-600" /></div>;
 
   return (
@@ -341,10 +606,43 @@ export default function CreateQuotationPage() {
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight">Create Quotation</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight">Create Quotation</h1>
+            <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border ml-2">
+              <button
+                type="button"
+                onClick={() => { setQuotationMode("standard"); setActiveBrandOption("all"); }}
+                className={cn(
+                  "px-2.5 py-1 text-xs font-semibold rounded-md transition-all",
+                  quotationMode === "standard" ? "bg-white text-slate-900 shadow-2xs font-bold" : "text-slate-600 hover:text-slate-900"
+                )}
+              >
+                Standard
+              </button>
+              <button
+                type="button"
+                onClick={() => setQuotationMode("multi_brand")}
+                className={cn(
+                  "px-2.5 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1",
+                  quotationMode === "multi_brand" ? "bg-emerald-600 text-white shadow-2xs font-bold" : "text-slate-600 hover:text-slate-900"
+                )}
+              >
+                <Layers className="w-3 h-3" /> Multi-Brand Comparative
+              </button>
+            </div>
+          </div>
           <p className="text-muted-foreground text-sm mt-0.5">{businessName} · New quotation (no stock deducted until converted)</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleCopyWhatsApp}
+            className="text-xs bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100"
+          >
+            <Share2 className="w-4 h-4 mr-1.5 text-emerald-600" />
+            WhatsApp Quote
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -376,9 +674,9 @@ export default function CreateQuotationPage() {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-3">
-        {/* LEFT */}
+        {/* LEFT COLUMN */}
         <div className="xl:col-span-2 space-y-4">
-          {/* Details */}
+          {/* Details Card */}
           <Card>
             <CardHeader className="pb-0 flex flex-row items-center gap-3">
               <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 xl:hidden" onClick={() => router.push("/dashboard/office/retail/quotations")}>
@@ -452,10 +750,15 @@ export default function CreateQuotationPage() {
             </CardContent>
           </Card>
 
-          {/* Add Products */}
+          {/* Add Products Card */}
           <Card>
             <CardHeader className="pb-0">
-              <CardTitle className="text-base">Add Products</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">Add Products</CardTitle>
+                <span className="text-xs text-muted-foreground">
+                  Select item · Base name &amp; brand options are linked automatically
+                </span>
+              </div>
             </CardHeader>
             <CardContent className="space-y-3 pt-3">
               {/* Supplier filter */}
@@ -477,13 +780,13 @@ export default function CreateQuotationPage() {
               <Popover open={productOpen} onOpenChange={setProductOpen}>
                 <PopoverTrigger asChild>
                   <Button variant="outline" role="combobox" className="w-full justify-between" disabled={stockLoading}>
-                    {currentItem.productId ? products.find((p) => p.id === currentItem.productId)?.name : "Select Product"}
+                    {currentItem.productId ? products.find((p) => p.id === currentItem.productId)?.name : "Select Product / Base Item"}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start" side="bottom" avoidCollisions={false}>
                   <Command>
-                    <CommandInput placeholder="Search product..." />
+                    <CommandInput placeholder="Search product or base spec..." />
                     <CommandList className="max-h-[400px]">
                       <CommandEmpty>No products found</CommandEmpty>
                       <CommandGroup>
@@ -574,7 +877,7 @@ export default function CreateQuotationPage() {
                 </div>
               </div>
 
-              {/* Add/Update button */}
+              {/* Add/Update buttons */}
               <div className={cn("grid gap-2", editingItemId ? "grid-cols-2" : "grid-cols-1")}>
                 {editingItemId && (
                   <Button variant="outline" onClick={resetCurrentItem} className="h-12"><X className="w-4 h-4 mr-2" />Cancel</Button>
@@ -587,10 +890,60 @@ export default function CreateQuotationPage() {
             </CardContent>
           </Card>
 
-          {/* Items Table */}
+          {/* Quotation Items Table Card with Multi-Brand Option Tabs */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Quotation Items</CardTitle>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    Quotation Items
+                    <Badge variant="outline" className="text-xs font-mono">
+                      {items.length} base specs
+                    </Badge>
+                  </CardTitle>
+                </div>
+
+                {/* Brand Option Tabs (Option A: Orange, Option B: ACL, etc.) */}
+                {quotationBrands.length > 0 && (
+                  <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border overflow-x-auto">
+                    <button
+                      type="button"
+                      onClick={() => setActiveBrandOption("all")}
+                      className={cn(
+                        "px-2.5 py-1 text-xs font-semibold rounded-md transition-all whitespace-nowrap cursor-pointer",
+                        activeBrandOption === "all"
+                          ? "bg-slate-900 text-white font-bold shadow-2xs"
+                          : "text-slate-600 hover:text-slate-900"
+                      )}
+                    >
+                      Comparative View
+                    </button>
+                    {quotationBrands.map((b, idx) => {
+                      const letter = String.fromCharCode(65 + idx);
+                      const isSelected = activeBrandOption === b;
+                      const summary = brandOptionSummaries[b];
+                      return (
+                        <button
+                          key={b}
+                          type="button"
+                          onClick={() => setActiveBrandOption(b)}
+                          className={cn(
+                            "px-2.5 py-1 text-xs font-semibold rounded-md transition-all whitespace-nowrap cursor-pointer flex items-center gap-1",
+                            isSelected
+                              ? "bg-emerald-600 text-white font-bold shadow-2xs"
+                              : "text-slate-600 hover:text-slate-900"
+                          )}
+                        >
+                          <span>Option {letter}: {b}</span>
+                          <span className={cn("text-[10px] px-1 py-0.2 rounded font-mono", isSelected ? "bg-emerald-700 text-white" : "bg-slate-200 text-slate-700")}>
+                            LKR {Number(summary?.total || 0).toLocaleString()}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="pt-0">
               {items.length === 0 ? (
@@ -601,48 +954,91 @@ export default function CreateQuotationPage() {
               ) : (
                 <div className="space-y-2">
                   {items.map((item, idx) => {
-                    const isSierra = (item.supplier || "").toLowerCase().includes("sierra");
-                    const isWireman = (item.supplier || "").toLowerCase().includes("wireman");
-                    const isOrange = (item.supplier || "").toLowerCase().includes("orange");
-                    const isRetailOnly = item.retailOnly;
-                    let leftBorder = "border-l-4 border-l-slate-200";
-                    let supplierLabel = "";
-                    let badgeCls = "bg-slate-100 text-slate-600 border-slate-200";
-                    if (isRetailOnly) { leftBorder = "border-l-4 border-l-emerald-500"; supplierLabel = "Retail Only"; badgeCls = "bg-emerald-100 text-emerald-700 border-emerald-200"; }
-                    else if (isSierra) { leftBorder = "border-l-4 border-l-purple-500"; supplierLabel = "Sierra"; badgeCls = "bg-purple-100 text-purple-700 border-purple-200"; }
-                    else if (isWireman) { leftBorder = "border-l-4 border-l-red-500"; supplierLabel = "Wireman"; badgeCls = "bg-red-100 text-red-700 border-red-200"; }
-                    else if (isOrange) { leftBorder = "border-l-4 border-l-orange-500"; supplierLabel = "Orange"; badgeCls = "bg-orange-100 text-orange-700 border-orange-200"; }
+                    const activeVariant =
+                      activeBrandOption === "all"
+                        ? (item.brandVariants[item.primaryBrand] || Object.values(item.brandVariants)[0])
+                        : item.brandVariants[activeBrandOption];
+
                     const isEditing = editingItemId === item.id;
+                    const isAvailableInActiveBrand = !!activeVariant;
+
                     return (
-                      <div key={item.id} className={cn("flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors", leftBorder, isEditing ? "bg-blue-50/60 border-blue-200" : "hover:bg-muted/40")}>
-                        <span className="text-xs text-muted-foreground w-5 shrink-0 text-center">{idx + 1}</span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-medium text-sm">{item.productName}</span>
-                            {supplierLabel && <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded border shrink-0", badgeCls)}>{supplierLabel}</span>}
-                            {item.currentStock === 0 && (
-                              <span className="text-[10px] font-bold text-red-500 border border-red-200 bg-red-50 px-1.5 py-0.5 rounded shrink-0">Out of Stock</span>
+                      <div
+                        key={item.id}
+                        className={cn(
+                          "rounded-lg border px-3 py-2.5 transition-colors space-y-2",
+                          isAvailableInActiveBrand
+                            ? isEditing
+                              ? "bg-blue-50/60 border-blue-200"
+                              : "hover:bg-muted/40"
+                            : "bg-amber-50/40 border-amber-200"
+                        )}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs text-muted-foreground font-mono w-5 text-center">{idx + 1}</span>
+                            <span className="font-bold text-sm text-slate-900">{item.baseItemName}</span>
+                            {item.sizeSpec && (
+                              <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">
+                                {item.sizeSpec}
+                              </Badge>
                             )}
+                            {item.color && (
+                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                                {item.color}
+                              </Badge>
+                            )}
+                            <span className="text-xs font-semibold text-slate-700 ml-1">
+                              Qty: {item.quantity} {item.unit}
+                            </span>
                           </div>
-                          <div className="flex flex-wrap gap-x-2.5 mt-1 text-xs text-muted-foreground">
-                            <span className="font-mono text-[11px]">{item.sku}</span>
-                            <span>·</span>
-                            <span>{item.quantity} {item.unit}</span>
-                            {item.freeQuantity > 0 && <><span>·</span><span className="text-green-600">+{item.freeQuantity} free</span></>}
-                            <span>·</span>
-                            <span>LKR {item.unitPrice.toLocaleString()}</span>
-                            <span>·</span>
-                            <span className="text-slate-500">Avail: {item.currentStock}</span>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            {activeVariant ? (
+                              <span className="font-bold text-sm text-slate-900 font-mono">
+                                LKR {((activeVariant.unitPrice * item.quantity) * (1 - item.discountPercent / 100)).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                              </span>
+                            ) : (
+                              <Badge variant="outline" className="text-[10px] text-amber-700 bg-amber-50 border-amber-200">
+                                ⚠️ Unavailable in {activeBrandOption}
+                              </Badge>
+                            )}
+                            <Button variant="ghost" size="icon" className={cn("h-7 w-7", isEditing && "bg-blue-100")} onClick={() => handleEditItem(item.id)}>
+                              <Pencil className="w-3.5 h-3.5 text-blue-500" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setItems(items.filter((i) => i.id !== item.id)); if (editingItemId === item.id) resetCurrentItem(); }}>
+                              <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                            </Button>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <span className="font-bold text-sm text-slate-800 min-w-[60px] text-right">{item.total.toLocaleString()}</span>
-                          <Button variant="ghost" size="icon" className={cn("h-7 w-7", isEditing && "bg-blue-100")} onClick={() => handleEditItem(item.id)}>
-                            <Pencil className="w-3.5 h-3.5 text-blue-500" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setItems(items.filter((i) => i.id !== item.id)); if (editingItemId === item.id) resetCurrentItem(); }}>
-                            <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                          </Button>
+
+                        {/* Comparative Brand Options Chips for this Base Item */}
+                        <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-slate-100">
+                          <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
+                            Brand Prices:
+                          </span>
+                          {Object.entries(item.brandVariants).map(([brandName, v]) => {
+                            const isBrandActive = activeBrandOption === brandName || (activeBrandOption === "all" && item.primaryBrand === brandName);
+                            return (
+                              <div
+                                key={brandName}
+                                className={cn(
+                                  "px-2 py-0.5 rounded text-[11px] font-medium border flex items-center gap-1.5 transition-all",
+                                  isBrandActive
+                                    ? "bg-slate-900 text-white border-slate-900 font-semibold shadow-2xs"
+                                    : "bg-slate-50 text-slate-700 border-slate-200"
+                                )}
+                              >
+                                <span>{brandName}:</span>
+                                <span className={isBrandActive ? "text-emerald-300 font-bold" : "text-emerald-700 font-semibold"}>
+                                  LKR {v.unitPrice.toLocaleString()}
+                                </span>
+                                <span className={cn("text-[9px]", v.stock >= item.quantity ? "text-emerald-500" : "text-amber-500")}>
+                                  ({v.stock} in stock)
+                                </span>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     );
@@ -653,11 +1049,18 @@ export default function CreateQuotationPage() {
           </Card>
         </div>
 
-        {/* RIGHT SIDEBAR */}
+        {/* RIGHT SIDEBAR (SUMMARY CARD) */}
         <div className="xl:col-span-1 hidden xl:block">
           <Card className="sticky top-6">
             <CardHeader className="pb-2 border-b">
-              <CardTitle className="text-base font-semibold text-slate-700">Summary</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base font-semibold text-slate-700">Summary</CardTitle>
+                {activeBrandOption !== "all" && (
+                  <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 text-[10px]">
+                    OPTION: {activeBrandOption.toUpperCase()}
+                  </Badge>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="p-4 space-y-4">
               <div className="space-y-1.5">
@@ -674,33 +1077,46 @@ export default function CreateQuotationPage() {
               </div>
               <div className="border-t pt-3 space-y-1.5">
                 <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>Gross Total</span><span>LKR {grossTotal.toLocaleString()}</span>
+                  <span>Gross Total</span><span>LKR {calculatedTotals.grossTotal.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>Item Discounts</span><span className="text-red-500">− LKR {totalItemDiscount.toLocaleString()}</span>
+                  <span>Item Discounts</span><span className="text-red-500">− LKR {calculatedTotals.totalItemDiscount.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between text-sm font-semibold border-t pt-1">
-                  <span>Subtotal</span><span>LKR {subtotal.toLocaleString()}</span>
+                  <span>Subtotal</span><span>LKR {calculatedTotals.subtotal.toLocaleString()}</span>
                 </div>
               </div>
               <div className="border-t pt-3 space-y-2">
                 <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">Extra Discount %</Label>
                 <Input type="number" min="0" max="100" value={extraDiscount} onChange={(e) => setExtraDiscount(Number(e.target.value))} className="h-10" />
-                {extraDiscountAmount > 0 && (
+                {calculatedTotals.extraDiscountAmount > 0 && (
                   <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Extra Discount</span><span className="text-red-500">− LKR {extraDiscountAmount.toLocaleString()}</span>
+                    <span>Extra Discount</span><span className="text-red-500">− LKR {calculatedTotals.extraDiscountAmount.toLocaleString()}</span>
                   </div>
                 )}
               </div>
               <div className="rounded-xl bg-amber-50 border border-amber-100 p-3.5">
-                <p className="text-[10px] uppercase tracking-widest text-amber-700 font-bold mb-1">Quotation Total</p>
-                <p className="text-2xl font-black text-amber-700">LKR {grandTotal.toLocaleString()}</p>
-                {items.length > 0 && <p className="text-[11px] text-amber-600 mt-1">{items.length} product{items.length !== 1 ? "s" : ""}</p>}
+                <p className="text-[10px] uppercase tracking-widest text-amber-700 font-bold mb-1">
+                  {activeBrandOption !== "all" ? `${activeBrandOption.toUpperCase()} QUOTATION TOTAL` : "QUOTATION TOTAL"}
+                </p>
+                <p className="text-2xl font-black text-amber-700">LKR {calculatedTotals.grandTotal.toLocaleString()}</p>
+                {items.length > 0 && <p className="text-[11px] text-amber-600 mt-1">{items.length} base specification{items.length !== 1 ? "s" : ""}</p>}
               </div>
-              <Button onClick={() => handleSave("save")} disabled={items.length === 0 || saving} className="w-full h-11 bg-green-600 hover:bg-green-700 font-bold">
-                {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileText className="w-4 h-4 mr-2" />}
-                Save Quotation
-              </Button>
+              <div className="space-y-2">
+                <Button onClick={() => handleSave("save")} disabled={items.length === 0 || saving} className="w-full h-11 bg-green-600 hover:bg-green-700 font-bold">
+                  {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileText className="w-4 h-4 mr-2" />}
+                  Save Quotation {activeBrandOption !== "all" ? `(${activeBrandOption})` : ""}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleCopyWhatsApp}
+                  className="w-full h-9 text-xs font-semibold bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100"
+                >
+                  <Share2 className="w-3.5 h-3.5 mr-1.5 text-emerald-600" />
+                  Copy WhatsApp Multi-Brand Quote
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -712,7 +1128,7 @@ export default function CreateQuotationPage() {
           <div className="flex-1 min-w-0">
             <div className="flex items-baseline gap-1.5">
               <span className="text-xs text-muted-foreground">Total</span>
-              <span className="font-bold text-base text-amber-600 truncate">LKR {grandTotal.toLocaleString()}</span>
+              <span className="font-bold text-base text-amber-600 truncate">LKR {calculatedTotals.grandTotal.toLocaleString()}</span>
             </div>
             <div className="text-xs text-muted-foreground">{items.length} item{items.length !== 1 ? "s" : ""}</div>
           </div>

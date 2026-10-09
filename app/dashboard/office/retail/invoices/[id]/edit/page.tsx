@@ -222,21 +222,23 @@ export default function EditRetailInvoicePage({
         const productsData = await prodRes.json();
 
         // 3. Setup Customers
-        const retailCustomers = customersData;
+        const retailCustomers = Array.isArray(customersData) ? customersData : [];
         
         // Find Guest Customer (Logic from Create Page)
         const guest = retailCustomers.find((c: any) => {
-          const nameToCheck = (c.shop_name || c.name || "").toLowerCase();
+          const nameToCheck = (c.shop_name || c.shopName || c.name || "").toLowerCase();
           return nameToCheck.includes("walk-in") || nameToCheck.includes("guest");
         });
         if (guest) setGuestCustomerId(guest.id);
 
         setCustomers(retailCustomers.map((c: any) => ({
           id: c.id,
-          name: c.shop_name || c.name,
-          shop_name: c.shop_name,
-          owner_name: c.owner_name,
-          business_id: c.business_id,
+          name: c.shop_name || c.shopName || c.name || "Unnamed Customer",
+          shop_name: c.shop_name || c.shopName || c.name || "Unnamed Customer",
+          owner_name: c.owner_name || c.ownerName || "",
+          business_id: c.business_id || c.businessId || null,
+          phone: c.phone || "",
+          ownerName: c.owner_name || c.ownerName || "",
         })));
 
         // 4. Setup Products

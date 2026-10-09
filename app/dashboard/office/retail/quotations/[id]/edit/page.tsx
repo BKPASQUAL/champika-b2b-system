@@ -177,21 +177,23 @@ export default function EditQuotationPage({ params }: { params: Promise<{ id: st
         const customersData = await customersRes.json();
         const productsData = await productsRes.json();
 
-        const retailCustomers = (customersData || []).filter(
+        const rawCustomers = Array.isArray(customersData) ? customersData : [];
+        const retailCustomers = rawCustomers.filter(
           (c: any) => c.business_id === BUSINESS_IDS.CHAMPIKA_RETAIL || c.businessId === BUSINESS_IDS.CHAMPIKA_RETAIL
         );
+        const customerList = retailCustomers.length > 0 ? retailCustomers : rawCustomers;
 
-        const guest = retailCustomers.find((c: any) => {
+        const guest = customerList.find((c: any) => {
           const n = (c.shop_name || c.shopName || c.name || "").toLowerCase();
           return n.includes("walk-in") || n.includes("guest");
         });
         if (guest) setGuestCustomerId(guest.id);
 
-        setCustomers(retailCustomers.map((c: any) => ({
+        setCustomers(customerList.map((c: any) => ({
           id: c.id,
-          name: c.shop_name || c.shopName,
-          shop_name: c.shop_name || c.shopName,
-          owner_name: c.owner_name || c.ownerName,
+          name: c.shop_name || c.shopName || c.name || "Unnamed Customer",
+          shop_name: c.shop_name || c.shopName || c.name || "Unnamed Customer",
+          owner_name: c.owner_name || c.ownerName || "",
         })));
 
         if (Array.isArray(productsData)) {
