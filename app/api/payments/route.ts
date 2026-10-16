@@ -418,9 +418,32 @@ export async function POST(request: NextRequest) {
     }
 
     // Update Invoice status & paid_amount
-    const newPaidAmount = (Number(invoice.paid_amount) || 0) + val.amount;
-    const finalPaidAmount = Math.min(newPaidAmount, Number(invoice.total_amount));
-    const isFullyPaid = finalPaidAmount >= Number(invoice.total_amount);
+    const invoiceTotal = Number(invoice.total_amount) || 0;
+    const previousPaid = Number(invoice.paid_amount) || 0;
+    const newPaidAmount = previousPaid + val.amount;
+    const rawRemaining = invoiceTotal - newPaidAmount;
+    const remainingDue = Math.round(Math.max(0, rawRemaining) * 100) / 100;
+
+    let finalPaidAmount = Math.min(newPaidAmount, invoiceTotal);
+    let isFullyPaid = finalPaidAmount >= invoiceTotal;
+    let autoCashAmount = 0;
+
+    // Auto cash settlement if remaining due is below 100 LKR
+    if (!isFullyPaid && remainingDue > 0 && remainingDue < 100) {
+      autoCashAmount = remainingDue;
+      finalPaidAmount = invoiceTotal;
+      isFullyPaid = true;
+
+      // Automatically insert a cash payment for the remaining balance
+      await supabaseAdmin.from("payments").insert({
+        invoice_id: invoice.id,
+        customer_id: customer.id,
+        amount: autoCashAmount,
+        payment_date: paymentDate,
+        method: "cash",
+      });
+    }
+
     const newStatus = isFullyPaid ? "Paid" : "Partial";
 
     const { error: invoiceUpdateError } = await supabaseAdmin
@@ -448,7 +471,7 @@ export async function POST(request: NextRequest) {
 
     // Update customer outstanding balance
     const currentBalance = Number(customer.outstanding_balance) || 0;
-    const creditAmount = isFullyPaid ? (Number(invoice.total_amount) - (Number(invoice.paid_amount) || 0)) : val.amount;
+    const creditAmount = val.amount + autoCashAmount;
     const newBalance = currentBalance - creditAmount;
 
     const { error: customerUpdateError } = await supabaseAdmin

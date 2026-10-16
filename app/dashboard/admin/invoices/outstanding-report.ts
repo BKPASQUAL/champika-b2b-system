@@ -48,7 +48,8 @@ function getOutstandingForRep(invoices: Invoice[], repFilter: string = "all"): I
         inv.status !== "Paid" &&
         inv.orderStatus !== "Cancelled" &&
         isDelivered &&
-        inv.dueAmount > 0
+        inv.dueAmount > 0 &&
+        (inv.hasReturnedCheque || inv.dueAmount >= 100)
       );
     }
   );

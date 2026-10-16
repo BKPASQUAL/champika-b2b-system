@@ -50,6 +50,7 @@ function getOutstandingForRep(invoices: Invoice[], repFilter: string = "all", ex
         inv.orderStatus !== "Cancelled" &&
         isDelivered &&
         inv.dueAmount > 0 &&
+        (inv.hasReturnedCheque || inv.dueAmount >= 100) &&
         (!excludeChampika || !(inv.customerName || "").toLowerCase().includes("champika hardware"))
       );
     }
