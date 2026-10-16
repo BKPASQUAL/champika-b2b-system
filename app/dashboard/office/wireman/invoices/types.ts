@@ -29,6 +29,11 @@ export interface Invoice {
   itemsCount?: number;
   businessId?: string;
   profit: number;
+  hasReturnedCheque?: boolean;
+  returnedChequeCount?: number;
+  returnedChequeNos?: string | null;
+  returnedChequeAmount?: number;
+  returnedCheques?: any[];
 }
 
 export type SortField =

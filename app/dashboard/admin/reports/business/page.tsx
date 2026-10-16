@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,6 +56,8 @@ import {
   Package,
   Receipt,
   Search,
+  Eye,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { BUSINESS_THEMES, BUSINESS_IDS } from "@/app/config/business-constants";
@@ -126,6 +129,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function BusinessAnalyticsPage() {
+  const router = useRouter();
   const today = new Date().toISOString().split("T")[0];
   const firstOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
     .toISOString().split("T")[0];
@@ -176,7 +180,7 @@ export default function BusinessAnalyticsPage() {
     () => businesses.map((b) => ({
       name: b.name.replace("Champika Hardware - ", "CH ").replace(" Agency", ""),
       revenue: b.totalRevenue,
-      profit: b.totalProfit,
+      profit: b.totalGrossProfit !== undefined ? b.totalGrossProfit : b.totalProfit,
       due: b.dueAmount,
     })),
     [businesses]
@@ -223,15 +227,22 @@ export default function BusinessAnalyticsPage() {
   }, [current, detailSearch]);
 
   // Totals for detail tabs
-  const invTotals = useMemo(() => ({
-    amount: filteredInvoices.reduce((s, i) => s + i.amount, 0),
-    due: filteredInvoices.reduce((s, i) => s + i.due, 0),
-    profit: filteredInvoices.reduce((s, i) => s + (i.profit || 0), 0),
-    freeQty: filteredInvoices.reduce((s, i) => s + (i.freeQty || 0), 0),
-    freeCost: filteredInvoices.reduce((s, i) => s + (i.freeCost || 0), 0),
-    netProfit: filteredInvoices.reduce((s, i) => s + (i.netProfit || 0), 0),
-    pendingClaimCost: filteredInvoices.reduce((s, i) => s + (i.pendingClaimCost || 0), 0),
-  }), [filteredInvoices]);
+  const invTotals = useMemo(() => {
+    const grossProfit = filteredInvoices.reduce((s, i) => s + ((i.profit && i.profit > 0) ? i.profit : 0), 0);
+    const totalLoss = filteredInvoices.reduce((s, i) => s + ((i.profit && i.profit < 0) ? Math.abs(i.profit) : 0), 0);
+    const profit = filteredInvoices.reduce((s, i) => s + (i.profit || 0), 0);
+    return {
+      amount: filteredInvoices.reduce((s, i) => s + i.amount, 0),
+      due: filteredInvoices.reduce((s, i) => s + i.due, 0),
+      grossProfit,
+      totalLoss,
+      profit,
+      freeQty: filteredInvoices.reduce((s, i) => s + (i.freeQty || 0), 0),
+      freeCost: filteredInvoices.reduce((s, i) => s + (i.freeCost || 0), 0),
+      netProfit: filteredInvoices.reduce((s, i) => s + (i.netProfit || 0), 0),
+      pendingClaimCost: filteredInvoices.reduce((s, i) => s + (i.pendingClaimCost || 0), 0),
+    };
+  }, [filteredInvoices]);
 
   const custTotals = useMemo(() => ({
     revenue: filteredCustomers.reduce((s, c) => s + c.revenue, 0),
@@ -436,7 +447,7 @@ export default function BusinessAnalyticsPage() {
               {/* Row 1: Sales & Profits Reconciliation */}
               <div>
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Sales & Profits Reconciliation (Claims Lag)</p>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
                   {/* Total Sales */}
                   <Card className="bg-blue-50/50 border-blue-100">
                     <CardHeader className="pb-1 pt-3 px-3 md:px-4">
@@ -450,7 +461,7 @@ export default function BusinessAnalyticsPage() {
                     </CardContent>
                   </Card>
 
-                  {/* Gross Profit (Expected) */}
+                  {/* Gross Profit (Expected - Unreduced) */}
                   <Card className="bg-green-50 border-green-200">
                     <CardHeader className="pb-1 pt-3 px-3 md:px-4">
                       <CardTitle className="text-[10px] md:text-xs text-green-700 font-medium flex items-center gap-1">
@@ -458,8 +469,27 @@ export default function BusinessAnalyticsPage() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
-                      <div className="text-sm md:text-xl font-bold text-green-700">LKR {fmt(current.totalProfit)}</div>
+                      <div className="text-sm md:text-xl font-bold text-green-700">
+                        LKR {fmt(current.totalGrossProfit !== undefined ? current.totalGrossProfit : current.totalProfit)}
+                      </div>
                       <p className="text-[10px] text-green-600/80 mt-0.5">{current.margin.toFixed(1)}% margin</p>
+                    </CardContent>
+                  </Card>
+
+                  {/* Total Loss / Lost Amount */}
+                  <Card className={(current.totalLoss || 0) > 0 ? "bg-rose-50 border-rose-200" : "bg-gray-50/50 border-gray-200"}>
+                    <CardHeader className="pb-1 pt-3 px-3 md:px-4">
+                      <CardTitle className={`text-[10px] md:text-xs font-medium flex items-center gap-1 ${(current.totalLoss || 0) > 0 ? "text-rose-700" : "text-gray-600"}`}>
+                        <AlertCircle className="h-3 w-3" /> Total Loss
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
+                      <div className={`text-sm md:text-xl font-bold ${(current.totalLoss || 0) > 0 ? "text-rose-700" : "text-gray-800"}`}>
+                        LKR {fmt(current.totalLoss || 0)}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">
+                        {(current.totalLoss || 0) > 0 ? "lost amount (below cost)" : "no loss recorded"}
+                      </p>
                     </CardContent>
                   </Card>
 
@@ -625,7 +655,9 @@ export default function BusinessAnalyticsPage() {
                         <TableRow>
                           <TableHead>Business</TableHead>
                           <TableHead className="text-right">Total Sales</TableHead>
-                          <TableHead className="text-right">Total Profit</TableHead>
+                          <TableHead className="text-right">Gross Profit</TableHead>
+                          <TableHead className="text-right">Total Loss</TableHead>
+                          <TableHead className="text-right">Net Profit</TableHead>
                           <TableHead className="text-right">Margin</TableHead>
                           <TableHead className="text-right">Due Amount</TableHead>
                           <TableHead className="text-right">Invoices</TableHead>
@@ -639,8 +671,14 @@ export default function BusinessAnalyticsPage() {
                           <TableCell className="text-right text-blue-700 font-bold">
                             LKR {fmt(overall?.totalRevenue || 0)}
                           </TableCell>
-                          <TableCell className={`text-right font-bold ${(overall?.totalProfit || 0) >= 0 ? "text-green-700" : "text-red-700"}`}>
-                            LKR {fmt(overall?.totalProfit || 0)}
+                          <TableCell className="text-right text-green-700 font-bold">
+                            LKR {fmt(overall?.totalGrossProfit ?? overall?.totalProfit ?? 0)}
+                          </TableCell>
+                          <TableCell className="text-right text-rose-600 font-bold">
+                            {(overall?.totalLoss || 0) > 0 ? `LKR ${fmt(overall.totalLoss)}` : "—"}
+                          </TableCell>
+                          <TableCell className={`text-right font-bold ${(overall?.netProfit || 0) >= 0 ? "text-slate-800" : "text-rose-700"}`}>
+                            LKR {fmt(overall?.netProfit || 0)}
                           </TableCell>
                           <TableCell className="text-right text-xs font-bold">
                             {overall?.margin.toFixed(1)}%
@@ -666,8 +704,14 @@ export default function BusinessAnalyticsPage() {
                             <TableCell className="text-right font-medium text-blue-700">
                               LKR {fmt(biz.totalRevenue)}
                             </TableCell>
-                            <TableCell className={`text-right font-medium ${biz.totalProfit >= 0 ? "text-green-700" : "text-red-700"}`}>
-                              LKR {fmt(biz.totalProfit)}
+                            <TableCell className="text-right font-medium text-green-700">
+                              LKR {fmt(biz.totalGrossProfit !== undefined ? biz.totalGrossProfit : biz.totalProfit)}
+                            </TableCell>
+                            <TableCell className="text-right font-medium text-rose-600">
+                              {(biz.totalLoss || 0) > 0 ? `LKR ${fmt(biz.totalLoss)}` : "—"}
+                            </TableCell>
+                            <TableCell className={`text-right font-medium ${(biz.netProfit ?? biz.totalProfit) >= 0 ? "text-slate-800" : "text-rose-700"}`}>
+                              LKR {fmt(biz.netProfit ?? biz.totalProfit)}
                             </TableCell>
                             <TableCell className="text-right text-xs text-muted-foreground">
                               {biz.margin.toFixed(1)}%
@@ -774,6 +818,7 @@ export default function BusinessAnalyticsPage() {
                           <TableHead className="text-right">Expected Profit</TableHead>
                           <TableHead className="text-right">Realized Net Profit</TableHead>
                           <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Action</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -794,25 +839,47 @@ export default function BusinessAnalyticsPage() {
                           <TableCell className="text-right text-red-600 font-bold">
                             LKR {fmt(invTotals.due)}
                           </TableCell>
-                          <TableCell className={`text-right font-bold ${invTotals.profit >= 0 ? "text-slate-700" : "text-red-700"}`}>
-                            LKR {fmt(invTotals.profit)}
+                          <TableCell className="text-right font-bold">
+                            <div className="flex flex-col items-end">
+                              <span className="text-green-700 font-bold">LKR {fmt(invTotals.grossProfit)}</span>
+                              {invTotals.totalLoss > 0 && (
+                                <span className="text-[10px] text-rose-600 font-semibold mt-0.5">
+                                  Loss: LKR {fmt(invTotals.totalLoss)}
+                                </span>
+                              )}
+                            </div>
                           </TableCell>
-                          <TableCell className={`text-right font-bold ${invTotals.netProfit >= 0 ? "text-green-700 font-bold" : "text-red-700 font-bold"}`}>
-                            LKR {fmt(invTotals.netProfit)}
+                          <TableCell className="text-right font-bold">
+                            <div className="flex flex-col items-end">
+                              <span className={`font-bold ${invTotals.netProfit >= 0 ? "text-slate-800" : "text-rose-700"}`}>
+                                LKR {fmt(invTotals.netProfit)}
+                              </span>
+                            </div>
                           </TableCell>
+                          <TableCell />
                           <TableCell />
                         </TableRow>
                         {filteredInvoices.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={10} className="text-center text-muted-foreground text-xs py-8">
+                            <TableCell colSpan={11} className="text-center text-muted-foreground text-xs py-8">
                               No invoices found
                             </TableCell>
                           </TableRow>
                         ) : (
                           filteredInvoices.map((inv: any) => (
-                            <TableRow key={inv.invoiceId} className="text-xs">
+                            <TableRow key={inv.invoiceId} className="text-xs hover:bg-muted/40 transition-colors">
                               <TableCell className="text-muted-foreground whitespace-nowrap">{inv.date}</TableCell>
-                              <TableCell className="font-mono font-medium">{inv.invoiceNo}</TableCell>
+                              <TableCell className="font-mono font-medium">
+                                <button
+                                  type="button"
+                                  onClick={() => router.push(`/dashboard/admin/invoices/${inv.invoiceId}?from=/dashboard/admin/reports/business`)}
+                                  className="text-blue-600 hover:text-blue-800 hover:underline font-bold cursor-pointer text-left transition-colors inline-flex items-center gap-1 group"
+                                  title="View invoice details"
+                                >
+                                  <span>{inv.invoiceNo}</span>
+                                  <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                                </button>
+                              </TableCell>
                               <TableCell>{inv.customer}</TableCell>
                               
                               {/* Free Issues */}
@@ -848,43 +915,69 @@ export default function BusinessAnalyticsPage() {
                               </TableCell>
                               
                               {/* Expected Profit */}
-                              <TableCell className={`text-right font-mono tabular-nums font-semibold ${
-                                inv.profit === null || inv.profit === undefined ? "text-muted-foreground"
-                                : inv.profit >= 0 ? "text-green-700 font-bold" : "text-red-600 font-bold"
-                              }`}>
+                              <TableCell className="text-right font-mono tabular-nums font-semibold">
                                 {inv.profit === null || inv.profit === undefined ? (
                                   <span className="text-[10px] text-muted-foreground/50">—</span>
+                                ) : inv.profit < 0 ? (
+                                  <div className="flex flex-col items-end">
+                                    <span className="text-rose-600 font-bold bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 text-xs">
+                                      Loss: LKR {fmt(Math.abs(inv.profit))}
+                                    </span>
+                                    <span className="text-[9px] text-rose-500 font-normal mt-0.5">
+                                      {inv.profitMargin !== null ? `${inv.profitMargin.toFixed(1)}%` : ""}
+                                    </span>
+                                  </div>
                                 ) : (
                                   <div className="flex flex-col items-end">
-                                    <span>LKR {fmt(inv.profit)}</span>
-                                    <span className={`text-[9px] font-normal ${inv.profit >= 0 ? "text-green-600" : "text-red-500"}`}>
-                                      {inv.profitMargin !== null ? `${inv.profitMargin.toFixed(1)}%` : ""}
+                                    <span className="text-green-700 font-bold">LKR {fmt(inv.profit)}</span>
+                                    <span className="text-[9px] font-normal text-green-600">
+                                      {inv.profitMargin !== null ? `+${inv.profitMargin.toFixed(1)}%` : ""}
                                     </span>
                                   </div>
                                 )}
                               </TableCell>
                               
                               {/* Realized Net Profit */}
-                              <TableCell className={`text-right font-mono tabular-nums font-semibold ${
-                                inv.netProfit === null || inv.netProfit === undefined ? "text-muted-foreground"
-                                : inv.netProfit >= 0 ? "text-slate-700" : "text-red-600"
-                              }`}>
+                              <TableCell className="text-right font-mono tabular-nums font-semibold">
                                 {inv.netProfit === null || inv.netProfit === undefined ? (
                                   <span className="text-[10px] text-muted-foreground/50">—</span>
+                                ) : inv.netProfit < 0 ? (
+                                  <div className="flex flex-col items-end">
+                                    <span className="text-rose-600 font-bold">
+                                      -LKR {fmt(Math.abs(inv.netProfit))}
+                                    </span>
+                                    <span className="text-[9px] text-rose-500 font-normal">
+                                      {inv.netMargin !== null ? `${inv.netMargin.toFixed(1)}%` : ""}
+                                    </span>
+                                  </div>
                                 ) : (
                                   <div className="flex flex-col items-end">
-                                    <span>LKR {fmt(inv.netProfit)}</span>
+                                    <span className="text-slate-800 font-bold">LKR {fmt(inv.netProfit)}</span>
                                     <span className="text-[9px] text-muted-foreground font-normal">
                                       {inv.netMargin !== null ? `${inv.netMargin.toFixed(1)}%` : ""}
                                     </span>
                                   </div>
                                 )}
                               </TableCell>
-                              
+
                               <TableCell>
-                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${STATUS_COLORS[inv.paymentStatus] || "bg-gray-100 text-gray-700"}`}>
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${STATUS_COLORS[inv.paymentStatus] || "bg-gray-100 text-gray-700"}`}>
                                   {inv.paymentStatus}
                                 </span>
+                              </TableCell>
+
+                              {/* Action: View Invoice */}
+                              <TableCell className="text-right">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 px-2.5 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 font-medium gap-1 cursor-pointer"
+                                  onClick={() => router.push(`/dashboard/admin/invoices/${inv.invoiceId}?from=/dashboard/admin/reports/business`)}
+                                  title="View invoice details"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span>View</span>
+                                </Button>
                               </TableCell>
                             </TableRow>
                           ))

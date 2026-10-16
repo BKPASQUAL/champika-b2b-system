@@ -30,6 +30,8 @@ const COLOR = {
 
   grandBg:       [255, 237, 213] as [number, number, number],
   grandText:     [124, 45,  18 ] as [number, number, number],
+  returnedBg:    [254, 226, 226] as [number, number, number],
+  returnedText:  [185, 28,  28 ] as [number, number, number],
   divider:       [200, 200, 200] as [number, number, number],
   titleOrange:   [220, 38,  38 ] as [number, number, number],
   bodyText:      [50,  50,  50 ] as [number, number, number],
@@ -69,6 +71,16 @@ function getOutstandingForRep(invoices: Invoice[], repFilter: string = "all"): I
   );
 }
 
+const getReturnedChequesCount = (inv: Invoice): number => {
+  if (inv.returnedChequeCount && inv.returnedChequeCount > 0) return inv.returnedChequeCount;
+  if (inv.returnedCheques && inv.returnedCheques.length > 0) return inv.returnedCheques.length;
+  if (inv.returnedChequeNos) {
+    const count = inv.returnedChequeNos.split(",").map((s) => s.trim()).filter(Boolean).length;
+    if (count > 0) return count;
+  }
+  return inv.hasReturnedCheque ? 1 : 0;
+};
+
 function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth  = doc.internal.pageSize.getWidth();
@@ -102,6 +114,9 @@ function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
   let due45 = 0;
   let due60 = 0;
   let due90 = 0;
+  let countReturnedBills = 0;
+  let countReturnedCheques = 0;
+  let dueReturned = 0;
 
   let count45 = 0;
   let count60 = 0;
@@ -109,6 +124,11 @@ function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
 
   outstanding.forEach((inv) => {
     totalDue += inv.dueAmount;
+    if (inv.hasReturnedCheque) {
+      countReturnedBills++;
+      countReturnedCheques += getReturnedChequesCount(inv);
+      dueReturned += inv.dueAmount;
+    }
     const days = Math.floor(
       (today.getTime() - new Date(inv.date).getTime()) / (1000 * 60 * 60 * 24)
     );
@@ -124,17 +144,29 @@ function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
     }
   });
 
+  const summaryBody = [
+    ["All Outstanding Bills", outstanding.length.toString(), fmt(totalDue)],
+    ["45+ Days Overdue (Amber Theme)", count45.toString(), fmt(due45)],
+    ["60+ Days Overdue (Orange Theme)", count60.toString(), fmt(due60)],
+    ["90+ Days Overdue (Critical Red)", count90.toString(), fmt(due90)],
+  ];
+
+  if (countReturnedBills > 0) {
+    summaryBody.push([
+      "Returned Cheques (Critical)",
+      countReturnedCheques > countReturnedBills
+        ? `${countReturnedCheques} cheques (${countReturnedBills} bills)`
+        : `${countReturnedCheques} cheques`,
+      fmt(dueReturned),
+    ]);
+  }
+
   // ── Aging Breakdown Summary Table ─────────────────────────────────────────
   autoTable(doc, {
     startY: 32,
     margin: { left: M, right: M },
-    head: [["Summary Category", "Bills Count", "Outstanding Amount (LKR)"]],
-    body: [
-      ["All Outstanding Bills", outstanding.length.toString(), fmt(totalDue)],
-      ["45+ Days Overdue (Amber Theme)", count45.toString(), fmt(due45)],
-      ["60+ Days Overdue (Orange Theme)", count60.toString(), fmt(due60)],
-      ["90+ Days Overdue (Critical Red)", count90.toString(), fmt(due90)],
-    ],
+    head: [["Summary Category", "Count", "Outstanding Amount (LKR)"]],
+    body: summaryBody,
     theme: "grid",
     headStyles: {
       fillColor: [60, 60, 60],
@@ -164,6 +196,10 @@ function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
           data.cell.styles.fillColor = COLOR.overdue90Bg;
           data.cell.styles.textColor = COLOR.overdue90Text;
           data.cell.styles.fontStyle = "bold";
+        } else if (data.row.index === 4) {
+          data.cell.styles.fillColor = COLOR.returnedBg;
+          data.cell.styles.textColor = COLOR.returnedText;
+          data.cell.styles.fontStyle = "bold";
         }
       }
     },
@@ -190,14 +226,16 @@ function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
       (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
     );
     const custDue = rows.reduce((s, i) => s + i.dueAmount, 0);
+    const custReturnedCount = rows.reduce((sum, i) => sum + getReturnedChequesCount(i), 0);
+    const custReturnedTag = custReturnedCount > 0 ? `  •  [!! ${custReturnedCount} RETURNED CHEQUE${custReturnedCount > 1 ? "S" : ""}]` : "";
 
     tableData.push([
       {
-        content: `${customer}  (Total Due: LKR ${fmt(custDue)})`,
+        content: `${customer}  (Total Due: LKR ${fmt(custDue)})${custReturnedTag}`,
         colSpan: 7,
         styles: {
-          fillColor: COLOR.custBg,
-          textColor: COLOR.custText,
+          fillColor: custReturnedCount > 0 ? [254, 242, 242] : COLOR.custBg,
+          textColor: custReturnedCount > 0 ? COLOR.returnedText : COLOR.custText,
           fontStyle: "bold",
           halign: "left",
           fontSize: 8.5,
@@ -214,14 +252,28 @@ function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
       grandPaid  += inv.paidAmount;
       grandDue   += inv.dueAmount;
 
+      let invNoDisplay = `${inv.manualInvoiceNo || inv.invoiceNo || ""}`;
+      if (inv.hasReturnedCheque) {
+        const rawNos = (inv.returnedChequeNos || "").replace(/\s*\([^)]*\)/g, "").trim();
+        const formattedChqNos = rawNos
+          ? rawNos.split(",").map((s) => s.trim().startsWith("#") ? s.trim() : `#${s.trim()}`).join(", ")
+          : "N/A";
+        invNoDisplay += `\n[CHQ RET: ${formattedChqNos}]`;
+      }
+
+      let statusDisplay = (inv.status || "UNPAID").toUpperCase();
+      if (inv.hasReturnedCheque) {
+        statusDisplay = `RETURN CHQ\n(${statusDisplay})`;
+      }
+
       tableData.push([
         new Date(inv.date).toLocaleDateString("en-GB"),
-        inv.invoiceNo,
+        invNoDisplay,
         daysOverdue,
         fmt(inv.totalAmount),
         fmt(inv.paidAmount),
         fmt(inv.dueAmount),
-        (inv.status || "UNPAID").toUpperCase(),
+        statusDisplay,
       ]);
     });
   });
@@ -263,12 +315,12 @@ function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
     },
     columnStyles: {
       0: { halign: "left",   cellWidth: 24 },
-      1: { halign: "center", cellWidth: 24 },
-      2: { halign: "center", cellWidth: 20 },
-      3: { halign: "right",  cellWidth: 34 },
+      1: { halign: "center", cellWidth: 32 },
+      2: { halign: "center", cellWidth: 16 },
+      3: { halign: "right",  cellWidth: 33 },
       4: { halign: "right",  cellWidth: 26 },
       5: { halign: "right",  cellWidth: 30, fontStyle: "bold" },
-      6: { halign: "center", cellWidth: 22 },
+      6: { halign: "center", cellWidth: 25 },
     },
     didParseCell(data) {
       const raw = data.row.raw as any[];
@@ -276,8 +328,14 @@ function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
 
       const days   = Number(raw[2]);
       const status = String(raw[6]);
+      const invoiceCol = String(raw[1]);
+      const isReturnedChq = status.includes("RETURN CHQ") || invoiceCol.includes("[CHQ RET");
 
-      if (days >= 90) {
+      if (isReturnedChq) {
+        data.cell.styles.fillColor = COLOR.returnedBg;
+        data.cell.styles.textColor = COLOR.returnedText;
+        data.cell.styles.fontStyle = "bold";
+      } else if (days >= 90) {
         data.cell.styles.fillColor = COLOR.overdue90Bg;
         data.cell.styles.textColor = COLOR.overdue90Text;
         data.cell.styles.fontStyle = "bold";
@@ -290,8 +348,19 @@ function buildDoc(outstanding: Invoice[], repFilter: string): jsPDF {
       }
 
       if (data.column.index === 6) {
-        if (status.includes("PARTIAL")) data.cell.styles.textColor = [180, 83, 9];
-        else if (status.includes("UNPAID")) data.cell.styles.textColor = [185, 28, 28];
+        if (isReturnedChq) {
+          data.cell.styles.textColor = [153, 27, 27];
+          data.cell.styles.fontStyle = "bold";
+        } else if (status.includes("PARTIAL")) {
+          data.cell.styles.textColor = [180, 83, 9];
+        } else if (status.includes("UNPAID")) {
+          data.cell.styles.textColor = [185, 28, 28];
+        }
+      }
+
+      if (data.column.index === 1 && isReturnedChq) {
+        data.cell.styles.textColor = [153, 27, 27];
+        data.cell.styles.fontStyle = "bold";
       }
     },
     didDrawPage(_data) {

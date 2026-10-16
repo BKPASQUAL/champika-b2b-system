@@ -27,6 +27,11 @@ export interface Invoice {
   status: PaymentStatus;
   orderStatus: OrderStatus;
   itemsCount: number;
+  hasReturnedCheque?: boolean;
+  returnedChequeCount?: number;
+  returnedChequeNos?: string | null;
+  returnedChequeAmount?: number;
+  returnedCheques?: any[];
 }
 
 export type SortField =

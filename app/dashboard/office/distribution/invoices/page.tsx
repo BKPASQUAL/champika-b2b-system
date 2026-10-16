@@ -98,6 +98,7 @@ export default function DistributionInvoicesPage() {
       rawInvoices.map((inv: any) => ({
         id: inv.id,
         invoiceNo: inv.invoiceNo,
+        manualInvoiceNo: inv.manualInvoiceNo || "",
         date: inv.date || (inv.createdAt ? inv.createdAt.split("T")[0] : new Date().toISOString().split("T")[0]),
         createdAt: inv.createdAt || "",
         customerId: inv.customerId,
@@ -109,6 +110,11 @@ export default function DistributionInvoicesPage() {
         status: inv.status,
         orderStatus: inv.orderStatus || "Pending",
         itemsCount: 0,
+        hasReturnedCheque: inv.hasReturnedCheque || false,
+        returnedChequeCount: inv.returnedChequeCount || (inv.returnedCheques?.length ?? (inv.hasReturnedCheque ? 1 : 0)),
+        returnedChequeNos: inv.returnedChequeNos || null,
+        returnedChequeAmount: inv.returnedChequeAmount || 0,
+        returnedCheques: inv.returnedCheques || [],
       })),
     [rawInvoices]
   );

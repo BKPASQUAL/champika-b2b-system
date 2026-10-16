@@ -132,6 +132,11 @@ export default function WiremanInvoicesPage() {
         orderStatus: inv.orderStatus || "Pending",
         itemsCount: 0,
         profit: inv.profit || 0,
+        hasReturnedCheque: inv.hasReturnedCheque || false,
+        returnedChequeCount: inv.returnedChequeCount || (inv.returnedCheques?.length ?? (inv.hasReturnedCheque ? 1 : 0)),
+        returnedChequeNos: inv.returnedChequeNos || null,
+        returnedChequeAmount: inv.returnedChequeAmount || 0,
+        returnedCheques: inv.returnedCheques || [],
       })),
     [rawInvoices]
   );

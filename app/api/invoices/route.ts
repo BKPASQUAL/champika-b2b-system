@@ -119,7 +119,11 @@ export async function GET(request: NextRequest) {
             amount,
             payment_date,
             receipt_number,
-            is_cancelled
+            is_cancelled,
+            method,
+            cheque_no,
+            cheque_date,
+            cheque_status
           )
         `
         )
@@ -173,6 +177,36 @@ export async function GET(request: NextRequest) {
       const activePayments = (inv.payments || []).filter((p: any) => !p.is_cancelled && p.receipt_number);
       const receiptNumbers = Array.from(new Set(activePayments.map((p: any) => p.receipt_number))).join(", ");
 
+      const returnedPayments = (inv.payments || []).filter(
+        (p: any) =>
+          !p.is_cancelled &&
+          (p.cheque_status?.toLowerCase() === "returned" || p.cheque_status?.toLowerCase() === "bounced")
+      );
+      const hasReturnedCheque = returnedPayments.length > 0;
+      const returnedChequeCount = returnedPayments.length;
+      const returnedChequeNos = Array.from(
+        new Set(
+          returnedPayments
+            .map((p: any) => {
+              const raw = (p.cheque_no || "").trim();
+              // Remove branch code e.g. "117182 (Branch: 541)" -> "117182"
+              return raw.replace(/\s*\([^)]*\)/g, "").trim();
+            })
+            .filter(Boolean)
+        )
+      ).join(", ");
+      const returnedChequeAmount = returnedPayments.reduce(
+        (sum: number, p: any) => sum + Number(p.amount || 0),
+        0
+      );
+      const returnedCheques = returnedPayments.map((p: any) => ({
+        id: p.id,
+        chequeNo: (p.cheque_no || "").replace(/\s*\([^)]*\)/g, "").trim(),
+        amount: Number(p.amount || 0),
+        date: p.cheque_date || p.payment_date,
+        status: p.cheque_status,
+      }));
+
       return {
         id: inv.id,
         invoiceNo: inv.invoice_no,
@@ -197,6 +231,11 @@ export async function GET(request: NextRequest) {
         businessId: bId,
         profit: totalProfit,
         isIncorrect: inv.is_incorrect || false,
+        hasReturnedCheque,
+        returnedChequeCount,
+        returnedChequeNos: returnedChequeNos || null,
+        returnedChequeAmount,
+        returnedCheques,
       };
     });
 

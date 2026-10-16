@@ -348,7 +348,10 @@ Thank you for your business! 🙏`;
                 size="icon"
                 className="h-8 w-8 rounded-full bg-background"
                 onClick={() => {
-                  if (fromProduct) {
+                  const returnUrl = searchParams?.get("from") || searchParams?.get("returnUrl");
+                  if (returnUrl) {
+                    router.push(returnUrl);
+                  } else if (fromProduct) {
                     router.push(`/dashboard/admin/products/${fromProduct}`);
                   } else {
                     router.back();

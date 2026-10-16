@@ -291,6 +291,37 @@ export async function GET(request: NextRequest) {
 
     // Build final list
     const businesses = Object.values(businessMap).map((biz) => {
+      const invoices = [...biz.invoiceList].map((inv: any) => {
+        const profitEntry = orderProfitMap[inv.orderId];
+        const profit = profitEntry ? inv.amount - profitEntry.cost : null;
+        const grossProfit = profit !== null ? (profit > 0 ? profit : 0) : null;
+        const loss = profit !== null ? (profit < 0 ? Math.abs(profit) : 0) : null;
+        const profitMargin = profit !== null && inv.amount > 0 ? (profit / inv.amount) * 100 : null;
+        
+        const freeQty = profitEntry ? profitEntry.freeQty : 0;
+        const freeCost = profitEntry ? profitEntry.freeCost : 0;
+        const pendingClaimCost = profitEntry ? profitEntry.pendingClaimCost : 0;
+        const netProfit = profit !== null ? profit - pendingClaimCost : null;
+        const netMargin = profitEntry && inv.amount > 0 && netProfit !== null ? (netProfit / inv.amount) * 100 : null;
+
+        return {
+          ...inv,
+          profit,
+          grossProfit,
+          loss,
+          profitMargin,
+          freeQty,
+          freeCost,
+          pendingClaimCost,
+          netProfit,
+          netMargin,
+        };
+      }).sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
+
+      const totalGrossProfit = invoices.reduce((s, inv) => s + ((inv.profit && inv.profit > 0) ? inv.profit : 0), 0);
+      const totalLoss = invoices.reduce((s, inv) => s + ((inv.profit && inv.profit < 0) ? Math.abs(inv.profit) : 0), 0);
       const totalProfit = biz.totalRevenue - biz.totalCost;
       const netProfit = totalProfit - biz.pendingClaimCost;
 
@@ -316,36 +347,13 @@ export async function GET(request: NextRequest) {
         }))
         .sort((a, b) => b.revenue - a.revenue);
 
-      const invoices = [...biz.invoiceList].map((inv: any) => {
-        const profitEntry = orderProfitMap[inv.orderId];
-        const profit = profitEntry ? inv.amount - profitEntry.cost : null;
-        const profitMargin = profit !== null && inv.amount > 0 ? (profit / inv.amount) * 100 : null;
-        
-        const freeQty = profitEntry ? profitEntry.freeQty : 0;
-        const freeCost = profitEntry ? profitEntry.freeCost : 0;
-        const pendingClaimCost = profitEntry ? profitEntry.pendingClaimCost : 0;
-        const netProfit = profit !== null ? profit - pendingClaimCost : null;
-        const netMargin = profitEntry && inv.amount > 0 && netProfit !== null ? (netProfit / inv.amount) * 100 : null;
-
-        return {
-          ...inv,
-          profit,
-          profitMargin,
-          freeQty,
-          freeCost,
-          pendingClaimCost,
-          netProfit,
-          netMargin,
-        };
-      }).sort(
-        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-      );
-
       return {
         id: biz.id,
         name: biz.name,
         totalRevenue: biz.totalRevenue,
         totalCost: biz.totalCost,
+        totalGrossProfit,
+        totalLoss,
         totalProfit,
         totalUnits: biz.totalUnits,
         invoiceCount: invoices.length,
@@ -356,7 +364,7 @@ export async function GET(request: NextRequest) {
         netMargin: biz.totalRevenue > 0 ? (netProfit / biz.totalRevenue) * 100 : 0,
         totalFreeQty: biz.totalFreeQty,
         totalFreeCost: biz.totalFreeCost,
-        margin: biz.totalRevenue > 0 ? (totalProfit / biz.totalRevenue) * 100 : 0,
+        margin: biz.totalRevenue > 0 ? (totalGrossProfit / biz.totalRevenue) * 100 : 0,
         products,
         customers,
         reps,
@@ -424,6 +432,8 @@ export async function GET(request: NextRequest) {
 
     const overallTotalRevenue = businesses.reduce((s, b) => s + b.totalRevenue, 0);
     const overallTotalCost = businesses.reduce((s, b) => s + b.totalCost, 0);
+    const overallTotalGrossProfit = businesses.reduce((s, b) => s + (b.totalGrossProfit || 0), 0);
+    const overallTotalLoss = businesses.reduce((s, b) => s + (b.totalLoss || 0), 0);
     const overallTotalProfit = overallTotalRevenue - overallTotalCost;
     const overallPendingClaimCost = businesses.reduce((s, b) => s + b.pendingClaimCost, 0);
     const overallNetProfit = overallTotalProfit - overallPendingClaimCost;
@@ -433,6 +443,8 @@ export async function GET(request: NextRequest) {
       name: "Overall",
       totalRevenue: overallTotalRevenue,
       totalCost: overallTotalCost,
+      totalGrossProfit: overallTotalGrossProfit,
+      totalLoss: overallTotalLoss,
       totalProfit: overallTotalProfit,
       totalUnits: businesses.reduce((s, b) => s + b.totalUnits, 0),
       invoiceCount: businesses.reduce((s, b) => s + b.invoiceCount, 0),
@@ -443,7 +455,7 @@ export async function GET(request: NextRequest) {
       netMargin: overallTotalRevenue > 0 ? (overallNetProfit / overallTotalRevenue) * 100 : 0,
       totalFreeQty: businesses.reduce((s, b) => s + b.totalFreeQty, 0),
       totalFreeCost: businesses.reduce((s, b) => s + b.totalFreeCost, 0),
-      margin: overallTotalRevenue > 0 ? (overallTotalProfit / overallTotalRevenue) * 100 : 0,
+      margin: overallTotalRevenue > 0 ? (overallTotalGrossProfit / overallTotalRevenue) * 100 : 0,
       products: overallProducts,
       customers: overallCustomers,
       reps: overallReps,
