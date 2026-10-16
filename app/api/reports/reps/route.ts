@@ -4,6 +4,9 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+const _repReportCache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_TTL_MS = 60_000; // 60 seconds
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -14,6 +17,13 @@ export async function GET(request: NextRequest) {
     const toDate = searchParams.get("to") || lastDay;
     const fromDateOnly = fromDate.split("T")[0];
     const toDateOnly = toDate.split("T")[0];
+    const isRefresh = searchParams.get("refresh") === "true";
+
+    const cacheKey = `${fromDate}_${toDate}`;
+    const cached = _repReportCache.get(cacheKey);
+    if (!isRefresh && cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+      return NextResponse.json(cached.data);
+    }
 
     // 1. All reps
     const { data: reps, error: repsError } = await supabaseAdmin
@@ -76,21 +86,27 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 4. Order items for per-supplier & per-category commission breakdown (batched to prevent URL limit)
+    // 4. Order items for per-supplier & per-category commission breakdown (batched in parallel)
     let rawOrderItems: any[] = [];
     if (allOrderIds.length > 0) {
-      const batchSize = 50;
+      const batchSize = 100;
+      const batchPromises = [];
       for (let i = 0; i < allOrderIds.length; i += batchSize) {
         const batch = allOrderIds.slice(i, i + batchSize);
-        const { data: batchItems } = await supabaseAdmin
-          .from("order_items")
-          .select(`
-            order_id, quantity, unit_price, commission_earned,
-            product:products (supplier_name, category, sub_category)
-          `)
-          .in("order_id", batch);
-        if (batchItems && batchItems.length > 0) {
-          rawOrderItems.push(...batchItems);
+        batchPromises.push(
+          supabaseAdmin
+            .from("order_items")
+            .select(`
+              order_id, quantity, unit_price, commission_earned,
+              product:products (supplier_name, category, sub_category)
+            `)
+            .in("order_id", batch)
+        );
+      }
+      const results = await Promise.all(batchPromises);
+      for (const res of results) {
+        if (res.data && res.data.length > 0) {
+          rawOrderItems.push(...res.data);
         }
       }
     }
@@ -340,7 +356,9 @@ export async function GET(request: NextRequest) {
       };
     }).sort((a, b) => b.totalSales - a.totalSales);
 
-    return NextResponse.json({ reps: repsResult, commissionRules: commissionRules || [] });
+    const payload = { reps: repsResult, commissionRules: commissionRules || [] };
+    _repReportCache.set(cacheKey, { data: payload, timestamp: Date.now() });
+    return NextResponse.json(payload);
   } catch (error: any) {
     console.error("Rep analytics error:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });

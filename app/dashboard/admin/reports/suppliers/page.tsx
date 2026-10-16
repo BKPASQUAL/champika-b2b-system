@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -166,8 +167,7 @@ export default function SupplierAnalyticsPage() {
   const [quickSelect, setQuickSelect] = useState("this-month");
   const [customFrom, setCustomFrom] = useState(firstOfMonth);
   const [customTo, setCustomTo] = useState(today);
-  const [loading, setLoading] = useState(true);
-  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [appliedCustom, setAppliedCustom] = useState<{ from: string; to: string } | null>(null);
   const [selectedSupplier, setSelectedSupplier] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -178,31 +178,39 @@ export default function SupplierAnalyticsPage() {
   const [customerPage, setCustomerPage] = useState(1);
   const [invoicePage, setInvoicePage] = useState(1);
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const { from, to } = getRange(quickSelect, customFrom, customTo);
-      const res = await fetch(`/api/reports/suppliers?from=${from}&to=${to}`);
-      if (!res.ok) throw new Error("Failed to fetch supplier analytics");
-      const data = await res.json();
-      setSuppliers(data.suppliers || []);
-      if (data.suppliers?.length > 0 && !selectedSupplier) {
-        setSelectedSupplier(data.suppliers[0].name);
-      }
-    } catch {
-      toast.error("Failed to load supplier analytics");
-    } finally {
-      setLoading(false);
+  const { from, to } = useMemo(() => {
+    if (quickSelect === "custom") {
+      return appliedCustom || { from: customFrom, to: customTo };
     }
-  };
+    return getRange(quickSelect, customFrom, customTo);
+  }, [quickSelect, appliedCustom, customFrom, customTo]);
 
+  const apiUrl = `/api/reports/suppliers?from=${from}&to=${to}`;
+
+  const {
+    data: reportData = { suppliers: [] },
+    loading,
+    refetch: fetchData,
+  } = useCachedFetch<{ suppliers: any[] }>(
+    apiUrl,
+    { suppliers: [] },
+    () => toast.error("Failed to load supplier analytics")
+  );
+
+  const suppliers = reportData.suppliers || [];
+
+  // Automatically select the first supplier if none is selected
   useEffect(() => {
-    if (quickSelect !== "custom") fetchData();
-  }, [quickSelect]);
+    if (suppliers.length > 0) {
+      if (!selectedSupplier || !suppliers.some((s) => s.name === selectedSupplier)) {
+        setSelectedSupplier(suppliers[0].name);
+      }
+    }
+  }, [suppliers, selectedSupplier]);
 
   const handleCustomApply = () => {
     if (!customFrom || !customTo) return;
-    fetchData();
+    setAppliedCustom({ from: customFrom, to: customTo });
   };
 
   const handleSelectSupplier = (name: string) => {

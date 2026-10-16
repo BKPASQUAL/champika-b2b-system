@@ -3,6 +3,9 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
 
+const _predictionCache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_TTL_MS = 60_000; // 60 seconds
+
 function getMonthsInRange(fromStr: string, toStr: string) {
   const start = new Date(fromStr);
   const end = new Date(toStr);
@@ -29,6 +32,13 @@ export async function GET(request: NextRequest) {
     const fromDate = searchParams.get("from") || sixMonthsAgo;
     const toDate = searchParams.get("to") || todayStr;
     const supplierName = searchParams.get("supplier") || "China";
+    const isRefresh = searchParams.get("refresh") === "true";
+
+    const cacheKey = `${supplierName}_${fromDate}_${toDate}`;
+    const cached = _predictionCache.get(cacheKey);
+    if (!isRefresh && cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+      return NextResponse.json(cached.data);
+    }
 
     // 1. Get supplier records so we can find the supplier ID
     const { data: supplierInfo, error: supErr } = await supabaseAdmin
@@ -265,13 +275,15 @@ export async function GET(request: NextRequest) {
       .eq("status", "Active")
       .order("name", { ascending: true });
 
-    return NextResponse.json({
+    const payload = {
       supplier: supplierInfo,
       products: formattedProducts,
       months: monthKeys,
       numberOfMonths,
       suppliersList: allSuppliers || []
-    });
+    };
+    _predictionCache.set(cacheKey, { data: payload, timestamp: Date.now() });
+    return NextResponse.json(payload);
   } catch (error: any) {
     console.error("Prediction API error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });

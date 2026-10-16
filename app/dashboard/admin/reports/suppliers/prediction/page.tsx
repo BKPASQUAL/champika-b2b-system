@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -95,7 +96,6 @@ export default function SupplierPredictionPage() {
   const router = useRouter();
   
   // Basic states
-  const [loading, setLoading] = useState(true);
   const [selectedSupplier, setSelectedSupplier] = useState("China");
   const [quickPeriod, setQuickPeriod] = useState("6-months");
   
@@ -106,8 +106,6 @@ export default function SupplierPredictionPage() {
   const [safetyStockSource, setSafetyStockSource] = useState<"minStock" | "buffer">("buffer");
   
   // Data states
-  const [products, setProducts] = useState<any[]>([]);
-  const [suppliersList, setSuppliersList] = useState<any[]>([]);
   const [activeProduct, setActiveProduct] = useState<any | null>(null);
   
   // UI states
@@ -122,39 +120,32 @@ export default function SupplierPredictionPage() {
   // Retrieve date range
   const { from, to } = useMemo(() => getQuickRange(quickPeriod), [quickPeriod]);
 
-  // Load Data
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(
-        `/api/reports/suppliers/prediction?supplier=${encodeURIComponent(
-          selectedSupplier
-        )}&from=${from}&to=${to}`
-      );
-      if (!res.ok) throw new Error("Failed to fetch prediction analytics");
-      const data = await res.json();
-      setProducts(data.products || []);
-      setSuppliersList(data.suppliersList || []);
-      
-      // Auto adjust default lead time: If they pick China, it should default to 12 months.
-      if (selectedSupplier === "China") {
-        setLeadTime(12);
-      } else {
-        setLeadTime(3); // Default other local suppliers to 3 months
-      }
-      
-      // Clear overwrites when supplier changes
-      setOverwrites({});
-    } catch (err: any) {
-      toast.error("Failed to load prediction report: " + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const apiUrl = `/api/reports/suppliers/prediction?supplier=${encodeURIComponent(
+    selectedSupplier
+  )}&from=${from}&to=${to}`;
 
+  const {
+    data: predictionData = { products: [], suppliersList: [] },
+    loading,
+    refetch: fetchData,
+  } = useCachedFetch<{ products: any[]; suppliersList: any[] }>(
+    apiUrl,
+    { products: [], suppliersList: [] },
+    (err) => toast.error("Failed to load prediction report: " + err.message)
+  );
+
+  const products = predictionData.products || [];
+  const suppliersList = predictionData.suppliersList || [];
+
+  // Auto adjust default lead time and clear overwrites when supplier changes
   useEffect(() => {
-    fetchData();
-  }, [selectedSupplier, from, to]);
+    if (selectedSupplier === "China") {
+      setLeadTime(12);
+    } else {
+      setLeadTime(3);
+    }
+    setOverwrites({});
+  }, [selectedSupplier]);
 
   // Handle overwrite changes
   const handleOverwrite = (pid: string, val: string) => {

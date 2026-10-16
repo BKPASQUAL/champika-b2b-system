@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -183,9 +184,7 @@ export default function RepAnalyticsPage() {
   const [quickSelect, setQuickSelect] = useState("this-month");
   const [customFrom, setCustomFrom] = useState(firstOfMonth);
   const [customTo, setCustomTo] = useState(today);
-  const [loading, setLoading] = useState(true);
-  const [reps, setReps] = useState<any[]>([]);
-  const [commissionRules, setCommissionRules] = useState<any[]>([]);
+  const [appliedCustom, setAppliedCustom] = useState<{ from: string; to: string } | null>(null);
   const [selectedRepId, setSelectedRepId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [supplierSearch, setSupplierSearch] = useState("");
@@ -195,32 +194,37 @@ export default function RepAnalyticsPage() {
   const PER_PAGE = 10;
   const [invoicePage, setInvoicePage] = useState(1);
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const { from, to } = getRange(quickSelect, customFrom, customTo);
-      const res = await fetch(`/api/reports/reps?from=${from}&to=${to}&_t=${Date.now()}`, { cache: "no-store" });
-      if (!res.ok) throw new Error("Failed to fetch rep analytics");
-      const data = await res.json();
-      setReps(data.reps || []);
-      setCommissionRules(data.commissionRules || []);
-      if (!selectedRepId) {
-        setSelectedRepId("__overall__");
-      }
-    } catch {
-      toast.error("Failed to load rep analytics");
-    } finally {
-      setLoading(false);
+  const { from, to } = useMemo(() => {
+    if (quickSelect === "custom") {
+      return appliedCustom || { from: customFrom, to: customTo };
     }
-  };
+    return getRange(quickSelect, customFrom, customTo);
+  }, [quickSelect, appliedCustom, customFrom, customTo]);
+
+  const apiUrl = `/api/reports/reps?from=${from}&to=${to}`;
+
+  const {
+    data: repReport = { reps: [], commissionRules: [] },
+    loading,
+    refetch: fetchData,
+  } = useCachedFetch<{ reps: any[]; commissionRules: any[] }>(
+    apiUrl,
+    { reps: [], commissionRules: [] },
+    () => toast.error("Failed to load rep analytics")
+  );
+
+  const reps = repReport.reps || [];
+  const commissionRules = repReport.commissionRules || [];
 
   useEffect(() => {
-    if (quickSelect !== "custom") fetchData();
-  }, [quickSelect]);
+    if (!selectedRepId) {
+      setSelectedRepId("__overall__");
+    }
+  }, [selectedRepId]);
 
   const handleCustomApply = () => {
     if (!customFrom || !customTo) return;
-    fetchData();
+    setAppliedCustom({ from: customFrom, to: customTo });
   };
 
   const handleSelectRep = (id: string) => {

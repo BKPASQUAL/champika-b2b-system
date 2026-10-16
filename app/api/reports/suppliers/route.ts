@@ -4,6 +4,154 @@ import { BUSINESS_NAMES } from "@/app/config/business-constants";
 
 export const dynamic = "force-dynamic";
 
+// Module-level server-side in-memory cache for aggregate supplier analytics
+const _serverReportCache = new Map<string, { data: any; timestamp: number }>();
+const SERVER_CACHE_TTL_MS = 60_000; // 60 seconds
+
+interface MonthStat {
+  salesQty: number;
+  salesAmount: number;
+  purchaseQty: number;
+  purchaseAmount: number;
+}
+
+// Module-level cache for historical rolling 12 months totals
+let _rolling12MonthCache: {
+  timestamp: number;
+  data: Record<string, Record<string, MonthStat>>;
+} | null = null;
+const ROLLING_CACHE_TTL_MS = 15 * 60_000; // 15 minutes
+
+async function getRolling12MonthSummary(rollingStartStr: string, toDateStr: string) {
+  if (_rolling12MonthCache && Date.now() - _rolling12MonthCache.timestamp < ROLLING_CACHE_TTL_MS) {
+    return _rolling12MonthCache.data;
+  }
+
+  const result: Record<string, Record<string, MonthStat>> = {};
+
+  const ensureEntry = (supplier: string, month: string) => {
+    if (!result[supplier]) result[supplier] = {};
+    if (!result[supplier][month]) {
+      result[supplier][month] = { salesQty: 0, salesAmount: 0, purchaseQty: 0, purchaseAmount: 0 };
+    }
+  };
+
+  // Pre-fetch inter-branch customer IDs once to avoid joining customer table on 14,000+ rows
+  const getInterBranchCustomerIds = async (): Promise<Set<string>> => {
+    try {
+      const { data } = await supabaseAdmin
+        .from("customers")
+        .select("id")
+        .ilike("shop_name", "%champika hardware%");
+      return new Set((data || []).map((c: any) => c.id));
+    } catch {
+      return new Set();
+    }
+  };
+
+  const fetchSales = async (interBranchIds: Set<string>) => {
+    const PAGE_SIZE = 1000;
+    const BATCH_SIZE = 8;
+    let pageOffset = 0;
+
+    while (true) {
+      const pageIndices = Array.from({ length: BATCH_SIZE }, (_, i) => pageOffset + i);
+      const batchResults = await Promise.all(
+        pageIndices.map(pageIdx =>
+          supabaseAdmin
+            .from("order_items")
+            .select("quantity, total_price, product:products!inner(supplier_name), order:orders!inner(order_date, is_inter_branch, customer_id)")
+            .gte("order.order_date", rollingStartStr)
+            .lte("order.order_date", toDateStr)
+            .eq("order.status", "Delivered")
+            .range(pageIdx * PAGE_SIZE, (pageIdx + 1) * PAGE_SIZE - 1)
+        )
+      );
+
+      let reachedEnd = false;
+      for (const res of batchResults) {
+        if (res.error) {
+          console.error("fetchSales rolling error:", res.error);
+          break;
+        }
+        const data = res.data || [];
+        data.forEach((item: any) => {
+          if (item.order?.is_inter_branch === true) return;
+          if (item.order?.customer_id && interBranchIds.has(item.order.customer_id)) return;
+          const supplier = item.product?.supplier_name || "Unknown Supplier";
+          const dateStr = (item.order?.order_date || "").split("T")[0];
+          const monthKey = dateStr.slice(0, 7);
+          if (!monthKey) return;
+          ensureEntry(supplier, monthKey);
+          result[supplier][monthKey].salesQty += Number(item.quantity) || 0;
+          result[supplier][monthKey].salesAmount += Number(item.total_price) || 0;
+        });
+
+        if (data.length < PAGE_SIZE) {
+          reachedEnd = true;
+          break;
+        }
+      }
+
+      if (reachedEnd) break;
+      pageOffset += BATCH_SIZE;
+    }
+  };
+
+  const fetchPurchases = async () => {
+    const PAGE_SIZE = 1000;
+    const BATCH_SIZE = 4;
+    let pageOffset = 0;
+
+    while (true) {
+      const pageIndices = Array.from({ length: BATCH_SIZE }, (_, i) => pageOffset + i);
+      const batchResults = await Promise.all(
+        pageIndices.map(pageIdx =>
+          supabaseAdmin
+            .from("purchase_items")
+            .select("quantity, free_quantity, total_cost, product:products(supplier_name), purchase:purchases!inner(purchase_date, status)")
+            .gte("purchase.purchase_date", rollingStartStr)
+            .lte("purchase.purchase_date", toDateStr)
+            .neq("purchase.status", "Draft")
+            .range(pageIdx * PAGE_SIZE, (pageIdx + 1) * PAGE_SIZE - 1)
+        )
+      );
+
+      let reachedEnd = false;
+      for (const res of batchResults) {
+        if (res.error) {
+          console.error("fetchPurchases rolling error:", res.error);
+          break;
+        }
+        const data = res.data || [];
+        data.forEach((item: any) => {
+          const supplier = item.product?.supplier_name || "Unknown Supplier";
+          const dateStr = (item.purchase?.purchase_date || "").split("T")[0];
+          const monthKey = dateStr.slice(0, 7);
+          if (!monthKey) return;
+          ensureEntry(supplier, monthKey);
+          result[supplier][monthKey].purchaseQty += (Number(item.quantity) || 0) + (Number(item.free_quantity) || 0);
+          result[supplier][monthKey].purchaseAmount += Number(item.total_cost) || 0;
+        });
+
+        if (data.length < PAGE_SIZE) {
+          reachedEnd = true;
+          break;
+        }
+      }
+
+      if (reachedEnd) break;
+      pageOffset += BATCH_SIZE;
+    }
+  };
+
+  const interBranchIds = await getInterBranchCustomerIds();
+  await Promise.all([fetchSales(interBranchIds), fetchPurchases()]);
+
+  _rolling12MonthCache = { timestamp: Date.now(), data: result };
+  return result;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -12,11 +160,20 @@ export async function GET(request: NextRequest) {
     const lastDay = new Date(now.getFullYear(), 11, 31).toISOString();
     const fromDate = searchParams.get("from") || firstDay;
     const toDate = searchParams.get("to") || lastDay;
+    const isRefresh = searchParams.get("refresh") === "true";
+
+    const cacheKey = `${fromDate}_${toDate}`;
+    const cached = _serverReportCache.get(cacheKey);
+
+    // Return instant server response if within cache TTL and not forced refresh
+    if (!isRefresh && cached && Date.now() - cached.timestamp < SERVER_CACHE_TTL_MS) {
+      return NextResponse.json(cached.data);
+    }
 
     // Calculate rolling 12 months start date
     const rollingStart = new Date(now.getFullYear(), now.getMonth() - 11, 1);
     const rollingStartStr = rollingStart.toISOString().split("T")[0]; // YYYY-MM-DD
-    const minFromDate = fromDate < rollingStartStr ? fromDate : rollingStartStr;
+    const toDateStr = toDate.split("T")[0];
 
     // Generate rolling 12 month keys in chronological order
     const rollingMonths: string[] = [];
@@ -28,77 +185,144 @@ export async function GET(request: NextRequest) {
       tempDate.setMonth(tempDate.getMonth() + 1);
     }
 
-    // 1. All products with current stock — range-based pagination to prevent truncation
-    const products: any[] = [];
-    let productsStart = 0;
-    const productsLimit = 1000;
-    while (true) {
-      const { data: batch, error: productsError } = await supabaseAdmin
-        .from("products")
-        .select(`
-          id, name, sku, supplier_name, cost_price, selling_price, category,
-          product_stocks (quantity)
-        `)
-        .range(productsStart, productsStart + productsLimit - 1);
+    // 1. All products with current stock — parallel batch pagination
+    const fetchProducts = async () => {
+      const products: any[] = [];
+      const PAGE_SIZE = 1000;
+      const BATCH_SIZE = 4;
+      let pageOffset = 0;
 
-      if (productsError) throw productsError;
-      if (!batch || batch.length === 0) break;
-      products.push(...batch);
-      if (batch.length < productsLimit) break;
-      productsStart += productsLimit;
-    }
-
-    // 2. Order items in date range — filter status in JS to support Delivered + Completed with pagination
-    const orderItems: any[] = [];
-    let itemsStart = 0;
-    const itemsLimit = 1000;
-    while (true) {
-      const { data: batch, error: itemsError } = await supabaseAdmin
-        .from("order_items")
-        .select(`
-          id, quantity, free_quantity, unit_price, actual_unit_cost, total_price, claim_status,
-          product:products!inner (id, name, sku, supplier_name, category),
-          order:orders!inner (
-            id, order_id, status, is_inter_branch, created_at, order_date, business_id,
-            customer:customers (id, shop_name, owner_name),
-            invoices (invoice_no, manual_invoice_no)
+      while (true) {
+        const pageIndices = Array.from({ length: BATCH_SIZE }, (_, i) => pageOffset + i);
+        const batchResults = await Promise.all(
+          pageIndices.map(pageIdx =>
+            supabaseAdmin
+              .from("products")
+              .select(`
+                id, name, sku, supplier_name, cost_price, selling_price, category,
+                product_stocks (quantity)
+              `)
+              .range(pageIdx * PAGE_SIZE, (pageIdx + 1) * PAGE_SIZE - 1)
           )
-        `)
-        .gte("order.order_date", minFromDate)
-        .lte("order.order_date", toDate)
-        .range(itemsStart, itemsStart + itemsLimit - 1);
+        );
 
-      if (itemsError) throw new Error(`Order items query failed: ${itemsError.message}`);
-      if (!batch || batch.length === 0) break;
-      orderItems.push(...batch);
-      if (batch.length < itemsLimit) break;
-      itemsStart += itemsLimit;
-    }
+        let reachedEnd = false;
+        for (const res of batchResults) {
+          if (res.error) throw res.error;
+          const data = res.data || [];
+          products.push(...data);
+          if (data.length < PAGE_SIZE) {
+            reachedEnd = true;
+            break;
+          }
+        }
 
-    // 2b. Purchase items in date range
-    const purchaseItems: any[] = [];
-    let purchasesStart = 0;
-    const purchasesLimit = 1000;
-    while (true) {
-      const { data: batch, error: purchasesError } = await supabaseAdmin
-        .from("purchase_items")
-        .select(`
-          id, quantity, free_quantity, total_cost,
-          product:products (id, name, sku, supplier_name),
-          purchase:purchases!inner (
-            id, purchase_id, purchase_date, status, supplier_id, business_id
+        if (reachedEnd) break;
+        pageOffset += BATCH_SIZE;
+      }
+
+      return products;
+    };
+
+    // 2. Order items strictly for the requested range (fromDate to toDate) with Delivered status — parallel batching
+    const fetchOrderItems = async () => {
+      const orderItems: any[] = [];
+      const PAGE_SIZE = 1000;
+      const BATCH_SIZE = 4;
+      let pageOffset = 0;
+
+      while (true) {
+        const pageIndices = Array.from({ length: BATCH_SIZE }, (_, i) => pageOffset + i);
+        const batchResults = await Promise.all(
+          pageIndices.map(pageIdx =>
+            supabaseAdmin
+              .from("order_items")
+              .select(`
+                id, quantity, free_quantity, unit_price, actual_unit_cost, total_price, claim_status,
+                product:products!inner (id, name, sku, supplier_name, category),
+                order:orders!inner (
+                  id, order_id, status, is_inter_branch, created_at, order_date, business_id,
+                  customer:customers (id, shop_name, owner_name),
+                  invoices (invoice_no, manual_invoice_no)
+                )
+              `)
+              .gte("order.order_date", fromDate)
+              .lte("order.order_date", toDate)
+              .eq("order.status", "Delivered")
+              .range(pageIdx * PAGE_SIZE, (pageIdx + 1) * PAGE_SIZE - 1)
           )
-        `)
-        .gte("purchase.purchase_date", minFromDate.split("T")[0])
-        .lte("purchase.purchase_date", toDate.split("T")[0])
-        .range(purchasesStart, purchasesStart + purchasesLimit - 1);
+        );
 
-      if (purchasesError) throw purchasesError;
-      if (!batch || batch.length === 0) break;
-      purchaseItems.push(...batch);
-      if (batch.length < purchasesLimit) break;
-      purchasesStart += purchasesLimit;
-    }
+        let reachedEnd = false;
+        for (const res of batchResults) {
+          if (res.error) throw new Error(`Order items query failed: ${res.error.message}`);
+          const data = res.data || [];
+          orderItems.push(...data);
+          if (data.length < PAGE_SIZE) {
+            reachedEnd = true;
+            break;
+          }
+        }
+
+        if (reachedEnd) break;
+        pageOffset += BATCH_SIZE;
+      }
+
+      return orderItems;
+    };
+
+    // 2b. Purchase items in date range — parallel batching
+    const fetchPurchaseItems = async () => {
+      const purchaseItems: any[] = [];
+      const PAGE_SIZE = 1000;
+      const BATCH_SIZE = 4;
+      let pageOffset = 0;
+
+      while (true) {
+        const pageIndices = Array.from({ length: BATCH_SIZE }, (_, i) => pageOffset + i);
+        const batchResults = await Promise.all(
+          pageIndices.map(pageIdx =>
+            supabaseAdmin
+              .from("purchase_items")
+              .select(`
+                id, quantity, free_quantity, total_cost,
+                product:products (id, name, sku, supplier_name),
+                purchase:purchases!inner (
+                  id, purchase_id, purchase_date, status, supplier_id, business_id
+                )
+              `)
+              .gte("purchase.purchase_date", fromDate.split("T")[0])
+              .lte("purchase.purchase_date", toDateStr)
+              .neq("purchase.status", "Draft")
+              .range(pageIdx * PAGE_SIZE, (pageIdx + 1) * PAGE_SIZE - 1)
+          )
+        );
+
+        let reachedEnd = false;
+        for (const res of batchResults) {
+          if (res.error) throw res.error;
+          const data = res.data || [];
+          purchaseItems.push(...data);
+          if (data.length < PAGE_SIZE) {
+            reachedEnd = true;
+            break;
+          }
+        }
+
+        if (reachedEnd) break;
+        pageOffset += BATCH_SIZE;
+      }
+
+      return purchaseItems;
+    };
+
+    // Execute product catalog, sales order items, purchase records, and rolling summary in parallel
+    const [products, orderItems, purchaseItems, rollingSummary] = await Promise.all([
+      fetchProducts(),
+      fetchOrderItems(),
+      fetchPurchaseItems(),
+      getRolling12MonthSummary(rollingStartStr, toDateStr),
+    ]);
 
     // 3. Supplier → products stock map
     type ProductEntry = {
@@ -160,7 +384,20 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    // 4. Aggregate sales → products + customers + invoices
+    // Populate 12-month rolling summary (sales & purchases) from rollingSummary
+    Object.entries(rollingSummary).forEach(([supplier, monthsData]) => {
+      ensureSupplier(supplier);
+      Object.entries(monthsData).forEach(([mKey, agg]) => {
+        if (supplierMap[supplier].months[mKey]) {
+          supplierMap[supplier].months[mKey].salesQty = agg.salesQty;
+          supplierMap[supplier].months[mKey].salesAmount = agg.salesAmount;
+          supplierMap[supplier].months[mKey].purchaseQty = agg.purchaseQty;
+          supplierMap[supplier].months[mKey].purchaseAmount = agg.purchaseAmount;
+        }
+      });
+    });
+
+    // 4. Aggregate sales → products + customers + invoices for selected period
     // Exclude inter-branch orders: flag check + customer name check (flag may be unset on older rows)
     const isInterBranch = (item: any) => {
       if (item.order?.is_inter_branch === true) return true;
@@ -169,7 +406,6 @@ export async function GET(request: NextRequest) {
     };
 
     (orderItems || []).forEach((item: any) => {
-      if (item.order?.status !== "Delivered" && item.order?.status !== "Completed") return;
       if (isInterBranch(item)) return;
       const supplier = item.product?.supplier_name || "Unknown Supplier";
       const pid = item.product?.id;
@@ -178,21 +414,8 @@ export async function GET(request: NextRequest) {
 
       const orderDate = order.order_date || order.created_at || "";
       const dateStr = orderDate.split("T")[0];
-      const monthKey = dateStr.slice(0, 7);
 
       ensureSupplier(supplier);
-
-      // Monthly sales accumulation (rolling 12 months)
-      if (supplierMap[supplier].months[monthKey]) {
-        const qty = Number(item.quantity) || 0;
-        const revenue = Number(item.total_price) || 0;
-        supplierMap[supplier].months[monthKey].salesQty += qty;
-        supplierMap[supplier].months[monthKey].salesAmount += revenue;
-      }
-
-      // KPIs and detail tables: filter strictly by selected date range
-      const inSelectedRange = orderDate >= fromDate && orderDate <= toDate;
-      if (!inSelectedRange) return;
 
       // Skip ghost/duplicate orders without successfully created invoices
       const invoices = order.invoices;
@@ -257,27 +480,6 @@ export async function GET(request: NextRequest) {
       // Count unique orders per customer
       if (!supplierMap[supplier].customers[cId].orders) {
         supplierMap[supplier].customers[cId].orders = 0;
-      }
-    });
-
-    // 4b. Aggregate purchases
-    (purchaseItems || []).forEach((item: any) => {
-      const purchase = item.purchase;
-      if (!purchase || purchase.status === "Draft") return;
-      const supplier = item.product?.supplier_name || "Unknown Supplier";
-      const qty = (Number(item.quantity) || 0) + (Number(item.free_quantity) || 0);
-      const amount = Number(item.total_cost) || 0;
-      const purchaseDate = purchase.purchase_date;
-      if (!purchaseDate) return;
-
-      const dateStr = purchaseDate.split("T")[0];
-      const monthKey = dateStr.slice(0, 7);
-
-      ensureSupplier(supplier);
-
-      if (supplierMap[supplier].months[monthKey]) {
-        supplierMap[supplier].months[monthKey].purchaseQty += qty;
-        supplierMap[supplier].months[monthKey].purchaseAmount += amount;
       }
     });
 
@@ -389,7 +591,9 @@ export async function GET(request: NextRequest) {
       };
     }).sort((a, b) => b.totalRevenue - a.totalRevenue);
 
-    return NextResponse.json({ suppliers });
+    const payload = { suppliers };
+    _serverReportCache.set(cacheKey, { data: payload, timestamp: Date.now() });
+    return NextResponse.json(payload);
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
