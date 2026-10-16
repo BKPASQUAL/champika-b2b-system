@@ -11,6 +11,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
@@ -52,7 +53,22 @@ import {
   Printer,
   Share2,
   ReceiptText,
+  BarChart3,
+  TrendingUp,
+  TrendingDown,
+  Sparkles,
 } from "lucide-react";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+} from "recharts";
 import { toast } from "sonner";
 import {
   downloadCustomerHistoryReport,
@@ -63,6 +79,64 @@ import {
   shareCustomerStatement,
   StatementInvoice,
 } from "@/lib/customer-statement-report";
+
+const CustomMonthlyTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0]?.payload;
+    if (!data) return null;
+    return (
+      <div className="bg-slate-900/95 text-white backdrop-blur-md px-3.5 py-3 rounded-xl shadow-xl border border-slate-700/60 text-xs space-y-2 min-w-[220px]">
+        <div className="flex justify-between items-center border-b border-slate-700/70 pb-1.5">
+          <span className="font-bold text-slate-100 flex items-center gap-1.5">
+            <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+            {data.monthLabel}
+          </span>
+          <Badge className="bg-indigo-500/20 text-indigo-300 border-indigo-500/30 text-[10px] px-1.5 py-0">
+            {data.invoiceCount} {data.invoiceCount === 1 ? "bill" : "bills"}
+          </Badge>
+        </div>
+        <div className="space-y-1.5">
+          <div className="flex justify-between items-center text-slate-300">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block" />
+              Invoiced Sales:
+            </span>
+            <span className="font-mono font-bold text-white">
+              LKR {(data.totalSales || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          </div>
+          <div className="flex justify-between items-center text-emerald-300">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+              Paid / Realized:
+            </span>
+            <span className="font-mono font-bold text-emerald-400">
+              LKR {(data.totalPaid || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          </div>
+          {data.totalDue > 0 && (
+            <div className="flex justify-between items-center text-amber-300">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
+                Remaining Due:
+              </span>
+              <span className="font-mono font-bold text-amber-400">
+                LKR {(data.totalDue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+          )}
+          <div className="pt-1.5 border-t border-slate-700/70 flex justify-between items-center">
+            <span className="text-[11px] text-slate-400">Collection Rate:</span>
+            <span className="font-mono font-semibold text-emerald-400">
+              {(data.collectionRate || 0).toFixed(1)}%
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
 
 interface CustomerDetailPageProps {
   params: Promise<{ id: string }>;
@@ -88,6 +162,12 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
   const [invoiceDetails, setInvoiceDetails] = useState<any>(null);
   const [loadingInvoice, setLoadingInvoice] = useState(false);
   const [showInvoiceSheet, setShowInvoiceSheet] = useState(false);
+
+  // Monthly Sales Analytics States
+  const [analyticsChartType, setAnalyticsChartType] = useState<"bar" | "area">("bar");
+  const [analyticsYearFilter, setAnalyticsYearFilter] = useState<string>("all");
+  const [showMonthlyBreakdownTable, setShowMonthlyBreakdownTable] = useState<boolean>(true);
+  const [selectedAnalyticsMonth, setSelectedAnalyticsMonth] = useState<string | null>(null);
 
   const fetchCustomerDetails = async () => {
     setLoading(true);
@@ -184,6 +264,154 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
       totalDue,
     };
   }, [deliveredInvoices]);
+
+  const formatCurrency = (val: number) =>
+    (val || 0).toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
+  // Month-by-Month Analytics Calculation
+  const monthlySalesAnalytics = useMemo(() => {
+    if (!deliveredInvoices || deliveredInvoices.length === 0) {
+      return {
+        monthlyData: [] as any[],
+        availableYears: [] as string[],
+        totalSalesAll: 0,
+        totalPaidAll: 0,
+        totalDueAll: 0,
+        avgMonthlySales: 0,
+        bestMonth: null as any,
+        latestMonth: null as any,
+        momGrowth: null as number | null,
+        overallCollectionRate: 0,
+      };
+    }
+
+    const map: Record<string, {
+      key: string;
+      year: string;
+      monthNum: number;
+      monthLabel: string;
+      shortMonth: string;
+      timestamp: number;
+      totalSales: number;
+      totalPaid: number;
+      totalDue: number;
+      invoiceCount: number;
+    }> = {};
+
+    deliveredInvoices.forEach((inv: any) => {
+      const rawDate = inv.date || inv.createdAt;
+      if (!rawDate) return;
+      const d = new Date(rawDate);
+      if (isNaN(d.getTime())) return;
+
+      const year = String(d.getFullYear());
+      const monthNum = d.getMonth() + 1;
+      const key = `${year}-${String(monthNum).padStart(2, "0")}`;
+      const monthLabel = d.toLocaleString("en-US", { month: "long", year: "numeric" });
+      const shortMonth = d.toLocaleString("en-US", { month: "short", year: "2-digit" });
+
+      if (!map[key]) {
+        map[key] = {
+          key,
+          year,
+          monthNum,
+          monthLabel,
+          shortMonth,
+          timestamp: new Date(d.getFullYear(), d.getMonth(), 1).getTime(),
+          totalSales: 0,
+          totalPaid: 0,
+          totalDue: 0,
+          invoiceCount: 0,
+        };
+      }
+
+      map[key].totalSales += Number(inv.totalAmount) || 0;
+      map[key].totalPaid += Number(inv.paidAmount) || 0;
+      map[key].totalDue += Number(inv.dueAmount) || 0;
+      map[key].invoiceCount += 1;
+    });
+
+    const allMonthsChronological = Object.values(map).sort((a, b) => a.timestamp - b.timestamp);
+    const availableYears = Array.from(new Set(allMonthsChronological.map((m) => m.year))).sort().reverse();
+
+    const filteredMonths = analyticsYearFilter === "all"
+      ? allMonthsChronological
+      : allMonthsChronological.filter((m) => m.year === analyticsYearFilter);
+
+    const totalSalesAll = filteredMonths.reduce((s, m) => s + m.totalSales, 0);
+    const totalPaidAll = filteredMonths.reduce((s, m) => s + m.totalPaid, 0);
+    const totalDueAll = filteredMonths.reduce((s, m) => s + m.totalDue, 0);
+    const activeMonthsCount = filteredMonths.length;
+    const avgMonthlySales = activeMonthsCount > 0 ? totalSalesAll / activeMonthsCount : 0;
+    const overallCollectionRate = totalSalesAll > 0 ? (totalPaidAll / totalSalesAll) * 100 : 0;
+
+    let bestMonth = filteredMonths.length > 0 ? filteredMonths[0] : null;
+    filteredMonths.forEach((m) => {
+      if (!bestMonth || m.totalSales > bestMonth.totalSales) {
+        bestMonth = m;
+      }
+    });
+
+    const latestMonth = filteredMonths.length > 0 ? filteredMonths[filteredMonths.length - 1] : null;
+    let momGrowth: number | null = null;
+    if (filteredMonths.length >= 2) {
+      const prevMonth = filteredMonths[filteredMonths.length - 2];
+      if (prevMonth.totalSales > 0 && latestMonth) {
+        momGrowth = ((latestMonth.totalSales - prevMonth.totalSales) / prevMonth.totalSales) * 100;
+      }
+    }
+
+    const enrichedMonths = filteredMonths.map((m) => {
+      const collectionRate = m.totalSales > 0 ? (m.totalPaid / m.totalSales) * 100 : 0;
+      const shareOfTotal = totalSalesAll > 0 ? (m.totalSales / totalSalesAll) * 100 : 0;
+      return {
+        ...m,
+        collectionRate,
+        shareOfTotal,
+      };
+    });
+
+    return {
+      monthlyData: enrichedMonths,
+      availableYears,
+      totalSalesAll,
+      totalPaidAll,
+      totalDueAll,
+      avgMonthlySales,
+      bestMonth,
+      latestMonth,
+      momGrowth,
+      overallCollectionRate,
+    };
+  }, [deliveredInvoices, analyticsYearFilter]);
+
+  const activeAnalyticsMonthKey = useMemo(() => {
+    if (selectedAnalyticsMonth) return selectedAnalyticsMonth;
+    if (monthlySalesAnalytics.monthlyData.length > 0) {
+      return monthlySalesAnalytics.monthlyData[monthlySalesAnalytics.monthlyData.length - 1].key;
+    }
+    return null;
+  }, [selectedAnalyticsMonth, monthlySalesAnalytics.monthlyData]);
+
+  const monthInvoicesList = useMemo(() => {
+    if (!activeAnalyticsMonthKey) return [];
+    return deliveredInvoices.filter((inv: any) => {
+      const rawDate = inv.date || inv.createdAt;
+      if (!rawDate) return false;
+      const d = new Date(rawDate);
+      if (isNaN(d.getTime())) return false;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      return key === activeAnalyticsMonthKey;
+    });
+  }, [deliveredInvoices, activeAnalyticsMonthKey]);
+
+  const selectedMonthMeta = useMemo(() => {
+    if (!activeAnalyticsMonthKey) return null;
+    return monthlySalesAnalytics.monthlyData.find((m) => m.key === activeAnalyticsMonthKey) || null;
+  }, [monthlySalesAnalytics.monthlyData, activeAnalyticsMonthKey]);
 
   // Filtered Invoices for UI display
   const filteredInvoices = useMemo(() => {
@@ -525,6 +753,464 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
         </Card>
       </div>
 
+      {/* Month-by-Month Sales Analytics Section */}
+      <Card className="border-t-4 border-t-indigo-600 shadow-sm bg-white overflow-hidden">
+        <CardHeader className="p-4 sm:p-5 pb-3 border-b border-slate-100 bg-gradient-to-r from-slate-50/80 via-white to-indigo-50/30">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-indigo-100 text-indigo-700 shadow-xs">
+                  <BarChart3 className="w-4 h-4" />
+                </div>
+                <CardTitle className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                  <span>Monthly Sales Analytics</span>
+                  {monthlySalesAnalytics.monthlyData.length > 0 && (
+                    <Badge variant="outline" className="text-[11px] font-semibold bg-indigo-50/70 text-indigo-700 border-indigo-200">
+                      {monthlySalesAnalytics.monthlyData.length} Active Month{monthlySalesAnalytics.monthlyData.length === 1 ? "" : "s"}
+                    </Badge>
+                  )}
+                </CardTitle>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Month-by-month sales volume, realized payments, and collection trends
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Year filter selector */}
+              {monthlySalesAnalytics.availableYears.length > 1 && (
+                <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setAnalyticsYearFilter("all")}
+                    className={`px-2.5 py-1 rounded-md font-medium transition-all ${
+                      analyticsYearFilter === "all"
+                        ? "bg-white text-slate-900 shadow-xs font-semibold"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    All Years
+                  </button>
+                  {monthlySalesAnalytics.availableYears.map((yr) => (
+                    <button
+                      key={yr}
+                      type="button"
+                      onClick={() => setAnalyticsYearFilter(yr)}
+                      className={`px-2.5 py-1 rounded-md font-medium transition-all ${
+                        analyticsYearFilter === yr
+                          ? "bg-white text-slate-900 shadow-xs font-semibold"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      {yr}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Chart type toggle */}
+              <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setAnalyticsChartType("bar")}
+                  className={`px-2.5 py-1 rounded-md font-medium transition-all ${
+                    analyticsChartType === "bar"
+                      ? "bg-white text-indigo-700 shadow-xs font-semibold"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  Bar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAnalyticsChartType("area")}
+                  className={`px-2.5 py-1 rounded-md font-medium transition-all ${
+                    analyticsChartType === "area"
+                      ? "bg-white text-indigo-700 shadow-xs font-semibold"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  Trend
+                </button>
+              </div>
+
+              {/* Toggle Table Breakdown Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowMonthlyBreakdownTable(!showMonthlyBreakdownTable)}
+                className="text-xs h-8 gap-1.5 border-slate-200 text-slate-700 hover:bg-slate-50"
+              >
+                {showMonthlyBreakdownTable ? (
+                  <>
+                    <ChevronUp className="w-3.5 h-3.5" /> Hide Breakdown
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="w-3.5 h-3.5" /> View Breakdown
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent className="p-4 sm:p-5 space-y-5">
+          {/* Mini 4-Column Summary Strip */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {/* Metric 1: Avg Monthly Sales */}
+            <div className="bg-slate-50/80 border border-slate-200/80 p-3 rounded-xl space-y-1">
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                <BarChart3 className="w-3.5 h-3.5 text-indigo-600" /> Avg Monthly Sales
+              </span>
+              <p className="text-base font-bold font-mono text-slate-900">
+                LKR {formatCurrency(monthlySalesAnalytics.avgMonthlySales)}
+              </p>
+              <p className="text-[10px] text-muted-foreground">
+                Across {monthlySalesAnalytics.monthlyData.length} active month(s)
+              </p>
+            </div>
+
+            {/* Metric 2: Peak Month */}
+            <div className="bg-amber-50/50 border border-amber-200/60 p-3 rounded-xl space-y-1">
+              <span className="text-[11px] font-semibold text-amber-700 uppercase tracking-wider flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-amber-600" /> Peak Month
+              </span>
+              <p className="text-base font-bold font-mono text-amber-950 truncate">
+                {monthlySalesAnalytics.bestMonth ? monthlySalesAnalytics.bestMonth.monthLabel : "—"}
+              </p>
+              <p className="text-[10px] text-amber-700/80 font-mono font-medium truncate">
+                {monthlySalesAnalytics.bestMonth ? `LKR ${formatCurrency(monthlySalesAnalytics.bestMonth.totalSales)}` : "No sales"}
+              </p>
+            </div>
+
+            {/* Metric 3: Latest Month & MoM Growth */}
+            <div className="bg-indigo-50/40 border border-indigo-200/60 p-3 rounded-xl space-y-1">
+              <span className="text-[11px] font-semibold text-indigo-700 uppercase tracking-wider flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-indigo-600" /> Latest Month
+                </span>
+                {monthlySalesAnalytics.momGrowth !== null && (
+                  <span
+                    className={`inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                      monthlySalesAnalytics.momGrowth >= 0
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-red-100 text-red-800"
+                    }`}
+                  >
+                    {monthlySalesAnalytics.momGrowth >= 0 ? (
+                      <TrendingUp className="w-3 h-3 mr-0.5 inline" />
+                    ) : (
+                      <TrendingDown className="w-3 h-3 mr-0.5 inline" />
+                    )}
+                    {monthlySalesAnalytics.momGrowth >= 0 ? "+" : ""}
+                    {monthlySalesAnalytics.momGrowth.toFixed(1)}% MoM
+                  </span>
+                )}
+              </span>
+              <p className="text-base font-bold font-mono text-indigo-950 truncate">
+                {monthlySalesAnalytics.latestMonth ? monthlySalesAnalytics.latestMonth.monthLabel : "—"}
+              </p>
+              <p className="text-[10px] text-indigo-700/80 font-mono font-medium truncate">
+                {monthlySalesAnalytics.latestMonth ? `LKR ${formatCurrency(monthlySalesAnalytics.latestMonth.totalSales)} (${monthlySalesAnalytics.latestMonth.invoiceCount} bills)` : "No sales"}
+              </p>
+            </div>
+
+            {/* Metric 4: Overall Collection Rate */}
+            <div className="bg-emerald-50/50 border border-emerald-200/60 p-3 rounded-xl space-y-1">
+              <span className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wider flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Realized Rate
+                </span>
+                <span className="font-mono font-bold text-emerald-800">
+                  {monthlySalesAnalytics.overallCollectionRate.toFixed(1)}%
+                </span>
+              </span>
+              <div className="w-full bg-emerald-200/60 h-2 rounded-full overflow-hidden mt-1">
+                <div
+                  className="bg-emerald-600 h-full rounded-full transition-all duration-500"
+                  style={{ width: `${Math.min(100, Math.max(0, monthlySalesAnalytics.overallCollectionRate))}%` }}
+                />
+              </div>
+              <p className="text-[10px] text-emerald-700 font-mono truncate">
+                Paid: LKR {formatCurrency(monthlySalesAnalytics.totalPaidAll)}
+              </p>
+            </div>
+          </div>
+
+          {/* Chart Section */}
+          {monthlySalesAnalytics.monthlyData.length === 0 ? (
+            <div className="text-center py-10 bg-slate-50/60 rounded-xl border border-dashed border-slate-200 text-slate-500 text-xs">
+              No delivered sales data available to calculate monthly analytics.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="h-[240px] w-full">
+                <ResponsiveContainer width="100%" height={240}>
+                  {analyticsChartType === "bar" ? (
+                    <BarChart
+                      data={monthlySalesAnalytics.monthlyData}
+                      margin={{ top: 10, right: 12, left: 0, bottom: 0 }}
+                    >
+                      <defs>
+                        <linearGradient id="salesBarGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#4f46e5" stopOpacity={0.9} />
+                          <stop offset="100%" stopColor="#6366f1" stopOpacity={0.65} />
+                        </linearGradient>
+                        <linearGradient id="paidBarGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#059669" stopOpacity={0.9} />
+                          <stop offset="100%" stopColor="#10b981" stopOpacity={0.65} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis
+                        dataKey="shortMonth"
+                        tick={{ fontSize: 11, fill: "#64748b" }}
+                        axisLine={{ stroke: "#e2e8f0" }}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 10, fill: "#64748b" }}
+                        axisLine={false}
+                        tickLine={false}
+                        tickFormatter={(v) =>
+                          v >= 1000000
+                            ? `${(v / 1000000).toFixed(1)}M`
+                            : v >= 1000
+                            ? `${(v / 1000).toFixed(0)}k`
+                            : `${v}`
+                        }
+                      />
+                      <RechartsTooltip content={<CustomMonthlyTooltip />} />
+                      <Bar
+                        dataKey="totalSales"
+                        name="Invoiced Sales"
+                        fill="url(#salesBarGrad)"
+                        radius={[4, 4, 0, 0]}
+                        maxBarSize={44}
+                      />
+                      <Bar
+                        dataKey="totalPaid"
+                        name="Paid Amount"
+                        fill="url(#paidBarGrad)"
+                        radius={[4, 4, 0, 0]}
+                        maxBarSize={44}
+                      />
+                    </BarChart>
+                  ) : (
+                    <AreaChart
+                      data={monthlySalesAnalytics.monthlyData}
+                      margin={{ top: 10, right: 12, left: 0, bottom: 0 }}
+                    >
+                      <defs>
+                        <linearGradient id="salesAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.35} />
+                          <stop offset="95%" stopColor="#4f46e5" stopOpacity={0.0} />
+                        </linearGradient>
+                        <linearGradient id="paidAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis
+                        dataKey="shortMonth"
+                        tick={{ fontSize: 11, fill: "#64748b" }}
+                        axisLine={{ stroke: "#e2e8f0" }}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 10, fill: "#64748b" }}
+                        axisLine={false}
+                        tickLine={false}
+                        tickFormatter={(v) =>
+                          v >= 1000000
+                            ? `${(v / 1000000).toFixed(1)}M`
+                            : v >= 1000
+                            ? `${(v / 1000).toFixed(0)}k`
+                            : `${v}`
+                        }
+                      />
+                      <RechartsTooltip content={<CustomMonthlyTooltip />} />
+                      <Area
+                        type="monotone"
+                        dataKey="totalSales"
+                        name="Invoiced Sales"
+                        stroke="#4f46e5"
+                        strokeWidth={2.5}
+                        fillOpacity={1}
+                        fill="url(#salesAreaGrad)"
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="totalPaid"
+                        name="Paid Amount"
+                        stroke="#059669"
+                        strokeWidth={2}
+                        fillOpacity={1}
+                        fill="url(#paidAreaGrad)"
+                      />
+                    </AreaChart>
+                  )}
+                </ResponsiveContainer>
+              </div>
+
+              {/* Chart Legend Badges */}
+              <div className="flex flex-wrap items-center justify-between text-xs pt-1 px-1 border-t border-slate-100">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-1.5 text-slate-700">
+                    <span className="w-2.5 h-2.5 rounded-sm bg-indigo-600 inline-block" />
+                    <span>Invoiced Sales</span>
+                    <span className="font-mono font-semibold text-slate-900">
+                      (LKR {formatCurrency(monthlySalesAnalytics.totalSalesAll)})
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-slate-700">
+                    <span className="w-2.5 h-2.5 rounded-sm bg-emerald-600 inline-block" />
+                    <span>Paid / Realized</span>
+                    <span className="font-mono font-semibold text-emerald-700">
+                      (LKR {formatCurrency(monthlySalesAnalytics.totalPaidAll)})
+                    </span>
+                  </div>
+                  {monthlySalesAnalytics.totalDueAll > 0 && (
+                    <div className="flex items-center gap-1.5 text-slate-700">
+                      <span className="w-2.5 h-2.5 rounded-sm bg-amber-500 inline-block" />
+                      <span>Remaining Due</span>
+                      <span className="font-mono font-semibold text-amber-700">
+                        (LKR {formatCurrency(monthlySalesAnalytics.totalDueAll)})
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <span className="text-[11px] text-muted-foreground italic">
+                  Hover bars or points for detailed breakdown
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Collapsible Month-by-Month Breakdown Table */}
+          {showMonthlyBreakdownTable && monthlySalesAnalytics.monthlyData.length > 0 && (
+            <div className="space-y-2 pt-2 border-t border-slate-100">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                  Monthly Performance Ledger
+                </h4>
+                <span className="text-[11px] text-muted-foreground">
+                  Showing {monthlySalesAnalytics.monthlyData.length} recorded month{monthlySalesAnalytics.monthlyData.length === 1 ? "" : "s"}
+                </span>
+              </div>
+
+              <div className="rounded-lg border border-slate-200 overflow-hidden bg-white">
+                <Table>
+                  <TableHeader className="bg-slate-50 text-[11px]">
+                    <TableRow>
+                      <TableHead className="font-semibold text-slate-700">Month</TableHead>
+                      <TableHead className="text-center font-semibold text-slate-700">Invoices</TableHead>
+                      <TableHead className="text-right font-semibold text-slate-700">Sales Amount</TableHead>
+                      <TableHead className="text-right font-semibold text-slate-700">Paid Amount</TableHead>
+                      <TableHead className="text-right font-semibold text-slate-700">Due Balance</TableHead>
+                      <TableHead className="w-[140px] text-center font-semibold text-slate-700">Collection Rate</TableHead>
+                      <TableHead className="text-right font-semibold text-slate-700">Share</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody className="text-xs">
+                    {monthlySalesAnalytics.monthlyData.map((m) => {
+                      const isPeak = monthlySalesAnalytics.bestMonth?.key === m.key;
+                      return (
+                        <TableRow
+                          key={m.key}
+                          className={`hover:bg-slate-50/80 transition-colors ${
+                            isPeak ? "bg-amber-50/20" : ""
+                          }`}
+                        >
+                          <TableCell className="font-medium text-slate-900 py-2.5">
+                            <div className="flex items-center gap-1.5">
+                              <span>{m.monthLabel}</span>
+                              {isPeak && (
+                                <Badge className="bg-amber-100 text-amber-800 border-amber-300 text-[9px] px-1 py-0 font-bold flex items-center gap-0.5">
+                                  <Sparkles className="w-2.5 h-2.5 text-amber-600" /> Peak
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center py-2.5">
+                            <Badge variant="outline" className="font-mono text-[11px] px-2 py-0 bg-slate-50 text-slate-700">
+                              {m.invoiceCount} bill{m.invoiceCount === 1 ? "" : "s"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-mono font-bold text-slate-900 py-2.5">
+                            LKR {formatCurrency(m.totalSales)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono font-semibold text-emerald-600 py-2.5">
+                            LKR {formatCurrency(m.totalPaid)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono font-semibold py-2.5">
+                            {m.totalDue > 0 ? (
+                              <span className="text-amber-700">LKR {formatCurrency(m.totalDue)}</span>
+                            ) : (
+                              <span className="text-slate-400 font-normal">LKR 0.00</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="py-2.5">
+                            <div className="space-y-1">
+                              <div className="flex justify-between items-center text-[10px] font-mono">
+                                <span className={m.collectionRate >= 80 ? "text-emerald-700 font-bold" : m.collectionRate >= 50 ? "text-amber-700 font-semibold" : "text-red-700 font-semibold"}>
+                                  {m.collectionRate.toFixed(1)}%
+                                </span>
+                              </div>
+                              <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full ${
+                                    m.collectionRate >= 80
+                                      ? "bg-emerald-500"
+                                      : m.collectionRate >= 50
+                                      ? "bg-amber-500"
+                                      : "bg-red-500"
+                                  }`}
+                                  style={{ width: `${Math.min(100, Math.max(0, m.collectionRate))}%` }}
+                                />
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-[11px] text-muted-foreground py-2.5">
+                            {m.shareOfTotal.toFixed(1)}%
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                  <TableFooter className="bg-slate-100/80 font-semibold text-xs border-t-2 border-slate-200">
+                    <TableRow>
+                      <TableCell className="font-bold text-slate-900 py-3">Total / Overall</TableCell>
+                      <TableCell className="text-center font-mono font-bold text-slate-900 py-3">
+                        {deliveredInvoices.length} bills
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-bold text-slate-900 py-3">
+                        LKR {formatCurrency(monthlySalesAnalytics.totalSalesAll)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-bold text-emerald-700 py-3">
+                        LKR {formatCurrency(monthlySalesAnalytics.totalPaidAll)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-bold text-amber-700 py-3">
+                        LKR {formatCurrency(monthlySalesAnalytics.totalDueAll)}
+                      </TableCell>
+                      <TableCell className="text-center font-mono font-bold text-emerald-700 py-3">
+                        {monthlySalesAnalytics.overallCollectionRate.toFixed(1)}% Realized
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-bold text-slate-900 py-3">
+                        100.0%
+                      </TableCell>
+                    </TableRow>
+                  </TableFooter>
+                </Table>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Comprehensive Tabs Section */}
       <Card className="shadow-xs">
         <CardContent className="p-4 sm:p-6">
@@ -532,6 +1218,9 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
             <TabsList className="flex flex-wrap h-auto p-1 bg-slate-100 gap-1">
               <TabsTrigger value="invoices" className="text-xs font-semibold">
                 <FileText className="w-3.5 h-3.5 mr-1.5" /> Invoices ({deliveredInvoices.length})
+              </TabsTrigger>
+              <TabsTrigger value="monthly-analytics" className="text-xs font-semibold">
+                <BarChart3 className="w-3.5 h-3.5 mr-1.5 text-indigo-600" /> Monthly Analytics ({monthlySalesAnalytics.monthlyData.length})
               </TabsTrigger>
               <TabsTrigger value="purchased-products" className="text-xs font-semibold">
                 <ShoppingBag className="w-3.5 h-3.5 mr-1.5 text-orange-600" /> Purchased Products ({purchasedProducts.length})
@@ -634,6 +1323,170 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
                       ))
                     )}
                   </TableBody>
+                </Table>
+              </div>
+            </TabsContent>
+
+            {/* TAB: MONTHLY ANALYTICS DRILL-DOWN */}
+            <TabsContent value="monthly-analytics" className="space-y-4 pt-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                    <BarChart3 className="w-4 h-4 text-indigo-600" />
+                    Month-by-Month Invoice Explorer
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Select any calendar month below to view every specific invoice and payment breakdown
+                  </p>
+                </div>
+                {selectedMonthMeta && (
+                  <div className="flex flex-wrap items-center gap-2 text-xs bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-xs">
+                    <span className="text-slate-600 font-medium">Selected: <strong className="text-slate-900">{selectedMonthMeta.monthLabel}</strong></span>
+                    <span className="text-slate-300">|</span>
+                    <span className="font-mono font-bold text-indigo-700">LKR {formatCurrency(selectedMonthMeta.totalSales)}</span>
+                    <span className="text-slate-300">|</span>
+                    <span className="font-mono font-semibold text-emerald-600">Paid: LKR {formatCurrency(selectedMonthMeta.totalPaid)}</span>
+                    {selectedMonthMeta.totalDue > 0 && (
+                      <>
+                        <span className="text-slate-300">|</span>
+                        <span className="font-mono font-semibold text-amber-600">Due: LKR {formatCurrency(selectedMonthMeta.totalDue)}</span>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Month Selector Pills */}
+              <div className="flex flex-wrap items-center gap-2">
+                {monthlySalesAnalytics.monthlyData.map((m) => {
+                  const isSelected = m.key === activeAnalyticsMonthKey;
+                  const isPeak = monthlySalesAnalytics.bestMonth?.key === m.key;
+                  return (
+                    <button
+                      key={m.key}
+                      type="button"
+                      onClick={() => setSelectedAnalyticsMonth(m.key)}
+                      className={`px-3 py-2 rounded-lg text-xs font-medium border transition-all text-left flex flex-col gap-0.5 cursor-pointer ${
+                        isSelected
+                          ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                          : "bg-white hover:bg-slate-50 text-slate-700 border-slate-200"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 justify-between">
+                        <span className="font-bold">{m.shortMonth}</span>
+                        {isPeak && (
+                          <span
+                            className={`text-[9px] px-1 py-0 rounded font-semibold ${
+                              isSelected ? "bg-white/20 text-white" : "bg-amber-100 text-amber-800"
+                            }`}
+                          >
+                            Peak
+                          </span>
+                        )}
+                      </div>
+                      <span
+                        className={`font-mono text-[11px] ${
+                          isSelected ? "text-indigo-100" : "text-slate-500"
+                        }`}
+                      >
+                        LKR {formatCurrency(m.totalSales)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Invoices list for selected month */}
+              <div className="rounded-lg border bg-white overflow-hidden shadow-xs">
+                <Table>
+                  <TableHeader className="bg-slate-50">
+                    <TableRow>
+                      <TableHead className="w-[110px]">Date</TableHead>
+                      <TableHead>Invoice No</TableHead>
+                      <TableHead>Payment Type</TableHead>
+                      <TableHead className="text-right">Total Amount</TableHead>
+                      <TableHead className="text-right">Paid Amount</TableHead>
+                      <TableHead className="text-right">Due Amount</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {monthInvoicesList.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground text-xs">
+                          No invoices found for this month.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      monthInvoicesList.map((inv: any) => (
+                        <TableRow key={inv.id} className="hover:bg-slate-50/80">
+                          <TableCell className="text-xs text-muted-foreground">
+                            {new Date(inv.date || inv.createdAt).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell className="font-mono font-bold text-xs text-blue-700">
+                            {inv.invoiceNo}
+                          </TableCell>
+                          <TableCell className="text-xs capitalize">{inv.paymentType || "Standard"}</TableCell>
+                          <TableCell className="text-right font-mono font-semibold text-xs">
+                            LKR {formatCurrency(inv.totalAmount)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs text-emerald-600 font-semibold">
+                            LKR {formatCurrency(inv.paidAmount)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono font-bold text-xs text-red-600">
+                            LKR {formatCurrency(inv.dueAmount)}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              className={
+                                inv.status === "Paid"
+                                  ? "bg-green-100 text-green-800"
+                                  : inv.status === "Partial"
+                                  ? "bg-amber-100 text-amber-800"
+                                  : inv.status === "Cancelled"
+                                  ? "bg-gray-100 text-gray-700"
+                                  : "bg-red-100 text-red-800"
+                              }
+                            >
+                              {inv.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs"
+                              onClick={() => openInvoiceSheet(inv.id)}
+                            >
+                              View Invoice
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                  {monthInvoicesList.length > 0 && selectedMonthMeta && (
+                    <TableFooter className="bg-slate-50/80 font-semibold text-xs border-t-2 border-slate-200">
+                      <TableRow>
+                        <TableCell colSpan={3} className="font-bold text-slate-800 py-2.5">
+                          Total for {selectedMonthMeta.monthLabel} ({monthInvoicesList.length} Invoices)
+                        </TableCell>
+                        <TableCell className="text-right font-mono font-bold text-slate-900 py-2.5">
+                          LKR {formatCurrency(selectedMonthMeta.totalSales)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono font-bold text-emerald-600 py-2.5">
+                          LKR {formatCurrency(selectedMonthMeta.totalPaid)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono font-bold text-red-600 py-2.5">
+                          LKR {formatCurrency(selectedMonthMeta.totalDue)}
+                        </TableCell>
+                        <TableCell colSpan={2} className="text-right text-xs font-medium text-slate-500 py-2.5">
+                          Collection: {selectedMonthMeta.collectionRate.toFixed(1)}%
+                        </TableCell>
+                      </TableRow>
+                    </TableFooter>
+                  )}
                 </Table>
               </div>
             </TabsContent>
