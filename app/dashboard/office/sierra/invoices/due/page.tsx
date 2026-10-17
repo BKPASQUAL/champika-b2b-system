@@ -37,11 +37,12 @@ import {
   Download,
   Loader2,
   Flame,
+  Share2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
 import { toast } from "sonner";
-import { downloadOutstandingReport, printOutstandingReport } from "../outstanding-report";
+import { downloadOutstandingReport, printOutstandingReport, shareOutstandingReport } from "../outstanding-report";
 
 interface OverdueInvoice {
   id: string;
@@ -208,6 +209,14 @@ export default function SierraDueAlertsPage() {
           >
             <Printer className="w-4 h-4 mr-2 text-red-600" />
             Print Report
+          </Button>
+          <Button
+            variant="outline"
+            className="bg-white text-emerald-700 hover:text-emerald-800"
+            onClick={() => shareOutstandingReport(rawInvoices as any)}
+          >
+            <Share2 className="w-4 h-4 mr-2 text-emerald-600" />
+            Share Report
           </Button>
         </div>
       </div>

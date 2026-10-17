@@ -22,11 +22,13 @@ import {
   RefreshCw,
   Filter,
   Printer,
+  Share2,
 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
@@ -34,7 +36,7 @@ import { toast } from "sonner";
 import { Invoice, SortField, SortOrder } from "./types";
 import { InvoiceTable } from "./_components/InvoiceTable";
 import { InvoiceStats } from "./_components/InvoiceStats";
-import { downloadOutstandingReport, printOutstandingReport } from "./outstanding-report";
+import { downloadOutstandingReport, printOutstandingReport, shareOutstandingReport } from "./outstanding-report";
 
 const STORAGE_KEYS = {
   search: "admin_invoices_search",
@@ -287,22 +289,31 @@ export default function InvoicesPage() {
                 <Download className="w-4 h-4 mr-2" /> Export
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="w-60">
               <DropdownMenuItem
                 onClick={() => toast.info("Export Excel coming soon")}
               >
                 <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" />{" "}
                 Export Excel
               </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => downloadOutstandingReport(invoices, repFilter)}
               >
                 <FileText className="w-4 h-4 mr-2 text-red-600" /> Outstanding (PDF)
               </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => printOutstandingReport(invoices, repFilter)}
               >
-                <Printer className="w-4 h-4 mr-2 text-red-600" /> Print Outstanding
+                <Printer className="w-4 h-4 mr-2 text-blue-600" /> Print Outstanding
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => shareOutstandingReport(invoices, repFilter)}
+                className="text-emerald-700 focus:text-emerald-700"
+              >
+                <Share2 className="w-4 h-4 mr-2 text-emerald-600" /> Share Outstanding
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

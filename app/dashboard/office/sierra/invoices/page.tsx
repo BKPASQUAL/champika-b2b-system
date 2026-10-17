@@ -23,11 +23,13 @@ import {
   Filter,
   Printer,
   ClipboardCheck,
+  Share2,
 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
@@ -36,7 +38,7 @@ import { BUSINESS_IDS } from "@/app/config/business-constants";
 import { Invoice, SortField, SortOrder } from "./types";
 import { InvoiceTable } from "./_components/InvoiceTable";
 import { InvoiceStats } from "./_components/InvoiceStats";
-import { downloadOutstandingReport, printOutstandingReport } from "./outstanding-report";
+import { downloadOutstandingReport, printOutstandingReport, shareOutstandingReport } from "./outstanding-report";
 
 const NUMBER_WORDS: Record<string, string> = {
   "0": "zero", "1": "one", "2": "two", "3": "three", "4": "four",
@@ -295,13 +297,14 @@ export default function SierraInvoicesPage() {
                 <Download className="w-4 h-4 mr-2" /> Export
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="w-64">
               <DropdownMenuItem
                 onClick={() => toast.info("Export Excel coming soon")}
               >
                 <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" />{" "}
                 Export Excel
               </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => downloadOutstandingReport(invoices, repFilter, false)}
               >
@@ -312,15 +315,29 @@ export default function SierraInvoicesPage() {
               >
                 <FileText className="w-4 h-4 mr-2 text-red-600" /> Outstanding (PDF) - Without Champika
               </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => printOutstandingReport(invoices, repFilter, false)}
               >
-                <Printer className="w-4 h-4 mr-2 text-red-600" /> Print Outstanding - With Champika
+                <Printer className="w-4 h-4 mr-2 text-blue-600" /> Print Outstanding - With Champika
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => printOutstandingReport(invoices, repFilter, true)}
               >
-                <Printer className="w-4 h-4 mr-2 text-red-600" /> Print Outstanding - Without Champika
+                <Printer className="w-4 h-4 mr-2 text-blue-600" /> Print Outstanding - Without Champika
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => shareOutstandingReport(invoices, repFilter, false)}
+                className="text-emerald-700 focus:text-emerald-700"
+              >
+                <Share2 className="w-4 h-4 mr-2 text-emerald-600" /> Share Outstanding - With Champika
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => shareOutstandingReport(invoices, repFilter, true)}
+                className="text-emerald-700 focus:text-emerald-700"
+              >
+                <Share2 className="w-4 h-4 mr-2 text-emerald-600" /> Share Outstanding - Without Champika
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

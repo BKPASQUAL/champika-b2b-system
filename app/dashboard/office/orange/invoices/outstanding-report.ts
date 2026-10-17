@@ -423,3 +423,103 @@ export function printOutstandingReport(
 
   toast.success(`Print ready – ${outstanding.length} outstanding bill${outstanding.length > 1 ? "s" : ""}`);
 }
+
+export async function shareOutstandingReport(
+  invoices: Invoice[],
+  repFilter: string = "all",
+  excludeChampika: boolean = false
+) {
+  const outstanding = getOutstandingForRep(invoices, repFilter, excludeChampika);
+  if (outstanding.length === 0) {
+    toast.info("No outstanding bills found");
+    return;
+  }
+
+  const totalDue = outstanding.reduce((sum, inv) => sum + inv.dueAmount, 0);
+
+  const grouped: Record<string, Invoice[]> = {};
+  outstanding.forEach((inv) => {
+    if (!grouped[inv.customerName]) grouped[inv.customerName] = [];
+    grouped[inv.customerName].push(inv);
+  });
+  const sortedCustomers = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
+
+  let msg = `*${COMPANY_NAME.toUpperCase()} - OUTSTANDING REPORT*\n`;
+  if (repFilter !== "all") msg += `Rep: *${repFilter}*\n`;
+  if (excludeChampika) msg += `_(Excluding Champika Hardware)_\n`;
+  msg += `*Total Outstanding:* LKR ${fmt(totalDue)}\n`;
+  msg += `*Total Outstanding Invoices:* ${outstanding.length}\n`;
+  msg += `*Total Customers:* ${sortedCustomers.length}\n\n`;
+
+  let detailedMsg = msg;
+  sortedCustomers.forEach((cust) => {
+    const invs = grouped[cust];
+    const custDue = invs.reduce((s, i) => s + i.dueAmount, 0);
+    detailedMsg += `👤 *${cust}* (LKR ${fmt(custDue)}):\n`;
+    invs.forEach((inv) => {
+      const days = inv.date
+        ? Math.max(0, Math.floor((new Date().getTime() - new Date(inv.date).getTime()) / (1000 * 60 * 60 * 24)))
+        : 0;
+      const refStr = inv.manualInvoiceNo ? `${inv.manualInvoiceNo} (${inv.invoiceNo})` : inv.invoiceNo;
+      detailedMsg += `   • ${refStr} (${inv.date}, ${days} days): LKR ${fmt(inv.dueAmount)}\n`;
+    });
+    detailedMsg += `\n`;
+  });
+
+  const doc = buildDoc(outstanding, repFilter, excludeChampika);
+  const blob = doc.output("blob");
+  const date = new Date().toISOString().split("T")[0];
+  const repSuffix = repFilter !== "all" ? `_${repFilter.replace(/\s+/g, "_")}` : "";
+  const champikaSuffix = excludeChampika ? "_Excl_Champika" : "";
+  const filename = `Outstanding_${COMPANY_NAME.replace(/\s+/g, "_")}${repSuffix}${champikaSuffix}_${date}.pdf`;
+  const file = new File([blob], filename, { type: "application/pdf" });
+
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({
+        title: `${COMPANY_NAME} - Outstanding Report`,
+        text: `Outstanding Report (${outstanding.length} bills, Total Due: LKR ${fmt(totalDue)})`,
+        files: [file],
+      });
+      toast.success("Outstanding report shared");
+      return;
+    } catch (e: any) {
+      if (e.name !== "AbortError") {
+        console.warn("File share failed, falling back to WhatsApp/Clipboard:", e);
+      } else {
+        return;
+      }
+    }
+  }
+
+  // Safe length for WhatsApp URL
+  let textToSend = detailedMsg;
+  if (encodeURIComponent(textToSend).length > 2000) {
+    textToSend = msg;
+    sortedCustomers.slice(0, 15).forEach((cust) => {
+      const invs = grouped[cust];
+      const custDue = invs.reduce((s, i) => s + i.dueAmount, 0);
+      textToSend += `• *${cust}*: LKR ${fmt(custDue)} (${invs.length} bills)\n`;
+    });
+    if (sortedCustomers.length > 15) {
+      textToSend += `\n... and ${sortedCustomers.length - 15} more customers.\n(Full report copied to clipboard)`;
+    }
+  }
+
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(detailedMsg);
+      toast.info("Full report copied to clipboard");
+    }
+  } catch (_) {}
+
+  // If on desktop without native file sharing, also trigger download of the PDF
+  if (!navigator.share) {
+    doc.save(filename);
+  }
+
+  const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(textToSend)}`;
+  window.open(waUrl, "_blank");
+  toast.success("Opened WhatsApp with outstanding report summary");
+}
+
