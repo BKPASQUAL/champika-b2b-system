@@ -91,6 +91,8 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
+import { CustomerOverdueAlert } from "@/components/CustomerOverdueAlert";
+import { CustomerOverdueStatusResult } from "@/lib/customer-overdue";
 
 // --- Types ---
 interface Product {
@@ -171,6 +173,55 @@ export default function DistributionEditInvoicePage({
   const [salesRepId, setSalesRepId] = useState<string>("");
   const [orderStatus, setOrderStatus] = useState<string>("Pending");
   const [editReason, setEditReason] = useState("");
+
+  // Customer 60+ Days Overdue Status State
+  const [customerOverdueStatus, setCustomerOverdueStatus] = useState<CustomerOverdueStatusResult | null>(null);
+  const [overdueLoading, setOverdueLoading] = useState(false);
+
+  const fetchCustomerOverdueStatus = async (cId: string) => {
+    setOverdueLoading(true);
+    try {
+      const user = getUserBusinessContext();
+      let uId = user?.id || "";
+      let uRole = user?.role || "distribution";
+      if (!uId && typeof window !== "undefined") {
+        const uStr = localStorage.getItem("currentUser");
+        if (uStr) {
+          try {
+            const p = JSON.parse(uStr);
+            uId = p.id || uId;
+            uRole = p.role || uRole;
+          } catch {}
+        }
+      }
+
+      const params = new URLSearchParams();
+      if (uId) params.set("userId", uId);
+      if (uRole) params.set("role", uRole);
+      const qs = params.toString() ? `?${params.toString()}` : "";
+
+      const res = await fetch(`/api/customers/${cId}/overdue-status${qs}`);
+      if (res.ok) {
+        const data = await res.json();
+        setCustomerOverdueStatus(data);
+      } else {
+        setCustomerOverdueStatus(null);
+      }
+    } catch (err) {
+      console.error("Error checking customer overdue status:", err);
+      setCustomerOverdueStatus(null);
+    } finally {
+      setOverdueLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (customerId) {
+      fetchCustomerOverdueStatus(customerId);
+    } else {
+      setCustomerOverdueStatus(null);
+    }
+  }, [customerId]);
 
   // Items State
   const [items, setItems] = useState<InvoiceItem[]>([]);
@@ -743,6 +794,13 @@ export default function DistributionEditInvoicePage({
       toast.error("This invoice is locked and cannot be edited.");
       return;
     }
+    if (customerOverdueStatus?.isBlocked) {
+      toast.error(
+        customerOverdueStatus.blockReason ||
+          "This customer has unpaid invoices overdue by 60+ days. Invoice update is blocked until settled or unlocked by Admin."
+      );
+      return;
+    }
     if (!customerId || !salesRepId || items.length === 0) {
       toast.error("Please fill all required fields");
       return;
@@ -891,7 +949,7 @@ export default function DistributionEditInvoicePage({
             </SheetContent>
           </Sheet>
 
-          {!isReadOnly && (
+          {!isReadOnly && !customerOverdueStatus?.isBlocked && (
             <>
               <Button
                 variant="secondary"
@@ -1165,10 +1223,38 @@ export default function DistributionEditInvoicePage({
                   </Select>
                 </div>
               </div>
+
+              {/* 60+ Days Overdue Warning / Admin Unlock Alert */}
+              <CustomerOverdueAlert
+                status={customerOverdueStatus}
+                loading={overdueLoading}
+                onStatusUpdated={() => customerId && fetchCustomerOverdueStatus(customerId)}
+                currentUser={currentUserRole ? { role: currentUserRole } : undefined}
+              />
             </CardContent>
           </Card>
 
-          {/* 2. Add / Edit Products */}
+          {/* If customer is blocked due to 60+ days overdue bills, HIDE product selection and invoice editing UI */}
+          {customerOverdueStatus?.isBlocked ? (
+            <Card className="border-2 border-dashed border-red-300 bg-red-50/20 p-8 text-center rounded-2xl shadow-sm">
+              <div className="flex flex-col items-center justify-center max-w-lg mx-auto space-y-3 py-6">
+                <div className="p-4 bg-red-100 text-red-700 rounded-2xl shadow-inner">
+                  <Lock className="w-10 h-10" />
+                </div>
+                <h3 className="font-bold text-lg text-slate-900 tracking-tight">
+                  Product Selection & Invoice Editing Locked
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                  Product catalog, stock, and invoice editing are hidden for <strong>{customerOverdueStatus.customerName}</strong> because of unsettled 60+ days overdue bills.
+                </p>
+                <p className="text-xs text-red-700 font-medium">
+                  Click <strong>Request Admin Unlock</strong> above or settle the overdue bills to unlock and edit the invoice.
+                </p>
+              </div>
+            </Card>
+          ) : (
+            <>
+              {/* 2. Add / Edit Products */}
           <Card className={editingItemId ? "border-blue-500 border-2" : ""}>
             <CardHeader>
               <CardTitle>{editingItemId ? "Edit Item" : "Add Products"}</CardTitle>
@@ -1520,11 +1606,26 @@ export default function DistributionEditInvoicePage({
               </div>
             </CardContent>
           </Card>
+            </>
+          )}
         </div>
 
         {/* RIGHT COLUMN */}
         <div className="lg:col-span-1">
-          <Card className="sticky top-6">
+          {customerOverdueStatus?.isBlocked ? (
+            <Card className="border-red-200 bg-red-50/20 p-6 text-center space-y-3 sticky top-6">
+              <div className="p-3 bg-red-100 text-red-700 rounded-full w-fit mx-auto">
+                <Lock className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <p className="font-semibold text-sm text-slate-900">Editing Locked</p>
+                <p className="text-xs text-muted-foreground">
+                  Invoice editing and summary will become active once an Admin unlocks this customer or overdue bills are settled.
+                </p>
+              </div>
+            </Card>
+          ) : (
+            <Card className="sticky top-6">
             <CardHeader>
               <CardTitle>Invoice Summary</CardTitle>
             </CardHeader>
@@ -1644,6 +1745,7 @@ export default function DistributionEditInvoicePage({
               </div>
             </CardContent>
           </Card>
+          )}
         </div>
       </div>
 

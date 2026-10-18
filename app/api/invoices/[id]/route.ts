@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
 import { BUSINESS_NAMES, BUSINESS_IDS } from "@/app/config/business-constants";
+import { checkCustomerOverdueStatus, markCustomerUnlockAsUsed } from "@/lib/customer-overdue";
 
 // --- Validation Schemas ---
 const invoiceItemSchema = z.object({
@@ -313,6 +314,28 @@ export async function PATCH(
 
     const val = updateInvoiceSchema.parse(body);
 
+    // -------------------------------------------------------------
+    // Customer Overdue Invoicing Block Check (60d Orange/Sierra, 90d Others)
+    // Enforced unless Admin globally disabled, user is exempt, or approved unlock exists.
+    // -------------------------------------------------------------
+    const requesterUserId = val.salesRepId || body.userId || body.performedById || null;
+    const overdueStatus = await checkCustomerOverdueStatus(val.customerId, {
+      userId: requesterUserId,
+      userRole: body.performedByRole || undefined,
+    });
+    if (overdueStatus.isBlocked) {
+      return NextResponse.json(
+        {
+          error:
+            overdueStatus.blockReason ||
+            "Invoice update blocked: Customer has 60+ days overdue bills. Please settle bills or request Admin unlock.",
+          isCustomerBlocked: true,
+          overdueDetails: overdueStatus,
+        },
+        { status: 403 }
+      );
+    }
+
     // 1. Fetch Current Invoice State (Snapshot for History)
     const { data: currentInvoice, error: invError } = await supabaseAdmin
       .from("invoices")
@@ -549,6 +572,15 @@ export async function PATCH(
       .from("invoices")
       .update(invoiceUpdateFields)
       .eq("id", id);
+
+    // Consume One-Time Customer Unlock if update was made under authorization
+    if (overdueStatus?.activeUnlock?.id && overdueStatus.activeUnlock.unlockType === "one_time") {
+      try {
+        await markCustomerUnlockAsUsed(overdueStatus.activeUnlock.id, id);
+      } catch (unlockErr) {
+        console.error("Warning marking customer unlock as used on invoice update:", unlockErr);
+      }
+    }
 
     // Build historical cost map from old items (preserves original cost for unchanged products)
     const oldCostMap: Record<string, number> = {};

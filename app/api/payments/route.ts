@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
 import { BUSINESS_NAMES } from "@/app/config/business-constants";
+import { checkAndAutoUnblockCustomer } from "@/lib/customer-overdue";
 
 // --- Validation Schema ---
 const paymentSchema = z.object({
@@ -268,6 +269,13 @@ export async function POST(request: NextRequest) {
           .from("customers")
           .update({ outstanding_balance: newBal })
           .eq("id", targetCustomerId);
+
+        // Auto-unblock customer if 60+ days overdue bills are settled
+        try {
+          await checkAndAutoUnblockCustomer(targetCustomerId);
+        } catch (unblockErr) {
+          console.error("Auto unblock check warning:", unblockErr);
+        }
       }
 
       return NextResponse.json({ message: "Customer payment recorded successfully", data: payment }, { status: 201 });
@@ -482,6 +490,13 @@ export async function POST(request: NextRequest) {
       .eq("id", customer.id);
 
     if (customerUpdateError) throw customerUpdateError;
+
+    // Auto-unblock customer if 60+ days overdue bills are settled
+    try {
+      await checkAndAutoUnblockCustomer(customer.id);
+    } catch (unblockErr) {
+      console.error("Auto unblock check warning:", unblockErr);
+    }
 
     // Account transaction for cash/bank
     if (

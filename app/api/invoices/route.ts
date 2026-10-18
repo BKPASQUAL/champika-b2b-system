@@ -4,6 +4,7 @@ import { z } from "zod";
 import { BUSINESS_IDS, BUSINESS_NAMES } from "@/app/config/business-constants";
 import { triggerAgencyBillsForInvoice } from "@/app/lib/inter-branch-billing";
 import { getOrCreateActiveRepBook, getNextInvoiceNumber } from "@/lib/invoice-books";
+import { checkCustomerOverdueStatus, markCustomerUnlockAsUsed } from "@/lib/customer-overdue";
 
 // --- Validation Schemas ---
 
@@ -265,6 +266,28 @@ export async function POST(request: NextRequest) {
           { status: 409 }
         );
       }
+    }
+
+    // -------------------------------------------------------------
+    // Customer Overdue Invoicing Block Check (60d Orange/Sierra, 90d Others)
+    // Enforced unless Admin globally disabled, user is exempt, or approved unlock exists.
+    // -------------------------------------------------------------
+    const requesterUserId = val.salesRepId || body.userId || body.salesRepId || null;
+    const overdueStatus = await checkCustomerOverdueStatus(val.customerId, {
+      userId: requesterUserId,
+      userRole: body.performedByRole || undefined,
+    });
+    if (overdueStatus.isBlocked) {
+      return NextResponse.json(
+        {
+          error:
+            overdueStatus.blockReason ||
+            "Customer invoicing is blocked due to 60+ days overdue bills. Admin authorization is required.",
+          isCustomerBlocked: true,
+          overdueDetails: overdueStatus,
+        },
+        { status: 403 }
+      );
     }
 
     // -------------------------------------------------------------
@@ -616,6 +639,15 @@ export async function POST(request: NextRequest) {
     }
 
     if (invoiceError) throw invoiceError;
+
+    // Consume One-Time Customer Unlock if invoice was created under authorization
+    if (overdueStatus?.activeUnlock?.id && overdueStatus.activeUnlock.unlockType === "one_time") {
+      try {
+        await markCustomerUnlockAsUsed(overdueStatus.activeUnlock.id, invoiceData.id);
+      } catch (unlockErr) {
+        console.error("Warning marking customer unlock as used:", unlockErr);
+      }
+    }
 
     // If invoice was created from an active Rep Invoice Book in Distribution, update the current_number
     if (isDistribution && usedRepBookId) {

@@ -149,7 +149,7 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           icon: AlertCircle,
         },
         {
-          name: "Edit Unlock Requests",
+          name: "Unlock Requests",
           href: "/dashboard/admin/invoices/unlock-requests",
           icon: KeyRound,
         },

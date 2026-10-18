@@ -23,6 +23,7 @@ import {
   Upload,
   Share2,
   Copy,
+  Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,6 +70,8 @@ import { BUSINESS_IDS } from "@/app/config/business-constants";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { printInvoice, downloadInvoice } from "../print-utils";
 import { DocumentAttachments } from "@/components/ui/DocumentAttachments";
+import { CustomerOverdueAlert } from "@/components/CustomerOverdueAlert";
+import { CustomerOverdueStatusResult } from "@/lib/customer-overdue";
 
 // --- Types ---
 
@@ -126,6 +129,42 @@ export default function CreateDistributionInvoicePage() {
   const [salesRepId, setSalesRepId] = useState<string>("");
   const [orderStatus, setOrderStatus] = useState<string>("Pending");
   const [isIncorrect, setIsIncorrect] = useState(false);
+
+  // Customer 60+ Days Overdue Status State
+  const [customerOverdueStatus, setCustomerOverdueStatus] = useState<CustomerOverdueStatusResult | null>(null);
+  const [overdueLoading, setOverdueLoading] = useState(false);
+
+  const fetchCustomerOverdueStatus = async (cId: string) => {
+    setOverdueLoading(true);
+    try {
+      const user = getUserBusinessContext();
+      const params = new URLSearchParams();
+      if (user?.id) params.set("userId", user.id);
+      if (user?.role) params.set("role", user.role);
+      const qs = params.toString() ? `?${params.toString()}` : "";
+
+      const res = await fetch(`/api/customers/${cId}/overdue-status${qs}`);
+      if (res.ok) {
+        const data = await res.json();
+        setCustomerOverdueStatus(data);
+      } else {
+        setCustomerOverdueStatus(null);
+      }
+    } catch (err) {
+      console.error("Error checking customer overdue status:", err);
+      setCustomerOverdueStatus(null);
+    } finally {
+      setOverdueLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (customerId) {
+      fetchCustomerOverdueStatus(customerId);
+    } else {
+      setCustomerOverdueStatus(null);
+    }
+  }, [customerId]);
 
   // Temporary Upload Link & Sync State
   const [tempInvoiceId, setTempInvoiceId] = useState(() => {
@@ -438,6 +477,13 @@ export default function CreateDistributionInvoicePage() {
       toast.error("Please select a customer.");
       return;
     }
+    if (customerOverdueStatus?.isBlocked) {
+      toast.error(
+        customerOverdueStatus.blockReason ||
+        "Invoicing blocked: Customer has 60+ days overdue bills. Please settle bills or request Admin unlock."
+      );
+      return;
+    }
     if (!salesRepId) {
       toast.error("Please select a sales representative.");
       return;
@@ -585,32 +631,34 @@ export default function CreateDistributionInvoicePage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 ml-auto">
-          <Button
-            variant="outline"
-            onClick={() => handleSaveAction("download")}
-            disabled={items.length === 0 || submitting}
-          >
-            {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
-            Save & Download
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => handleSaveAction("print")}
-            disabled={items.length === 0 || submitting}
-          >
-            {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Printer className="w-4 h-4 mr-2" />}
-            Save & Print
-          </Button>
-          <Button
-            onClick={() => handleSaveAction("save")}
-            disabled={items.length === 0 || submitting}
-            className="bg-blue-600 hover:bg-blue-700"
-          >
-            {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-            Save Invoice
-          </Button>
-        </div>
+        {!customerOverdueStatus?.isBlocked && (
+          <div className="flex items-center gap-2 ml-auto">
+            <Button
+              variant="outline"
+              onClick={() => handleSaveAction("download")}
+              disabled={items.length === 0 || submitting}
+            >
+              {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+              Save & Download
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => handleSaveAction("print")}
+              disabled={items.length === 0 || submitting}
+            >
+              {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Printer className="w-4 h-4 mr-2" />}
+              Save & Print
+            </Button>
+            <Button
+              onClick={() => handleSaveAction("save")}
+              disabled={items.length === 0 || submitting}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+              Save Invoice
+            </Button>
+          </div>
+        )}
       </div>
 
       {outOfStockOverride && (
@@ -695,6 +743,14 @@ export default function CreateDistributionInvoicePage() {
                   />
                 </div>
               </div>
+
+              {/* 60+ Days Overdue Warning / Admin Unlock Alert */}
+              <CustomerOverdueAlert
+                status={customerOverdueStatus}
+                loading={overdueLoading}
+                onStatusUpdated={() => customerId && fetchCustomerOverdueStatus(customerId)}
+                currentUser={getUserBusinessContext()}
+              />
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Invoice No (Auto)</Label>
@@ -825,8 +881,28 @@ export default function CreateDistributionInvoicePage() {
             </CardContent>
           </Card>
 
-          {/* 2. Add Items */}
-          <Card>
+          {/* If customer is blocked due to 60+ days overdue bills, HIDE product selection and invoicing UI */}
+          {customerOverdueStatus?.isBlocked ? (
+            <Card className="border-2 border-dashed border-red-300 bg-red-50/20 p-8 text-center rounded-2xl shadow-sm">
+              <div className="flex flex-col items-center justify-center max-w-lg mx-auto space-y-3 py-6">
+                <div className="p-4 bg-red-100 text-red-700 rounded-2xl shadow-inner">
+                  <Lock className="w-10 h-10" />
+                </div>
+                <h3 className="font-bold text-lg text-slate-900 tracking-tight">
+                  Product Selection & Invoicing Locked
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                  Product catalog, stock, and invoicing are hidden for <strong>{customerOverdueStatus.customerName}</strong> because of unsettled 60+ days overdue bills.
+                </p>
+                <p className="text-xs text-red-700 font-medium">
+                  Click <strong>Request Admin Unlock</strong> above or settle the overdue bills to unlock and view the product catalog.
+                </p>
+              </div>
+            </Card>
+          ) : (
+            <>
+              {/* 2. Add Items */}
+              <Card>
             <CardHeader>
               <CardTitle>Add Products</CardTitle>
               <CardDescription>
@@ -1175,11 +1251,26 @@ export default function CreateDistributionInvoicePage() {
             showMobileUpload={true}
             onShareLink={handleShareTempLink}
           />
+            </>
+          )}
         </div>
 
         {/* RIGHT COLUMN */}
         <div className="lg:col-span-1">
-          <Card className="sticky top-6">
+          {customerOverdueStatus?.isBlocked ? (
+            <Card className="border-red-200 bg-red-50/20 p-6 text-center space-y-3 sticky top-6">
+              <div className="p-3 bg-red-100 text-red-700 rounded-full w-fit mx-auto">
+                <Lock className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <p className="font-semibold text-sm text-slate-900">Invoicing Locked</p>
+                <p className="text-xs text-muted-foreground">
+                  Invoice summary and actions will become active once an Admin unlocks this customer or overdue bills are settled.
+                </p>
+              </div>
+            </Card>
+          ) : (
+            <Card className="sticky top-6">
             <CardHeader>
               <CardTitle>Invoice Summary</CardTitle>
             </CardHeader>
@@ -1337,6 +1428,7 @@ export default function CreateDistributionInvoicePage() {
               </div>
             </CardContent>
           </Card>
+          )}
         </div>
       </div>
     </div>

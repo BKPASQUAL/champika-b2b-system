@@ -14,6 +14,7 @@ import {
   ChevronsUpDown,
   AlertTriangle,
   Receipt,
+  Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,6 +52,8 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { CustomerOverdueAlert } from "@/components/CustomerOverdueAlert";
+import { CustomerOverdueStatusResult } from "@/lib/customer-overdue";
 
 // --- Types ---
 
@@ -104,6 +107,42 @@ export default function DirectBillPage() {
     new Date().toISOString().split("T")[0]
   );
   const [invoiceNumber, setInvoiceNumber] = useState("Loading...");
+
+  // Customer 60+ Days Overdue Status State
+  const [customerOverdueStatus, setCustomerOverdueStatus] = useState<CustomerOverdueStatusResult | null>(null);
+  const [overdueLoading, setOverdueLoading] = useState(false);
+
+  const fetchCustomerOverdueStatus = async (cId: string) => {
+    setOverdueLoading(true);
+    try {
+      const user = getUserBusinessContext();
+      const params = new URLSearchParams();
+      if (user?.id) params.set("userId", user.id);
+      if (user?.role) params.set("role", user.role);
+      const qs = params.toString() ? `?${params.toString()}` : "";
+
+      const res = await fetch(`/api/customers/${cId}/overdue-status${qs}`);
+      if (res.ok) {
+        const data = await res.json();
+        setCustomerOverdueStatus(data);
+      } else {
+        setCustomerOverdueStatus(null);
+      }
+    } catch (err) {
+      console.error("Error checking customer overdue status:", err);
+      setCustomerOverdueStatus(null);
+    } finally {
+      setOverdueLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (customerId) {
+      fetchCustomerOverdueStatus(customerId);
+    } else {
+      setCustomerOverdueStatus(null);
+    }
+  }, [customerId]);
 
   // Fetch next Direct Invoice Number Preview
   useEffect(() => {
@@ -328,6 +367,13 @@ export default function DirectBillPage() {
       toast.error("Please select a customer.");
       return;
     }
+    if (customerOverdueStatus?.isBlocked) {
+      toast.error(
+        customerOverdueStatus.blockReason ||
+        "Invoicing blocked: Customer has 60+ days overdue bills. Please settle bills or request Admin unlock."
+      );
+      return;
+    }
     if (!currentUserId) {
       toast.error("Unable to determine current user. Please re-login.");
       return;
@@ -419,18 +465,20 @@ export default function DirectBillPage() {
             Create a direct distribution bill · continuous CHD direct sequence · order status locked to Delivered
           </p>
         </div>
-        <Button
-          onClick={handleSaveInvoice}
-          disabled={items.length === 0 || submitting}
-          className="bg-blue-600 hover:bg-blue-700"
-        >
-          {submitting ? (
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-          ) : (
-            <Receipt className="w-4 h-4 mr-2" />
-          )}
-          Create Bill
-        </Button>
+        {!customerOverdueStatus?.isBlocked && (
+          <Button
+            onClick={handleSaveInvoice}
+            disabled={items.length === 0 || submitting}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            {submitting ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Receipt className="w-4 h-4 mr-2" />
+            )}
+            Create Bill
+          </Button>
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -518,6 +566,14 @@ export default function DirectBillPage() {
                 </div>
               </div>
 
+              {/* 60+ Days Overdue Warning / Admin Unlock Alert */}
+              <CustomerOverdueAlert
+                status={customerOverdueStatus}
+                loading={overdueLoading}
+                onStatusUpdated={() => customerId && fetchCustomerOverdueStatus(customerId)}
+                currentUser={{ id: currentUserId, name: currentUserName, role: "distribution" }}
+              />
+
               {/* Invoice No (auto) + Order Status (locked) */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -553,8 +609,28 @@ export default function DirectBillPage() {
             </CardContent>
           </Card>
 
-          {/* 2. Add Products */}
-          <Card>
+          {/* If customer is blocked due to 60+ days overdue bills, HIDE product selection and billing UI */}
+          {customerOverdueStatus?.isBlocked ? (
+            <Card className="border-2 border-dashed border-red-300 bg-red-50/20 p-8 text-center rounded-2xl shadow-sm">
+              <div className="flex flex-col items-center justify-center max-w-lg mx-auto space-y-3 py-6">
+                <div className="p-4 bg-red-100 text-red-700 rounded-2xl shadow-inner">
+                  <Lock className="w-10 h-10" />
+                </div>
+                <h3 className="font-bold text-lg text-slate-900 tracking-tight">
+                  Product Selection & Billing Locked
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                  Product catalog, stock, and billing are hidden for <strong>{customerOverdueStatus.customerName}</strong> because of unsettled 60+ days overdue bills.
+                </p>
+                <p className="text-xs text-red-700 font-medium">
+                  Click <strong>Request Admin Unlock</strong> above or settle the overdue bills to unlock and view the product catalog.
+                </p>
+              </div>
+            </Card>
+          ) : (
+            <>
+              {/* 2. Add Products */}
+              <Card>
             <CardHeader>
               <CardTitle>Add Products</CardTitle>
               <CardDescription>
@@ -811,11 +887,26 @@ export default function DirectBillPage() {
               </div>
             </CardContent>
           </Card>
+            </>
+          )}
         </div>
 
         {/* RIGHT COLUMN — Summary */}
         <div className="lg:col-span-1">
-          <Card className="sticky top-6">
+          {customerOverdueStatus?.isBlocked ? (
+            <Card className="border-red-200 bg-red-50/20 p-6 text-center space-y-3 sticky top-6">
+              <div className="p-3 bg-red-100 text-red-700 rounded-full w-fit mx-auto">
+                <Lock className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <p className="font-semibold text-sm text-slate-900">Direct Billing Locked</p>
+                <p className="text-xs text-muted-foreground">
+                  Bill summary and actions will become active once an Admin unlocks this customer or overdue bills are settled.
+                </p>
+              </div>
+            </Card>
+          ) : (
+            <Card className="sticky top-6">
             <CardHeader>
               <CardTitle>Bill Summary</CardTitle>
             </CardHeader>
@@ -898,6 +989,7 @@ export default function DirectBillPage() {
               </Button>
             </CardContent>
           </Card>
+          )}
         </div>
       </div>
     </div>

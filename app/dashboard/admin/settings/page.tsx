@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import Link from "next/link";
 import {
   Settings,
   Shield,
@@ -32,6 +33,8 @@ import {
   Wrench,
   CheckCircle2,
   KeyRound,
+  Lock,
+  Users,
 } from "lucide-react";
 
 // ── Navigation items ──────────────────────────────────────────────────────────
@@ -593,10 +596,13 @@ function OperationsSettings() {
   const [stockOverride, setStockOverride] = useState(false);
   const [repCustomerCreate, setRepCustomerCreate] = useState(false);
   const [distributionRetailItems, setDistributionRetailItems] = useState(false);
+  const [overdueBlockingMaster, setOverdueBlockingMaster] = useState(true);
+  const [overdueExemptCount, setOverdueExemptCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [savingStock, setSavingStock] = useState(false);
   const [savingCustomer, setSavingCustomer] = useState(false);
   const [savingDistributionRetail, setSavingDistributionRetail] = useState(false);
+  const [savingOverdueBlocking, setSavingOverdueBlocking] = useState(false);
 
   const [portalStockOverrides, setPortalStockOverrides] = useState({
     wireman: false, sierra: false, orange: false, distribution: false, retail: false,
@@ -615,12 +621,19 @@ function OperationsSettings() {
       fetch("/api/settings/distribution-retail-items").then((r) => r.json()).catch(() => ({ enabled: false })),
       fetch("/api/settings/discount-feature").then((r) => r.json()).catch(() => ({})),
       fetch("/api/settings/portal-stock-override").then((r) => r.json()).catch(() => ({})),
-    ]).then(([stock, cust, distRetail, disc, portalStock]) => {
+      fetch("/api/settings/customer-overdue-blocking").then((r) => r.json()).catch(() => ({ config: { globalEnabled: true }, users: [] })),
+    ]).then(([stock, cust, distRetail, disc, portalStock, overdueData]) => {
       setStockOverride(stock.enabled ?? false);
       setRepCustomerCreate(cust.enabled ?? false);
       setDistributionRetailItems(distRetail.enabled ?? false);
       setDiscountPortals((prev) => ({ ...prev, ...disc }));
       setPortalStockOverrides((prev) => ({ ...prev, ...portalStock }));
+      if (overdueData?.config) {
+        setOverdueBlockingMaster(overdueData.config.globalEnabled ?? true);
+      }
+      if (Array.isArray(overdueData?.users)) {
+        setOverdueExemptCount(overdueData.users.filter((u: any) => !u.isEnforced).length);
+      }
     }).finally(() => setLoading(false));
   }, []);
 
@@ -739,6 +752,35 @@ function OperationsSettings() {
     }
   };
 
+  const handleOverdueBlockingToggle = async (value: boolean) => {
+    setSavingOverdueBlocking(true);
+    try {
+      let adminName = "Admin";
+      if (typeof window !== "undefined") {
+        const u = localStorage.getItem("currentUser");
+        if (u) adminName = JSON.parse(u).fullName || JSON.parse(u).name || "Admin";
+      }
+
+      const res = await fetch("/api/settings/customer-overdue-blocking", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ globalEnabled: value, adminName }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to save setting");
+      setOverdueBlockingMaster(data.config.globalEnabled);
+      toast.success(
+        value
+          ? "Customer overdue invoice blocking is now ACTIVE"
+          : "Customer overdue invoice blocking is PAUSED system-wide"
+      );
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save setting");
+    } finally {
+      setSavingOverdueBlocking(false);
+    }
+  };
+
   return (
     <div className="space-y-8">
       {/* Section Header */}
@@ -757,6 +799,58 @@ function OperationsSettings() {
       <Separator />
 
       <div className="space-y-4">
+        {/* Customer Overdue Invoicing Block Master Toggle */}
+        <div
+          className={cn(
+            "rounded-xl border-2 p-5 transition-colors",
+            overdueBlockingMaster ? "border-emerald-300 bg-emerald-50/50" : "border-amber-300 bg-amber-50/70"
+          )}
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-sm font-semibold text-gray-800">
+                  Customer Overdue Invoicing Block (Credit Rules)
+                </p>
+                {overdueBlockingMaster ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-semibold">
+                    <CheckCircle2 className="h-3 w-3" />
+                    ENFORCING RULES
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold">
+                    <AlertTriangle className="h-3 w-3" />
+                    PAUSED (SYSTEM-WIDE)
+                  </span>
+                )}
+                {overdueExemptCount > 0 && overdueBlockingMaster && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-medium">
+                    {overdueExemptCount} user(s) exempt
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                When enabled, customers with unsettled overdue invoices (Orange/Sierra ≥60 days | others ≥90 days) cannot be invoiced without Admin approval. Turning this off allows all users to invoice overdue customers.
+              </p>
+              <div className="pt-2">
+                <Link
+                  href="/dashboard/admin/invoices/unlock-requests?tab=management"
+                  className="inline-flex items-center gap-1.5 text-xs text-blue-700 hover:text-blue-900 font-semibold underline underline-offset-2"
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  Manage Separate User Invoicing Permissions & Overrides →
+                </Link>
+              </div>
+            </div>
+            <Switch
+              checked={overdueBlockingMaster}
+              onCheckedChange={handleOverdueBlockingToggle}
+              disabled={loading || savingOverdueBlocking}
+              className="shrink-0 mt-0.5 data-[state=checked]:bg-emerald-600"
+            />
+          </div>
+        </div>
+
         {/* Allow Retail Items in Distribution Toggle */}
         <div
           className={cn(

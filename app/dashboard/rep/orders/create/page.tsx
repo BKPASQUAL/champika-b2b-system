@@ -22,6 +22,7 @@ import {
   RotateCcw,
   Pencil,
   Undo2,
+  Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,6 +73,8 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useFormDraft } from "@/hooks/useFormDraft";
+import { CustomerOverdueAlert } from "@/components/CustomerOverdueAlert";
+import { CustomerOverdueStatusResult } from "@/lib/customer-overdue";
 
 // --- Types ---
 
@@ -254,6 +257,42 @@ export default function CreateOrderPage() {
   const [orderDate, setOrderDate] = useState(
     new Date().toISOString().split("T")[0]
   );
+  // Customer 60+ Days Overdue Status State
+  const [customerOverdueStatus, setCustomerOverdueStatus] = useState<CustomerOverdueStatusResult | null>(null);
+  const [overdueLoading, setOverdueLoading] = useState(false);
+
+  const fetchCustomerOverdueStatus = async (cId: string) => {
+    setOverdueLoading(true);
+    try {
+      const uId = currentUser?.id || "";
+      const uRole = currentUser?.role || "rep";
+      const params = new URLSearchParams();
+      if (uId) params.set("userId", uId);
+      if (uRole) params.set("role", uRole);
+      const queryStr = params.toString() ? `?${params.toString()}` : "";
+
+      const res = await fetch(`/api/customers/${cId}/overdue-status${queryStr}`);
+      if (res.ok) {
+        const data = await res.json();
+        setCustomerOverdueStatus(data);
+      } else {
+        setCustomerOverdueStatus(null);
+      }
+    } catch (err) {
+      console.error("Error checking customer overdue status:", err);
+      setCustomerOverdueStatus(null);
+    } finally {
+      setOverdueLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (customerId) {
+      fetchCustomerOverdueStatus(customerId);
+    } else {
+      setCustomerOverdueStatus(null);
+    }
+  }, [customerId, currentUser?.id]);
 
   // Items State
   const [items, setItems] = useState<OrderItem[]>([]);
@@ -794,6 +833,13 @@ export default function CreateOrderPage() {
       toast.error("Please select a customer.");
       return;
     }
+    if (customerOverdueStatus?.isBlocked) {
+      toast.error(
+        customerOverdueStatus.blockReason ||
+        "Invoicing blocked: Customer has 60+ days overdue bills. Please settle bills or request Admin unlock."
+      );
+      return;
+    }
     if (items.length === 0) {
       toast.error("Please add items to the order.");
       return;
@@ -1087,14 +1133,16 @@ export default function CreateOrderPage() {
           </span>
         )}
         {/* Desktop Place Order button — hidden on mobile (uses sticky bar below) */}
-        <Button
-          onClick={handleSaveOrder}
-          disabled={items.length === 0 || submitting}
-          className="hidden lg:flex bg-black hover:bg-gray-800 text-white shrink-0"
-        >
-          <Save className="w-4 h-4 mr-2" />
-          Place Order
-        </Button>
+        {!customerOverdueStatus?.isBlocked && (
+          <Button
+            onClick={handleSaveOrder}
+            disabled={items.length === 0 || submitting}
+            className="hidden lg:flex bg-black hover:bg-gray-800 text-white shrink-0"
+          >
+            <Save className="w-4 h-4 mr-2" />
+            Place Order
+          </Button>
+        )}
       </div>
 
       <div className="grid gap-4 sm:gap-6 lg:grid-cols-3 w-full max-w-full min-w-0">
@@ -1191,6 +1239,14 @@ export default function CreateOrderPage() {
                 </div>
               </div>
 
+              {/* 60+ Days Overdue Warning / Admin Unlock Alert */}
+              <CustomerOverdueAlert
+                status={customerOverdueStatus}
+                loading={overdueLoading}
+                onStatusUpdated={() => customerId && fetchCustomerOverdueStatus(customerId)}
+                currentUser={currentUser}
+              />
+
               {/* Rep info & Payment Method row (2 columns) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 pt-1">
                 <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-md border bg-muted/20">
@@ -1233,8 +1289,28 @@ export default function CreateOrderPage() {
             </CardContent>
           </Card>
 
-          {/* 2. Add Products */}
-          <div ref={addProductCardRef} className="scroll-mt-4 w-full">
+          {/* If customer is blocked due to 60+ days overdue bills, HIDE product selection and ordering UI */}
+          {customerOverdueStatus?.isBlocked ? (
+            <Card className="border-2 border-dashed border-red-300 bg-red-50/20 p-8 text-center rounded-2xl shadow-sm">
+              <div className="flex flex-col items-center justify-center max-w-lg mx-auto space-y-3 py-6">
+                <div className="p-4 bg-red-100 text-red-700 rounded-2xl shadow-inner">
+                  <Lock className="w-10 h-10" />
+                </div>
+                <h3 className="font-bold text-lg text-slate-900 tracking-tight">
+                  Product Selection & Ordering Locked
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                  Product catalog, stock, and ordering are hidden for <strong>{customerOverdueStatus.customerName}</strong> because of unsettled 60+ days overdue bills.
+                </p>
+                <p className="text-xs text-red-700 font-medium">
+                  Click <strong>Request Admin Unlock</strong> above or settle the overdue bills to unlock and view the product catalog.
+                </p>
+              </div>
+            </Card>
+          ) : (
+            <>
+              {/* 2. Add Products */}
+              <div ref={addProductCardRef} className="scroll-mt-4 w-full">
             <Card className={cn("w-full min-w-0 overflow-hidden transition-all", editingItemId ? "border-blue-500 border-2" : "")}>
               <CardHeader className="pb-1 sm:pb-2">
                 <CardTitle className="text-base sm:text-lg">
@@ -2034,11 +2110,26 @@ export default function CreateOrderPage() {
               </div>
             </CardContent>
           </Card>
+            </>
+          )}
         </div>
 
         {/* ── RIGHT COLUMN — Summary (desktop sidebar) ── */}
         <div className="lg:col-span-1 hidden lg:block">
-          <Card className="sticky top-6">
+          {customerOverdueStatus?.isBlocked ? (
+            <Card className="border-red-200 bg-red-50/20 p-6 text-center space-y-3 sticky top-6">
+              <div className="p-3 bg-red-100 text-red-700 rounded-full w-fit mx-auto">
+                <Lock className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <p className="font-semibold text-sm text-slate-900">Ordering Locked</p>
+                <p className="text-xs text-muted-foreground">
+                  Order summary will become active once an Admin unlocks this customer.
+                </p>
+              </div>
+            </Card>
+          ) : (
+            <Card className="sticky top-6">
             <CardHeader>
               <CardTitle>Order Summary</CardTitle>
             </CardHeader>
@@ -2150,58 +2241,61 @@ export default function CreateOrderPage() {
               </Button>
             </CardContent>
           </Card>
+          )}
         </div>
       </div>
 
       {/* ── Mobile / Tablet sticky bottom bar ── */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t shadow-lg px-4 py-3 safe-area-inset-bottom">
-        <div className="flex items-center gap-3 max-w-2xl mx-auto">
-          {/* Mini totals */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-xs text-muted-foreground">Total</span>
-              <span className="font-bold text-base text-primary truncate">
-                LKR {grandTotal.toLocaleString()}
-              </span>
+      {!customerOverdueStatus?.isBlocked && (
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t shadow-lg px-4 py-3 safe-area-inset-bottom">
+          <div className="flex items-center gap-3 max-w-2xl mx-auto">
+            {/* Mini totals */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-xs text-muted-foreground">Total</span>
+                <span className="font-bold text-base text-primary truncate">
+                  LKR {grandTotal.toLocaleString()}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                <span>{items.length} item{items.length !== 1 ? "s" : ""}</span>
+                {extraDiscountAmount > 0 && (
+                  <span>· Disc: LKR {extraDiscountAmount.toLocaleString()}</span>
+                )}
+                {returnItems.length > 0 && (
+                  <span className="text-orange-600 font-medium">· Returns: {returnItems.length} item(s)</span>
+                )}
+              </div>
             </div>
-            <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-              <span>{items.length} item{items.length !== 1 ? "s" : ""}</span>
-              {extraDiscountAmount > 0 && (
-                <span>· Disc: LKR {extraDiscountAmount.toLocaleString()}</span>
-              )}
-              {returnItems.length > 0 && (
-                <span className="text-orange-600 font-medium">· Returns: {returnItems.length} item(s)</span>
-              )}
+
+            {/* Extra discount quick input */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <Label className="text-xs text-muted-foreground whitespace-nowrap">
+                Extra %
+              </Label>
+              <Input
+                type="number"
+                min="0"
+                max="100"
+                placeholder="0"
+                value={extraDiscount}
+                onChange={(e) => setExtraDiscount(e.target.value)}
+                className="w-16 h-9 text-sm text-center"
+              />
             </div>
-          </div>
 
-          {/* Extra discount quick input */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            <Label className="text-xs text-muted-foreground whitespace-nowrap">
-              Extra %
-            </Label>
-            <Input
-              type="number"
-              min="0"
-              max="100"
-              placeholder="0"
-              value={extraDiscount}
-              onChange={(e) => setExtraDiscount(e.target.value)}
-              className="w-16 h-9 text-sm text-center"
-            />
+            {/* Place Order */}
+            <Button
+              onClick={handleSaveOrder}
+              disabled={items.length === 0 || submitting}
+              className="bg-black hover:bg-gray-800 text-white shrink-0"
+            >
+              <Save className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">Place Order</span>
+            </Button>
           </div>
-
-          {/* Place Order */}
-          <Button
-            onClick={handleSaveOrder}
-            disabled={items.length === 0 || submitting}
-            className="bg-black hover:bg-gray-800 text-white shrink-0"
-          >
-            <Save className="w-4 h-4 sm:mr-2" />
-            <span className="hidden sm:inline">Place Order</span>
-          </Button>
         </div>
-      </div>
+      )}
 
       {/* New Customer Dialog */}
       <Dialog open={newCustomerOpen} onOpenChange={setNewCustomerOpen}>
