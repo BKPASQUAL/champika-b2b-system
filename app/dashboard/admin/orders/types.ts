@@ -24,8 +24,9 @@ export interface Order {
   totalAmount: number;
   itemCount: number;
   status: OrderStatus;
-  paymentStatus: PaymentStatus;
+  paymentStatus?: PaymentStatus;
   salesRep: string;
+  route?: string;
   lockedBy?: string | null;
   lockedAt?: string | null;
   notes?: string | null;

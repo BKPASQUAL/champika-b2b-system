@@ -586,9 +586,9 @@ export default function LoadingOrdersPage() {
       <LoadingSheetDialog
         isOpen={isDialogOpen}
         onOpenChange={setIsDialogOpen}
-        selectedOrdersCount={selectedOrders.length}
-        preselectedLorryNumber={preselectedLorry}
-        onSubmit={handleCreateLoad}
+        selectedCount={selectedOrders.length}
+        onConfirm={handleCreateLoad}
+        preselectedLorry={preselectedLorry}
       />
 
       {/* Modal Dialog for Adding to Existing Loading Sheet */}
