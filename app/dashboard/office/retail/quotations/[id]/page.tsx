@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, use } from "react";
+import React, { useState, useEffect, use } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
@@ -108,52 +108,7 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
   const [deleting, setDeleting] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [sharing, setSharing] = useState(false);
-  const [activeBrandOption, setActiveBrandOption] = useState<string>("all");
   const autoActionTriggeredRef = React.useRef(false);
-
-  const getBrandKey = (supplierOrBrand?: string) => {
-    const s = (supplierOrBrand || "").toLowerCase();
-    if (s.includes("orange")) return "orange";
-    if (s.includes("sierra")) return "sierra";
-    if (s.includes("wireman")) return "wireman";
-    if (s.includes("acl")) return "acl";
-    if (s.includes("kelani")) return "kelani";
-    return "other";
-  };
-
-  const itemBrands = useMemo(() => {
-    if (!quotation?.items) return [];
-    const map = new Map<string, { label: string; count: number; total: number }>();
-
-    quotation.items.forEach((item) => {
-      const bKey = getBrandKey(item.supplier);
-      let label = "Other Brands";
-      if (bKey === "orange") label = "Orange";
-      else if (bKey === "sierra") label = "Sierra";
-      else if (bKey === "wireman") label = "Wireman";
-      else if (bKey === "acl") label = "ACL";
-      else if (bKey === "kelani") label = "Kelani";
-
-      if (!map.has(bKey)) {
-        map.set(bKey, { label, count: 0, total: 0 });
-      }
-      const prev = map.get(bKey)!;
-      prev.count += 1;
-      prev.total += item.total;
-    });
-
-    return Array.from(map.entries()).map(([key, val]) => ({ key, ...val }));
-  }, [quotation]);
-
-  const displayedItems = useMemo(() => {
-    if (!quotation?.items) return [];
-    if (activeBrandOption === "all") return quotation.items;
-    return quotation.items.filter((i) => getBrandKey(i.supplier) === activeBrandOption);
-  }, [quotation, activeBrandOption]);
-
-  const displayedSubtotal = displayedItems.reduce((s: number, i: QuotationItem) => s + i.total, 0);
-  const displayedExtraDiscountAmount = (displayedSubtotal * (quotation?.extraDiscountPercent || 0)) / 100;
-  const displayedGrandTotal = displayedSubtotal - displayedExtraDiscountAmount;
 
   // Auto-trigger print or download when redirected from creation page
   useEffect(() => {
@@ -449,53 +404,10 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
             </CardContent>
           </Card>
 
-          {/* Items table with Brand Option Tabs */}
+          {/* Items table */}
           <Card>
             <CardHeader className="pb-2">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                  Items ({displayedItems.length})
-                </CardTitle>
-
-                {itemBrands.length > 1 && (
-                  <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border overflow-x-auto">
-                    <button
-                      type="button"
-                      onClick={() => setActiveBrandOption("all")}
-                      className={cn(
-                        "px-2.5 py-1 text-xs font-semibold rounded-md transition-all whitespace-nowrap cursor-pointer",
-                        activeBrandOption === "all"
-                          ? "bg-slate-900 text-white font-bold shadow-2xs"
-                          : "text-slate-600 hover:text-slate-900"
-                      )}
-                    >
-                      All Items ({quotation.items.length})
-                    </button>
-                    {itemBrands.map((b, idx) => {
-                      const letter = String.fromCharCode(65 + idx);
-                      const isSelected = activeBrandOption === b.key;
-                      return (
-                        <button
-                          key={b.key}
-                          type="button"
-                          onClick={() => setActiveBrandOption(b.key)}
-                          className={cn(
-                            "px-2.5 py-1 text-xs font-semibold rounded-md transition-all whitespace-nowrap cursor-pointer flex items-center gap-1",
-                            isSelected
-                              ? "bg-emerald-600 text-white font-bold shadow-2xs"
-                              : "text-slate-600 hover:text-slate-900"
-                          )}
-                        >
-                          <span>Option {letter}: {b.label}</span>
-                          <span className={cn("text-[10px] px-1 py-0.2 rounded", isSelected ? "bg-emerald-700 text-white" : "bg-slate-200 text-slate-700")}>
-                            LKR {b.total.toLocaleString()}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+              <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Items</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
@@ -511,7 +423,7 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {displayedItems.map((item, idx) => (
+                  {quotation.items.map((item, idx) => (
                     <TableRow key={idx} className={supplierBorderClass(item)}>
                       <TableCell className="text-xs text-muted-foreground">{idx + 1}</TableCell>
                       <TableCell>
@@ -534,13 +446,13 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
                   ))}
                 </TableBody>
                 <TableFooter>
-                  {displayedExtraDiscountAmount > 0 && (
+                  {quotation.extraDiscountAmount > 0 && (
                     <TableRow>
                       <TableCell colSpan={6} className="text-right text-sm text-muted-foreground">
                         Subtotal
                       </TableCell>
                       <TableCell className="text-right font-medium">
-                        LKR {displayedSubtotal.toLocaleString()}
+                        LKR {quotation.subTotal.toLocaleString()}
                       </TableCell>
                     </TableRow>
                   )}
@@ -550,16 +462,14 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
                         Extra Discount ({quotation.extraDiscountPercent}%)
                       </TableCell>
                       <TableCell className="text-right font-medium text-red-500">
-                        − LKR {displayedExtraDiscountAmount.toLocaleString()}
+                        − LKR {quotation.extraDiscountAmount.toLocaleString()}
                       </TableCell>
                     </TableRow>
                   )}
                   <TableRow className="bg-slate-50">
-                    <TableCell colSpan={6} className="text-right font-bold text-base">
-                      {activeBrandOption !== "all" ? `${activeBrandOption.toUpperCase()} Grand Total` : "Grand Total"}
-                    </TableCell>
+                    <TableCell colSpan={6} className="text-right font-bold text-base">Grand Total</TableCell>
                     <TableCell className="text-right font-black text-green-700 text-lg">
-                      LKR {displayedGrandTotal.toLocaleString()}
+                      LKR {quotation.grandTotal.toLocaleString()}
                     </TableCell>
                   </TableRow>
                 </TableFooter>
@@ -581,30 +491,23 @@ export default function QuotationViewPage({ params }: { params: Promise<{ id: st
         <div className="space-y-4">
           <Card>
             <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Totals</CardTitle>
-                {activeBrandOption !== "all" && (
-                  <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 text-[10px]">
-                    {activeBrandOption.toUpperCase()} OPTION
-                  </Badge>
-                )}
-              </div>
+              <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Totals</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Subtotal</span>
-                <span>LKR {displayedSubtotal.toLocaleString()}</span>
+                <span>LKR {quotation.subTotal.toLocaleString()}</span>
               </div>
-              {displayedExtraDiscountAmount > 0 && (
+              {quotation.extraDiscountAmount > 0 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Extra Discount ({quotation.extraDiscountPercent}%)</span>
-                  <span className="text-red-500">− LKR {displayedExtraDiscountAmount.toLocaleString()}</span>
+                  <span className="text-red-500">− LKR {quotation.extraDiscountAmount.toLocaleString()}</span>
                 </div>
               )}
               <Separator />
               <div className="flex justify-between font-bold text-lg">
                 <span>Grand Total</span>
-                <span className="text-green-700">LKR {displayedGrandTotal.toLocaleString()}</span>
+                <span className="text-green-700">LKR {quotation.grandTotal.toLocaleString()}</span>
               </div>
             </CardContent>
           </Card>

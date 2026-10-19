@@ -30,7 +30,6 @@ import {
   CheckCircle2,
   Clock,
   XCircle,
-  Layers,
 } from "lucide-react";
 import { toast } from "sonner";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
@@ -108,16 +107,9 @@ export default function QuotationsListPage() {
             Create and manage retail quotations — convert to invoice when ready.
           </p>
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={refetch}>
             <RefreshCw className="w-4 h-4" />
-          </Button>
-          <Button
-            variant="outline"
-            className="border-blue-300 text-blue-800 bg-blue-50 hover:bg-blue-100"
-            onClick={() => router.push("/dashboard/office/retail/quotations/multi-brand")}
-          >
-            <Layers className="w-4 h-4 mr-2 text-blue-600" /> Multi-Brand Quotation
           </Button>
           <Button
             className="bg-green-600 hover:bg-green-700"
