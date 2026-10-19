@@ -60,11 +60,26 @@ export function ProductReportDialog({
   const [reportType, setReportType] = useState<"cost_price" | "price_list">("cost_price");
   const [selectedSupplier, setSelectedSupplier] = useState<string>("all");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [selectedSubCategory, setSelectedSubCategory] = useState<string>("all");
   const [channelFilter, setChannelFilter] = useState<"all" | "distribution" | "retail_only">(
     isRetailPortal ? "all" : "all"
   );
   const [stockFilter, setStockFilter] = useState<string>("all");
   const [includeImages, setIncludeImages] = useState<boolean>(true);
+
+  // Available sub-categories derived from current product pool & category
+  const availableSubCategories = useMemo(() => {
+    const pool =
+      selectedCategory === "all"
+        ? products
+        : products.filter(
+            (p) => p.category?.toLowerCase().trim() === selectedCategory.toLowerCase().trim()
+          );
+    const subs = Array.from(
+      new Set(pool.map((p) => p.subCategory?.trim()).filter((s): s is string => Boolean(s)))
+    );
+    return subs.sort((a, b) => a.localeCompare(b));
+  }, [products, selectedCategory]);
 
   // Filter products for preview metrics
   const previewProducts = useMemo(() => {
@@ -76,6 +91,9 @@ export function ProductReportDialog({
       if (selectedCategory !== "all" && p.category?.toLowerCase().trim() !== selectedCategory.toLowerCase().trim()) {
         return false;
       }
+      if (selectedSubCategory !== "all" && p.subCategory?.toLowerCase().trim() !== selectedSubCategory.toLowerCase().trim()) {
+        return false;
+      }
       if (channelFilter === "distribution" && p.retailOnly) return false;
       if (channelFilter === "retail_only" && !p.retailOnly) return false;
 
@@ -84,7 +102,7 @@ export function ProductReportDialog({
       if (stockFilter === "out-of-stock" && (p.stock || 0) > 0) return false;
       return true;
     });
-  }, [products, selectedSupplier, selectedCategory, channelFilter, stockFilter]);
+  }, [products, selectedSupplier, selectedCategory, selectedSubCategory, channelFilter, stockFilter]);
 
   const metrics = useMemo(() => {
     const totalItems = previewProducts.length;
@@ -105,6 +123,7 @@ export function ProductReportDialog({
       action,
       supplierFilter: selectedSupplier,
       categoryFilter: selectedCategory,
+      subCategoryFilter: selectedSubCategory,
       channelFilter,
       stockFilter,
       includeImages,
@@ -130,6 +149,7 @@ export function ProductReportDialog({
     exportProductsToExcel(previewProducts, {
       supplierFilter: selectedSupplier,
       categoryFilter: selectedCategory,
+      subCategoryFilter: selectedSubCategory,
       channelFilter,
       includeCost: reportType === "cost_price",
       isRetailPortal,
@@ -138,20 +158,20 @@ export function ProductReportDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-xl sm:max-w-2xl md:max-w-3xl w-[95vw] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl font-bold">
             <FileText className="w-5 h-5 text-blue-600" />
             {isRetailPortal ? "Retail Product & Price Report" : "Generate Product & Cost Report"}
           </DialogTitle>
           <DialogDescription>
-            Filter by Distribution / Retail channel, Supplier, Category, and Stock to generate accurate valuation & price reports.
+            Filter by Distribution / Retail channel, Supplier, Category, and Sub-Category to generate organized valuation & price reports.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
           {/* Report Type Selector */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div
               onClick={() => setReportType("cost_price")}
               className={`cursor-pointer rounded-lg border-2 p-3 transition-all ${
@@ -165,7 +185,7 @@ export function ProductReportDialog({
                 Cost & Price Report
               </div>
               <p className="text-xs text-slate-500 mt-1">
-                Supplier breakdown with Cost Price, {isRetailPortal ? "Retail Price" : "Selling Price"}, MRP, Margin & Stock Valuation.
+                Grouped by Category &amp; Sub-Category with Cost Price, Selling Price, Retail Price, and MRP.
               </p>
             </div>
 
@@ -182,23 +202,23 @@ export function ProductReportDialog({
                 Price List (Customer Facing)
               </div>
               <p className="text-xs text-slate-500 mt-1">
-                Clean catalog with SKU, Item Name, Pack Size, {isRetailPortal ? "Retail Price" : "Selling Price"} and MRP.
+                Clean catalog with SKU, Item Name, Unit, Selling Price, Retail Price, and MRP.
               </p>
             </div>
           </div>
 
-          {/* Filters Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          {/* Filters Grid - Fully Responsive */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
             {/* Channel / Item Type Filter */}
-            <div className="space-y-1">
-              <Label className="text-xs font-medium text-slate-700 flex items-center gap-1">
-                <Globe className="w-3.5 h-3.5 text-slate-500" /> Channel
+            <div className="space-y-1.5 min-w-0">
+              <Label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5 whitespace-nowrap">
+                <Globe className="w-3.5 h-3.5 text-blue-600" /> Channel
               </Label>
               <Select
                 value={channelFilter}
                 onValueChange={(val: any) => setChannelFilter(val)}
               >
-                <SelectTrigger className="h-8 text-xs">
+                <SelectTrigger className="h-9 text-xs w-full bg-white border-slate-200">
                   <SelectValue placeholder="All Channels" />
                 </SelectTrigger>
                 <SelectContent>
@@ -210,12 +230,12 @@ export function ProductReportDialog({
             </div>
 
             {/* Supplier Filter */}
-            <div className="space-y-1">
-              <Label className="text-xs font-medium text-slate-700 flex items-center gap-1">
-                <Building2 className="w-3.5 h-3.5 text-slate-500" /> Supplier
+            <div className="space-y-1.5 min-w-0">
+              <Label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5 whitespace-nowrap">
+                <Building2 className="w-3.5 h-3.5 text-blue-600" /> Supplier
               </Label>
               <Select value={selectedSupplier} onValueChange={setSelectedSupplier}>
-                <SelectTrigger className="h-8 text-xs">
+                <SelectTrigger className="h-9 text-xs w-full bg-white border-slate-200">
                   <SelectValue placeholder="All Suppliers" />
                 </SelectTrigger>
                 <SelectContent>
@@ -229,13 +249,37 @@ export function ProductReportDialog({
               </Select>
             </div>
 
-            {/* Category Filter */}
-            <div className="space-y-1">
-              <Label className="text-xs font-medium text-slate-700 flex items-center gap-1">
-                <Layers className="w-3.5 h-3.5 text-slate-500" /> Category
+            {/* Stock Filter */}
+            <div className="space-y-1.5 min-w-0">
+              <Label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5 whitespace-nowrap">
+                <Package className="w-3.5 h-3.5 text-blue-600" /> Stock Status
               </Label>
-              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                <SelectTrigger className="h-8 text-xs">
+              <Select value={stockFilter} onValueChange={setStockFilter}>
+                <SelectTrigger className="h-9 text-xs w-full bg-white border-slate-200">
+                  <SelectValue placeholder="All Stock" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Stock Levels</SelectItem>
+                  <SelectItem value="in-stock">In-Stock Only (&gt; 0)</SelectItem>
+                  <SelectItem value="low">Low Stock (Below Min)</SelectItem>
+                  <SelectItem value="out-of-stock">Out of Stock (0)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Category Filter */}
+            <div className="space-y-1.5 min-w-0">
+              <Label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5 whitespace-nowrap">
+                <Layers className="w-3.5 h-3.5 text-blue-600" /> Category
+              </Label>
+              <Select
+                value={selectedCategory}
+                onValueChange={(val) => {
+                  setSelectedCategory(val);
+                  setSelectedSubCategory("all");
+                }}
+              >
+                <SelectTrigger className="h-9 text-xs w-full bg-white border-slate-200">
                   <SelectValue placeholder="All Categories" />
                 </SelectTrigger>
                 <SelectContent>
@@ -249,20 +293,26 @@ export function ProductReportDialog({
               </Select>
             </div>
 
-            {/* Stock Filter */}
-            <div className="space-y-1">
-              <Label className="text-xs font-medium text-slate-700 flex items-center gap-1">
-                <Package className="w-3.5 h-3.5 text-slate-500" /> Stock
+            {/* Sub Category Filter */}
+            <div className="space-y-1.5 min-w-0">
+              <Label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5 whitespace-nowrap">
+                <Layers className="w-3.5 h-3.5 text-blue-600" /> Sub Category
               </Label>
-              <Select value={stockFilter} onValueChange={setStockFilter}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="All Stock" />
+              <Select
+                value={selectedSubCategory}
+                onValueChange={setSelectedSubCategory}
+                disabled={availableSubCategories.length === 0}
+              >
+                <SelectTrigger className="h-9 text-xs w-full bg-white border-slate-200">
+                  <SelectValue placeholder={availableSubCategories.length === 0 ? "No Sub Categories" : "All Sub Categories"} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Stock Levels</SelectItem>
-                  <SelectItem value="in-stock">In-Stock Only (&gt; 0)</SelectItem>
-                  <SelectItem value="low">Low Stock (Below Min)</SelectItem>
-                  <SelectItem value="out-of-stock">Out of Stock (0)</SelectItem>
+                  <SelectItem value="all">All Sub Categories</SelectItem>
+                  {availableSubCategories.map((sub) => (
+                    <SelectItem key={sub} value={sub}>
+                      {sub}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

@@ -563,23 +563,23 @@ export function ProductDialogs({
           </div>
 
           {/* Pricing Section */}
-          <div className="col-span-2 grid grid-cols-3 gap-4 border-t pt-4">
+          <div className="col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-4 border-t pt-4">
             <div className="space-y-2 relative">
-              <Label>MRP (LKR)</Label>
+              <Label>Cost Price (LKR)</Label>
               <Input
                 type="number"
                 step="0.01"
-                value={formData.mrp}
+                value={formData.costPrice}
                 onChange={(e) =>
                   setFormData({
                     ...formData,
-                    mrp: parseFloat(e.target.value) || 0,
+                    costPrice: parseFloat(e.target.value) || 0,
                   })
                 }
               />
-              {isMultiPack && Number(formData.mrp) > 0 && (
+              {isMultiPack && Number(formData.costPrice) > 0 && (
                 <p className="text-[10px] text-muted-foreground absolute -bottom-4 left-0">
-                  Per Pcs: {(Number(formData.mrp) / packQuantity).toFixed(2)}
+                  Per Pcs: {(Number(formData.costPrice) / packQuantity).toFixed(2)}
                 </p>
               )}
             </div>
@@ -604,21 +604,42 @@ export function ProductDialogs({
               )}
             </div>
             <div className="space-y-2 relative">
-              <Label>Cost Price (LKR)</Label>
+              <Label className="text-purple-700">Retail Price (LKR)</Label>
               <Input
                 type="number"
                 step="0.01"
-                value={formData.costPrice}
+                value={formData.retailPrice ?? ""}
                 onChange={(e) =>
                   setFormData({
                     ...formData,
-                    costPrice: parseFloat(e.target.value) || 0,
+                    retailPrice: parseFloat(e.target.value) || "",
+                  })
+                }
+                placeholder="Optional"
+                className="border-purple-200 focus-visible:ring-purple-400"
+              />
+              {isMultiPack && Number(formData.retailPrice) > 0 && (
+                <p className="text-[10px] text-muted-foreground absolute -bottom-4 left-0">
+                  Per Pcs: {(Number(formData.retailPrice) / packQuantity).toFixed(2)}
+                </p>
+              )}
+            </div>
+            <div className="space-y-2 relative">
+              <Label>MRP (LKR)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={formData.mrp}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    mrp: parseFloat(e.target.value) || 0,
                   })
                 }
               />
-              {isMultiPack && Number(formData.costPrice) > 0 && (
+              {isMultiPack && Number(formData.mrp) > 0 && (
                 <p className="text-[10px] text-muted-foreground absolute -bottom-4 left-0">
-                  Per Pcs: {(Number(formData.costPrice) / packQuantity).toFixed(2)}
+                  Per Pcs: {(Number(formData.mrp) / packQuantity).toFixed(2)}
                 </p>
               )}
             </div>

@@ -16,11 +16,14 @@ interface ProductFiltersProps {
   setSearchQuery: (val: string) => void;
   categoryFilter: string;
   setCategoryFilter: (val: string) => void;
+  subCategoryFilter: string;
+  setSubCategoryFilter: (val: string) => void;
   supplierFilter: string;
   setSupplierFilter: (val: string) => void;
   stockFilter: string;
   setStockFilter: (val: string) => void;
   categories: string[];
+  subCategories: string[];
   suppliers: string[];
   showCost: boolean;
   onToggleCost: () => void;
@@ -31,18 +34,21 @@ export function ProductFilters({
   setSearchQuery,
   categoryFilter,
   setCategoryFilter,
+  subCategoryFilter,
+  setSubCategoryFilter,
   supplierFilter,
   setSupplierFilter,
   stockFilter,
   setStockFilter,
   categories,
+  subCategories,
   suppliers,
   showCost,
   onToggleCost,
 }: ProductFiltersProps) {
   return (
     <>
-      {/* Mobile: stacked (search full-width, then 2+1 grid) */}
+      {/* Mobile: stacked (search full-width, then 2+2+1 grid) */}
       <div className="flex flex-col gap-3 md:hidden">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -66,6 +72,22 @@ export function ProductFilters({
               ))}
             </SelectContent>
           </Select>
+          <Select
+            value={subCategoryFilter}
+            onValueChange={setSubCategoryFilter}
+            disabled={subCategories.length <= 1}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder={subCategories.length <= 1 ? "No Sub Categories" : "Sub Category"} />
+            </SelectTrigger>
+            <SelectContent>
+              {subCategories.map((sub) => (
+                <SelectItem key={sub} value={sub}>
+                  {sub === "all" ? "All Sub Categories" : sub}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Select value={supplierFilter} onValueChange={setSupplierFilter}>
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Supplier" />
@@ -79,7 +101,7 @@ export function ProductFilters({
             </SelectContent>
           </Select>
           <Select value={stockFilter} onValueChange={setStockFilter}>
-            <SelectTrigger className="w-full col-span-2">
+            <SelectTrigger className="w-full">
               <SelectValue placeholder="Stock Status" />
             </SelectTrigger>
             <SelectContent>
@@ -96,19 +118,19 @@ export function ProductFilters({
         </div>
       </div>
 
-      {/* Desktop: all in one row */}
-      <div className="hidden md:flex md:items-center md:gap-2">
-        <div className="relative flex-1">
+      {/* Desktop: responsive flex wrap */}
+      <div className="hidden md:flex md:flex-wrap xl:flex-nowrap md:items-center md:gap-2">
+        <div className="relative flex-1 min-w-[180px]">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search by name, category, or supplier..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 w-full"
+            className="pl-9 w-full h-9 text-xs"
           />
         </div>
         <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="w-32 lg:w-36 h-9 text-xs">
             <SelectValue placeholder="Category" />
           </SelectTrigger>
           <SelectContent>
@@ -119,8 +141,24 @@ export function ProductFilters({
             ))}
           </SelectContent>
         </Select>
+        <Select
+          value={subCategoryFilter}
+          onValueChange={setSubCategoryFilter}
+          disabled={subCategories.length <= 1}
+        >
+          <SelectTrigger className="w-32 lg:w-36 h-9 text-xs">
+            <SelectValue placeholder={subCategories.length <= 1 ? "No Sub Category" : "Sub Category"} />
+          </SelectTrigger>
+          <SelectContent>
+            {subCategories.map((sub) => (
+              <SelectItem key={sub} value={sub}>
+                {sub === "all" ? "All Sub Categories" : sub}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Select value={supplierFilter} onValueChange={setSupplierFilter}>
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="w-32 lg:w-36 h-9 text-xs">
             <SelectValue placeholder="Supplier" />
           </SelectTrigger>
           <SelectContent>
@@ -132,7 +170,7 @@ export function ProductFilters({
           </SelectContent>
         </Select>
         <Select value={stockFilter} onValueChange={setStockFilter}>
-          <SelectTrigger className="w-[140px]">
+          <SelectTrigger className="w-28 lg:w-[130px] h-9 text-xs">
             <SelectValue placeholder="Stock Status" />
           </SelectTrigger>
           <SelectContent>

@@ -104,6 +104,7 @@ export interface ReportOptions {
   action?: "print" | "download";
   supplierFilter?: string;
   categoryFilter?: string;
+  subCategoryFilter?: string;
   stockFilter?: string;
   channelFilter?: "all" | "distribution" | "retail_only";
   includeImages?: boolean;
@@ -123,6 +124,7 @@ export const generateCostAndPriceReport = async (
     action = "download",
     supplierFilter = "all",
     categoryFilter = "all",
+    subCategoryFilter = "all",
     stockFilter = "all",
     channelFilter = "all",
     includeImages = true,
@@ -147,6 +149,9 @@ export const generateCostAndPriceReport = async (
     }
     if (categoryFilter && categoryFilter !== "all") {
       eligible = eligible.filter((p) => p.category?.toLowerCase().trim() === categoryFilter.toLowerCase().trim());
+    }
+    if (subCategoryFilter && subCategoryFilter !== "all") {
+      eligible = eligible.filter((p) => p.subCategory?.toLowerCase().trim() === subCategoryFilter.toLowerCase().trim());
     }
     if (channelFilter === "distribution") {
       eligible = eligible.filter((p) => !p.retailOnly);
@@ -196,13 +201,6 @@ export const generateCostAndPriceReport = async (
     const grandTotalItems = eligible.length;
     const grandDistCount = eligible.filter((p) => !p.retailOnly).length;
     const grandRetailCount = eligible.filter((p) => Boolean(p.retailOnly)).length;
-    const grandTotalStock = eligible.reduce((sum, p) => sum + (Number(p.stock) || 0), 0);
-    const grandTotalCostVal = eligible.reduce((sum, p) => sum + (Number(p.stock) || 0) * (Number(p.costPrice) || 0), 0);
-    const grandTotalSellingVal = eligible.reduce((sum, p) => {
-      const sellPrice = (isRetailPortal && Number(p.retailPrice) > 0) ? Number(p.retailPrice) : (Number(p.sellingPrice) || 0);
-      return sum + (Number(p.stock) || 0) * sellPrice;
-    }, 0);
-    const grandTotalProfitVal = grandTotalSellingVal - grandTotalCostVal;
 
     const scopeLabel =
       channelFilter === "distribution"
@@ -246,7 +244,7 @@ export const generateCostAndPriceReport = async (
       doc.setFontSize(7);
       doc.setFont("helvetica", "italic");
       doc.setTextColor(148, 163, 184);
-      doc.text(`${companyName} — Confidential Product & Cost Valuation Report`, marginLeft, pageHeight - 6);
+      doc.text(`${companyName} — Product Cost & Price Report`, marginLeft, pageHeight - 6);
       doc.text(`Page ${pageNum} of ${total}`, marginRight, pageHeight - 6, { align: "right" });
     };
 
@@ -255,20 +253,19 @@ export const generateCostAndPriceReport = async (
     let currentY = 22;
 
     supplierNames.forEach((supplierName, sIndex) => {
-      const supplierProducts = grouped[supplierName].sort((a, b) => {
-        const catCompare = (a.category || "").localeCompare(b.category || "");
-        if (catCompare !== 0) return catCompare;
-        return (a.name || "").localeCompare(b.name || "");
+      const supplierProducts = grouped[supplierName];
+
+      // Group products: Category -> Sub Category
+      const catMap: Record<string, Record<string, Product[]>> = {};
+      supplierProducts.forEach((p) => {
+        const cat = p.category?.trim() || "Uncategorized";
+        const sub = p.subCategory?.trim() || "General";
+        if (!catMap[cat]) catMap[cat] = {};
+        if (!catMap[cat][sub]) catMap[cat][sub] = [];
+        catMap[cat][sub].push(p);
       });
 
-      const supStock = supplierProducts.reduce((s, p) => s + (Number(p.stock) || 0), 0);
-      const supCostVal = supplierProducts.reduce((s, p) => s + (Number(p.stock) || 0) * (Number(p.costPrice) || 0), 0);
-      const supSellingVal = supplierProducts.reduce((s, p) => {
-        const sellPrice = (isRetailPortal && Number(p.retailPrice) > 0) ? Number(p.retailPrice) : (Number(p.sellingPrice) || 0);
-        return s + (Number(p.stock) || 0) * sellPrice;
-      }, 0);
-      const supProfit = supSellingVal - supCostVal;
-      const supMarginPct = supSellingVal > 0 ? ((supProfit / supSellingVal) * 100).toFixed(1) : "0.0";
+      const sortedCategories = Object.keys(catMap).sort((a, b) => a.localeCompare(b));
 
       if (currentY > pageHeight - 35) {
         doc.addPage();
@@ -276,6 +273,7 @@ export const generateCostAndPriceReport = async (
         currentY = 22;
       }
 
+      // Supplier banner
       doc.setFillColor(30, 41, 59);
       doc.roundedRect(marginLeft, currentY, marginRight - marginLeft, 6.5, 1, 1, "F");
 
@@ -287,7 +285,7 @@ export const generateCostAndPriceReport = async (
       doc.setFontSize(7.5);
       doc.setFont("helvetica", "normal");
       doc.text(
-        `Stock: ${fmtInt(supStock)} Pcs  |  Cost Val: LKR ${fmt(supCostVal)}  |  ${isRetailPortal ? "Retail Val" : "Selling Val"}: LKR ${fmt(supSellingVal)}  |  Margin: ${supMarginPct}%`,
+        `${sortedCategories.length} Categories  |  ${supplierProducts.length} Products`,
         marginRight - 3,
         currentY + 4.5,
         { align: "right" }
@@ -295,30 +293,89 @@ export const generateCostAndPriceReport = async (
 
       currentY += 8;
 
-      const tableRows = supplierProducts.map((p, idx) => {
-        const cost = Number(p.costPrice) || 0;
-        const sell = (isRetailPortal && Number(p.retailPrice) > 0) ? Number(p.retailPrice) : (Number(p.sellingPrice) || 0);
-        const mrp = Number(p.mrp) || 0;
-        const stock = Number(p.stock) || 0;
-        const unitProfit = sell - cost;
-        const marginPct = sell > 0 ? ((unitProfit / sell) * 100).toFixed(1) + "%" : "-";
-        const stockVal = stock * cost;
-        const typeTag = p.retailOnly ? "[Retail Only]" : "[Distribution]";
+      const tableRows: any[] = [];
+      const rowProductMap: Record<number, Product> = {};
+      let itemSeq = 1;
+      let rowIndex = 0;
 
-        return [
-          idx + 1,
-          p.sku || p.companyCode || "-",
-          "",
-          `${p.name || "-"}\n${typeTag}`,
-          p.category || "-",
-          p.unitOfMeasure || "Pcs",
-          stock,
-          fmt(cost),
-          fmt(sell),
-          mrp > 0 ? fmt(mrp) : "-",
-          marginPct,
-          fmt(stockVal),
-        ];
+      sortedCategories.forEach((catName) => {
+        const subCats = Object.keys(catMap[catName]).sort((a, b) => a.localeCompare(b));
+        const totalCatItems = subCats.reduce((sum, sc) => sum + catMap[catName][sc].length, 0);
+
+        // Category Header Row spanning all 9 columns
+        tableRows.push([
+          {
+            content: `CATEGORY: ${catName.toUpperCase()}  (${totalCatItems} item${totalCatItems !== 1 ? "s" : ""})`,
+            colSpan: 9,
+            styles: {
+              fillColor: [51, 65, 85], // Slate-700
+              textColor: [255, 255, 255],
+              fontStyle: "bold",
+              fontSize: 7.5,
+              halign: "left",
+              cellPadding: { top: 2.2, bottom: 2.2, left: 4, right: 4 },
+            },
+          },
+        ]);
+        rowIndex++;
+
+        subCats.forEach((subCatName) => {
+          // Sort items in alphabetical order by product name
+          const items = catMap[catName][subCatName].sort((a, b) =>
+            (a.name || "").localeCompare(b.name || "", undefined, {
+              numeric: true,
+              sensitivity: "base",
+            })
+          );
+
+          // Show subcategory banner if there's multiple subcategories or an explicit subcategory name
+          const hasExplicitSubCat =
+            subCatName &&
+            subCatName.toLowerCase() !== "general" &&
+            subCatName.toLowerCase() !== catName.toLowerCase();
+          const shouldShowSubCat = subCats.length > 1 || hasExplicitSubCat;
+
+          if (shouldShowSubCat) {
+            tableRows.push([
+              {
+                content: `    SUB CATEGORY: ${(subCatName || "General").toUpperCase()}  (${items.length} item${items.length !== 1 ? "s" : ""})`,
+                colSpan: 9,
+                styles: {
+                  fillColor: [241, 245, 249], // Slate-100
+                  textColor: [30, 41, 59],     // Dark Slate
+                  fontStyle: "bold",
+                  fontSize: 7,
+                  halign: "left",
+                  cellPadding: { top: 1.8, bottom: 1.8, left: 6, right: 4 },
+                },
+              },
+            ]);
+            rowIndex++;
+          }
+
+          items.forEach((p) => {
+            const cost = Number(p.costPrice) || 0;
+            const sellingPrice = Number(p.sellingPrice) || 0;
+            const retailPrice = Number(p.retailPrice) || 0;
+            const mrp = Number(p.mrp) || 0;
+            // Only show [Retail Only] for retail exclusive items; REMOVE [Distribution] completely
+            const typeTag = p.retailOnly ? "\n[Retail Only]" : "";
+
+            rowProductMap[rowIndex] = p;
+            tableRows.push([
+              itemSeq++,
+              p.sku || p.companyCode || "-",
+              "",
+              `${p.name || "-"}${typeTag}`,
+              p.unitOfMeasure || "Pcs",
+              cost > 0 ? fmt(cost) : "-",
+              sellingPrice > 0 ? fmt(sellingPrice) : "-",
+              retailPrice > 0 ? fmt(retailPrice) : "-",
+              mrp > 0 ? fmt(mrp) : "-",
+            ]);
+            rowIndex++;
+          });
+        });
       });
 
       autoTable(doc, {
@@ -328,14 +385,11 @@ export const generateCostAndPriceReport = async (
             "Item Code",
             "Img",
             "Product Name / Type",
-            "Category",
             "Unit",
-            "Stock",
             "Cost Price",
-            isRetailPortal ? "Retail Price" : "Selling Price",
+            "Selling Price",
+            "Retail Price",
             "MRP",
-            "Margin",
-            "Stock Cost Value",
           ],
         ],
         body: tableRows,
@@ -365,32 +419,31 @@ export const generateCostAndPriceReport = async (
           fillColor: [248, 250, 252],
         },
         columnStyles: {
-          0: { cellWidth: 8, halign: "center" },
-          1: { cellWidth: 22, fontStyle: "bold" },
-          2: { cellWidth: includeImages ? 10 : 0.1, halign: "center", cellPadding: 0.5 },
+          0: { cellWidth: 9, halign: "center" },
+          1: { cellWidth: 25, fontStyle: "bold" },
+          2: { cellWidth: includeImages ? 11 : 0.1, halign: "center", cellPadding: 0.5 },
           3: { cellWidth: "auto" },
-          4: { cellWidth: 26 },
-          5: { cellWidth: 12, halign: "center" },
-          6: { cellWidth: 14, halign: "center", fontStyle: "bold" },
-          7: { cellWidth: 24, halign: "right", fontStyle: "bold", textColor: [37, 99, 235] },
-          8: { cellWidth: 24, halign: "right", fontStyle: "bold", textColor: isRetailPortal ? [147, 51, 234] : [16, 185, 129] },
-          9: { cellWidth: 22, halign: "right", textColor: [100, 116, 139] },
-          10: { cellWidth: 18, halign: "right" },
-          11: { cellWidth: 28, halign: "right", fontStyle: "bold" },
+          4: { cellWidth: 14, halign: "center" },
+          5: { cellWidth: 26, halign: "right", fontStyle: "bold", textColor: [37, 99, 235] },
+          6: { cellWidth: 26, halign: "right", fontStyle: "bold", textColor: [16, 185, 129] },
+          7: { cellWidth: 26, halign: "right", fontStyle: "bold", textColor: [147, 51, 234] },
+          8: { cellWidth: 25, halign: "right", textColor: [100, 116, 139] },
         },
         didDrawCell: (data) => {
           if (includeImages && data.column.index === 2 && data.section === "body") {
-            const product = supplierProducts[data.row.index];
-            const imgUrl = product?.images?.[0];
-            if (imgUrl && imageMap[imgUrl]) {
-              const cellX = data.cell.x;
-              const cellY = data.cell.y;
-              const cellH = data.cell.height;
-              const cellW = data.cell.width;
-              const imgSize = Math.min(cellH - 1, cellW - 1, 7);
-              const x = cellX + (cellW - imgSize) / 2;
-              const y = cellY + (cellH - imgSize) / 2;
-              doc.addImage(imageMap[imgUrl]!, "JPEG", x, y, imgSize, imgSize);
+            const product = rowProductMap[data.row.index];
+            if (product) {
+              const imgUrl = product?.images?.[0];
+              if (imgUrl && imageMap[imgUrl]) {
+                const cellX = data.cell.x;
+                const cellY = data.cell.y;
+                const cellH = data.cell.height;
+                const cellW = data.cell.width;
+                const imgSize = Math.min(cellH - 1, cellW - 1, 7);
+                const x = cellX + (cellW - imgSize) / 2;
+                const y = cellY + (cellH - imgSize) / 2;
+                doc.addImage(imageMap[imgUrl]!, "JPEG", x, y, imgSize, imgSize);
+              }
             }
           }
         },
@@ -412,28 +465,20 @@ export const generateCostAndPriceReport = async (
     doc.setFillColor(241, 245, 249);
     doc.setDrawColor(148, 163, 184);
     doc.setLineWidth(0.4);
-    doc.roundedRect(marginLeft, summaryY, marginRight - marginLeft, 14, 1.5, 1.5, "FD");
+    doc.roundedRect(marginLeft, summaryY, marginRight - marginLeft, 10, 1.5, 1.5, "FD");
 
     doc.setTextColor(15, 23, 42);
     doc.setFontSize(8.5);
     doc.setFont("helvetica", "bold");
-    doc.text("GRAND SUMMARY TOTALS", marginLeft + 4, summaryY + 5);
+    doc.text("REPORT SUMMARY TOTALS", marginLeft + 4, summaryY + 6);
 
     doc.setFontSize(7.5);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(51, 65, 85);
     doc.text(
-      `Total Suppliers: ${supplierNames.length}  |  Total Items: ${grandTotalItems} (Dist: ${grandDistCount}, Retail: ${grandRetailCount})  |  Stock Units: ${fmtInt(grandTotalStock)}`,
-      marginLeft + 4,
-      summaryY + 10
-    );
-
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(15, 23, 42);
-    doc.text(
-      `Total Stock Cost: LKR ${fmt(grandTotalCostVal)}   |   Total ${isRetailPortal ? "Retail" : "Selling"} Value: LKR ${fmt(grandTotalSellingVal)}   |   Est. Margin: LKR ${fmt(grandTotalProfitVal)} (${grandTotalSellingVal > 0 ? ((grandTotalProfitVal / grandTotalSellingVal) * 100).toFixed(1) : "0.0"}%)`,
+      `Total Suppliers: ${supplierNames.length}  |  Total Products: ${grandTotalItems} (Distribution: ${grandDistCount}, Retail Exclusive: ${grandRetailCount})`,
       marginRight - 4,
-      summaryY + 8,
+      summaryY + 6,
       { align: "right" }
     );
 
@@ -471,6 +516,7 @@ export const generatePriceListReport = async (
     action = "download",
     supplierFilter = "all",
     categoryFilter = "all",
+    subCategoryFilter = "all",
     channelFilter = "all",
     includeImages = true,
     isRetailPortal = false,
@@ -492,6 +538,9 @@ export const generatePriceListReport = async (
     }
     if (categoryFilter && categoryFilter !== "all") {
       eligible = eligible.filter((p) => p.category?.toLowerCase().trim() === categoryFilter.toLowerCase().trim());
+    }
+    if (subCategoryFilter && subCategoryFilter !== "all") {
+      eligible = eligible.filter((p) => p.subCategory?.toLowerCase().trim() === subCategoryFilter.toLowerCase().trim());
     }
     if (channelFilter === "distribution") {
       eligible = eligible.filter((p) => !p.retailOnly);
@@ -560,7 +609,7 @@ export const generatePriceListReport = async (
       doc.setFont("helvetica", "italic");
       doc.setTextColor(130, 130, 130);
       doc.text(`Page ${pageNum} of ${totalPages}`, pageWidth / 2, pageHeight - 8, { align: "center" });
-      doc.text(`${companyName} — Confidential Price List`, marginLeft, pageHeight - 8);
+      doc.text(`${companyName} — Price List`, marginLeft, pageHeight - 8);
     };
 
     const grouped: Record<string, Product[]> = {};
@@ -576,9 +625,18 @@ export const generatePriceListReport = async (
     let currentY = 45;
 
     supplierNames.forEach((supplierName, sIndex) => {
-      const supplierProducts = grouped[supplierName].sort((a, b) =>
-        (a.sku || "").localeCompare(b.sku || "", undefined, { numeric: true, sensitivity: "base" })
-      );
+      const supplierProducts = grouped[supplierName];
+
+      const catMap: Record<string, Record<string, Product[]>> = {};
+      supplierProducts.forEach((p) => {
+        const cat = p.category?.trim() || "Uncategorized";
+        const sub = p.subCategory?.trim() || "General";
+        if (!catMap[cat]) catMap[cat] = {};
+        if (!catMap[cat][sub]) catMap[cat][sub] = [];
+        catMap[cat][sub].push(p);
+      });
+
+      const sortedCategories = Object.keys(catMap).sort((a, b) => a.localeCompare(b));
 
       if (currentY > pageHeight - 50) {
         doc.addPage();
@@ -599,22 +657,87 @@ export const generatePriceListReport = async (
 
       currentY += 9;
 
-      const tableRows = supplierProducts.map((p, idx) => {
-        const sellPrice = (isRetailPortal && Number(p.retailPrice) > 0) ? Number(p.retailPrice) : (Number(p.sellingPrice) || 0);
-        const typeTag = p.retailOnly ? " [Retail Only]" : "";
-        return [
-          idx + 1,
-          p.sku || p.companyCode || "-",
-          "",
-          `${p.name}${typeTag}`,
-          p.unitOfMeasure || "-",
-          `LKR ${fmt(sellPrice)}`,
-          p.mrp ? `LKR ${fmt(p.mrp)}` : "-",
-        ];
+      const tableRows: any[] = [];
+      const rowProductMap: Record<number, Product> = {};
+      let itemSeq = 1;
+      let rowIndex = 0;
+
+      sortedCategories.forEach((catName) => {
+        const subCats = Object.keys(catMap[catName]).sort((a, b) => a.localeCompare(b));
+        const totalCatItems = subCats.reduce((sum, sc) => sum + catMap[catName][sc].length, 0);
+
+        tableRows.push([
+          {
+            content: `CATEGORY: ${catName.toUpperCase()} (${totalCatItems} items)`,
+            colSpan: 8,
+            styles: {
+              fillColor: [60, 60, 60],
+              textColor: [255, 255, 255],
+              fontStyle: "bold",
+              fontSize: 7.5,
+              halign: "left",
+              cellPadding: { top: 2, bottom: 2, left: 3, right: 3 },
+            },
+          },
+        ]);
+        rowIndex++;
+
+        subCats.forEach((subCatName) => {
+          const items = catMap[catName][subCatName].sort((a, b) =>
+            (a.name || "").localeCompare(b.name || "", undefined, {
+              numeric: true,
+              sensitivity: "base",
+            })
+          );
+
+          const hasExplicitSubCat =
+            subCatName &&
+            subCatName.toLowerCase() !== "general" &&
+            subCatName.toLowerCase() !== catName.toLowerCase();
+          const shouldShowSubCat = subCats.length > 1 || hasExplicitSubCat;
+
+          if (shouldShowSubCat) {
+            tableRows.push([
+              {
+                content: `    SUB CATEGORY: ${(subCatName || "General").toUpperCase()} (${items.length} items)`,
+                colSpan: 8,
+                styles: {
+                  fillColor: [240, 240, 240],
+                  textColor: [40, 40, 40],
+                  fontStyle: "bold",
+                  fontSize: 7,
+                  halign: "left",
+                  cellPadding: { top: 1.5, bottom: 1.5, left: 5, right: 3 },
+                },
+              },
+            ]);
+            rowIndex++;
+          }
+
+          items.forEach((p) => {
+            const sellPrice = Number(p.sellingPrice) || 0;
+            const retailPrice = Number(p.retailPrice) || 0;
+            const mrp = Number(p.mrp) || 0;
+            const typeTag = p.retailOnly ? " [Retail Only]" : "";
+
+            rowProductMap[rowIndex] = p;
+            tableRows.push([
+              itemSeq++,
+              p.sku || p.companyCode || "-",
+              "",
+              `${p.name}${typeTag}`,
+              p.unitOfMeasure || "-",
+              sellPrice > 0 ? `LKR ${fmt(sellPrice)}` : "-",
+              retailPrice > 0 ? `LKR ${fmt(retailPrice)}` : "-",
+              mrp > 0 ? `LKR ${fmt(mrp)}` : "-",
+            ]);
+            rowIndex++;
+          });
+        });
       });
 
       autoTable(doc, {
-        head: [["#", "Item Code", "Image", "Item Name / Type", "Pack Size", isRetailPortal ? "Retail Price" : "Selling Price", "MRP"]],
+        head: [["#", "Item Code", "Image", "Item Name / Type", "Unit", "Selling Price", "Retail Price", "MRP"]],
         body: tableRows,
         startY: currentY,
         theme: "plain",
@@ -623,48 +746,51 @@ export const generatePriceListReport = async (
           fillColor: [240, 240, 240],
           textColor: [30, 30, 30],
           fontStyle: "bold",
-          fontSize: 8,
+          fontSize: 7.5,
           halign: "center",
           lineColor: [200, 200, 200],
           lineWidth: 0.3,
         },
         bodyStyles: {
           textColor: [30, 30, 30],
-          fontSize: 8,
+          fontSize: 7.5,
           lineColor: [220, 220, 220],
           lineWidth: 0.2,
-          minCellHeight: 12,
+          minCellHeight: 10,
           valign: "middle",
         },
         alternateRowStyles: {
           fillColor: [250, 250, 250],
         },
         styles: {
-          cellPadding: 2.5,
+          cellPadding: 2,
           overflow: "linebreak",
         },
         columnStyles: {
-          0: { cellWidth: 10, halign: "center" },
-          1: { cellWidth: 26 },
-          2: { cellWidth: 14, halign: "center", cellPadding: 1 },
+          0: { cellWidth: 9, halign: "center" },
+          1: { cellWidth: 24, fontStyle: "bold" },
+          2: { cellWidth: includeImages ? 11 : 0.1, halign: "center", cellPadding: 1 },
           3: { cellWidth: "auto", overflow: "linebreak" },
-          4: { cellWidth: 22, halign: "center" },
-          5: { cellWidth: 30, halign: "right", fontStyle: "bold" },
-          6: { cellWidth: 26, halign: "right", textColor: [100, 100, 100] },
+          4: { cellWidth: 16, halign: "center" },
+          5: { cellWidth: 26, halign: "right", fontStyle: "bold" },
+          6: { cellWidth: 26, halign: "right", fontStyle: "bold" },
+          7: { cellWidth: 24, halign: "right", textColor: [100, 100, 100] },
         },
         didDrawCell: (data) => {
           if (includeImages && data.column.index === 2 && data.section === "body") {
-            const product = supplierProducts[data.row.index];
-            const imgUrl = product?.images?.[0];
-            if (imgUrl && imageMap[imgUrl]) {
-              const cellX = data.cell.x;
-              const cellY = data.cell.y;
-              const cellH = data.cell.height;
-              const cellW = data.cell.width;
-              const imgSize = Math.min(cellH - 2, cellW - 2, 10);
-              const x = cellX + (cellW - imgSize) / 2;
-              const y = cellY + (cellH - imgSize) / 2;
-              doc.addImage(imageMap[imgUrl]!, "JPEG", x, y, imgSize, imgSize);
+            const product = rowProductMap[data.row.index];
+            if (product) {
+              const imgUrl = product?.images?.[0];
+              if (imgUrl && imageMap[imgUrl]) {
+                const cellX = data.cell.x;
+                const cellY = data.cell.y;
+                const cellH = data.cell.height;
+                const cellW = data.cell.width;
+                const imgSize = Math.min(cellH - 2, cellW - 2, 8);
+                const x = cellX + (cellW - imgSize) / 2;
+                const y = cellY + (cellH - imgSize) / 2;
+                doc.addImage(imageMap[imgUrl]!, "JPEG", x, y, imgSize, imgSize);
+              }
             }
           }
         },
@@ -706,6 +832,7 @@ export const exportProductsToExcel = (
   options: {
     supplierFilter?: string;
     categoryFilter?: string;
+    subCategoryFilter?: string;
     channelFilter?: "all" | "distribution" | "retail_only";
     includeCost?: boolean;
     isRetailPortal?: boolean;
@@ -714,6 +841,7 @@ export const exportProductsToExcel = (
   const {
     supplierFilter = "all",
     categoryFilter = "all",
+    subCategoryFilter = "all",
     channelFilter = "all",
     includeCost = true,
     isRetailPortal = false,
@@ -726,6 +854,9 @@ export const exportProductsToExcel = (
   if (categoryFilter !== "all") {
     eligible = eligible.filter((p) => p.category?.toLowerCase().trim() === categoryFilter.toLowerCase().trim());
   }
+  if (subCategoryFilter && subCategoryFilter !== "all") {
+    eligible = eligible.filter((p) => p.subCategory?.toLowerCase().trim() === subCategoryFilter.toLowerCase().trim());
+  }
   if (channelFilter === "distribution") {
     eligible = eligible.filter((p) => !p.retailOnly);
   } else if (channelFilter === "retail_only") {
@@ -736,6 +867,17 @@ export const exportProductsToExcel = (
     toast.error("No products to export");
     return;
   }
+
+  // Sort alphabetically by Supplier, Category, Sub Category, and Name
+  eligible = [...eligible].sort((a, b) => {
+    const supCompare = (a.supplier || "").localeCompare(b.supplier || "");
+    if (supCompare !== 0) return supCompare;
+    const catCompare = (a.category || "").localeCompare(b.category || "");
+    if (catCompare !== 0) return catCompare;
+    const subCompare = (a.subCategory || "").localeCompare(b.subCategory || "");
+    if (subCompare !== 0) return subCompare;
+    return (a.name || "").localeCompare(b.name || "", undefined, { numeric: true, sensitivity: "base" });
+  });
 
   const data = eligible.map((p) => {
     const cost = Number(p.costPrice) || 0;
@@ -752,6 +894,7 @@ export const exportProductsToExcel = (
       Name: p.name,
       Channel: p.retailOnly ? "Retail Only" : "Distribution & Wholesale",
       Category: p.category,
+      "Sub Category": p.subCategory || "-",
       Supplier: p.supplier,
       Stock: stock,
       Unit: p.unitOfMeasure || "Pcs",
@@ -762,9 +905,7 @@ export const exportProductsToExcel = (
     }
 
     row["Base Selling Price (LKR)"] = sell;
-    if (isRetailPortal || retail > 0) {
-      row["Retail Price (LKR)"] = retail > 0 ? retail : "-";
-    }
+    row["Retail Price (LKR)"] = retail > 0 ? retail : "-";
     row["MRP (LKR)"] = p.mrp || 0;
 
     if (includeCost) {

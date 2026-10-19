@@ -34,11 +34,13 @@ export interface Product {
 export type SortField =
   | "name"
   | "category"
+  | "subCategory"
   | "brand"
   | "supplier"
   | "stock"
   | "costPrice"
   | "sellingPrice"
+  | "retailPrice"
   | "mrp"
   | "totalCost"
   | "commissionValue"
@@ -63,6 +65,7 @@ export interface ProductFormData {
   minStock: number | string;
   mrp: number | string;
   sellingPrice: number | string;
+  retailPrice?: number | string;
   costPrice: number | string;
   images: string[];
   unitOfMeasure: string;

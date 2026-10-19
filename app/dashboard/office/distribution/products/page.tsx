@@ -55,6 +55,7 @@ export default function ProductsPage() {
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [subCategoryFilter, setSubCategoryFilter] = useState("all");
   const [supplierFilter, setSupplierFilter] = useState("all");
   const [stockFilter, setStockFilter] = useState("all");
   const [showCost, setShowCost] = useState(true);
@@ -92,6 +93,7 @@ export default function ProductsPage() {
     minStock: "",
     mrp: "",
     sellingPrice: "",
+    retailPrice: "",
     costPrice: "",
     images: [],
     unitOfMeasure: "Pcs",
@@ -119,6 +121,20 @@ export default function ProductsPage() {
     [rawSuppliers, settingSuppliers]
   );
 
+  // Available sub-categories based on selected category
+  const availableSubCategories = useMemo(() => {
+    const pool =
+      categoryFilter === "all"
+        ? products
+        : products.filter(
+            (p) => p.category?.toLowerCase().trim() === categoryFilter.toLowerCase().trim()
+          );
+    const unique = Array.from(
+      new Set(pool.map((p) => p.subCategory?.trim()).filter((s): s is string => Boolean(s)))
+    );
+    return ["all", ...unique.sort((a, b) => a.localeCompare(b))];
+  }, [products, categoryFilter]);
+
   const fetchData = useCallback(() => {
     refetchProducts();
   }, [refetchProducts]);
@@ -138,6 +154,8 @@ export default function ProductsPage() {
 
     const matchesCategory =
       categoryFilter === "all" || product.category === categoryFilter;
+    const matchesSubCategory =
+      subCategoryFilter === "all" || product.subCategory === subCategoryFilter;
     const matchesSupplier =
       supplierFilter === "all" || product.supplier === supplierFilter;
 
@@ -148,7 +166,7 @@ export default function ProductsPage() {
     else if (stockFilter === "in-stock")
       matchesStock = product.stock >= product.minStock;
 
-    return matchesSearch && matchesCategory && matchesSupplier && matchesStock && !product.retailOnly;
+    return matchesSearch && matchesCategory && matchesSubCategory && matchesSupplier && matchesStock && !product.retailOnly;
   });
 
   // Sort Logic
@@ -177,7 +195,7 @@ export default function ProductsPage() {
     setCurrentPage(1);
     setSelectedIds(new Set());
     setSelectAllMode(false);
-  }, [searchQuery, categoryFilter, supplierFilter, stockFilter]);
+  }, [searchQuery, categoryFilter, subCategoryFilter, supplierFilter, stockFilter]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) setSortOrder(sortOrder === "asc" ? "desc" : "asc");
@@ -199,6 +217,7 @@ export default function ProductsPage() {
       minStock: Number(formData.minStock) || 0,
       mrp: Number(formData.mrp) || 0,
       sellingPrice: Number(formData.sellingPrice) || 0,
+      retailPrice: formData.retailPrice !== "" && formData.retailPrice !== undefined ? Number(formData.retailPrice) : null,
       costPrice: Number(formData.costPrice) || 0,
     };
 
@@ -258,6 +277,7 @@ export default function ProductsPage() {
       minStock: "",
       mrp: "",
       sellingPrice: "",
+      retailPrice: "",
       costPrice: "",
       images: [],
       unitOfMeasure: "Pcs",
@@ -270,6 +290,7 @@ export default function ProductsPage() {
     exportProductsToExcel(sortedProducts, {
       supplierFilter,
       categoryFilter,
+      subCategoryFilter,
       includeCost: true,
     });
   };
@@ -279,6 +300,7 @@ export default function ProductsPage() {
       action: "download",
       supplierFilter,
       categoryFilter,
+      subCategoryFilter,
     });
   };
 
@@ -296,6 +318,7 @@ export default function ProductsPage() {
             action: "download",
             supplierFilter,
             categoryFilter,
+            subCategoryFilter,
           })
         }
         onPrintPriceListReport={() =>
@@ -303,6 +326,7 @@ export default function ProductsPage() {
             action: "print",
             supplierFilter,
             categoryFilter,
+            subCategoryFilter,
           })
         }
         onCostPriceDownload={() =>
@@ -310,6 +334,7 @@ export default function ProductsPage() {
             action: "download",
             supplierFilter,
             categoryFilter,
+            subCategoryFilter,
             stockFilter,
           })
         }
@@ -318,6 +343,7 @@ export default function ProductsPage() {
             action: "print",
             supplierFilter,
             categoryFilter,
+            subCategoryFilter,
             stockFilter,
           })
         }
@@ -367,7 +393,13 @@ export default function ProductsPage() {
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
             categoryFilter={categoryFilter}
-            setCategoryFilter={setCategoryFilter}
+            setCategoryFilter={(val) => {
+              setCategoryFilter(val);
+              setSubCategoryFilter("all");
+            }}
+            subCategoryFilter={subCategoryFilter}
+            setSubCategoryFilter={setSubCategoryFilter}
+            subCategories={availableSubCategories}
             supplierFilter={supplierFilter}
             setSupplierFilter={setSupplierFilter}
             stockFilter={stockFilter}
@@ -420,6 +452,7 @@ export default function ProductsPage() {
                 minStock: p.minStock,
                 mrp: p.mrp,
                 sellingPrice: p.sellingPrice,
+                retailPrice: p.retailPrice ?? "",
                 costPrice: p.costPrice,
                 images: p.images || [],
                 unitOfMeasure: p.unitOfMeasure || "Pcs",

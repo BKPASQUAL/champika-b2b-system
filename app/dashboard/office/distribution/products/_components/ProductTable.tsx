@@ -155,6 +155,9 @@ export function ProductTable({
               <TableHead className="text-right cursor-pointer hover:bg-muted/50" onClick={() => onSort("sellingPrice")}>
                 <div className="flex items-center justify-end">Selling Price {getSortIcon("sellingPrice")}</div>
               </TableHead>
+              <TableHead className="text-right cursor-pointer hover:bg-muted/50" onClick={() => onSort("retailPrice")}>
+                <div className="flex items-center justify-end">Retail Price {getSortIcon("retailPrice")}</div>
+              </TableHead>
               <TableHead className="text-right cursor-pointer hover:bg-muted/50" onClick={() => onSort("mrp")}>
                 <div className="flex items-center justify-end">MRP {getSortIcon("mrp")}</div>
               </TableHead>
@@ -165,7 +168,7 @@ export function ProductTable({
             {/* ── Select-all banner ── */}
             {allPageSelected && allFilteredCount > products.length && showPagination && (
               <TableRow className="bg-purple-50 hover:bg-purple-50">
-                <TableCell colSpan={showCost ? 12 : 11} className="py-2 text-center text-sm text-purple-800">
+                <TableCell colSpan={showCost ? 13 : 12} className="py-2 text-center text-sm text-purple-800">
                   All <strong>{products.length}</strong> products on this page are selected.{" "}
                   <button
                     className="font-semibold underline hover:text-purple-900"
@@ -178,7 +181,7 @@ export function ProductTable({
             )}
             {selectedIds.size === allFilteredCount && allFilteredCount > 0 && !showPagination && (
               <TableRow className="bg-purple-100 hover:bg-purple-100">
-                <TableCell colSpan={showCost ? 12 : 11} className="py-2 text-center text-sm text-purple-800 font-medium">
+                <TableCell colSpan={showCost ? 13 : 12} className="py-2 text-center text-sm text-purple-800 font-medium">
                   All <strong>{allFilteredCount}</strong> products are selected.
                 </TableCell>
               </TableRow>
@@ -186,7 +189,7 @@ export function ProductTable({
 
             {products.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={showCost ? 12 : 11} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={showCost ? 13 : 12} className="text-center py-8 text-muted-foreground">
                   No products found
                 </TableCell>
               </TableRow>
@@ -238,9 +241,16 @@ export function ProductTable({
                       </div>
                     </TableCell>
                     <TableCell>
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
-                        <Tag className="w-3 h-3 mr-1" /> {product.category}
-                      </span>
+                      <div className="flex flex-col gap-1 items-start">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                          <Tag className="w-3 h-3 mr-1" /> {product.category}
+                        </span>
+                        {product.subCategory && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                            {product.subCategory}
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
@@ -280,6 +290,14 @@ export function ProductTable({
                       <div className="text-green-600 font-medium">LKR {product.sellingPrice.toLocaleString()}</div>
                       {isMultiPack && product.sellingPrice > 0 && (
                         <div className="text-[10px] text-muted-foreground">Pcs: {(product.sellingPrice / packQty).toFixed(2)}</div>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="text-purple-600 font-medium">
+                        {product.retailPrice && product.retailPrice > 0 ? `LKR ${product.retailPrice.toLocaleString()}` : "-"}
+                      </div>
+                      {isMultiPack && product.retailPrice && product.retailPrice > 0 && (
+                        <div className="text-[10px] text-muted-foreground">Pcs: {(product.retailPrice / packQty).toFixed(2)}</div>
                       )}
                     </TableCell>
                     <TableCell className="text-right">
@@ -374,6 +392,11 @@ export function ProductTable({
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-primary/10 text-primary">
                         <Tag className="w-2.5 h-2.5 mr-1" /> {product.category}
                       </span>
+                      {product.subCategory && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                          {product.subCategory}
+                        </span>
+                      )}
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-100 text-blue-700">
                         <Building2 className="w-2.5 h-2.5 mr-1" /> {product.supplier}
                       </span>
@@ -383,7 +406,7 @@ export function ProductTable({
                     </div>
 
                     {/* Prices grid */}
-                    <div className={`grid ${showCost ? "grid-cols-3" : "grid-cols-2"} gap-1 mb-2 text-xs`}>
+                    <div className={`grid ${showCost ? "grid-cols-4" : "grid-cols-3"} gap-1 mb-2 text-xs`}>
                       {showCost && (
                         <div className="bg-muted/50 rounded p-1.5 text-center">
                           <div className="text-muted-foreground text-[10px] mb-0.5">Cost</div>
@@ -398,6 +421,15 @@ export function ProductTable({
                         <div className="text-green-600 font-semibold">LKR {product.sellingPrice.toLocaleString()}</div>
                         {isMultiPack && product.sellingPrice > 0 && (
                           <div className="text-[9px] text-muted-foreground">Pcs: {(product.sellingPrice / packQty).toFixed(2)}</div>
+                        )}
+                      </div>
+                      <div className="bg-muted/50 rounded p-1.5 text-center">
+                        <div className="text-muted-foreground text-[10px] mb-0.5">Retail</div>
+                        <div className="text-purple-600 font-semibold">
+                          {product.retailPrice && product.retailPrice > 0 ? `LKR ${product.retailPrice.toLocaleString()}` : "-"}
+                        </div>
+                        {isMultiPack && product.retailPrice && product.retailPrice > 0 && (
+                          <div className="text-[9px] text-muted-foreground">Pcs: {(product.retailPrice / packQty).toFixed(2)}</div>
                         )}
                       </div>
                       <div className="bg-muted/50 rounded p-1.5 text-center">
