@@ -1,3 +1,4 @@
+// app/dashboard/admin/orders/loading/page.tsx
 "use client";
 
 import { useState, useCallback, useMemo } from "react";
@@ -41,14 +42,17 @@ import {
   FileText,
   User,
   MapPin,
+  Download,
+  Printer,
   FolderOpen,
+  Folder,
   Eye,
   MoreHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
-import { LoadingSheetDialog } from "../_components/LoadingSheetDialog";
+import { LoadingSheetDialog } from "@/app/dashboard/admin/orders/_components/LoadingSheetDialog";
+import { downloadLoadingSummary, printLoadingSummary } from "./print-loading-summary";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
-
 
 interface Order {
   id: string;
@@ -118,13 +122,16 @@ export default function LoadingOrdersPage() {
     return m;
   }, [groups]);
 
-  const lorryNumbers = useMemo(() => {
-    const seen = new Set<string>();
+  const groupKeys = useMemo(() => {
+    const seen = new Map<string, LorryGroup>();
     for (const o of orders) {
-      const ln = lorryMap[o.id]?.lorryNumber;
-      if (ln) seen.add(ln);
+      const g = lorryMap[o.id];
+      if (g) {
+        const key = g.lorryNumber || g.loadId;
+        if (!seen.has(key)) seen.set(key, g);
+      }
     }
-    return [...seen].sort();
+    return [...seen.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [orders, lorryMap]);
 
   const preselectedLorry = useMemo(() => {
@@ -135,7 +142,11 @@ export default function LoadingOrdersPage() {
   const filteredOrders = useMemo(() => {
     const q = searchQuery.toLowerCase();
     return orders.filter((order) => {
-      if (lorryFilter !== "all" && lorryMap[order.id]?.lorryNumber !== lorryFilter) return false;
+      if (lorryFilter !== "all") {
+        const g = lorryMap[order.id];
+        const key = g ? g.lorryNumber || g.loadId : null;
+        if (key !== lorryFilter) return false;
+      }
       return (
         !q ||
         (order.invoiceNo && order.invoiceNo.toLowerCase().includes(q)) ||
@@ -246,9 +257,15 @@ export default function LoadingOrdersPage() {
             Select orders to create a delivery load.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2 self-start md:self-auto">
-          <Button variant="outline" size="icon" onClick={refetchAll} className="bg-white">
-            <RefreshCw className="h-4 w-4" />
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={refetchAll}
+            title="Refresh"
+            className="bg-white"
+          >
+            <RefreshCw className="w-4 h-4" />
           </Button>
           <Button
             variant="outline"
@@ -261,96 +278,114 @@ export default function LoadingOrdersPage() {
             <>
               <Button
                 variant="outline"
-                onClick={openAddToExisting}
-                className="animate-in fade-in zoom-in duration-200 bg-white border-slate-200"
+                onClick={() => printLoadingSummary(selectedOrders)}
+                className="animate-in fade-in zoom-in duration-300 bg-white border-slate-200"
               >
-                <FolderOpen className="w-4 h-4 mr-2" /> Add to Existing ({selectedOrders.length})
+                <Printer className="w-4 h-4 mr-2" /> Print Summary ({selectedOrders.length})
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => downloadLoadingSummary(selectedOrders)}
+                className="animate-in fade-in zoom-in duration-300 bg-white border-slate-200"
+              >
+                <Download className="w-4 h-4 mr-2" /> Download Summary ({selectedOrders.length})
+              </Button>
+              <Button
+                variant="outline"
+                onClick={openAddToExisting}
+                className="animate-in fade-in zoom-in duration-300 bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100"
+              >
+                <FolderOpen className="w-4 h-4 mr-2" /> Add to Existing Sheet ({selectedOrders.length})
               </Button>
               <Button
                 onClick={() => setIsDialogOpen(true)}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white animate-in fade-in zoom-in duration-200"
+                className="animate-in fade-in zoom-in duration-300 bg-teal-600 hover:bg-teal-700 text-white"
               >
-                <PlusCircle className="w-4 h-4 mr-2" /> Create Load ({selectedOrders.length})
+                <Truck className="w-4 h-4 mr-2" /> Create Load Sheet ({selectedOrders.length})
               </Button>
             </>
           )}
         </div>
       </div>
 
-      {/* Main Content Card */}
-      <Card className="border-0 sm:border shadow-none sm:shadow-sm bg-transparent sm:bg-card">
-        <CardHeader className="px-0 sm:px-6 pb-2 pt-2 space-y-2">
-          {/* Search + Filter */}
+      {/* Main Content Area */}
+      <div className="mt-4 space-y-4">
+        {/* Search & Filter Bar */}
+        <div className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search Invoice, Shop, or Sales Rep..."
+                placeholder="Search by Invoice No, Order ID, Shop Name, or Rep..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 bg-white border-slate-200"
+                className="pl-9 bg-white"
               />
             </div>
-            <Button variant="outline" size="icon" className="shrink-0 bg-white">
-              <Filter className="h-4 w-4" />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={toggleSelectAll}
+              className="shrink-0 bg-white"
+            >
+              {selectedOrders.length === filteredOrders.length && filteredOrders.length > 0
+                ? "Deselect All"
+                : "Select All"}
             </Button>
           </div>
 
-          {/* Lorry filter pills */}
-          {lorryNumbers.length > 0 && (
+          {/* Lorry / Folder filter pills */}
+          {groupKeys.length > 0 && (
             <div className="flex items-center gap-1.5 flex-wrap">
               <button
                 onClick={() => setFilter("all")}
                 className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
                   lorryFilter === "all"
-                    ? "bg-slate-800 text-white border-slate-800"
-                    : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
+                    ? "bg-slate-900 text-white border-slate-900"
+                    : "bg-white text-muted-foreground border-slate-200 hover:border-slate-300 hover:bg-slate-50"
                 }`}
               >
                 All
               </button>
-              {lorryNumbers.map((ln) => (
+              {groupKeys.map(([key, g]) => (
                 <button
-                  key={ln}
-                  onClick={() => setFilter(lorryFilter === ln ? "all" : ln)}
+                  key={key}
+                  onClick={() => setFilter(lorryFilter === key ? "all" : key)}
                   className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-all ${
-                    lorryFilter === ln
+                    lorryFilter === key
                       ? "bg-teal-600 text-white border-teal-600"
                       : "bg-white text-teal-700 border-teal-200 hover:border-teal-400 hover:bg-teal-50"
                   }`}
                 >
-                  <Truck className="h-3 w-3" />
-                  {ln}
+                  {g.lorryNumber ? <Truck className="h-3 w-3" /> : <Folder className="h-3 w-3" />}
+                  {key}
                 </button>
               ))}
             </div>
           )}
-        </CardHeader>
+        </div>
 
-        <CardContent className="px-0 sm:px-6 pt-0">
-          {/* --- MOBILE VIEW --- */}
-          <div className="grid grid-cols-1 gap-3 md:hidden">
-            {filteredOrders.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground bg-slate-50 rounded-lg border border-dashed">
-                <div className="flex flex-col items-center gap-2">
-                  <Truck className="h-10 w-10 text-muted-foreground/20" />
-                  <p>No orders ready for loading</p>
-                </div>
-              </div>
-            ) : (
-              filteredOrders.map((order) => {
-                const isSelected = selectedOrders.includes(order.id);
-                const lorryGroup = lorryMap[order.id];
-                return (
-                  <div
-                    key={order.id}
-                    className={`bg-white border rounded-xl p-4 shadow-sm flex flex-col gap-3 active:scale-[0.99] transition-transform ${
-                      isSelected ? "border-indigo-400 bg-indigo-50/10" : "border-slate-200"
-                    }`}
-                    onClick={() => toggleSelectOrder(order.id)}
-                  >
-                    {/* Row 1: Checkbox + Invoice + Lorry badge */}
-                    <div className="flex items-center justify-between gap-2">
+        {/* Orders Cards for Mobile */}
+        <div className="grid grid-cols-1 gap-3 md:hidden">
+          {filteredOrders.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground bg-white rounded-lg border">
+              No orders ready for loading.
+            </div>
+          ) : (
+            filteredOrders.map((order) => {
+              const isSelected = selectedOrders.includes(order.id);
+              const lorryGroup = lorryMap[order.id];
+
+              return (
+                <Card
+                  key={order.id}
+                  className={`cursor-pointer transition-all border ${
+                    isSelected ? "border-teal-500 bg-teal-50/20 shadow-sm" : "bg-white"
+                  }`}
+                  onClick={() => toggleSelectOrder(order.id)}
+                >
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Checkbox
                           checked={isSelected}
@@ -365,37 +400,44 @@ export default function LoadingOrdersPage() {
                           className="flex items-center gap-1 font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded text-xs transition-colors hover:bg-indigo-100 hover:text-indigo-900 cursor-pointer"
                           title="Click to view order"
                         >
-                          <FileText className="h-3 w-3" />
-                          {order.invoiceNo || "N/A"}
+                          <FileText className="w-3.5 h-3.5" />
+                          <span>{order.invoiceNo || order.orderId}</span>
                         </div>
-                        <span className="text-[10px] text-muted-foreground font-mono">({order.orderId})</span>
                       </div>
                       {lorryGroup && (
                         <div className="flex items-center gap-1 shrink-0">
-                          <Truck className="h-3 w-3 text-teal-600" />
-                          <span className="text-xs font-medium text-teal-700">{lorryGroup.lorryNumber}</span>
+                          {lorryGroup.lorryNumber ? (
+                            <Truck className="h-3 w-3 text-teal-600" />
+                          ) : (
+                            <Folder className="h-3 w-3 text-indigo-600" />
+                          )}
+                          <span className={`text-xs font-medium ${lorryGroup.lorryNumber ? "text-teal-700" : "text-indigo-700"}`}>
+                            {lorryGroup.lorryNumber || lorryGroup.loadId}
+                          </span>
                         </div>
                       )}
                     </div>
 
-                    {/* Row 2: Shop & Sales Rep */}
-                    <div className="flex justify-between items-start gap-2">
-                      <div className="flex flex-col min-w-0">
-                        <p className="text-sm font-bold text-slate-900 truncate">{order.shopName}</p>
-                        <div className="flex items-center gap-1 mt-0.5 text-xs text-muted-foreground">
-                          <MapPin className="h-3 w-3" />
-                          <span>{order.route}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0 bg-slate-50 border border-slate-100 text-slate-600 px-2 py-1 rounded text-xs font-medium">
-                        <User className="h-3 w-3" />
-                        <span>{order.salesRepName}</span>
+                    <div>
+                      <p className="font-semibold text-sm">{order.shopName}</p>
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
+                        <span className="flex items-center gap-1">
+                          <MapPin className="w-3 h-3" /> {order.route}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <User className="w-3 h-3" /> {order.salesRepName}
+                        </span>
                       </div>
                     </div>
 
-                    {/* Row 3: Total & Actions */}
-                    <div className="flex justify-between items-center border-t pt-2 mt-1">
-                      <div className="flex gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-between pt-2 border-t text-xs">
+                      <span className="font-bold text-slate-800">
+                        LKR {order.totalAmount.toLocaleString()}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-teal-700 border-teal-200 bg-teal-50">
+                          {order.status}
+                        </Badge>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -404,194 +446,231 @@ export default function LoadingOrdersPage() {
                         >
                           <Eye className="w-3.5 h-3.5 mr-1" /> View Order
                         </Button>
-
                       </div>
-                      <p className="font-bold text-slate-900 text-sm">LKR {order.totalAmount.toLocaleString()}</p>
                     </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
+                  </CardContent>
+                </Card>
+              );
+            })
+          )}
+        </div>
 
-          {/* --- DESKTOP VIEW --- */}
-          <div className="hidden md:block rounded-md border bg-white overflow-hidden">
-            <Table>
-              <TableHeader className="bg-slate-50">
+        {/* Orders Table for Desktop */}
+        <div className="hidden md:block rounded-md border bg-white overflow-hidden shadow-sm">
+          <Table>
+            <TableHeader className="bg-slate-50/80">
+              <TableRow>
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={
+                      selectedOrders.length === filteredOrders.length &&
+                      filteredOrders.length > 0
+                    }
+                    onCheckedChange={toggleSelectAll}
+                  />
+                </TableHead>
+                <TableHead>Invoice No</TableHead>
+                <TableHead>Customer / Shop</TableHead>
+                <TableHead>Route</TableHead>
+                <TableHead>Lorry / Folder</TableHead>
+                <TableHead>Sales Rep</TableHead>
+                <TableHead className="text-right">Total Bill</TableHead>
+                <TableHead className="text-center">Status</TableHead>
+                <TableHead className="w-24 text-right">Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredOrders.length === 0 ? (
                 <TableRow>
-                  <TableHead className="w-10">
-                    <Checkbox
-                      checked={filteredOrders.length > 0 && selectedOrders.length === filteredOrders.length}
-                      onCheckedChange={toggleSelectAll}
-                    />
-                  </TableHead>
-                  <TableHead>Invoice No</TableHead>
-                  <TableHead>Customer / Shop</TableHead>
-                  <TableHead>Route</TableHead>
-                  <TableHead>Lorry</TableHead>
-                  <TableHead>Sales Rep</TableHead>
-                  <TableHead className="text-right">Total Bill</TableHead>
-                  <TableHead className="text-center">Status</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
+                  <TableCell
+                    colSpan={9}
+                    className="text-center py-12 text-muted-foreground"
+                  >
+                    No orders ready for loading.
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredOrders.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
-                      <div className="flex flex-col items-center gap-2">
-                        <Truck className="h-12 w-12 text-muted-foreground/30" />
-                        <p className="font-medium">No orders ready for loading</p>
-                        <p className="text-sm">Orders appear here once they pass quality checks</p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredOrders.map((order) => {
-                    const isSelected = selectedOrders.includes(order.id);
-                    const lorryGroup = lorryMap[order.id];
-                    return (
-                      <TableRow
-                        key={order.id}
-                        className={`hover:bg-slate-50 cursor-pointer transition-colors ${
-                          isSelected ? "bg-indigo-50/30" : ""
-                        }`}
-                        onClick={() => toggleSelectOrder(order.id)}
-                      >
-                        <TableCell onClick={(e) => e.stopPropagation()}>
-                          <Checkbox
-                            checked={isSelected}
-                            onCheckedChange={() => toggleSelectOrder(order.id)}
-                          />
-                        </TableCell>
-                        <TableCell
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            router.push(`/dashboard/admin/orders/${order.id}`);
-                          }}
-                        >
-                          <div className="flex flex-col">
-                            <span
-                              className="font-medium font-mono text-xs flex items-center gap-1 w-fit transition-all text-indigo-700 hover:text-indigo-900 hover:underline cursor-pointer"
-                              title="Click to view order"
-                            >
-                              <FileText className="h-3 w-3" />
-                              {order.invoiceNo || "N/A"}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground font-mono mt-0.5">
-                              {order.orderId}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <span className="font-medium text-sm text-slate-900">{order.shopName}</span>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-xs text-muted-foreground">{order.route || "—"}</span>
-                        </TableCell>
-                        <TableCell>
-                          {lorryGroup ? (
-                            <div className="flex items-center gap-1.5">
-                              <Truck className="h-3.5 w-3.5 text-teal-600 shrink-0" />
-                              <span className="text-xs font-semibold text-teal-700">{lorryGroup.lorryNumber}</span>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <div className="h-6 w-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-600 border border-slate-200">
-                              {order.salesRepName?.charAt(0).toUpperCase()}
-                            </div>
-                            <span className="text-sm text-muted-foreground">{order.salesRepName}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right font-semibold text-sm">
-                          LKR {order.totalAmount.toLocaleString()}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 text-xs">
-                            {order.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-8 text-xs hover:bg-slate-100 hover:text-slate-900 border-slate-200"
-                            onClick={() => router.push(`/dashboard/admin/orders/${order.id}`)}
-                          >
-                            <Eye className="w-3.5 h-3.5 mr-1" /> View Order
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+              ) : (
+                filteredOrders.map((order) => {
+                  const isSelected = selectedOrders.includes(order.id);
+                  const lorryGroup = lorryMap[order.id];
 
+                  return (
+                    <TableRow
+                      key={order.id}
+                      className={`cursor-pointer transition-colors ${
+                        isSelected ? "bg-teal-50/40 hover:bg-teal-50/60" : "hover:bg-slate-50"
+                      }`}
+                      onClick={() => toggleSelectOrder(order.id)}
+                    >
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => toggleSelectOrder(order.id)}
+                        />
+                      </TableCell>
+                      <TableCell
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push(`/dashboard/admin/orders/${order.id}`);
+                        }}
+                      >
+                        <div className="flex flex-col">
+                          <span
+                            className="font-mono font-bold text-xs text-indigo-700 hover:text-indigo-900 transition-colors flex items-center gap-1"
+                            title="Click to view order"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                            {order.invoiceNo || "No Inv No"}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            {order.orderId}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-medium text-slate-800">
+                        {order.shopName}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-xs">
+                        {order.route}
+                      </TableCell>
+                      <TableCell>
+                        {lorryGroup ? (
+                          <div className="flex items-center gap-1.5">
+                            {lorryGroup.lorryNumber ? (
+                              <Truck className="h-3.5 w-3.5 text-teal-600 shrink-0" />
+                            ) : (
+                              <Folder className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+                            )}
+                            <span className={`text-xs font-semibold ${lorryGroup.lorryNumber ? "text-teal-700" : "text-indigo-700"}`}>
+                              {lorryGroup.lorryNumber || lorryGroup.loadId}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-xs">
+                        {order.salesRepName}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold text-slate-800">
+                        LKR {order.totalAmount.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge
+                          variant="outline"
+                          className="text-teal-700 border-teal-200 bg-teal-50"
+                        >
+                          {order.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-xs hover:bg-slate-100 hover:text-slate-900 border-slate-200"
+                          onClick={() => router.push(`/dashboard/admin/orders/${order.id}`)}
+                        >
+                          <Eye className="w-3.5 h-3.5 mr-1" /> View Order
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+
+      {/* Modal Dialog for Loading Sheet Creation */}
       <LoadingSheetDialog
         isOpen={isDialogOpen}
         onOpenChange={setIsDialogOpen}
-        selectedCount={selectedOrders.length}
-        onConfirm={handleCreateLoad}
-        preselectedLorry={preselectedLorry}
+        selectedOrdersCount={selectedOrders.length}
+        preselectedLorryNumber={preselectedLorry}
+        onSubmit={handleCreateLoad}
       />
 
+      {/* Modal Dialog for Adding to Existing Loading Sheet */}
       <Dialog open={addToExistingOpen} onOpenChange={setAddToExistingOpen}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FolderOpen className="h-5 w-5 text-indigo-600" />
-              Add to Existing Load
+            <DialogTitle className="flex items-center gap-2 text-indigo-700">
+              <FolderOpen className="h-5 w-5" />
+              Add Orders to Existing Sheet
             </DialogTitle>
             <DialogDescription>
-              {selectedOrders.length} order(s) will be added to the selected loading sheet.
+              Select an in-transit loading sheet to add the {selectedOrders.length} selected order(s) to.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-2 max-h-64 overflow-y-auto py-1">
+
+          <div className="py-4 space-y-3">
             {loadingSheets ? (
-              <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+              <div className="flex justify-center py-6">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
             ) : existingSheets.length === 0 ? (
-              <p className="text-sm text-center text-muted-foreground py-8">No active loading sheets (In Transit) found.</p>
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No active in-transit loading sheets found.
+              </p>
             ) : (
-              existingSheets.map((sheet) => {
-                const isSelected = selectedSheetId === sheet.id;
-                return (
-                  <button
+              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                {existingSheets.map((sheet) => (
+                  <label
                     key={sheet.id}
-                    onClick={() => setSelectedSheetId(sheet.id)}
-                    className={`w-full text-left rounded-xl border p-3 transition-all ${isSelected ? "border-indigo-500 bg-indigo-50 ring-1 ring-indigo-400" : "border-slate-200 hover:border-indigo-200 hover:bg-slate-50"}`}
+                    className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
+                      selectedSheetId === sheet.id
+                        ? "border-indigo-500 bg-indigo-50/60"
+                        : "border-slate-200 hover:bg-slate-50"
+                    }`}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <Truck className={`h-4 w-4 shrink-0 ${isSelected ? "text-indigo-600" : "text-slate-400"}`} />
-                        <div>
-                          <p className={`text-sm font-bold ${isSelected ? "text-indigo-700" : "text-slate-700"}`}>{sheet.lorryNumber}</p>
-                          <p className="text-xs text-muted-foreground font-mono">{sheet.loadId}</p>
-                        </div>
+                    <div className="flex items-center gap-2.5">
+                      <input
+                        type="radio"
+                        name="existingSheet"
+                        value={sheet.id}
+                        checked={selectedSheetId === sheet.id}
+                        onChange={() => setSelectedSheetId(sheet.id)}
+                        className="text-indigo-600"
+                      />
+                      <div>
+                        <p className="font-semibold text-sm text-slate-800 font-mono">
+                          {sheet.loadId}
+                        </p>
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Truck className="h-3 w-3" /> {sheet.lorryNumber}
+                        </p>
                       </div>
-                      <Badge variant="outline" className="shrink-0">{sheet.totalOrders} orders</Badge>
                     </div>
-                  </button>
-                );
-              })
+                    <Badge variant="secondary" className="text-xs">
+                      {sheet.totalOrders} order(s)
+                    </Badge>
+                  </label>
+                ))}
+              </div>
             )}
           </div>
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAddToExistingOpen(false)}>Cancel</Button>
+            <Button
+              variant="outline"
+              onClick={() => setAddToExistingOpen(false)}
+              disabled={addingToExistingBusy}
+            >
+              Cancel
+            </Button>
             <Button
               onClick={handleAddToExisting}
-              disabled={addingToExistingBusy || !selectedSheetId}
+              disabled={!selectedSheetId || addingToExistingBusy}
               className="bg-indigo-600 hover:bg-indigo-700 text-white"
             >
-              {addingToExistingBusy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Add to Load
+              {addingToExistingBusy ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Adding...
+                </>
+              ) : (
+                "Add Orders"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

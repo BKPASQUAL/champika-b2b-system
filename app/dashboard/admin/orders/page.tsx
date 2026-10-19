@@ -52,7 +52,11 @@ export default function OrdersPage() {
 
   // Filter Logic
   const filteredOrders = orders.filter((order) => {
+    // Updated search to include invoiceNo
     const matchesSearch =
+      (order.invoiceNo?.toLowerCase() || "").includes(
+        searchQuery.toLowerCase()
+      ) ||
       order.orderId.toLowerCase().includes(searchQuery.toLowerCase()) ||
       order.shopName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       order.customerName.toLowerCase().includes(searchQuery.toLowerCase());

@@ -1,6 +1,7 @@
+// app/dashboard/admin/orders/pending/page.tsx
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -28,6 +29,7 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  MapPin,
 } from "lucide-react";
 import {
   Table,
@@ -39,7 +41,7 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 import { Order, SortField, SortOrder } from "../types";
-import { downloadLoadingSummary } from "@/app/dashboard/office/distribution/orders/loading/print-loading-summary";
+import { downloadLoadingSummary, printLoadingSummary } from "../loading/print-loading-summary";
 import { printBulkInvoices } from "@/app/lib/invoice-print";
 
 export default function PendingOrdersPage() {
@@ -48,11 +50,20 @@ export default function PendingOrdersPage() {
   const { data: orders = [], loading } = useCachedFetch<Order[]>(
     "/api/orders?status=Pending",
     [],
-    () => toast.error("Failed to load pending orders")
+    () => toast.error("Failed to load orders")
   );
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
-  const [selectedRep, setSelectedRep] = useState<string>("all");
+  const [selectedRep, setSelectedRep] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("admin_pending_selectedRep") ?? "all";
+    }
+    return "all";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("admin_pending_selectedRep", selectedRep);
+  }, [selectedRep]);
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortDirection, setSortDirection] = useState<SortOrder>("desc");
 
@@ -72,6 +83,7 @@ export default function PendingOrdersPage() {
       : <ArrowDown className="h-3.5 w-3.5 ml-1" />;
   };
 
+  // Unique sales reps derived from loaded orders
   const salesReps = useMemo(() => {
     const names = Array.from(new Set(orders.map((o) => o.salesRep).filter(Boolean)));
     return names.sort();
@@ -89,8 +101,10 @@ export default function PendingOrdersPage() {
           order.orderId.toLowerCase().includes(searchLower) ||
           order.shopName.toLowerCase().includes(searchLower) ||
           order.customerName.toLowerCase().includes(searchLower);
-        const repMatch = selectedRep === "all" || order.salesRep === selectedRep;
-        return textMatch && repMatch;
+        const repMatch =
+          selectedRep === "all" || order.salesRep === selectedRep;
+        const cancelReqMatch = !order.notes?.includes("[CANCEL_REQUEST:");
+        return textMatch && repMatch && cancelReqMatch;
       })
       .sort((a, b) => {
         let cmp = 0;
@@ -135,6 +149,17 @@ export default function PendingOrdersPage() {
     [filteredOrders, selectedOrders]
   );
 
+  // Group already-sorted filteredOrders by route, routes sorted alphabetically
+  const groupedOrders = useMemo(() => {
+    const groups: Record<string, Order[]> = {};
+    filteredOrders.forEach((order) => {
+      const key = order.route || "General";
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(order);
+    });
+    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+  }, [filteredOrders]);
+
   const toggleSelect = (id: string) =>
     setSelectedOrders((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
@@ -162,7 +187,7 @@ export default function PendingOrdersPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Pending Orders</h1>
           <p className="text-muted-foreground text-sm">
-            Review new orders and approve them for processing.
+            Orders waiting for approval or processing.
           </p>
         </div>
         <div className="flex flex-col items-start md:items-end gap-2">
@@ -222,6 +247,18 @@ export default function PendingOrdersPage() {
               <Button
                 variant="outline"
                 onClick={() =>
+                  printLoadingSummary(selectedOrders, {
+                    title: "PENDING ORDERS — ITEMS SUMMARY REPORT",
+                  })
+                }
+                className="bg-white border-slate-200"
+              >
+                <Printer className="w-4 h-4 mr-2" />
+                Print Summary ({selectedOrders.length})
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() =>
                   downloadLoadingSummary(selectedOrders, {
                     title: "PENDING ORDERS — ITEMS SUMMARY REPORT",
                     filePrefix: "Pending_Summary",
@@ -240,59 +277,77 @@ export default function PendingOrdersPage() {
       {/* Main Content Card */}
       <Card className="border-0 sm:border shadow-none sm:shadow-sm bg-transparent sm:bg-card">
         <CardHeader className="px-0 sm:px-6 pb-2 pt-2">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search Invoice, Order ID or Shop..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 bg-white border-slate-200"
-              />
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search Invoice, Order ID or Shop..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 bg-white border-slate-200"
+                />
+              </div>
+              {/* Sort Field */}
+              <Select value={sortField} onValueChange={(v) => setSortField(v as SortField)}>
+                <SelectTrigger className="w-full sm:w-40 bg-white border-slate-200">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="date">Date</SelectItem>
+                  <SelectItem value="invoiceNo">Invoice No</SelectItem>
+                  <SelectItem value="customerName">Shop Name</SelectItem>
+                  <SelectItem value="totalAmount">Total Amount</SelectItem>
+                </SelectContent>
+              </Select>
+              {/* Sort Direction */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSortDirection((d) => (d === "asc" ? "desc" : "asc"))}
+                className="bg-white border-slate-200 gap-1.5 shrink-0"
+              >
+                {sortDirection === "desc" ? (
+                  <><ArrowDown className="h-3.5 w-3.5" /> Desc</>
+                ) : (
+                  <><ArrowUp className="h-3.5 w-3.5" /> Asc</>
+                )}
+              </Button>
             </div>
-            <Select value={selectedRep} onValueChange={setSelectedRep}>
-              <SelectTrigger className="w-full sm:w-[200px] bg-white border-slate-200">
-                <User className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
-                <SelectValue placeholder="All Sales Reps" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Sales Reps</SelectItem>
-                {salesReps.map((rep) => (
-                  <SelectItem key={rep} value={rep}>
-                    {rep}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={sortField} onValueChange={(v) => setSortField(v as SortField)}>
-              <SelectTrigger className="w-full sm:w-40 bg-white border-slate-200">
-                <SelectValue placeholder="Sort by" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="date">Date</SelectItem>
-                <SelectItem value="invoiceNo">Invoice No</SelectItem>
-                <SelectItem value="customerName">Shop Name</SelectItem>
-                <SelectItem value="totalAmount">Total Amount</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSortDirection((d) => (d === "asc" ? "desc" : "asc"))}
-              className="bg-white border-slate-200 gap-1.5 shrink-0"
-            >
-              {sortDirection === "desc" ? (
-                <><ArrowDown className="h-3.5 w-3.5" /> Desc</>
-              ) : (
-                <><ArrowUp className="h-3.5 w-3.5" /> Asc</>
-              )}
-            </Button>
+
+            {/* Sales Rep filter pills */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <button
+                onClick={() => setSelectedRep("all")}
+                className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
+                  selectedRep === "all"
+                    ? "bg-slate-800 text-white border-slate-800"
+                    : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
+                }`}
+              >
+                All
+              </button>
+              {salesReps.map((rep) => (
+                <button
+                  key={rep}
+                  onClick={() => setSelectedRep(selectedRep === rep ? "all" : rep)}
+                  className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-all ${
+                    selectedRep === rep
+                      ? "bg-orange-600 text-white border-orange-600"
+                      : "bg-white text-orange-700 border-orange-200 hover:border-orange-400 hover:bg-orange-50"
+                  }`}
+                >
+                  <User className="h-3 w-3" />
+                  {rep}
+                </button>
+              ))}
+            </div>
           </div>
         </CardHeader>
 
         <CardContent className="px-0 sm:px-6 pt-0">
           {/* --- MOBILE VIEW --- */}
-          <div className="grid grid-cols-1 gap-3 md:hidden">
+          <div className="flex flex-col gap-3 md:hidden">
             {filteredOrders.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground bg-slate-50 rounded-lg border border-dashed">
                 <div className="flex flex-col items-center justify-center">
@@ -301,90 +356,106 @@ export default function PendingOrdersPage() {
                 </div>
               </div>
             ) : (
-              filteredOrders.map((order) => {
-                const isSelected = selectedOrders.includes(order.id);
-                return (
-                  <div
-                    key={order.id}
-                    className={`bg-white border rounded-xl p-4 shadow-sm flex flex-col gap-3 transition-all duration-200 ${
-                      isSelected
-                        ? "border-yellow-400 ring-1 ring-yellow-400 bg-yellow-50/10"
-                        : "border-slate-200"
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <Checkbox
-                        checked={isSelected}
-                        onCheckedChange={() => toggleSelect(order.id)}
-                        className="mt-1"
-                      />
-                      <div
-                        className="flex-1 min-w-0 cursor-pointer"
-                        onClick={() =>
-                          router.push(`/dashboard/admin/orders/${order.id}`)
-                        }
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <div className="flex items-center gap-2">
-                            <div className="flex items-center gap-1 font-mono font-bold text-yellow-700 bg-yellow-50 px-2 py-0.5 rounded text-xs">
-                              <FileText className="h-3 w-3" />
-                              {(order as any).invoiceNo || "N/A"}
-                            </div>
-                            <span className="text-[10px] text-muted-foreground font-mono">
-                              ({order.orderId})
-                            </span>
-                          </div>
-                          <Badge
-                            variant="outline"
-                            className="bg-yellow-50 text-yellow-700 border-yellow-200 shrink-0"
-                          >
-                            Pending
-                          </Badge>
-                        </div>
-
-                        <div className="flex justify-between items-start gap-2 mt-1">
-                          <div className="flex flex-col min-w-0">
-                            <p className="text-sm font-bold text-slate-900 truncate">
-                              {order.shopName}
-                            </p>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <Calendar className="h-3 w-3" />
-                              {new Date(order.date).toLocaleDateString()}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0 bg-slate-50 border border-slate-100 text-slate-600 px-2 py-1 rounded text-xs font-medium">
-                            <User className="h-3 w-3" />
-                            <span>{order.salesRep}</span>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2 text-sm border-t pt-2 mt-2">
-                          <div>
-                            <p className="text-xs text-muted-foreground">Items</p>
-                            <p className="font-medium">{order.itemCount}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-xs text-muted-foreground">Total Amount</p>
-                            <p className="font-bold text-slate-900">
-                              LKR {order.totalAmount.toLocaleString()}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <Button
-                      size="sm"
-                      className="w-full mt-1 bg-yellow-600 hover:bg-yellow-700 text-white h-9"
-                      onClick={() =>
-                        router.push(`/dashboard/admin/orders/${order.id}`)
-                      }
-                    >
-                      Review Order <ArrowRight className="ml-2 h-3 w-3" />
-                    </Button>
+              groupedOrders.map(([routeName, routeOrders]) => (
+                <React.Fragment key={routeName}>
+                  {/* Route group header */}
+                  <div className="flex items-center gap-2 px-1 pt-1">
+                    <MapPin className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                    <span className="text-xs font-bold text-blue-800 uppercase tracking-wide">{routeName}</span>
+                    <span className="text-xs text-blue-500 ml-auto">{routeOrders.length} order{routeOrders.length !== 1 ? "s" : ""}</span>
                   </div>
-                );
-              })
+
+                  {routeOrders.map((order) => {
+                    const isSelected = selectedOrders.includes(order.id);
+                    return (
+                      <div
+                        key={order.id}
+                        className={`bg-white border rounded-xl p-4 shadow-sm flex flex-col gap-3 transition-all duration-200 ${
+                          isSelected
+                            ? "border-yellow-400 ring-1 ring-yellow-400 bg-yellow-50/10"
+                            : "border-slate-200"
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleSelect(order.id)}
+                            className="mt-1"
+                          />
+                          <div
+                            className="flex-1 min-w-0 cursor-pointer"
+                            onClick={() =>
+                              router.push(
+                                `/dashboard/admin/orders/${order.id}`
+                              )
+                            }
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-1 font-mono font-bold text-yellow-700 bg-yellow-50 px-2 py-0.5 rounded text-xs">
+                                  <FileText className="h-3 w-3" />
+                                  {order.invoiceNo || "N/A"}
+                                </div>
+                                <span className="text-[10px] text-muted-foreground font-mono">
+                                  ({order.orderId})
+                                </span>
+                              </div>
+                              <Badge
+                                variant="outline"
+                                className="bg-yellow-50 text-yellow-700 border-yellow-200 shrink-0"
+                              >
+                                Pending
+                              </Badge>
+                            </div>
+
+                            <div className="flex justify-between items-start gap-2 mt-1">
+                              <div className="flex flex-col min-w-0">
+                                <p className="text-sm font-bold text-slate-900 truncate">
+                                  {order.shopName}
+                                </p>
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                  <Calendar className="h-3 w-3" />
+                                  {new Date(order.date).toLocaleDateString()}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0 bg-slate-50 border border-slate-100 text-slate-600 px-2 py-1 rounded text-xs font-medium">
+                                <User className="h-3 w-3" />
+                                <span>{order.salesRep}</span>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 text-sm border-t pt-2 mt-2">
+                              <div>
+                                <p className="text-xs text-muted-foreground">Items</p>
+                                <p className="font-medium">{order.itemCount}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-xs text-muted-foreground">Total Amount</p>
+                                <p className="font-bold text-slate-900">
+                                  LKR {order.totalAmount.toLocaleString()}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <Button
+                          size="sm"
+                          className="w-full mt-1 bg-yellow-600 hover:bg-yellow-700 text-white h-9"
+                          disabled={selectedOrders.length > 0 && !selectedOrders.includes(order.id)}
+                          onClick={() =>
+                            router.push(
+                              `/dashboard/admin/orders/${order.id}`
+                            )
+                          }
+                        >
+                          Process Order <ArrowRight className="ml-2 h-3 w-3" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </React.Fragment>
+              ))
             )}
           </div>
 
@@ -446,70 +517,92 @@ export default function PendingOrdersPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredOrders.map((order) => (
-                    <TableRow
-                      key={order.id}
-                      className={`hover:bg-slate-50 ${
-                        selectedOrders.includes(order.id) ? "bg-yellow-50/30" : ""
-                      }`}
-                    >
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
-                          checked={selectedOrders.includes(order.id)}
-                          onCheckedChange={() => toggleSelect(order.id)}
-                        />
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-muted-foreground text-xs">
-                        {new Date(order.date).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-medium font-mono text-yellow-700 text-xs flex items-center gap-1">
-                            <FileText className="h-3 w-3" />
-                            {(order as any).invoiceNo || "N/A"}
-                          </span>
-                          <span className="text-[10px] text-muted-foreground font-mono">
-                            {order.orderId}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-medium text-sm text-slate-900">
-                            {order.shopName}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {order.customerName}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm">{order.salesRep}</TableCell>
-                      <TableCell className="text-right text-sm">
-                        {order.itemCount}
-                      </TableCell>
-                      <TableCell className="text-right font-semibold text-sm">
-                        LKR {order.totalAmount.toLocaleString()}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge
-                          variant="outline"
-                          className="bg-yellow-50 text-yellow-700 border-yellow-200"
+                  groupedOrders.map(([routeName, routeOrders]) => (
+                    <React.Fragment key={routeName}>
+                      {/* Route divider row */}
+                      <TableRow className="bg-blue-50 hover:bg-blue-50 border-t-2 border-blue-100">
+                        <TableCell colSpan={9} className="py-2 px-4">
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                            <span className="text-xs font-bold text-blue-800 uppercase tracking-wide">
+                              {routeName}
+                            </span>
+                            <span className="text-xs text-blue-500 font-normal">
+                              — {routeOrders.length} order{routeOrders.length !== 1 ? "s" : ""}
+                            </span>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+
+                      {routeOrders.map((order) => (
+                        <TableRow
+                          key={order.id}
+                          className={`hover:bg-slate-50 ${
+                            selectedOrders.includes(order.id) ? "bg-yellow-50/30" : ""
+                          }`}
                         >
-                          Pending
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          className="bg-yellow-600 hover:bg-yellow-700 text-white h-8 text-xs"
-                          onClick={() =>
-                            router.push(`/dashboard/admin/orders/${order.id}`)
-                          }
-                        >
-                          Review <ArrowRight className="ml-1 h-3 w-3" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            <Checkbox
+                              checked={selectedOrders.includes(order.id)}
+                              onCheckedChange={() => toggleSelect(order.id)}
+                            />
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-muted-foreground text-xs">
+                            {new Date(order.date).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span className="font-medium font-mono text-yellow-700 text-xs flex items-center gap-1">
+                                <FileText className="h-3 w-3" />
+                                {order.invoiceNo || "N/A"}
+                              </span>
+                              <span className="text-[10px] text-muted-foreground font-mono">
+                                {order.orderId}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span className="font-medium text-sm text-slate-900">
+                                {order.shopName}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {order.customerName}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm">{order.salesRep}</TableCell>
+                          <TableCell className="text-right text-sm">
+                            {order.itemCount}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold text-sm">
+                            LKR {order.totalAmount.toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge
+                              variant="outline"
+                              className="bg-yellow-50 text-yellow-700 border-yellow-200"
+                            >
+                              Pending
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              size="sm"
+                              className="bg-yellow-600 hover:bg-yellow-700 text-white h-8 text-xs"
+                              disabled={selectedOrders.length > 0 && !selectedOrders.includes(order.id)}
+                              onClick={() =>
+                                router.push(
+                                  `/dashboard/admin/orders/${order.id}`
+                                )
+                              }
+                            >
+                              Process <ArrowRight className="ml-1 h-3 w-3" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </React.Fragment>
                   ))
                 )}
               </TableBody>

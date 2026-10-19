@@ -1,7 +1,6 @@
-// app/dashboard/admin/orders/loading/reconcile/[id]/page.tsx
 "use client";
 
-import React, { useState, useEffect, use } from "react";
+import React, { useState, useEffect, use, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Card,
@@ -66,6 +65,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ExpenseFormDialog } from "@/app/dashboard/admin/expenses/_components/ExpenseDialogs";
 import { ExpenseFormData } from "@/app/dashboard/admin/expenses/types";
 import { cn } from "@/lib/utils";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 interface ReconcileReturnItem {
   id: string;
@@ -74,7 +74,8 @@ interface ReconcileReturnItem {
   productName: string;
   sku: string;
   quantity: number;
-  returnType: "Good" | "Damage";
+  returnType: "Good" | "Damage" | "Exchange";
+  actualCondition: "Good" | "Damage" | null;
   price: number;
   totalValue: number;
   createdAt: string;
@@ -98,50 +99,19 @@ interface ExpenseItem {
   description: string;
   amount: number;
   category: string;
+  date: string;
 }
 
-interface ReconcileState {
-  [orderId: string]: {
-    status: string;
-    paymentStatus: string;
-    notes: string;
-  };
+interface LoadDetails {
+  id: string;
+  loadId: string;
+  driverName: string;
+  lorryNumber: string;
+  status: string;
+  createdAt: string;
 }
 
-function KpiCard({
-  label,
-  value,
-  sub,
-  icon: Icon,
-  highlight,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  icon: (props: { className?: string }) => React.ReactNode;
-  highlight?: boolean;
-}) {
-  return (
-    <Card className={cn("border", highlight && "border-black bg-black text-white")}>
-      <CardContent className="p-4 flex items-center gap-3">
-        <div className={cn("p-2 rounded-lg shrink-0", highlight ? "bg-white/10" : "bg-slate-100")}>
-          <Icon className={cn("w-5 h-5", highlight ? "text-white" : "text-slate-600")} />
-        </div>
-        <div className="min-w-0">
-          <p className={cn("text-xs font-medium truncate", highlight ? "text-white/70" : "text-muted-foreground")}>
-            {label}
-          </p>
-          <p className={cn("text-base font-bold leading-tight", highlight ? "text-white" : "")}>{value}</p>
-          {sub && (
-            <p className={cn("text-xs truncate", highlight ? "text-white/60" : "text-muted-foreground")}>{sub}</p>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-export default function ReconcileLoadPage({
+export default function AdminReconcileLoadPage({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -151,115 +121,135 @@ export default function ReconcileLoadPage({
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [loadDetails, setLoadDetails] = useState<any>(null);
+  const [loadDetails, setLoadDetails] = useState<LoadDetails | null>(null);
   const [orders, setOrders] = useState<OrderItem[]>([]);
-  const [loadExpenses, setLoadExpenses] = useState<ExpenseItem[]>([]);
-  const [currentUser, setCurrentUser] = useState<{ id: string; name: string } | null>(null);
+  const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
+  const [reconcileData, setReconcileData] = useState<
+    Record<string, { status: string; notes?: string }>
+  >({});
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  // Unload state
+  const [unloadingId, setUnloadingId] = useState<string | null>(null);
+  const [targetStage, setTargetStage] = useState<string>("Loading");
+  const [unloadNotes, setUnloadNotes] = useState<string>("");
+  const [isUnloading, setIsUnloading] = useState(false);
+
+  // Expense Dialog states
   const [isExpenseDialogOpen, setIsExpenseDialogOpen] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState<string | null>(null);
-  const [reconcileData, setReconcileData] = useState<ReconcileState>({});
+
+  useEffect(() => {
+    try {
+      const u = localStorage.getItem("currentUser");
+      if (u) setCurrentUser(JSON.parse(u));
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const fetchData = async () => {
     try {
-      if (typeof window !== "undefined") {
-        const stored = localStorage.getItem("currentUser");
-        if (stored) {
-          try {
-            const parsed = JSON.parse(stored);
-            if (parsed?.id) setCurrentUser(parsed);
-          } catch {}
-        }
-      }
-
-      const res = await fetch(`/api/orders/loading/history/${id}`);
-      if (!res.ok) throw new Error();
+      setLoading(true);
+      const res = await fetch(`/api/orders/loading/reconcile/${id}`);
+      if (!res.ok) throw new Error("Failed to load details");
       const data = await res.json();
-      setLoadDetails(data);
+      setLoadDetails(data.load);
+      setOrders(data.orders || []);
+      setExpenses(data.expenses || []);
 
-      const expRes = await fetch("/api/expenses");
-      if (expRes.ok) {
-        const allExpenses = await expRes.json();
-        setLoadExpenses(allExpenses.filter((e: any) => e.loadId === id));
-      }
-
-      const ordersWithHistory = await Promise.all(
-        data.orders.map(async (o: any) => {
-          let originalAmount = o.totalAmount;
-          if (o.invoiceId) {
-            try {
-              const histRes = await fetch(`/api/invoices/${o.invoiceId}/history`);
-              if (histRes.ok) {
-                const history = await histRes.json();
-                if (history.length > 0) originalAmount = history[history.length - 1].previousTotal;
-              }
-            } catch {}
-          }
-          return {
-            id: o.id,
-            orderId: o.orderId,
-            invoiceId: o.invoiceId,
-            invoiceNo: o.invoiceNo || "N/A",
-            customer: o.customer.shopName,
-            currentAmount: o.totalAmount,
-            originalAmount,
-            status: o.status,
-            paymentStatus: "Credit",
-            returns: o.returns || [],
-          };
-        })
-      );
-
-      setOrders(ordersWithHistory);
-      setReconcileData((prev) => {
-        if (Object.keys(prev).length > 0) return prev;
-        const init: ReconcileState = {};
-        ordersWithHistory.forEach((o: OrderItem) => {
-          init[o.id] = {
-            status: o.status === "In Transit" || o.status === "Loading" ? "Delivered" : o.status,
-            paymentStatus: "Credit",
-            notes: "",
-          };
-        });
-        return init;
+      const initialReconcile: Record<string, { status: string; notes?: string }> = {};
+      (data.orders || []).forEach((o: OrderItem) => {
+        initialReconcile[o.id] = {
+          status: o.status,
+          notes: "",
+        };
       });
-    } catch {
-      toast.error("Failed to load delivery sheet");
+      setReconcileData(initialReconcile);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to load reconciliation data");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    setLoading(true);
     fetchData();
   }, [id]);
 
-  const handleToggleReturnType = async (returnId: string, currentType: "Good" | "Damage") => {
+  const handleStatusChange = (orderId: string, status: string) => {
     if (loadDetails?.status === "Completed") {
-      toast.info("Load is completed. Returns cannot be modified.");
+      toast.info("Load is completed and locked for edits.");
       return;
     }
-    const newType = currentType === "Good" ? "Damage" : "Good";
+    setReconcileData((prev) => ({
+      ...prev,
+      [orderId]: { ...prev[orderId], status },
+    }));
+  };
+
+  const handleNotesChange = (orderId: string, notes: string) => {
+    if (loadDetails?.status === "Completed") return;
+    setReconcileData((prev) => ({
+      ...prev,
+      [orderId]: { ...prev[orderId], notes },
+    }));
+  };
+
+  const handleUnloadOrder = async (orderId: string) => {
+    if (loadDetails?.status === "Completed") {
+      toast.info("Completed loads cannot be modified.");
+      return;
+    }
+    try {
+      setIsUnloading(true);
+      const res = await fetch(`/api/orders/loading/reconcile/${id}/unload`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId,
+          targetStage,
+          notes: unloadNotes,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to unload order");
+      }
+
+      toast.success(`Order unloaded and moved to ${targetStage}`);
+      setUnloadingId(null);
+      setUnloadNotes("");
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to unload order");
+    } finally {
+      setIsUnloading(false);
+    }
+  };
+
+  const handleToggleReturnType = async (
+    returnId: string,
+    currentCondition: "Good" | "Damage"
+  ) => {
+    if (loadDetails?.status === "Completed") {
+      toast.info("Load is completed and returns cannot be changed.");
+      return;
+    }
+    const newCondition = currentCondition === "Good" ? "Damage" : "Good";
     try {
       const res = await fetch(`/api/inventory/returns/${returnId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ return_type: newType }),
+        body: JSON.stringify({ return_type: newCondition }),
       });
       if (!res.ok) throw new Error();
-      toast.success(`Marked item as ${newType}`);
+      toast.success(`Marked item as ${newCondition}`);
       fetchData();
     } catch {
-      toast.error("Failed to update return type");
+      toast.error("Failed to update return condition");
     }
-  };
-
-  const updateOrderState = (orderId: string, field: string, value: any) => {
-    if (loadDetails?.status === "Completed") return;
-    setReconcileData((prev) => ({
-      ...prev,
-      [orderId]: { ...prev[orderId], [field]: value },
-    }));
   };
 
   const handleEditInvoice = (invoiceId: string | null) => {
@@ -335,7 +325,8 @@ export default function ReconcileLoadPage({
   const isCompleted = loadDetails?.status === "Completed";
   const isUserMissing = !currentUser?.id;
 
-  const allReturns = React.useMemo(() => {
+  // Consolidate returns
+  const allReturns = useMemo(() => {
     const list: any[] = [];
     orders.forEach((o) => {
       if (o.returns) list.push(...o.returns);
@@ -343,109 +334,61 @@ export default function ReconcileLoadPage({
     return list;
   }, [orders]);
   const totalDispatchedValue = orders.reduce((sum, o) => sum + o.originalAmount, 0);
-  const totalFinalValue = orders.reduce((sum, o) => sum + o.currentAmount, 0);
-  const totalExpenses = loadExpenses.reduce((sum, e) => sum + e.amount, 0);
-  const valueDiff = totalFinalValue - totalDispatchedValue;
-
-  const deliveredCount = Object.values(reconcileData).filter((s) => s.status === "Delivered").length;
-  const returnedCount = Object.values(reconcileData).filter((s) => s.status === "Returned").length;
-  const partialCount = Object.values(reconcileData).filter((s) => s.status === "Partial").length;
-  const pendingCount = Object.values(reconcileData).filter((s) => s.status === "Pending").length;
-  const rescheduleCount = Object.values(reconcileData).filter((s) => s.status === "Loading").length;
-  const cancelledCount = Object.values(reconcileData).filter((s) => s.status === "Cancelled").length;
-
-  const deliveredValue = orders.reduce((sum, o) => {
-    const s = reconcileData[o.id]?.status;
-    return s === "Delivered" || s === "Partial" ? sum + o.currentAmount : sum;
-  }, 0);
+  const totalActualValue = orders.reduce((sum, o) => sum + o.currentAmount, 0);
+  const totalDifference = totalActualValue - totalDispatchedValue;
+  const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const netCollectedEst = totalActualValue - totalExpenses;
 
   if (loading) {
     return (
-      <div className="space-y-6 pb-20">
-        <div className="flex items-center gap-4">
-          <div className="h-9 w-9 rounded-md bg-gray-100 animate-pulse" />
-          <div className="space-y-2">
-            <div className="h-6 w-56 bg-gray-100 rounded animate-pulse" />
-            <div className="h-4 w-40 bg-gray-100 rounded animate-pulse" />
-          </div>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-20 bg-gray-100 rounded-lg animate-pulse" />
-          ))}
-        </div>
-        <div className="h-96 bg-gray-100 rounded-lg animate-pulse" />
+      <div className="flex justify-center items-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
     <>
-      <div className="space-y-5 pb-24">
-
-        {/* ── Page Header ── */}
-        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-          <div className="flex items-start gap-3">
+      <div className="space-y-6 max-w-7xl mx-auto pb-24 md:pb-12">
+        {/* ── Top Bar ── */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b pb-4">
+          <div className="flex items-center gap-3">
             <Button
-              variant="ghost"
+              variant="outline"
               size="icon"
-              className="mt-0.5 shrink-0"
-              onClick={() => router.back()}
+              onClick={() => router.push("/dashboard/admin/orders/loading/active")}
+              className="h-9 w-9 shrink-0"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="h-4 w-4" />
             </Button>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-2xl font-bold tracking-tight">Reconcile Delivery</h1>
-                {isCompleted && (
-                  <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100">
-                    <CheckCircle2 className="w-3 h-3 mr-1" /> Completed
-                  </Badge>
-                )}
+                <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
+                  Reconcile Load: {loadDetails?.loadId}
+                </h1>
+                <Badge
+                  variant={isCompleted ? "secondary" : "default"}
+                  className={cn(
+                    "text-xs font-semibold",
+                    isCompleted
+                      ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+                      : "bg-blue-100 text-blue-800 border-blue-200"
+                  )}
+                >
+                  {loadDetails?.status}
+                </Badge>
               </div>
-
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2">
-                <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
-                  <ClipboardList className="w-3.5 h-3.5 text-muted-foreground" />
-                  {loadDetails?.loadId}
-                </span>
-                <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                  <Truck className="w-3.5 h-3.5" />
-                  {loadDetails?.lorryNumber}
-                </span>
-                <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                  <Package className="w-3.5 h-3.5" />
-                  {orders.length} orders
-                </span>
-                {currentUser ? (
-                  <span className="flex items-center gap-1.5 bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full text-xs font-medium border border-blue-100">
-                    <User className="w-3 h-3" />
-                    Reconciling as <strong className="ml-0.5">{currentUser.name}</strong>
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1.5 bg-red-50 text-red-700 px-2.5 py-1 rounded-full text-xs font-medium border border-red-100">
-                    <AlertCircle className="w-3 h-3" /> Not Logged In
-                  </span>
-                )}
-              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Vehicle: <strong className="text-foreground">{loadDetails?.lorryNumber}</strong> · Driver: <strong className="text-foreground">{loadDetails?.driverName}</strong>
+              </p>
             </div>
           </div>
 
-          {/* Desktop action button */}
-          <div className="hidden md:block shrink-0">
-            {isCompleted ? (
+          {!isCompleted && (
+            <div className="hidden md:flex items-center gap-2 self-end sm:self-auto">
               <Button
-                size="lg"
-                variant="outline"
-                disabled
-                className="bg-green-50 text-green-700 border-green-200 opacity-100"
-              >
-                <CheckCircle2 className="w-4 h-4 mr-2" /> Load Completed
-              </Button>
-            ) : (
-              <Button
-                size="lg"
-                className="bg-black hover:bg-gray-800 text-white shadow-md"
+                size="default"
+                className="bg-black hover:bg-gray-800 text-white font-medium shadow"
                 onClick={handleFinalize}
                 disabled={submitting || isUserMissing}
               >
@@ -454,158 +397,234 @@ export default function ReconcileLoadPage({
                 ) : (
                   <Lock className="w-4 h-4 mr-2" />
                 )}
-                Finalize & Close Load
+                Finalize &amp; Close Load
               </Button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
-        {/* ── Auth Alert ── */}
-        {isUserMissing && !isCompleted && (
+        {isUserMissing && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Session Required</AlertTitle>
+            <AlertTitle>Authentication Warning</AlertTitle>
             <AlertDescription>
-              No valid session found. Please log out and log in again before reconciling.
+              Current session is missing or invalid. Please reload or log in again to reconcile this load.
             </AlertDescription>
           </Alert>
         )}
 
-        {/* ── KPI Cards ── */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <KpiCard
-            label="Final Order Value"
-            value={`LKR ${totalFinalValue.toLocaleString()}`}
-            sub={
-              valueDiff !== 0
-                ? `${valueDiff > 0 ? "+" : ""}${valueDiff.toLocaleString()} vs dispatched`
-                : `Dispatched: ${totalDispatchedValue.toLocaleString()}`
-            }
-            icon={Package}
-          />
-          <KpiCard
-            label="Total Expenses"
-            value={`LKR ${totalExpenses.toLocaleString()}`}
-            sub="Fuel, meals & misc"
-            icon={TrendingDown}
-          />
-          <KpiCard
-            label="Delivered Value"
-            value={`LKR ${deliveredValue.toLocaleString()}`}
-            sub={`${deliveredCount + partialCount} of ${orders.length} orders delivered`}
-            icon={CheckCircle2}
-            highlight
-          />
-        </div>
+        {/* ── KPI Stat Cards ── */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+          <Card className="bg-slate-50/70 border-slate-200">
+            <CardHeader className="p-3 sm:p-4 pb-1">
+              <CardDescription className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                Dispatched Value
+              </CardDescription>
+              <CardTitle className="text-base sm:text-xl font-bold text-slate-800">
+                LKR {totalDispatchedValue.toLocaleString()}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-3 sm:p-4 pt-0">
+              <span className="text-[11px] text-muted-foreground">{orders.length} Invoices</span>
+            </CardContent>
+          </Card>
 
-        {/* ── Order Status Strip ── */}
-        <div className="flex flex-wrap gap-2 items-center">
-          <span className="text-sm text-muted-foreground font-medium">Status:</span>
-          {deliveredCount > 0 && (
-            <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100">
-              {deliveredCount} Delivered
-            </Badge>
-          )}
-          {partialCount > 0 && (
-            <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100">
-              {partialCount} Partial
-            </Badge>
-          )}
-          {returnedCount > 0 && (
-            <Badge className="bg-red-100 text-red-700 border-red-200 hover:bg-red-100">
-              {returnedCount} Returned
-            </Badge>
-          )}
-          {rescheduleCount > 0 && (
-            <Badge className="bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100">
-              {rescheduleCount} Reschedule
-            </Badge>
-          )}
-          {pendingCount > 0 && (
-            <Badge className="bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-100">
-              {pendingCount} Pending
-            </Badge>
-          )}
-          {cancelledCount > 0 && (
-            <Badge className="bg-rose-100 text-rose-700 border-rose-200 hover:bg-rose-100">
-              {cancelledCount} Cancelled
-            </Badge>
-          )}
+          <Card className="bg-blue-50/50 border-blue-100">
+            <CardHeader className="p-3 sm:p-4 pb-1">
+              <CardDescription className="text-xs font-medium text-blue-600 uppercase tracking-wide">
+                Actual Value
+              </CardDescription>
+              <CardTitle className="text-base sm:text-xl font-bold text-blue-900">
+                LKR {totalActualValue.toLocaleString()}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-3 sm:p-4 pt-0">
+              <span
+                className={cn(
+                  "text-[11px] font-semibold",
+                  totalDifference < 0
+                    ? "text-red-600"
+                    : totalDifference > 0
+                    ? "text-green-600"
+                    : "text-muted-foreground"
+                )}
+              >
+                {totalDifference !== 0
+                  ? `${totalDifference > 0 ? "+" : ""}LKR ${totalDifference.toLocaleString()} diff`
+                  : "No change"}
+              </span>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-amber-50/50 border-amber-100">
+            <CardHeader className="p-3 sm:p-4 pb-1">
+              <CardDescription className="text-xs font-medium text-amber-700 uppercase tracking-wide">
+                Total Expenses
+              </CardDescription>
+              <CardTitle className="text-base sm:text-xl font-bold text-amber-900">
+                LKR {totalExpenses.toLocaleString()}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-3 sm:p-4 pt-0">
+              <span className="text-[11px] text-muted-foreground">{expenses.length} Entries</span>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-emerald-50/60 border-emerald-200">
+            <CardHeader className="p-3 sm:p-4 pb-1">
+              <CardDescription className="text-xs font-medium text-emerald-700 uppercase tracking-wide">
+                Net To Collect
+              </CardDescription>
+              <CardTitle className="text-base sm:text-xl font-bold text-emerald-900">
+                LKR {netCollectedEst.toLocaleString()}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-3 sm:p-4 pt-0">
+              <span className="text-[11px] text-emerald-700 font-medium">After all expenses</span>
+            </CardContent>
+          </Card>
         </div>
 
         {/* ── Main Two-Column Layout ── */}
-        <div className="grid gap-5 md:grid-cols-3">
-
-          {/* Left: Expenses */}
-          <div className="md:col-span-1">
-            <Card className="md:sticky md:top-4">
-              <CardHeader className="flex flex-row items-center justify-between pb-3">
-                <div>
-                  <CardTitle className="text-base">Load Expenses</CardTitle>
-                  <CardDescription className="text-xs mt-0.5">
-                    Fuel, meals &amp; miscellaneous
-                  </CardDescription>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+          {/* LEFT COLUMN: Returns & Expenses (1/3 width) */}
+          <div className="space-y-6 lg:col-span-1 order-2 lg:order-1">
+            {/* ── RETURNED ITEMS CARD ── */}
+            <Card className="border-slate-200 shadow-sm">
+              <CardHeader className="pb-3 border-b bg-slate-50/50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <TrendingDown className="h-4 w-4 text-rose-600" />
+                    <CardTitle className="text-sm font-bold">Returned Items</CardTitle>
+                  </div>
+                  <Badge variant="outline" className="text-xs font-mono font-bold bg-white">
+                    {allReturns.length} Items
+                  </Badge>
                 </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setIsExpenseDialogOpen(true)}
-                  disabled={isCompleted}
-                  className="shrink-0"
-                >
-                  <Plus className="w-3.5 h-3.5 mr-1" /> Add
-                </Button>
+                <CardDescription className="text-xs">
+                  Physical condition of items received back from this load.
+                </CardDescription>
               </CardHeader>
-              <CardContent>
-                {loadExpenses.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-8 text-center border-2 border-dashed rounded-lg">
-                    <Receipt className="w-7 h-7 text-muted-foreground/40 mb-2" />
-                    <p className="text-sm font-medium text-muted-foreground">No expenses yet</p>
-                    <p className="text-xs text-muted-foreground/60 mt-0.5">
-                      Add fuel, tolls, meals, etc.
-                    </p>
+              <CardContent className="p-3">
+                {allReturns.length === 0 ? (
+                  <div className="text-center py-6 text-muted-foreground text-xs">
+                    <Package className="h-6 w-6 mx-auto mb-1 opacity-40" />
+                    No returns logged on this load.
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {loadExpenses.map((exp) => (
+                    {allReturns.map((ret: ReconcileReturnItem) => {
+                      const isExchange = ret.returnType === "Exchange";
+                      const effectiveCondition = ret.actualCondition || (ret.returnType === "Good" ? "Good" : "Damage");
+                      const isGood = effectiveCondition === "Good";
+                      return (
+                        <div
+                          key={ret.id}
+                          className="p-2.5 rounded-lg border border-slate-200 bg-white shadow-xs space-y-1.5"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="font-semibold text-xs text-slate-800 leading-tight">
+                                {ret.productName}
+                                {isExchange && (
+                                  <span className="ml-1.5 text-[9px] font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded px-1 py-0.5 align-middle">
+                                    Exchange
+                                  </span>
+                                )}
+                              </p>
+                              <p className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                                {ret.sku} · Qty: <strong>{ret.quantity}</strong>
+                              </p>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={isCompleted}
+                              onClick={() => handleToggleReturnType(ret.id, effectiveCondition)}
+                              className={cn(
+                                "h-6 text-[10px] font-bold px-2 shrink-0 transition-all",
+                                isGood
+                                  ? "bg-green-50 text-green-700 border-green-300 hover:bg-green-100"
+                                  : "bg-red-50 text-red-700 border-red-300 hover:bg-red-100"
+                              )}
+                              title="Click to toggle physical condition"
+                            >
+                              {isGood ? "✓ Good Stock" : "⚠ Damage"}
+                            </Button>
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] text-slate-500 pt-0.5 border-t border-slate-100">
+                            <span>Ref: {ret.returnNumber}</span>
+                            <span className="font-semibold font-mono text-slate-700">
+                              LKR {ret.totalValue.toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* ── LOAD EXPENSES CARD ── */}
+            <Card className="border-slate-200 shadow-sm">
+              <CardHeader className="pb-3 border-b bg-slate-50/50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Receipt className="h-4 w-4 text-amber-600" />
+                    <CardTitle className="text-sm font-bold">Load Expenses</CardTitle>
+                  </div>
+                  {!isCompleted && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs border-amber-300 text-amber-900 hover:bg-amber-50"
+                      onClick={() => setIsExpenseDialogOpen(true)}
+                    >
+                      <Plus className="h-3 w-3 mr-1" /> Add
+                    </Button>
+                  )}
+                </div>
+                <CardDescription className="text-xs">
+                  Fuel, food, and other driver trip costs.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-3">
+                {expenses.length === 0 ? (
+                  <div className="text-center py-6 text-muted-foreground text-xs">
+                    No expenses logged for this load.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {expenses.map((exp) => (
                       <div
                         key={exp.id}
-                        className="flex items-center gap-2 p-2.5 rounded-lg border bg-white hover:bg-slate-50 transition-colors group"
+                        className="flex items-center justify-between p-2 rounded-lg border border-slate-200 bg-white text-xs gap-2"
                       >
-                        <div className="p-1.5 bg-red-50 text-red-600 rounded-md shrink-0">
-                          <Receipt className="w-3.5 h-3.5" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold">{exp.category}</p>
-                          <p
-                            className="text-xs text-muted-foreground truncate"
-                            title={exp.description}
-                          >
-                            {exp.description || "—"}
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-slate-800 truncate">{exp.description}</p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {exp.category} · {new Date(exp.date).toLocaleDateString()}
                           </p>
                         </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <span className="font-mono text-sm font-bold">
-                            {exp.amount.toLocaleString()}
-                          </span>
-                          {!isCompleted && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-red-600 transition-opacity"
-                              onClick={() => setExpenseToDelete(exp.id)}
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
-                          )}
-                        </div>
+                        <span className="font-bold font-mono text-slate-900 shrink-0">
+                          LKR {exp.amount.toLocaleString()}
+                        </span>
+                        {!isCompleted && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6 text-red-500 hover:text-red-700 hover:bg-red-50 shrink-0"
+                            onClick={() => setExpenseToDelete(exp.id)}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        )}
                       </div>
                     ))}
-
-                    <Separator className="my-2" />
-                    <div className="flex justify-between items-center px-1">
-                      <span className="text-sm font-semibold">Total</span>
-                      <span className="font-mono text-sm font-bold text-red-600">
+                    <div className="pt-2 border-t flex justify-between font-bold text-xs text-slate-900">
+                      <span>Total Expenses</span>
+                      <span className="font-mono text-amber-700">
                         LKR {totalExpenses.toLocaleString()}
                       </span>
                     </div>
@@ -613,278 +632,150 @@ export default function ReconcileLoadPage({
                 )}
               </CardContent>
             </Card>
-
-            {/* Lorry Returns Summary Card */}
-            {allReturns.length > 0 && (
-              <Card className="md:sticky md:top-[380px]">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center justify-between text-orange-950 font-bold">
-                    <span className="flex items-center gap-1.5">
-                      <Undo2 className="w-5 h-5 text-orange-600" />
-                      Lorry Returns Summary
-                    </span>
-                    <Badge variant="outline" className="text-xs bg-orange-50 text-orange-700 border-orange-200">
-                      Shop by Shop
-                    </Badge>
-                  </CardTitle>
-                  <CardDescription className="text-xs mt-0.5">
-                    Click Good / Damage buttons to set item condition before closing load
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
-                    {orders
-                      .filter((o) => o.returns && o.returns.length > 0)
-                      .map((o) => (
-                        <div key={o.id} className="p-3 rounded-xl border border-orange-100 bg-orange-50/20 space-y-2">
-                          <div className="flex justify-between items-center border-b border-orange-100 pb-1.5">
-                            <div>
-                              <span className="font-bold text-xs text-slate-900 block truncate max-w-[180px]">
-                                {o.customer}
-                              </span>
-                              <span className="text-[10px] text-orange-700 font-mono">
-                                Invoice: {o.invoiceNo}
-                              </span>
-                            </div>
-                            <span className="text-xs font-bold font-mono text-orange-700">
-                              LKR {o.returns?.reduce((s, r) => s + r.totalValue, 0).toLocaleString()}
-                            </span>
-                          </div>
-
-                          <div className="space-y-1.5">
-                            {o.returns?.map((ret) => {
-                              const isGood = ret.returnType === "Good";
-                              return (
-                                <div key={ret.id} className="p-2 rounded-lg bg-white border border-slate-200 flex items-center justify-between gap-2">
-                                  <div className="min-w-0">
-                                    <p className="font-semibold text-xs text-slate-800 truncate" title={ret.productName}>
-                                      {ret.productName}
-                                    </p>
-                                    <p className="text-[10px] text-muted-foreground font-mono">
-                                      {ret.sku} · {ret.quantity} Pcs · LKR {ret.totalValue.toLocaleString()}
-                                    </p>
-                                  </div>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    disabled={isCompleted}
-                                    onClick={() => handleToggleReturnType(ret.id, ret.returnType)}
-                                    className={cn(
-                                      "h-6 text-[10px] font-bold px-2 shrink-0 transition-all",
-                                      isGood
-                                        ? "bg-green-50 text-green-700 border-green-300 hover:bg-green-100"
-                                        : "bg-red-50 text-red-700 border-red-300 hover:bg-red-100"
-                                    )}
-                                    title="Click to toggle condition"
-                                  >
-                                    {isGood ? "✓ Good Stock" : "⚠ Damage"}
-                                  </Button>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                  <Separator className="opacity-50" />
-                  <div className="flex justify-between items-center px-1">
-                    <span className="text-sm font-semibold">Total Returns Value</span>
-                    <span className="font-mono text-sm font-bold text-orange-600">
-                      LKR {allReturns.reduce((sum: number, r: any) => sum + r.totalValue, 0).toLocaleString()}
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
           </div>
 
-          {/* Right: Order Table */}
-          <div className="md:col-span-2">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle>Order Reconciliation</CardTitle>
-                <CardDescription>
-                  {isCompleted
-                    ? "This load has been closed. Records are locked."
-                    : "Set delivery status and payment method for each invoice."}
-                </CardDescription>
+          {/* RIGHT COLUMN: Invoices Table (2/3 width) */}
+          <div className="lg:col-span-2 order-1 lg:order-2 space-y-4">
+            <Card className="border-slate-200 shadow-sm overflow-hidden">
+              <CardHeader className="flex flex-row items-center justify-between pb-3 bg-slate-50/50 border-b">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <ClipboardList className="h-4 w-4 text-blue-600" />
+                    <CardTitle className="text-sm font-bold">Delivery Invoices</CardTitle>
+                  </div>
+                  <CardDescription className="text-xs mt-0.5">
+                    Update delivery outcome, review returned products, or adjust invoice items.
+                  </CardDescription>
+                </div>
+                <Badge variant="outline" className="text-xs font-mono font-bold bg-white">
+                  {orders.length} Total
+                </Badge>
               </CardHeader>
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
                   <Table>
-                    <TableHeader>
-                      <TableRow className="bg-slate-50 hover:bg-slate-50">
-                        <TableHead className="pl-4 min-w-[110px]">Invoice</TableHead>
-                        <TableHead className="min-w-[130px]">Customer</TableHead>
-                        <TableHead className="min-w-[100px]">Returns</TableHead>
-                        <TableHead className="min-w-[150px]">Delivery Status</TableHead>
-                        <TableHead className="text-right min-w-[90px]">Amount (LKR)</TableHead>
-                        <TableHead className="text-right w-[65px]">Diff</TableHead>
-                        <TableHead className="min-w-[130px]">Notes</TableHead>
-                        <TableHead className="text-center w-12">Edit</TableHead>
+                    <TableHeader className="bg-slate-50/80 text-[11px]">
+                      <TableRow>
+                        <TableHead className="font-bold pl-4">Invoice No</TableHead>
+                        <TableHead className="font-bold">Customer</TableHead>
+                        <TableHead className="font-bold text-right">Value (LKR)</TableHead>
+                        <TableHead className="font-bold text-center w-36">Delivery Status</TableHead>
+                        <TableHead className="font-bold text-right pr-4 w-28">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {orders.map((order, idx) => {
-                        const state = reconcileData[order.id] || {};
-                        const currentStatus = state.status || "Delivered";
-                        const diff = order.currentAmount - order.originalAmount;
+                        const rData = reconcileData[order.id];
+                        const currentStatus = rData?.status || order.status;
                         const isCancelled = currentStatus === "Cancelled";
+                        const hasReturns = (order.returns?.length || 0) > 0;
 
                         return (
                           <TableRow
                             key={order.id}
                             className={cn(
-                              "transition-colors",
+                              "text-xs transition-colors border-b",
                               isCancelled
-                                ? "bg-rose-50/40 opacity-70"
-                                : idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"
+                                ? "bg-red-50/40 text-muted-foreground"
+                                : idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"
                             )}
                           >
+                            {/* Invoice Number */}
                             <TableCell className="pl-4">
-                              <div className="text-sm font-bold font-mono tracking-wide">
+                              <div className="font-bold font-mono text-slate-900">
                                 {order.invoiceNo}
                               </div>
-                              <div className="text-xs text-muted-foreground mt-0.5">
+                              <span className="text-[10px] text-muted-foreground font-mono block">
                                 {order.orderId}
-                              </div>
-                            </TableCell>
-
-                            <TableCell>
-                              <span
-                                className="text-sm block max-w-[140px] truncate"
-                                title={order.customer}
-                              >
-                                {order.customer}
                               </span>
                             </TableCell>
 
-                            {/* Returns */}
+                            {/* Customer */}
                             <TableCell>
-                              {order.returns && order.returns.length > 0 ? (
-                                <Popover>
-                                  <PopoverTrigger asChild>
-                                    <Button variant="outline" size="sm" className="h-7 text-xs border-orange-200 bg-orange-50/30 text-orange-850 hover:bg-orange-100 flex items-center gap-1">
-                                      <Undo2 className="w-3 h-3 text-orange-600" />
-                                      {order.returns.length} Return{order.returns.length !== 1 ? "s" : ""}
-                                    </Button>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-80 p-3" align="start">
-                                    <div className="space-y-2">
-                                      <h4 className="font-bold text-xs text-orange-800 uppercase tracking-wider flex items-center gap-1 border-b pb-1">
-                                        <Undo2 className="w-3.5 h-3.5" /> Return Details
-                                      </h4>
-                                      <div className="space-y-1.5 max-h-[200px] overflow-y-auto pr-1">
-                                        {order.returns.map((ret) => (
-                                          <div key={ret.id} className="text-xs flex justify-between gap-2 border-b border-slate-100 pb-1 last:border-0">
-                                            <div className="min-w-0">
-                                              <p className="font-semibold text-slate-800 truncate">{ret.productName}</p>
-                                              <p className="text-[10px] text-muted-foreground font-mono">{ret.sku} · {ret.returnType}</p>
-                                            </div>
-                                            <div className="text-right shrink-0">
-                                              <p className="font-semibold">{ret.quantity} unit{ret.quantity !== 1 ? "s" : ""}</p>
-                                              <p className="text-[10px] text-orange-600 font-bold">LKR {ret.totalValue.toLocaleString()}</p>
-                                            </div>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  </PopoverContent>
-                                </Popover>
-                              ) : (
-                                <span className="text-muted-foreground text-xs">—</span>
+                              <span className="font-medium text-slate-800 line-clamp-1">
+                                {order.customer}
+                              </span>
+                              {hasReturns && (
+                                <Badge
+                                  variant="outline"
+                                  className="mt-1 text-[9px] font-medium bg-rose-50 text-rose-700 border-rose-200"
+                                >
+                                  {order.returns?.length} return item(s)
+                                </Badge>
                               )}
                             </TableCell>
 
+                            {/* Value */}
+                            <TableCell className="text-right font-mono">
+                              <div className="font-bold text-slate-900">
+                                {order.currentAmount.toLocaleString()}
+                              </div>
+                              {order.currentAmount !== order.originalAmount && (
+                                <span className="text-[10px] line-through text-muted-foreground block">
+                                  {order.originalAmount.toLocaleString()}
+                                </span>
+                              )}
+                            </TableCell>
+
+                            {/* Delivery Status */}
                             <TableCell>
                               {isCompleted ? (
                                 <span
                                   className={cn(
                                     "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border",
-                                    currentStatus === "Delivered" && "bg-green-100 text-green-700 border-green-200",
-                                    currentStatus === "Partial" && "bg-amber-100 text-amber-700 border-amber-200",
-                                    currentStatus === "Returned" && "bg-red-100 text-red-700 border-red-200",
-                                    currentStatus === "Loading" && "bg-blue-100 text-blue-700 border-blue-200",
                                     currentStatus === "Pending" && "bg-gray-100 text-gray-600 border-gray-200",
-                                    currentStatus === "Cancelled" && "bg-rose-100 text-rose-700 border-rose-200",
+                                    currentStatus === "Approved" && "bg-purple-100 text-purple-700 border-purple-200",
+                                    currentStatus === "Processing" && "bg-indigo-100 text-indigo-700 border-indigo-200",
+                                    currentStatus === "Checking" && "bg-cyan-100 text-cyan-700 border-cyan-200",
+                                    currentStatus === "Loading" && "bg-blue-100 text-blue-700 border-blue-200",
+                                    currentStatus === "Delivered" && "bg-green-100 text-green-700 border-green-200"
                                   )}
                                 >
-                                  {currentStatus === "Loading" ? "Reschedule" : currentStatus}
+                                  {currentStatus}
                                 </span>
                               ) : (
                                 <Select
                                   value={currentStatus}
-                                  onValueChange={(val) => updateOrderState(order.id, "status", val)}
+                                  onValueChange={(val) => handleStatusChange(order.id, val)}
                                 >
                                   <SelectTrigger
                                     className={cn(
                                       "w-full h-8 text-xs font-medium border",
-                                      currentStatus === "Delivered" && "border-green-200 bg-green-50 text-green-700",
-                                      currentStatus === "Partial" && "border-amber-200 bg-amber-50 text-amber-700",
-                                      currentStatus === "Returned" && "border-red-200 bg-red-50 text-red-700",
-                                      currentStatus === "Loading" && "border-blue-200 bg-blue-50 text-blue-700",
                                       currentStatus === "Pending" && "border-gray-200 bg-gray-50 text-gray-600",
-                                      currentStatus === "Cancelled" && "border-rose-200 bg-rose-50 text-rose-700",
+                                      currentStatus === "Approved" && "border-purple-200 bg-purple-50 text-purple-700",
+                                      currentStatus === "Processing" && "border-indigo-200 bg-indigo-50 text-indigo-700",
+                                      currentStatus === "Checking" && "border-cyan-200 bg-cyan-50 text-cyan-700",
+                                      currentStatus === "Loading" && "border-blue-200 bg-blue-50 text-blue-700",
+                                      currentStatus === "Delivered" && "border-green-200 bg-green-50 text-green-700"
                                     )}
                                   >
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
+                                    <SelectItem value="Approved">Approved</SelectItem>
+                                    <SelectItem value="Processing">Processing</SelectItem>
+                                    <SelectItem value="Checking">Checking</SelectItem>
+                                    <SelectItem value="Loading">Loading</SelectItem>
                                     <SelectItem value="Delivered">Delivered</SelectItem>
-                                    <SelectItem value="Partial">Partial</SelectItem>
-                                    <SelectItem value="Returned">Returned</SelectItem>
-                                    <SelectItem value="Loading">Reschedule</SelectItem>
-                                    <SelectItem value="Cancelled">Cancelled</SelectItem>
                                   </SelectContent>
                                 </Select>
                               )}
                             </TableCell>
 
-                            <TableCell className="text-right">
-                              <span className="font-mono text-sm font-bold">
-                                {order.currentAmount.toLocaleString()}
-                              </span>
-                            </TableCell>
-
-                            <TableCell className="text-right">
-                              {diff !== 0 ? (
-                                <span
-                                  className={cn(
-                                    "text-xs font-mono font-bold",
-                                    diff > 0 ? "text-green-600" : "text-red-600"
-                                  )}
+                            {/* Actions */}
+                            <TableCell className="text-right pr-4">
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  disabled={isCompleted}
+                                  onClick={() => handleEditInvoice(order.invoiceId)}
+                                  className="h-7 w-7 text-blue-600 hover:bg-blue-50"
+                                  title="Edit Invoice"
                                 >
-                                  {diff > 0 ? "+" : ""}
-                                  {diff.toLocaleString()}
-                                </span>
-                              ) : (
-                                <span className="text-muted-foreground text-sm">—</span>
-                              )}
-                            </TableCell>
-
-                            <TableCell>
-                              <Input
-                                disabled={isCompleted || isCancelled}
-                                placeholder="Add note..."
-                                value={state.notes || ""}
-                                onChange={(e) =>
-                                  updateOrderState(order.id, "notes", e.target.value)
-                                }
-                                className="h-8 text-xs bg-white border-slate-200 focus:border-slate-400 disabled:cursor-not-allowed"
-                              />
-                            </TableCell>
-
-                            <TableCell className="text-center">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                disabled={isCompleted || isCancelled}
-                                onClick={() => handleEditInvoice(order.invoiceId)}
-                                className="h-8 w-8 p-0 text-blue-600 hover:bg-blue-50 disabled:opacity-30"
-                                title={isCancelled ? "Order cancelled" : "Edit Invoice"}
-                              >
-                                <Edit3 className="w-3.5 h-3.5" />
-                              </Button>
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         );
@@ -951,7 +842,7 @@ export default function ReconcileLoadPage({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-red-600 hover:bg-red-700 text-white"
               onClick={confirmDeleteExpense}
             >
               Remove

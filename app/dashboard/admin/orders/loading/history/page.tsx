@@ -1,7 +1,7 @@
+// app/dashboard/admin/orders/loading/history/page.tsx
 "use client";
 
-import React, { useState } from "react";
-import { useCachedFetch } from "@/hooks/useCachedFetch";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -42,6 +42,7 @@ import {
   ChevronRight,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
   FileText,
   Share2,
 } from "lucide-react";
@@ -79,19 +80,30 @@ interface LoadingHistory {
 export default function DeliveryHistoryPage() {
   const router = useRouter();
 
+  const [history, setHistory] = useState<LoadingHistory[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [printingId, setPrintingId] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 10;
 
-  const {
-    data: history = [],
-    loading,
-    refetch: fetchHistory,
-  } = useCachedFetch<LoadingHistory[]>("/api/orders/loading/history", [], () =>
-    toast.error("Failed to load delivery history")
-  );
+  const fetchHistory = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await fetch("/api/orders/loading/history");
+      if (!res.ok) throw new Error("Failed to fetch delivery history");
+      setHistory(await res.json());
+    } catch {
+      toast.error("Failed to load delivery history");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchHistory(); }, [fetchHistory]);
 
   const handlePrint = async (e: React.MouseEvent, loadId: string) => {
     e.stopPropagation();
@@ -113,24 +125,35 @@ export default function DeliveryHistoryPage() {
     e.stopPropagation();
     setExpandedIds((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
 
   const filteredHistory = history.filter((load) => {
+    const q = searchQuery.toLowerCase();
     const matchesSearch =
-      (load.loadId ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (load.lorryNumber ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (load.driverName ?? "").toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === "all" || load.status === statusFilter;
+      load.loadId.toLowerCase().includes(q) ||
+      load.lorryNumber.toLowerCase().includes(q) ||
+      load.driverName.toLowerCase().includes(q) ||
+      load.orders?.some(
+        (o) =>
+          o.orderId.toLowerCase().includes(q) ||
+          (o.invoiceNo && o.invoiceNo.toLowerCase().includes(q))
+      );
+    const matchesStatus =
+      statusFilter === "all" || load.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filteredHistory.length / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const pagedHistory = filteredHistory.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   const totalLoads = history.length;
   const inTransitCount = history.filter((l) => l.status === "In Transit").length;
   const completedCount = history.filter((l) => l.status === "Completed").length;
-  const totalOrdersDelivered = history.reduce((sum, load) => sum + load.totalOrders, 0);
 
   return (
     <div className="space-y-6">
@@ -139,55 +162,44 @@ export default function DeliveryHistoryPage() {
         <Button variant="ghost" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="w-5 h-5" />
         </Button>
-        <div className="flex-1">
-          <h1 className="text-3xl font-bold tracking-tight">Loading Deliveries</h1>
-          <p className="text-muted-foreground mt-1">History of dispatched delivery loads.</p>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Delivery History</h1>
+          <p className="text-muted-foreground">
+            View all generated loading sheets and delivery loads.
+          </p>
         </div>
-        <Button variant="outline" size="icon" onClick={fetchHistory} title="Refresh">
-          <RefreshCw className={loading ? "animate-spin" : ""} />
-        </Button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      {/* Summary Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Total Loads</CardTitle>
-            <Truck className="w-4 h-4 text-muted-foreground" />
+            <Truck className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalLoads}</div>
-            <p className="text-xs text-muted-foreground mt-1">All time deliveries</p>
+            <p className="text-xs text-muted-foreground mt-1">All time</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">In Transit</CardTitle>
-            <Truck className="w-4 h-4 text-blue-600" />
+            <Package className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">{inTransitCount}</div>
-            <p className="text-xs text-muted-foreground mt-1">Currently delivering</p>
+            <p className="text-xs text-muted-foreground mt-1">Currently on delivery</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Completed</CardTitle>
-            <Package className="w-4 h-4 text-green-600" />
+            <Calendar className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">{completedCount}</div>
             <p className="text-xs text-muted-foreground mt-1">Successfully delivered</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
-            <Package className="w-4 h-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalOrdersDelivered}</div>
-            <p className="text-xs text-muted-foreground mt-1">Orders delivered</p>
           </CardContent>
         </Card>
       </div>
@@ -196,43 +208,46 @@ export default function DeliveryHistoryPage() {
       <Card>
         <CardHeader className="pb-4">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <CardTitle>Recent Deliveries</CardTitle>
-            <div className="flex gap-2">
-              <div className="relative flex-1 md:w-[300px]">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <div className="flex flex-1 items-center gap-2">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search Load ID, Vehicle, or Driver..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
                   className="pl-9"
                 />
               </div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setCurrentPage(1); }}>
                 <SelectTrigger className="w-[180px]">
                   <Filter className="w-4 h-4 mr-2" />
                   <SelectValue placeholder="Filter Status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="all">All Statuses</SelectItem>
                   <SelectItem value="In Transit">In Transit</SelectItem>
                   <SelectItem value="Completed">Completed</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+            <Button variant="outline" size="icon" onClick={fetchHistory} title="Refresh">
+              <RefreshCw className="h-4 w-4" />
+            </Button>
           </div>
         </CardHeader>
+
         <CardContent>
-          <div className="rounded-md border">
+          <div className="rounded-md border overflow-hidden">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead className="w-8" />
+                <TableRow className="bg-muted/50">
+                  <TableHead className="w-10" />
                   <TableHead>Load ID</TableHead>
-                  <TableHead>Date</TableHead>
+                  <TableHead>Dispatched Date</TableHead>
                   <TableHead>Vehicle</TableHead>
-                  <TableHead>Responsible Person</TableHead>
+                  <TableHead>Driver</TableHead>
                   <TableHead className="text-center">Orders</TableHead>
-                  <TableHead className="text-right">Total Value</TableHead>
+                  <TableHead className="text-right">Total Amount</TableHead>
                   <TableHead className="text-center">Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -240,10 +255,8 @@ export default function DeliveryHistoryPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-16">
-                      <div className="flex justify-center items-center">
-                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                      </div>
+                    <TableCell colSpan={9} className="text-center py-12">
+                      <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
                     </TableCell>
                   </TableRow>
                 ) : filteredHistory.length === 0 ? (
@@ -257,7 +270,7 @@ export default function DeliveryHistoryPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredHistory.map((load) => {
+                  pagedHistory.map((load) => {
                     const isExpanded = expandedIds.has(load.id);
                     return (
                       <React.Fragment key={load.id}>
@@ -267,110 +280,136 @@ export default function DeliveryHistoryPage() {
                         >
                           <TableCell onClick={(e) => toggleExpand(e, load.id)} className="pl-3">
                             {isExpanded
-                              ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
-                              : <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                              ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                              : <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground" />
                             }
                           </TableCell>
-                          <TableCell className="font-medium font-mono">{load.loadId}</TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <Calendar className="w-4 h-4 text-muted-foreground" />
-                              {new Date(load.loadingDate).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
-                            </div>
+                          <TableCell className="font-medium font-mono">
+                            {load.loadId}
                           </TableCell>
                           <TableCell>
-                            <div className="flex items-center gap-2">
-                              <Truck className="w-4 h-4 text-muted-foreground" />
-                              <span className="font-medium">{load.lorryNumber}</span>
-                            </div>
+                            {new Date(load.loadingDate).toLocaleDateString()}
                           </TableCell>
                           <TableCell>
-                            <div className="flex items-center gap-2">
-                              <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary">
-                                {(load.driverName ?? "?").charAt(0).toUpperCase()}
-                              </div>
-                              <div className="flex flex-col">
-                                <span className="text-sm font-medium">{load.driverName}</span>
-                                {load.helperName && <span className="text-xs text-muted-foreground">+ {load.helperName}</span>}
-                              </div>
-                            </div>
+                            <Badge variant="outline">{load.lorryNumber}</Badge>
+                          </TableCell>
+                          <TableCell>{load.driverName}</TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="secondary">{load.totalOrders}</Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            LKR {load.totalAmount.toLocaleString()}
                           </TableCell>
                           <TableCell className="text-center">
-                            <Badge variant="outline" className="font-semibold">{load.totalOrders}</Badge>
-                          </TableCell>
-                          <TableCell className="text-right font-semibold">
-                            Rs. {load.totalAmount.toLocaleString()}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <Badge className={load.status === "Completed" ? "bg-green-600 hover:bg-green-700" : "bg-blue-600 hover:bg-blue-700 text-white"}>
+                            <Badge
+                              variant="outline"
+                              className={
+                                load.status === "In Transit"
+                                  ? "bg-blue-50 text-blue-700 border-blue-200"
+                                  : "bg-green-50 text-green-700 border-green-200"
+                              }
+                            >
                               {load.status}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end items-center gap-1">
+                          <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={(e) => handlePrint(e, load.id)}
+                                disabled={printingId === load.id}
+                                title="Print Loading Sheet"
+                              >
+                                {printingId === load.id
+                                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  : <Printer className="w-3.5 h-3.5" />
+                                }
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={(e) => handleDownload(e, load.id)}
+                                disabled={downloadingId === load.id}
+                                title="Download Loading Sheet"
+                              >
+                                {downloadingId === load.id
+                                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  : <Download className="w-3.5 h-3.5" />
+                                }
+                              </Button>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50" title="Customer Outstanding PDF Options" onClick={(e) => e.stopPropagation()}>
-                                    <FileText className="w-4 h-4 text-red-600" />
+                                  <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
+                                    <FileText className="h-3.5 w-3.5 text-muted-foreground" />
                                   </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-56">
-                                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); printLoadingOutstandingReport(load.id); }} className="cursor-pointer gap-2 text-red-700 focus:text-red-800 focus:bg-red-50">
-                                    <Printer className="w-4 h-4 text-red-600" /> Print Outstanding PDF
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => printLoadingOutstandingReport(load.id)}>
+                                    <Printer className="h-4 w-4 mr-2" />
+                                    Print Outstanding Invoices
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); downloadLoadingOutstandingReport(load.id); }} className="cursor-pointer gap-2 text-red-700 focus:text-red-800 focus:bg-red-50">
-                                    <Download className="w-4 h-4 text-red-600" /> Download Outstanding PDF
+                                  <DropdownMenuItem onClick={() => downloadLoadingOutstandingReport(load.id)}>
+                                    <Download className="h-4 w-4 mr-2" />
+                                    Download Outstanding Invoices (PDF)
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); shareLoadingOutstandingReport(load.id); }} className="cursor-pointer gap-2 text-red-700 focus:text-red-800 focus:bg-red-50">
-                                    <Share2 className="w-4 h-4 text-red-600" /> Share Outstanding PDF
+                                  <DropdownMenuItem onClick={() => shareLoadingOutstandingReport(load.id)}>
+                                    <Share2 className="h-4 w-4 mr-2" />
+                                    Share Outstanding Invoices
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                                onClick={(e) => handlePrint(e, load.id)} disabled={printingId === load.id || downloadingId === load.id} title="Print Loading Sheet">
-                                {printingId === load.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
-                              </Button>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-                                onClick={(e) => handleDownload(e, load.id)} disabled={printingId === load.id || downloadingId === load.id} title="Download Loading Sheet PDF">
-                                {downloadingId === load.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                              </Button>
-                              <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-muted-foreground transition-colors ml-1" />
                             </div>
                           </TableCell>
                         </TableRow>
 
+                        {/* Inline Expandable Rows */}
                         {isExpanded && (
-                          <TableRow className="bg-slate-50 hover:bg-slate-50">
-                            <TableCell colSpan={9} className="py-3 px-6">
-                              <div className="flex flex-wrap gap-1.5">
-                                {load.orders.length === 0 ? (
-                                  <span className="text-xs text-muted-foreground">No orders</span>
+                          <TableRow className="bg-muted/20 hover:bg-muted/20 border-b">
+                            <TableCell colSpan={9} className="py-2 px-6">
+                              <div className="text-xs space-y-1">
+                                <span className="font-semibold text-muted-foreground uppercase tracking-wide">
+                                  Invoices in this Load ({load.orders?.length ?? 0}):
+                                </span>
+                                {load.orders && load.orders.length > 0 ? (
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 pt-1">
+                                    {load.orders.map((o) => {
+                                      const hasInvoice = Boolean(o.invoiceId);
+                                      return (
+                                        <div
+                                          key={o.id}
+                                          className={`flex items-center justify-between p-2 rounded border bg-white text-xs ${
+                                            hasInvoice
+                                              ? "cursor-pointer hover:border-blue-300 hover:bg-blue-50/50"
+                                              : "cursor-default opacity-80"
+                                          }`}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (hasInvoice) {
+                                              window.open(`/dashboard/admin/invoices/${o.invoiceId}`, "_blank");
+                                            } else {
+                                              toast.error("Invoice details not available");
+                                            }
+                                          }}
+                                          title={hasInvoice ? "Click to view invoice details" : "No invoice details"}
+                                        >
+                                          <div>
+                                            <p className="font-mono font-bold text-slate-800">
+                                              {o.invoiceNo || "No Inv No"}
+                                            </p>
+                                            <p className="text-[10px] text-muted-foreground font-mono">
+                                              {o.orderId}
+                                            </p>
+                                          </div>
+                                          <span className="font-semibold text-slate-900">
+                                            LKR {o.totalAmount.toLocaleString()}
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
                                 ) : (
-                                  load.orders.map((o) => {
-                                    const hasInvoice = !!o.invoiceId;
-                                    return (
-                                      <button
-                                        key={o.id}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          if (hasInvoice) {
-                                            window.open(`/dashboard/admin/invoices/${o.invoiceId}`, "_blank");
-                                          } else {
-                                            toast.error("Invoice details not available");
-                                          }
-                                        }}
-                                        className={`flex items-center gap-1 text-xs font-mono bg-white border border-slate-200 text-slate-700 px-2 py-0.5 rounded transition-all ${
-                                          hasInvoice
-                                            ? "hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-300 cursor-pointer"
-                                            : "opacity-60 cursor-not-allowed"
-                                        }`}
-                                        title={hasInvoice ? "Click to view invoice" : "Invoice not available"}
-                                      >
-                                        <FileText className="h-3 w-3 text-indigo-400" />
-                                        {o.invoiceNo || o.orderId}
-                                      </button>
-                                    );
-                                  })
+                                  <p className="text-muted-foreground">No order details available.</p>
                                 )}
                               </div>
                             </TableCell>
@@ -383,6 +422,57 @@ export default function DeliveryHistoryPage() {
               </TableBody>
             </Table>
           </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-2 pt-4">
+              <p className="text-sm text-muted-foreground">
+                Showing {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filteredHistory.length)} of {filteredHistory.length} loads
+              </p>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={safePage === 1}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter((p) => p === 1 || p === totalPages || Math.abs(p - safePage) <= 1)
+                  .reduce<(number | "…")[]>((acc, p, idx, arr) => {
+                    if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push("…");
+                    acc.push(p);
+                    return acc;
+                  }, [])
+                  .map((p, i) =>
+                    p === "…" ? (
+                      <span key={`ellipsis-${i}`} className="px-1 text-muted-foreground text-sm">…</span>
+                    ) : (
+                      <Button
+                        key={p}
+                        variant={safePage === p ? "default" : "outline"}
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => setCurrentPage(p as number)}
+                      >
+                        {p}
+                      </Button>
+                    )
+                  )}
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={safePage === totalPages}
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
