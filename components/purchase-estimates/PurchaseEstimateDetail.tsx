@@ -22,6 +22,7 @@ import {
   Calculator,
   ShieldCheck,
   Pencil,
+  TrendingUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -54,6 +55,7 @@ import {
   printPurchaseEstimate,
   shareViaWhatsApp,
 } from "@/app/lib/purchase-estimate-print";
+import { cn } from "@/lib/utils";
 
 interface PurchaseEstimateDetailProps {
   id: string;
@@ -180,6 +182,19 @@ export function PurchaseEstimateDetail({
     (s: number, it: any) => s + (Number(it.freeQuantity) || 0),
     0
   );
+  const totalEstimatedRevenue = items.reduce(
+    (s: number, it: any) =>
+      s + (Number(it.sellingPrice) || 0) * (Number(it.quantity) || 0),
+    0
+  );
+  const totalEstimatedProfit =
+    totalEstimatedRevenue > 0
+      ? totalEstimatedRevenue - (Number(estimate.totalAmount) || 0)
+      : 0;
+  const overallMarginPct =
+    totalEstimatedRevenue > 0
+      ? (totalEstimatedProfit / totalEstimatedRevenue) * 100
+      : 0;
 
   const statusColors: Record<string, string> = {
     Saved: "bg-slate-100 text-slate-700 border-slate-300",
@@ -438,48 +453,72 @@ export function PurchaseEstimateDetail({
             <TableHeader className="bg-slate-50/60">
               <TableRow>
                 <TableHead className="w-[40px] text-center">#</TableHead>
-                <TableHead className="w-[140px]">Code</TableHead>
+                <TableHead className="w-[110px]">Code</TableHead>
                 <TableHead>Product Description</TableHead>
-                <TableHead className="text-right w-[110px]">Cost Price</TableHead>
-                <TableHead className="text-center w-[80px]">Qty</TableHead>
-                <TableHead className="text-center w-[80px]">Free</TableHead>
-                <TableHead className="text-center w-[70px]">Unit</TableHead>
-                <TableHead className="text-right w-[90px]">Disc %</TableHead>
-                <TableHead className="text-right w-[140px]">Line Total</TableHead>
+                <TableHead className="text-center w-[85px]">Stock</TableHead>
+                <TableHead className="text-right w-[95px]">Cost Price</TableHead>
+                <TableHead className="text-right w-[95px]">Sell Price</TableHead>
+                <TableHead className="text-center w-[60px]">Qty</TableHead>
+                <TableHead className="text-center w-[60px]">Free</TableHead>
+                <TableHead className="text-right w-[80px]">Disc %</TableHead>
+                <TableHead className="text-right w-[110px]">Line Total</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {items.map((it: any, idx: number) => (
-                <TableRow key={it.id || idx} className="text-xs hover:bg-slate-50/50">
-                  <TableCell className="text-center font-mono text-muted-foreground">
-                    {idx + 1}
-                  </TableCell>
-                  <TableCell className="font-mono font-bold text-slate-900">
-                    {it.sku || "-"}
-                  </TableCell>
-                  <TableCell className="font-medium text-slate-900">
-                    {it.productName}
-                  </TableCell>
-                  <TableCell className="text-right font-mono">
-                    Rs. {fmt(it.unitPrice)}
-                  </TableCell>
-                  <TableCell className="text-center font-bold">
-                    {it.quantity}
-                  </TableCell>
-                  <TableCell className="text-center font-bold text-green-700">
-                    {it.freeQuantity ? `+${it.freeQuantity}` : "-"}
-                  </TableCell>
-                  <TableCell className="text-center text-slate-500">
-                    {it.unit || "Pcs"}
-                  </TableCell>
-                  <TableCell className="text-right text-red-600">
-                    {it.discountPercent ? `${it.discountPercent}%` : "-"}
-                  </TableCell>
-                  <TableCell className="text-right font-mono font-bold text-slate-950">
-                    Rs. {fmt(it.total)}
-                  </TableCell>
-                </TableRow>
-              ))}
+              {items.map((it: any, idx: number) => {
+                const unitPrice = Number(it.unitPrice) || 0;
+                const sellingPrice = Number(it.sellingPrice) || 0;
+
+                return (
+                  <TableRow key={it.id || idx} className="text-xs hover:bg-slate-50/50">
+                    <TableCell className="text-center font-mono text-muted-foreground">
+                      {idx + 1}
+                    </TableCell>
+                    <TableCell className="font-mono font-bold text-slate-900">
+                      {it.sku || "-"}
+                    </TableCell>
+                    <TableCell className="font-medium text-slate-900">
+                      {it.productName}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {it.currentStock !== undefined ? (
+                        <span
+                          className={cn(
+                            "inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-bold border",
+                            (it.currentStock ?? 0) <= 0
+                              ? "bg-red-50 text-red-600 border-red-200"
+                              : (it.currentStock ?? 0) < 10
+                              ? "bg-amber-50 text-amber-700 border-amber-200"
+                              : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          )}
+                        >
+                          {it.currentStock} {it.unit || "Pcs"}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 text-[11px]">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      Rs. {fmt(unitPrice)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono font-semibold text-purple-950">
+                      {sellingPrice > 0 ? `Rs. ${fmt(sellingPrice)}` : "-"}
+                    </TableCell>
+                    <TableCell className="text-center font-bold">
+                      {it.quantity}
+                    </TableCell>
+                    <TableCell className="text-center font-bold text-green-700">
+                      {it.freeQuantity ? `+${it.freeQuantity}` : "-"}
+                    </TableCell>
+                    <TableCell className="text-right text-red-600">
+                      {it.discountPercent ? `${it.discountPercent}%` : "-"}
+                    </TableCell>
+                    <TableCell className="text-right font-mono font-bold text-slate-950">
+                      Rs. {fmt(it.total)}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>
@@ -550,6 +589,33 @@ export function PurchaseEstimateDetail({
                 Rs. {fmt(estimate.totalAmount)}
               </span>
             </div>
+
+            {/* Projected Sales & Profitability */}
+            {totalEstimatedRevenue > 0 && (
+              <div className="bg-emerald-50/70 border border-emerald-200 rounded-md p-2.5 space-y-1.5 mt-3">
+                <div className="flex justify-between items-center text-xs font-semibold text-emerald-950">
+                  <span className="flex items-center gap-1">
+                    <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+                    Projected Sales Value:
+                  </span>
+                  <span className="font-mono font-bold">
+                    Rs. {fmt(totalEstimatedRevenue)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-xs text-emerald-800">
+                  <span>Est. Gross Profit:</span>
+                  <span className="font-mono font-bold">
+                    Rs. {fmt(totalEstimatedProfit)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-xs text-emerald-900 pt-1 border-t border-emerald-200">
+                  <span>Projected Margin:</span>
+                  <span className="font-bold font-mono px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300 text-[10px]">
+                    {overallMarginPct.toFixed(1)}%
+                  </span>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

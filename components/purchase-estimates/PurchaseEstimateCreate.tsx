@@ -19,6 +19,7 @@ import {
   MessageSquare,
   Pencil,
   Check,
+  TrendingUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -80,6 +81,7 @@ export interface EstimateItem {
   discountAmount: number;
   finalPrice: number;
   total: number;
+  currentStock?: number;
 }
 
 interface PurchaseEstimateCreateProps {
@@ -147,16 +149,18 @@ export function PurchaseEstimateCreate({
   const [currentItem, setCurrentItem] = useState<{
     productId: string;
     sku: string;
+    currentStock: number;
     quantity: number | string;
     freeQuantity: number | string;
-    mrp: number;
-    sellingPrice: number;
+    mrp: number | string;
+    sellingPrice: number | string;
     unitPrice: number | string;
     discountPercent: number | string;
     unit: string;
   }>({
     productId: "",
     sku: "",
+    currentStock: 0,
     quantity: "",
     freeQuantity: "",
     mrp: 0,
@@ -307,6 +311,7 @@ export function PurchaseEstimateCreate({
     setCurrentItem({
       productId: product.id,
       sku: product.sku,
+      currentStock: product.stock ?? 0,
       mrp: product.mrp || 0,
       sellingPrice: product.sellingPrice || 0,
       unitPrice: product.costPrice > 0 ? product.costPrice : "",
@@ -322,6 +327,26 @@ export function PurchaseEstimateCreate({
       qtyInputRef.current?.focus({ preventScroll: true });
     }, 100);
   };
+
+  // Sync latest product stock onto items if not yet set
+  useEffect(() => {
+    if (products.length > 0 && items.length > 0) {
+      setItems((prevItems) => {
+        let changed = false;
+        const updated = prevItems.map((it) => {
+          if (it.currentStock === undefined) {
+            const p = products.find((prod) => prod.id === it.productId || prod.sku === it.sku);
+            if (p) {
+              changed = true;
+              return { ...it, currentStock: p.stock ?? 0 };
+            }
+          }
+          return it;
+        });
+        return changed ? updated : prevItems;
+      });
+    }
+  }, [products]);
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!isDropdownOpen) {
@@ -379,13 +404,14 @@ export function PurchaseEstimateCreate({
       quantity: qty,
       freeQuantity: parseNumber(currentItem.freeQuantity),
       unit: currentItem.unit,
-      mrp: currentItem.mrp,
-      sellingPrice: currentItem.sellingPrice,
+      mrp: parseNumber(currentItem.mrp),
+      sellingPrice: parseNumber(currentItem.sellingPrice),
       unitPrice: unitPrice,
       discountPercent: discPct,
       discountAmount: lineDiscountAmt,
       finalPrice: finalUnitPrice,
       total: lineTotal,
+      currentStock: currentItem.currentStock,
     };
 
     setItems([...items, newItem]);
@@ -394,6 +420,7 @@ export function PurchaseEstimateCreate({
     setCurrentItem({
       productId: "",
       sku: "",
+      currentStock: 0,
       quantity: "",
       freeQuantity: "",
       mrp: 0,
@@ -417,10 +444,14 @@ export function PurchaseEstimateCreate({
 
   // Start editing a row in the items table
   const handleEditItem = (item: EstimateItem) => {
+    const matchingProd = products.find(
+      (p) => p.id === item.productId || p.sku === item.sku
+    );
     setEditingRowId(item.id);
     setCurrentItem({
       productId: item.productId,
       sku: item.sku,
+      currentStock: item.currentStock ?? matchingProd?.stock ?? 0,
       quantity: item.quantity,
       freeQuantity: item.freeQuantity ? item.freeQuantity : "",
       mrp: item.mrp || 0,
@@ -442,6 +473,7 @@ export function PurchaseEstimateCreate({
     setCurrentItem({
       productId: "",
       sku: "",
+      currentStock: 0,
       quantity: "",
       freeQuantity: "",
       mrp: 0,
@@ -476,12 +508,13 @@ export function PurchaseEstimateCreate({
               ...it,
               productId: currentItem.productId || it.productId,
               sku: currentItem.sku || it.sku,
+              currentStock: currentItem.currentStock ?? it.currentStock ?? 0,
               productName: searchTerm || it.productName,
               quantity: qty,
               freeQuantity: parseNumber(currentItem.freeQuantity),
               unit: currentItem.unit || it.unit,
-              mrp: currentItem.mrp,
-              sellingPrice: currentItem.sellingPrice,
+              mrp: parseNumber(currentItem.mrp),
+              sellingPrice: parseNumber(currentItem.sellingPrice),
               unitPrice: unitPrice,
               discountPercent: discPct,
               discountAmount: lineDiscountAmt,
@@ -585,11 +618,33 @@ export function PurchaseEstimateCreate({
     return true;
   });
 
+  const currentLineQty = parseNumber(currentItem.quantity);
+  const currentLineUnitPrice = parseNumber(currentItem.unitPrice);
+  const currentLineSellingPrice = parseNumber(currentItem.sellingPrice);
+  const currentLineGross = currentLineUnitPrice * currentLineQty;
   const currentLineDiscountAmount =
-    ((parseNumber(currentItem.unitPrice) *
+    ((currentLineUnitPrice *
       parseNumber(currentItem.discountPercent)) /
       100) *
-    parseNumber(currentItem.quantity);
+    currentLineQty;
+  const currentLineTotal = currentLineGross - currentLineDiscountAmount;
+  const currentUnitProfit =
+    currentLineSellingPrice > 0 ? currentLineSellingPrice - currentLineUnitPrice : 0;
+  const currentProfitMarginPct =
+    currentLineSellingPrice > 0
+      ? (currentUnitProfit / currentLineSellingPrice) * 100
+      : 0;
+
+  const totalEstimatedRevenue = items.reduce(
+    (sum, it) => sum + (it.sellingPrice || 0) * (it.quantity || 0),
+    0
+  );
+  const totalEstimatedProfit =
+    totalEstimatedRevenue > 0 ? totalEstimatedRevenue - finalTotal : 0;
+  const overallMarginPct =
+    totalEstimatedRevenue > 0
+      ? (totalEstimatedProfit / totalEstimatedRevenue) * 100
+      : 0;
 
   if (loadingData) {
     return (
@@ -803,7 +858,7 @@ export function PurchaseEstimateCreate({
                           ref={(el) => {
                             itemRefs.current[index] = el;
                           }}
-                          className={`p-2 cursor-pointer border-b border-slate-100 last:border-0 ${
+                          className={`p-2.5 cursor-pointer border-b border-slate-100 last:border-0 ${
                             highlightedIndex === index
                               ? "bg-slate-100"
                               : "hover:bg-slate-50"
@@ -811,8 +866,22 @@ export function PurchaseEstimateCreate({
                           onMouseEnter={() => setHighlightedIndex(index)}
                           onClick={() => handleProductSelect(product)}
                         >
-                          <div className="font-semibold text-xs text-slate-900">
-                            {product.name}
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold text-xs text-slate-900 truncate">
+                              {product.name}
+                            </span>
+                            <span
+                              className={cn(
+                                "text-[10px] font-bold px-1.5 py-0.5 rounded border shrink-0",
+                                (product.stock ?? 0) <= 0
+                                  ? "bg-red-50 text-red-600 border-red-200"
+                                  : (product.stock ?? 0) < 10
+                                  ? "bg-amber-50 text-amber-700 border-amber-200"
+                                  : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              )}
+                            >
+                              Stock: {product.stock ?? 0} {product.unitOfMeasure || "Pcs"}
+                            </span>
                           </div>
                           <div className="text-[11px] text-slate-500 flex items-center gap-4 mt-0.5">
                             <span>
@@ -834,6 +903,53 @@ export function PurchaseEstimateCreate({
                 )}
               </div>
 
+              {/* Selected Product Quick Info & Stock Banner */}
+              {currentItem.productId && (
+                <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-500 font-medium">Selected:</span>
+                    <span className="font-bold text-slate-900">{searchTerm}</span>
+                    <span className="text-slate-400 font-mono text-[11px]">({currentItem.sku})</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="flex items-center gap-1.5">
+                      <span className="text-slate-500">Current Stock:</span>
+                      <span
+                        className={cn(
+                          "font-extrabold px-2 py-0.5 rounded text-[11px] border",
+                          currentItem.currentStock <= 0
+                            ? "bg-red-50 text-red-700 border-red-200"
+                            : currentItem.currentStock < 10
+                            ? "bg-amber-50 text-amber-800 border-amber-200"
+                            : "bg-emerald-50 text-emerald-800 border-emerald-200"
+                        )}
+                      >
+                        {currentItem.currentStock} {currentItem.unit || "Pcs"}
+                      </span>
+                    </span>
+
+                    {/* Selling Price preview */}
+                    {currentLineSellingPrice > 0 && (
+                      <span className="flex items-center gap-1.5">
+                        <span className="text-slate-500">Sell Price:</span>
+                        <span className="font-mono font-bold text-purple-900">
+                          Rs. {currentLineSellingPrice.toFixed(2)}
+                        </span>
+                      </span>
+                    )}
+
+                    {currentLineQty > 0 && (
+                      <span className="flex items-center gap-1.5 text-slate-500">
+                        <span>Est. After Order:</span>
+                        <span className="font-bold text-indigo-900 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded text-[11px]">
+                          {currentItem.currentStock + currentLineQty + parseNumber(currentItem.freeQuantity)} {currentItem.unit || "Pcs"}
+                        </span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Editing Banner */}
               {editingRowId && (
                 <div className="bg-blue-50 border border-blue-200 text-blue-900 text-xs px-3 py-2 rounded-md flex items-center justify-between">
@@ -852,129 +968,184 @@ export function PurchaseEstimateCreate({
                 </div>
               )}
 
-              {/* Item Fast-Entry Row */}
-              <div className="grid grid-cols-2 md:grid-cols-6 lg:grid-cols-7 gap-2 items-end pt-1">
-                <div className="col-span-1">
-                  <Label className="mb-1 block text-[11px] text-muted-foreground">Code</Label>
-                  <Input
-                    value={currentItem.sku || ""}
-                    disabled
-                    className="h-8 bg-slate-50 text-xs"
-                    placeholder="Auto"
-                  />
+              {/* Item Fast-Entry Rows (2 Lines) */}
+              <div className="space-y-2.5 pt-1">
+                {/* Line 1: Reference & Pricing */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div>
+                    <Label className="mb-1 block text-[11px] text-muted-foreground">Code</Label>
+                    <Input
+                      value={currentItem.sku || ""}
+                      disabled
+                      className="h-8 bg-slate-50 text-xs font-mono"
+                      placeholder="Auto"
+                    />
+                  </div>
+
+                  <div>
+                    <Label className="mb-1 block text-[11px] font-semibold text-slate-700">
+                      Current Stock
+                    </Label>
+                    <Input
+                      value={
+                        currentItem.productId
+                          ? `${currentItem.currentStock} ${currentItem.unit || "Pcs"}`
+                          : "-"
+                      }
+                      disabled
+                      className={cn(
+                        "h-8 text-xs font-bold",
+                        !currentItem.productId
+                          ? "bg-slate-50 text-slate-400"
+                          : currentItem.currentStock <= 0
+                          ? "bg-red-50 text-red-600 border-red-200 font-bold"
+                          : currentItem.currentStock < 10
+                          ? "bg-amber-50 text-amber-700 border-amber-200 font-bold"
+                          : "bg-emerald-50 text-emerald-700 border-emerald-200 font-bold"
+                      )}
+                    />
+                  </div>
+
+                  <div>
+                    <Label className="mb-1 block text-[11px] text-blue-700 font-semibold">Cost Price (Rs.)</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={currentItem.unitPrice}
+                      onChange={(e) =>
+                        setCurrentItem({
+                          ...currentItem,
+                          unitPrice: e.target.value === "" ? "" : parseFloat(e.target.value),
+                        })
+                      }
+                      onKeyDown={(e) => e.key === "Enter" && (editingRowId ? handleSaveItemEdit() : handleAddItem())}
+                      className="h-8 border-blue-200 text-xs font-mono font-bold"
+                      placeholder="0.00"
+                    />
+                  </div>
+
+                  <div>
+                    <Label className="mb-1 block text-[11px] text-purple-700 font-semibold">
+                      Selling Price (Rs.)
+                    </Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={currentItem.sellingPrice}
+                      onChange={(e) =>
+                        setCurrentItem({
+                          ...currentItem,
+                          sellingPrice: e.target.value === "" ? "" : parseFloat(e.target.value),
+                        })
+                      }
+                      onKeyDown={(e) => e.key === "Enter" && (editingRowId ? handleSaveItemEdit() : handleAddItem())}
+                      className="h-8 border-purple-200 text-xs font-mono font-bold text-purple-900"
+                      placeholder="0.00"
+                    />
+                  </div>
                 </div>
 
-                <div className="col-span-1">
-                  <Label className="mb-1 block text-[11px] font-semibold text-slate-700">Quantity</Label>
-                  <Input
-                    ref={qtyInputRef}
-                    type="number"
-                    min="1"
-                    value={currentItem.quantity}
-                    onChange={(e) =>
-                      setCurrentItem({
-                        ...currentItem,
-                        quantity: e.target.value === "" ? "" : parseInt(e.target.value),
-                      })
-                    }
-                    onKeyDown={(e) => e.key === "Enter" && (editingRowId ? handleSaveItemEdit() : handleAddItem())}
-                    className="h-8 text-xs font-bold"
-                  />
-                </div>
+                {/* Line 2: Order Quantities, Discount, Est. Total & Action */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 items-end">
+                  <div>
+                    <Label className="mb-1 block text-[11px] font-semibold text-slate-700">Quantity</Label>
+                    <Input
+                      ref={qtyInputRef}
+                      type="number"
+                      min="1"
+                      value={currentItem.quantity}
+                      onChange={(e) =>
+                        setCurrentItem({
+                          ...currentItem,
+                          quantity: e.target.value === "" ? "" : parseInt(e.target.value),
+                        })
+                      }
+                      onKeyDown={(e) => e.key === "Enter" && (editingRowId ? handleSaveItemEdit() : handleAddItem())}
+                      className="h-8 text-xs font-bold"
+                      placeholder="Qty"
+                    />
+                  </div>
 
-                <div className="col-span-1">
-                  <Label className="mb-1 block text-[11px] text-green-700 font-medium">Free Qty</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={currentItem.freeQuantity}
-                    onChange={(e) =>
-                      setCurrentItem({
-                        ...currentItem,
-                        freeQuantity: e.target.value === "" ? "" : parseInt(e.target.value),
-                      })
-                    }
-                    onKeyDown={(e) => e.key === "Enter" && (editingRowId ? handleSaveItemEdit() : handleAddItem())}
-                    className="h-8 border-green-200 text-xs text-green-700"
-                  />
-                </div>
+                  <div>
+                    <Label className="mb-1 block text-[11px] text-green-700 font-medium">Free Qty</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={currentItem.freeQuantity}
+                      onChange={(e) =>
+                        setCurrentItem({
+                          ...currentItem,
+                          freeQuantity: e.target.value === "" ? "" : parseInt(e.target.value),
+                        })
+                      }
+                      onKeyDown={(e) => e.key === "Enter" && (editingRowId ? handleSaveItemEdit() : handleAddItem())}
+                      className="h-8 border-green-200 text-xs text-green-700"
+                      placeholder="0"
+                    />
+                  </div>
 
-                <div className="col-span-1">
-                  <Label className="mb-1 block text-[11px] text-blue-700 font-semibold">Cost Price</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={currentItem.unitPrice}
-                    onChange={(e) =>
-                      setCurrentItem({
-                        ...currentItem,
-                        unitPrice: e.target.value === "" ? "" : parseFloat(e.target.value),
-                      })
-                    }
-                    onKeyDown={(e) => e.key === "Enter" && (editingRowId ? handleSaveItemEdit() : handleAddItem())}
-                    className="h-8 border-blue-200 text-xs font-mono font-bold"
-                  />
-                </div>
+                  <div>
+                    <Label className="mb-1 block text-[11px] text-slate-700 font-medium">Disc %</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      value={currentItem.discountPercent}
+                      onChange={(e) =>
+                        setCurrentItem({
+                          ...currentItem,
+                          discountPercent: e.target.value === "" ? "" : parseFloat(e.target.value),
+                        })
+                      }
+                      onKeyDown={(e) => e.key === "Enter" && (editingRowId ? handleSaveItemEdit() : handleAddItem())}
+                      className="h-8 text-xs"
+                      placeholder="0%"
+                    />
+                  </div>
 
-                <div className="col-span-1">
-                  <Label className="mb-1 block text-[11px]">Disc %</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.01"
-                    value={currentItem.discountPercent}
-                    onChange={(e) =>
-                      setCurrentItem({
-                        ...currentItem,
-                        discountPercent: e.target.value === "" ? "" : parseFloat(e.target.value),
-                      })
-                    }
-                    onKeyDown={(e) => e.key === "Enter" && (editingRowId ? handleSaveItemEdit() : handleAddItem())}
-                    className="h-8 text-xs"
-                  />
-                </div>
+                  <div>
+                    <Label className="mb-1 block text-[11px] text-indigo-700 font-semibold">Est. Total (Rs.)</Label>
+                    <Input
+                      value={currentLineTotal > 0 ? currentLineTotal.toFixed(2) : "0.00"}
+                      disabled
+                      className="h-8 bg-indigo-50/60 border-indigo-200 text-xs font-mono font-bold text-indigo-900"
+                      placeholder="0.00"
+                    />
+                  </div>
 
-                <div className="col-span-1">
-                  <Label className="mb-1 block text-[11px] text-muted-foreground">Disc Amt</Label>
-                  <Input
-                    value={currentLineDiscountAmount > 0 ? currentLineDiscountAmount.toFixed(2) : ""}
-                    disabled
-                    className="h-8 bg-slate-50 text-xs"
-                    placeholder="0.00"
-                  />
-                </div>
-
-                <div className="col-span-2 md:col-span-6 lg:col-span-1">
-                  {editingRowId ? (
-                    <div className="flex items-center gap-1">
+                  <div className="col-span-2 sm:col-span-1">
+                    {editingRowId ? (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          onClick={handleSaveItemEdit}
+                          className="flex-1 h-8 bg-blue-600 hover:bg-blue-700 text-white text-xs px-2"
+                          title="Update this item"
+                        >
+                          <Check className="w-3.5 h-3.5 mr-1" /> Update
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon-sm"
+                          onClick={handleCancelItemEdit}
+                          className="h-8 w-8 text-slate-500 hover:bg-slate-100 shrink-0"
+                          title="Cancel edit"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    ) : (
                       <Button
-                        onClick={handleSaveItemEdit}
-                        className="flex-1 h-8 bg-blue-600 hover:bg-blue-700 text-white text-xs px-2"
-                        title="Update this item"
+                        onClick={handleAddItem}
+                        className={`w-full h-8 ${colorStyles.primary} font-semibold`}
+                        disabled={!currentItem.productId}
                       >
-                        <Check className="w-3.5 h-3.5 mr-1" /> Update
+                        <Plus className="w-3.5 h-3.5 mr-1" /> Add
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="icon-sm"
-                        onClick={handleCancelItemEdit}
-                        className="h-8 w-8 text-slate-500 hover:bg-slate-100 shrink-0"
-                        title="Cancel edit"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button
-                      onClick={handleAddItem}
-                      className={`w-full h-8 ${colorStyles.primary}`}
-                      disabled={!currentItem.productId}
-                    >
-                      <Plus className="w-3.5 h-3.5 mr-1" /> Add
-                    </Button>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -987,18 +1158,20 @@ export function PurchaseEstimateCreate({
                 <TableHeader className="bg-slate-50/80">
                   <TableRow>
                     <TableHead>Product</TableHead>
-                    <TableHead className="text-right w-[100px]">Cost Price</TableHead>
-                    <TableHead className="text-center w-[70px]">Qty</TableHead>
-                    <TableHead className="text-center w-[70px]">Free</TableHead>
-                    <TableHead className="text-right w-[90px]">Disc</TableHead>
-                    <TableHead className="text-right w-[120px]">Line Total</TableHead>
+                    <TableHead className="text-center w-[85px]">Stock</TableHead>
+                    <TableHead className="text-right w-[95px]">Cost Price</TableHead>
+                    <TableHead className="text-right w-[95px]">Sell Price</TableHead>
+                    <TableHead className="text-center w-[60px]">Qty</TableHead>
+                    <TableHead className="text-center w-[60px]">Free</TableHead>
+                    <TableHead className="text-right w-[80px]">Disc</TableHead>
+                    <TableHead className="text-right w-[110px]">Line Total</TableHead>
                     <TableHead className="w-[75px] text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {items.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-10 text-muted-foreground text-xs">
+                      <TableCell colSpan={9} className="text-center py-10 text-muted-foreground text-xs">
                         No items added yet. Search a product above and click Add.
                       </TableCell>
                     </TableRow>
@@ -1015,8 +1188,25 @@ export function PurchaseEstimateCreate({
                           <div className="font-semibold text-slate-900">{it.productName}</div>
                           <div className="text-[11px] text-muted-foreground font-mono">{it.sku}</div>
                         </TableCell>
+                        <TableCell className="text-center">
+                          <span
+                            className={cn(
+                              "inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-bold border",
+                              (it.currentStock ?? 0) <= 0
+                                ? "bg-red-50 text-red-600 border-red-200"
+                                : (it.currentStock ?? 0) < 10
+                                ? "bg-amber-50 text-amber-700 border-amber-200"
+                                : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            )}
+                          >
+                            {it.currentStock ?? 0} {it.unit || "Pcs"}
+                          </span>
+                        </TableCell>
                         <TableCell className="text-right font-mono font-medium">
                           {it.unitPrice.toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono font-semibold text-purple-950">
+                          {it.sellingPrice > 0 ? Number(it.sellingPrice).toFixed(2) : "-"}
                         </TableCell>
                         <TableCell className="text-center font-bold">
                           {it.quantity}
@@ -1151,6 +1341,33 @@ export function PurchaseEstimateCreate({
                     </span>
                   </div>
                 </div>
+
+                {/* Projected Sales & Profitability */}
+                {totalEstimatedRevenue > 0 && (
+                  <div className="bg-emerald-50/70 border border-emerald-200 rounded-md p-2.5 space-y-1.5 mt-2">
+                    <div className="flex justify-between items-center text-[11px] font-semibold text-emerald-950">
+                      <span className="flex items-center gap-1">
+                        <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+                        Projected Sales Value:
+                      </span>
+                      <span className="font-mono font-bold">
+                        Rs. {totalEstimatedRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-[11px] text-emerald-800">
+                      <span>Est. Gross Profit:</span>
+                      <span className="font-mono font-bold">
+                        Rs. {totalEstimatedProfit.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-[11px] text-emerald-900 pt-1 border-t border-emerald-200">
+                      <span>Projected Margin:</span>
+                      <span className="font-bold font-mono px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300 text-[10px]">
+                        {overallMarginPct.toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Status Selector */}
