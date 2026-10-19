@@ -255,6 +255,7 @@ export default function EditOrderPage({
       const params = new URLSearchParams();
       if (uId) params.set("userId", uId);
       if (uRole) params.set("role", uRole);
+      params.set("isRep", "true");
       const queryStr = params.toString() ? `?${params.toString()}` : "";
 
       const res = await fetch(`/api/customers/${cId}/overdue-status${queryStr}`);
@@ -873,6 +874,7 @@ export default function EditOrderPage({
       grandTotal: grandTotal,
       notes: "Updated by sales representative",
       userId: currentUser.id,
+      performedByRole: currentUser.role ?? "rep",
       changeReason: "Representative edited pending invoice items",
     };
 

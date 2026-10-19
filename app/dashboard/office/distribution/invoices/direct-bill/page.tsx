@@ -119,6 +119,7 @@ export default function DirectBillPage() {
       const params = new URLSearchParams();
       if (user?.id) params.set("userId", user.id);
       if (user?.role) params.set("role", user.role);
+      params.set("businessId", user?.businessId || BUSINESS_IDS.CHAMPIKA_DISTRIBUTION);
       const qs = params.toString() ? `?${params.toString()}` : "";
 
       const res = await fetch(`/api/customers/${cId}/overdue-status${qs}`);

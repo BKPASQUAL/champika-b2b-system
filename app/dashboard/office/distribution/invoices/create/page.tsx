@@ -141,6 +141,7 @@ export default function CreateDistributionInvoicePage() {
       const params = new URLSearchParams();
       if (user?.id) params.set("userId", user.id);
       if (user?.role) params.set("role", user.role);
+      params.set("businessId", distributionBusinessId);
       const qs = params.toString() ? `?${params.toString()}` : "";
 
       const res = await fetch(`/api/customers/${cId}/overdue-status${qs}`);

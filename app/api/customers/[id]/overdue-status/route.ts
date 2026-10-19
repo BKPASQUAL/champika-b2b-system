@@ -14,8 +14,10 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId") || undefined;
     const userRole = searchParams.get("role") || undefined;
+    const businessId = searchParams.get("businessId") || undefined;
+    const isRep = searchParams.get("isRep") === "true" || userRole === "rep";
 
-    const status = await checkCustomerOverdueStatus(id, { userId, userRole });
+    const status = await checkCustomerOverdueStatus(id, { userId, userRole, businessId, isRep });
     return NextResponse.json(status);
   } catch (error: any) {
     console.error("Error checking customer overdue status:", error);

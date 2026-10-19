@@ -198,6 +198,7 @@ export default function DistributionEditInvoicePage({
       const params = new URLSearchParams();
       if (uId) params.set("userId", uId);
       if (uRole) params.set("role", uRole);
+      params.set("businessId", BUSINESS_IDS.CHAMPIKA_DISTRIBUTION);
       const qs = params.toString() ? `?${params.toString()}` : "";
 
       const res = await fetch(`/api/customers/${cId}/overdue-status${qs}`);

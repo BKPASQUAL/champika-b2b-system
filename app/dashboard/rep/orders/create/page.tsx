@@ -269,6 +269,7 @@ export default function CreateOrderPage() {
       const params = new URLSearchParams();
       if (uId) params.set("userId", uId);
       if (uRole) params.set("role", uRole);
+      params.set("isRep", "true");
       const queryStr = params.toString() ? `?${params.toString()}` : "";
 
       const res = await fetch(`/api/customers/${cId}/overdue-status${queryStr}`);
@@ -882,6 +883,7 @@ export default function CreateOrderPage() {
       notes: "",
       performedByName: currentUser.name ?? null,
       performedByEmail: currentUser.email ?? null,
+      performedByRole: currentUser.role ?? "rep",
     };
 
     try {

@@ -47,7 +47,7 @@ export interface CustomerOverdueStatusResult {
   pendingRequest: PendingCustomerUnlock | null;
   isFeatureDisabled?: boolean;
   isUserExempt?: boolean;
-  enforcementMode?: "enforced" | "globally_disabled" | "user_exempt";
+  enforcementMode?: "enforced" | "globally_disabled" | "user_exempt" | "business_exempt" | "walkin_exempt";
 }
 
 export interface OverdueBlockingConfig {
@@ -223,15 +223,69 @@ export function isOrangeOrSierraSupplier(supplierName?: string | null): boolean 
 }
 
 /**
+ * Checks if a customer is a retail walk-in or guest customer based on their shop/customer name.
+ * Walk-in and guest customers are counter retail sales and are NEVER subject to overdue invoicing blocks.
+ */
+export function isWalkInOrGuestCustomer(customerName?: string | null): boolean {
+  if (!customerName) return false;
+  const n = customerName.toLowerCase().trim();
+  return (
+    n.includes("walk-in") ||
+    n.includes("walk in") ||
+    n.includes("walking") ||
+    n.includes("walkin") ||
+    n.includes("guest")
+  );
+}
+
+/**
+ * Determines whether customer overdue invoicing blocking applies to a given business and role context.
+ * Rule:
+ *  - Overdue invoicing block ONLY applies to Champika Hardware Distribution and Sales Rep portals.
+ *  - Retail Division (Champika Retail), Sierra Agency, Orange Agency, and Wireman Agency are EXEMPT.
+ */
+export function isOverdueBlockingEnforcedForBusiness(
+  businessId?: string | null,
+  userRole?: string | null,
+  isRep?: boolean
+): boolean {
+  const roleLower = (userRole || "").toLowerCase().trim();
+  const isRepRole = isRep || roleLower === "rep" || roleLower === "sales_rep" || roleLower === "salesrep";
+
+  // Rep portals are always subject to overdue blocking
+  if (isRepRole) {
+    return true;
+  }
+
+  // If businessId is provided:
+  if (businessId) {
+    // Only Champika Distribution is subject to overdue blocking
+    return businessId === BUSINESS_IDS.CHAMPIKA_DISTRIBUTION;
+  }
+
+  // If no businessId provided and not rep, default to true (e.g. general distribution queries)
+  return true;
+}
+
+export interface CheckCustomerOverdueContext {
+  userId?: string | null;
+  userRole?: string | null;
+  businessId?: string | null;
+  isRep?: boolean;
+}
+
+/**
  * Checks if a customer has overdue unsettled invoices and determines
  * if the customer is blocked or has an active Admin override.
  * Rule:
  *  - Overdue ≥ 60 days for invoices containing Orange (Orel Corporation) or Sierra Cables Plc items
  *  - Overdue ≥ 90 days for invoices containing only other suppliers
+ *  - Overdue blocking ONLY applies to Champika Hardware Distribution and Sales Rep portals.
+ *  - Retail Division, Sierra Agency, Orange Agency, Wireman Agency, and Walk-in customers are ALWAYS EXEMPT.
  */
 export async function checkCustomerOverdueStatus(
   customerId: string,
-  userContext?: { userId?: string | null; userRole?: string | null }
+  userContext?: CheckCustomerOverdueContext
 ): Promise<CustomerOverdueStatusResult> {
   if (!customerId) {
     throw new Error("Customer ID is required");
@@ -240,12 +294,62 @@ export async function checkCustomerOverdueStatus(
   // 1. Fetch Customer info
   const { data: customer, error: custErr } = await supabaseAdmin
     .from("customers")
-    .select("id, shop_name, status, credit_limit, outstanding_balance")
+    .select("id, shop_name, status, credit_limit, outstanding_balance, business_id")
     .eq("id", customerId)
     .single();
 
   if (custErr || !customer) {
     throw new Error(custErr?.message || "Customer not found");
+  }
+
+  // 1a. Walk-in / Guest Customer Exemption:
+  // Retail walk-in sales & guest customer accounts must NEVER be blocked by overdue invoices.
+  if (isWalkInOrGuestCustomer(customer.shop_name)) {
+    return {
+      customerId: customer.id,
+      customerName: customer.shop_name,
+      customerStatus: customer.status,
+      isBlocked: false,
+      hasOverdue: false,
+      blockReason: undefined,
+      totalOverdueAmount: 0,
+      oldestDaysOverdue: 0,
+      overdueInvoices: [],
+      activeUnlock: null,
+      pendingRequest: null,
+      isFeatureDisabled: false,
+      isUserExempt: true,
+      enforcementMode: "walkin_exempt",
+    };
+  }
+
+  // 1b. Business-level Exemption:
+  // Overdue invoicing blocking ONLY applies to Champika Hardware Distribution and Rep portals.
+  // Retail, Sierra, Orange, and Wireman are EXEMPT.
+  const targetBusinessId = userContext?.businessId || customer.business_id || null;
+  const isBusinessEnforced = isOverdueBlockingEnforcedForBusiness(
+    targetBusinessId,
+    userContext?.userRole,
+    userContext?.isRep
+  );
+
+  if (!isBusinessEnforced) {
+    return {
+      customerId: customer.id,
+      customerName: customer.shop_name,
+      customerStatus: customer.status,
+      isBlocked: false,
+      hasOverdue: false,
+      blockReason: undefined,
+      totalOverdueAmount: 0,
+      oldestDaysOverdue: 0,
+      overdueInvoices: [],
+      activeUnlock: null,
+      pendingRequest: null,
+      isFeatureDisabled: false,
+      isUserExempt: true,
+      enforcementMode: "business_exempt",
+    };
   }
 
   // 2. Fetch all unsettled invoices for this customer with order and products details

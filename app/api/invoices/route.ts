@@ -269,29 +269,7 @@ export async function POST(request: NextRequest) {
     }
 
     // -------------------------------------------------------------
-    // Customer Overdue Invoicing Block Check (60d Orange/Sierra, 90d Others)
-    // Enforced unless Admin globally disabled, user is exempt, or approved unlock exists.
-    // -------------------------------------------------------------
-    const requesterUserId = val.salesRepId || body.userId || body.salesRepId || null;
-    const overdueStatus = await checkCustomerOverdueStatus(val.customerId, {
-      userId: requesterUserId,
-      userRole: body.performedByRole || undefined,
-    });
-    if (overdueStatus.isBlocked) {
-      return NextResponse.json(
-        {
-          error:
-            overdueStatus.blockReason ||
-            "Customer invoicing is blocked due to 60+ days overdue bills. Admin authorization is required.",
-          isCustomerBlocked: true,
-          overdueDetails: overdueStatus,
-        },
-        { status: 403 }
-      );
-    }
-
-    // -------------------------------------------------------------
-    // 1. Resolve business_id first — needed to determine invoice prefix.
+    // 1. Resolve business_id first — needed to determine invoice prefix & overdue enforcement.
     //    If not sent (e.g. rep portal), look it up from the customer.
     // -------------------------------------------------------------
     let resolvedBusinessId: string | null = val.businessId || null;
@@ -300,14 +278,47 @@ export async function POST(request: NextRequest) {
         .from("customers")
         .select("business_id")
         .eq("id", val.customerId)
-        .single();
+        .maybeSingle();
       resolvedBusinessId = custBizData?.business_id || null;
+    }
+
+    const isDistribution = resolvedBusinessId === BUSINESS_IDS.CHAMPIKA_DISTRIBUTION;
+    const isRepPortal =
+      body.performedByRole === "rep" ||
+      body.source === "rep" ||
+      (!val.businessId && Boolean(val.salesRepId));
+
+    // -------------------------------------------------------------
+    // Customer Overdue Invoicing Block Check (60d Orange/Sierra, 90d Others)
+    // ONLY enforced for Champika Hardware Distribution and Sales Rep portals.
+    // Retail (always allowed), Sierra, Orange, Wireman, and Walk-in customers are EXEMPT.
+    // -------------------------------------------------------------
+    let overdueStatus: any = null;
+    if (isDistribution || isRepPortal) {
+      const requesterUserId = val.salesRepId || body.userId || body.salesRepId || null;
+      overdueStatus = await checkCustomerOverdueStatus(val.customerId, {
+        userId: requesterUserId,
+        userRole: body.performedByRole || undefined,
+        businessId: resolvedBusinessId,
+        isRep: isRepPortal,
+      });
+      if (overdueStatus?.isBlocked) {
+        return NextResponse.json(
+          {
+            error:
+              overdueStatus.blockReason ||
+              "Customer invoicing is blocked due to 60+ days overdue bills. Admin authorization is required.",
+            isCustomerBlocked: true,
+            overdueDetails: overdueStatus,
+          },
+          { status: 403 }
+        );
+      }
     }
 
     // -------------------------------------------------------------
     // 2. Generate Invoice Number with per-business prefix or Sales Rep assigned Invoice Book
     // -------------------------------------------------------------
-    const isDistribution = resolvedBusinessId === BUSINESS_IDS.CHAMPIKA_DISTRIBUTION;
     const initialInv = await getNextInvoiceNumber(resolvedBusinessId, val.salesRepId, 0);
     let invoiceNo = initialInv.invoiceNo;
     let usedRepBookId = initialInv.isFromRepBook ? initialInv.bookId : null;

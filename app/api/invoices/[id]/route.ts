@@ -314,28 +314,6 @@ export async function PATCH(
 
     const val = updateInvoiceSchema.parse(body);
 
-    // -------------------------------------------------------------
-    // Customer Overdue Invoicing Block Check (60d Orange/Sierra, 90d Others)
-    // Enforced unless Admin globally disabled, user is exempt, or approved unlock exists.
-    // -------------------------------------------------------------
-    const requesterUserId = val.salesRepId || body.userId || body.performedById || null;
-    const overdueStatus = await checkCustomerOverdueStatus(val.customerId, {
-      userId: requesterUserId,
-      userRole: body.performedByRole || undefined,
-    });
-    if (overdueStatus.isBlocked) {
-      return NextResponse.json(
-        {
-          error:
-            overdueStatus.blockReason ||
-            "Invoice update blocked: Customer has 60+ days overdue bills. Please settle bills or request Admin unlock.",
-          isCustomerBlocked: true,
-          overdueDetails: overdueStatus,
-        },
-        { status: 403 }
-      );
-    }
-
     // 1. Fetch Current Invoice State (Snapshot for History)
     const { data: currentInvoice, error: invError } = await supabaseAdmin
       .from("invoices")
@@ -354,6 +332,42 @@ export async function PATCH(
         { error: "Invoice not found or DB error" },
         { status: 404 },
       );
+    }
+
+    // -------------------------------------------------------------
+    // Customer Overdue Invoicing Block Check (60d Orange/Sierra, 90d Others)
+    // ONLY enforced for Champika Hardware Distribution and Sales Rep portals.
+    // Retail, Sierra, Orange, Wireman, and Walk-in customers are EXEMPT.
+    // -------------------------------------------------------------
+    const invoiceOrder = Array.isArray(currentInvoice.orders) ? currentInvoice.orders[0] : currentInvoice.orders;
+    const invoiceBusinessId = body.businessId || invoiceOrder?.business_id || currentInvoice.business_id || null;
+    const isDistribution = invoiceBusinessId === BUSINESS_IDS.CHAMPIKA_DISTRIBUTION;
+    const isRepPortal =
+      body.performedByRole === "rep" ||
+      body.source === "rep" ||
+      (!invoiceBusinessId && Boolean(val.salesRepId || currentInvoice.sales_rep_id));
+
+    let overdueStatus: any = null;
+    if (isDistribution || isRepPortal) {
+      const requesterUserId = val.salesRepId || body.userId || body.performedById || null;
+      overdueStatus = await checkCustomerOverdueStatus(val.customerId, {
+        userId: requesterUserId,
+        userRole: body.performedByRole || undefined,
+        businessId: invoiceBusinessId,
+        isRep: isRepPortal,
+      });
+      if (overdueStatus?.isBlocked) {
+        return NextResponse.json(
+          {
+            error:
+              overdueStatus.blockReason ||
+              "Invoice update blocked: Customer has 60+ days overdue bills. Please settle bills or request Admin unlock.",
+            isCustomerBlocked: true,
+            overdueDetails: overdueStatus,
+          },
+          { status: 403 }
+        );
+      }
     }
 
     // Pre-compute the final paid amount once — used in both invoice update and customer balance sections.
