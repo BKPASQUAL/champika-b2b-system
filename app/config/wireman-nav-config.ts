@@ -18,6 +18,7 @@ import {
   Printer,
   ShieldAlert,
   BookOpen,
+  Calculator,
 } from "lucide-react";
 
 interface WiremanNavItem {
@@ -98,6 +99,12 @@ export const wiremanOfficeNavItems: WiremanNavSection[] = [
         name: "Purchases",
         href: "/dashboard/office/wireman/purchases",
         icon: FileText,
+      },
+      {
+        name: "Purchase Estimates",
+        href: "/dashboard/office/wireman/purchase-estimates",
+        icon: Calculator,
+        description: "Order planning & price quotations",
       },
       {
         name: "Payments Out",

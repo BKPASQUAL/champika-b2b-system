@@ -22,6 +22,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   CalendarClock,
+  Calculator,
 } from "lucide-react";
 
 interface SierraNavItem {
@@ -109,6 +110,12 @@ export const sierraOfficeNavItems: SierraNavSection[] = [
         name: "Purchases",
         href: "/dashboard/office/sierra/purchases",
         icon: FileText,
+      },
+      {
+        name: "Purchase Estimates",
+        href: "/dashboard/office/sierra/purchase-estimates",
+        icon: Calculator,
+        description: "Order planning & price quotations",
       },
       {
         name: "Payments Out",

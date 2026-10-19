@@ -22,6 +22,7 @@ import {
   Printer,
   BookOpen,
   Gift,
+  Calculator,
 } from "lucide-react";
 
 interface OrangeNavItem {
@@ -101,6 +102,12 @@ export const orangeOfficeNavItems: OrangeNavSection[] = [
         name: "Purchases",
         href: "/dashboard/office/orange/purchases",
         icon: FileText,
+      },
+      {
+        name: "Purchase Estimates",
+        href: "/dashboard/office/orange/purchase-estimates",
+        icon: Calculator,
+        description: "Order planning & price quotations",
       },
       {
         name: "Payments Out",

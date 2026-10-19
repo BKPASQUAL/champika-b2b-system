@@ -40,6 +40,7 @@ import {
   Building2,
   KeyRound,
   PackageX,
+  Calculator,
 } from "lucide-react";
 
 export type UserRole = "admin" | "office" | "rep" | "delivery";
@@ -167,6 +168,11 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           name: "Purchases",
           href: "/dashboard/admin/purchases",
           icon: FileText,
+        },
+        {
+          name: "Purchase Estimates",
+          href: "/dashboard/admin/purchase-estimates",
+          icon: Calculator,
         },
         {
           name: "Payments Out",
@@ -409,6 +415,11 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           name: "Purchases",
           href: "/dashboard/office/purchases",
           icon: FileText,
+        },
+        {
+          name: "Purchase Estimates",
+          href: "/dashboard/office/purchase-estimates",
+          icon: Calculator,
         },
         {
           name: "Payments Out",
