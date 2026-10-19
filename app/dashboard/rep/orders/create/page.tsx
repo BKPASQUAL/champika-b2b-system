@@ -1293,18 +1293,18 @@ export default function CreateOrderPage() {
 
           {/* If customer is blocked due to 60+ days overdue bills, HIDE product selection and ordering UI */}
           {customerOverdueStatus?.isBlocked ? (
-            <Card className="border-2 border-dashed border-red-300 bg-red-50/20 p-8 text-center rounded-2xl shadow-sm">
-              <div className="flex flex-col items-center justify-center max-w-lg mx-auto space-y-3 py-6">
-                <div className="p-4 bg-red-100 text-red-700 rounded-2xl shadow-inner">
-                  <Lock className="w-10 h-10" />
+            <Card className="border-2 border-dashed border-red-300 bg-red-50/20 p-5 sm:p-8 text-center rounded-2xl shadow-sm w-full min-w-0">
+              <div className="flex flex-col items-center justify-center max-w-lg mx-auto space-y-3 py-4 sm:py-6">
+                <div className="p-3 sm:p-4 bg-red-100 text-red-700 rounded-2xl shadow-inner">
+                  <Lock className="w-8 h-8 sm:w-10 sm:h-10" />
                 </div>
-                <h3 className="font-bold text-lg text-slate-900 tracking-tight">
+                <h3 className="font-bold text-base sm:text-lg text-slate-900 tracking-tight">
                   Product Selection & Ordering Locked
                 </h3>
-                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed break-words">
                   Product catalog, stock, and ordering are hidden for <strong>{customerOverdueStatus.customerName}</strong> because of unsettled 60+ days overdue bills.
                 </p>
-                <p className="text-xs text-red-700 font-medium">
+                <p className="text-xs text-red-700 font-medium break-words">
                   Click <strong>Request Admin Unlock</strong> above or settle the overdue bills to unlock and view the product catalog.
                 </p>
               </div>

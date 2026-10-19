@@ -52,13 +52,14 @@ export default function RepDashboardLayout({
       {/* Main Content Wrapper */}
       <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         {/* Mobile Header (Visible only on small screens) */}
-        <header className="lg:hidden h-16 bg-white border-b flex items-center px-4 shrink-0 z-30 gap-3">
+        <header className="lg:hidden h-16 bg-white border-b flex items-center px-3 sm:px-4 shrink-0 z-30 gap-2 sm:gap-3">
           <MobileNav role={userRole} />
-          <span className="font-bold text-gray-700 flex-1 truncate">Champika HW</span>
+          <span className="font-bold text-gray-700 flex-1 truncate text-sm sm:text-base">Champika HW</span>
           <Link href="/dashboard/rep/orders/create">
-            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white gap-1.5 shrink-0">
+            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white gap-1 sm:gap-1.5 shrink-0 text-xs sm:text-sm h-8 sm:h-9 px-2.5 sm:px-3">
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">Create Invoice</span>
+              <span className="sm:hidden">Invoice</span>
             </Button>
           </Link>
         </header>
@@ -92,7 +93,7 @@ export default function RepDashboardLayout({
         </header>
 
         {/* Page Content */}
-        <div className="flex-1 p-4 md:p-8 overflow-y-auto">{children}</div>
+        <div className="flex-1 p-3 sm:p-4 md:p-8 overflow-y-auto overflow-x-hidden min-w-0">{children}</div>
       </main>
     </div>
   );

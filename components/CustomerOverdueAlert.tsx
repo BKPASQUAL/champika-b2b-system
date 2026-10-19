@@ -161,19 +161,19 @@ export function CustomerOverdueAlert({
       : "Active";
 
     return (
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-900 shadow-sm">
-        <div className="flex items-start gap-2.5">
+      <div className="w-full min-w-0 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 sm:p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-900 shadow-sm">
+        <div className="flex items-start gap-2.5 min-w-0 flex-1">
           <ShieldCheck className="h-5 w-5 mt-0.5 text-emerald-600 shrink-0" />
-          <div className="space-y-0.5">
+          <div className="space-y-0.5 min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-semibold text-sm">
+              <span className="font-semibold text-xs sm:text-sm">
                 Admin Temporary Invoicing Unlock Active
               </span>
-              <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-normal border-none">
+              <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] sm:text-[11px] font-normal border-none whitespace-nowrap">
                 {unlockLabel}
               </Badge>
             </div>
-            <p className="text-xs text-emerald-800">
+            <p className="text-xs text-emerald-800 break-words">
               Approved by <strong>{status.activeUnlock.approvedByName}</strong> · Valid until:{" "}
               <strong>{formattedExpiry}</strong>. Invoicing is authorized.
             </p>
@@ -244,45 +244,44 @@ export function CustomerOverdueAlert({
         setSubmitting(false);
       }
     };
-
-    return (
+    return (
       <>
-        <div className="flex flex-col gap-3 p-4 bg-gradient-to-r from-red-50 to-orange-50 border-2 border-red-400 rounded-xl text-red-950 shadow-sm animate-in fade-in duration-200">
-          <div className="flex items-start justify-between gap-3 flex-wrap">
-            <div className="flex items-start gap-2.5">
+        <div className="w-full min-w-0 flex flex-col gap-3 p-3 sm:p-4 bg-gradient-to-r from-red-50 to-orange-50 border-2 border-red-400 rounded-xl text-red-950 shadow-sm animate-in fade-in duration-200 overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 min-w-0">
+            <div className="flex items-start gap-2.5 min-w-0 flex-1">
               <div className="p-1.5 bg-red-100 text-red-700 rounded-lg shrink-0 mt-0.5">
-                <Lock className="h-5 w-5" />
+                <Lock className="h-4 w-4 sm:h-5 sm:w-5" />
               </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-bold text-sm tracking-tight text-red-900">
+              <div className="space-y-1 min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                  <span className="font-bold text-xs sm:text-sm tracking-tight text-red-900 leading-snug">
                     INVOICING BLOCKED: Overdue Bills (60d Orange/Sierra | 90d Others)
                   </span>
-                  <Badge className="bg-red-600 hover:bg-red-700 text-white font-mono text-xs border-none">
+                  <Badge className="bg-red-600 hover:bg-red-700 text-white font-mono text-[11px] sm:text-xs border-none whitespace-nowrap">
                     LKR {fmt(status.totalOverdueAmount)} Due
                   </Badge>
-                  <Badge variant="outline" className="border-red-300 text-red-800 text-[11px] bg-red-100/50">
+                  <Badge variant="outline" className="border-red-300 text-red-800 text-[10px] sm:text-[11px] bg-red-100/50 whitespace-nowrap">
                     {status.oldestDaysOverdue}+ Days Oldest
                   </Badge>
                 </div>
-                <p className="text-xs text-red-900/90 leading-relaxed max-w-2xl">
+                <p className="text-xs text-red-900/90 leading-relaxed max-w-2xl break-words">
                   This customer has <strong>{status.overdueInvoices.length}</strong> invoice(s) exceeding credit rules (60+ days for Orange & Sierra items, 90+ days for other suppliers). Invoicing and updates are blocked until overdue bills are settled or Admin approves an unlock.
                 </p>
               </div>
             </div>
 
             {/* Action / Status Button */}
-            <div className="ml-auto flex items-center gap-2">
+            <div className="w-full sm:w-auto shrink-0 flex items-center justify-start sm:justify-end">
               {status.pendingRequest ? (
-                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 border border-amber-300 text-amber-900 rounded-lg text-xs font-medium">
-                  <Clock className="h-3.5 w-3.5 text-amber-700 animate-spin" style={{ animationDuration: "3s" }} />
-                  <span>Pending Admin Approval ({status.pendingRequest.unlockType.replace("_", " ")})</span>
+                <div className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-1.5 bg-amber-100 border border-amber-300 text-amber-900 rounded-lg text-xs font-medium text-center">
+                  <Clock className="h-3.5 w-3.5 text-amber-700 animate-spin shrink-0" style={{ animationDuration: "3s" }} />
+                  <span className="truncate">Pending Admin Approval ({status.pendingRequest.unlockType.replace("_", " ")})</span>
                 </div>
               ) : (
                 <Button
                   size="sm"
                   onClick={() => setDialogOpen(true)}
-                  className="bg-red-600 hover:bg-red-700 text-white text-xs font-semibold shadow-sm flex items-center gap-1.5 h-8 px-3"
+                  className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white text-xs font-semibold shadow-sm flex items-center justify-center gap-1.5 h-8 px-3"
                 >
                   <KeyRound className="h-3.5 w-3.5" />
                   Request Admin Unlock
@@ -293,65 +292,87 @@ export function CustomerOverdueAlert({
 
           {/* List of Overdue Invoices */}
           {status.overdueInvoices.length > 0 && (
-            <div className="mt-1 pt-2.5 border-t border-red-200/80">
-              <span className="text-[11px] font-semibold text-red-800 block mb-1.5">
-                Overdue Invoices Requiring Settlement:
-              </span>
-              <div className="flex flex-wrap gap-2">
+            <div className="mt-1 pt-2.5 border-t border-red-200/80 space-y-2 w-full min-w-0">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-[11px] font-semibold text-red-800 block">
+                  Overdue Invoices Requiring Settlement ({status.overdueInvoices.length}):
+                </span>
+                <span className="text-[10px] text-red-700/80 italic hidden xs:inline sm:inline">
+                  Click &apos;View&apos; for details & item list
+                </span>
+              </div>
+              <div className="flex flex-col gap-2 w-full min-w-0">
                 {status.overdueInvoices.map((inv) => (
                   <div
                     key={inv.id}
-                    className="flex items-center gap-2 px-2.5 py-1.5 bg-white border border-red-200 hover:border-red-300 rounded-lg text-xs font-medium text-slate-800 shadow-xs transition-all group"
+                    className="w-full min-w-0 flex flex-col md:flex-row md:items-center justify-between gap-2.5 p-2.5 sm:p-3 bg-white border border-red-200 hover:border-red-300 rounded-lg text-xs shadow-xs transition-all group"
                   >
-                    <FileText className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                    <span className="font-mono text-red-900 font-semibold">{inv.invoiceNo}</span>
-                    <span className="text-[11px] text-muted-foreground font-normal">
-                      ({inv.invoiceDate})
-                    </span>
-                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-red-100 text-red-800 border-none font-bold">
-                      {inv.daysOverdue}d overdue
-                    </Badge>
-                    {inv.hasOrangeOrSierra ? (
-                      <Badge className="text-[10px] px-1.5 py-0 bg-amber-100 text-amber-900 border-amber-300 font-medium">
-                        Orange/Sierra (60d)
-                      </Badge>
-                    ) : (
-                      <Badge className="text-[10px] px-1.5 py-0 bg-slate-100 text-slate-800 border-slate-300 font-medium">
-                        Other (90d)
-                      </Badge>
-                    )}
-                    {inv.supplierNames && inv.supplierNames.length > 0 && (
-                      <span className="text-[10px] text-slate-500 max-w-[130px] truncate" title={inv.supplierNames.join(", ")}>
-                        {inv.supplierNames.join(", ")}
-                      </span>
-                    )}
-                    <span className="font-mono text-xs font-bold text-slate-900">
-                      LKR {fmt(inv.dueAmount)}
-                    </span>
+                    {/* Invoice Number, Date, and Category Badges */}
+                    <div className="flex items-center gap-2 flex-wrap min-w-0">
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <FileText className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                        <span className="font-mono text-red-900 font-bold whitespace-nowrap text-xs sm:text-sm">
+                          {inv.invoiceNo}
+                        </span>
+                        <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                          ({inv.invoiceDate})
+                        </span>
+                      </div>
 
-                    {/* View Button */}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleOpenInvoiceView(inv)}
-                      className="h-6 px-2 text-[11px] font-semibold text-blue-700 hover:text-blue-900 hover:bg-blue-100/70 ml-1 rounded flex items-center gap-1 border border-blue-200 bg-blue-50/60"
-                      title="View invoice details"
-                    >
-                      <Eye className="h-3 w-3 text-blue-600" />
-                      View
-                    </Button>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-red-100 text-red-800 border-none font-bold whitespace-nowrap">
+                          {inv.daysOverdue}d overdue
+                        </Badge>
+                        {inv.hasOrangeOrSierra ? (
+                          <Badge className="text-[10px] px-1.5 py-0 bg-amber-100 text-amber-900 border-amber-300 font-medium whitespace-nowrap">
+                            Orange/Sierra (60d)
+                          </Badge>
+                        ) : (
+                          <Badge className="text-[10px] px-1.5 py-0 bg-slate-100 text-slate-800 border-slate-300 font-medium whitespace-nowrap">
+                            Other (90d)
+                          </Badge>
+                        )}
+                        {inv.supplierNames && inv.supplierNames.length > 0 && (
+                          <span className="text-[10px] text-slate-500 max-w-[140px] sm:max-w-[200px] truncate block" title={inv.supplierNames.join(", ")}>
+                            {inv.supplierNames.join(", ")}
+                          </span>
+                        )}
+                      </div>
+                    </div>
 
-                    {/* Open in new tab link */}
-                    <a
-                      href={`/invoice/${inv.id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="Open full printable invoice in new tab"
-                      className="text-muted-foreground hover:text-blue-600 p-1 rounded hover:bg-slate-100 transition-colors inline-flex items-center"
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
+                    {/* Due Amount, View and Action Buttons */}
+                    <div className="flex items-center justify-between md:justify-end gap-2.5 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100 shrink-0 min-w-0">
+                      <div className="flex items-baseline md:flex-col md:items-end gap-1.5 md:gap-0">
+                        <span className="text-[10px] text-slate-400 font-medium md:hidden">Due:</span>
+                        <span className="font-mono text-xs sm:text-sm font-bold text-slate-900 whitespace-nowrap">
+                          LKR {fmt(inv.dueAmount)}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleOpenInvoiceView(inv)}
+                          className="h-7 px-2.5 text-[11px] font-semibold text-blue-700 hover:text-blue-900 hover:bg-blue-100/70 rounded flex items-center gap-1 border border-blue-200 bg-blue-50/60"
+                          title="View invoice details"
+                        >
+                          <Eye className="h-3 w-3 text-blue-600" />
+                          <span>View</span>
+                        </Button>
+
+                        <a
+                          href={`/invoice/${inv.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Open full printable invoice in new tab"
+                          className="text-muted-foreground hover:text-blue-600 p-1.5 rounded hover:bg-slate-100 transition-colors inline-flex items-center border border-transparent hover:border-slate-200"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -361,32 +382,32 @@ export function CustomerOverdueAlert({
 
         {/* Unlock Request Dialog */}
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="w-[95vw] sm:max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-red-900">
-                <KeyRound className="h-5 w-5 text-red-600" />
-                Request Admin Invoicing Unlock
+              <DialogTitle className="flex items-center gap-2 text-red-900 text-base sm:text-lg">
+                <KeyRound className="h-5 w-5 text-red-600 shrink-0" />
+                <span>Request Admin Invoicing Unlock</span>
               </DialogTitle>
-              <DialogDescription className="text-xs">
+              <DialogDescription className="text-xs break-words">
                 Request temporary authorization from Admin to create invoice(s) for{" "}
-                <strong>{status.customerName}</strong> despite overdue balance.
+                <strong className="text-slate-900">{status.customerName}</strong> despite overdue balance.
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4 py-2">
               {/* Overdue Summary Card */}
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs space-y-1.5">
-                <div className="flex justify-between items-center text-red-900 font-semibold">
-                  <span>Customer Shop:</span>
-                  <span>{status.customerName}</span>
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs space-y-2">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 text-red-900 font-semibold">
+                  <span className="text-slate-600 text-[11px]">Customer Shop:</span>
+                  <span className="break-words">{status.customerName}</span>
                 </div>
-                <div className="flex justify-between items-center text-red-900 font-semibold">
-                  <span>Total 60+ Days Overdue:</span>
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 text-red-900 font-semibold border-t sm:border-t-0 pt-1 sm:pt-0 border-red-100">
+                  <span className="text-slate-600 text-[11px]">Total Overdue:</span>
                   <span className="font-mono text-sm text-red-700">LKR {fmt(status.totalOverdueAmount)}</span>
                 </div>
-                <div className="flex justify-between items-center text-slate-700">
-                  <span>Overdue Bills Count:</span>
-                  <span>{status.overdueInvoices.length} bill(s) (Oldest: {status.oldestDaysOverdue} days)</span>
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 text-slate-700 border-t sm:border-t-0 pt-1 sm:pt-0 border-red-100">
+                  <span className="text-slate-600 text-[11px]">Overdue Bills:</span>
+                  <span className="text-[11px] font-medium">{status.overdueInvoices.length} bill(s) (Oldest: {status.oldestDaysOverdue} days)</span>
                 </div>
               </div>
 
@@ -400,11 +421,11 @@ export function CustomerOverdueAlert({
                   <SelectTrigger className="w-full text-xs">
                     <SelectValue placeholder="Select unlock type" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-w-[90vw] sm:max-w-md">
                     <SelectItem value="one_time">
                       <div className="flex flex-col text-left py-0.5">
                         <span className="font-medium text-xs">One-Time Invoice Creation</span>
-                        <span className="text-[10px] text-muted-foreground">
+                        <span className="text-[10px] text-muted-foreground whitespace-normal">
                           Allows creating exactly 1 invoice; automatically expires once saved
                         </span>
                       </div>
@@ -412,7 +433,7 @@ export function CustomerOverdueAlert({
                     <SelectItem value="7_days">
                       <div className="flex flex-col text-left py-0.5">
                         <span className="font-medium text-xs">7 Days Temporary Unlock</span>
-                        <span className="text-[10px] text-muted-foreground">
+                        <span className="text-[10px] text-muted-foreground whitespace-normal">
                           Grace period for sales & deliveries valid for 7 days
                         </span>
                       </div>
@@ -420,7 +441,7 @@ export function CustomerOverdueAlert({
                     <SelectItem value="14_days">
                       <div className="flex flex-col text-left py-0.5">
                         <span className="font-medium text-xs">14 Days Temporary Unlock</span>
-                        <span className="text-[10px] text-muted-foreground">
+                        <span className="text-[10px] text-muted-foreground whitespace-normal">
                           Extended grace period valid for 14 days
                         </span>
                       </div>
@@ -444,12 +465,13 @@ export function CustomerOverdueAlert({
               </div>
             </div>
 
-            <DialogFooter className="gap-2 sm:gap-0">
+            <DialogFooter className="flex-col-reverse sm:flex-row gap-2 sm:gap-2 pt-2">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setDialogOpen(false)}
                 disabled={submitting}
+                className="w-full sm:w-auto"
               >
                 Cancel
               </Button>
@@ -457,7 +479,7 @@ export function CustomerOverdueAlert({
                 size="sm"
                 onClick={handleRequestSubmit}
                 disabled={submitting || !reason.trim()}
-                className="bg-red-600 hover:bg-red-700 text-white"
+                className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white"
               >
                 {submitting ? (
                   <>
@@ -474,29 +496,29 @@ export function CustomerOverdueAlert({
 
         {/* Invoice Quick View Dialog */}
         <Dialog open={viewInvoiceModalOpen} onOpenChange={setViewInvoiceModalOpen}>
-          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogContent className="w-[96vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
             <DialogHeader className="border-b pb-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-red-600" />
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <FileText className="h-5 w-5 text-red-600 shrink-0" />
                   <DialogTitle className="text-base sm:text-lg font-bold text-slate-900 font-mono">
                     {selectedOverdueInv?.invoiceNo || "Invoice Details"}
                   </DialogTitle>
-                  <Badge variant="secondary" className="bg-red-100 text-red-800 border-none font-bold text-xs">
+                  <Badge variant="secondary" className="bg-red-100 text-red-800 border-none font-bold text-xs whitespace-nowrap">
                     {selectedOverdueInv?.daysOverdue} Days Overdue
                   </Badge>
                   {selectedOverdueInv?.hasOrangeOrSierra ? (
-                    <Badge className="bg-amber-100 text-amber-900 border-amber-300 font-medium text-xs">
+                    <Badge className="bg-amber-100 text-amber-900 border-amber-300 font-medium text-xs whitespace-nowrap">
                       Orange/Sierra (60d rule)
                     </Badge>
                   ) : (
-                    <Badge className="bg-slate-100 text-slate-800 border-slate-300 font-medium text-xs">
+                    <Badge className="bg-slate-100 text-slate-800 border-slate-300 font-medium text-xs whitespace-nowrap">
                       Other Suppliers (90d rule)
                     </Badge>
                   )}
                 </div>
               </div>
-              <DialogDescription className="text-xs text-muted-foreground">
+              <DialogDescription className="text-xs text-muted-foreground truncate">
                 Detailed statement for {status.customerName}
               </DialogDescription>
             </DialogHeader>
@@ -527,7 +549,7 @@ export function CustomerOverdueAlert({
                     <span className="font-medium text-slate-900">{invoiceData.paymentMethod || "Standard"}</span>
                   </div>
                   {selectedOverdueInv?.supplierNames && selectedOverdueInv.supplierNames.length > 0 && (
-                    <div className="col-span-2 sm:col-span-4 pt-1.5 border-t border-slate-200/70 flex items-center gap-1.5 text-[11px]">
+                    <div className="col-span-2 sm:col-span-4 pt-1.5 border-t border-slate-200/70 flex items-center gap-1.5 text-[11px] flex-wrap">
                       <span className="text-muted-foreground font-semibold">Suppliers:</span>
                       <span className="font-medium text-slate-800">{selectedOverdueInv.supplierNames.join(", ")}</span>
                     </div>
@@ -535,20 +557,20 @@ export function CustomerOverdueAlert({
                 </div>
 
                 {/* Financial Summary */}
-                <div className="grid grid-cols-3 gap-2 p-3 bg-red-50/60 border border-red-200 rounded-lg">
-                  <div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 p-3 bg-red-50/60 border border-red-200 rounded-lg">
+                  <div className="flex justify-between sm:block items-center">
                     <span className="text-slate-600 block text-[10px] uppercase font-semibold">Invoice Total</span>
                     <span className="font-bold text-slate-900 text-sm font-mono">
                       LKR {fmt(invoiceData.grandTotal)}
                     </span>
                   </div>
-                  <div>
+                  <div className="flex justify-between sm:block items-center border-t sm:border-t-0 pt-1.5 sm:pt-0 border-red-100">
                     <span className="text-slate-600 block text-[10px] uppercase font-semibold">Paid Amount</span>
                     <span className="font-bold text-emerald-700 text-sm font-mono">
                       LKR {fmt(invoiceData.paidAmount || 0)}
                     </span>
                   </div>
-                  <div>
+                  <div className="flex justify-between sm:block items-center border-t sm:border-t-0 pt-1.5 sm:pt-0 border-red-100">
                     <span className="text-red-700 block text-[10px] uppercase font-semibold">Remaining Overdue</span>
                     <span className="font-bold text-red-700 text-sm font-mono">
                       LKR {fmt(selectedOverdueInv?.dueAmount ?? Math.max(0, invoiceData.grandTotal - (invoiceData.paidAmount || 0)))}
@@ -561,8 +583,8 @@ export function CustomerOverdueAlert({
                   <h4 className="font-semibold text-slate-900 text-xs flex items-center justify-between">
                     <span>Invoiced Items ({invoiceData.items?.length || 0})</span>
                   </h4>
-                  <div className="border rounded-md overflow-hidden">
-                    <table className="w-full text-left text-xs">
+                  <div className="border rounded-md overflow-x-auto">
+                    <table className="w-full text-left text-xs min-w-[500px] sm:min-w-0">
                       <thead className="bg-slate-100/80 text-slate-700 font-semibold border-b">
                         <tr>
                           <th className="py-1.5 px-2.5">Item</th>
@@ -580,19 +602,19 @@ export function CustomerOverdueAlert({
                                 <span className="font-medium text-slate-900 block">{it.productName}</span>
                                 <span className="text-[10px] text-muted-foreground font-mono">{it.sku}</span>
                               </td>
-                              <td className="py-1.5 px-2 text-center font-medium">
+                              <td className="py-1.5 px-2 text-center font-medium whitespace-nowrap">
                                 {it.quantity} {it.unit || ""}
                                 {it.freeQuantity ? (
                                   <span className="text-[10px] text-emerald-600 block">+{it.freeQuantity} free</span>
                                 ) : null}
                               </td>
-                              <td className="py-1.5 px-2 text-right font-mono">
+                              <td className="py-1.5 px-2 text-right font-mono whitespace-nowrap">
                                 LKR {fmt(it.unitPrice)}
                               </td>
                               <td className="py-1.5 px-2 text-center text-muted-foreground">
                                 {it.discountPercent ? `${it.discountPercent}%` : "-"}
                               </td>
-                              <td className="py-1.5 px-2.5 text-right font-bold text-slate-900 font-mono">
+                              <td className="py-1.5 px-2.5 text-right font-bold text-slate-900 font-mono whitespace-nowrap">
                                 LKR {fmt(it.total)}
                               </td>
                             </tr>
@@ -613,8 +635,8 @@ export function CustomerOverdueAlert({
                 {invoiceData.payments && invoiceData.payments.length > 0 && (
                   <div className="space-y-1.5 pt-1">
                     <h4 className="font-semibold text-slate-900 text-xs">Payment History</h4>
-                    <div className="border rounded-md overflow-hidden">
-                      <table className="w-full text-left text-xs">
+                    <div className="border rounded-md overflow-x-auto">
+                      <table className="w-full text-left text-xs min-w-[320px] sm:min-w-0">
                         <thead className="bg-emerald-50 text-emerald-900 font-semibold border-b">
                           <tr>
                             <th className="py-1.5 px-2.5">Date</th>
@@ -625,11 +647,11 @@ export function CustomerOverdueAlert({
                         <tbody className="divide-y divide-slate-100">
                           {invoiceData.payments.map((p) => (
                             <tr key={p.id} className="hover:bg-slate-50/50">
-                              <td className="py-1.5 px-2.5 text-muted-foreground">{p.payment_date}</td>
+                              <td className="py-1.5 px-2.5 text-muted-foreground whitespace-nowrap">{p.payment_date}</td>
                               <td className="py-1.5 px-2">
                                 {p.method} {p.cheque_no ? `(#${p.cheque_no})` : ""}
                               </td>
-                              <td className="py-1.5 px-2.5 text-right font-bold text-emerald-700 font-mono">
+                              <td className="py-1.5 px-2.5 text-right font-bold text-emerald-700 font-mono whitespace-nowrap">
                                 LKR {fmt(p.amount)}
                               </td>
                             </tr>
@@ -655,14 +677,14 @@ export function CustomerOverdueAlert({
               </div>
             )}
 
-            <DialogFooter className="border-t pt-3 flex items-center justify-between sm:justify-between w-full">
+            <DialogFooter className="border-t pt-3 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-0 w-full">
               {selectedOverdueInv && (
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   asChild
-                  className="gap-1.5 text-xs text-blue-700 border-blue-200 hover:bg-blue-50"
+                  className="gap-1.5 text-xs text-blue-700 border-blue-200 hover:bg-blue-50 w-full sm:w-auto"
                 >
                   <a
                     href={`/invoice/${selectedOverdueInv.id}`}
@@ -679,6 +701,7 @@ export function CustomerOverdueAlert({
                 variant="secondary"
                 size="sm"
                 onClick={() => setViewInvoiceModalOpen(false)}
+                className="w-full sm:w-auto"
               >
                 Close
               </Button>
@@ -692,9 +715,9 @@ export function CustomerOverdueAlert({
   // Case 3: Manually blocked without 60+ days overdue
   if (status.isBlocked && !status.hasOverdue) {
     return (
-      <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-300 rounded-xl text-red-900 text-xs">
-        <AlertTriangle className="h-4 w-4 text-red-600 shrink-0" />
-        <span>
+      <div className="w-full min-w-0 flex items-start sm:items-center gap-2.5 p-3.5 bg-red-50 border border-red-300 rounded-xl text-red-900 text-xs shadow-xs">
+        <AlertTriangle className="h-4 w-4 text-red-600 shrink-0 mt-0.5 sm:mt-0" />
+        <span className="break-words leading-relaxed">
           <strong>Customer Account Blocked:</strong> {status.blockReason || "Customer is blocked by administration. Invoicing is restricted."}
         </span>
       </div>
