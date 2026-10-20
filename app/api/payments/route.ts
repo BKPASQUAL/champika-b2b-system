@@ -270,7 +270,7 @@ export async function POST(request: NextRequest) {
           cheque_no: paymentMethod === "cheque"
             ? (val.branchCode ? `${val.chequeNo} (Branch: ${val.branchCode})` : val.chequeNo)
             : paymentMethod === "goods"
-            ? (val.goodsSummary ? `Goods: ${val.goodsSummary}`.slice(0, 250) : "Goods Settlement")
+            ? (val.goodsSummary ? `Goods: ${val.goodsSummary}` : "Goods Settlement")
             : null,
           cheque_date: paymentMethod === "cheque" ? val.chequeDate : null,
           cheque_status: paymentMethod === "cheque" ? "Pending" : null,
@@ -377,7 +377,7 @@ export async function POST(request: NextRequest) {
         cheque_no: paymentMethod === "cheque"
           ? (val.branchCode ? `${val.chequeNo} (Branch: ${val.branchCode})` : val.chequeNo)
           : paymentMethod === "goods"
-          ? (val.goodsSummary ? `Goods: ${val.goodsSummary}`.slice(0, 250) : "Goods Settlement")
+          ? (val.goodsSummary ? `Goods: ${val.goodsSummary}` : "Goods Settlement")
           : null,
         cheque_date: paymentMethod === "cheque" ? val.chequeDate : null,
         cheque_status: paymentMethod === "cheque" ? "Pending" : null,

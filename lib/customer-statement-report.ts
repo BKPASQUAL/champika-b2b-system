@@ -372,6 +372,7 @@ function buildDoc(
     date: string;
     manualInvoiceNo: string;
     itemName: string;
+    qty: string | number;
     amount: number;
     isSoldToCustomer: boolean;
   }
@@ -418,7 +419,7 @@ function buildDoc(
       }
     }
 
-    // 4. Clean Item Name (strip debug metadata in parens or @ prices)
+    // 4. Clean Item Name & Extract Quantity (e.g. "3x Sierra 1/113 Brown 100m Coil")
     const isDamage = /\bDamage\b/i.test(trimmed);
     let cleanName = trimmed;
     const parenIdx = cleanName.indexOf("(");
@@ -431,6 +432,14 @@ function buildDoc(
       }
     }
     cleanName = cleanName.replace(/^(?:goods(?:\s+settlement)?:\s*)/i, "").trim();
+
+    let qty: string | number = 1;
+    const qtyMatch = cleanName.match(/^(\d+(?:\.\d+)?)\s*x\s+/i);
+    if (qtyMatch) {
+      qty = qtyMatch[1];
+      cleanName = cleanName.substring(qtyMatch[0].length).trim();
+    }
+
     if (isDamage && !cleanName.toLowerCase().includes("damage")) {
       cleanName += " [Damaged]";
     }
@@ -440,6 +449,7 @@ function buildDoc(
       date: defaultDate,
       manualInvoiceNo: manualRef,
       itemName: cleanName,
+      qty,
       amount,
       isSoldToCustomer,
     };
@@ -488,10 +498,17 @@ function buildDoc(
           // Legacy unstructured payment record
           const manualRef = inv.manualInvoiceNo || "—";
           let cleanName = rawDetails.replace(/^(?:goods(?:\s+settlement)?:\s*)/i, "").trim();
+          let qty: string | number = 1;
+          const qtyMatch = cleanName.match(/^(\d+(?:\.\d+)?)\s*x\s+/i);
+          if (qtyMatch) {
+            qty = qtyMatch[1];
+            cleanName = cleanName.substring(qtyMatch[0].length).trim();
+          }
           parsedGoodsItems.push({
             date: pDate,
             manualInvoiceNo: manualRef,
             itemName: cleanName || "Sierra Products Exchanged",
+            qty,
             amount: p.amount,
             isSoldToCustomer: false,
           });
@@ -536,12 +553,13 @@ function buildDoc(
           item.manualInvoiceNo,
           item.date,
           item.itemName,
+          String(item.qty),
           fmt(item.amount),
         ]),
         [
           {
             content: `SUBTOTAL (SOLD TO CUSTOMER): ${soldItems.length} item(s)`,
-            colSpan: 3,
+            colSpan: 4,
             styles: {
               fontStyle: "bold",
               halign: "right",
@@ -566,7 +584,7 @@ function buildDoc(
       autoTable(doc, {
         startY: currentY + 3.5,
         margin: { left: M, right: M },
-        head: [["Manual Bill Ref", "Date", "Item Name", "Amount (LKR)"]],
+        head: [["Manual Bill Ref", "Date", "Item Name", "Qty", "Amount (LKR)"]],
         body: soldTableBody,
         theme: "plain",
         headStyles: {
@@ -586,10 +604,11 @@ function buildDoc(
           overflow: "linebreak",
         },
         columnStyles: {
-          0: { halign: "center", cellWidth: 32 },
-          1: { halign: "center", cellWidth: 26 },
-          2: { halign: "left",   cellWidth: 88 },
-          3: { halign: "right",  cellWidth: 34, fontStyle: "bold" },
+          0: { halign: "center", cellWidth: 28 },
+          1: { halign: "center", cellWidth: 24 },
+          2: { halign: "left",   cellWidth: 82 },
+          3: { halign: "center", cellWidth: 14 },
+          4: { halign: "right",  cellWidth: 32, fontStyle: "bold" },
         },
       });
 
@@ -624,12 +643,13 @@ function buildDoc(
           item.manualInvoiceNo,
           item.date,
           item.itemName,
+          String(item.qty),
           fmt(item.amount),
         ]),
         [
           {
             content: `SUBTOTAL (OTHER SIERRA STOCK): ${notSoldItems.length} item(s)`,
-            colSpan: 3,
+            colSpan: 4,
             styles: {
               fontStyle: "bold",
               halign: "right",
@@ -654,7 +674,7 @@ function buildDoc(
       autoTable(doc, {
         startY: currentY + 3.5,
         margin: { left: M, right: M },
-        head: [["Manual Bill Ref", "Date", "Item Name", "Amount (LKR)"]],
+        head: [["Manual Bill Ref", "Date", "Item Name", "Qty", "Amount (LKR)"]],
         body: notSoldTableBody,
         theme: "plain",
         headStyles: {
@@ -674,10 +694,11 @@ function buildDoc(
           overflow: "linebreak",
         },
         columnStyles: {
-          0: { halign: "center", cellWidth: 32 },
-          1: { halign: "center", cellWidth: 26 },
-          2: { halign: "left",   cellWidth: 88 },
-          3: { halign: "right",  cellWidth: 34, fontStyle: "bold" },
+          0: { halign: "center", cellWidth: 28 },
+          1: { halign: "center", cellWidth: 24 },
+          2: { halign: "left",   cellWidth: 82 },
+          3: { halign: "center", cellWidth: 14 },
+          4: { halign: "right",  cellWidth: 32, fontStyle: "bold" },
         },
       });
 
