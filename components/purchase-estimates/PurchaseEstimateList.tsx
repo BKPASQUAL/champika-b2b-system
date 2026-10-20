@@ -44,6 +44,7 @@ import {
   FileSpreadsheet,
   AlertCircle,
   FileCheck2,
+  FileText,
   Calendar,
   Pencil,
 } from "lucide-react";
@@ -523,24 +524,70 @@ export function PurchaseEstimateList({
                           </DropdownMenu>
 
                           {/* PDF Download */}
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            onClick={() => downloadPurchaseEstimatePdf(est)}
-                            title="Download PDF"
-                          >
-                            <Download className="w-4 h-4 text-emerald-600" />
-                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                title="Download PDF"
+                              >
+                                <Download className="w-4 h-4 text-emerald-600" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-64">
+                              <DropdownMenuItem
+                                onClick={() => downloadPurchaseEstimatePdf(est, "order_sheet")}
+                              >
+                                <FileText className="w-4 h-4 mr-2 text-emerald-600 shrink-0" />
+                                <div className="flex flex-col">
+                                  <span className="font-semibold text-xs text-slate-900">Order Sheet PDF (Only Item & Qty)</span>
+                                  <span className="text-[10px] text-muted-foreground">Letterhead • Black font • No prices</span>
+                                </div>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => downloadPurchaseEstimatePdf(est, "full")}
+                              >
+                                <Calculator className="w-4 h-4 mr-2 text-blue-600 shrink-0" />
+                                <div className="flex flex-col">
+                                  <span className="font-semibold text-xs text-slate-900">Full Pricing PDF</span>
+                                  <span className="text-[10px] text-muted-foreground">With costs & line totals</span>
+                                </div>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
 
                           {/* Print */}
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            onClick={() => printPurchaseEstimate(est)}
-                            title="Print"
-                          >
-                            <Printer className="w-4 h-4 text-slate-600" />
-                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                title="Print"
+                              >
+                                <Printer className="w-4 h-4 text-slate-600" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-64">
+                              <DropdownMenuItem
+                                onClick={() => printPurchaseEstimate(est, "order_sheet")}
+                              >
+                                <FileText className="w-4 h-4 mr-2 text-slate-700 shrink-0" />
+                                <div className="flex flex-col">
+                                  <span className="font-semibold text-xs text-slate-900">Print Order Sheet</span>
+                                  <span className="text-[10px] text-muted-foreground">Item Name & Qty only • Letterhead</span>
+                                </div>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => printPurchaseEstimate(est, "full")}
+                              >
+                                <Calculator className="w-4 h-4 mr-2 text-blue-600 shrink-0" />
+                                <div className="flex flex-col">
+                                  <span className="font-semibold text-xs text-slate-900">Print Full Estimate</span>
+                                  <span className="text-[10px] text-muted-foreground">With costs & line totals</span>
+                                </div>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
 
                           {/* Share via WhatsApp */}
                           <Button

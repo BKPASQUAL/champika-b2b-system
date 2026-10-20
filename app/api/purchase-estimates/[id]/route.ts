@@ -74,16 +74,31 @@ export async function PATCH(
     if (body.status !== undefined) updateData.status = body.status;
     if (body.notes !== undefined) updateData.notes = body.notes;
     if (body.reference_no !== undefined) updateData.reference_no = body.reference_no;
-    if (body.estimate_date !== undefined) updateData.estimate_date = body.estimate_date;
-    if (body.arrival_date !== undefined) updateData.arrival_date = body.arrival_date;
+    if (body.supplier_id !== undefined) updateData.supplier_id = body.supplier_id;
+    if (body.supplier_name !== undefined) updateData.supplier_name = body.supplier_name;
+
+    // Sanitize date fields: Postgres requires NULL instead of empty string ""
+    if (body.estimate_date !== undefined) {
+      updateData.estimate_date =
+        body.estimate_date && String(body.estimate_date).trim() !== ""
+          ? body.estimate_date
+          : new Date().toISOString().split("T")[0];
+    }
+    if (body.arrival_date !== undefined) {
+      updateData.arrival_date =
+        body.arrival_date && String(body.arrival_date).trim() !== ""
+          ? body.arrival_date
+          : null;
+    }
+
     if (body.items !== undefined) {
       updateData.items = body.items;
-      updateData.gross_total = body.gross_total;
-      updateData.line_discount_total = body.line_discount_total;
-      updateData.sub_total = body.sub_total;
-      updateData.extra_discount_percent = body.extra_discount_percent;
-      updateData.extra_discount_amount = body.extra_discount_amount;
-      updateData.total_amount = body.total_amount;
+      updateData.gross_total = Number(body.gross_total) || 0;
+      updateData.line_discount_total = Number(body.line_discount_total) || 0;
+      updateData.sub_total = Number(body.sub_total) || 0;
+      updateData.extra_discount_percent = Number(body.extra_discount_percent) || 0;
+      updateData.extra_discount_amount = Number(body.extra_discount_amount) || 0;
+      updateData.total_amount = Number(body.total_amount) || 0;
     }
 
     const { data: updated, error } = await supabaseAdmin
@@ -105,6 +120,8 @@ export async function PATCH(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+export const PUT = PATCH;
 
 export async function DELETE(
   request: NextRequest,

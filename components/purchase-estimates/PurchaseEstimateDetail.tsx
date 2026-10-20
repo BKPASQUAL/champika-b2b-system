@@ -288,24 +288,70 @@ export function PurchaseEstimateDetail({
           </Button>
 
           {/* PDF Download */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => downloadPurchaseEstimatePdf(estimate)}
-            className="h-9 text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-          >
-            <Download className="w-3.5 h-3.5 mr-1 text-emerald-600" /> PDF Download
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+              >
+                <Download className="w-3.5 h-3.5 mr-1 text-emerald-600" /> PDF Download
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuItem
+                onClick={() => downloadPurchaseEstimatePdf(estimate, "order_sheet")}
+              >
+                <FileText className="w-4 h-4 mr-2 text-emerald-600 shrink-0" />
+                <div className="flex flex-col">
+                  <span className="font-semibold text-xs text-slate-900">Order Sheet PDF (Items & Qty Only)</span>
+                  <span className="text-[10px] text-muted-foreground">Letterhead • Black font • No prices</span>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => downloadPurchaseEstimatePdf(estimate, "full")}
+              >
+                <Calculator className="w-4 h-4 mr-2 text-blue-600 shrink-0" />
+                <div className="flex flex-col">
+                  <span className="font-semibold text-xs text-slate-900">Full Pricing PDF</span>
+                  <span className="text-[10px] text-muted-foreground">With costs & line totals</span>
+                </div>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Print */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => printPurchaseEstimate(estimate)}
-            className="h-9 text-xs"
-          >
-            <Printer className="w-3.5 h-3.5 mr-1" /> Print
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 text-xs"
+              >
+                <Printer className="w-3.5 h-3.5 mr-1" /> Print
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuItem
+                onClick={() => printPurchaseEstimate(estimate, "order_sheet")}
+              >
+                <FileText className="w-4 h-4 mr-2 text-slate-700 shrink-0" />
+                <div className="flex flex-col">
+                  <span className="font-semibold text-xs text-slate-900">Print Order Sheet</span>
+                  <span className="text-[10px] text-muted-foreground">Item Name & Qty only • Letterhead</span>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => printPurchaseEstimate(estimate, "full")}
+              >
+                <Calculator className="w-4 h-4 mr-2 text-blue-600 shrink-0" />
+                <div className="flex flex-col">
+                  <span className="font-semibold text-xs text-slate-900">Print Full Estimate</span>
+                  <span className="text-[10px] text-muted-foreground">With costs & line totals</span>
+                </div>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* WhatsApp Share */}
           <Button

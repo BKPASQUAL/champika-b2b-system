@@ -552,12 +552,14 @@ export function PurchaseEstimateCreate({
     if (!supplierId) return toast.error("Select a supplier");
 
     setSubmitting(true);
+    const selectedSupplier = suppliers.find((s) => s.id === supplierId);
     const payload = {
       supplier_id: supplierId,
       business_id: businessId,
+      supplier_name: selectedSupplier?.name || undefined,
       reference_no: referenceNo || "",
-      estimate_date: estimateDate,
-      arrival_date: arrivalDate || "",
+      estimate_date: estimateDate?.trim() || new Date().toISOString().split("T")[0],
+      arrival_date: arrivalDate && arrivalDate.trim() !== "" ? arrivalDate.trim() : null,
       items: items,
       gross_total: grossTotal,
       line_discount_total: totalLineDiscount,

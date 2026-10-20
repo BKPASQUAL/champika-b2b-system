@@ -5,7 +5,6 @@
  */
 
 import { toast } from "sonner";
-import { BUSINESS_NAMES, BUSINESS_THEMES } from "@/app/config/business-constants";
 
 const fmt = (amount: number) =>
   new Intl.NumberFormat("en-LK", {
@@ -39,9 +38,6 @@ export const copyEstimateItemsAsText = (
     }
 
     let textToCopy = "";
-    const bName =
-      BUSINESS_NAMES[estimate.businessId as keyof typeof BUSINESS_NAMES] ||
-      "Champika Agency";
     const supplierName =
       estimate.supplierName || estimate.supplier?.name || "Supplier";
     const estNo = estimate.estimateNumber || estimate.estimate_number || "EST";
@@ -49,49 +45,33 @@ export const copyEstimateItemsAsText = (
 
     if (mode === "whatsapp") {
       const lines = [
-        `*PURCHASE ORDER ESTIMATE / QUOTATION*`,
-        `*${bName}*`,
+        `*PURCHASE ORDER ESTIMATE*`,
+        `*C D Pasqual And PW kumari*`,
+        `Paranawaththa Road, Wallabada, Boossa | Tel: 0777681663`,
         `Estimate No: ${estNo}`,
         `Supplier: ${supplierName}`,
         `Date: ${dateStr}`,
         `----------------------------------------`,
         ...items.map((it: any, idx: number) => {
           const qty = it.quantity || 0;
-          const free = it.freeQuantity ? ` + (Free: ${it.freeQuantity})` : "";
-          const unit = it.unit || "Pcs";
-          const cost = fmt(it.unitPrice || 0);
-          const disc = it.discountPercent ? ` [Disc ${it.discountPercent}%]` : "";
-          const tot = fmt(it.total || 0);
-          return `${idx + 1}. *${it.productName || it.name}* (${it.sku || "N/A"})\n   Qty: ${qty} ${unit}${free} @ Rs. ${cost}${disc} = Rs. ${tot}`;
+          return `${idx + 1}. *${it.productName || it.name}* - Qty: ${qty}`;
         }),
         `----------------------------------------`,
         `Total Items: ${items.length}`,
-        `Subtotal: Rs. ${fmt(estimate.subTotal || estimate.sub_total || 0)}`,
+        `Total Qty: ${items.reduce((s: number, i: any) => s + (Number(i.quantity) || 0), 0)} units`,
       ];
-
-      if (estimate.extraDiscountAmount || estimate.extra_discount_amount) {
-        lines.push(
-          `Extra Discount (${estimate.extraDiscountPercent || estimate.extra_discount_percent || 0}%): -Rs. ${fmt(estimate.extraDiscountAmount || estimate.extra_discount_amount || 0)}`
-        );
-      }
-
-      lines.push(
-        `*ESTIMATED NET TOTAL: Rs. ${fmt(estimate.totalAmount || estimate.total_amount || 0)}*`,
-        `\n_(Order inquiry / estimation only. Please confirm availability & pricing)_`
-      );
 
       textToCopy = lines.join("\n");
     } else if (mode === "portal_tab") {
-      // Tab-separated: Product Code / Name, Qty, Free Qty (Ideal for Excel / Portal paste)
+      // Tab-separated: Product Name, Qty (Ideal for Excel / Portal paste)
       textToCopy = items
-        .map((it: any) => `${it.sku || it.productName}\t${it.productName}\t${it.quantity}\t${it.freeQuantity || 0}\t${it.unitPrice || 0}`)
+        .map((it: any) => `${it.productName || it.name}\t${it.quantity || 0}`)
         .join("\n");
     } else {
       // Simple Bullet List: Item Name & Qty
       textToCopy = items
         .map((it: any, idx: number) => {
-          const free = it.freeQuantity ? ` (+${it.freeQuantity} Free)` : "";
-          return `${idx + 1}. ${it.productName} - Qty: ${it.quantity} ${it.unit || "Pcs"}${free}`;
+          return `${idx + 1}. ${it.productName || it.name} - Qty: ${it.quantity || 0}`;
         })
         .join("\n");
     }
@@ -128,28 +108,31 @@ export const copyEstimateItemsAsText = (
 // ── Share via WhatsApp ──────────────────────────────────────────────────────
 export const shareViaWhatsApp = (estimate: any) => {
   const items = estimate.items || [];
-  const bName =
-    BUSINESS_NAMES[estimate.businessId as keyof typeof BUSINESS_NAMES] ||
-    "Champika Agency";
   const supplierName =
     estimate.supplierName || estimate.supplier?.name || "Supplier";
   const estNo = estimate.estimateNumber || estimate.estimate_number || "EST";
   const dateStr = formatDate(estimate.estimateDate || estimate.estimate_date);
+  const totalQty = items.reduce(
+    (acc: number, it: any) => acc + (Number(it.quantity) || 0),
+    0
+  );
 
   const lines = [
     `*PURCHASE ORDER ESTIMATE*`,
-    `*${bName}*`,
+    `*C D Pasqual And PW kumari*`,
+    `Paranawaththa Road, Wallabada, Boossa`,
+    `Tel: 0777681663`,
+    `----------------------------------------`,
     `Estimate No: ${estNo}`,
     `Supplier: ${supplierName}`,
     `Date: ${dateStr}`,
     `----------------------------------------`,
     ...items.map((it: any, idx: number) => {
-      const free = it.freeQuantity ? ` (+${it.freeQuantity} Free)` : "";
-      return `${idx + 1}. *${it.productName}* (${it.sku || "N/A"}) - ${it.quantity} ${it.unit || "Pcs"}${free}`;
+      return `${idx + 1}. *${it.productName || it.name}* - Qty: ${it.quantity || 0}`;
     }),
     `----------------------------------------`,
     `Total Items: ${items.length}`,
-    `Estimated Total: Rs. ${fmt(estimate.totalAmount || estimate.total_amount || 0)}`,
+    `Total Quantity: ${totalQty} units`,
   ];
 
   const fullText = encodeURIComponent(lines.join("\n"));
@@ -163,10 +146,10 @@ export const shareViaWhatsApp = (estimate: any) => {
 };
 
 // ── Generate Clean Printable HTML ───────────────────────────────────────────
-export const generateEstimateHTML = (estimate: any): string => {
-  const bName =
-    BUSINESS_NAMES[estimate.businessId as keyof typeof BUSINESS_NAMES] ||
-    "Champika Hardware & Agency";
+export const generateEstimateHTML = (
+  estimate: any,
+  mode: "order_sheet" | "full" = "order_sheet"
+): string => {
   const estNo = estimate.estimateNumber || estimate.estimate_number || "EST-0001";
   const dateStr = formatDate(estimate.estimateDate || estimate.estimate_date);
   const arrivalDateStr = formatDate(estimate.arrivalDate || estimate.arrival_date);
@@ -191,6 +174,216 @@ export const generateEstimateHTML = (estimate: any): string => {
     0
   );
 
+  // ── ORDER SHEET MODE (Item Name & Qty Only, Letterhead, Black Font) ────────
+  if (mode === "order_sheet") {
+    return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8"/>
+      <title>Purchase Order Sheet - ${estNo}</title>
+      <style>
+        @page {
+          size: A4 portrait;
+          margin: 12mm 12mm 15mm 12mm;
+        }
+        * {
+          box-sizing: border-box;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, Helvetica, sans-serif;
+          color: #000000;
+          background: #ffffff;
+          margin: 0 auto;
+          padding: 20px 24px;
+          font-size: 11px;
+          line-height: 1.35;
+          width: 794px;
+          max-width: 794px;
+        }
+        @media print {
+          body {
+            width: 100% !important;
+            max-width: 100% !important;
+            padding: 0 !important;
+            margin: 0 !important;
+          }
+          tr {
+            page-break-inside: avoid;
+          }
+        }
+        .header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          border-bottom: 2.5px solid #000000;
+          padding-bottom: 10px;
+          margin-bottom: 12px;
+        }
+        .letterhead-title {
+          font-size: 22px;
+          font-weight: 900;
+          color: #000000;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          margin: 0 0 4px 0;
+          line-height: 1.1;
+        }
+        .letterhead-address {
+          font-size: 12px;
+          font-weight: 700;
+          color: #000000;
+          line-height: 1.4;
+        }
+        .meta-box {
+          text-align: right;
+          min-width: 220px;
+        }
+        .meta-num {
+          font-size: 16px;
+          font-weight: 900;
+          color: #000000;
+          font-family: monospace;
+          margin-bottom: 2px;
+        }
+        .meta-row {
+          font-size: 11px;
+          font-weight: 700;
+          color: #000000;
+          margin-top: 2px;
+        }
+        table.items-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 12px;
+        }
+        table.items-table th {
+          border: 1.5px solid #000000;
+          background: #000000;
+          color: #ffffff;
+          font-size: 10.5px;
+          font-weight: 900;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          padding: 6px 8px;
+        }
+        table.items-table td {
+          border: 1px solid #000000;
+          padding: 5px 8px;
+          font-size: 11.5px;
+          color: #000000;
+          background: #ffffff;
+        }
+        .col-idx {
+          width: 8%;
+          text-align: center;
+          font-weight: 800;
+        }
+        .col-name {
+          width: 74%;
+          text-align: left;
+          font-weight: 700;
+        }
+        .col-qty {
+          width: 18%;
+          text-align: center;
+          font-weight: 900;
+          font-size: 13px;
+        }
+        .total-row td {
+          border-top: 2px solid #000000;
+          border-bottom: 2.5px solid #000000;
+          font-size: 12px;
+          font-weight: 900;
+          padding: 6px 8px;
+          background: #ffffff;
+        }
+        .summary-section {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          margin-top: 6px;
+          font-size: 11px;
+          font-weight: 700;
+        }
+        .notes-box {
+          border: 1px solid #000000;
+          padding: 6px 8px;
+          width: 60%;
+          min-height: 40px;
+          color: #000000;
+        }
+        .notes-box h5 {
+          margin: 0 0 3px 0;
+          font-size: 10px;
+          text-transform: uppercase;
+          font-weight: 800;
+          color: #000000;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <div>
+          <div class="letterhead-title">C D Pasqual And PW kumari</div>
+          <div class="letterhead-address">
+            Paranawaththa Road, Wallabada, Boossa<br/>
+            Tel - 0777681663
+          </div>
+        </div>
+        <div class="meta-box">
+          <div class="meta-num">${estNo}</div>
+          <div class="meta-row"><strong>Date:</strong> ${dateStr}</div>
+          ${arrivalDateStr !== "-" ? `<div class="meta-row"><strong>Expected:</strong> ${arrivalDateStr}</div>` : ""}
+          ${estimate.referenceNo ? `<div class="meta-row"><strong>Ref #:</strong> ${estimate.referenceNo}</div>` : ""}
+        </div>
+      </div>
+
+      <table class="items-table">
+        <thead>
+          <tr>
+            <th class="col-idx">#</th>
+            <th class="col-name">Item Name</th>
+            <th class="col-qty">Qty</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${items.length === 0 ? `
+            <tr>
+              <td colspan="3" style="text-align: center; padding: 14px; font-weight: 700;">No items in this estimate</td>
+            </tr>
+          ` : items.map((it: any, idx: number) => `
+            <tr>
+              <td class="col-idx">${idx + 1}</td>
+              <td class="col-name">${it.productName || it.name || "Item"}</td>
+              <td class="col-qty">${it.quantity || 0}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+        <tfoot>
+          <tr class="total-row">
+            <td colspan="2" style="text-align: right; font-weight: 900;">TOTAL QUANTITY:</td>
+            <td class="col-qty" style="font-size: 14px; font-weight: 900;">${totalQty}</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      ${estimate.notes ? `
+        <div class="summary-section">
+          <div class="notes-box">
+            <h5>Notes & Planning Instructions</h5>
+            <div>${estimate.notes}</div>
+          </div>
+        </div>
+      ` : ""}
+    </body>
+    </html>
+    `;
+  }
+
+  // ── FULL PRICING MODE (With Costs, Totals, Letterhead, Black Font) ─────────
   return `
   <!DOCTYPE html>
   <html>
@@ -202,46 +395,63 @@ export const generateEstimateHTML = (estimate: any): string => {
         size: A4 portrait;
         margin: 12mm 10mm;
       }
-      * { box-sizing: border-box; }
+      * {
+        box-sizing: border-box;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
       body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        color: #1e293b;
-        background: #fff;
-        margin: 0;
-        padding: 16px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, Helvetica, sans-serif;
+        color: #000000;
+        background: #ffffff;
+        margin: 0 auto;
+        padding: 20px 24px;
         font-size: 11px;
         line-height: 1.4;
+        width: 794px;
+        max-width: 794px;
+      }
+      @media print {
+        body {
+          width: 100% !important;
+          max-width: 100% !important;
+          padding: 0 !important;
+          margin: 0 !important;
+        }
+        tr {
+          page-break-inside: avoid;
+        }
       }
       .header {
         display: flex;
         justify-content: space-between;
         align-items: flex-start;
-        border-bottom: 2px solid #0f172a;
+        border-bottom: 2.5px solid #000000;
         padding-bottom: 12px;
         margin-bottom: 14px;
       }
-      .brand-title {
-        font-size: 20px;
-        font-weight: 800;
-        color: #0f172a;
+      .letterhead-title {
+        font-size: 22px;
+        font-weight: 900;
+        color: #000000;
         text-transform: uppercase;
         letter-spacing: 0.5px;
         margin: 0 0 4px 0;
+        line-height: 1.1;
       }
-      .brand-subtitle {
-        font-size: 11px;
-        color: #64748b;
-        font-weight: 500;
+      .letterhead-address {
+        font-size: 12px;
+        font-weight: 700;
+        color: #000000;
+        line-height: 1.4;
       }
       .doc-badge {
         display: inline-block;
-        background: #f1f5f9;
-        color: #334155;
-        border: 1px solid #cbd5e1;
-        padding: 4px 10px;
-        border-radius: 4px;
-        font-size: 12px;
-        font-weight: 700;
+        border: 1.5px solid #000000;
+        color: #000000;
+        padding: 3px 10px;
+        font-size: 11px;
+        font-weight: 800;
         text-transform: uppercase;
         letter-spacing: 0.5px;
         margin-bottom: 6px;
@@ -251,24 +461,15 @@ export const generateEstimateHTML = (estimate: any): string => {
       }
       .meta-num {
         font-size: 16px;
-        font-weight: 800;
-        color: #0f172a;
+        font-weight: 900;
+        color: #000000;
+        font-family: monospace;
       }
       .meta-row {
-        font-size: 10px;
-        color: #475569;
+        font-size: 11px;
+        font-weight: 700;
+        color: #000000;
         margin-top: 2px;
-      }
-      .watermark-notice {
-        background: #eff6ff;
-        border: 1px dashed #93c5fd;
-        color: #1e40af;
-        padding: 6px 12px;
-        border-radius: 4px;
-        font-size: 10px;
-        font-weight: 600;
-        text-align: center;
-        margin-bottom: 14px;
       }
       .info-grid {
         display: grid;
@@ -277,28 +478,29 @@ export const generateEstimateHTML = (estimate: any): string => {
         margin-bottom: 14px;
       }
       .info-card {
-        border: 1px solid #e2e8f0;
-        border-radius: 6px;
+        border: 1.5px solid #000000;
+        border-radius: 4px;
         padding: 10px 12px;
-        background: #f8fafc;
+        background: #ffffff;
       }
       .info-card h4 {
         margin: 0 0 6px 0;
-        font-size: 10px;
+        font-size: 11px;
         text-transform: uppercase;
-        color: #64748b;
-        font-weight: 700;
+        color: #000000;
+        font-weight: 800;
         letter-spacing: 0.5px;
       }
       .info-card .name {
         font-size: 13px;
-        font-weight: 700;
-        color: #0f172a;
+        font-weight: 800;
+        color: #000000;
       }
       .info-card p {
         margin: 2px 0;
-        font-size: 10px;
-        color: #475569;
+        font-size: 11px;
+        font-weight: 600;
+        color: #000000;
       }
       table {
         width: 100%;
@@ -306,31 +508,28 @@ export const generateEstimateHTML = (estimate: any): string => {
         margin-bottom: 14px;
       }
       th {
-        background: #0f172a;
+        border: 1.5px solid #000000;
+        background: #000000;
         color: #ffffff;
-        font-size: 9px;
-        font-weight: 700;
+        font-size: 10px;
+        font-weight: 800;
         text-transform: uppercase;
         letter-spacing: 0.5px;
         padding: 7px 6px;
       }
       td {
         padding: 6px;
-        border-bottom: 1px solid #e2e8f0;
-        font-size: 10px;
-      }
-      tr:nth-child(even) td {
-        background: #f8fafc;
+        border: 1px solid #000000;
+        font-size: 11px;
+        color: #000000;
+        background: #ffffff;
       }
       .text-left { text-align: left; }
       .text-center { text-align: center; }
       .text-right { text-align: right; }
       .font-mono { font-family: monospace; }
       .font-bold { font-weight: 700; }
-      .free-badge {
-        color: #16a34a;
-        font-weight: 700;
-      }
+      .font-black { font-weight: 900; }
       .summary-section {
         display: flex;
         justify-content: space-between;
@@ -339,35 +538,38 @@ export const generateEstimateHTML = (estimate: any): string => {
       }
       .notes-box {
         width: 55%;
-        border: 1px solid #e2e8f0;
-        border-radius: 6px;
+        border: 1.5px solid #000000;
+        border-radius: 4px;
         padding: 10px;
-        background: #f8fafc;
+        background: #ffffff;
         min-height: 80px;
+        color: #000000;
       }
       .notes-box h5 {
         margin: 0 0 4px 0;
         font-size: 10px;
         text-transform: uppercase;
-        color: #64748b;
+        color: #000000;
+        font-weight: 800;
       }
       .totals-table {
         width: 40%;
         border-collapse: collapse;
       }
       .totals-table td {
-        padding: 4px 6px;
-        font-size: 10px;
-        border-bottom: 1px solid #f1f5f9;
+        padding: 5px 6px;
+        font-size: 11px;
+        border: 1px solid #000000;
+        color: #000000;
       }
       .totals-table tr.grand-total td {
-        border-top: 2px solid #0f172a;
-        border-bottom: 2px solid #0f172a;
+        border-top: 2.5px solid #000000;
+        border-bottom: 2.5px solid #000000;
         font-size: 13px;
-        font-weight: 800;
-        color: #0f172a;
+        font-weight: 900;
+        color: #000000;
         padding: 6px;
-        background: #f8fafc;
+        background: #ffffff;
       }
       .footer-sign {
         margin-top: 40px;
@@ -378,31 +580,30 @@ export const generateEstimateHTML = (estimate: any): string => {
       .sign-box {
         text-align: center;
         width: 180px;
-        border-top: 1px dashed #94a3b8;
+        border-top: 1.5px solid #000000;
         padding-top: 6px;
-        font-size: 10px;
-        color: #475569;
-        font-weight: 600;
+        font-size: 11px;
+        color: #000000;
+        font-weight: 800;
+        text-transform: uppercase;
       }
     </style>
   </head>
   <body>
     <div class="header">
       <div>
-        <h1 class="brand-title">${bName}</h1>
-        <div class="brand-subtitle">Supplier Order Planning & Purchase Quotation</div>
+        <div class="letterhead-title">C D Pasqual And PW kumari</div>
+        <div class="letterhead-address">
+          Paranawaththa Road, Wallabada, Boossa<br/>
+          Tel - 0777681663
+        </div>
       </div>
       <div class="meta-box">
-        <span class="doc-badge">PURCHASE ESTIMATE</span>
         <div class="meta-num">${estNo}</div>
         <div class="meta-row"><strong>Date:</strong> ${dateStr}</div>
         ${arrivalDateStr !== "-" ? `<div class="meta-row"><strong>Expected:</strong> ${arrivalDateStr}</div>` : ""}
         ${estimate.referenceNo ? `<div class="meta-row"><strong>Ref #:</strong> ${estimate.referenceNo}</div>` : ""}
       </div>
-    </div>
-
-    <div class="watermark-notice">
-      📋 ORDER ESTIMATE ONLY — NOT A BILL / NO INVENTORY DEDUCTED OR ADDED TO STOCK
     </div>
 
     <div class="info-grid">
@@ -418,7 +619,7 @@ export const generateEstimateHTML = (estimate: any): string => {
         <h4>Order Summary Details</h4>
         <p><strong>Total Items Listed:</strong> ${items.length}</p>
         <p><strong>Total Billed Qty:</strong> ${totalQty} units</p>
-        ${totalFree > 0 ? `<p><strong>Total Free Qty:</strong> <span class="free-badge">${totalFree} units</span></p>` : ""}
+        ${totalFree > 0 ? `<p><strong>Total Free Qty:</strong> ${totalFree} units</p>` : ""}
         <p><strong>Status:</strong> ${estimate.status || "Saved"}</p>
       </div>
     </div>
@@ -442,17 +643,17 @@ export const generateEstimateHTML = (estimate: any): string => {
           .map(
             (it: any, idx: number) => `
           <tr>
-            <td class="text-center text-muted font-mono">${idx + 1}</td>
+            <td class="text-center font-bold font-mono">${idx + 1}</td>
             <td class="text-left font-mono font-bold">${it.sku || "-"}</td>
-            <td class="text-left">
-              <strong>${it.productName}</strong>
+            <td class="text-left font-bold">
+              ${it.productName || it.name}
             </td>
-            <td class="text-right font-mono">${fmt(it.unitPrice)}</td>
-            <td class="text-center font-bold">${it.quantity}</td>
-            <td class="text-center free-badge">${it.freeQuantity || "-"}</td>
+            <td class="text-right font-mono font-bold">${fmt(it.unitPrice)}</td>
+            <td class="text-center font-black">${it.quantity}</td>
+            <td class="text-center font-bold">${it.freeQuantity || "-"}</td>
             <td class="text-center">${it.unit || "Pcs"}</td>
-            <td class="text-right">${it.discountPercent ? `${it.discountPercent}%` : "-"}</td>
-            <td class="text-right font-mono font-bold">${fmt(it.total)}</td>
+            <td class="text-right font-bold">${it.discountPercent ? `${it.discountPercent}%` : "-"}</td>
+            <td class="text-right font-mono font-black">${fmt(it.total)}</td>
           </tr>
         `
           )
@@ -463,32 +664,32 @@ export const generateEstimateHTML = (estimate: any): string => {
     <div class="summary-section">
       <div class="notes-box">
         <h5>Notes & Planning Instructions</h5>
-        <p>${estimate.notes || "No special instructions provided. Please review price and confirm order with supplier."}</p>
+        <p>${estimate.notes || "No special instructions provided."}</p>
       </div>
       <table class="totals-table">
         ${grossTotal !== subTotal ? `
           <tr>
-            <td class="text-left">Gross Total:</td>
-            <td class="text-right font-mono">Rs. ${fmt(grossTotal)}</td>
+            <td class="text-left font-bold">Gross Total:</td>
+            <td class="text-right font-mono font-bold">Rs. ${fmt(grossTotal)}</td>
           </tr>
           <tr>
-            <td class="text-left">Line Discounts:</td>
-            <td class="text-right font-mono" style="color: #dc2626;">-Rs. ${fmt(lineDiscounts)}</td>
+            <td class="text-left font-bold">Line Discounts:</td>
+            <td class="text-right font-mono font-bold">-Rs. ${fmt(lineDiscounts)}</td>
           </tr>
         ` : ""}
         <tr>
-          <td class="text-left">Subtotal:</td>
+          <td class="text-left font-bold">Subtotal:</td>
           <td class="text-right font-mono font-bold">Rs. ${fmt(subTotal)}</td>
         </tr>
         ${extraDiscAmt > 0 ? `
           <tr>
-            <td class="text-left">Extra Cash Disc (${extraDiscPct}%):</td>
-            <td class="text-right font-mono" style="color: #dc2626;">-Rs. ${fmt(extraDiscAmt)}</td>
+            <td class="text-left font-bold">Extra Cash Disc (${extraDiscPct}%):</td>
+            <td class="text-right font-mono font-bold">-Rs. ${fmt(extraDiscAmt)}</td>
           </tr>
         ` : ""}
         <tr class="grand-total">
-          <td class="text-left">Estimated Total:</td>
-          <td class="text-right font-mono">Rs. ${fmt(netTotal)}</td>
+          <td class="text-left font-black">Estimated Total:</td>
+          <td class="text-right font-mono font-black">Rs. ${fmt(netTotal)}</td>
         </tr>
       </table>
     </div>
@@ -503,8 +704,11 @@ export const generateEstimateHTML = (estimate: any): string => {
 };
 
 // ── Native Browser Print ────────────────────────────────────────────────────
-export const printPurchaseEstimate = (estimate: any) => {
-  const html = generateEstimateHTML(estimate);
+export const printPurchaseEstimate = (
+  estimate: any,
+  mode: "order_sheet" | "full" = "order_sheet"
+) => {
+  const html = generateEstimateHTML(estimate, mode);
   const iframe = document.createElement("iframe");
   iframe.style.position = "fixed";
   iframe.style.right = "0";
@@ -534,12 +738,18 @@ export const printPurchaseEstimate = (estimate: any) => {
 };
 
 // ── PDF Download using jsPDF + html2canvas ──────────────────────────────────
-export const downloadPurchaseEstimatePdf = async (estimate: any) => {
+export const downloadPurchaseEstimatePdf = async (
+  estimate: any,
+  mode: "order_sheet" | "full" = "order_sheet"
+) => {
   const tid = toast.loading("Generating PDF...");
   const estNo = estimate.estimateNumber || estimate.estimate_number || "EST";
-  const filename = `Purchase_Estimate_${estNo}.pdf`;
+  const filename =
+    mode === "order_sheet"
+      ? `Order_Sheet_${estNo}.pdf`
+      : `Purchase_Estimate_${estNo}.pdf`;
 
-  const html = generateEstimateHTML(estimate);
+  const html = generateEstimateHTML(estimate, mode);
   const iframe = document.createElement("iframe");
   iframe.style.cssText =
     "position:fixed;left:-9999px;top:0;width:794px;height:1123px;border:none;visibility:hidden;";
@@ -577,11 +787,21 @@ export const downloadPurchaseEstimatePdf = async (estimate: any) => {
     const pageH = pdf.internal.pageSize.getHeight();
     const imgH = (canvas.height * pageW) / canvas.width;
 
-    let yOffset = 0;
-    while (yOffset < imgH) {
-      if (yOffset > 0) pdf.addPage();
-      pdf.addImage(imgData, "JPEG", 0, -yOffset, pageW, imgH);
-      yOffset += pageH;
+    // Single-page guarantee: If content is within 1 A4 page (or slightly exceeding by up to 25mm due to padding),
+    // fit strictly onto 1 single page so it never creates an unwanted second page!
+    if (imgH <= pageH + 25) {
+      const renderH = imgH > pageH ? pageH : imgH;
+      const renderW = imgH > pageH ? (pageH * canvas.width) / canvas.height : pageW;
+      const xOffset = imgH > pageH ? (pageW - renderW) / 2 : 0;
+      pdf.addImage(imgData, "JPEG", xOffset, 0, renderW, renderH);
+    } else {
+      let yOffset = 0;
+      // Multi-page: do not add a page if the remaining slice is just bottom whitespace (< 15mm)
+      while (yOffset < imgH - 15) {
+        if (yOffset > 0) pdf.addPage();
+        pdf.addImage(imgData, "JPEG", 0, -yOffset, pageW, imgH);
+        yOffset += pageH;
+      }
     }
 
     pdf.save(filename);
