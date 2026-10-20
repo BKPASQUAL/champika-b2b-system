@@ -373,6 +373,7 @@ function buildDoc(
     manualInvoiceNo: string;
     itemName: string;
     qty: string | number;
+    unitPrice: number;
     amount: number;
     isSoldToCustomer: boolean;
   }
@@ -445,11 +446,15 @@ function buildDoc(
     }
     if (!cleanName) cleanName = "Sierra Products Exchanged";
 
+    const numQty = parseFloat(String(qty)) || 1;
+    const unitPrice = numQty > 0 ? amount / numQty : amount;
+
     return {
       date: defaultDate,
       manualInvoiceNo: manualRef,
       itemName: cleanName,
       qty,
+      unitPrice,
       amount,
       isSoldToCustomer,
     };
@@ -504,11 +509,14 @@ function buildDoc(
             qty = qtyMatch[1];
             cleanName = cleanName.substring(qtyMatch[0].length).trim();
           }
+          const numQty = parseFloat(String(qty)) || 1;
+          const unitPrice = numQty > 0 ? p.amount / numQty : p.amount;
           parsedGoodsItems.push({
             date: pDate,
             manualInvoiceNo: manualRef,
             itemName: cleanName || "Sierra Products Exchanged",
             qty,
+            unitPrice,
             amount: p.amount,
             isSoldToCustomer: false,
           });
@@ -554,12 +562,13 @@ function buildDoc(
           item.date,
           item.itemName,
           String(item.qty),
+          fmt(item.unitPrice),
           fmt(item.amount),
         ]),
         [
           {
             content: `SUBTOTAL (SOLD TO CUSTOMER): ${soldItems.length} item(s)`,
-            colSpan: 4,
+            colSpan: 5,
             styles: {
               fontStyle: "bold",
               halign: "right",
@@ -584,7 +593,7 @@ function buildDoc(
       autoTable(doc, {
         startY: currentY + 3.5,
         margin: { left: M, right: M },
-        head: [["Manual Bill Ref", "Date", "Item Name", "Qty", "Amount (LKR)"]],
+        head: [["Manual Bill Ref", "Date", "Item Name", "Qty", "Unit Price (LKR)", "Amount (LKR)"]],
         body: soldTableBody,
         theme: "plain",
         headStyles: {
@@ -604,11 +613,12 @@ function buildDoc(
           overflow: "linebreak",
         },
         columnStyles: {
-          0: { halign: "center", cellWidth: 28 },
-          1: { halign: "center", cellWidth: 24 },
-          2: { halign: "left",   cellWidth: 82 },
-          3: { halign: "center", cellWidth: 14 },
-          4: { halign: "right",  cellWidth: 32, fontStyle: "bold" },
+          0: { halign: "center", cellWidth: 26 },
+          1: { halign: "center", cellWidth: 22 },
+          2: { halign: "left",   cellWidth: 68 },
+          3: { halign: "center", cellWidth: 12 },
+          4: { halign: "right",  cellWidth: 26 },
+          5: { halign: "right",  cellWidth: 26, fontStyle: "bold" },
         },
       });
 
@@ -644,12 +654,13 @@ function buildDoc(
           item.date,
           item.itemName,
           String(item.qty),
+          fmt(item.unitPrice),
           fmt(item.amount),
         ]),
         [
           {
             content: `SUBTOTAL (OTHER SIERRA STOCK): ${notSoldItems.length} item(s)`,
-            colSpan: 4,
+            colSpan: 5,
             styles: {
               fontStyle: "bold",
               halign: "right",
@@ -674,7 +685,7 @@ function buildDoc(
       autoTable(doc, {
         startY: currentY + 3.5,
         margin: { left: M, right: M },
-        head: [["Manual Bill Ref", "Date", "Item Name", "Qty", "Amount (LKR)"]],
+        head: [["Manual Bill Ref", "Date", "Item Name", "Qty", "Unit Price (LKR)", "Amount (LKR)"]],
         body: notSoldTableBody,
         theme: "plain",
         headStyles: {
@@ -694,11 +705,12 @@ function buildDoc(
           overflow: "linebreak",
         },
         columnStyles: {
-          0: { halign: "center", cellWidth: 28 },
-          1: { halign: "center", cellWidth: 24 },
-          2: { halign: "left",   cellWidth: 82 },
-          3: { halign: "center", cellWidth: 14 },
-          4: { halign: "right",  cellWidth: 32, fontStyle: "bold" },
+          0: { halign: "center", cellWidth: 26 },
+          1: { halign: "center", cellWidth: 22 },
+          2: { halign: "left",   cellWidth: 68 },
+          3: { halign: "center", cellWidth: 12 },
+          4: { halign: "right",  cellWidth: 26 },
+          5: { halign: "right",  cellWidth: 26, fontStyle: "bold" },
         },
       });
 
