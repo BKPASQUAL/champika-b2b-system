@@ -559,6 +559,7 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
               const items: StatementInvoice[] = deliveredInvoices.map((inv: any) => ({
                 id: inv.id,
                 invoiceNo: inv.invoiceNo,
+                manualInvoiceNo: inv.manualInvoiceNo || inv.manual_invoice_no || undefined,
                 date: inv.date,
                 totalAmount: inv.totalAmount,
                 paidAmount: inv.paidAmount,
@@ -573,6 +574,8 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
                     method: p.method,
                     chequeNo: p.chequeNo,
                     chequeStatus: p.chequeStatus,
+                    goodsSummary: p.goodsSummary || (p.method === "goods" ? p.chequeNo : null),
+                    notes: p.notes,
                   })),
               }));
               downloadCustomerStatement(data.customer.shopName, items, data.customer.businessName);
@@ -590,6 +593,7 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
               const items: StatementInvoice[] = deliveredInvoices.map((inv: any) => ({
                 id: inv.id,
                 invoiceNo: inv.invoiceNo,
+                manualInvoiceNo: inv.manualInvoiceNo || inv.manual_invoice_no || undefined,
                 date: inv.date,
                 totalAmount: inv.totalAmount,
                 paidAmount: inv.paidAmount,
@@ -604,6 +608,8 @@ export default function CustomerDetailPage({ params }: CustomerDetailPageProps) 
                     method: p.method,
                     chequeNo: p.chequeNo,
                     chequeStatus: p.chequeStatus,
+                    goodsSummary: p.goodsSummary || (p.method === "goods" ? p.chequeNo : null),
+                    notes: p.notes,
                   })),
               }));
               shareCustomerStatement(data.customer.shopName, items, data.customer.businessName);

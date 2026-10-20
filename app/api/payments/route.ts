@@ -1,8 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
-import { BUSINESS_NAMES } from "@/app/config/business-constants";
+import { BUSINESS_NAMES, BUSINESS_IDS } from "@/app/config/business-constants";
 import { checkAndAutoUnblockCustomer } from "@/lib/customer-overdue";
+
+const goodsItemSchema = z.object({
+  id: z.string().optional(),
+  type: z.enum(["own_product", "external_goods"]),
+  isCustomerPurchased: z.boolean().optional(),
+  productId: z.string().optional().nullable(),
+  productName: z.string().optional().nullable(),
+  sku: z.string().optional().nullable(),
+  invoiceNo: z.string().optional().nullable(),
+  manualInvoiceNo: z.string().optional().nullable(),
+  returnType: z.enum(["Good", "Damage"]).optional().nullable(),
+  locationId: z.string().optional().nullable(),
+  externalItemName: z.string().optional().nullable(),
+  externalUnit: z.string().optional().nullable(),
+  externalRemarks: z.string().optional().nullable(),
+  quantity: z.number().min(0.0001),
+  unitPrice: z.number().min(0),
+  totalValue: z.number().min(0),
+});
 
 // --- Validation Schema ---
 const paymentSchema = z.object({
@@ -24,10 +43,15 @@ const paymentSchema = z.object({
   branchCode: z.string().optional().nullable(),
   // Deposit specific
   depositAccountId: z.string().optional().nullable(),
+  // Goods settlement specific
+  goodsItems: z.array(goodsItemSchema).optional().nullable(),
+  goodsSummary: z.string().optional().nullable(),
+  isSecondaryGoodsSettlement: z.boolean().optional().nullable(),
   // Receipt details
   receiptNumber: z.string().optional().nullable(),
   receiptBookId: z.string().optional().nullable(),
   // Performer info (logged-in user)
+  performedById: z.string().optional().nullable(),
   performedByName: z.string().optional().nullable(),
   performedByEmail: z.string().optional().nullable(),
 });
@@ -243,7 +267,11 @@ export async function POST(request: NextRequest) {
           amount: val.amount,
           payment_date: paymentDate,
           method: paymentMethod,
-          cheque_no: paymentMethod === "cheque" ? (val.branchCode ? `${val.chequeNo} (Branch: ${val.branchCode})` : val.chequeNo) : null,
+          cheque_no: paymentMethod === "cheque"
+            ? (val.branchCode ? `${val.chequeNo} (Branch: ${val.branchCode})` : val.chequeNo)
+            : paymentMethod === "goods"
+            ? (val.goodsSummary ? `Goods: ${val.goodsSummary}`.slice(0, 250) : "Goods Settlement")
+            : null,
           cheque_date: paymentMethod === "cheque" ? val.chequeDate : null,
           cheque_status: paymentMethod === "cheque" ? "Pending" : null,
           bank_id: paymentMethod === "cheque" ? val.bankId : null,
@@ -346,7 +374,11 @@ export async function POST(request: NextRequest) {
         amount: val.amount,
         payment_date: paymentDate,
         method: paymentMethod,
-        cheque_no: paymentMethod === "cheque" ? (val.branchCode ? `${val.chequeNo} (Branch: ${val.branchCode})` : val.chequeNo) : null,
+        cheque_no: paymentMethod === "cheque"
+          ? (val.branchCode ? `${val.chequeNo} (Branch: ${val.branchCode})` : val.chequeNo)
+          : paymentMethod === "goods"
+          ? (val.goodsSummary ? `Goods: ${val.goodsSummary}`.slice(0, 250) : "Goods Settlement")
+          : null,
         cheque_date: paymentMethod === "cheque" ? val.chequeDate : null,
         cheque_status: paymentMethod === "cheque" ? "Pending" : null,
         bank_id: paymentMethod === "cheque" ? val.bankId : null,
@@ -545,6 +577,135 @@ export async function POST(request: NextRequest) {
 
         if (balanceError) {
           console.error("Error updating account balance:", balanceError);
+        }
+      }
+    }
+
+    // Account transaction and inventory updates for goods settlement
+    if (paymentMethod === "goods") {
+      try {
+        await supabaseAdmin.from("account_transactions").insert({
+          transaction_no: `TXN-GDS-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          transaction_type: "GOODS_SETTLEMENT",
+          from_account_id: null,
+          to_account_id: null,
+          amount: val.amount,
+          description: `Goods settlement from ${customer.shop_name} for ${invoice.invoice_no}${val.goodsSummary ? ` [${val.goodsSummary}]` : ""}`,
+          transaction_date: paymentDate,
+          reference_no: invoice.invoice_no,
+          payment_id: payment.id,
+        });
+      } catch (txErr) {
+        console.error("Account transaction error for goods settlement:", txErr);
+      }
+
+      // Process inventory return for own products (only on primary payment in multi-invoice settlement)
+      if (val.goodsItems && Array.isArray(val.goodsItems) && !val.isSecondaryGoodsSettlement) {
+        for (const item of val.goodsItems) {
+          if (item.type === "own_product" && item.productId) {
+            try {
+              const retNumber = `RET-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 100)}`;
+              const targetLocationId = item.locationId || "0b68fd7b-6a40-496f-9279-0a003c26b211";
+              const retType = item.returnType === "Damage" ? "Damage" : "Good";
+
+              const isValidUuid = (str: any) =>
+                typeof str === "string" &&
+                /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+              const returnedByUuid = isValidUuid(val.performedById)
+                ? val.performedById
+                : null;
+
+              const { error: retErr } = await supabaseAdmin.from("inventory_returns").insert({
+                return_number: retNumber,
+                product_id: item.productId,
+                location_id: targetLocationId,
+                business_id: orderData.business_id || BUSINESS_IDS.SIERRA_AGENCY,
+                customer_id: customer.id,
+                quantity: Number(item.quantity),
+                return_type: retType,
+                reason: `Payment Goods Settlement for ${invoice.invoice_no}${item.invoiceNo ? ` (ref: ${item.invoiceNo})` : ""}${item.manualInvoiceNo ? ` (manual ref: ${item.manualInvoiceNo})` : ""}`,
+                status: "Completed",
+                returned_by: returnedByUuid,
+                return_date: paymentDate,
+              });
+              if (retErr) {
+                console.error("inventory_returns insert error:", retErr);
+              }
+
+              // Update product_stocks
+              const { data: existingStock } = await supabaseAdmin
+                .from("product_stocks")
+                .select("id, quantity, damaged_quantity")
+                .eq("product_id", item.productId)
+                .eq("location_id", targetLocationId)
+                .maybeSingle();
+
+              if (retType === "Damage") {
+                if (existingStock) {
+                  await supabaseAdmin
+                    .from("product_stocks")
+                    .update({
+                      damaged_quantity: (Number(existingStock.damaged_quantity) || 0) + Number(item.quantity),
+                      last_updated: new Date().toISOString(),
+                    })
+                    .eq("id", existingStock.id);
+                } else {
+                  await supabaseAdmin.from("product_stocks").insert({
+                    product_id: item.productId,
+                    location_id: targetLocationId,
+                    quantity: 0,
+                    damaged_quantity: Number(item.quantity),
+                    last_updated: new Date().toISOString(),
+                  });
+                }
+              } else {
+                if (existingStock) {
+                  await supabaseAdmin
+                    .from("product_stocks")
+                    .update({
+                      quantity: (Number(existingStock.quantity) || 0) + Number(item.quantity),
+                      last_updated: new Date().toISOString(),
+                    })
+                    .eq("id", existingStock.id);
+                } else {
+                  await supabaseAdmin.from("product_stocks").insert({
+                    product_id: item.productId,
+                    location_id: targetLocationId,
+                    quantity: Number(item.quantity),
+                    damaged_quantity: 0,
+                    last_updated: new Date().toISOString(),
+                  });
+                }
+              }
+
+              // Update products table
+              const { data: prodData } = await supabaseAdmin
+                .from("products")
+                .select("id, stock_quantity, damaged_quantity")
+                .eq("id", item.productId)
+                .maybeSingle();
+
+              if (prodData) {
+                if (retType === "Damage") {
+                  await supabaseAdmin
+                    .from("products")
+                    .update({
+                      damaged_quantity: (Number(prodData.damaged_quantity) || 0) + Number(item.quantity),
+                    })
+                    .eq("id", item.productId);
+                } else {
+                  await supabaseAdmin
+                    .from("products")
+                    .update({
+                      stock_quantity: (Number(prodData.stock_quantity) || 0) + Number(item.quantity),
+                    })
+                    .eq("id", item.productId);
+                }
+              }
+            } catch (stockErr) {
+              console.error("Stock update error for returned item:", stockErr);
+            }
+          }
         }
       }
     }

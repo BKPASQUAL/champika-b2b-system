@@ -72,7 +72,7 @@ export async function GET(
       .from("inventory_returns")
       .select(
         `
-        id, quantity, return_type, reason, created_at, business_id,
+        id, quantity, return_type, reason, created_at, return_date, business_id,
         customer:customers (shop_name),
         location:locations (name)
       `,
@@ -167,27 +167,52 @@ export async function GET(
       });
     });
 
-    // C. Returns
+    // C. Returns & Goods Settlements
     (returnItems || []).forEach((item: any) => {
       const isDamage = item.return_type === "Damage";
       const qty = Number(item.quantity);
       // Assumption: Good returns add to stock. Damage returns don't count towards "Good Stock"
-      // or track them separately. For this view, we'll assume only Good returns increase the main balance.
       const realChange = isDamage ? 0 : qty;
+
+      // Extract invoice reference if present in reason
+      let invRef: string | null = null;
+      let manualInvRef: string | null = null;
+      if (item.reason) {
+        const manualMatch = item.reason.match(/manual ref:\s*([^\s,\)]+)/i);
+        if (manualMatch) manualInvRef = manualMatch[1].trim();
+
+        const invMatch =
+          item.reason.match(/\b(SI-[\w-]+|CHD-[\w-]+)/i) ||
+          item.reason.match(/ref:\s*([^\s,\)]+)/i) ||
+          item.reason.match(/\[([^\]]+)\]/);
+        if (invMatch) invRef = invMatch[1].trim();
+      }
+
+      const isGoodsSettlement = /Payment Goods Settlement|Goods Settlement/i.test(item.reason || "");
+      const displayInvoiceNo = manualInvRef || invRef || null;
+      const displayRef = displayInvoiceNo
+        ? displayInvoiceNo
+        : isGoodsSettlement
+        ? "Goods Settlement"
+        : item.reason || "-";
+
+      const txDate = item.return_date ? item.return_date.split("T")[0] : item.created_at.split("T")[0];
 
       history.push({
         id: item.id,
-        date: item.created_at.split("T")[0],
-        timestamp: new Date(item.created_at).getTime(),
+        date: txDate,
+        timestamp: new Date(item.return_date || item.created_at).getTime(),
         type: isDamage ? "DAMAGE" : "RETURN",
+        isGoodsSettlement,
         quantity: isDamage ? -qty : qty,
         freeQuantity: 0,
         realChange: realChange,
-        customer: item.customer?.shop_name || "N/A",
+        customer: item.customer?.shop_name || (isGoodsSettlement ? "Goods Settlement Return" : "N/A"),
         repName: "-",
-        reference: item.reason || "-",
-        location: item.location?.name || "Unknown",
-        notes: item.reason || "-",
+        reference: displayRef,
+        invoiceNo: displayInvoiceNo,
+        location: item.location?.name || "Main Warehouse",
+        notes: item.reason || (isGoodsSettlement ? "Settled via Goods" : "-"),
         buyingPrice: 0,
         sellingPrice: 0,
         businessId: item.business_id,

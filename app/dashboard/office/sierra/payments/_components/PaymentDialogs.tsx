@@ -246,6 +246,13 @@ export function PaymentViewDialog({ isOpen, setIsOpen, payment }: PaymentViewDia
             </div>
           )}
 
+          {payment.method === "goods" && (
+            <div className="mt-1 rounded-lg border border-amber-200 bg-amber-50/70 p-3">
+              <p className="text-xs text-amber-900 font-semibold mb-1 uppercase tracking-wide">Goods Settlement Reference</p>
+              <p className="text-sm font-medium text-amber-950">{payment.chequeNo || "Goods / Products Exchanged"}</p>
+            </div>
+          )}
+
           {isCheque && (
             <div className="mt-1 rounded-lg border border-purple-100 bg-purple-50 p-3 grid grid-cols-2 gap-x-4 gap-y-3">
               <div>

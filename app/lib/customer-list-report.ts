@@ -370,6 +370,7 @@ export async function quickShareCustomerStatement(
     const rawInvoices: StatementInvoice[] = (data.invoices || []).map((inv: any) => ({
       id: inv.id,
       invoiceNo: inv.invoiceNo || inv.invoice_no || "INV",
+      manualInvoiceNo: inv.manualInvoiceNo || inv.manual_invoice_no || undefined,
       date: inv.date || inv.created_at || new Date().toISOString(),
       totalAmount: inv.totalAmount || inv.total_amount || 0,
       paidAmount: inv.paidAmount || inv.paid_amount || 0,
@@ -381,6 +382,8 @@ export async function quickShareCustomerStatement(
         method: p.method,
         chequeNo: p.chequeNo,
         chequeStatus: p.chequeStatus,
+        goodsSummary: p.goodsSummary || (p.method === "goods" ? p.chequeNo : null),
+        notes: p.notes,
       })),
     }));
 

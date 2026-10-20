@@ -65,6 +65,7 @@ interface Transaction {
   id: string;
   date: string;
   type: "SALE" | "PURCHASE" | "RETURN" | "DAMAGE" | "ADJUSTMENT" | "FREE ISSUE";
+  isGoodsSettlement?: boolean;
   quantity: number;
   freeQuantity?: number;
   currentStock?: number;
@@ -324,10 +325,10 @@ export default function SierraProductDetailsPage({
                             transaction.type === "SALE" ? "bg-black text-white" :
                             transaction.type === "PURCHASE" ? "bg-green-100 text-green-700" :
                             transaction.type === "FREE ISSUE" ? "bg-green-100 text-green-700" :
-                            transaction.type === "RETURN" ? "bg-blue-100 text-blue-700" :
+                            transaction.type === "RETURN" ? (transaction.isGoodsSettlement ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700") :
                             transaction.type === "DAMAGE" ? "bg-red-100 text-red-700" :
                             "bg-gray-100 text-gray-700"
-                          }`}>{transaction.type}</span>
+                          }`}>{transaction.isGoodsSettlement ? "GOODS RETURN" : transaction.type}</span>
                           <Button
                             variant="outline"
                             size="sm"
@@ -506,9 +507,9 @@ export default function SierraProductDetailsPage({
                               </Badge>
                             )}
                             {transaction.type === "RETURN" && (
-                              <Badge className="bg-blue-500 text-white hover:bg-blue-600 gap-1 whitespace-nowrap">
+                              <Badge className={`${transaction.isGoodsSettlement ? "bg-purple-600 hover:bg-purple-700" : "bg-blue-500 hover:bg-blue-600"} text-white gap-1 whitespace-nowrap`}>
                                 <RotateCcw className="h-3 w-3" />
-                                RETURN
+                                {transaction.isGoodsSettlement ? "GOODS RETURN" : "RETURN"}
                               </Badge>
                             )}
                             {transaction.type === "DAMAGE" && (

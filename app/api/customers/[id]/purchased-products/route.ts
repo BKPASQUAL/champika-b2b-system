@@ -10,12 +10,17 @@ export async function GET(
     const { id } = await params;
     const { searchParams } = new URL(request.url);
     const invoiceNo = searchParams.get("invoiceNo");
+    const businessId = searchParams.get("businessId");
 
     // 1. Fetch Orders directly for this customer (only Delivered or Completed)
-    const { data: ordersData } = await supabaseAdmin
+    let ordersQuery = supabaseAdmin
       .from("orders")
-      .select("id")
+      .select("id, business_id")
       .eq("customer_id", id);
+    if (businessId) {
+      ordersQuery = ordersQuery.eq("business_id", businessId);
+    }
+    const { data: ordersData } = await ordersQuery;
     const orderIdsFromOrders = (ordersData || []).map((o: any) => o.id).filter(Boolean);
 
     // 2. Fetch Invoices directly for this customer
@@ -55,15 +60,16 @@ export async function GET(
     // 4. Fetch all linked invoices for mapping invoice numbers
     const { data: allLinkedInvoices = [] } = await supabaseAdmin
       .from("invoices")
-      .select("id, invoice_no, order_id, created_at, status")
+      .select("id, invoice_no, manual_invoice_no, order_id, created_at, status")
       .in("order_id", allOrderIds);
 
-    const orderInvoiceMap: Record<string, { id: string; invoiceNo: string; createdAt: string; status: string }> = {};
+    const orderInvoiceMap: Record<string, { id: string; invoiceNo: string; manualInvoiceNo: string | null; createdAt: string; status: string }> = {};
     (allLinkedInvoices || []).forEach((inv: any) => {
       if (inv.order_id) {
         orderInvoiceMap[inv.order_id] = {
           id: inv.id,
           invoiceNo: inv.invoice_no,
+          manualInvoiceNo: inv.manual_invoice_no || null,
           createdAt: inv.created_at,
           status: inv.status,
         };
@@ -95,15 +101,20 @@ export async function GET(
           id,
           sku,
           name,
+          company_code,
           unit_of_measure,
           stock_quantity,
-          selling_price
+          selling_price,
+          supplier_name,
+          brand,
+          retail_only
         ),
         orders (
           id,
           order_id,
           order_date,
-          status
+          status,
+          business_id
         )
       `)
       .in("order_id", targetOrderIds)
@@ -121,6 +132,9 @@ export async function GET(
       if (!item.products) return;
 
       const orderData = Array.isArray(item.orders) ? item.orders[0] : item.orders;
+      if (businessId && orderData?.business_id && orderData.business_id !== businessId) {
+        return;
+      }
       const invInfo = orderInvoiceMap[item.order_id];
 
       // Order/Invoice status validation: ONLY Delivered or Completed orders (or non-cancelled valid invoices)
@@ -150,6 +164,7 @@ export async function GET(
         orderId: item.order_id,
         invoiceId: invInfo?.id || null,
         invoiceNo: invInfo?.invoiceNo || orderData?.order_id || "N/A",
+        manualInvoiceNo: invInfo?.manualInvoiceNo || null,
         date: invInfo?.createdAt || orderData?.order_date || item.created_at,
         quantity: billedQty,
         freeQuantity: freeQty,
@@ -171,15 +186,23 @@ export async function GET(
         if (new Date(historyEntry.date) > new Date(existing.lastPurchasedDate)) {
           existing.lastPurchasedDate = historyEntry.date;
           existing.latestUnitPrice = itemPrice;
+          existing.latestInvoiceNo = historyEntry.invoiceNo;
+          existing.latestManualInvoiceNo = historyEntry.manualInvoiceNo;
         }
       } else {
         productsMap.set(pId, {
           id: item.products.id,
           sku: item.products.sku || "",
           name: item.products.name,
+          companyCode: item.products.company_code || "",
           unit: productUnit,
+          supplier: item.products.supplier_name || "",
+          brand: item.products.brand || "",
+          retailOnly: item.products.retail_only ?? false,
           currentStock: item.products.stock_quantity || 0,
           latestUnitPrice: itemPrice,
+          latestInvoiceNo: historyEntry.invoiceNo,
+          latestManualInvoiceNo: historyEntry.manualInvoiceNo,
           totalPurchasedQty: totalItemQty,
           totalSpent: itemTotalVal,
           purchaseCount: 1,

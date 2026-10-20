@@ -1,6 +1,6 @@
 // app/dashboard/office/sierra/payments/types.ts
 
-export type PaymentMethod = "cash" | "cheque" | "bank" | "credit";
+export type PaymentMethod = "cash" | "cheque" | "bank" | "credit" | "goods";
 export type ChequeStatus = "Pending" | "Cleared" | "Bounced" | "Returned" | "Deposited";
 
 export interface Payment {

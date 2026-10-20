@@ -22,6 +22,7 @@ import {
   CreditCard,
   Building2,
   XCircle,
+  Package,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -92,6 +93,13 @@ function MethodBadge({ method }: { method: string }) {
     return (
       <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 text-xs font-medium">
         <Building2 className="w-3 h-3" /> Bank
+      </span>
+    );
+  }
+  if (m === "goods") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 text-xs font-medium">
+        <Package className="w-3 h-3" /> Goods
       </span>
     );
   }

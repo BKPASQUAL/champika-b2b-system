@@ -12,11 +12,14 @@ export interface InvoicePaymentRecord {
   receipt_number?: string | null;
   chequeNo?: string | null;
   chequeStatus?: string | null;
+  goodsSummary?: string | null;
+  notes?: string | null;
 }
 
 export interface StatementInvoice {
   id: string;
   invoiceNo: string;
+  manualInvoiceNo?: string;
   date: string;
   totalAmount: number;
   paidAmount: number;
@@ -198,7 +201,7 @@ function buildDoc(
     // Main Invoice Row
     tableData.push([
       inv.date ? invDate.toLocaleDateString("en-GB") : "—",
-      inv.invoiceNo,
+      inv.manualInvoiceNo || inv.invoiceNo,
       `${daysOverdue} days`,
       fmt(inv.totalAmount),
       fmt(inv.paidAmount),
@@ -206,24 +209,26 @@ function buildDoc(
       inv.balance === 0 ? "PAID" : inv.paidAmount > 0 ? "PARTIAL" : "UNPAID",
     ]);
 
-    // Payment History Sub-rows (ONLY Non-Cheque Payments: Cash, Bank Transfer, etc.)
+    // Payment History Sub-rows (Non-Cheque Payments: Cash, Bank Transfer, Goods Settlement, etc.)
     if (inv.payments && inv.payments.length > 0) {
       const nonChequePayments = inv.payments.filter(
-        (p) => p.method?.toLowerCase() !== "cheque" && !Boolean(p.chequeNo)
+        (p) => p.method?.toLowerCase() !== "cheque"
       );
       nonChequePayments.forEach((p) => {
         const pDate = p.paymentDate ? new Date(p.paymentDate).toLocaleDateString("en-GB") : "—";
-        const methodStr = p.method.toUpperCase();
+        const isGoods = p.method?.toLowerCase() === "goods";
+        const methodStr = isGoods ? "GOODS SETTLEMENT" : p.method.toUpperCase();
         const paymentLabel = inv.balance === 0 ? "Payment" : "Partial Payment";
-        const detailStr = `     Invoice ${inv.invoiceNo} -- ${paymentLabel} on ${pDate} via ${methodStr}: LKR ${fmt(p.amount)}`;
+        const invDisplay = inv.manualInvoiceNo || inv.invoiceNo;
+        const detailStr = `     Invoice ${invDisplay} -- ${paymentLabel} on ${pDate} via ${methodStr}: LKR ${fmt(p.amount)}`;
 
         tableData.push([
           {
             content: detailStr,
             colSpan: 7,
             styles: {
-              fillColor: COLOR.paymentSubRowBg,
-              textColor: COLOR.paymentSubRowText,
+              fillColor: isGoods ? [245, 243, 255] : COLOR.paymentSubRowBg,
+              textColor: isGoods ? [109, 40, 217] : COLOR.paymentSubRowText,
               fontStyle: "italic",
               fontSize: 8,
               cellPadding: { top: 2, bottom: 2, left: 6, right: 2 },
@@ -286,7 +291,7 @@ function buildDoc(
   autoTable(doc, {
     startY: START_Y,
     margin: { left: M, right: M },
-    head: [["Date", "Invoice No", "Age", "Total (LKR)", "Paid (LKR)", "Balance Due", "Status"]],
+    head: [["Date", "Invoice / Manual Ref", "Age", "Total (LKR)", "Paid (LKR)", "Balance Due", "Status"]],
     body: tableData,
     theme: "plain",
     headStyles: {
@@ -307,9 +312,9 @@ function buildDoc(
     },
     columnStyles: {
       0: { halign: "left", cellWidth: 24 }, // Date
-      1: { halign: "center", cellWidth: 28 }, // Invoice No
-      2: { halign: "center", cellWidth: 20 }, // Age
-      3: { halign: "right", cellWidth: 32 }, // Total
+      1: { halign: "center", cellWidth: 32 }, // Invoice / Manual Ref
+      2: { halign: "center", cellWidth: 18 }, // Age
+      3: { halign: "right", cellWidth: 30 }, // Total
       4: { halign: "right", cellWidth: 28 }, // Paid
       5: { halign: "right", cellWidth: 32, fontStyle: "bold" }, // Balance Due
       6: { halign: "center", cellWidth: 16 }, // Status
@@ -362,7 +367,354 @@ function buildDoc(
     },
   });
 
-  // ── 4. Dedicated Cheque Details Table (Grouped by Cheque No) ─────────────
+  // ── 4. Dedicated Goods / Product Settlement Details Tables ────────────────
+  interface ParsedGoodsItem {
+    date: string;
+    manualInvoiceNo: string;
+    itemName: string;
+    amount: number;
+    isSoldToCustomer: boolean;
+  }
+
+  function parseSingleGoodsChunk(
+    chunk: string,
+    defaultDate: string,
+    parentInv: StatementInvoice,
+    invMap: Map<string, StatementInvoice>
+  ): ParsedGoodsItem {
+    const trimmed = chunk.trim();
+
+    // 1. Amount: extract from "@ LKR 21,736" or "@ 21,736" or "@ LKR 21736.00"
+    let amount = 0;
+    const amountMatch = trimmed.match(/@\s*(?:LKR\s*)?([\d,]+(?:\.\d+)?)/i);
+    if (amountMatch) {
+      const parsedAmt = parseFloat(amountMatch[1].replace(/,/g, ""));
+      if (!isNaN(parsedAmt) && parsedAmt > 0) {
+        amount = parsedAmt;
+      }
+    }
+
+    // 2. Is Sold To Customer (items originally billed to customer vs other agency stock)
+    const isSoldToCustomer =
+      trimmed.includes("CustomerBilled") ||
+      trimmed.includes("SoldToCust") ||
+      (!trimmed.includes("OtherAgencyStock") && /Bill:\s*|Manual:\s*/i.test(trimmed));
+
+    // 3. Manual Invoice Number
+    let manualRef = "—";
+    const manualMatch = trimmed.match(/Manual:\s*([^,\)]+)/i);
+    if (manualMatch && manualMatch[1].trim()) {
+      manualRef = manualMatch[1].trim();
+    } else {
+      const billMatch = trimmed.match(/Bill:\s*([^,\)]+)/i);
+      if (billMatch && billMatch[1].trim()) {
+        const referencedInv = invMap.get(billMatch[1].trim());
+        if (referencedInv?.manualInvoiceNo) {
+          manualRef = referencedInv.manualInvoiceNo;
+        }
+      }
+      if (manualRef === "—" && isSoldToCustomer && parentInv.manualInvoiceNo) {
+        manualRef = parentInv.manualInvoiceNo;
+      }
+    }
+
+    // 4. Clean Item Name (strip debug metadata in parens or @ prices)
+    const isDamage = /\bDamage\b/i.test(trimmed);
+    let cleanName = trimmed;
+    const parenIdx = cleanName.indexOf("(");
+    if (parenIdx !== -1) {
+      cleanName = cleanName.substring(0, parenIdx).trim();
+    } else {
+      const atIdx = cleanName.indexOf("@");
+      if (atIdx !== -1) {
+        cleanName = cleanName.substring(0, atIdx).trim();
+      }
+    }
+    cleanName = cleanName.replace(/^(?:goods(?:\s+settlement)?:\s*)/i, "").trim();
+    if (isDamage && !cleanName.toLowerCase().includes("damage")) {
+      cleanName += " [Damaged]";
+    }
+    if (!cleanName) cleanName = "Sierra Products Exchanged";
+
+    return {
+      date: defaultDate,
+      manualInvoiceNo: manualRef,
+      itemName: cleanName,
+      amount,
+      isSoldToCustomer,
+    };
+  }
+
+  const invoiceMap = new Map<string, StatementInvoice>();
+  invoices.forEach((inv) => {
+    if (inv.invoiceNo) invoiceMap.set(inv.invoiceNo, inv);
+    if (inv.id) invoiceMap.set(inv.id, inv);
+  });
+
+  const processedSummaries = new Set<string>();
+  const parsedGoodsItems: ParsedGoodsItem[] = [];
+
+  invoices.forEach((inv) => {
+    if (inv.payments && inv.payments.length > 0) {
+      inv.payments.forEach((p) => {
+        const isGoods = p.method?.toLowerCase() === "goods";
+        if (!isGoods) return;
+
+        let rawDetails = (p.goodsSummary || p.chequeNo || "").trim();
+        if (rawDetails.toLowerCase().startsWith("goods:")) {
+          rawDetails = rawDetails.slice(6).trim();
+        }
+        if (!rawDetails) rawDetails = "Sierra Goods / Products Exchanged";
+
+        const pDate = p.paymentDate ? new Date(p.paymentDate).toLocaleDateString("en-GB") : "—";
+
+        const isStructured =
+          rawDetails.includes(";") ||
+          rawDetails.includes("@") ||
+          rawDetails.includes("CustomerBilled") ||
+          rawDetails.includes("OtherAgencyStock");
+
+        if (isStructured) {
+          const summaryKey = `${pDate}_${p.receiptNumber || ""}_${rawDetails}`;
+          if (!processedSummaries.has(summaryKey)) {
+            processedSummaries.add(summaryKey);
+            const chunks = rawDetails.split(/\s*;\s*/).filter(Boolean);
+            chunks.forEach((chunk) => {
+              const item = parseSingleGoodsChunk(chunk, pDate, inv, invoiceMap);
+              parsedGoodsItems.push(item);
+            });
+          }
+        } else {
+          // Legacy unstructured payment record
+          const manualRef = inv.manualInvoiceNo || "—";
+          let cleanName = rawDetails.replace(/^(?:goods(?:\s+settlement)?:\s*)/i, "").trim();
+          parsedGoodsItems.push({
+            date: pDate,
+            manualInvoiceNo: manualRef,
+            itemName: cleanName || "Sierra Products Exchanged",
+            amount: p.amount,
+            isSoldToCustomer: false,
+          });
+        }
+      });
+    }
+  });
+
+  const soldItems = parsedGoodsItems.filter((i) => i.isSoldToCustomer);
+  const notSoldItems = parsedGoodsItems.filter((i) => !i.isSoldToCustomer);
+  const totalGoodsAmount = parsedGoodsItems.reduce((sum, i) => sum + i.amount, 0);
+  let goodsBannerBottomY = 0;
+
+  if (parsedGoodsItems.length > 0) {
+    let currentY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 8 : START_Y + 10;
+
+    // Table 1: Items Sold to Customer (Customer Billed)
+    if (soldItems.length > 0) {
+      if (currentY > pageHeight - 45) {
+        doc.addPage();
+        currentY = 20;
+      }
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(5, 150, 105); // Emerald-700
+      doc.text("GOODS RETURNED FROM INVOICES (SOLD TO CUSTOMER)", M, currentY);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(...COLOR.mutedText);
+      doc.text(
+        `${soldItems.length} item(s) returned from customer invoices`,
+        pageWidth - M,
+        currentY,
+        { align: "right" }
+      );
+
+      const soldSubtotal = soldItems.reduce((sum, i) => sum + i.amount, 0);
+      const soldTableBody: any[] = [
+        ...soldItems.map((item) => [
+          item.manualInvoiceNo,
+          item.date,
+          item.itemName,
+          fmt(item.amount),
+        ]),
+        [
+          {
+            content: `SUBTOTAL (SOLD TO CUSTOMER): ${soldItems.length} item(s)`,
+            colSpan: 3,
+            styles: {
+              fontStyle: "bold",
+              halign: "right",
+              fillColor: [236, 253, 245],
+              textColor: [4, 120, 87],
+              fontSize: 8,
+            },
+          },
+          {
+            content: fmt(soldSubtotal),
+            styles: {
+              fontStyle: "bold",
+              halign: "right",
+              fillColor: [236, 253, 245],
+              textColor: [4, 120, 87],
+              fontSize: 8,
+            },
+          },
+        ],
+      ];
+
+      autoTable(doc, {
+        startY: currentY + 3.5,
+        margin: { left: M, right: M },
+        head: [["Manual Bill Ref", "Date", "Item Name", "Amount (LKR)"]],
+        body: soldTableBody,
+        theme: "plain",
+        headStyles: {
+          fillColor: [5, 150, 105], // Emerald-600
+          textColor: [255, 255, 255],
+          fontStyle: "bold",
+          fontSize: 8,
+          halign: "center",
+          cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 },
+        },
+        styles: {
+          fontSize: 8,
+          cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 },
+          lineColor: COLOR.divider,
+          lineWidth: 0.1,
+          textColor: COLOR.bodyText,
+          overflow: "linebreak",
+        },
+        columnStyles: {
+          0: { halign: "center", cellWidth: 32 },
+          1: { halign: "center", cellWidth: 26 },
+          2: { halign: "left",   cellWidth: 88 },
+          3: { halign: "right",  cellWidth: 34, fontStyle: "bold" },
+        },
+      });
+
+      currentY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 8 : currentY + 35;
+    }
+
+    // Table 2: Other Sierra Products Received (Not Sold to Customer)
+    if (notSoldItems.length > 0) {
+      if (currentY > pageHeight - 45) {
+        doc.addPage();
+        currentY = 20;
+      }
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(109, 40, 217); // Purple-700
+      doc.text("OTHER SIERRA PRODUCTS RECEIVED (NOT SOLD TO CUSTOMER)", M, currentY);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(...COLOR.mutedText);
+      doc.text(
+        `${notSoldItems.length} other stock item(s) received`,
+        pageWidth - M,
+        currentY,
+        { align: "right" }
+      );
+
+      const notSoldSubtotal = notSoldItems.reduce((sum, i) => sum + i.amount, 0);
+      const notSoldTableBody: any[] = [
+        ...notSoldItems.map((item) => [
+          item.manualInvoiceNo,
+          item.date,
+          item.itemName,
+          fmt(item.amount),
+        ]),
+        [
+          {
+            content: `SUBTOTAL (OTHER SIERRA STOCK): ${notSoldItems.length} item(s)`,
+            colSpan: 3,
+            styles: {
+              fontStyle: "bold",
+              halign: "right",
+              fillColor: [243, 232, 255],
+              textColor: [109, 40, 217],
+              fontSize: 8,
+            },
+          },
+          {
+            content: fmt(notSoldSubtotal),
+            styles: {
+              fontStyle: "bold",
+              halign: "right",
+              fillColor: [243, 232, 255],
+              textColor: [109, 40, 217],
+              fontSize: 8,
+            },
+          },
+        ],
+      ];
+
+      autoTable(doc, {
+        startY: currentY + 3.5,
+        margin: { left: M, right: M },
+        head: [["Manual Bill Ref", "Date", "Item Name", "Amount (LKR)"]],
+        body: notSoldTableBody,
+        theme: "plain",
+        headStyles: {
+          fillColor: [109, 40, 217], // Purple-700
+          textColor: [255, 255, 255],
+          fontStyle: "bold",
+          fontSize: 8,
+          halign: "center",
+          cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 },
+        },
+        styles: {
+          fontSize: 8,
+          cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 },
+          lineColor: COLOR.divider,
+          lineWidth: 0.1,
+          textColor: COLOR.bodyText,
+          overflow: "linebreak",
+        },
+        columnStyles: {
+          0: { halign: "center", cellWidth: 32 },
+          1: { halign: "center", cellWidth: 26 },
+          2: { halign: "left",   cellWidth: 88 },
+          3: { halign: "right",  cellWidth: 34, fontStyle: "bold" },
+        },
+      });
+
+      currentY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 8 : currentY + 35;
+    }
+
+    // Grand Total Goods Settlement Banner (when both tables exist)
+    if (soldItems.length > 0 && notSoldItems.length > 0) {
+      if (currentY > pageHeight - 20) {
+        doc.addPage();
+        currentY = 20;
+      }
+
+      doc.setFillColor(245, 243, 255);
+      doc.setDrawColor(221, 214, 254);
+      doc.roundedRect(M, currentY, pageWidth - M * 2, 7.5, 1, 1, "FD");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(109, 40, 217);
+      doc.text(
+        `TOTAL GOODS SETTLEMENT CREDITS: ${parsedGoodsItems.length} item(s)`,
+        M + 4,
+        currentY + 5
+      );
+      doc.text(
+        `LKR ${fmt(totalGoodsAmount)}`,
+        pageWidth - M - 4,
+        currentY + 5,
+        { align: "right" }
+      );
+
+      goodsBannerBottomY = currentY + 7.5;
+    }
+  }
+
+  // ── 5. Dedicated Cheque Details Table (Grouped by Cheque No) ─────────────
   interface GroupedCheque {
     invoiceNos: string[];
     date: string;
@@ -376,18 +728,19 @@ function buildDoc(
   invoices.forEach((inv) => {
     if (inv.payments && inv.payments.length > 0) {
       inv.payments.forEach((p) => {
-        const isCheque = p.method?.toLowerCase() === "cheque" || Boolean(p.chequeNo);
+        const isCheque = p.method?.toLowerCase() === "cheque";
         if (isCheque) {
           const rawNo = (p.chequeNo || "").trim();
           const chequeKey = rawNo ? rawNo.toLowerCase() : `no_no_${p.id || Math.random()}`;
           const pDate = p.paymentDate ? new Date(p.paymentDate).toLocaleDateString("en-GB") : "—";
           const chequeNoStr = rawNo ? `#${rawNo}` : "—";
           const status = (p.chequeStatus || "Pending").toUpperCase();
+          const invDisplay = inv.manualInvoiceNo || inv.invoiceNo;
 
           if (chequeMap.has(chequeKey)) {
             const existing = chequeMap.get(chequeKey)!;
-            if (inv.invoiceNo && !existing.invoiceNos.includes(inv.invoiceNo)) {
-              existing.invoiceNos.push(inv.invoiceNo);
+            if (invDisplay && !existing.invoiceNos.includes(invDisplay)) {
+              existing.invoiceNos.push(invDisplay);
             }
             existing.amount += p.amount;
             if (["RETURNED", "BOUNCED"].includes(status)) {
@@ -395,7 +748,7 @@ function buildDoc(
             }
           } else {
             chequeMap.set(chequeKey, {
-              invoiceNos: inv.invoiceNo ? [inv.invoiceNo] : [],
+              invoiceNos: invDisplay ? [invDisplay] : [],
               date: pDate,
               chequeNo: chequeNoStr,
               amount: p.amount,
@@ -431,8 +784,10 @@ function buildDoc(
   });
 
   if (chequeRows.length > 0) {
-    const mainTableFinalY = (doc as any).lastAutoTable.finalY + 8;
-    let currentY = mainTableFinalY;
+    const lastFinalY = (doc as any).lastAutoTable
+      ? (doc as any).lastAutoTable.finalY + 8
+      : START_Y + 10;
+    let currentY = goodsBannerBottomY > 0 ? Math.max(lastFinalY, goodsBannerBottomY + 8) : lastFinalY;
 
     if (currentY > pageHeight - 50) {
       doc.addPage();
@@ -473,7 +828,7 @@ function buildDoc(
     autoTable(doc, {
       startY: currentY + 3,
       margin: { left: M, right: M },
-      head: [["Invoice No", "Date", "Cheque No & Branch", "Amount (LKR)", "Cheque Status"]],
+      head: [["Invoice / Manual Ref", "Date", "Cheque No & Branch", "Amount (LKR)", "Cheque Status"]],
       body: chequeTableBody,
       theme: "plain",
       headStyles: {
