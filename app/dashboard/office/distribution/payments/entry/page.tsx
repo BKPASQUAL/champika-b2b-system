@@ -15,6 +15,7 @@ import {
   Share2,
   Calendar,
   Clock,
+  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -74,6 +75,10 @@ import {
   shareCustomerStatement,
   InvoicePaymentRecord,
 } from "@/lib/customer-statement-report";
+import {
+  GoodsSettlementSection,
+  GoodsSettlementItem,
+} from "@/components/payments/GoodsSettlementSection";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const formatCurrency = (amount: number) =>
@@ -116,7 +121,7 @@ interface PendingInvoice {
   payments?: InvoicePaymentRecord[];
 }
 interface InvoiceSettlement { invoiceId: string; selected: boolean; settleAmount: number; }
-type PaymentMethod = "cash" | "bank" | "cheque";
+type PaymentMethod = "cash" | "bank" | "cheque" | "goods";
 
 function StepBadge({ step, label }: { step: number; label: string }) {
   return (
@@ -145,6 +150,7 @@ export default function DistributionPaymentEntryPage() {
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
   const [totalAmount, setTotalAmount] = useState<number>(0);
   const [notes, setNotes] = useState("");
+  const [goodsItems, setGoodsItems] = useState<GoodsSettlementItem[]>([]);
   const [chequeNumber, setChequeNumber] = useState("");
   const [chequeDate, setChequeDate] = useState("");
   const [selectedBankId, setSelectedBankId] = useState("");
@@ -222,14 +228,17 @@ export default function DistributionPaymentEntryPage() {
           const key = invId || invNo;
           if (!key) return;
           if (!paymentMap[key]) paymentMap[key] = [];
+          const isGoods = (p.payment_method || p.method) === "goods";
           paymentMap[key].push({
             id: p.id,
             paymentDate: p.payment_date,
             amount: p.amount,
             method: p.payment_method || p.method || "cash",
             receiptNumber: p.receipt_number || p.receiptNumber || null,
-            chequeNo: p.cheque_number || p.cheque_no || null,
-            chequeStatus: p.cheque_status || null,
+            chequeNo: isGoods ? null : (p.cheque_number || p.cheque_no || null),
+            chequeStatus: isGoods ? null : (p.cheque_status || null),
+            goodsSummary: isGoods ? (p.cheque_number || p.cheque_no || p.notes || "Goods Settlement") : null,
+            notes: p.notes || null,
           });
         });
 
@@ -286,6 +295,14 @@ export default function DistributionPaymentEntryPage() {
   useEffect(() => { if (selectedCustomerId) fetchPendingInvoices(selectedCustomerId); else { setPendingInvoices([]); setSettlements({}); } }, [selectedCustomerId, fetchPendingInvoices]);
   useEffect(() => { setSelectedAccountId(""); }, [paymentMethod]);
 
+  // Recalculate totalAmount whenever goods items change
+  useEffect(() => {
+    if (paymentMethod === "goods") {
+      const sum = goodsItems.reduce((acc, it) => acc + (it.totalValue || 0), 0);
+      setTotalAmount(Math.round(sum * 100) / 100);
+    }
+  }, [goodsItems, paymentMethod]);
+
   const totalAllocated = Object.values(settlements).filter((s) => s.selected).reduce((sum, s) => sum + (s.settleAmount || 0), 0);
   const remaining = totalAmount - totalAllocated;
   const selectedCustomer = customers.find((c) => c.id === selectedCustomerId);
@@ -307,15 +324,57 @@ export default function DistributionPaymentEntryPage() {
     setSelectedCustomerId(""); setPaymentMethod("cash"); setPaymentDate(new Date().toISOString().split("T")[0]);
     setTotalAmount(0); setNotes(""); setChequeNumber(""); setChequeDate(""); setSelectedBankId(""); setBranchCode(""); setSelectedAccountId("");
     setReceiptNumber(""); setReceiptBookId(undefined);
+    setGoodsItems([]);
     setPendingInvoices([]); setSettlements({});
   };
 
-  const isReceiptOptional = paymentMethod === "bank" || paidOnCustomerBill;
+  const isReceiptOptional = paymentMethod === "bank" || paymentMethod === "goods" || paidOnCustomerBill;
   const isReceiptRequired = !isReceiptOptional;
+
+  const buildGoodsSummary = () => {
+    return goodsItems
+      .map((item) => {
+        const parts = [
+          item.invoiceNo ? `Bill: ${item.invoiceNo}` : null,
+          item.manualInvoiceNo ? `Manual: ${item.manualInvoiceNo}` : null,
+          item.isCustomerPurchased !== false ? "CustomerBilled" : "OtherAgencyStock",
+        ].filter(Boolean).join(", ");
+        const total = item.totalValue ?? (item.quantity * item.unitPrice);
+        return `${item.quantity}x ${item.productName} (${item.returnType}${parts ? ` | ${parts}` : ""}) @ LKR ${total.toLocaleString()}`;
+      })
+      .join(" ; ");
+  };
+
+  const autoAllocateOldest = () => {
+    if (totalAmount <= 0) {
+      toast.error("Please enter or calculate an amount first");
+      return;
+    }
+    let rem = totalAmount;
+    const newSettlements: Record<string, InvoiceSettlement> = {};
+    const sorted = [...pendingInvoices].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    for (const inv of sorted) {
+      if (rem <= 0) {
+        newSettlements[inv.id] = { invoiceId: inv.id, selected: false, settleAmount: 0 };
+      } else {
+        const alloc = Math.min(inv.balance, rem);
+        newSettlements[inv.id] = { invoiceId: inv.id, selected: true, settleAmount: alloc };
+        rem -= alloc;
+      }
+    }
+    setSettlements(newSettlements);
+    toast.success(`Auto-allocated LKR ${(totalAmount - rem).toLocaleString()} across pending invoices`);
+  };
 
   const validate = () => {
     if (!selectedCustomerId) { toast.error("Please select a customer"); return false; }
     if (isReceiptRequired && !receiptNumber.trim()) { toast.error("Please enter receipt number"); return false; }
+    if (paymentMethod === "goods") {
+      if (goodsItems.length === 0) {
+        toast.error("Please add at least one goods/product item to settle this payment");
+        return false;
+      }
+    }
     if (totalAmount <= 0) { toast.error("Please enter a valid amount"); return false; }
     if (paymentMethod === "cheque") {
       if (!chequeNumber.trim()) { toast.error("Please enter cheque number"); return false; }
@@ -332,21 +391,52 @@ export default function DistributionPaymentEntryPage() {
     if (!validate()) return;
     setIsSubmitting(true);
     let successCount = 0, failCount = 0;
+    const goodsSummaryStr = paymentMethod === "goods" ? buildGoodsSummary() : undefined;
+    let isFirstGoodsInvoice = true;
     try {
       for (const s of Object.values(settlements).filter((s) => s.selected && s.settleAmount > 0)) {
         const res = await fetch("/api/payments", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ orderId: s.invoiceId, customerId: selectedCustomerId, amount: s.settleAmount, date: paymentDate, method: paymentMethod, notes: notes || undefined, depositAccountId: paymentMethod !== "cheque" ? selectedAccountId : null, chequeNo: paymentMethod === "cheque" ? chequeNumber : null, chequeDate: paymentMethod === "cheque" ? chequeDate : null, bankId: paymentMethod === "cheque" ? selectedBankId : null, branchCode: paymentMethod === "cheque" ? branchCode : null, receiptNumber: receiptNumber || undefined, receiptBookId: receiptBookId || undefined, performedByName: getUserBusinessContext()?.name ?? null, performedByEmail: getUserBusinessContext()?.email ?? null }),
+          body: JSON.stringify({
+            orderId: s.invoiceId,
+            customerId: selectedCustomerId,
+            amount: s.settleAmount,
+            date: paymentDate,
+            method: paymentMethod,
+            notes: notes || undefined,
+            depositAccountId: paymentMethod !== "cheque" && paymentMethod !== "goods" ? selectedAccountId : null,
+            chequeNo: paymentMethod === "cheque" ? chequeNumber : null,
+            chequeDate: paymentMethod === "cheque" ? chequeDate : null,
+            bankId: paymentMethod === "cheque" ? selectedBankId : null,
+            branchCode: paymentMethod === "cheque" ? branchCode : null,
+            receiptNumber: receiptNumber || undefined,
+            receiptBookId: receiptBookId || undefined,
+            performedByName: getUserBusinessContext()?.name ?? null,
+            performedByEmail: getUserBusinessContext()?.email ?? null,
+            goodsItems: paymentMethod === "goods" ? goodsItems : undefined,
+            goodsSummary: goodsSummaryStr,
+            isSecondaryGoodsSettlement: paymentMethod === "goods" && !isFirstGoodsInvoice,
+          }),
         });
-        if (res.ok) successCount++; else failCount++;
+        if (res.ok) {
+          successCount++;
+          if (paymentMethod === "goods") isFirstGoodsInvoice = false;
+        } else {
+          failCount++;
+        }
       }
       if (successCount > 0) { toast.success(`Payment recorded successfully!`); resetForm(); invalidatePaymentCaches(); }
       if (failCount > 0) toast.error(`${failCount} payment(s) failed.`);
     } catch { toast.error("An unexpected error occurred"); } finally { setIsSubmitting(false); }
   };
 
-  const methodLabel: Record<PaymentMethod, string> = { cash: "Cash", bank: "Bank Transfer", cheque: "Cheque" };
+  const methodLabel: Record<PaymentMethod, string> = {
+    cash: "Cash",
+    bank: "Bank Transfer",
+    cheque: "Cheque",
+    goods: "Goods Settlement",
+  };
 
   return (
     <div className="space-y-6">
@@ -435,6 +525,7 @@ export default function DistributionPaymentEntryPage() {
                   <SelectItem value="cash">Cash</SelectItem>
                   <SelectItem value="bank">Bank Transfer</SelectItem>
                   <SelectItem value="cheque">Cheque</SelectItem>
+                  <SelectItem value="goods">Goods / Products Exchange</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -445,8 +536,24 @@ export default function DistributionPaymentEntryPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>{methodLabel[paymentMethod]} Amount *</Label>
-              <Input type="number" min="0" step="0.01" placeholder="0.00" value={totalAmount || ""} onChange={(e) => setTotalAmount(parseFloat(e.target.value) || 0)} />
+              <div className="flex items-center justify-between">
+                <Label>{methodLabel[paymentMethod]} Amount *</Label>
+                {paymentMethod === "goods" && (
+                  <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200">
+                    Auto-computed from items
+                  </Badge>
+                )}
+              </div>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                value={totalAmount || ""}
+                readOnly={paymentMethod === "goods"}
+                onChange={(e) => setTotalAmount(parseFloat(e.target.value) || 0)}
+                className={cn(paymentMethod === "goods" && "bg-blue-50/40 cursor-not-allowed font-semibold")}
+              />
             </div>
 
             {paymentMethod === "cheque" && (
@@ -505,6 +612,20 @@ export default function DistributionPaymentEntryPage() {
               <Input placeholder="Any additional notes…" value={notes} onChange={(e) => setNotes(e.target.value)} />
             </div>
           </div>
+
+          {/* Goods / Products Settlement Section */}
+          {paymentMethod === "goods" && (
+            <div className="mt-6 pt-6 border-t border-blue-100">
+              <GoodsSettlementSection
+                agencyName="Distribution"
+                businessId={businessId || BUSINESS_IDS.CHAMPIKA_DISTRIBUTION}
+                selectedCustomerId={selectedCustomerId}
+                goodsItems={goodsItems}
+                setGoodsItems={setGoodsItems}
+                formatCurrency={formatCurrency}
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -522,6 +643,15 @@ export default function DistributionPaymentEntryPage() {
             </div>
             {selectedCustomerId && pendingInvoices.length > 0 && (
               <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={autoAllocateOldest}
+                  title="Auto-allocate payment to oldest pending invoices"
+                  className="text-xs bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+                >
+                  <Zap className="w-3.5 h-3.5 mr-1 text-blue-600" /> Auto-Allocate
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"
@@ -853,7 +983,14 @@ export default function DistributionPaymentEntryPage() {
                               {p.paymentDate ? new Date(p.paymentDate).toLocaleDateString("en-GB") : "—"}
                             </p>
                             <p className="text-muted-foreground text-[11px] mt-0.5 flex flex-wrap items-center gap-1">
-                              Method: <span className="capitalize font-semibold text-slate-700">{p.method}</span>
+                              Method:{" "}
+                              {p.method === "goods" ? (
+                                <span className="font-semibold text-amber-800 bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded text-[10px]">
+                                  Goods Settlement
+                                </span>
+                              ) : (
+                                <span className="capitalize font-semibold text-slate-700">{p.method}</span>
+                              )}
                               {(p.receiptNumber || p.receipt_number) && (
                                 <span className="font-bold font-mono text-purple-800 bg-purple-100 border border-purple-200 px-1.5 py-0.5 rounded text-[10px]">
                                   Receipt #{p.receiptNumber || p.receipt_number}
@@ -866,6 +1003,12 @@ export default function DistributionPaymentEntryPage() {
                                 </span>
                               )}
                             </p>
+                            {p.goodsSummary && (
+                              <div className="mt-1 text-[11px] text-amber-900 bg-amber-50/80 border border-amber-200 rounded px-2 py-1">
+                                <span className="font-semibold text-amber-800">Exchange Items: </span>
+                                {p.goodsSummary}
+                              </div>
+                            )}
                           </div>
                           <span className={cn("font-bold text-sm", isReturned ? "text-red-600 line-through" : "text-green-700")}>
                             {formatCurrency(p.amount)}
