@@ -86,6 +86,7 @@ interface ReturnRecord {
     name: string;
     sku: string;
     selling_price: number;
+    cost_price?: number;
   };
   profiles: {
     full_name: string;
@@ -260,8 +261,16 @@ export default function WiremanViewInvoicePage({
   if (!invoice) return null;
 
   // --- Calculations ---
+  const isInterBranch =
+    invoice.orderData?.is_inter_branch ||
+    invoice.customer?.name?.includes("Champika Hardware") ||
+    /^(OR-RE|OR-DI|RE|DI|SI-RE|SI-DI)-/i.test(invoice.invoiceNo || "");
+
   const totalRefunded = returns.reduce((acc, r) => {
-    return acc + r.quantity * (r.products?.selling_price || 0);
+    const unitPrice = isInterBranch
+      ? Number(r.products?.cost_price || r.products?.selling_price || 0)
+      : Number(r.products?.selling_price || 0);
+    return acc + r.quantity * unitPrice;
   }, 0);
 
   const paymentsList: PaymentRecord[] = invoice.payments || [];

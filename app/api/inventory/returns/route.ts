@@ -2,6 +2,8 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { triggerAgencyBillsForInvoice } from "@/app/lib/inter-branch-billing";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 export const dynamic = "force-dynamic";
 
@@ -113,6 +115,16 @@ export async function POST(req: Request) {
       .single();
 
     if (returnError) throw returnError;
+
+    // Trigger inter-branch bill recalculation if returned to Distribution or Retail
+    if (
+      business_id === BUSINESS_IDS.CHAMPIKA_DISTRIBUTION ||
+      business_id === BUSINESS_IDS.CHAMPIKA_RETAIL
+    ) {
+      triggerAgencyBillsForInvoice(business_id, [product_id]).catch((err) =>
+        console.error("[InterBranch] Inventory return trigger error:", err)
+      );
+    }
 
     // --- 3. Update Damage Control Stock if return is Damaged ---
     const { data: existingStock } = await supabaseAdmin

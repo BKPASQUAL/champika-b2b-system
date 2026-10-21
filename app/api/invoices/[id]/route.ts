@@ -131,39 +131,100 @@ export async function GET(
 
     if (paymentsError) throw paymentsError;
 
-    // 4. Fetch Returns linked to this invoice (tagged via reason containing invoice_no)
+    // 4. Fetch Returns linked to this invoice (tagged via reason containing invoice_no or inter-branch)
     const invoiceNo = invoice.invoice_no || "";
-    const { data: returnsRaw } = await supabaseAdmin
-      .from("inventory_returns")
-      .select(`
-        id,
-        product_id,
-        quantity,
-        reason,
-        return_type,
-        created_at,
-        products (
-          id,
-          name,
-          sku,
-          unit_of_measure,
-          selling_price
-        )
-      `)
-      .ilike("reason", `%${invoiceNo}%`);
+    const isInterBranch =
+      invoice.orders?.is_inter_branch ||
+      /^(OR-RE|OR-DI|RE|DI|SI-RE|SI-DI)-\d{4}-\d{2}$/i.test(invoiceNo);
 
-    const returns = (returnsRaw || []).map((r: any) => ({
-      id: r.id,
-      productId: r.product_id,
-      productName: r.products?.name || "Unknown",
-      sku: r.products?.sku || "",
-      unit: r.products?.unit_of_measure || "Unit",
-      quantity: r.quantity,
-      returnType: r.return_type || "Good",
-      price: r.products?.selling_price || 0,
-      totalValue: (r.quantity || 0) * (r.products?.selling_price || 0),
-      createdAt: r.created_at,
-    }));
+    let returnsRaw: any[] = [];
+    if (isInterBranch) {
+      const match = invoiceNo.match(/^(OR-RE|OR-DI|RE|DI|SI-RE|SI-DI)-(\d{4})-(\d{2})$/i);
+      if (match) {
+        const prefix = match[1].toUpperCase();
+        const year = parseInt(match[2], 10);
+        const month = parseInt(match[3], 10);
+        const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+        const nextMonthYear = month === 12 ? year + 1 : year;
+        const nextMonthNum = month === 12 ? 1 : month + 1;
+        const nextMonthStart = `${nextMonthYear}-${String(nextMonthNum).padStart(2, "0")}-01`;
+
+        const isDistribution = prefix.endsWith("-DI") || prefix === "DI";
+        const targetBusinessId = isDistribution
+          ? BUSINESS_IDS.CHAMPIKA_DISTRIBUTION
+          : BUSINESS_IDS.CHAMPIKA_RETAIL;
+
+        let agencyName = "Wireman";
+        if (prefix.startsWith("SI")) agencyName = "Sierra";
+        else if (prefix.startsWith("OR")) agencyName = "Orange";
+
+        const { data: ibReturns } = await supabaseAdmin
+          .from("inventory_returns")
+          .select(`
+            id,
+            product_id,
+            quantity,
+            reason,
+            return_type,
+            created_at,
+            products!inner (
+              id,
+              name,
+              sku,
+              unit_of_measure,
+              selling_price,
+              cost_price,
+              supplier_name
+            )
+          `)
+          .eq("business_id", targetBusinessId)
+          .ilike("products.supplier_name", `%${agencyName}%`)
+          .gte("created_at", startDate)
+          .lt("created_at", nextMonthStart)
+          .order("created_at", { ascending: false });
+
+        returnsRaw = ibReturns || [];
+      }
+    } else {
+      const { data: standardReturns } = await supabaseAdmin
+        .from("inventory_returns")
+        .select(`
+          id,
+          product_id,
+          quantity,
+          reason,
+          return_type,
+          created_at,
+          products (
+            id,
+            name,
+            sku,
+            unit_of_measure,
+            selling_price,
+            cost_price
+          )
+        `)
+        .ilike("reason", `%${invoiceNo}%`);
+      returnsRaw = standardReturns || [];
+    }
+
+    const returns = returnsRaw.map((r: any) => {
+      const unitPrice = isInterBranch
+        ? Number(r.products?.cost_price || r.products?.selling_price || 0)
+        : Number(r.products?.selling_price || 0);
+      return {
+        id: r.id,
+        productId: r.product_id,
+        productName: r.products?.name || "Unknown",
+        sku: r.products?.sku || "",
+        unit: r.products?.unit_of_measure || "Unit",
+        quantity: r.quantity,
+        returnType: r.return_type || "Good",
+        price: unitPrice,
+        totalValue: (Number(r.quantity) || 0) * unitPrice,
+        createdAt: r.created_at,
+      };
+    });
 
     const returnsTotal = returns.reduce((sum: number, r: any) => sum + r.totalValue, 0);
 

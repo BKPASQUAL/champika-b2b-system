@@ -870,7 +870,8 @@ export async function PATCH(
               .select("product_id")
               .eq("order_id", id);
 
-            const productIds = (orderItems || []).map((i: any) => i.product_id);
+            const returnProductIds = (body.returnsList || []).map((r: any) => r.productId).filter(Boolean);
+            const productIds = [...new Set([...(orderItems || []).map((i: any) => i.product_id), ...returnProductIds])];
             await triggerAgencyBillsForInvoice(ord.business_id, productIds);
           }
         } catch (err) {

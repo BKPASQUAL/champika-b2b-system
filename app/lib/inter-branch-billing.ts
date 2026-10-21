@@ -124,20 +124,59 @@ export async function generateInterBranchBill(params: {
 
   console.log(`[InterBranch] ${agencyName} found ${sales?.length ?? 0} order_items`);
 
-  if (!sales || sales.length === 0) return;
+  // Fetch all agency-supplier inventory returns for this month from target business
+  const { data: returns, error: retError } = await supabaseAdmin
+    .from("inventory_returns")
+    .select(
+      `
+      id,
+      quantity,
+      product_id,
+      return_type,
+      products!inner (
+        id,
+        name,
+        supplier_name,
+        cost_price
+      )
+    `,
+    )
+    .eq("business_id", targetBusinessId)
+    .ilike("products.supplier_name", `%${agencyName}%`)
+    .gte("created_at", startDate)
+    .lt("created_at", nextMonthStart);
 
-  // Aggregate by product_id, billing at cost_price
+  if (retError) {
+    console.error(`[InterBranch] Fetch returns error (${agencyName}):`, retError.message);
+  }
+
+  console.log(`[InterBranch] ${agencyName} found ${returns?.length ?? 0} inventory_returns`);
+
+  // Check if this month's invoice already exists
+  const { data: existingInvoice } = await supabaseAdmin
+    .from("invoices")
+    .select("id, total_amount, paid_amount, order_id")
+    .eq("invoice_no", fixedInvoiceNo)
+    .maybeSingle();
+
+  if ((!sales || sales.length === 0) && (!returns || returns.length === 0) && !existingInvoice) {
+    return;
+  }
+
+  // Aggregate delivered sales by product_id, billing at cost_price
+  let grossSalesAmount = 0;
   const productMap = new Map<
     string,
     { productId: string; quantity: number; unitPrice: number; totalPrice: number }
   >();
 
-  sales.forEach((sale: any) => {
+  sales?.forEach((sale: any) => {
     const pId = sale.product_id;
     const cost = Number(sale.products?.cost_price) || 0;
     const qty = Number(sale.quantity) || 0;
     const lineTotal = qty * cost;
 
+    grossSalesAmount += lineTotal;
     if (productMap.has(pId)) {
       const existing = productMap.get(pId)!;
       existing.quantity += qty;
@@ -147,11 +186,8 @@ export async function generateInterBranchBill(params: {
     }
   });
 
-  let totalBillAmount = 0;
   const orderItemsToInsert: any[] = [];
-
   productMap.forEach((item) => {
-    totalBillAmount += item.totalPrice;
     orderItemsToInsert.push({
       product_id: item.productId,
       quantity: item.quantity,
@@ -162,14 +198,22 @@ export async function generateInterBranchBill(params: {
     });
   });
 
-  if (totalBillAmount === 0) return;
+  // Calculate total return reversals at cost_price
+  let totalReturnsAmount = 0;
+  returns?.forEach((ret: any) => {
+    const cost = Number(ret.products?.cost_price) || 0;
+    const qty = Number(ret.quantity) || 0;
+    totalReturnsAmount += qty * cost;
+  });
 
-  // Check if this month's invoice already exists
-  const { data: existingInvoice } = await supabaseAdmin
-    .from("invoices")
-    .select("id, total_amount, order_id")
-    .eq("invoice_no", fixedInvoiceNo)
-    .maybeSingle();
+  const totalBillAmount = Math.max(0, grossSalesAmount - totalReturnsAmount);
+  console.log(`[InterBranch] ${agencyName} | Gross: ${grossSalesAmount} | Returns: ${totalReturnsAmount} | Net Bill: ${totalBillAmount}`);
+
+  const billNotes = `Auto-generated monthly bill for ${customerName} (${agencyName} Items) - ${now.toLocaleString("default", { month: "long" })} ${year}${
+    totalReturnsAmount > 0
+      ? ` [Gross: ${grossSalesAmount.toFixed(2)}, Returns Reversed: -${totalReturnsAmount.toFixed(2)}]`
+      : ""
+  }`;
 
   if (existingInvoice) {
     // --- UPDATE existing monthly bill ---
@@ -178,13 +222,27 @@ export async function generateInterBranchBill(params: {
 
     await supabaseAdmin
       .from("invoices")
-      .update({ total_amount: totalBillAmount, customer_id: customerId })
+      .update({
+        total_amount: totalBillAmount,
+        customer_id: customerId,
+        status:
+          totalBillAmount <= (Number(existingInvoice.paid_amount) || 0)
+            ? "Paid"
+            : (Number(existingInvoice.paid_amount) || 0) > 0
+            ? "Partial"
+            : "Unpaid",
+      })
       .eq("id", existingInvoice.id);
 
     if (existingInvoice.order_id) {
       await supabaseAdmin
         .from("orders")
-        .update({ total_amount: totalBillAmount, customer_id: customerId, updated_at: new Date() })
+        .update({
+          total_amount: totalBillAmount,
+          customer_id: customerId,
+          notes: billNotes,
+          updated_at: new Date(),
+        })
         .eq("id", existingInvoice.order_id);
 
       // Replace order items with freshly aggregated list
@@ -193,9 +251,11 @@ export async function generateInterBranchBill(params: {
         .delete()
         .eq("order_id", existingInvoice.order_id);
 
-      await supabaseAdmin
-        .from("order_items")
-        .insert(orderItemsToInsert.map((item) => ({ ...item, order_id: existingInvoice.order_id })));
+      if (orderItemsToInsert.length > 0) {
+        await supabaseAdmin
+          .from("order_items")
+          .insert(orderItemsToInsert.map((item) => ({ ...item, order_id: existingInvoice.order_id })));
+      }
     }
 
     // Adjust customer outstanding balance by the difference
@@ -215,6 +275,8 @@ export async function generateInterBranchBill(params: {
     }
   } else {
     // --- CREATE new monthly bill ---
+    if (totalBillAmount === 0 && orderItemsToInsert.length === 0) return;
+
     const agencyPrefix = agencyName.toUpperCase().slice(0, 2);
     const { data: orderData, error: orderError } = await supabaseAdmin
       .from("orders")
@@ -225,7 +287,7 @@ export async function generateInterBranchBill(params: {
         total_amount: totalBillAmount,
         status: "Delivered",
         is_inter_branch: true,
-        notes: `Auto-generated monthly bill for ${customerName} (${agencyName} Items) - ${now.toLocaleString("default", { month: "long" })} ${year}`,
+        notes: billNotes,
         order_date: startDate,
       })
       .select()
@@ -247,9 +309,11 @@ export async function generateInterBranchBill(params: {
 
     if (invoiceError) throw new Error(`[InterBranch] Invoice insert failed (${agencyName}): ${invoiceError.message}`);
 
-    await supabaseAdmin
-      .from("order_items")
-      .insert(orderItemsToInsert.map((item) => ({ ...item, order_id: orderData.id })));
+    if (orderItemsToInsert.length > 0) {
+      await supabaseAdmin
+        .from("order_items")
+        .insert(orderItemsToInsert.map((item) => ({ ...item, order_id: orderData.id })));
+    }
 
     // Add bill total to customer outstanding balance
     const { data: cust } = await supabaseAdmin

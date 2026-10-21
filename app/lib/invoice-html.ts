@@ -90,9 +90,10 @@ export const generateInvoiceHTML = async (
     .replace(/\[CASH_DISCOUNT_AMOUNT:[\d.]+\]/g, "")
     .trim();
 
+  const returnsTotal = Number(invoice.returnsTotal || invoice.totalRefunded || 0);
   const subTotal    = items.reduce((s: number, i: any) => s + (i.total || 0), 0);
   const grandTotal  = invoice.grandTotal || invoice.totalAmount || 0;
-  const extraDiscount = Math.max(0, subTotal - grandTotal - cashDiscountAmount);
+  const extraDiscount = Math.max(0, subTotal - grandTotal - cashDiscountAmount - returnsTotal);
 
 
   const ITEMS_PER_PAGE = 17;
@@ -242,6 +243,10 @@ export const generateInvoiceHTML = async (
               <td style="padding:5px 0;font-size:12px;color:#333;">Subtotal</td>
               <td style="padding:5px 0;font-size:12px;color:#000;text-align:right;white-space:nowrap;">LKR ${fmt(subTotal)}</td>
             </tr>
+            ${returnsTotal > 0 ? `<tr>
+              <td style="padding:5px 0;font-size:12px;color:#c00;">Returns &amp; Adjustments</td>
+              <td style="padding:5px 0;font-size:12px;color:#c00;text-align:right;white-space:nowrap;">- LKR ${fmt(returnsTotal)}</td>
+            </tr>` : ""}
             ${extraDiscount > 1 ? `<tr>
               <td style="padding:5px 0;font-size:12px;color:#333;">Extra Discount</td>
               <td style="padding:5px 0;font-size:12px;color:#000;text-align:right;white-space:nowrap;">- LKR ${fmt(extraDiscount)}</td>

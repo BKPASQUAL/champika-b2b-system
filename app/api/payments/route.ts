@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
 import { BUSINESS_NAMES, BUSINESS_IDS } from "@/app/config/business-constants";
 import { checkAndAutoUnblockCustomer } from "@/lib/customer-overdue";
+import { triggerAgencyBillsForInvoice } from "@/app/lib/inter-branch-billing";
 
 const goodsItemSchema = z.object({
   id: z.string().optional(),
@@ -706,6 +707,21 @@ export async function POST(request: NextRequest) {
               console.error("Stock update error for returned item:", stockErr);
             }
           }
+        }
+
+        // Trigger inter-branch bill recalculation if goods were returned in Distribution or Retail
+        const returnedPids = val.goodsItems
+          .filter((it: any) => it.type === "own_product" && it.productId)
+          .map((it: any) => it.productId);
+
+        if (
+          returnedPids.length > 0 &&
+          (orderData.business_id === BUSINESS_IDS.CHAMPIKA_DISTRIBUTION ||
+            orderData.business_id === BUSINESS_IDS.CHAMPIKA_RETAIL)
+        ) {
+          triggerAgencyBillsForInvoice(orderData.business_id, returnedPids).catch((err) =>
+            console.error("[InterBranch] Payment goods return trigger error:", err)
+          );
         }
       }
     }

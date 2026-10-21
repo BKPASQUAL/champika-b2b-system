@@ -1130,7 +1130,9 @@ export async function POST(request: NextRequest) {
     ) {
       try {
         const invoiceProductIds = val.items.map((i) => i.productId);
-        await triggerAgencyBillsForInvoice(resolvedBusinessId, invoiceProductIds);
+        const returnProductIds = (val.returnItems || []).map((r: any) => r.productId).filter(Boolean);
+        const allProductIds = [...new Set([...invoiceProductIds, ...returnProductIds])];
+        await triggerAgencyBillsForInvoice(resolvedBusinessId, allProductIds);
       } catch (err) {
         console.error("[InterBranch] trigger failed (non-critical):", err);
       }

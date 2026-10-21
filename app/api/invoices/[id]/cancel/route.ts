@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { triggerAgencyBillsForInvoice } from "@/app/lib/inter-branch-billing";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 export async function POST(
   request: NextRequest,
@@ -204,7 +206,7 @@ export async function POST(
     // 8. Mark order as Cancelled and strip cancel request pattern from notes
     const { data: orderData } = await supabaseAdmin
       .from("orders")
-      .select("notes")
+      .select("notes, business_id")
       .eq("id", invoice.order_id)
       .single();
 
@@ -219,6 +221,23 @@ export async function POST(
         notes: cleanNotes || null,
       })
       .eq("id", invoice.order_id);
+
+    // If cancelled invoice belongs to Champika Retail or Distribution, trigger agency bill recalculation
+    if (
+      orderData?.business_id === BUSINESS_IDS.CHAMPIKA_DISTRIBUTION ||
+      orderData?.business_id === BUSINESS_IDS.CHAMPIKA_RETAIL
+    ) {
+      const { data: cancelledItems } = await supabaseAdmin
+        .from("order_items")
+        .select("product_id")
+        .eq("order_id", invoice.order_id);
+      const cancelledPids = (cancelledItems || []).map((i: any) => i.product_id);
+      if (cancelledPids.length > 0) {
+        triggerAgencyBillsForInvoice(orderData.business_id, cancelledPids).catch((err) =>
+          console.error("[InterBranch] Cancel invoice trigger error:", err)
+        );
+      }
+    }
 
     // 9. Save cancellation snapshot to history
     const { data: currentInvoice } = await supabaseAdmin
