@@ -320,6 +320,7 @@ function buildDoc(
       6: { halign: "center", cellWidth: 16 }, // Status
     },
     didParseCell(data) {
+      if (data.section !== "body") return;
       const raw = data.row.raw as any[];
       if (!raw || raw.length !== 7 || typeof raw[0] !== "string") return;
 
@@ -761,7 +762,7 @@ function buildDoc(
     }
   }
 
-  // ── 5. Dedicated Cheque Details Table (Grouped by Cheque No) ─────────────
+  // ── 5. Dedicated Cheque Details Tables (Grouped by Cheque No) ─────────────
   interface GroupedCheque {
     invoiceNos: string[];
     date: string;
@@ -780,7 +781,7 @@ function buildDoc(
           const rawNo = (p.chequeNo || "").trim();
           const chequeKey = rawNo ? rawNo.toLowerCase() : `no_no_${p.id || Math.random()}`;
           const pDate = p.paymentDate ? new Date(p.paymentDate).toLocaleDateString("en-GB") : "—";
-          const chequeNoStr = rawNo ? `#${rawNo}` : "—";
+          const chequeNoStr = rawNo ? (rawNo.startsWith("#") ? rawNo : `#${rawNo}`) : "—";
           const status = (p.chequeStatus || "Pending").toUpperCase();
           const invDisplay = inv.manualInvoiceNo || inv.invoiceNo;
 
@@ -791,6 +792,8 @@ function buildDoc(
             }
             existing.amount += p.amount;
             if (["RETURNED", "BOUNCED"].includes(status)) {
+              existing.status = status;
+            } else if (existing.status !== "RETURNED" && existing.status !== "BOUNCED") {
               existing.status = status;
             }
           } else {
@@ -807,79 +810,97 @@ function buildDoc(
     }
   });
 
-  const chequeRows: any[] = [];
-  let totalChequeAmount = 0;
-  let returnedChequeCount = 0;
-  let clearedChequeCount = 0;
-  let depositedChequeCount = 0;
-  let pendingChequeCount = 0;
+  // Separate into Pending / Deposited and Returned / Bounced (excluding Cleared cheques)
+  const pendingCheques: GroupedCheque[] = [];
+  const returnedCheques: GroupedCheque[] = [];
 
   chequeMap.forEach((chq) => {
-    totalChequeAmount += chq.amount;
-    if (["RETURNED", "BOUNCED"].includes(chq.status)) returnedChequeCount++;
-    else if (chq.status === "CLEARED") clearedChequeCount++;
-    else if (chq.status === "DEPOSITED") depositedChequeCount++;
-    else pendingChequeCount++;
-
-    chequeRows.push([
-      chq.invoiceNos.join(", ") || "—",
-      chq.date,
-      chq.chequeNo,
-      fmt(chq.amount),
-      chq.status,
-    ]);
+    const s = chq.status.toUpperCase();
+    if (["RETURNED", "BOUNCED"].includes(s)) {
+      returnedCheques.push(chq);
+    } else if (s !== "CLEARED") {
+      // Pending, Deposited, or other uncleared statuses
+      pendingCheques.push(chq);
+    }
   });
 
-  if (chequeRows.length > 0) {
-    const lastFinalY = (doc as any).lastAutoTable
-      ? (doc as any).lastAutoTable.finalY + 8
-      : START_Y + 10;
-    let currentY = goodsBannerBottomY > 0 ? Math.max(lastFinalY, goodsBannerBottomY + 8) : lastFinalY;
+  const totalPendingAmount = pendingCheques.reduce((sum, c) => sum + c.amount, 0);
+  const totalReturnedAmount = returnedCheques.reduce((sum, c) => sum + c.amount, 0);
 
-    if (currentY > pageHeight - 50) {
+  const lastFinalY = (doc as any).lastAutoTable
+    ? (doc as any).lastAutoTable.finalY + 8
+    : START_Y + 10;
+  let currentY = goodsBannerBottomY > 0 ? Math.max(lastFinalY, goodsBannerBottomY + 8) : lastFinalY;
+
+  // ── Table 5A: Pending / Deposited Cheques Details ─────────────────────────
+  if (pendingCheques.length > 0) {
+    if (currentY > pageHeight - 45) {
       doc.addPage();
       currentY = 20;
     }
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.setTextColor(...COLOR.titleBlue);
-    doc.text("RETURN CHEQUES DETAILS", M, currentY);
+    doc.setFontSize(9.5);
+    doc.setTextColor(180, 83, 9); // Amber-700
+    doc.text("PENDING CHEQUES DETAILS (AWAITING CLEARANCE)", M, currentY);
 
-    const summaryParts: string[] = [];
-    if (clearedChequeCount > 0) summaryParts.push(`${clearedChequeCount} Cleared`);
-    if (depositedChequeCount > 0) summaryParts.push(`${depositedChequeCount} Deposited`);
-    if (pendingChequeCount > 0) summaryParts.push(`${pendingChequeCount} Pending`);
-    if (returnedChequeCount > 0) summaryParts.push(`${returnedChequeCount} Returned`);
-    const summaryStr = summaryParts.length > 0 ? ` (${summaryParts.join(", ")})` : "";
+    const pendingCount = pendingCheques.filter((c) => c.status === "PENDING").length;
+    const depositedCount = pendingCheques.filter((c) => c.status === "DEPOSITED").length;
+    const pSubtitle =
+      depositedCount > 0
+        ? `${pendingCheques.length} cheque(s) (${pendingCount} Pending, ${depositedCount} Deposited)`
+        : `${pendingCheques.length} pending cheque(s)`;
 
-    const chequeTableBody = [
-      ...chequeRows,
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...COLOR.mutedText);
+    doc.text(pSubtitle, pageWidth - M, currentY, { align: "right" });
+
+    const pendingTableBody = [
+      ...pendingCheques.map((c) => [
+        c.invoiceNos.join(", ") || "—",
+        c.date,
+        c.chequeNo,
+        fmt(c.amount),
+        c.status,
+      ]),
       [
         {
-          content: `TOTAL CHEQUES: ${chequeRows.length}${summaryStr}`,
+          content: `TOTAL PENDING CHEQUES: ${pendingCheques.length}`,
           colSpan: 3,
-          styles: { fontStyle: "bold", halign: "right", fillColor: COLOR.grandBg, textColor: COLOR.grandText, fontSize: 8.5 },
+          styles: {
+            fontStyle: "bold",
+            halign: "right",
+            fillColor: [254, 243, 199], // Amber-100
+            textColor: [146, 64, 14], // Amber-800
+            fontSize: 8.5,
+          },
         },
         {
-          content: fmt(totalChequeAmount),
-          styles: { fontStyle: "bold", halign: "right", fillColor: COLOR.grandBg, textColor: COLOR.grandText, fontSize: 8.5 },
+          content: fmt(totalPendingAmount),
+          styles: {
+            fontStyle: "bold",
+            halign: "right",
+            fillColor: [254, 243, 199],
+            textColor: [146, 64, 14],
+            fontSize: 8.5,
+          },
         },
         {
           content: "",
-          styles: { fillColor: COLOR.grandBg },
+          styles: { fillColor: [254, 243, 199] },
         },
       ],
     ];
 
     autoTable(doc, {
-      startY: currentY + 3,
+      startY: currentY + 3.5,
       margin: { left: M, right: M },
       head: [["Invoice / Manual Ref", "Date", "Cheque No & Branch", "Amount (LKR)", "Cheque Status"]],
-      body: chequeTableBody,
+      body: pendingTableBody as any,
       theme: "plain",
       headStyles: {
-        fillColor: [51, 65, 85],
+        fillColor: [217, 119, 6], // Amber-600
         textColor: [255, 255, 255],
         fontStyle: "bold",
         fontSize: 8.5,
@@ -888,7 +909,7 @@ function buildDoc(
       },
       styles: {
         fontSize: 8,
-        cellPadding: { top: 2, bottom: 2, left: 2, right: 2 },
+        cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 },
         lineColor: COLOR.divider,
         lineWidth: 0.1,
         textColor: COLOR.bodyText,
@@ -902,18 +923,119 @@ function buildDoc(
         4: { halign: "center", cellWidth: 30 },
       },
       didParseCell(data) {
+        if (data.section !== "body") return;
         const raw = data.row.raw as any[];
         if (!raw || raw.length !== 5 || typeof raw[0] !== "string") return;
 
         const status = String(raw[4]).toUpperCase();
-        if (status === "RETURNED" || status === "BOUNCED") {
-          data.cell.styles.fillColor = [254, 242, 242];
+        if (data.column.index === 4) {
+          if (status === "PENDING") {
+            data.cell.styles.textColor = [180, 83, 9];
+            data.cell.styles.fontStyle = "bold";
+          } else if (status === "DEPOSITED") {
+            data.cell.styles.textColor = [29, 78, 216];
+            data.cell.styles.fontStyle = "bold";
+          }
+        }
+      },
+    });
+
+    currentY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 8 : currentY + 35;
+  }
+
+  // ── Table 5B: Returned Cheques Details ────────────────────────────────────
+  if (returnedCheques.length > 0) {
+    if (currentY > pageHeight - 45) {
+      doc.addPage();
+      currentY = 20;
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.setTextColor(185, 28, 28); // Red-700
+    doc.text("RETURN CHEQUES DETAILS", M, currentY);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...COLOR.mutedText);
+    doc.text(`${returnedCheques.length} returned cheque(s)`, pageWidth - M, currentY, { align: "right" });
+
+    const returnedTableBody = [
+      ...returnedCheques.map((c) => [
+        c.invoiceNos.join(", ") || "—",
+        c.date,
+        c.chequeNo,
+        fmt(c.amount),
+        c.status,
+      ]),
+      [
+        {
+          content: `TOTAL RETURNED CHEQUES: ${returnedCheques.length}`,
+          colSpan: 3,
+          styles: {
+            fontStyle: "bold",
+            halign: "right",
+            fillColor: [254, 226, 226], // Red-100
+            textColor: [185, 28, 28], // Red-700
+            fontSize: 8.5,
+          },
+        },
+        {
+          content: fmt(totalReturnedAmount),
+          styles: {
+            fontStyle: "bold",
+            halign: "right",
+            fillColor: [254, 226, 226],
+            textColor: [185, 28, 28],
+            fontSize: 8.5,
+          },
+        },
+        {
+          content: "",
+          styles: { fillColor: [254, 226, 226] },
+        },
+      ],
+    ];
+
+    autoTable(doc, {
+      startY: currentY + 3.5,
+      margin: { left: M, right: M },
+      head: [["Invoice / Manual Ref", "Date", "Cheque No & Branch", "Amount (LKR)", "Cheque Status"]],
+      body: returnedTableBody as any,
+      theme: "plain",
+      headStyles: {
+        fillColor: [185, 28, 28], // Red-700
+        textColor: [255, 255, 255],
+        fontStyle: "bold",
+        fontSize: 8.5,
+        halign: "center",
+        cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 },
+      },
+      styles: {
+        fontSize: 8,
+        cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 },
+        lineColor: COLOR.divider,
+        lineWidth: 0.1,
+        textColor: COLOR.bodyText,
+        overflow: "linebreak",
+      },
+      columnStyles: {
+        0: { halign: "center", cellWidth: 28 },
+        1: { halign: "center", cellWidth: 24 },
+        2: { halign: "left",   cellWidth: 64 },
+        3: { halign: "right",  cellWidth: 34, fontStyle: "bold" },
+        4: { halign: "center", cellWidth: 30 },
+      },
+      didParseCell(data) {
+        if (data.section !== "body") return;
+        const raw = data.row.raw as any[];
+        if (!raw || raw.length !== 5 || typeof raw[0] !== "string") return;
+
+        // Apply soft red row background for returned cheques to highlight caution
+        data.cell.styles.fillColor = [254, 242, 242];
+        if (data.column.index === 3 || data.column.index === 4) {
           data.cell.styles.textColor = [185, 28, 28];
           data.cell.styles.fontStyle = "bold";
-        } else if (data.column.index === 4) {
-          if (status === "CLEARED") data.cell.styles.textColor = [22, 101, 52];
-          else if (status === "DEPOSITED") data.cell.styles.textColor = [29, 78, 216];
-          else if (status === "PENDING") data.cell.styles.textColor = [180, 83, 9];
         }
       },
     });
@@ -1025,17 +1147,18 @@ export async function shareCustomerStatement(
           const key = rawNo ? rawNo.toLowerCase() : `no_no_${p.id || Math.random()}`;
           const pDate = p.paymentDate ? new Date(p.paymentDate).toLocaleDateString("en-GB") : "—";
           const status = (p.chequeStatus || "Pending").toUpperCase();
+          const invDisplay = inv.manualInvoiceNo || inv.invoiceNo;
 
           if (groupedChequesMap.has(key)) {
             const ext = groupedChequesMap.get(key)!;
-            if (inv.invoiceNo && !ext.invoiceNos.includes(inv.invoiceNo)) {
-              ext.invoiceNos.push(inv.invoiceNo);
+            if (invDisplay && !ext.invoiceNos.includes(invDisplay)) {
+              ext.invoiceNos.push(invDisplay);
             }
             ext.amount += p.amount;
             if (["RETURNED", "BOUNCED"].includes(status)) ext.status = status;
           } else {
             groupedChequesMap.set(key, {
-              invoiceNos: inv.invoiceNo ? [inv.invoiceNo] : [],
+              invoiceNos: invDisplay ? [invDisplay] : [],
               date: pDate,
               chequeNo: rawNo || "N/A",
               amount: p.amount,
@@ -1047,17 +1170,32 @@ export async function shareCustomerStatement(
     }
   });
 
-  const allCheques: string[] = [];
+  const pendingWaCheques: string[] = [];
+  const returnedWaCheques: string[] = [];
+
   groupedChequesMap.forEach((chq) => {
-    const isReturned = ["RETURNED", "BOUNCED"].includes(chq.status);
-    const tag = isReturned ? ` [CHEQUE ${chq.status}]` : ` [${chq.status}]`;
+    const s = chq.status.toUpperCase();
+    if (s === "CLEARED") return; // exclude cleared cheques
+
     const invList = chq.invoiceNos.join(", ") || "—";
-    allCheques.push(`• Cheque #${chq.chequeNo} (Invoices: ${invList}): LKR ${fmt(chq.amount)} (${chq.date})${tag}`);
+    const line = `• Cheque #${chq.chequeNo} (Invoices: ${invList}): LKR ${fmt(chq.amount)} (${chq.date}) [${s}]`;
+    if (["RETURNED", "BOUNCED"].includes(s)) {
+      returnedWaCheques.push(line);
+    } else {
+      pendingWaCheques.push(line);
+    }
   });
 
-  if (allCheques.length > 0) {
-    msg += `\n*RETURN CHEQUES DETAILS (${allCheques.length}):*\n`;
-    allCheques.forEach((chq) => {
+  if (pendingWaCheques.length > 0) {
+    msg += `\n*PENDING CHEQUES DETAILS (${pendingWaCheques.length}):*\n`;
+    pendingWaCheques.forEach((chq) => {
+      msg += `${chq}\n`;
+    });
+  }
+
+  if (returnedWaCheques.length > 0) {
+    msg += `\n*RETURN CHEQUES DETAILS (${returnedWaCheques.length}):*\n`;
+    returnedWaCheques.forEach((chq) => {
       msg += `${chq}\n`;
     });
   }
