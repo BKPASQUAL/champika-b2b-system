@@ -14,6 +14,7 @@ import {
   Printer,
   Share2,
   Zap,
+  SlidersHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,7 +73,9 @@ import {
   printCustomerStatement,
   shareCustomerStatement,
   InvoicePaymentRecord,
+  StatementInvoice,
 } from "@/lib/customer-statement-report";
+import { CustomStatementDialog } from "@/components/payments/CustomStatementDialog";
 import {
   GoodsSettlementSection,
   GoodsSettlementItem,
@@ -224,6 +227,8 @@ export default function AdminPaymentEntryPage() {
     Record<string, InvoiceSettlement>
   >({});
   const [historyModalInvoice, setHistoryModalInvoice] = useState<PendingInvoice | null>(null);
+  const [statementInvoices, setStatementInvoices] = useState<StatementInvoice[]>([]);
+  const [isCustomStatementOpen, setIsCustomStatementOpen] = useState(false);
 
   // ── Data fetching ─────────────────────────────────────────────────────────────
 
@@ -357,11 +362,14 @@ export default function AdminPaymentEntryPage() {
             paymentMap[key].push({
               id: p.id,
               paymentDate: p.payment_date,
+              chequeDate: isGoods ? null : (p.cheque_date || null),
               amount: p.amount,
               method: p.payment_method || p.method || "cash",
               receiptNumber: p.receipt_number || p.receiptNumber || null,
               chequeNo: isGoods ? null : (p.cheque_number || p.cheque_no || null),
               chequeStatus: isGoods ? null : (p.cheque_status || null),
+              bankName: p.banks?.bank_name || p.bank_codes?.bank_name || null,
+              bankCode: p.banks?.bank_code || p.bank_codes?.bank_code || null,
               goodsSummary: isGoods ? (p.cheque_number || p.cheque_no || p.notes || "Goods Settlement") : null,
               notes: p.notes || null,
             });
@@ -386,6 +394,46 @@ export default function AdminPaymentEntryPage() {
             payments: history,
           };
         });
+
+        // Capture all customer invoices with payment history (including paid orders with pending cheques)
+        const customerPayments = (paymentsData || []).filter(
+          (p: any) => (p.customer_id === customerId || p.customerId === customerId) && !p.is_cancelled
+        );
+        const orderMap = new Map<string, StatementInvoice>();
+        orders.forEach((o: any) => {
+          const key = o.id || o.order_number;
+          const history = paymentMap[key] || paymentMap[o.id] || paymentMap[o.order_number] || [];
+          orderMap.set(key, {
+            id: o.id,
+            invoiceNo: o.order_number || o.id,
+            date: o.order_date ?? o.date ?? "",
+            totalAmount: o.total_amount ?? 0,
+            paidAmount: o.paid_amount ?? 0,
+            balance: o.balance ?? 0,
+            payments: history,
+          });
+        });
+
+        customerPayments.forEach((p: any) => {
+          const invId = p.invoice_id || p.invoices?.id;
+          const orderId = p.order_id || p.orders?.id;
+          const invNo = p.invoices?.invoice_no || p.orders?.order_number;
+          const key = invId || orderId || invNo;
+          if (key && !orderMap.has(key)) {
+            const history = paymentMap[key] || paymentMap[invId] || paymentMap[orderId] || paymentMap[invNo] || [];
+            orderMap.set(key, {
+              id: key,
+              invoiceNo: invNo || key,
+              date: p.payment_date || "",
+              totalAmount: p.orders?.total_amount ?? p.amount ?? 0,
+              paidAmount: p.orders?.total_amount ?? p.amount ?? 0,
+              balance: 0,
+              payments: history,
+            });
+          }
+        });
+
+        setStatementInvoices(Array.from(orderMap.values()));
         setPendingInvoices(invoices);
         const map: Record<string, InvoiceSettlement> = {};
         invoices.forEach((inv) => {
@@ -1128,15 +1176,17 @@ export default function AdminPaymentEntryPage() {
                   onClick={() =>
                     downloadCustomerStatement(
                       selectedCustomer?.name || "Customer",
-                      pendingInvoices.map((inv) => ({
-                        id: inv.id,
-                        invoiceNo: inv.orderNumber || inv.invoiceNo || inv.id,
-                        date: inv.date,
-                        totalAmount: inv.totalAmount,
-                        paidAmount: inv.paidAmount,
-                        balance: inv.balance,
-                        payments: inv.payments,
-                      })),
+                      statementInvoices.length > 0
+                        ? statementInvoices
+                        : pendingInvoices.map((inv) => ({
+                            id: inv.id,
+                            invoiceNo: inv.orderNumber || inv.invoiceNo || inv.id,
+                            date: inv.date,
+                            totalAmount: inv.totalAmount,
+                            paidAmount: inv.paidAmount,
+                            balance: inv.balance,
+                            payments: inv.payments,
+                          })),
                       selectedBusinessId
                         ? BUSINESS_NAMES[selectedBusinessId as keyof typeof BUSINESS_NAMES]
                         : "CHAMPIKA HARDWARE & DISTRIBUTION"
@@ -1153,15 +1203,17 @@ export default function AdminPaymentEntryPage() {
                   onClick={() =>
                     printCustomerStatement(
                       selectedCustomer?.name || "Customer",
-                      pendingInvoices.map((inv) => ({
-                        id: inv.id,
-                        invoiceNo: inv.orderNumber || inv.invoiceNo || inv.id,
-                        date: inv.date,
-                        totalAmount: inv.totalAmount,
-                        paidAmount: inv.paidAmount,
-                        balance: inv.balance,
-                        payments: inv.payments,
-                      })),
+                      statementInvoices.length > 0
+                        ? statementInvoices
+                        : pendingInvoices.map((inv) => ({
+                            id: inv.id,
+                            invoiceNo: inv.orderNumber || inv.invoiceNo || inv.id,
+                            date: inv.date,
+                            totalAmount: inv.totalAmount,
+                            paidAmount: inv.paidAmount,
+                            balance: inv.balance,
+                            payments: inv.payments,
+                          })),
                       selectedBusinessId
                         ? BUSINESS_NAMES[selectedBusinessId as keyof typeof BUSINESS_NAMES]
                         : "CHAMPIKA HARDWARE & DISTRIBUTION"
@@ -1178,15 +1230,17 @@ export default function AdminPaymentEntryPage() {
                   onClick={() =>
                     shareCustomerStatement(
                       selectedCustomer?.name || "Customer",
-                      pendingInvoices.map((inv) => ({
-                        id: inv.id,
-                        invoiceNo: inv.orderNumber || inv.invoiceNo || inv.id,
-                        date: inv.date,
-                        totalAmount: inv.totalAmount,
-                        paidAmount: inv.paidAmount,
-                        balance: inv.balance,
-                        payments: inv.payments,
-                      })),
+                      statementInvoices.length > 0
+                        ? statementInvoices
+                        : pendingInvoices.map((inv) => ({
+                            id: inv.id,
+                            invoiceNo: inv.orderNumber || inv.invoiceNo || inv.id,
+                            date: inv.date,
+                            totalAmount: inv.totalAmount,
+                            paidAmount: inv.paidAmount,
+                            balance: inv.balance,
+                            payments: inv.payments,
+                          })),
                       selectedBusinessId
                         ? BUSINESS_NAMES[selectedBusinessId as keyof typeof BUSINESS_NAMES]
                         : "CHAMPIKA HARDWARE & DISTRIBUTION"
@@ -1196,6 +1250,15 @@ export default function AdminPaymentEntryPage() {
                   className="text-xs text-green-700 border-green-200 hover:bg-green-50"
                 >
                   <Share2 className="w-3.5 h-3.5 mr-1 text-green-600" /> Share
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsCustomStatementOpen(true)}
+                  title="Customize Statement Tables, Cheques, Goods & Options"
+                  className="text-xs bg-primary/10 text-primary border-primary/20 hover:bg-primary/20 font-medium shadow-sm"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5 mr-1 text-primary" /> Customize Report
                 </Button>
               </div>
             )}
@@ -1619,6 +1682,30 @@ export default function AdminPaymentEntryPage() {
         </Card>
       )}
 
+      <CustomStatementDialog
+        open={isCustomStatementOpen}
+        onOpenChange={setIsCustomStatementOpen}
+        customerName={selectedCustomer?.name || "Customer"}
+        invoices={
+          statementInvoices.length > 0
+            ? statementInvoices
+            : pendingInvoices.map((inv) => ({
+                id: inv.id,
+                invoiceNo: inv.orderNumber || inv.invoiceNo || inv.id,
+                date: inv.date,
+                totalAmount: inv.totalAmount,
+                paidAmount: inv.paidAmount,
+                balance: inv.balance,
+                payments: inv.payments,
+              }))
+        }
+        companyName={
+          selectedBusinessId
+            ? BUSINESS_NAMES[selectedBusinessId as keyof typeof BUSINESS_NAMES]
+            : "CHAMPIKA HARDWARE & DISTRIBUTION"
+        }
+        themeColor="default"
+      />
     </div>
   );
 }

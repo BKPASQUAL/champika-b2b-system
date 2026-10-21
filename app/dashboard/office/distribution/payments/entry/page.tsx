@@ -16,6 +16,7 @@ import {
   Calendar,
   Clock,
   Zap,
+  SlidersHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -74,7 +75,9 @@ import {
   printCustomerStatement,
   shareCustomerStatement,
   InvoicePaymentRecord,
+  StatementInvoice,
 } from "@/lib/customer-statement-report";
+import { CustomStatementDialog } from "@/components/payments/CustomStatementDialog";
 import {
   GoodsSettlementSection,
   GoodsSettlementItem,
@@ -161,6 +164,8 @@ export default function DistributionPaymentEntryPage() {
   const [paidOnCustomerBill, setPaidOnCustomerBill] = useState(false);
   const [settlements, setSettlements] = useState<Record<string, InvoiceSettlement>>({});
   const [historyModalInvoice, setHistoryModalInvoice] = useState<PendingInvoice | null>(null);
+  const [statementInvoices, setStatementInvoices] = useState<StatementInvoice[]>([]);
+  const [isCustomStatementOpen, setIsCustomStatementOpen] = useState(false);
 
   useEffect(() => {
     const user = getUserBusinessContext();
@@ -232,11 +237,14 @@ export default function DistributionPaymentEntryPage() {
           paymentMap[key].push({
             id: p.id,
             paymentDate: p.payment_date,
+            chequeDate: isGoods ? null : (p.cheque_date || null),
             amount: p.amount,
             method: p.payment_method || p.method || "cash",
             receiptNumber: p.receipt_number || p.receiptNumber || null,
             chequeNo: isGoods ? null : (p.cheque_number || p.cheque_no || null),
             chequeStatus: isGoods ? null : (p.cheque_status || null),
+            bankName: p.banks?.bank_name || p.bank_codes?.bank_name || null,
+            bankCode: p.banks?.bank_code || p.bank_codes?.bank_code || null,
             goodsSummary: isGoods ? (p.cheque_number || p.cheque_no || p.notes || "Goods Settlement") : null,
             notes: p.notes || null,
           });
@@ -258,31 +266,35 @@ export default function DistributionPaymentEntryPage() {
           }
         });
 
-        const filtered: PendingInvoice[] = invoicesData
-          .filter((inv: any) => {
-            if (inv.customerId !== customerId || inv.orderStatus !== "Delivered") return false;
-            const isUnpaid = inv.status !== "Paid" && (inv.dueAmount ?? 0) > 0;
-            const invKey = inv.orderId || inv.id;
-            const history = paymentMap[invKey] || paymentMap[inv.id] || paymentMap[inv.invoiceNo] || [];
-            const hasLastPayment = latestCustomerPaymentDate
-              ? history.some((p) => p.paymentDate && p.paymentDate.split("T")[0] === latestCustomerPaymentDate)
-              : false;
-
-            return isUnpaid || hasLastPayment;
-          })
+        // 1. All delivered customer invoices for the full Customer Statement Report
+        const allCustomerInvoices: StatementInvoice[] = invoicesData
+          .filter((inv: any) => inv.customerId === customerId && inv.orderStatus === "Delivered")
           .map((inv: any) => {
             const invKey = inv.orderId || inv.id;
             const history = paymentMap[invKey] || paymentMap[inv.id] || paymentMap[inv.invoiceNo] || [];
             return {
               id: invKey,
               invoiceNo: inv.invoiceNo,
+              manualInvoiceNo: inv.manualInvoiceNo || undefined,
               date: inv.date || (inv.createdAt?.split("T")[0] ?? ""),
               totalAmount: inv.totalAmount ?? 0,
               paidAmount: inv.paidAmount ?? 0,
               balance: inv.dueAmount ?? 0,
+              status: inv.status,
               payments: history,
             };
           });
+        setStatementInvoices(allCustomerInvoices);
+
+        // 2. Unpaid & recent payment invoices for Step 2 settlement table
+        const filtered: PendingInvoice[] = allCustomerInvoices.filter((inv) => {
+          const isUnpaid = inv.status !== "Paid" && (inv.balance ?? 0) > 0;
+          const hasLastPayment = latestCustomerPaymentDate
+            ? (inv.payments || []).some((p) => p.paymentDate && p.paymentDate.split("T")[0] === latestCustomerPaymentDate)
+            : false;
+
+          return isUnpaid || hasLastPayment;
+        });
 
         setPendingInvoices(filtered);
         const map: Record<string, InvoiceSettlement> = {};
@@ -292,7 +304,15 @@ export default function DistributionPaymentEntryPage() {
     } catch { toast.error("Failed to load invoices"); } finally { setLoadingInvoices(false); }
   }, [businessId]);
 
-  useEffect(() => { if (selectedCustomerId) fetchPendingInvoices(selectedCustomerId); else { setPendingInvoices([]); setSettlements({}); } }, [selectedCustomerId, fetchPendingInvoices]);
+  useEffect(() => {
+    if (selectedCustomerId) {
+      fetchPendingInvoices(selectedCustomerId);
+    } else {
+      setPendingInvoices([]);
+      setStatementInvoices([]);
+      setSettlements({});
+    }
+  }, [selectedCustomerId, fetchPendingInvoices]);
   useEffect(() => { setSelectedAccountId(""); }, [paymentMethod]);
 
   // Recalculate totalAmount whenever goods items change
@@ -658,7 +678,7 @@ export default function DistributionPaymentEntryPage() {
                   onClick={() =>
                     downloadCustomerStatement(
                       selectedCustomer?.name || "Customer",
-                      pendingInvoices,
+                      statementInvoices.length > 0 ? statementInvoices : pendingInvoices,
                       "CHAMPIKA DISTRIBUTION"
                     )
                   }
@@ -673,7 +693,7 @@ export default function DistributionPaymentEntryPage() {
                   onClick={() =>
                     printCustomerStatement(
                       selectedCustomer?.name || "Customer",
-                      pendingInvoices,
+                      statementInvoices.length > 0 ? statementInvoices : pendingInvoices,
                       "CHAMPIKA DISTRIBUTION"
                     )
                   }
@@ -688,7 +708,7 @@ export default function DistributionPaymentEntryPage() {
                   onClick={() =>
                     shareCustomerStatement(
                       selectedCustomer?.name || "Customer",
-                      pendingInvoices,
+                      statementInvoices.length > 0 ? statementInvoices : pendingInvoices,
                       "CHAMPIKA DISTRIBUTION"
                     )
                   }
@@ -696,6 +716,15 @@ export default function DistributionPaymentEntryPage() {
                   className="text-xs text-green-700 border-green-200 hover:bg-green-50"
                 >
                   <Share2 className="w-3.5 h-3.5 mr-1 text-green-600" /> Share
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsCustomStatementOpen(true)}
+                  title="Customize Statement Tables, Cheques, Goods & Options"
+                  className="text-xs bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100 font-medium shadow-sm"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5 mr-1 text-blue-600" /> Customize Report
                 </Button>
               </div>
             )}
@@ -1023,6 +1052,15 @@ export default function DistributionPaymentEntryPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <CustomStatementDialog
+        open={isCustomStatementOpen}
+        onOpenChange={setIsCustomStatementOpen}
+        customerName={selectedCustomer?.name || "Customer"}
+        invoices={statementInvoices.length > 0 ? statementInvoices : pendingInvoices}
+        companyName="CHAMPIKA DISTRIBUTION"
+        themeColor="blue"
+      />
     </div>
   );
 }

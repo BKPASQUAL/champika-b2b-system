@@ -6,12 +6,15 @@ import { toast } from "sonner";
 export interface InvoicePaymentRecord {
   id?: string;
   paymentDate: string;
+  chequeDate?: string | null;
   amount: number;
   method: string;
   receiptNumber?: string | null;
   receipt_number?: string | null;
   chequeNo?: string | null;
   chequeStatus?: string | null;
+  bankName?: string | null;
+  bankCode?: string | null;
   goodsSummary?: string | null;
   notes?: string | null;
 }
@@ -26,6 +29,18 @@ export interface StatementInvoice {
   balance: number;
   status?: string;
   payments?: InvoicePaymentRecord[];
+}
+
+export interface StatementReportOptions {
+  includeInvoices?: boolean;
+  includePaymentSubRows?: boolean;
+  includeGoodsSoldToCustomer?: boolean;
+  includeOtherGoodsStock?: boolean;
+  includePendingCheques?: boolean;
+  includeReturnedCheques?: boolean;
+  includeClearedCheques?: boolean;
+  customTitle?: string;
+  customNote?: string;
 }
 
 const fmt = (amount: number) =>
@@ -115,10 +130,11 @@ function parseCompanyAndAgency(companyName: string = "CHAMPIKA HARDWARE") {
   return { mainTitle, subAgency };
 }
 
-function buildDoc(
+export function buildDoc(
   customerName: string,
   rawInvoices: StatementInvoice[],
-  companyName: string = "CHAMPIKA HARDWARE"
+  companyName: string = "CHAMPIKA HARDWARE",
+  options?: StatementReportOptions
 ): jsPDF {
   const invoices = filterStatementInvoices(rawInvoices);
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -126,8 +142,17 @@ function buildDoc(
   const pageHeight = doc.internal.pageSize.getHeight();
   const today = new Date();
 
+  const showInvoices = options?.includeInvoices !== false;
+  const showSubRows = options?.includePaymentSubRows !== false;
+  const showSoldGoods = options?.includeGoodsSoldToCustomer !== false;
+  const showOtherGoods = options?.includeOtherGoodsStock !== false;
+  const showPendingCheques = options?.includePendingCheques !== false;
+  const showReturnedCheques = options?.includeReturnedCheques !== false;
+  const showClearedCheques = Boolean(options?.includeClearedCheques);
+
   // ── 1. Header & Title ──────────────────────────────────────────────────────
   const { mainTitle, subAgency } = parseCompanyAndAgency(companyName);
+  const statementTitle = options?.customTitle || "CUSTOMER OUTSTANDING STATEMENT";
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
@@ -144,7 +169,7 @@ function buildDoc(
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
     doc.setTextColor(220, 38, 38);
-    doc.text("CUSTOMER OUTSTANDING STATEMENT", M, 27);
+    doc.text(statementTitle, M, 27);
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
@@ -156,7 +181,7 @@ function buildDoc(
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
     doc.setTextColor(220, 38, 38);
-    doc.text("CUSTOMER OUTSTANDING STATEMENT", M, 23);
+    doc.text(statementTitle, M, 23);
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
@@ -192,181 +217,172 @@ function buildDoc(
   const START_Y = cardY + 20;
 
   // ── 3. Build Table Data with Payment History Rows ─────────────────────────
-  const tableData: any[] = [];
+  let currentY = START_Y;
 
-  invoices.forEach((inv) => {
-    const invDate = inv.date ? new Date(inv.date) : today;
-    const daysOverdue = Math.max(0, Math.floor((today.getTime() - invDate.getTime()) / (1000 * 60 * 60 * 24)));
+  if (showInvoices) {
+    const tableData: any[] = [];
 
-    // Main Invoice Row
+    invoices.forEach((inv) => {
+      const invDate = inv.date ? new Date(inv.date) : today;
+      const daysOverdue = Math.max(0, Math.floor((today.getTime() - invDate.getTime()) / (1000 * 60 * 60 * 24)));
+
+      // Main Invoice Row
+      tableData.push([
+        inv.date ? invDate.toLocaleDateString("en-GB") : "—",
+        inv.manualInvoiceNo || inv.invoiceNo,
+        `${daysOverdue} days`,
+        fmt(inv.totalAmount),
+        fmt(inv.paidAmount),
+        fmt(inv.balance),
+        inv.balance === 0 ? "PAID" : inv.paidAmount > 0 ? "PARTIAL" : "UNPAID",
+      ]);
+
+      // Payment History Sub-rows (Non-Cheque Payments: Cash, Bank Transfer, Goods Settlement, etc.)
+      if (showSubRows && inv.payments && inv.payments.length > 0) {
+        const nonChequePayments = inv.payments.filter(
+          (p) => p.method?.toLowerCase() !== "cheque"
+        );
+        nonChequePayments.forEach((p) => {
+          const pDate = p.paymentDate ? new Date(p.paymentDate).toLocaleDateString("en-GB") : "—";
+          const isGoods = p.method?.toLowerCase() === "goods";
+          const methodStr = isGoods ? "GOODS SETTLEMENT" : p.method.toUpperCase();
+          const paymentLabel = inv.balance === 0 ? "Payment" : "Partial Payment";
+          const invDisplay = inv.manualInvoiceNo || inv.invoiceNo;
+          const detailStr = `     Invoice ${invDisplay} -- ${paymentLabel} on ${pDate} via ${methodStr}: LKR ${fmt(p.amount)}`;
+
+          tableData.push([
+            {
+              content: detailStr,
+              colSpan: 7,
+              styles: {
+                fillColor: isGoods ? [245, 243, 255] : COLOR.paymentSubRowBg,
+                textColor: isGoods ? [109, 40, 217] : COLOR.paymentSubRowText,
+                fontStyle: "italic",
+                fontSize: 8,
+                cellPadding: { top: 2, bottom: 2, left: 6, right: 2 },
+              },
+            },
+          ]);
+        });
+      }
+    });
+
+    // Grand Total Summary Row
     tableData.push([
-      inv.date ? invDate.toLocaleDateString("en-GB") : "—",
-      inv.manualInvoiceNo || inv.invoiceNo,
-      `${daysOverdue} days`,
-      fmt(inv.totalAmount),
-      fmt(inv.paidAmount),
-      fmt(inv.balance),
-      inv.balance === 0 ? "PAID" : inv.paidAmount > 0 ? "PARTIAL" : "UNPAID",
+      {
+        content: "TOTAL OUTSTANDING BALANCE",
+        colSpan: 3,
+        styles: {
+          fontStyle: "bold",
+          halign: "right",
+          fillColor: COLOR.grandBg,
+          textColor: COLOR.grandText,
+          fontSize: 9,
+        },
+      },
+      {
+        content: fmt(totalInvoiced),
+        styles: {
+          fontStyle: "bold",
+          halign: "right",
+          fillColor: COLOR.grandBg,
+          textColor: COLOR.grandText,
+          fontSize: 9,
+        },
+      },
+      {
+        content: fmt(totalPaid),
+        styles: {
+          fontStyle: "bold",
+          halign: "right",
+          fillColor: COLOR.grandBg,
+          textColor: COLOR.grandText,
+          fontSize: 9,
+        },
+      },
+      {
+        content: fmt(totalOutstanding),
+        styles: {
+          fontStyle: "bold",
+          halign: "right",
+          fillColor: COLOR.grandBg,
+          textColor: [185, 28, 28], // Red for due
+          fontSize: 9,
+        },
+      },
+      {
+        content: "",
+        styles: { fillColor: COLOR.grandBg },
+      },
     ]);
 
-    // Payment History Sub-rows (Non-Cheque Payments: Cash, Bank Transfer, Goods Settlement, etc.)
-    if (inv.payments && inv.payments.length > 0) {
-      const nonChequePayments = inv.payments.filter(
-        (p) => p.method?.toLowerCase() !== "cheque"
-      );
-      nonChequePayments.forEach((p) => {
-        const pDate = p.paymentDate ? new Date(p.paymentDate).toLocaleDateString("en-GB") : "—";
-        const isGoods = p.method?.toLowerCase() === "goods";
-        const methodStr = isGoods ? "GOODS SETTLEMENT" : p.method.toUpperCase();
-        const paymentLabel = inv.balance === 0 ? "Payment" : "Partial Payment";
-        const invDisplay = inv.manualInvoiceNo || inv.invoiceNo;
-        const detailStr = `     Invoice ${invDisplay} -- ${paymentLabel} on ${pDate} via ${methodStr}: LKR ${fmt(p.amount)}`;
-
-        tableData.push([
-          {
-            content: detailStr,
-            colSpan: 7,
-            styles: {
-              fillColor: isGoods ? [245, 243, 255] : COLOR.paymentSubRowBg,
-              textColor: isGoods ? [109, 40, 217] : COLOR.paymentSubRowText,
-              fontStyle: "italic",
-              fontSize: 8,
-              cellPadding: { top: 2, bottom: 2, left: 6, right: 2 },
-            },
-          },
-        ]);
-      });
-    }
-  });
-
-  // Grand Total Summary Row
-  tableData.push([
-    {
-      content: "TOTAL OUTSTANDING BALANCE",
-      colSpan: 3,
-      styles: {
+    autoTable(doc, {
+      startY: START_Y,
+      margin: { left: M, right: M },
+      head: [["Date", "Invoice / Manual Ref", "Age", "Total (LKR)", "Paid (LKR)", "Balance Due", "Status"]],
+      body: tableData,
+      theme: "plain",
+      headStyles: {
+        fillColor: COLOR.headerBg,
+        textColor: COLOR.headerText,
         fontStyle: "bold",
-        halign: "right",
-        fillColor: COLOR.grandBg,
-        textColor: COLOR.grandText,
-        fontSize: 9,
+        fontSize: 8.5,
+        halign: "center",
+        cellPadding: { top: 3, bottom: 3, left: 2, right: 2 },
       },
-    },
-    {
-      content: fmt(totalInvoiced),
       styles: {
-        fontStyle: "bold",
-        halign: "right",
-        fillColor: COLOR.grandBg,
-        textColor: COLOR.grandText,
-        fontSize: 9,
+        fontSize: 8,
+        cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 },
+        lineColor: COLOR.divider,
+        lineWidth: 0.1,
+        textColor: COLOR.bodyText,
+        overflow: "linebreak",
       },
-    },
-    {
-      content: fmt(totalPaid),
-      styles: {
-        fontStyle: "bold",
-        halign: "right",
-        fillColor: COLOR.grandBg,
-        textColor: COLOR.grandText,
-        fontSize: 9,
+      columnStyles: {
+        0: { halign: "left", cellWidth: 24 }, // Date
+        1: { halign: "center", cellWidth: 32 }, // Invoice / Manual Ref
+        2: { halign: "center", cellWidth: 18 }, // Age
+        3: { halign: "right", cellWidth: 30 }, // Total
+        4: { halign: "right", cellWidth: 28 }, // Paid
+        5: { halign: "right", cellWidth: 32, fontStyle: "bold" }, // Balance Due
+        6: { halign: "center", cellWidth: 16 }, // Status
       },
-    },
-    {
-      content: fmt(totalOutstanding),
-      styles: {
-        fontStyle: "bold",
-        halign: "right",
-        fillColor: COLOR.grandBg,
-        textColor: [185, 28, 28], // Red for due
-        fontSize: 9,
-      },
-    },
-    {
-      content: "",
-      styles: { fillColor: COLOR.grandBg },
-    },
-  ]);
+      didParseCell(data) {
+        if (data.section !== "body") return;
+        const raw = data.row.raw as any[];
+        if (!raw || raw.length !== 7 || typeof raw[0] !== "string") return;
 
-  autoTable(doc, {
-    startY: START_Y,
-    margin: { left: M, right: M },
-    head: [["Date", "Invoice / Manual Ref", "Age", "Total (LKR)", "Paid (LKR)", "Balance Due", "Status"]],
-    body: tableData,
-    theme: "plain",
-    headStyles: {
-      fillColor: COLOR.headerBg,
-      textColor: COLOR.headerText,
-      fontStyle: "bold",
-      fontSize: 8.5,
-      halign: "center",
-      cellPadding: { top: 3, bottom: 3, left: 2, right: 2 },
-    },
-    styles: {
-      fontSize: 8,
-      cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 },
-      lineColor: COLOR.divider,
-      lineWidth: 0.1,
-      textColor: COLOR.bodyText,
-      overflow: "linebreak",
-    },
-    columnStyles: {
-      0: { halign: "left", cellWidth: 24 }, // Date
-      1: { halign: "center", cellWidth: 32 }, // Invoice / Manual Ref
-      2: { halign: "center", cellWidth: 18 }, // Age
-      3: { halign: "right", cellWidth: 30 }, // Total
-      4: { halign: "right", cellWidth: 28 }, // Paid
-      5: { halign: "right", cellWidth: 32, fontStyle: "bold" }, // Balance Due
-      6: { halign: "center", cellWidth: 16 }, // Status
-    },
-    didParseCell(data) {
-      if (data.section !== "body") return;
-      const raw = data.row.raw as any[];
-      if (!raw || raw.length !== 7 || typeof raw[0] !== "string") return;
+        const days = parseInt(raw[2] || "0", 10);
+        const status = String(raw[6]);
 
-      const days = parseInt(raw[2] || "0", 10);
-      const status = String(raw[6]);
-
-      if (status === "PAID") {
-        data.cell.styles.fillColor = COLOR.paidBg;
-        data.cell.styles.textColor = COLOR.paidText;
-      } else if (days >= 90) {
-        data.cell.styles.fillColor = COLOR.overdueXHigh;
-        data.cell.styles.textColor = COLOR.overdueXText;
-      } else if (days >= 45) {
-        data.cell.styles.fillColor = COLOR.overdueHigh;
-        data.cell.styles.textColor = COLOR.overdueText;
-      }
-
-      if (data.column.index === 6) {
         if (status === "PAID") {
-          data.cell.styles.textColor = [22, 101, 52];
-          data.cell.styles.fontStyle = "bold";
-        } else if (status === "PARTIAL") {
-          data.cell.styles.textColor = [180, 83, 9];
-          data.cell.styles.fontStyle = "bold";
-        } else if (status === "UNPAID") {
-          data.cell.styles.textColor = [185, 28, 28];
-          data.cell.styles.fontStyle = "bold";
+          data.cell.styles.fillColor = COLOR.paidBg;
+          data.cell.styles.textColor = COLOR.paidText;
+        } else if (days >= 90) {
+          data.cell.styles.fillColor = COLOR.overdueXHigh;
+          data.cell.styles.textColor = COLOR.overdueXText;
+        } else if (days >= 45) {
+          data.cell.styles.fillColor = COLOR.overdueHigh;
+          data.cell.styles.textColor = COLOR.overdueText;
         }
-      }
-    },
-    didDrawPage(_data) {
-      const pageNum = (doc as any).internal.getCurrentPageInfo().pageNumber;
-      const pageCount = (doc as any).internal.getNumberOfPages();
 
-      // Footer line
-      doc.setDrawColor(200, 200, 200);
-      doc.setLineWidth(0.2);
-      doc.line(M, pageHeight - 15, pageWidth - M, pageHeight - 15);
+        if (data.column.index === 6) {
+          if (status === "PAID") {
+            data.cell.styles.textColor = [22, 101, 52];
+            data.cell.styles.fontStyle = "bold";
+          } else if (status === "PARTIAL") {
+            data.cell.styles.textColor = [180, 83, 9];
+            data.cell.styles.fontStyle = "bold";
+          } else if (status === "UNPAID") {
+            data.cell.styles.textColor = [185, 28, 28];
+            data.cell.styles.fontStyle = "bold";
+          }
+        }
+      },
+    });
 
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(7.5);
-      doc.setTextColor(...COLOR.mutedText);
-      doc.text("Thank you for your business. Please arrange payment for overdue invoices.", M, pageHeight - 10);
-      doc.text(`Page ${pageNum} of ${pageCount}`, pageWidth - M, pageHeight - 10, { align: "right" });
-    },
-  });
+    currentY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 8 : START_Y + 10;
+  }
 
   // ── 4. Dedicated Goods / Product Settlement Details Tables ────────────────
   interface ParsedGoodsItem {
@@ -462,7 +478,7 @@ function buildDoc(
   }
 
   const invoiceMap = new Map<string, StatementInvoice>();
-  invoices.forEach((inv) => {
+  rawInvoices.forEach((inv) => {
     if (inv.invoiceNo) invoiceMap.set(inv.invoiceNo, inv);
     if (inv.id) invoiceMap.set(inv.id, inv);
   });
@@ -470,7 +486,7 @@ function buildDoc(
   const processedSummaries = new Set<string>();
   const parsedGoodsItems: ParsedGoodsItem[] = [];
 
-  invoices.forEach((inv) => {
+  rawInvoices.forEach((inv) => {
     if (inv.payments && inv.payments.length > 0) {
       inv.payments.forEach((p) => {
         const isGoods = p.method?.toLowerCase() === "goods";
@@ -545,11 +561,11 @@ function buildDoc(
   const totalGoodsAmount = deduplicatedGoodsItems.reduce((sum, i) => sum + i.amount, 0);
   let goodsBannerBottomY = 0;
 
-  if (parsedGoodsItems.length > 0) {
-    let currentY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 8 : START_Y + 10;
+  if (parsedGoodsItems.length > 0 && (showSoldGoods || showOtherGoods)) {
+    currentY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 8 : currentY + 8;
 
     // Table 1: Items Sold to Customer (Customer Billed)
-    if (soldItems.length > 0) {
+    if (showSoldGoods && soldItems.length > 0) {
       if (currentY > pageHeight - 45) {
         doc.addPage();
         currentY = 20;
@@ -641,7 +657,7 @@ function buildDoc(
     }
 
     // Table 2: Other Sierra Products Received (Not Sold to Customer)
-    if (notSoldItems.length > 0) {
+    if (showOtherGoods && notSoldItems.length > 0) {
       if (currentY > pageHeight - 45) {
         doc.addPage();
         currentY = 20;
@@ -732,8 +748,8 @@ function buildDoc(
       currentY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 8 : currentY + 35;
     }
 
-    // Grand Total Goods Settlement Banner (when both tables exist)
-    if (soldItems.length > 0 && notSoldItems.length > 0) {
+    // Grand Total Goods Settlement Banner (when both tables exist and are enabled)
+    if (showSoldGoods && showOtherGoods && soldItems.length > 0 && notSoldItems.length > 0) {
       if (currentY > pageHeight - 20) {
         doc.addPage();
         currentY = 20;
@@ -773,15 +789,17 @@ function buildDoc(
 
   const chequeMap = new Map<string, GroupedCheque>();
 
-  invoices.forEach((inv) => {
+  rawInvoices.forEach((inv) => {
     if (inv.payments && inv.payments.length > 0) {
       inv.payments.forEach((p) => {
-        const isCheque = p.method?.toLowerCase() === "cheque";
+        const isCheque = p.method?.toLowerCase() === "cheque" || Boolean(p.chequeNo && p.chequeNo.trim());
         if (isCheque) {
           const rawNo = (p.chequeNo || "").trim();
           const chequeKey = rawNo ? rawNo.toLowerCase() : `no_no_${p.id || Math.random()}`;
-          const pDate = p.paymentDate ? new Date(p.paymentDate).toLocaleDateString("en-GB") : "—";
-          const chequeNoStr = rawNo ? (rawNo.startsWith("#") ? rawNo : `#${rawNo}`) : "—";
+          const dateToUse = p.chequeDate || p.paymentDate;
+          const pDate = dateToUse ? new Date(dateToUse).toLocaleDateString("en-GB") : "—";
+          const bankDetail = p.bankName ? ` (${p.bankName}${p.bankCode ? ` - ${p.bankCode}` : ""})` : "";
+          const chequeNoStr = rawNo ? `${rawNo.startsWith("#") ? rawNo : `#${rawNo}`}${bankDetail}` : "—";
           const status = (p.chequeStatus || "Pending").toUpperCase();
           const invDisplay = inv.manualInvoiceNo || inv.invoiceNo;
 
@@ -789,6 +807,9 @@ function buildDoc(
             const existing = chequeMap.get(chequeKey)!;
             if (invDisplay && !existing.invoiceNos.includes(invDisplay)) {
               existing.invoiceNos.push(invDisplay);
+            }
+            if (!existing.chequeNo.includes("(") && bankDetail) {
+              existing.chequeNo = `${existing.chequeNo}${bankDetail}`;
             }
             existing.amount += p.amount;
             if (["RETURNED", "BOUNCED"].includes(status)) {
@@ -810,30 +831,33 @@ function buildDoc(
     }
   });
 
-  // Separate into Pending / Deposited and Returned / Bounced (excluding Cleared cheques)
+  // Separate into Pending / Deposited, Returned / Bounced, and Cleared
   const pendingCheques: GroupedCheque[] = [];
   const returnedCheques: GroupedCheque[] = [];
+  const clearedCheques: GroupedCheque[] = [];
 
   chequeMap.forEach((chq) => {
     const s = chq.status.toUpperCase();
     if (["RETURNED", "BOUNCED"].includes(s)) {
       returnedCheques.push(chq);
-    } else if (s !== "CLEARED") {
-      // Pending, Deposited, or other uncleared statuses
+    } else if (s === "CLEARED") {
+      clearedCheques.push(chq);
+    } else {
       pendingCheques.push(chq);
     }
   });
 
   const totalPendingAmount = pendingCheques.reduce((sum, c) => sum + c.amount, 0);
   const totalReturnedAmount = returnedCheques.reduce((sum, c) => sum + c.amount, 0);
+  const totalClearedAmount = clearedCheques.reduce((sum, c) => sum + c.amount, 0);
 
   const lastFinalY = (doc as any).lastAutoTable
     ? (doc as any).lastAutoTable.finalY + 8
-    : START_Y + 10;
-  let currentY = goodsBannerBottomY > 0 ? Math.max(lastFinalY, goodsBannerBottomY + 8) : lastFinalY;
+    : currentY + 8;
+  currentY = goodsBannerBottomY > 0 ? Math.max(lastFinalY, goodsBannerBottomY + 8) : lastFinalY;
 
   // ── Table 5A: Pending / Deposited Cheques Details ─────────────────────────
-  if (pendingCheques.length > 0) {
+  if (showPendingCheques && pendingCheques.length > 0) {
     if (currentY > pageHeight - 45) {
       doc.addPage();
       currentY = 20;
@@ -944,7 +968,7 @@ function buildDoc(
   }
 
   // ── Table 5B: Returned Cheques Details ────────────────────────────────────
-  if (returnedCheques.length > 0) {
+  if (showReturnedCheques && returnedCheques.length > 0) {
     if (currentY > pageHeight - 45) {
       doc.addPage();
       currentY = 20;
@@ -1039,6 +1063,122 @@ function buildDoc(
         }
       },
     });
+
+    currentY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 8 : currentY + 35;
+  }
+
+  // ── Table 5C: Cleared Cheques Details (Optional) ─────────────────────────
+  if (showClearedCheques && clearedCheques.length > 0) {
+    if (currentY > pageHeight - 45) {
+      doc.addPage();
+      currentY = 20;
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.setTextColor(5, 150, 105); // Emerald-700
+    doc.text("CLEARED CHEQUES (HISTORICAL SETTLED)", M, currentY);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...COLOR.mutedText);
+    doc.text(`${clearedCheques.length} cleared cheque(s)`, pageWidth - M, currentY, { align: "right" });
+
+    const clearedTableBody = [
+      ...clearedCheques.map((c) => [
+        c.invoiceNos.join(", ") || "—",
+        c.date,
+        c.chequeNo,
+        fmt(c.amount),
+        c.status,
+      ]),
+      [
+        {
+          content: `TOTAL CLEARED CHEQUES: ${clearedCheques.length}`,
+          colSpan: 3,
+          styles: {
+            fontStyle: "bold",
+            halign: "right",
+            fillColor: [236, 253, 245], // Emerald-50
+            textColor: [4, 120, 87], // Emerald-700
+            fontSize: 8.5,
+          },
+        },
+        {
+          content: fmt(totalClearedAmount),
+          styles: {
+            fontStyle: "bold",
+            halign: "right",
+            fillColor: [236, 253, 245],
+            textColor: [4, 120, 87],
+            fontSize: 8.5,
+          },
+        },
+        {
+          content: "",
+          styles: { fillColor: [236, 253, 245] },
+        },
+      ],
+    ];
+
+    autoTable(doc, {
+      startY: currentY + 3.5,
+      margin: { left: M, right: M },
+      head: [["Invoice / Manual Ref", "Date", "Cheque No & Branch", "Amount (LKR)", "Cheque Status"]],
+      body: clearedTableBody as any,
+      theme: "plain",
+      headStyles: {
+        fillColor: [5, 150, 105], // Emerald-600
+        textColor: [255, 255, 255],
+        fontStyle: "bold",
+        fontSize: 8.5,
+        halign: "center",
+        cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 },
+      },
+      styles: {
+        fontSize: 8,
+        cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 },
+        lineColor: COLOR.divider,
+        lineWidth: 0.1,
+        textColor: COLOR.bodyText,
+        overflow: "linebreak",
+      },
+      columnStyles: {
+        0: { halign: "center", cellWidth: 28 },
+        1: { halign: "center", cellWidth: 24 },
+        2: { halign: "left",   cellWidth: 64 },
+        3: { halign: "right",  cellWidth: 34, fontStyle: "bold" },
+        4: { halign: "center", cellWidth: 30 },
+      },
+      didParseCell(data) {
+        if (data.section !== "body") return;
+        const raw = data.row.raw as any[];
+        if (!raw || raw.length !== 5 || typeof raw[0] !== "string") return;
+
+        if (data.column.index === 4) {
+          data.cell.styles.textColor = [22, 101, 52]; // Emerald-800
+          data.cell.styles.fontStyle = "bold";
+        }
+      },
+    });
+
+    currentY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 8 : currentY + 35;
+  }
+
+  // Stamp footer line & page numbers across ALL pages
+  const pageCount = (doc as any).internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.2);
+    doc.line(M, pageHeight - 15, pageWidth - M, pageHeight - 15);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...COLOR.mutedText);
+    const footerMsg = options?.customNote || "Thank you for your business. Please arrange payment for overdue invoices.";
+    doc.text(footerMsg, M, pageHeight - 10);
+    doc.text(`Page ${i} of ${pageCount}`, pageWidth - M, pageHeight - 10, { align: "right" });
   }
 
   return doc;
@@ -1047,14 +1187,14 @@ function buildDoc(
 export function downloadCustomerStatement(
   customerName: string,
   rawInvoices: StatementInvoice[],
-  companyName?: string
+  companyName?: string,
+  options?: StatementReportOptions
 ) {
-  const invoices = filterStatementInvoices(rawInvoices);
-  if (invoices.length === 0) {
-    toast.info("No active outstanding invoices found for statement");
+  if (!rawInvoices || rawInvoices.length === 0) {
+    toast.info("No invoice records found for statement");
     return;
   }
-  const doc = buildDoc(customerName, invoices, companyName);
+  const doc = buildDoc(customerName, rawInvoices, companyName, options);
   const dateStr = new Date().toISOString().split("T")[0];
   const safeName = customerName.replace(/[^a-zA-Z0-9_-]/g, "_");
   doc.save(`Statement_${safeName}_${dateStr}.pdf`);
@@ -1064,14 +1204,14 @@ export function downloadCustomerStatement(
 export function printCustomerStatement(
   customerName: string,
   rawInvoices: StatementInvoice[],
-  companyName?: string
+  companyName?: string,
+  options?: StatementReportOptions
 ) {
-  const invoices = filterStatementInvoices(rawInvoices);
-  if (invoices.length === 0) {
-    toast.info("No active outstanding invoices found for statement");
+  if (!rawInvoices || rawInvoices.length === 0) {
+    toast.info("No invoice records found for statement");
     return;
   }
-  const doc = buildDoc(customerName, invoices, companyName);
+  const doc = buildDoc(customerName, rawInvoices, companyName, options);
   doc.autoPrint();
   const blob = doc.output("blob");
   const url = URL.createObjectURL(blob);
@@ -1100,52 +1240,65 @@ export function printCustomerStatement(
 export async function shareCustomerStatement(
   customerName: string,
   rawInvoices: StatementInvoice[],
-  companyName?: string
+  companyName?: string,
+  options?: StatementReportOptions
 ) {
-  const invoices = filterStatementInvoices(rawInvoices);
-  if (invoices.length === 0) {
-    toast.info("No active outstanding invoices found for statement");
+  if (!rawInvoices || rawInvoices.length === 0) {
+    toast.info("No invoice records found for statement");
     return;
   }
+  const invoices = filterStatementInvoices(rawInvoices);
   const totalDue = invoices.reduce((sum, i) => sum + i.balance, 0);
 
   const { mainTitle, subAgency } = parseCompanyAndAgency(companyName);
   const agencyLabel = subAgency ? ` (${subAgency})` : "";
+  const statementTitle = options?.customTitle || "Customer Statement";
+
+  const showInvoices = options?.includeInvoices !== false;
+  const showSubRows = options?.includePaymentSubRows !== false;
+  const showPendingCheques = options?.includePendingCheques !== false;
+  const showReturnedCheques = options?.includeReturnedCheques !== false;
+  const showClearedCheques = Boolean(options?.includeClearedCheques);
 
   // WhatsApp text summary
   let msg = `*${mainTitle}${agencyLabel}*\n`;
-  msg += `*Customer Statement - ${customerName}*\n\n`;
+  msg += `*${statementTitle} - ${customerName}*\n\n`;
   msg += `*Total Outstanding Balance:* LKR ${fmt(totalDue)}\n`;
   msg += `*Pending Invoices:* ${invoices.length}\n\n`;
-  msg += `*Invoice Breakdown:*\n`;
 
-  invoices.forEach((inv) => {
-    const invDate = inv.date ? new Date(inv.date).toLocaleDateString("en-GB") : "—";
-    const days = inv.date
-      ? Math.max(0, Math.floor((new Date().getTime() - new Date(inv.date).getTime()) / (1000 * 60 * 60 * 24)))
-      : 0;
-    const dueStr = inv.balance === 0 ? "*✅ PAID*" : `Due LKR ${fmt(inv.balance)}`;
-    msg += `• *${inv.invoiceNo}* (${invDate}, ${days} days): ${dueStr} (Total LKR ${fmt(inv.totalAmount)})\n`;
-    if (inv.payments && inv.payments.length > 0) {
-      const nonChequePayments = inv.payments.filter(
-        (p) => p.method?.toLowerCase() !== "cheque" && !Boolean(p.chequeNo)
-      );
-      nonChequePayments.forEach((p) => {
-        const pDate = p.paymentDate ? new Date(p.paymentDate).toLocaleDateString("en-GB") : "—";
-        msg += `   - Invoice ${inv.invoiceNo}: Paid LKR ${fmt(p.amount)} on ${pDate} (${p.method.toUpperCase()})\n`;
-      });
-    }
-  });
+  if (showInvoices) {
+    msg += `*Invoice Breakdown:*\n`;
+    invoices.forEach((inv) => {
+      const invDate = inv.date ? new Date(inv.date).toLocaleDateString("en-GB") : "—";
+      const days = inv.date
+        ? Math.max(0, Math.floor((new Date().getTime() - new Date(inv.date).getTime()) / (1000 * 60 * 60 * 24)))
+        : 0;
+      const dueStr = inv.balance === 0 ? "*✅ PAID*" : `Due LKR ${fmt(inv.balance)}`;
+      msg += `• *${inv.invoiceNo}* (${invDate}, ${days} days): ${dueStr} (Total LKR ${fmt(inv.totalAmount)})\n`;
+      if (showSubRows && inv.payments && inv.payments.length > 0) {
+        const nonChequePayments = inv.payments.filter(
+          (p) => p.method?.toLowerCase() !== "cheque" && !Boolean(p.chequeNo)
+        );
+        nonChequePayments.forEach((p) => {
+          const pDate = p.paymentDate ? new Date(p.paymentDate).toLocaleDateString("en-GB") : "—";
+          msg += `   - Invoice ${inv.invoiceNo}: Paid LKR ${fmt(p.amount)} on ${pDate} (${p.method.toUpperCase()})\n`;
+        });
+      }
+    });
+  }
 
   const groupedChequesMap = new Map<string, { invoiceNos: string[]; date: string; chequeNo: string; amount: number; status: string }>();
 
-  invoices.forEach((inv) => {
+  rawInvoices.forEach((inv) => {
     if (inv.payments && inv.payments.length > 0) {
       inv.payments.forEach((p) => {
         if (p.method?.toLowerCase() === "cheque" || p.chequeNo) {
           const rawNo = (p.chequeNo || "").trim();
           const key = rawNo ? rawNo.toLowerCase() : `no_no_${p.id || Math.random()}`;
-          const pDate = p.paymentDate ? new Date(p.paymentDate).toLocaleDateString("en-GB") : "—";
+          const dateToUse = p.chequeDate || p.paymentDate;
+          const pDate = dateToUse ? new Date(dateToUse).toLocaleDateString("en-GB") : "—";
+          const bankDetail = p.bankName ? ` (${p.bankName}${p.bankCode ? ` - ${p.bankCode}` : ""})` : "";
+          const chequeDisplay = rawNo ? `${rawNo}${bankDetail}` : "N/A";
           const status = (p.chequeStatus || "Pending").toUpperCase();
           const invDisplay = inv.manualInvoiceNo || inv.invoiceNo;
 
@@ -1154,13 +1307,16 @@ export async function shareCustomerStatement(
             if (invDisplay && !ext.invoiceNos.includes(invDisplay)) {
               ext.invoiceNos.push(invDisplay);
             }
+            if (!ext.chequeNo.includes("(") && bankDetail) {
+              ext.chequeNo = `${ext.chequeNo}${bankDetail}`;
+            }
             ext.amount += p.amount;
             if (["RETURNED", "BOUNCED"].includes(status)) ext.status = status;
           } else {
             groupedChequesMap.set(key, {
               invoiceNos: invDisplay ? [invDisplay] : [],
               date: pDate,
-              chequeNo: rawNo || "N/A",
+              chequeNo: chequeDisplay,
               amount: p.amount,
               status,
             });
@@ -1172,32 +1328,44 @@ export async function shareCustomerStatement(
 
   const pendingWaCheques: string[] = [];
   const returnedWaCheques: string[] = [];
+  const clearedWaCheques: string[] = [];
 
   groupedChequesMap.forEach((chq) => {
     const s = chq.status.toUpperCase();
-    if (s === "CLEARED") return; // exclude cleared cheques
-
     const invList = chq.invoiceNos.join(", ") || "—";
     const line = `• Cheque #${chq.chequeNo} (Invoices: ${invList}): LKR ${fmt(chq.amount)} (${chq.date}) [${s}]`;
     if (["RETURNED", "BOUNCED"].includes(s)) {
       returnedWaCheques.push(line);
+    } else if (s === "CLEARED") {
+      clearedWaCheques.push(line);
     } else {
       pendingWaCheques.push(line);
     }
   });
 
-  if (pendingWaCheques.length > 0) {
+  if (showPendingCheques && pendingWaCheques.length > 0) {
     msg += `\n*PENDING CHEQUES DETAILS (${pendingWaCheques.length}):*\n`;
     pendingWaCheques.forEach((chq) => {
       msg += `${chq}\n`;
     });
   }
 
-  if (returnedWaCheques.length > 0) {
+  if (showReturnedCheques && returnedWaCheques.length > 0) {
     msg += `\n*RETURN CHEQUES DETAILS (${returnedWaCheques.length}):*\n`;
     returnedWaCheques.forEach((chq) => {
       msg += `${chq}\n`;
     });
+  }
+
+  if (showClearedCheques && clearedWaCheques.length > 0) {
+    msg += `\n*CLEARED CHEQUES DETAILS (${clearedWaCheques.length}):*\n`;
+    clearedWaCheques.forEach((chq) => {
+      msg += `${chq}\n`;
+    });
+  }
+
+  if (options?.customNote) {
+    msg += `\n*Note:* ${options.customNote}\n`;
   }
 
   msg += `\nPlease arrange payment at your earliest convenience. Thank you!`;
@@ -1205,7 +1373,7 @@ export async function shareCustomerStatement(
   const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
 
   // Try Web Share API if PDF file sharing is supported
-  const doc = buildDoc(customerName, invoices, companyName);
+  const doc = buildDoc(customerName, rawInvoices, companyName, options);
   const blob = doc.output("blob");
   const safeName = customerName.replace(/[^a-zA-Z0-9_-]/g, "_");
   const file = new File([blob], `Statement_${safeName}.pdf`, { type: "application/pdf" });
@@ -1232,3 +1400,4 @@ export async function shareCustomerStatement(
   window.open(waUrl, "_blank");
   toast.success("Opened WhatsApp with invoice statement summary");
 }
+

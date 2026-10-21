@@ -19,6 +19,7 @@ import {
   Sparkles,
   Boxes,
   Pencil,
+  SlidersHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -77,7 +78,9 @@ import {
   printCustomerStatement,
   shareCustomerStatement,
   InvoicePaymentRecord,
+  StatementInvoice,
 } from "@/lib/customer-statement-report";
+import { CustomStatementDialog } from "@/components/payments/CustomStatementDialog";
 
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat("en-LK", { style: "currency", currency: "LKR", minimumFractionDigits: 2 }).format(amount);
@@ -218,6 +221,8 @@ export default function SierraPaymentEntryPage() {
   const [paidOnCustomerBill, setPaidOnCustomerBill] = useState(false);
   const [settlements, setSettlements] = useState<Record<string, InvoiceSettlement>>({});
   const [historyModalInvoice, setHistoryModalInvoice] = useState<PendingInvoice | null>(null);
+  const [statementInvoices, setStatementInvoices] = useState<StatementInvoice[]>([]);
+  const [isCustomStatementOpen, setIsCustomStatementOpen] = useState(false);
 
   // --- Sierra Products Settlement State ---
   const [locations, setLocations] = useState<Location[]>([]);
@@ -392,11 +397,14 @@ export default function SierraPaymentEntryPage() {
           paymentMap[key].push({
             id: p.id,
             paymentDate: p.payment_date,
+            chequeDate: isGoods ? null : (p.cheque_date || null),
             amount: p.amount,
             method: p.payment_method || p.method || "cash",
             receiptNumber: p.receipt_number || p.receiptNumber || null,
             chequeNo: isGoods ? null : (p.cheque_number || p.cheque_no || null),
             chequeStatus: isGoods ? null : (p.cheque_status || null),
+            bankName: p.banks?.bank_name || p.bank_codes?.bank_name || null,
+            bankCode: p.banks?.bank_code || p.bank_codes?.bank_code || null,
             goodsSummary: isGoods ? (p.cheque_number || p.cheque_no || p.notes || "Goods Settlement") : null,
             notes: p.notes || null,
           });
@@ -418,18 +426,9 @@ export default function SierraPaymentEntryPage() {
           }
         });
 
-        const filtered: PendingInvoice[] = invoicesData
-          .filter((inv: any) => {
-            if (inv.customerId !== customerId || inv.orderStatus !== "Delivered") return false;
-            const isUnpaid = inv.status !== "Paid" && (inv.dueAmount ?? 0) > 0;
-            const invKey = inv.orderId || inv.id;
-            const history = paymentMap[invKey] || paymentMap[inv.id] || paymentMap[inv.invoiceNo] || [];
-            const hasLastPayment = latestCustomerPaymentDate
-              ? history.some((p) => p.paymentDate && p.paymentDate.split("T")[0] === latestCustomerPaymentDate)
-              : false;
-
-            return isUnpaid || hasLastPayment;
-          })
+        // 1. All delivered customer invoices with full history for the customer statement report
+        const allCustomerInvoices: StatementInvoice[] = invoicesData
+          .filter((inv: any) => inv.customerId === customerId && inv.orderStatus === "Delivered")
           .map((inv: any) => {
             const invKey = inv.orderId || inv.id;
             const history = paymentMap[invKey] || paymentMap[inv.id] || paymentMap[inv.invoiceNo] || [];
@@ -441,9 +440,21 @@ export default function SierraPaymentEntryPage() {
               totalAmount: inv.totalAmount ?? 0,
               paidAmount: inv.paidAmount ?? 0,
               balance: inv.dueAmount ?? 0,
+              status: inv.status,
               payments: history,
             };
           });
+        setStatementInvoices(allCustomerInvoices);
+
+        // 2. Unpaid & recent payment invoices for Step 2 settlement table
+        const filtered: PendingInvoice[] = allCustomerInvoices.filter((inv) => {
+          const isUnpaid = inv.status !== "Paid" && (inv.balance ?? 0) > 0;
+          const hasLastPayment = latestCustomerPaymentDate
+            ? (inv.payments || []).some((p) => p.paymentDate && p.paymentDate.split("T")[0] === latestCustomerPaymentDate)
+            : false;
+
+          return isUnpaid || hasLastPayment;
+        });
 
         setPendingInvoices(filtered);
         const map: Record<string, InvoiceSettlement> = {};
@@ -453,7 +464,15 @@ export default function SierraPaymentEntryPage() {
     } catch { toast.error("Failed to load invoices"); } finally { setLoadingInvoices(false); }
   }, [businessId]);
 
-  useEffect(() => { if (selectedCustomerId) fetchPendingInvoices(selectedCustomerId); else { setPendingInvoices([]); setSettlements({}); } }, [selectedCustomerId, fetchPendingInvoices]);
+  useEffect(() => {
+    if (selectedCustomerId) {
+      fetchPendingInvoices(selectedCustomerId);
+    } else {
+      setPendingInvoices([]);
+      setStatementInvoices([]);
+      setSettlements({});
+    }
+  }, [selectedCustomerId, fetchPendingInvoices]);
   useEffect(() => { setSelectedAccountId(""); }, [paymentMethod]);
 
   const totalAllocated = Object.values(settlements).filter((s) => s.selected).reduce((sum, s) => sum + (s.settleAmount || 0), 0);
@@ -1447,7 +1466,7 @@ export default function SierraPaymentEntryPage() {
                   onClick={() =>
                     downloadCustomerStatement(
                       selectedCustomer?.name || "Customer",
-                      pendingInvoices,
+                      statementInvoices.length > 0 ? statementInvoices : pendingInvoices,
                       "CHAMPIKA SIERRA"
                     )
                   }
@@ -1462,7 +1481,7 @@ export default function SierraPaymentEntryPage() {
                   onClick={() =>
                     printCustomerStatement(
                       selectedCustomer?.name || "Customer",
-                      pendingInvoices,
+                      statementInvoices.length > 0 ? statementInvoices : pendingInvoices,
                       "CHAMPIKA SIERRA"
                     )
                   }
@@ -1477,7 +1496,7 @@ export default function SierraPaymentEntryPage() {
                   onClick={() =>
                     shareCustomerStatement(
                       selectedCustomer?.name || "Customer",
-                      pendingInvoices,
+                      statementInvoices.length > 0 ? statementInvoices : pendingInvoices,
                       "CHAMPIKA SIERRA"
                     )
                   }
@@ -1485,6 +1504,15 @@ export default function SierraPaymentEntryPage() {
                   className="text-xs text-green-700 border-green-200 hover:bg-green-50"
                 >
                   <Share2 className="w-3.5 h-3.5 mr-1 text-green-600" /> Share
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsCustomStatementOpen(true)}
+                  title="Customize Statement Tables, Cheques, Goods & Options"
+                  className="text-xs bg-purple-50 text-purple-700 border-purple-300 hover:bg-purple-100 font-medium shadow-sm"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5 mr-1 text-purple-600" /> Customize Report
                 </Button>
               </div>
             )}
@@ -1932,6 +1960,15 @@ export default function SierraPaymentEntryPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <CustomStatementDialog
+        open={isCustomStatementOpen}
+        onOpenChange={setIsCustomStatementOpen}
+        customerName={selectedCustomer?.name || "Customer"}
+        invoices={statementInvoices.length > 0 ? statementInvoices : pendingInvoices}
+        companyName="CHAMPIKA SIERRA"
+        themeColor="purple"
+      />
     </div>
   );
 }
