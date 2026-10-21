@@ -43,6 +43,16 @@ export interface StatementReportOptions {
   customNote?: string;
 }
 
+export const DEFAULT_STATEMENT_OPTIONS: StatementReportOptions = {
+  includeInvoices: true,
+  includePaymentSubRows: true,
+  includeGoodsSoldToCustomer: true,
+  includeOtherGoodsStock: true,
+  includePendingCheques: false,
+  includeReturnedCheques: true,
+  includeClearedCheques: false,
+};
+
 const fmt = (amount: number) =>
   amount.toLocaleString("en-LK", {
     minimumFractionDigits: 2,
@@ -136,23 +146,24 @@ export function buildDoc(
   companyName: string = "CHAMPIKA HARDWARE",
   options?: StatementReportOptions
 ): jsPDF {
+  const opts = { ...DEFAULT_STATEMENT_OPTIONS, ...(options || {}) };
   const invoices = filterStatementInvoices(rawInvoices);
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const today = new Date();
 
-  const showInvoices = options?.includeInvoices !== false;
-  const showSubRows = options?.includePaymentSubRows !== false;
-  const showSoldGoods = options?.includeGoodsSoldToCustomer !== false;
-  const showOtherGoods = options?.includeOtherGoodsStock !== false;
-  const showPendingCheques = options?.includePendingCheques !== false;
-  const showReturnedCheques = options?.includeReturnedCheques !== false;
-  const showClearedCheques = Boolean(options?.includeClearedCheques);
+  const showInvoices = opts.includeInvoices !== false;
+  const showSubRows = opts.includePaymentSubRows !== false;
+  const showSoldGoods = opts.includeGoodsSoldToCustomer !== false;
+  const showOtherGoods = opts.includeOtherGoodsStock !== false;
+  const showPendingCheques = Boolean(opts.includePendingCheques);
+  const showReturnedCheques = opts.includeReturnedCheques !== false;
+  const showClearedCheques = Boolean(opts.includeClearedCheques);
 
   // ── 1. Header & Title ──────────────────────────────────────────────────────
   const { mainTitle, subAgency } = parseCompanyAndAgency(companyName);
-  const statementTitle = options?.customTitle || "CUSTOMER OUTSTANDING STATEMENT";
+  const statementTitle = opts.customTitle || "CUSTOMER OUTSTANDING STATEMENT";
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
@@ -1247,18 +1258,19 @@ export async function shareCustomerStatement(
     toast.info("No invoice records found for statement");
     return;
   }
+  const opts = { ...DEFAULT_STATEMENT_OPTIONS, ...(options || {}) };
   const invoices = filterStatementInvoices(rawInvoices);
   const totalDue = invoices.reduce((sum, i) => sum + i.balance, 0);
 
   const { mainTitle, subAgency } = parseCompanyAndAgency(companyName);
   const agencyLabel = subAgency ? ` (${subAgency})` : "";
-  const statementTitle = options?.customTitle || "Customer Statement";
+  const statementTitle = opts.customTitle || "Customer Statement";
 
-  const showInvoices = options?.includeInvoices !== false;
-  const showSubRows = options?.includePaymentSubRows !== false;
-  const showPendingCheques = options?.includePendingCheques !== false;
-  const showReturnedCheques = options?.includeReturnedCheques !== false;
-  const showClearedCheques = Boolean(options?.includeClearedCheques);
+  const showInvoices = opts.includeInvoices !== false;
+  const showSubRows = opts.includePaymentSubRows !== false;
+  const showPendingCheques = Boolean(opts.includePendingCheques);
+  const showReturnedCheques = opts.includeReturnedCheques !== false;
+  const showClearedCheques = Boolean(opts.includeClearedCheques);
 
   // WhatsApp text summary
   let msg = `*${mainTitle}${agencyLabel}*\n`;

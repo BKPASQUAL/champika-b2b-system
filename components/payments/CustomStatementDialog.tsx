@@ -34,6 +34,7 @@ import {
   printCustomerStatement,
   shareCustomerStatement,
   filterStatementInvoices,
+  DEFAULT_STATEMENT_OPTIONS,
 } from "@/lib/customer-statement-report";
 
 interface CustomStatementDialogProps {
@@ -53,16 +54,25 @@ export function CustomStatementDialog({
   companyName = "CHAMPIKA SIERRA",
   themeColor = "purple",
 }: CustomStatementDialogProps) {
-  // Option States
-  const [includeInvoices, setIncludeInvoices] = useState(true);
-  const [includePaymentSubRows, setIncludePaymentSubRows] = useState(true);
-  const [includeGoodsSoldToCustomer, setIncludeGoodsSoldToCustomer] = useState(true);
-  const [includeOtherGoodsStock, setIncludeOtherGoodsStock] = useState(true);
-  const [includePendingCheques, setIncludePendingCheques] = useState(true);
-  const [includeReturnedCheques, setIncludeReturnedCheques] = useState(true);
-  const [includeClearedCheques, setIncludeClearedCheques] = useState(false);
+  // Option States (Default Outstanding: Invoices, Sub-rows, Goods, and Return Cheques only; Pending & Cleared Cheques unchecked)
+  const [includeInvoices, setIncludeInvoices] = useState(DEFAULT_STATEMENT_OPTIONS.includeInvoices !== false);
+  const [includePaymentSubRows, setIncludePaymentSubRows] = useState(DEFAULT_STATEMENT_OPTIONS.includePaymentSubRows !== false);
+  const [includeGoodsSoldToCustomer, setIncludeGoodsSoldToCustomer] = useState(DEFAULT_STATEMENT_OPTIONS.includeGoodsSoldToCustomer !== false);
+  const [includeOtherGoodsStock, setIncludeOtherGoodsStock] = useState(DEFAULT_STATEMENT_OPTIONS.includeOtherGoodsStock !== false);
+  const [includePendingCheques, setIncludePendingCheques] = useState(Boolean(DEFAULT_STATEMENT_OPTIONS.includePendingCheques));
+  const [includeReturnedCheques, setIncludeReturnedCheques] = useState(DEFAULT_STATEMENT_OPTIONS.includeReturnedCheques !== false);
+  const [includeClearedCheques, setIncludeClearedCheques] = useState(Boolean(DEFAULT_STATEMENT_OPTIONS.includeClearedCheques));
   const [customTitle, setCustomTitle] = useState("");
   const [customNote, setCustomNote] = useState("");
+
+  // Reset to default outstanding whenever dialog opens
+  React.useEffect(() => {
+    if (open) {
+      applyPreset("outstanding");
+      setCustomTitle("");
+      setCustomNote("");
+    }
+  }, [open]);
 
   // Analyze Customer Data for Badge Counts & Summaries
   const stats = useMemo(() => {
@@ -157,7 +167,7 @@ export function CustomStatementDialog({
       setIncludePaymentSubRows(true);
       setIncludeGoodsSoldToCustomer(true);
       setIncludeOtherGoodsStock(true);
-      setIncludePendingCheques(true);
+      setIncludePendingCheques(false);
       setIncludeReturnedCheques(true);
       setIncludeClearedCheques(false);
     } else if (preset === "invoicesOnly") {
