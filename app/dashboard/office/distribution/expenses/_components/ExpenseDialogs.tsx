@@ -4,6 +4,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
@@ -182,13 +183,18 @@ export function ExpenseFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-full max-w-[calc(100%-2rem)] overflow-visible">
+      <DialogContent className="sm:max-w-[520px]">
         <DialogHeader>
           <DialogTitle>
             {initialData?.id ? "Edit Expense" : "Add New Expense"}
           </DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground">
+            {initialData?.id
+              ? "Update details for this distribution expense record."
+              : "Enter details to record a new distribution expense."}
+          </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 py-4">
+        <form onSubmit={handleSubmit} className="space-y-4 py-2">
           <div className="space-y-2">
             <Label>Business Allocation</Label>
             <Select
@@ -234,9 +240,9 @@ export function ExpenseFormDialog({
                   setFormData({ ...formData, category: val as ExpenseCategory })
                 }
               >
-                <SelectTrigger  className="w-full">
+                <SelectTrigger className="w-full">
                   <SelectValue />
-                </SelectTrigger >
+                </SelectTrigger>
                 <SelectContent>
                   {CATEGORIES.map((cat) => (
                     <SelectItem key={cat} value={cat}>
@@ -251,6 +257,8 @@ export function ExpenseFormDialog({
               <Label>Amount (LKR)</Label>
               <Input
                 type="number"
+                step="any"
+                min="0"
                 value={formData.amount}
                 onChange={(e) =>
                   setFormData({
@@ -268,7 +276,7 @@ export function ExpenseFormDialog({
             <Label className="flex items-center justify-between">
               Linked Delivery
               {isLoadLocked && (
-                <span className="text-xs text-muted-foreground flex items-center">
+                <span className="text-xs text-muted-foreground flex items-center font-normal">
                   <Lock className="w-3 h-3 mr-1" /> Locked to current load
                 </span>
               )}
@@ -284,18 +292,23 @@ export function ExpenseFormDialog({
                   role="combobox"
                   aria-expanded={openLoadSelect}
                   className={cn(
-                    "w-full justify-between",
+                    "w-full justify-between font-normal text-left",
+                    !formData.loadId && "text-muted-foreground",
                     isLoadLocked && "opacity-80 bg-muted cursor-not-allowed"
                   )}
                   disabled={isLoadLocked}
                 >
-                  {getLoadDisplayText()}
+                  <span className="truncate">{getLoadDisplayText()}</span>
                   {!isLoadLocked && (
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   )}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-full p-0" align="start">
+              <PopoverContent
+                className="p-0"
+                style={{ width: "var(--radix-popover-trigger-width)" }}
+                align="start"
+              >
                 <Command>
                   <CommandInput placeholder="Search load ID..." />
                   <CommandList>
@@ -316,7 +329,7 @@ export function ExpenseFormDialog({
                         >
                           <Check
                             className={cn(
-                              "mr-2 h-4 w-4",
+                              "mr-2 h-4 w-4 shrink-0",
                               formData.loadId === load.id
                                 ? "opacity-100"
                                 : "opacity-0"
@@ -374,7 +387,7 @@ export function ExpenseFormDialog({
                   setFormData({ ...formData, paymentMethod: val })
                 }
               >
-                <SelectTrigger  className="w-full">
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -389,7 +402,12 @@ export function ExpenseFormDialog({
           </div>
 
           <div className="space-y-2">
-            <Label>Reference No. (Optional)</Label>
+            <Label>
+              Reference No.{" "}
+              <span className="text-muted-foreground font-normal">
+                (Optional)
+              </span>
+            </Label>
             <Input
               value={formData.referenceNo}
               onChange={(e) =>
@@ -399,7 +417,7 @@ export function ExpenseFormDialog({
             />
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="pt-2">
             <Button
               type="button"
               variant="outline"
