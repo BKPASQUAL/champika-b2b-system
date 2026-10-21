@@ -212,6 +212,11 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           icon: BarChart3,
         },
         {
+          name: "Monthly Profit & Loss",
+          href: "/dashboard/admin/reports/monthly-pnl",
+          icon: Calculator,
+        },
+        {
           name: "Supplier Analytics",
           href: "/dashboard/admin/reports/suppliers",
           icon: Factory,
@@ -307,9 +312,14 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
       title: "HR & Payroll",
       items: [
         {
+          name: "Staff Salaries",
+          href: "/dashboard/admin/salaries",
+          icon: Banknote,
+        },
+        {
           name: "Salary Approvals",
           href: "/dashboard/admin/salaries-approval",
-          icon: Banknote,
+          icon: ClipboardCheck,
         },
       ],
     },

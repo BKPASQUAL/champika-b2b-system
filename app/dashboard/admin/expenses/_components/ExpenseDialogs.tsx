@@ -64,10 +64,17 @@ interface Business {
 }
 
 const CATEGORIES: ExpenseCategory[] = [
+  "Labor",
+  "Salaries",
+  "Bank Interest",
+  "Rent",
+  "Electricity & Utilities",
   "Fuel",
   "Maintenance",
   "Services",
   "Delivery",
+  "Food & Meals",
+  "Office & Admin",
   "Lunch",
   "Breakfast",
   "Dinner",

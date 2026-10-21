@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -676,6 +677,23 @@ export default function AdminReportsPage() {
         </TabsContent>
 
         <TabsContent value="monthly" className="space-y-6">
+          <div className="bg-gradient-to-r from-blue-500/10 via-emerald-500/10 to-transparent border border-blue-200 dark:border-blue-900 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                Dedicated Monthly Profit & Loss Statement (P&L)
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                View month-by-month profit calculations with detailed labor costs, salaries, bank interest, utilities, and printable P&L statements.
+              </p>
+            </div>
+            <Button asChild size="sm" className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white">
+              <Link href="/dashboard/admin/reports/monthly-pnl">
+                Open Monthly P&L Statement →
+              </Link>
+            </Button>
+          </div>
+
           <Card>
             <CardHeader>
               <CardTitle>Monthly Net Profit Analysis</CardTitle>

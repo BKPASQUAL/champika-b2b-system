@@ -17,6 +17,7 @@ const createSalarySchema = z.object({
   night_out_allowance: z.number().default(0),
   payment_date: z.string().optional(),
   salary_month: z.string().optional(),
+  admin_approval_status: z.enum(["Pending", "Approved", "Rejected"]).optional(),
   business_id: z.string().uuid().optional().nullable(),
   recorded_by: z.string().uuid().optional().nullable(),
 });
@@ -80,7 +81,7 @@ export async function POST(request: NextRequest) {
         net_salary,
         payment_date: val.payment_date || new Date().toISOString().split('T')[0],
         salary_month: val.salary_month || null,
-        admin_approval_status: 'Pending',
+        admin_approval_status: val.admin_approval_status || "Pending",
         business_id: val.business_id || null,
         recorded_by: val.recorded_by || null,
       })
