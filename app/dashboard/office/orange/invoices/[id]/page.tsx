@@ -22,6 +22,7 @@ import {
   Download,
   Share2,
   RefreshCw,
+  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -61,6 +62,9 @@ import { downloadInvoice } from "../../../distribution/invoices/print-utils";
 import { shareInvoice } from "@/app/lib/invoice-print";
 import { DocumentAttachments } from "@/components/ui/DocumentAttachments";
 import { CancelInvoiceButton } from "@/components/ui/CancelInvoiceButton";
+import { RecordPaymentDialog } from "../_components/RecordPaymentDialog";
+import { EditPaymentDialog } from "@/components/payments/EditPaymentDialog";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 // --- Interfaces ---
 interface InvoiceHistory {
@@ -98,6 +102,7 @@ interface PaymentRecord {
   cheque_no?: string;
   cheque_status?: string;
   cheque_date?: string;
+  is_cancelled?: boolean;
 }
 
 export default function OrangeViewInvoicePage({
@@ -113,6 +118,8 @@ export default function OrangeViewInvoicePage({
   const [loading, setLoading] = useState(true);
   const [invoice, setInvoice] = useState<any>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [isPaymentOpen, setIsPaymentOpen] = useState(false);
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
 
   // History State
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -406,6 +413,17 @@ export default function OrangeViewInvoicePage({
               )}
               {sharing ? "Sharing…" : "Share"}
             </Button>
+
+            {/* Record Payment Button */}
+            {balanceDue > 0 && (
+              <Button
+                size="sm"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                onClick={() => setIsPaymentOpen(true)}
+              >
+                <Banknote className="w-4 h-4 mr-2" /> Record Payment
+              </Button>
+            )}
 
             <CancelInvoiceButton
               id={id}
@@ -736,6 +754,7 @@ export default function OrangeViewInvoicePage({
                         <TableHead>Reference / Cheque</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="text-right pr-6">Amount</TableHead>
+                        <TableHead className="text-center w-20">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -784,13 +803,27 @@ export default function OrangeViewInvoicePage({
                               </span>
                               {isReturned && <p className="text-[10px] text-red-500 font-medium">Reversed</p>}
                             </TableCell>
+                            <TableCell className="text-center">
+                              {!pay.is_cancelled && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  title="Edit Payment & Goods"
+                                  className="h-7 w-7 text-purple-600 hover:text-purple-800 hover:bg-purple-50"
+                                  onClick={() => setEditingPaymentId(pay.id)}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                            </TableCell>
                           </TableRow>
                         );
                       })}
                     </TableBody>
                     <TableFooter className="bg-emerald-50/30">
                       <TableRow>
-                        <TableCell colSpan={4} className="pl-6 text-emerald-700 font-medium text-right">Total Paid</TableCell>
+                        <TableCell colSpan={5} className="pl-6 text-emerald-700 font-medium text-right">Total Paid</TableCell>
                         <TableCell className="pr-6 text-right font-bold font-mono text-emerald-700">
                           LKR {totalPaid.toLocaleString("en-LK", { minimumFractionDigits: 2 })}
                         </TableCell>
@@ -964,6 +997,36 @@ export default function OrangeViewInvoicePage({
           </div>
         </div>
       </div>
+
+      <RecordPaymentDialog
+        isOpen={isPaymentOpen}
+        setIsOpen={setIsPaymentOpen}
+        invoice={{
+          orderId: invoice?.orderId,
+          invoiceNo: invoice?.invoiceNo,
+          customerName: invoice?.customer?.shop || invoice?.customer?.name || "",
+          customerId: invoice?.customer?.id,
+          dueAmount: Math.max(0, balanceDue),
+        }}
+        agencyName="Orange"
+        businessId={BUSINESS_IDS.ORANGE_AGENCY}
+        onPaymentSuccess={() => {
+          fetchInvoice(true);
+          fetchReturns();
+        }}
+      />
+
+      <EditPaymentDialog
+        isOpen={!!editingPaymentId}
+        setIsOpen={(open) => !open && setEditingPaymentId(null)}
+        paymentId={editingPaymentId}
+        agencyName="Orange"
+        businessId={BUSINESS_IDS.ORANGE_AGENCY}
+        onSuccess={() => {
+          fetchInvoice(true);
+          fetchReturns();
+        }}
+      />
     </div>
   );
 }

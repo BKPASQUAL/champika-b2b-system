@@ -23,6 +23,7 @@ import {
   Building2,
   XCircle,
   Package,
+  Pencil,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -45,6 +46,7 @@ interface PaymentTableProps {
   onUpdateStatus: (payment: Payment) => void;
   onView: (payment: Payment) => void;
   onCancel: (payment: Payment) => void;
+  onEdit?: (payment: Payment) => void;
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
@@ -119,6 +121,7 @@ export function PaymentTable({
   onUpdateStatus,
   onView,
   onCancel,
+  onEdit,
   currentPage,
   totalPages,
   onPageChange,
@@ -271,6 +274,11 @@ export function PaymentTable({
                           <DropdownMenuItem onClick={() => window.open(`/dashboard/office/sierra/invoices/${payment.invoiceId}`, "_blank")} className="cursor-pointer">
                             <FileText className="mr-2 h-4 w-4" /> View Invoice
                           </DropdownMenuItem>
+                          {!payment.isCancelled && onEdit && (
+                            <DropdownMenuItem onClick={() => onEdit(payment)} className="cursor-pointer text-purple-700 focus:text-purple-700 focus:bg-purple-50">
+                              <Pencil className="mr-2 h-4 w-4 text-purple-600" /> Edit Payment
+                            </DropdownMenuItem>
+                          )}
                           {isCheque && !payment.isCancelled && payment.chequeStatus !== "Returned" && payment.chequeStatus !== "Cleared" && (
                             <>
                               <DropdownMenuSeparator />

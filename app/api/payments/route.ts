@@ -624,7 +624,7 @@ export async function POST(request: NextRequest) {
                 customer_id: customer.id,
                 quantity: Number(item.quantity),
                 return_type: retType,
-                reason: `Payment Goods Settlement for ${invoice.invoice_no}${item.invoiceNo ? ` (ref: ${item.invoiceNo})` : ""}${item.manualInvoiceNo ? ` (manual ref: ${item.manualInvoiceNo})` : ""}`,
+                reason: `Payment Goods Settlement for ${invoice.invoice_no}${item.invoiceNo ? ` (ref: ${item.invoiceNo})` : ""}${item.manualInvoiceNo ? ` (manual ref: ${item.manualInvoiceNo})` : ""} [PAY:${payment.id}] [PRICE:${item.unitPrice}] [INV:${item.invoiceNo || ""}] [MAN:${item.manualInvoiceNo || ""}]`,
                 status: "Completed",
                 returned_by: returnedByUuid,
                 return_date: paymentDate,

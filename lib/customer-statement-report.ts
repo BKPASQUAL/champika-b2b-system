@@ -525,9 +525,23 @@ function buildDoc(
     }
   });
 
-  const soldItems = parsedGoodsItems.filter((i) => i.isSoldToCustomer);
-  const notSoldItems = parsedGoodsItems.filter((i) => !i.isSoldToCustomer);
-  const totalGoodsAmount = parsedGoodsItems.reduce((sum, i) => sum + i.amount, 0);
+  // Deduplicate goods items so that multi-invoice settlements sharing items on the same date never duplicate
+  const deduplicatedGoodsItems: ParsedGoodsItem[] = [];
+  const seenItemKeys = new Set<string>();
+
+  // Process items in reverse (newest payment records first) so updated rates overwrite older ones
+  for (let idx = parsedGoodsItems.length - 1; idx >= 0; idx--) {
+    const item = parsedGoodsItems[idx];
+    const key = `${item.date}_${item.itemName.trim().toLowerCase()}_${item.qty}_${item.manualInvoiceNo.trim().toLowerCase()}_${item.isSoldToCustomer ? "sold" : "stock"}`;
+    if (!seenItemKeys.has(key)) {
+      seenItemKeys.add(key);
+      deduplicatedGoodsItems.unshift(item);
+    }
+  }
+
+  const soldItems = deduplicatedGoodsItems.filter((i) => i.isSoldToCustomer);
+  const notSoldItems = deduplicatedGoodsItems.filter((i) => !i.isSoldToCustomer);
+  const totalGoodsAmount = deduplicatedGoodsItems.reduce((sum, i) => sum + i.amount, 0);
   let goodsBannerBottomY = 0;
 
   if (parsedGoodsItems.length > 0) {

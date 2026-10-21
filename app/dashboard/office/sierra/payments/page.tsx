@@ -24,6 +24,7 @@ import { PaymentStats } from "./_components/PaymentStats";
 import { PaymentTable } from "./_components/PaymentTable";
 import { PaymentDialogs, PaymentViewDialog, CancelPaymentDialog } from "./_components/PaymentDialogs";
 import { CreatePaymentDialog } from "./_components/CreatePaymentDialog";
+import { EditPaymentDialog } from "@/components/payments/EditPaymentDialog";
 
 export default function SierraPaymentsPage() {
   const router = useRouter();
@@ -45,6 +46,7 @@ export default function SierraPaymentsPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
 
   const {
@@ -246,6 +248,10 @@ export default function SierraPaymentsPage() {
               setSelectedPayment(p);
               setIsCancelDialogOpen(true);
             }}
+            onEdit={(p) => {
+              setSelectedPayment(p);
+              setIsEditDialogOpen(true);
+            }}
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={setCurrentPage}
@@ -278,6 +284,15 @@ export default function SierraPaymentsPage() {
         setIsOpen={setIsCancelDialogOpen}
         payment={selectedPayment}
         onCancelled={fetchPayments}
+      />
+
+      <EditPaymentDialog
+        isOpen={isEditDialogOpen}
+        setIsOpen={setIsEditDialogOpen}
+        paymentId={selectedPayment?.id || null}
+        agencyName="Sierra"
+        businessId={currentBusinessId}
+        onSuccess={fetchPayments}
       />
     </div>
   );

@@ -88,6 +88,7 @@ interface PurchasedProduct {
   latestInvoiceNo?: string;
   latestManualInvoiceNo?: string;
   sellingPrice?: number;
+  costPrice?: number;
   invoices?: Array<{ invoiceNo: string; manualInvoiceNo?: string; unitPrice: number; quantity: number }>;
   history?: Array<{ invoiceNo: string; manualInvoiceNo?: string; unitPrice: number; quantity: number }>;
 }
@@ -99,6 +100,7 @@ interface CatalogProduct {
   companyCode?: string;
   stock?: number;
   sellingPrice?: number;
+  costPrice?: number;
   supplier?: string;
   brand?: string;
   retailOnly?: boolean;
@@ -154,6 +156,8 @@ export function GoodsSettlementSection({
   const [editReturnType, setEditReturnType] = useState<"Good" | "Damage">("Good");
   const [editLocationId, setEditLocationId] = useState<string>("");
   const [editIsCustomerPurchased, setEditIsCustomerPurchased] = useState<boolean>(true);
+  const [editProductId, setEditProductId] = useState<string>("");
+  const [editProductSelectOpen, setEditProductSelectOpen] = useState(false);
 
   // Fetch locations
   useEffect(() => {
@@ -205,6 +209,7 @@ export function GoodsSettlementSection({
             companyCode: p.companyCode || p.company_code || "",
             stock: p.stock ?? p.stock_quantity ?? 0,
             sellingPrice: p.sellingPrice || p.selling_price || 0,
+            costPrice: Number(p.costPrice || p.cost_price || 0),
             supplier: p.supplier || p.supplier_name || "",
             brand: p.brand || "",
             retailOnly: p.retailOnly || false,
@@ -247,6 +252,8 @@ export function GoodsSettlementSection({
           ...p,
           companyCode: p.companyCode || p.company_code || "",
           stock: p.currentStock ?? p.stock ?? p.stock_quantity ?? 0,
+          costPrice: Number(p.costPrice || p.cost_price || 0),
+          sellingPrice: Number(p.sellingPrice || p.selling_price || 0),
         }));
         setPurchasedProducts(mapped);
         if (mapped.length > 0) {
@@ -322,6 +329,7 @@ export function GoodsSettlementSection({
     setEditReturnType(item.returnType);
     setEditLocationId(item.locationId);
     setEditIsCustomerPurchased(item.isCustomerPurchased !== false);
+    setEditProductId(item.productId);
   };
 
   const handleSaveEdit = () => {
@@ -340,11 +348,18 @@ export function GoodsSettlementSection({
       locations.find((l) => l.id === editingItem.locationId) ||
       locations[0];
 
+    const selectedProd =
+      catalogProducts.find((p) => p.id === editProductId) ||
+      purchasedProducts.find((p) => p.id === editProductId);
+
     setGoodsItems((prev) =>
       prev.map((it) => {
         if (it.id !== editingItem.id) return it;
         return {
           ...it,
+          productId: editProductId || it.productId,
+          productName: selectedProd?.name || it.productName,
+          sku: selectedProd?.sku || it.sku,
           quantity: editQuantity,
           unitPrice: editUnitPrice,
           totalValue: Math.round(editQuantity * editUnitPrice * 100) / 100,
@@ -585,6 +600,28 @@ export function GoodsSettlementSection({
               value={ownUnitPrice || ""}
               onChange={(e) => setOwnUnitPrice(parseFloat(e.target.value) || 0)}
             />
+            {selectedProductObj && (
+              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                {Number(selectedProductObj.costPrice) > 0 && (
+                  <button
+                    type="button"
+                    className="text-[10px] text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-1.5 py-0.5 rounded font-medium transition-colors"
+                    onClick={() => setOwnUnitPrice(Number(selectedProductObj.costPrice))}
+                  >
+                    Cost: {formatCurrency(Number(selectedProductObj.costPrice))}
+                  </button>
+                )}
+                {Number(selectedProductObj.sellingPrice) > 0 && (
+                  <button
+                    type="button"
+                    className="text-[10px] text-purple-800 bg-purple-50 hover:bg-purple-100 border border-purple-200 px-1.5 py-0.5 rounded font-medium transition-colors"
+                    onClick={() => setOwnUnitPrice(Number(selectedProductObj.sellingPrice))}
+                  >
+                    Selling: {formatCurrency(Number(selectedProductObj.sellingPrice))}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -673,94 +710,96 @@ export function GoodsSettlementSection({
             </div>
 
             {soldToCustomerItems.length > 0 ? (
-              <Table>
-                <TableHeader className="bg-emerald-50/30">
-                  <TableRow>
-                    <TableHead className="text-xs font-semibold">{agencyName} Product</TableHead>
-                    <TableHead className="text-xs font-semibold">Bill &amp; Manual Ref</TableHead>
-                    <TableHead className="text-xs font-semibold text-right">Quantity</TableHead>
-                    <TableHead className="text-xs font-semibold text-right">Credit Rate (LKR)</TableHead>
-                    <TableHead className="text-xs font-semibold text-right">Total Credit (LKR)</TableHead>
-                    <TableHead className="text-xs font-semibold">Stock Destination</TableHead>
-                    <TableHead className="text-xs font-semibold text-center w-20">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {soldToCustomerItems.map((item) => (
-                    <TableRow key={item.id} className="hover:bg-emerald-50/20">
-                      <TableCell className="py-2.5">
-                        <div className="font-semibold text-xs text-gray-900">
-                          {item.productName}
-                        </div>
-                        <div className="text-[11px] text-muted-foreground mt-0.5">
-                          {item.sku && <span>SKU: {item.sku}</span>}
-                        </div>
-                      </TableCell>
-                      <TableCell className="py-2.5 text-xs">
-                        <div className="flex flex-col gap-0.5">
-                          {item.invoiceNo ? (
-                            <span className="font-medium text-emerald-800 flex items-center gap-1">
-                              <ReceiptText className="w-3 h-3 text-emerald-600" />
-                              {item.invoiceNo}
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                          {item.manualInvoiceNo && (
-                            <span className="text-[11px] text-purple-700 font-medium">
-                              Manual: {item.manualInvoiceNo}
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="py-2.5 text-right font-medium text-xs">
-                        {item.quantity} units
-                      </TableCell>
-                      <TableCell className="py-2.5 text-right text-xs">
-                        {formatCurrency(item.unitPrice)}
-                      </TableCell>
-                      <TableCell className="py-2.5 text-right font-bold text-xs text-emerald-950">
-                        {formatCurrency(item.totalValue)}
-                      </TableCell>
-                      <TableCell className="py-2.5 text-xs text-muted-foreground">
-                        <span className="inline-flex items-center gap-1.5">
-                          <span
-                            className={cn(
-                              "inline-block w-2 h-2 rounded-full",
-                              item.returnType === "Damage" ? "bg-red-500" : "bg-emerald-500"
-                            )}
-                          />
-                          <span className="font-medium text-gray-700">{item.returnType} Stock</span> &bull; {item.locationName}
-                        </span>
-                      </TableCell>
-                      <TableCell className="py-2.5 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            title="Edit Item & Bill Details"
-                            className="h-7 w-7 text-purple-600 hover:text-purple-800 hover:bg-purple-50"
-                            onClick={() => handleOpenEdit(item)}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            title="Remove Item"
-                            className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50"
-                            onClick={() => handleRemoveGoodsItem(item.id)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </TableCell>
+              <div className="overflow-x-auto">
+                <Table className="min-w-[680px]">
+                  <TableHeader className="bg-emerald-50/30">
+                    <TableRow>
+                      <TableHead className="text-xs font-semibold">{agencyName} Product</TableHead>
+                      <TableHead className="text-xs font-semibold">Bill &amp; Manual Ref</TableHead>
+                      <TableHead className="text-xs font-semibold text-right">Quantity</TableHead>
+                      <TableHead className="text-xs font-semibold text-right">Credit Rate (LKR)</TableHead>
+                      <TableHead className="text-xs font-semibold text-right">Total Credit (LKR)</TableHead>
+                      <TableHead className="text-xs font-semibold">Stock Destination</TableHead>
+                      <TableHead className="text-xs font-semibold text-center w-20">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {soldToCustomerItems.map((item) => (
+                      <TableRow key={item.id} className="hover:bg-emerald-50/20">
+                        <TableCell className="py-2.5">
+                          <div className="font-semibold text-xs text-gray-900">
+                            {item.productName}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground mt-0.5">
+                            {item.sku && <span>SKU: {item.sku}</span>}
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-2.5 text-xs">
+                          <div className="flex flex-col gap-0.5">
+                            {item.invoiceNo ? (
+                              <span className="font-medium text-emerald-800 flex items-center gap-1">
+                                <ReceiptText className="w-3 h-3 text-emerald-600" />
+                                {item.invoiceNo}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                            {item.manualInvoiceNo && (
+                              <span className="text-[11px] text-purple-700 font-medium">
+                                Manual: {item.manualInvoiceNo}
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-2.5 text-right font-medium text-xs">
+                          {item.quantity} units
+                        </TableCell>
+                        <TableCell className="py-2.5 text-right text-xs">
+                          {formatCurrency(item.unitPrice)}
+                        </TableCell>
+                        <TableCell className="py-2.5 text-right font-bold text-xs text-emerald-950">
+                          {formatCurrency(item.totalValue)}
+                        </TableCell>
+                        <TableCell className="py-2.5 text-xs text-muted-foreground">
+                          <span className="inline-flex items-center gap-1.5">
+                            <span
+                              className={cn(
+                                "inline-block w-2 h-2 rounded-full",
+                                item.returnType === "Damage" ? "bg-red-500" : "bg-emerald-500"
+                              )}
+                            />
+                            <span className="font-medium text-gray-700">{item.returnType} Stock</span> &bull; {item.locationName}
+                          </span>
+                        </TableCell>
+                        <TableCell className="py-2.5 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              title="Edit Item & Bill Details"
+                              className="h-7 w-7 text-purple-600 hover:text-purple-800 hover:bg-purple-50"
+                              onClick={() => handleOpenEdit(item)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              title="Remove Item"
+                              className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => handleRemoveGoodsItem(item.id)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             ) : (
               <div className="p-3 text-center text-xs text-muted-foreground italic">
                 No items returned from customer bills in this settlement.
@@ -785,7 +824,8 @@ export function GoodsSettlementSection({
             </div>
 
             {notSoldToCustomerItems.length > 0 ? (
-              <Table>
+              <div className="overflow-x-auto">
+                <Table className="min-w-[680px]">
                 <TableHeader className="bg-amber-50/30">
                   <TableRow>
                     <TableHead className="text-xs font-semibold">{agencyName} Product</TableHead>
@@ -874,6 +914,7 @@ export function GoodsSettlementSection({
                   ))}
                 </TableBody>
               </Table>
+              </div>
             ) : (
               <div className="p-3 text-center text-xs text-muted-foreground italic">
                 No other {agencyName} items added in this settlement.
@@ -908,20 +949,65 @@ export function GoodsSettlementSection({
 
       {/* Edit Goods Settlement Item Dialog */}
       <Dialog open={!!editingItem} onOpenChange={(open) => !open && setEditingItem(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[95vw] sm:max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle className="text-sm font-bold flex items-center gap-2">
-              <Pencil className="w-4 h-4 text-purple-600" />
-              Edit {editingItem?.productName}
+            <DialogTitle className="text-sm sm:text-base font-bold flex items-center gap-2">
+              <Pencil className="w-4 h-4 text-purple-600 shrink-0" />
+              <span className="truncate">Edit {editingItem?.productName}</span>
             </DialogTitle>
-            <DialogDescription className="text-xs">
+            <DialogDescription className="text-xs text-muted-foreground">
               Update return quantity, credit rate, bill reference, or stock classification.
             </DialogDescription>
           </DialogHeader>
 
           {editingItem && (
-            <div className="space-y-3 py-2 text-xs">
-              <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-3.5 py-2 text-xs">
+              {/* Product selector in edit dialog */}
+              <div className="space-y-1">
+                <Label className="text-xs">Product</Label>
+                <Popover open={editProductSelectOpen} onOpenChange={setEditProductSelectOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" role="combobox" className="w-full justify-between h-9 text-xs bg-white">
+                      <span className="truncate">
+                        {catalogProducts.find((p) => p.id === editProductId)?.name ||
+                          purchasedProducts.find((p) => p.id === editProductId)?.name ||
+                          editingItem.productName}
+                      </span>
+                      <ChevronsUpDown className="ml-1 h-3.5 w-3.5 opacity-50 shrink-0" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[min(90vw,360px)] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Change product..." className="h-8 text-xs" />
+                      <CommandList className="max-h-52">
+                        <CommandGroup heading="Available Products">
+                          {catalogProducts.map((p) => (
+                            <CommandItem
+                              key={p.id}
+                              value={`${p.name} ${p.sku}`}
+                              onSelect={() => {
+                                setEditProductId(p.id);
+                                if (editUnitPrice <= 0 && p.sellingPrice) {
+                                  setEditUnitPrice(p.sellingPrice);
+                                }
+                                setEditProductSelectOpen(false);
+                              }}
+                            >
+                              <Check className={cn("mr-2 h-3.5 w-3.5", editProductId === p.id ? "opacity-100" : "opacity-0")} />
+                              <div className="flex-1 text-xs">
+                                <div className="font-medium">{p.name}</div>
+                                <div className="text-[10px] text-muted-foreground">{p.sku}</div>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label className="text-xs">Return Quantity</Label>
                   <Input
@@ -941,10 +1027,38 @@ export function GoodsSettlementSection({
                     value={editUnitPrice}
                     onChange={(e) => setEditUnitPrice(parseFloat(e.target.value) || 0)}
                   />
+                  {(() => {
+                    const prod =
+                      catalogProducts.find((p) => p.id === editProductId) ||
+                      purchasedProducts.find((p) => p.id === editProductId);
+                    if (!prod) return null;
+                    return (
+                      <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                        {Number(prod.costPrice) > 0 && (
+                          <button
+                            type="button"
+                            className="text-[10px] text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-1.5 py-0.5 rounded font-medium transition-colors"
+                            onClick={() => setEditUnitPrice(Number(prod.costPrice))}
+                          >
+                            Cost: {formatCurrency(Number(prod.costPrice))}
+                          </button>
+                        )}
+                        {Number(prod.sellingPrice) > 0 && (
+                          <button
+                            type="button"
+                            className="text-[10px] text-purple-800 bg-purple-50 hover:bg-purple-100 border border-purple-200 px-1.5 py-0.5 rounded font-medium transition-colors"
+                            onClick={() => setEditUnitPrice(Number(prod.sellingPrice))}
+                          >
+                            Selling: {formatCurrency(Number(prod.sellingPrice))}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label className="text-xs">Invoice No (System Ref)</Label>
                   <Input
@@ -963,7 +1077,7 @@ export function GoodsSettlementSection({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label className="text-xs">Stock Condition</Label>
                   <Select
@@ -1001,11 +1115,11 @@ export function GoodsSettlementSection({
                 </Label>
               </div>
 
-              <div className="flex items-center justify-between pt-2 border-t">
+              <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 pt-3 border-t">
                 <div className="text-xs text-muted-foreground">
                   New Total: <span className="font-bold text-gray-900">{formatCurrency(editQuantity * editUnitPrice)}</span>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 w-full sm:w-auto justify-end">
                   <Button type="button" variant="outline" size="sm" onClick={() => setEditingItem(null)}>
                     Cancel
                   </Button>

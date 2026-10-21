@@ -22,6 +22,7 @@ import {
   Download,
   Share2,
   RefreshCw,
+  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -60,7 +61,9 @@ import { downloadInvoice , printInvoice } from "../../../distribution/invoices/p
 import { shareInvoice } from "@/app/lib/invoice-print";
 import { DocumentAttachments } from "@/components/ui/DocumentAttachments";
 import { RecordPaymentDialog } from "../_components/RecordPaymentDialog";
+import { EditPaymentDialog } from "@/components/payments/EditPaymentDialog";
 import { CancelInvoiceButton } from "@/components/ui/CancelInvoiceButton";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 // --- Interfaces ---
 interface InvoiceHistory {
@@ -117,6 +120,7 @@ export default function WiremanViewInvoicePage({
   const [invoice, setInvoice] = useState<any>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
 
   // History State
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -748,9 +752,8 @@ export default function WiremanViewInvoicePage({
                         <TableHead>Method</TableHead>
                         <TableHead>Reference / Cheque</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead className="text-right pr-6">
-                          Amount
-                        </TableHead>
+                        <TableHead className="text-right pr-6">Amount</TableHead>
+                        <TableHead className="text-center w-20">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -833,6 +836,20 @@ export default function WiremanViewInvoicePage({
                                 <p className="text-[10px] text-red-500 font-medium">Reversed</p>
                               )}
                             </TableCell>
+                            <TableCell className="text-center">
+                              {!isCancelled && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  title="Edit Payment & Goods"
+                                  className="h-7 w-7 text-purple-600 hover:text-purple-800 hover:bg-purple-50"
+                                  onClick={() => setEditingPaymentId(pay.id)}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                            </TableCell>
                           </TableRow>
                         );
                       })}
@@ -840,7 +857,7 @@ export default function WiremanViewInvoicePage({
                     <TableFooter className="bg-emerald-50/30">
                       <TableRow>
                         <TableCell
-                          colSpan={4}
+                          colSpan={5}
                           className="pl-6 text-emerald-700 font-medium text-right"
                         >
                           Total Paid
@@ -1029,9 +1046,24 @@ export default function WiremanViewInvoicePage({
           orderId: invoice.orderId,
           invoiceNo: invoice.invoiceNo,
           customerName: invoice.customer?.shop || invoice.customer?.name || "",
+          customerId: invoice.customer?.id,
           dueAmount: Math.max(0, balanceDue),
         }}
+        agencyName="Wireman"
+        businessId={BUSINESS_IDS.WIREMAN_AGENCY}
         onPaymentSuccess={() => {
+          fetchInvoice(true);
+          fetchReturns();
+        }}
+      />
+
+      <EditPaymentDialog
+        isOpen={!!editingPaymentId}
+        setIsOpen={(open) => !open && setEditingPaymentId(null)}
+        paymentId={editingPaymentId}
+        agencyName="Wireman"
+        businessId={BUSINESS_IDS.WIREMAN_AGENCY}
+        onSuccess={() => {
           fetchInvoice(true);
           fetchReturns();
         }}
