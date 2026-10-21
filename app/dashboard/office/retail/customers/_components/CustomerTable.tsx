@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useRouter } from "next/navigation";
 import {
   Edit,
   Trash2,
@@ -19,6 +20,7 @@ import {
   Loader2,
   MapPin,
   Mail,
+  Eye,
 } from "lucide-react";
 import { Customer, SortField, SortOrder } from "../types";
 import { TablePagination } from "@/components/ui/TablePagination";
@@ -48,6 +50,8 @@ export function CustomerTable({
   totalPages,
   onPageChange,
 }: CustomerTableProps) {
+  const router = useRouter();
+
   const getSortIcon = (field: SortField) => {
     if (sortField !== field)
       return <ArrowUpDown className="w-4 h-4 ml-1 opacity-40" />;
@@ -102,13 +106,21 @@ export function CustomerTable({
                   {/* Customer Name & Phone */}
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-3">
-                      <Avatar className="h-9 w-9 bg-green-100 text-green-700">
+                      <Avatar
+                        className="h-9 w-9 bg-green-100 text-green-700 cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={() => router.push(`/dashboard/office/retail/customers/${customer.id}`)}
+                        title="View Customer Profile & History"
+                      >
                         <AvatarFallback>
                           {customer.shopName.substring(0, 2).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex flex-col">
-                        <span className="font-medium text-sm">
+                        <span
+                          className="font-medium text-sm cursor-pointer hover:text-green-700 hover:underline"
+                          onClick={() => router.push(`/dashboard/office/retail/customers/${customer.id}`)}
+                          title="View Customer Profile & History"
+                        >
                           {customer.shopName}
                         </span>
                         <div className="text-xs text-muted-foreground flex flex-col gap-1 mt-0.5">
@@ -141,12 +153,22 @@ export function CustomerTable({
 
                   {/* Actions */}
                   <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
+                    <div className="flex items-center justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 hover:bg-green-50 hover:text-green-700 text-green-600"
+                        onClick={() => router.push(`/dashboard/office/retail/customers/${customer.id}`)}
+                        title="View Customer Details & History"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8"
                         onClick={() => onEdit(customer)}
+                        title="Edit Customer"
                       >
                         <Edit className="w-4 h-4" />
                       </Button>
@@ -155,6 +177,7 @@ export function CustomerTable({
                         size="icon"
                         className="h-8 w-8"
                         onClick={() => onDelete(customer)}
+                        title="Delete Customer"
                       >
                         <Trash2 className="w-4 h-4 text-destructive" />
                       </Button>

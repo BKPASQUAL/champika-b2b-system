@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Table,
   TableBody,
@@ -13,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
+  Eye,
   Edit,
   Trash2,
   Phone,
@@ -65,6 +67,7 @@ export function CustomerTable({
   onPageChange,
   agencyTitle = "Wireman Distributors",
 }: CustomerTableProps) {
+  const router = useRouter();
   const [busyActionId, setBusyActionId] = useState<string | null>(null);
 
   // --- PINNING LOGIC ---
@@ -210,13 +213,21 @@ export function CustomerTable({
                     {/* Customer Name & Phone */}
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-3">
-                        <Avatar className="h-9 w-9 bg-red-100 text-red-700">
+                        <Avatar
+                          className="h-9 w-9 bg-red-100 text-red-700 cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={() => router.push(`/dashboard/office/wireman/customers/${customer.id}`)}
+                          title="View Customer Profile & History"
+                        >
                           <AvatarFallback>
                             {customer.shopName.substring(0, 2).toUpperCase()}
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex flex-col">
-                          <span className="font-medium text-sm flex items-center gap-2">
+                          <span
+                            className="font-medium text-sm flex items-center gap-2 cursor-pointer hover:text-red-700 hover:underline"
+                            onClick={() => router.push(`/dashboard/office/wireman/customers/${customer.id}`)}
+                            title="View Customer Profile & History"
+                          >
                             {customer.shopName}
                             {isPinned && (
                               <span className="inline-flex items-center gap-1 text-[10px] bg-red-100 text-red-700 font-semibold px-1.5 py-0.5 rounded">
@@ -270,6 +281,17 @@ export function CustomerTable({
                     {/* Actions */}
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
+                        {/* View Customer Profile & History */}
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => router.push(`/dashboard/office/wireman/customers/${customer.id}`)}
+                          title="View Customer Details & History"
+                          className="hover:bg-amber-50 hover:text-amber-700 text-amber-600"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
+
                         {/* Quick Statement PDF */}
                         <Button
                           variant="ghost"

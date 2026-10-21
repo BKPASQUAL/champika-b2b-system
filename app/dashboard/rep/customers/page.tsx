@@ -47,6 +47,7 @@ import {
   Check,
   ShieldCheck,
   BadgeCheck,
+  Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import { TablePagination } from "@/components/ui/TablePagination";
@@ -661,8 +662,18 @@ export default function RepCustomersPage() {
                       <Button
                         size="icon"
                         variant="ghost"
+                        className="h-7 w-7 shrink-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                        title="View Customer Profile & History"
+                        onClick={() => router.push(`/dashboard/rep/customers/${customer.id}`)}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
                         className="h-7 w-7 shrink-0"
                         onClick={() => openEdit(customer)}
+                        title="Edit Customer"
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
@@ -751,13 +762,21 @@ export default function RepCustomersPage() {
                     >
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <Avatar className="h-9 w-9 bg-blue-50 text-blue-700 border border-blue-100">
+                          <Avatar
+                            className="h-9 w-9 bg-blue-50 text-blue-700 border border-blue-100 cursor-pointer hover:opacity-80 transition-opacity"
+                            onClick={() => router.push(`/dashboard/rep/customers/${customer.id}`)}
+                            title="View Customer Profile & History"
+                          >
                             <AvatarFallback className="font-semibold">
                               {customer.shopName.substring(0, 2).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
                           <div className="flex flex-col">
-                            <span className="font-medium text-sm text-gray-900">
+                            <span
+                              className="font-medium text-sm text-gray-900 cursor-pointer hover:text-blue-700 hover:underline"
+                              onClick={() => router.push(`/dashboard/rep/customers/${customer.id}`)}
+                              title="View Customer Profile & History"
+                            >
                               {customer.shopName}
                             </span>
                             <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -839,8 +858,18 @@ export default function RepCustomersPage() {
                           <Button
                             size="icon"
                             variant="ghost"
+                            className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            title="View Customer Profile & History"
+                            onClick={() => router.push(`/dashboard/rep/customers/${customer.id}`)}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
                             className="h-8 w-8"
                             onClick={() => openEdit(customer)}
+                            title="Edit Customer"
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
