@@ -60,7 +60,10 @@ export function AppSidebar({
   const pathname = usePathname();
   const router = useRouter();
 
-  const isStorefront = isStorefrontProp || pathname?.startsWith("/dashboard/admin/storefront") || pathname?.startsWith("/dashboard/storefront");
+  const isStorefront =
+    isStorefrontProp ||
+    pathname?.startsWith("/dashboard/office/storefront") ||
+    pathname?.startsWith("/dashboard/storefront");
 
   // --- NAVIGATION SELECTION LOGIC ---
   let navSections;
@@ -338,11 +341,10 @@ export function AppSidebar({
                   if (isStorefront) {
                     if (item.href === "/") {
                       isActive = pathname === "/";
-                    } else if (item.href.includes("?tab=")) {
-                      const tab = item.href.split("?tab=")[1];
-                      isActive = pathname?.startsWith("/dashboard/admin/storefront") && currentQuery.includes(`tab=${tab}`);
-                    } else if (item.href === "/dashboard/admin/storefront") {
-                      isActive = pathname === "/dashboard/admin/storefront" && (!currentQuery || currentQuery === "?tab=orders" || currentQuery === "");
+                    } else if (item.href === "/dashboard/office/storefront") {
+                      isActive = pathname === "/dashboard/office/storefront";
+                    } else {
+                      isActive = pathname === item.href || (item.href !== "/" && pathname?.startsWith(item.href));
                     }
                   } else {
                     isActive = pathname === item.href;
@@ -354,13 +356,6 @@ export function AppSidebar({
                       href={item.href}
                       target={item.href === "/" ? "_blank" : undefined}
                       rel={item.href === "/" ? "noopener noreferrer" : undefined}
-                      onClick={() => {
-                        if (item.href.includes("?")) {
-                          setCurrentQuery(item.href.slice(item.href.indexOf("?")));
-                        } else if (item.href === "/dashboard/admin/storefront") {
-                          setCurrentQuery("");
-                        }
-                      }}
                     >
                       <Button
                         variant="ghost"

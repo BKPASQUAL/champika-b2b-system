@@ -63,7 +63,10 @@ export function MobileNav({
   const pathname = usePathname();
   const router = useRouter();
 
-  const isStorefront = isStorefrontProp || pathname?.startsWith("/dashboard/admin/storefront") || pathname?.startsWith("/dashboard/storefront");
+  const isStorefront =
+    isStorefrontProp ||
+    pathname?.startsWith("/dashboard/office/storefront") ||
+    pathname?.startsWith("/dashboard/storefront");
 
   // Fix: iOS PWA — close sheet and restore body state on every route change.
   // Radix Dialog applies scroll-lock styles (overflow:hidden, touch-action:none)
@@ -293,13 +296,25 @@ export function MobileNav({
                   <div className="space-y-0.5">
                     {visibleItems.map((item) => {
                       const Icon = item.icon;
-                      const isActive = pathname === item.href;
+                      let isActive = false;
+                      if (isStorefront) {
+                        if (item.href === "/") {
+                          isActive = pathname === "/";
+                        } else if (item.href === "/dashboard/office/storefront") {
+                          isActive = pathname === "/dashboard/office/storefront";
+                        } else {
+                          isActive = pathname === item.href || (item.href !== "/" && pathname?.startsWith(item.href));
+                        }
+                      } else {
+                        isActive = pathname === item.href;
+                      }
                       return (
                         <Link key={item.href} href={item.href} onClick={() => setIsOpen(false)}>
                           <div className={cn(
                             "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors",
                             isActive
-                              ? isWireman      ? "bg-red-100    text-red-700"
+                              ? isStorefront   ? "bg-amber-100  text-amber-900 font-semibold"
+                                : isWireman    ? "bg-red-100    text-red-700"
                                 : isSierra     ? "bg-purple-100 text-purple-700"
                                 : isOrange     ? "bg-orange-100 text-orange-700"
                                 : isRetail     ? "bg-green-100  text-green-700"

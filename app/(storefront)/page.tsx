@@ -261,7 +261,7 @@ export default function StorefrontHomePage() {
           <div className="text-center py-16 bg-white rounded-2xl border p-8 space-y-3">
             <p className="text-sm font-semibold text-slate-600">No products currently published to the storefront.</p>
             <p className="text-xs text-slate-400">
-              Admin can toggle products online in the <Link href="/dashboard/admin/storefront" className="text-amber-600 font-bold underline">Storefront Operations Hub</Link>.
+              Staff can toggle products online in the <Link href="/dashboard/office/storefront" className="text-amber-600 font-bold underline">Storefront Operations Hub</Link>.
             </p>
           </div>
         ) : (

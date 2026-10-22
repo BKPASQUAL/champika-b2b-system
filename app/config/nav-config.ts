@@ -205,16 +205,6 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
       ],
     },
     {
-      title: "Online Storefront",
-      items: [
-        {
-          name: "BK Wiring Kade Ops",
-          href: "/dashboard/admin/storefront",
-          icon: Globe,
-        },
-      ],
-    },
-    {
       title: "Analytics",
       items: [
         {

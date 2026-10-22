@@ -33,7 +33,7 @@ export const BUSINESS_ROUTES = {
   [BUSINESS_IDS.CHAMPIKA_DISTRIBUTION]: "/dashboard/office/distribution",
   [BUSINESS_IDS.WIREMAN_AGENCY]: "/dashboard/office/wireman",
   [BUSINESS_IDS.SIERRA_AGENCY]: "/dashboard/office/sierra",
-  [BUSINESS_IDS.CHAMPIKA_ONLINE]: "/dashboard/admin/storefront",
+  [BUSINESS_IDS.CHAMPIKA_ONLINE]: "/dashboard/office/storefront",
 } as const;
 
 export const BUSINESS_PO_PREFIXES: Record<string, string> = {

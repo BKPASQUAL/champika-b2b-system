@@ -29,7 +29,7 @@ export const storefrontOfficeNavItems: StorefrontNavSection[] = [
     items: [
       {
         name: "Storefront Overview",
-        href: "/dashboard/admin/storefront",
+        href: "/dashboard/office/storefront",
         icon: LayoutDashboard,
         description: "Operations dashboard",
       },
@@ -40,7 +40,7 @@ export const storefrontOfficeNavItems: StorefrontNavSection[] = [
     items: [
       {
         name: "Orders & Pipeline",
-        href: "/dashboard/admin/storefront?tab=orders",
+        href: "/dashboard/office/storefront/orders",
         icon: ShoppingCart,
         description: "Customer orders & tracking",
       },
@@ -51,13 +51,13 @@ export const storefrontOfficeNavItems: StorefrontNavSection[] = [
     items: [
       {
         name: "Products & Pricing",
-        href: "/dashboard/admin/storefront?tab=products",
+        href: "/dashboard/office/storefront/products",
         icon: Package,
         description: "Online catalog & buffers",
       },
       {
         name: "Shortage Backlog",
-        href: "/dashboard/admin/storefront?tab=backlog",
+        href: "/dashboard/office/storefront/backlog",
         icon: AlertTriangle,
         description: "Out-of-stock reorder",
       },
@@ -68,7 +68,7 @@ export const storefrontOfficeNavItems: StorefrontNavSection[] = [
     items: [
       {
         name: "Inquiries & Messages",
-        href: "/dashboard/admin/storefront?tab=messages",
+        href: "/dashboard/office/storefront/inquiries",
         icon: MessageSquare,
         description: "Visitor queries & alerts",
       },
