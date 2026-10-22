@@ -85,7 +85,7 @@ interface Transaction {
   sellingPrice: number;
 }
 
-export default function WiremanProductDetailsPage({
+export default function OrangeProductDetailsPage({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -103,12 +103,12 @@ export default function WiremanProductDetailsPage({
       try {
         setLoading(true);
         const prodRes = await fetch(
-          `/api/products/${id}?businessId=${BUSINESS_IDS.WIREMAN_AGENCY}`,
+          `/api/products/${id}?businessId=${BUSINESS_IDS.ORANGE_AGENCY}`,
         );
 
         if (prodRes.status === 404) {
           toast.error("Product not found");
-          router.push("/dashboard/office/wireman/products");
+          router.push("/dashboard/office/orange/products");
           return;
         }
 
@@ -142,6 +142,8 @@ export default function WiremanProductDetailsPage({
   };
 
   const getBranchBadgeColor = (bId?: string) => {
+    if (bId === BUSINESS_IDS.ORANGE_AGENCY)
+      return "bg-orange-100 text-orange-700 border-orange-200";
     if (bId === BUSINESS_IDS.WIREMAN_AGENCY)
       return "bg-red-100 text-red-700 border-red-200";
     if (bId === BUSINESS_IDS.CHAMPIKA_RETAIL)

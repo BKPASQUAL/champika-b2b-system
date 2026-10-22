@@ -242,7 +242,7 @@ export default function OrangeEditInvoicePage({
         }
 
         setStockLoading(true);
-        const stockRes = await fetch(`/api/rep/stock?userId=${repId}${isOverrideEnabled ? "&includeOutOfStock=true" : ""}`);
+        const stockRes = await fetch(`/api/rep/stock?userId=${repId}&supplierLike=Orange${isOverrideEnabled ? "&includeOutOfStock=true" : ""}`);
         const stockData = await stockRes.json();
         setProducts(
           Array.isArray(stockData)
