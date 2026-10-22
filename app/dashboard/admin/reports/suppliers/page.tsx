@@ -83,36 +83,11 @@ function getBusinessBadge(businessName: string) {
   return "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-50";
 }
 
-function getRange(quickSelect: string, customFrom: string, customTo: string) {
-  const now = new Date();
-  let from: Date, to: Date;
-  switch (quickSelect) {
-    case "this-month":
-      from = new Date(now.getFullYear(), now.getMonth(), 1);
-      to = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-      break;
-    case "last-month":
-      from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      to = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
-      break;
-    case "this-year":
-      from = new Date(now.getFullYear(), 0, 1);
-      to = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
-      break;
-    case "last-year":
-      from = new Date(now.getFullYear() - 1, 0, 1);
-      to = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59);
-      break;
-    case "custom":
-      from = new Date(customFrom); from.setHours(0, 0, 0, 0);
-      to = new Date(customTo); to.setHours(23, 59, 59, 999);
-      break;
-    default:
-      from = new Date(now.getFullYear(), now.getMonth(), 1);
-      to = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-  }
-  return { from: from.toISOString(), to: to.toISOString() };
-}
+import {
+  ReportDateFilter,
+  ReportDateFilterValue,
+  calculateRange,
+} from "../_components/ReportDateFilter";
 
 // ── Reusable supplier list ────────────────────────────────────────────────────
 function SupplierList({
@@ -160,14 +135,15 @@ function SupplierList({
 }
 
 export default function SupplierAnalyticsPage() {
-  const today = new Date().toISOString().split("T")[0];
-  const firstOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-    .toISOString().split("T")[0];
-
-  const [quickSelect, setQuickSelect] = useState("this-month");
-  const [customFrom, setCustomFrom] = useState(firstOfMonth);
-  const [customTo, setCustomTo] = useState(today);
-  const [appliedCustom, setAppliedCustom] = useState<{ from: string; to: string } | null>(null);
+  const [dateFilter, setDateFilter] = useState<ReportDateFilterValue>(() => {
+    const range = calculateRange("this-month");
+    return {
+      from: range.from,
+      to: range.to,
+      quickSelect: "this-month",
+      label: range.label,
+    };
+  });
   const [selectedSupplier, setSelectedSupplier] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -178,13 +154,8 @@ export default function SupplierAnalyticsPage() {
   const [customerPage, setCustomerPage] = useState(1);
   const [invoicePage, setInvoicePage] = useState(1);
 
-  const { from, to } = useMemo(() => {
-    if (quickSelect === "custom") {
-      return appliedCustom || { from: customFrom, to: customTo };
-    }
-    return getRange(quickSelect, customFrom, customTo);
-  }, [quickSelect, appliedCustom, customFrom, customTo]);
-
+  const from = dateFilter.from;
+  const to = dateFilter.to;
   const apiUrl = `/api/reports/suppliers?from=${from}&to=${to}`;
 
   const {
@@ -207,11 +178,6 @@ export default function SupplierAnalyticsPage() {
       }
     }
   }, [suppliers, selectedSupplier]);
-
-  const handleCustomApply = () => {
-    if (!customFrom || !customTo) return;
-    setAppliedCustom({ from: customFrom, to: customTo });
-  };
 
   const handleSelectSupplier = (name: string) => {
     setSelectedSupplier(name);
@@ -267,31 +233,11 @@ export default function SupplierAnalyticsPage() {
 
   // ── Date filter controls (shared between sidebar & mobile top bar) ──────────
   const DateControls = () => (
-    <div className="space-y-2">
-      <Select value={quickSelect} onValueChange={setQuickSelect}>
-        <SelectTrigger className="w-full h-8 text-xs">
-          <Calendar className="mr-1 h-3 w-3" />
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="this-month">This Month</SelectItem>
-          <SelectItem value="last-month">Last Month</SelectItem>
-          <SelectItem value="this-year">This Year</SelectItem>
-          <SelectItem value="last-year">Last Year</SelectItem>
-          <SelectItem value="custom">Custom Range</SelectItem>
-        </SelectContent>
-      </Select>
-      {quickSelect === "custom" && (
-        <div className="space-y-1.5">
-          <Input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="h-7 text-xs" />
-          <Input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="h-7 text-xs" />
-          <Button size="sm" className="w-full h-7 text-xs" onClick={handleCustomApply} disabled={loading}>
-            {loading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RefreshCw className="h-3 w-3 mr-1" />}
-            Apply
-          </Button>
-        </div>
-      )}
-    </div>
+    <ReportDateFilter
+      value={dateFilter}
+      onChange={setDateFilter}
+      loading={loading}
+    />
   );
 
   return (
@@ -317,7 +263,7 @@ export default function SupplierAnalyticsPage() {
       </aside>
 
       {/* ── Mobile / Tablet top bar (< lg) ────────────────────────────── */}
-      <div className="lg:hidden bg-white border-b px-4 py-3 space-y-3 shrink-0">
+      <div className="lg:hidden bg-white border-b px-4 py-3 space-y-2.5 shrink-0">
         <div className="flex items-center gap-2">
           {/* Hamburger → Sheet */}
           <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
@@ -362,33 +308,9 @@ export default function SupplierAnalyticsPage() {
               ))}
             </SelectContent>
           </Select>
-
-          {/* Period quick-select */}
-          <Select value={quickSelect} onValueChange={setQuickSelect}>
-            <SelectTrigger className="h-8 text-xs w-32 shrink-0">
-              <Calendar className="mr-1 h-3 w-3 shrink-0" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="this-month">This Month</SelectItem>
-              <SelectItem value="last-month">Last Month</SelectItem>
-              <SelectItem value="this-year">This Year</SelectItem>
-              <SelectItem value="last-year">Last Year</SelectItem>
-              <SelectItem value="custom">Custom</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
 
-        {/* Custom date inputs on mobile */}
-        {quickSelect === "custom" && (
-          <div className="flex gap-2">
-            <Input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="h-8 text-xs flex-1" />
-            <Input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="h-8 text-xs flex-1" />
-            <Button size="sm" className="h-8 px-3 shrink-0" onClick={handleCustomApply} disabled={loading}>
-              {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-            </Button>
-          </div>
-        )}
+        <DateControls />
       </div>
 
       {/* ── Main Content ───────────────────────────────────────────────── */}

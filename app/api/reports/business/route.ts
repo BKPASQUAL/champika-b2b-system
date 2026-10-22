@@ -86,6 +86,8 @@ export async function GET(request: NextRequest) {
       invoiceId: string; orderId: string; invoiceNo: string;
       customer: string; date: string;
       amount: number; due: number; paymentStatus: string;
+      repName?: string;
+      repId?: string;
       profit?: number | null;
       profitMargin?: number | null;
       freeQty?: number;
@@ -155,6 +157,8 @@ export async function GET(request: NextRequest) {
         biz.dueAmount += due;
       }
 
+      const repId = order.sales_rep_id || "direct";
+      const repName = order.rep?.full_name || "Direct Sales";
       const date = (order.order_date || order.created_at || "").split("T")[0];
       biz.invoiceList.push({
         invoiceId: inv.id,
@@ -165,11 +169,11 @@ export async function GET(request: NextRequest) {
         amount,
         due,
         paymentStatus: inv.status || "Unpaid",
+        repName,
+        repId,
       });
 
       // Representatives aggregation in Pass 1
-      const repId = order.sales_rep_id || "direct";
-      const repName = order.rep?.full_name || "Direct Sales";
       if (!biz.repMap[repId]) {
         biz.repMap[repId] = {
           id: repId,
@@ -330,22 +334,85 @@ export async function GET(request: NextRequest) {
         .sort((a, b) => b.revenue - a.revenue);
 
       const customers = Object.values(biz.customerMap)
-        .map((c) => ({
-          id: c.id, name: c.name,
-          revenue: c.revenue, cost: c.cost, profit: c.profit,
-          dueAmount: c.dueAmount, invoiceCount: c.orderSet.size,
-          margin: c.revenue > 0 ? (c.profit / c.revenue) * 100 : 0,
-        }))
+        .map((c) => {
+          const collected = Math.max(0, c.revenue - c.dueAmount);
+          return {
+            id: c.id, name: c.name,
+            revenue: c.revenue, cost: c.cost, profit: c.profit,
+            dueAmount: c.dueAmount,
+            collected,
+            collectionRate: c.revenue > 0 ? (collected / c.revenue) * 100 : 0,
+            invoiceCount: c.orderSet.size,
+            margin: c.revenue > 0 ? (c.profit / c.revenue) * 100 : 0,
+          };
+        })
         .sort((a, b) => b.revenue - a.revenue);
 
       const reps = Object.values(biz.repMap)
-        .map((r) => ({
-          id: r.id, name: r.name,
-          revenue: r.revenue, cost: r.cost, profit: r.profit,
-          dueAmount: r.dueAmount, invoiceCount: r.invoiceCount,
-          margin: r.revenue > 0 ? (r.profit / r.revenue) * 100 : 0,
-        }))
+        .map((r) => {
+          const collected = Math.max(0, r.revenue - r.dueAmount);
+          return {
+            id: r.id, name: r.name,
+            revenue: r.revenue, cost: r.cost, profit: r.profit,
+            dueAmount: r.dueAmount,
+            collected,
+            collectionRate: r.revenue > 0 ? (collected / r.revenue) * 100 : 0,
+            invoiceCount: r.invoiceCount,
+            margin: r.revenue > 0 ? (r.profit / r.revenue) * 100 : 0,
+          };
+        })
         .sort((a, b) => b.revenue - a.revenue);
+
+      // Monthly breakdown
+      const monthMap: Record<string, any> = {};
+      invoices.forEach((inv) => {
+        if (!inv.date) return;
+        const monthKey = inv.date.slice(0, 7);
+        if (!monthKey || monthKey.length !== 7) return;
+
+        if (!monthMap[monthKey]) {
+          const [y, m] = monthKey.split("-");
+          const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+          const label = `${monthNames[parseInt(m, 10) - 1]} ${y}`;
+          monthMap[monthKey] = {
+            month: monthKey,
+            monthLabel: label,
+            salesAmount: 0,
+            collectedAmount: 0,
+            dueAmount: 0,
+            invoiceCount: 0,
+            profit: 0,
+            repMap: {},
+          };
+        }
+
+        const mEntry = monthMap[monthKey];
+        const isDue = ["Unpaid", "Partial", "Overdue"].includes(inv.paymentStatus);
+        const invDue = isDue ? (Number(inv.due) || 0) : 0;
+        const invCollected = Math.max(0, inv.amount - invDue);
+
+        mEntry.salesAmount += inv.amount;
+        mEntry.collectedAmount += invCollected;
+        mEntry.dueAmount += invDue;
+        mEntry.invoiceCount += 1;
+        mEntry.profit += (inv.profit || 0);
+
+        const rName = inv.repName || "Direct Sales";
+        if (!mEntry.repMap[rName]) {
+          mEntry.repMap[rName] = { name: rName, sales: 0, collected: 0, due: 0, invoiceCount: 0 };
+        }
+        mEntry.repMap[rName].sales += inv.amount;
+        mEntry.repMap[rName].collected += invCollected;
+        mEntry.repMap[rName].due += invDue;
+        mEntry.repMap[rName].invoiceCount += 1;
+      });
+
+      const months = Object.values(monthMap).map((m: any) => ({
+        ...m,
+        collectionRate: m.salesAmount > 0 ? (m.collectedAmount / m.salesAmount) * 100 : 0,
+        margin: m.salesAmount > 0 ? (m.profit / m.salesAmount) * 100 : 0,
+        reps: Object.values(m.repMap).sort((a: any, b: any) => b.sales - a.sales),
+      })).sort((a, b) => a.month.localeCompare(b.month));
 
       return {
         id: biz.id,
@@ -359,6 +426,8 @@ export async function GET(request: NextRequest) {
         invoiceCount: invoices.length,
         customerCount: biz.customerCountSet.size,
         dueAmount: biz.dueAmount,
+        totalCollections: Math.max(0, biz.totalRevenue - biz.dueAmount),
+        collectionRate: biz.totalRevenue > 0 ? (Math.max(0, biz.totalRevenue - biz.dueAmount) / biz.totalRevenue) * 100 : 0,
         pendingClaimCost: biz.pendingClaimCost,
         netProfit,
         netMargin: biz.totalRevenue > 0 ? (netProfit / biz.totalRevenue) * 100 : 0,
@@ -369,6 +438,7 @@ export async function GET(request: NextRequest) {
         customers,
         reps,
         invoices,
+        months,
       };
     }).sort((a, b) => b.totalRevenue - a.totalRevenue);
 
@@ -397,6 +467,7 @@ export async function GET(request: NextRequest) {
           allCustomersMap[c.id].cost += c.cost;
           allCustomersMap[c.id].profit += c.profit;
           allCustomersMap[c.id].dueAmount += c.dueAmount;
+          allCustomersMap[c.id].collected += c.collected;
           allCustomersMap[c.id].invoiceCount += c.invoiceCount;
         }
       });
@@ -408,6 +479,7 @@ export async function GET(request: NextRequest) {
           allRepsMap[r.id].cost += r.cost;
           allRepsMap[r.id].profit += r.profit;
           allRepsMap[r.id].dueAmount += r.dueAmount;
+          allRepsMap[r.id].collected += r.collected;
           allRepsMap[r.id].invoiceCount += r.invoiceCount;
         }
       });
@@ -419,11 +491,27 @@ export async function GET(request: NextRequest) {
       .sort((a: any, b: any) => b.revenue - a.revenue);
 
     const overallCustomers = Object.values(allCustomersMap)
-      .map((c: any) => ({ ...c, margin: c.revenue > 0 ? (c.profit / c.revenue) * 100 : 0 }))
+      .map((c: any) => {
+        const collected = Math.max(0, c.revenue - c.dueAmount);
+        return {
+          ...c,
+          collected,
+          collectionRate: c.revenue > 0 ? (collected / c.revenue) * 100 : 0,
+          margin: c.revenue > 0 ? (c.profit / c.revenue) * 100 : 0,
+        };
+      })
       .sort((a: any, b: any) => b.revenue - a.revenue);
 
     const overallReps = Object.values(allRepsMap)
-      .map((r: any) => ({ ...r, margin: r.revenue > 0 ? (r.profit / r.revenue) * 100 : 0 }))
+      .map((r: any) => {
+        const collected = Math.max(0, r.revenue - r.dueAmount);
+        return {
+          ...r,
+          collected,
+          collectionRate: r.revenue > 0 ? (collected / r.revenue) * 100 : 0,
+          margin: r.revenue > 0 ? (r.profit / r.revenue) * 100 : 0,
+        };
+      })
       .sort((a: any, b: any) => b.revenue - a.revenue);
 
     const overallInvoices = allInvoicesList.sort(
@@ -437,6 +525,59 @@ export async function GET(request: NextRequest) {
     const overallTotalProfit = overallTotalRevenue - overallTotalCost;
     const overallPendingClaimCost = businesses.reduce((s, b) => s + b.pendingClaimCost, 0);
     const overallNetProfit = overallTotalProfit - overallPendingClaimCost;
+    const overallDueAmount = businesses.reduce((s, b) => s + b.dueAmount, 0);
+    const overallTotalCollections = Math.max(0, overallTotalRevenue - overallDueAmount);
+
+    // Overall Monthly breakdown
+    const overallMonthsMap: Record<string, any> = {};
+    overallInvoices.forEach((inv) => {
+      if (!inv.date) return;
+      const monthKey = inv.date.slice(0, 7);
+      if (!monthKey || monthKey.length !== 7) return;
+
+      if (!overallMonthsMap[monthKey]) {
+        const [y, m] = monthKey.split("-");
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const label = `${monthNames[parseInt(m, 10) - 1]} ${y}`;
+        overallMonthsMap[monthKey] = {
+          month: monthKey,
+          monthLabel: label,
+          salesAmount: 0,
+          collectedAmount: 0,
+          dueAmount: 0,
+          invoiceCount: 0,
+          profit: 0,
+          repMap: {},
+        };
+      }
+
+      const mEntry = overallMonthsMap[monthKey];
+      const isDue = ["Unpaid", "Partial", "Overdue"].includes(inv.paymentStatus);
+      const invDue = isDue ? (Number(inv.due) || 0) : 0;
+      const invCollected = Math.max(0, inv.amount - invDue);
+
+      mEntry.salesAmount += inv.amount;
+      mEntry.collectedAmount += invCollected;
+      mEntry.dueAmount += invDue;
+      mEntry.invoiceCount += 1;
+      mEntry.profit += (inv.profit || 0);
+
+      const rName = inv.repName || "Direct Sales";
+      if (!mEntry.repMap[rName]) {
+        mEntry.repMap[rName] = { name: rName, sales: 0, collected: 0, due: 0, invoiceCount: 0 };
+      }
+      mEntry.repMap[rName].sales += inv.amount;
+      mEntry.repMap[rName].collected += invCollected;
+      mEntry.repMap[rName].due += invDue;
+      mEntry.repMap[rName].invoiceCount += 1;
+    });
+
+    const overallMonths = Object.values(overallMonthsMap).map((m: any) => ({
+      ...m,
+      collectionRate: m.salesAmount > 0 ? (m.collectedAmount / m.salesAmount) * 100 : 0,
+      margin: m.salesAmount > 0 ? (m.profit / m.salesAmount) * 100 : 0,
+      reps: Object.values(m.repMap).sort((a: any, b: any) => b.sales - a.sales),
+    })).sort((a, b) => a.month.localeCompare(b.month));
 
     const overall = {
       id: "overall",
@@ -449,7 +590,9 @@ export async function GET(request: NextRequest) {
       totalUnits: businesses.reduce((s, b) => s + b.totalUnits, 0),
       invoiceCount: businesses.reduce((s, b) => s + b.invoiceCount, 0),
       customerCount: businesses.reduce((s, b) => s + b.customerCount, 0),
-      dueAmount: businesses.reduce((s, b) => s + b.dueAmount, 0),
+      dueAmount: overallDueAmount,
+      totalCollections: overallTotalCollections,
+      collectionRate: overallTotalRevenue > 0 ? (overallTotalCollections / overallTotalRevenue) * 100 : 0,
       pendingClaimCost: overallPendingClaimCost,
       netProfit: overallNetProfit,
       netMargin: overallTotalRevenue > 0 ? (overallNetProfit / overallTotalRevenue) * 100 : 0,
@@ -460,6 +603,7 @@ export async function GET(request: NextRequest) {
       customers: overallCustomers,
       reps: overallReps,
       invoices: overallInvoices,
+      months: overallMonths,
     };
 
     return NextResponse.json({ overall, businesses });

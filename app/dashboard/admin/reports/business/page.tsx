@@ -50,6 +50,7 @@ import {
   Loader2,
   Building2,
   ChevronRight,
+  ChevronDown,
   RefreshCw,
   Menu,
   Users,
@@ -58,6 +59,9 @@ import {
   Search,
   Eye,
   ExternalLink,
+  Banknote,
+  CheckCircle2,
+  CalendarDays,
 } from "lucide-react";
 import { toast } from "sonner";
 import { BUSINESS_THEMES, BUSINESS_IDS } from "@/app/config/business-constants";
@@ -81,36 +85,36 @@ function MarginBadge({ margin }: { margin: number | null | undefined }) {
   );
 }
 
-function getRange(quickSelect: string, customFrom: string, customTo: string) {
-  const now = new Date();
-  let from: Date, to: Date;
-  switch (quickSelect) {
-    case "this-month":
-      from = new Date(now.getFullYear(), now.getMonth(), 1);
-      to = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-      break;
-    case "last-month":
-      from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      to = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
-      break;
-    case "this-year":
-      from = new Date(now.getFullYear(), 0, 1);
-      to = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
-      break;
-    case "last-year":
-      from = new Date(now.getFullYear() - 1, 0, 1);
-      to = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59);
-      break;
-    case "custom":
-      from = new Date(customFrom); from.setHours(0, 0, 0, 0);
-      to = new Date(customTo); to.setHours(23, 59, 59, 999);
-      break;
-    default:
-      from = new Date(now.getFullYear(), now.getMonth(), 1);
-      to = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-  }
-  return { from: from.toISOString(), to: to.toISOString() };
+function CollectionBadge({ rate }: { rate: number | null | undefined }) {
+  const r = Math.min(100, Math.max(0, Number(rate) || 0));
+  const cls =
+    r >= 80 ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+    : r >= 50 ? "bg-blue-100 text-blue-800 border-blue-200"
+    : r >= 25 ? "bg-amber-100 text-amber-800 border-amber-200"
+    : "bg-rose-100 text-rose-800 border-rose-200";
+  const barColor =
+    r >= 80 ? "bg-emerald-500"
+    : r >= 50 ? "bg-blue-500"
+    : r >= 25 ? "bg-amber-500"
+    : "bg-rose-500";
+
+  return (
+    <div className="flex items-center justify-end gap-1.5">
+      <div className="w-12 bg-gray-200 rounded-full h-1.5 overflow-hidden">
+        <div className={`h-full ${barColor}`} style={{ width: `${r}%` }} />
+      </div>
+      <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold border ${cls}`}>
+        {r.toFixed(1)}%
+      </span>
+    </div>
+  );
 }
+
+import {
+  ReportDateFilter,
+  ReportDateFilterValue,
+  calculateRange,
+} from "../_components/ReportDateFilter";
 
 function getBizBg(bizId: string): string {
   const theme = BUSINESS_THEMES[bizId as keyof typeof BUSINESS_THEMES];
@@ -130,25 +134,28 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function BusinessAnalyticsPage() {
   const router = useRouter();
-  const today = new Date().toISOString().split("T")[0];
-  const firstOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-    .toISOString().split("T")[0];
-
-  const [quickSelect, setQuickSelect] = useState("this-month");
-  const [customFrom, setCustomFrom] = useState(firstOfMonth);
-  const [customTo, setCustomTo] = useState(today);
+  const [dateFilter, setDateFilter] = useState<ReportDateFilterValue>(() => {
+    const range = calculateRange("this-month");
+    return {
+      from: range.from,
+      to: range.to,
+      quickSelect: "this-month",
+      label: range.label,
+    };
+  });
   const [loading, setLoading] = useState(true);
   const [overall, setOverall] = useState<any>(null);
   const [businesses, setBusinesses] = useState<any[]>([]);
   const [selectedId, setSelectedId] = useState<string>("overall");
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [detailTab, setDetailTab] = useState<"invoices" | "customers" | "products" | "reps">("invoices");
+  const [detailTab, setDetailTab] = useState<"invoices" | "customers" | "products" | "reps" | "months">("invoices");
   const [detailSearch, setDetailSearch] = useState("");
+  const [selectedMonthRep, setSelectedMonthRep] = useState<string>("all");
+  const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
 
-  const fetchData = async () => {
+  const fetchData = async (from = dateFilter.from, to = dateFilter.to) => {
     setLoading(true);
     try {
-      const { from, to } = getRange(quickSelect, customFrom, customTo);
       const res = await fetch(`/api/reports/business?from=${from}&to=${to}`);
       if (!res.ok) throw new Error("Failed to fetch business analytics");
       const data = await res.json();
@@ -162,14 +169,9 @@ export default function BusinessAnalyticsPage() {
   };
 
   useEffect(() => {
-    if (quickSelect !== "custom") fetchData();
+    fetchData(dateFilter.from, dateFilter.to);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quickSelect]);
-
-  const handleCustomApply = () => {
-    if (!customFrom || !customTo) return;
-    fetchData();
-  };
+  }, [dateFilter.from, dateFilter.to]);
 
   const current = useMemo(() => {
     if (selectedId === "overall") return overall;
@@ -244,13 +246,23 @@ export default function BusinessAnalyticsPage() {
     };
   }, [filteredInvoices]);
 
-  const custTotals = useMemo(() => ({
-    revenue: filteredCustomers.reduce((s, c) => s + c.revenue, 0),
-    cost: filteredCustomers.reduce((s, c) => s + c.cost, 0),
-    profit: filteredCustomers.reduce((s, c) => s + c.profit, 0),
-    dueAmount: filteredCustomers.reduce((s, c) => s + c.dueAmount, 0),
-    invoiceCount: filteredCustomers.reduce((s, c) => s + c.invoiceCount, 0),
-  }), [filteredCustomers]);
+  const custTotals = useMemo(() => {
+    const revenue = filteredCustomers.reduce((s, c) => s + c.revenue, 0);
+    const cost = filteredCustomers.reduce((s, c) => s + c.cost, 0);
+    const profit = filteredCustomers.reduce((s, c) => s + c.profit, 0);
+    const dueAmount = filteredCustomers.reduce((s, c) => s + c.dueAmount, 0);
+    const collected = filteredCustomers.reduce((s, c) => s + (c.collected !== undefined ? c.collected : Math.max(0, c.revenue - c.dueAmount)), 0);
+    const invoiceCount = filteredCustomers.reduce((s, c) => s + c.invoiceCount, 0);
+    return {
+      revenue,
+      cost,
+      profit,
+      dueAmount,
+      collected,
+      collectionRate: revenue > 0 ? (collected / revenue) * 100 : 0,
+      invoiceCount,
+    };
+  }, [filteredCustomers]);
 
   const prodTotals = useMemo(() => ({
     unitsSold: filteredProducts.reduce((s, p) => s + p.unitsSold, 0),
@@ -259,40 +271,95 @@ export default function BusinessAnalyticsPage() {
     profit: filteredProducts.reduce((s, p) => s + p.profit, 0),
   }), [filteredProducts]);
 
-  const repTotals = useMemo(() => ({
-    revenue: filteredReps.reduce((s, r) => s + r.revenue, 0),
-    cost: filteredReps.reduce((s, r) => s + r.cost, 0),
-    profit: filteredReps.reduce((s, r) => s + r.profit, 0),
-    dueAmount: filteredReps.reduce((s, r) => s + r.dueAmount, 0),
-    invoiceCount: filteredReps.reduce((s, r) => s + r.invoiceCount, 0),
-  }), [filteredReps]);
+  const repTotals = useMemo(() => {
+    const revenue = filteredReps.reduce((s, r) => s + r.revenue, 0);
+    const cost = filteredReps.reduce((s, r) => s + r.cost, 0);
+    const profit = filteredReps.reduce((s, r) => s + r.profit, 0);
+    const dueAmount = filteredReps.reduce((s, r) => s + r.dueAmount, 0);
+    const collected = filteredReps.reduce((s, r) => s + (r.collected !== undefined ? r.collected : Math.max(0, r.revenue - r.dueAmount)), 0);
+    const invoiceCount = filteredReps.reduce((s, r) => s + r.invoiceCount, 0);
+    return {
+      revenue,
+      cost,
+      profit,
+      dueAmount,
+      collected,
+      collectionRate: revenue > 0 ? (collected / revenue) * 100 : 0,
+      invoiceCount,
+    };
+  }, [filteredReps]);
+
+  const monthlyData = useMemo(() => {
+    const monthsList: any[] = current?.months || [];
+    if (selectedMonthRep === "all") {
+      return monthsList;
+    }
+    return monthsList
+      .map((m) => {
+        const repData = (m.reps || []).find((r: any) => r.name === selectedMonthRep);
+        const sales = repData?.sales || 0;
+        const collected = repData?.collected || 0;
+        const due = repData?.due || 0;
+        const invoiceCount = repData?.invoiceCount || 0;
+        const collectionRate = sales > 0 ? (collected / sales) * 100 : 0;
+        return {
+          ...m,
+          salesAmount: sales,
+          collectedAmount: collected,
+          dueAmount: due,
+          invoiceCount,
+          collectionRate,
+          reps: repData ? [repData] : [],
+        };
+      })
+      .filter((m) => m.salesAmount > 0 || m.invoiceCount > 0);
+  }, [current, selectedMonthRep]);
+
+  const monthTotals = useMemo(() => {
+    const sales = monthlyData.reduce((s, m) => s + m.salesAmount, 0);
+    const collected = monthlyData.reduce((s, m) => s + m.collectedAmount, 0);
+    const due = monthlyData.reduce((s, m) => s + m.dueAmount, 0);
+    const invoiceCount = monthlyData.reduce((s, m) => s + m.invoiceCount, 0);
+    const profit = monthlyData.reduce((s, m) => s + (m.profit || 0), 0);
+    return {
+      sales,
+      collected,
+      due,
+      invoiceCount,
+      profit,
+      collectionRate: sales > 0 ? (collected / sales) * 100 : 0,
+    };
+  }, [monthlyData]);
+
+  const repFilterOptions = useMemo(() => {
+    const namesSet = new Set<string>();
+    (current?.reps || []).forEach((r: any) => {
+      if (r.name) namesSet.add(r.name);
+    });
+    (current?.months || []).forEach((m: any) => {
+      (m.reps || []).forEach((r: any) => {
+        if (r.name) namesSet.add(r.name);
+      });
+    });
+    return Array.from(namesSet).sort();
+  }, [current]);
+
+  const monthlyChartData = useMemo(() => {
+    return monthlyData.map((m) => ({
+      name: m.monthLabel || m.month,
+      sales: m.salesAmount,
+      collected: m.collectedAmount,
+      due: m.dueAmount,
+      rate: m.collectionRate,
+    }));
+  }, [monthlyData]);
 
   const DateControls = () => (
-    <div className="space-y-2">
-      <Select value={quickSelect} onValueChange={setQuickSelect}>
-        <SelectTrigger className="w-full h-8 text-xs">
-          <Calendar className="mr-1 h-3 w-3" />
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="this-month">This Month</SelectItem>
-          <SelectItem value="last-month">Last Month</SelectItem>
-          <SelectItem value="this-year">This Year</SelectItem>
-          <SelectItem value="last-year">Last Year</SelectItem>
-          <SelectItem value="custom">Custom Range</SelectItem>
-        </SelectContent>
-      </Select>
-      {quickSelect === "custom" && (
-        <div className="space-y-1.5">
-          <Input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="h-7 text-xs" />
-          <Input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="h-7 text-xs" />
-          <Button size="sm" className="w-full h-7 text-xs" onClick={handleCustomApply} disabled={loading}>
-            {loading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RefreshCw className="h-3 w-3 mr-1" />}
-            Apply
-          </Button>
-        </div>
-      )}
-    </div>
+    <ReportDateFilter
+      value={dateFilter}
+      onChange={setDateFilter}
+      loading={loading}
+    />
   );
 
   const BusinessList = () => (
@@ -352,7 +419,7 @@ export default function BusinessAnalyticsPage() {
       </aside>
 
       {/* Mobile top bar */}
-      <div className="lg:hidden bg-white border-b px-4 py-3 space-y-3 shrink-0">
+      <div className="lg:hidden bg-white border-b px-4 py-3 space-y-2.5 shrink-0">
         <div className="flex items-center gap-2">
           <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
             <SheetTrigger asChild>
@@ -385,29 +452,9 @@ export default function BusinessAnalyticsPage() {
               ))}
             </SelectContent>
           </Select>
-          <Select value={quickSelect} onValueChange={setQuickSelect}>
-            <SelectTrigger className="h-8 text-xs w-32 shrink-0">
-              <Calendar className="mr-1 h-3 w-3 shrink-0" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="this-month">This Month</SelectItem>
-              <SelectItem value="last-month">Last Month</SelectItem>
-              <SelectItem value="this-year">This Year</SelectItem>
-              <SelectItem value="last-year">Last Year</SelectItem>
-              <SelectItem value="custom">Custom</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
-        {quickSelect === "custom" && (
-          <div className="flex gap-2">
-            <Input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="h-8 text-xs flex-1" />
-            <Input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="h-8 text-xs flex-1" />
-            <Button size="sm" className="h-8 px-3 shrink-0" onClick={handleCustomApply} disabled={loading}>
-              {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-            </Button>
-          </div>
-        )}
+
+        <DateControls />
       </div>
 
       {/* Main Content */}
@@ -526,7 +573,26 @@ export default function BusinessAnalyticsPage() {
               {/* Row 2: Outstanding Balance & Customer Counts */}
               <div>
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Receivables & Customer Reach</p>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+                  {/* Collections Received */}
+                  <Card className="bg-emerald-50 border-emerald-200">
+                    <CardHeader className="pb-1 pt-3 px-3 md:px-4">
+                      <CardTitle className="text-[10px] md:text-xs text-emerald-700 font-medium flex items-center gap-1">
+                        <CheckCircle2 className="h-3 w-3" /> Collections Received
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
+                      <div className="text-sm md:text-xl font-bold text-emerald-700">
+                        LKR {fmt(current.totalCollections !== undefined ? current.totalCollections : Math.max(0, current.totalRevenue - current.dueAmount))}
+                      </div>
+                      <p className="text-[10px] text-emerald-600/80 mt-0.5">
+                        {current.collectionRate !== undefined
+                          ? current.collectionRate.toFixed(1)
+                          : ((Math.max(0, current.totalRevenue - current.dueAmount) / (current.totalRevenue || 1)) * 100).toFixed(1)}% recovery rate
+                      </p>
+                    </CardContent>
+                  </Card>
+
                   {/* Due Invoices */}
                   <Card className="bg-red-50 border-red-200">
                     <CardHeader className="pb-1 pt-3 px-3 md:px-4">
@@ -786,6 +852,19 @@ export default function BusinessAnalyticsPage() {
                       <span>Reps</span>
                       <span className="text-sky-500 font-bold ml-0.5">({current.reps?.length || 0})</span>
                     </button>
+
+                    <button
+                      onClick={() => { setDetailTab("months"); setDetailSearch(""); }}
+                      className={`px-4 py-2 text-xs font-semibold rounded-xl gap-2 transition-all flex items-center whitespace-nowrap border ${
+                        detailTab === "months"
+                          ? "bg-black text-white border-black shadow-sm"
+                          : "text-gray-800 hover:bg-gray-100/80 border-transparent"
+                      }`}
+                    >
+                      <CalendarDays className="h-4 w-4 shrink-0" />
+                      <span>Months — Sales vs Collection</span>
+                      <span className="text-sky-500 font-bold ml-0.5">({monthlyData.length})</span>
+                    </button>
                   </div>
 
                   <div className="relative w-full sm:w-60 shrink-0">
@@ -993,11 +1072,13 @@ export default function BusinessAnalyticsPage() {
                         <TableRow>
                           <TableHead>Customer</TableHead>
                           <TableHead className="text-right">Invoices</TableHead>
-                          <TableHead className="text-right">Revenue</TableHead>
+                          <TableHead className="text-right">Total Sales</TableHead>
+                          <TableHead className="text-right">Collections (Paid)</TableHead>
+                          <TableHead className="text-right">Due Amount</TableHead>
+                          <TableHead className="text-right">Collection %</TableHead>
                           <TableHead className="text-right">Cost</TableHead>
                           <TableHead className="text-right">Profit</TableHead>
                           <TableHead className="text-right">Margin</TableHead>
-                          <TableHead className="text-right">Due</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1010,6 +1091,15 @@ export default function BusinessAnalyticsPage() {
                           <TableCell className="text-right text-blue-700 font-bold">
                             LKR {fmt(custTotals.revenue)}
                           </TableCell>
+                          <TableCell className="text-right text-emerald-700 font-bold">
+                            LKR {fmt(custTotals.collected)}
+                          </TableCell>
+                          <TableCell className="text-right text-red-600 font-bold">
+                            LKR {fmt(custTotals.dueAmount)}
+                          </TableCell>
+                          <TableCell className="text-right font-bold">
+                            <CollectionBadge rate={custTotals.collectionRate} />
+                          </TableCell>
                           <TableCell className="text-right font-bold text-muted-foreground">
                             LKR {fmt(custTotals.cost)}
                           </TableCell>
@@ -1019,38 +1109,45 @@ export default function BusinessAnalyticsPage() {
                           <TableCell className="text-right text-xs font-bold">
                             {custTotals.revenue > 0 ? ((custTotals.profit / custTotals.revenue) * 100).toFixed(1) : "0.0"}%
                           </TableCell>
-                          <TableCell className="text-right text-red-600 font-bold">
-                            LKR {fmt(custTotals.dueAmount)}
-                          </TableCell>
                         </TableRow>
                         {filteredCustomers.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={7} className="text-center text-muted-foreground text-xs py-8">
+                            <TableCell colSpan={9} className="text-center text-muted-foreground text-xs py-8">
                               No customers found
                             </TableCell>
                           </TableRow>
                         ) : (
-                          filteredCustomers.map((c: any) => (
-                            <TableRow key={c.id} className="text-xs">
-                              <TableCell className="font-medium">{c.name}</TableCell>
-                              <TableCell className="text-right">{c.invoiceCount}</TableCell>
-                              <TableCell className="text-right text-blue-700 font-medium">
-                                LKR {fmt(c.revenue)}
-                              </TableCell>
-                              <TableCell className="text-right text-muted-foreground">
-                                LKR {fmt(c.cost)}
-                              </TableCell>
-                              <TableCell className={`text-right font-medium ${c.profit >= 0 ? "text-green-700" : "text-red-700"}`}>
-                                LKR {fmt(c.profit)}
-                              </TableCell>
-                              <TableCell className="text-right text-muted-foreground">
-                                {c.margin.toFixed(1)}%
-                              </TableCell>
-                              <TableCell className={`text-right font-medium ${c.dueAmount > 0 ? "text-red-600" : "text-muted-foreground"}`}>
-                                {c.dueAmount > 0 ? `LKR ${fmt(c.dueAmount)}` : "—"}
-                              </TableCell>
-                            </TableRow>
-                          ))
+                          filteredCustomers.map((c: any) => {
+                            const collected = c.collected !== undefined ? c.collected : Math.max(0, c.revenue - c.dueAmount);
+                            const collRate = c.collectionRate !== undefined ? c.collectionRate : (c.revenue > 0 ? (collected / c.revenue) * 100 : 0);
+                            return (
+                              <TableRow key={c.id} className="text-xs hover:bg-muted/30">
+                                <TableCell className="font-medium">{c.name}</TableCell>
+                                <TableCell className="text-right">{c.invoiceCount}</TableCell>
+                                <TableCell className="text-right text-blue-700 font-medium">
+                                  LKR {fmt(c.revenue)}
+                                </TableCell>
+                                <TableCell className="text-right text-emerald-700 font-medium">
+                                  LKR {fmt(collected)}
+                                </TableCell>
+                                <TableCell className={`text-right font-medium ${c.dueAmount > 0 ? "text-red-600" : "text-muted-foreground"}`}>
+                                  {c.dueAmount > 0 ? `LKR ${fmt(c.dueAmount)}` : "—"}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <CollectionBadge rate={collRate} />
+                                </TableCell>
+                                <TableCell className="text-right text-muted-foreground">
+                                  LKR {fmt(c.cost)}
+                                </TableCell>
+                                <TableCell className={`text-right font-medium ${c.profit >= 0 ? "text-green-700" : "text-red-700"}`}>
+                                  LKR {fmt(c.profit)}
+                                </TableCell>
+                                <TableCell className="text-right text-muted-foreground">
+                                  {c.margin.toFixed(1)}%
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })
                         )}
                       </TableBody>
                     </Table>
@@ -1130,10 +1227,12 @@ export default function BusinessAnalyticsPage() {
                           <TableHead>Representative</TableHead>
                           <TableHead className="text-right">Invoices</TableHead>
                           <TableHead className="text-right">Total Sales</TableHead>
+                          <TableHead className="text-right">Collections (Paid)</TableHead>
+                          <TableHead className="text-right">Due Amount</TableHead>
+                          <TableHead className="text-right">Collection %</TableHead>
                           <TableHead className="text-right">Cost</TableHead>
                           <TableHead className="text-right">Profit</TableHead>
                           <TableHead className="text-right">Margin</TableHead>
-                          <TableHead className="text-right">Due Amount</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1146,6 +1245,15 @@ export default function BusinessAnalyticsPage() {
                           <TableCell className="text-right text-blue-700 font-bold">
                             LKR {fmt(repTotals.revenue)}
                           </TableCell>
+                          <TableCell className="text-right text-emerald-700 font-bold">
+                            LKR {fmt(repTotals.collected)}
+                          </TableCell>
+                          <TableCell className="text-right text-red-600 font-bold">
+                            LKR {fmt(repTotals.dueAmount)}
+                          </TableCell>
+                          <TableCell className="text-right font-bold">
+                            <CollectionBadge rate={repTotals.collectionRate} />
+                          </TableCell>
                           <TableCell className="text-right font-bold text-muted-foreground">
                             LKR {fmt(repTotals.cost)}
                           </TableCell>
@@ -1155,19 +1263,18 @@ export default function BusinessAnalyticsPage() {
                           <TableCell className="text-right text-xs font-bold">
                             {repTotals.revenue > 0 ? ((repTotals.profit / repTotals.revenue) * 100).toFixed(1) : "0.0"}%
                           </TableCell>
-                          <TableCell className="text-right text-red-600 font-bold">
-                            LKR {fmt(repTotals.dueAmount)}
-                          </TableCell>
                         </TableRow>
                         {filteredReps.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={7} className="text-center text-muted-foreground text-xs py-8">
+                            <TableCell colSpan={9} className="text-center text-muted-foreground text-xs py-8">
                               No representatives found
                             </TableCell>
                           </TableRow>
                         ) : (
                           filteredReps.map((r: any) => {
                             const isDirect = r.name === "Champika Hardware";
+                            const collected = r.collected !== undefined ? r.collected : Math.max(0, r.revenue - r.dueAmount);
+                            const collRate = r.collectionRate !== undefined ? r.collectionRate : (r.revenue > 0 ? (collected / r.revenue) * 100 : 0);
                             return (
                               <TableRow key={r.id} className="text-xs hover:bg-muted/30">
                                 <TableCell>
@@ -1186,6 +1293,15 @@ export default function BusinessAnalyticsPage() {
                                 <TableCell className="text-right text-blue-700 font-medium">
                                   LKR {fmt(r.revenue)}
                                 </TableCell>
+                                <TableCell className="text-right text-emerald-700 font-medium">
+                                  LKR {fmt(collected)}
+                                </TableCell>
+                                <TableCell className={`text-right font-medium ${r.dueAmount > 0 ? "text-red-600" : "text-muted-foreground"}`}>
+                                  {r.dueAmount > 0 ? `LKR ${fmt(r.dueAmount)}` : "—"}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <CollectionBadge rate={collRate} />
+                                </TableCell>
                                 <TableCell className="text-right text-muted-foreground">
                                   LKR {fmt(r.cost)}
                                 </TableCell>
@@ -1195,15 +1311,287 @@ export default function BusinessAnalyticsPage() {
                                 <TableCell className="text-right text-muted-foreground">
                                   {r.margin.toFixed(1)}%
                                 </TableCell>
-                                <TableCell className={`text-right font-medium ${r.dueAmount > 0 ? "text-red-600" : "text-muted-foreground"}`}>
-                                  {r.dueAmount > 0 ? `LKR ${fmt(r.dueAmount)}` : "—"}
-                                </TableCell>
                               </TableRow>
                             );
                           })
                         )}
                       </TableBody>
                     </Table>
+                  )}
+
+                  {/* ── Months — Sales vs Collection Tab ── */}
+                  {detailTab === "months" && (
+                    <div className="space-y-4">
+                      {/* Controls header */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-2 bg-muted/20 border-b">
+                        <div>
+                          <h4 className="text-xs font-semibold text-gray-900">
+                            Monthly Sales vs Collections Performance
+                          </h4>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            Month-by-month cash realization, outstanding debt, and representative contributions
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-medium text-muted-foreground shrink-0">Filter Rep:</span>
+                          <Select value={selectedMonthRep} onValueChange={setSelectedMonthRep}>
+                            <SelectTrigger className="w-[180px] h-7 text-xs bg-white">
+                              <SelectValue placeholder="All Representatives" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">All Representatives</SelectItem>
+                              {repFilterOptions.map((name) => (
+                                <SelectItem key={name} value={name}>
+                                  {name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      {/* Monthly summary KPI metrics */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4">
+                        <div className="p-3 bg-blue-50/60 border border-blue-200/70 rounded-xl">
+                          <p className="text-[11px] font-medium text-blue-700 flex items-center gap-1">
+                            <DollarSign className="w-3.5 h-3.5" /> Total Sales
+                          </p>
+                          <p className="text-lg font-bold text-blue-900 mt-0.5">LKR {fmt(monthTotals.sales)}</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            {monthTotals.invoiceCount} invoices · {monthlyData.length} active months
+                          </p>
+                        </div>
+
+                        <div className="p-3 bg-emerald-50/60 border border-emerald-200/70 rounded-xl">
+                          <p className="text-[11px] font-medium text-emerald-700 flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Collections (Paid)
+                          </p>
+                          <p className="text-lg font-bold text-emerald-900 mt-0.5">LKR {fmt(monthTotals.collected)}</p>
+                          <p className="text-[10px] text-emerald-700 mt-0.5">
+                            Cash collected from billing
+                          </p>
+                        </div>
+
+                        <div className="p-3 bg-rose-50/60 border border-rose-200/70 rounded-xl">
+                          <p className="text-[11px] font-medium text-rose-700 flex items-center gap-1">
+                            <AlertCircle className="w-3.5 h-3.5" /> Due Amount
+                          </p>
+                          <p className="text-lg font-bold text-red-700 mt-0.5">LKR {fmt(monthTotals.due)}</p>
+                          <p className="text-[10px] text-rose-700 mt-0.5">
+                            Unrecovered receivables
+                          </p>
+                        </div>
+
+                        <div className="p-3 bg-indigo-50/60 border border-indigo-200/70 rounded-xl">
+                          <p className="text-[11px] font-medium text-indigo-700 flex items-center gap-1">
+                            <TrendingUp className="w-3.5 h-3.5" /> Collection Rate
+                          </p>
+                          <p className="text-lg font-bold text-indigo-900 mt-0.5">{monthTotals.collectionRate.toFixed(1)}%</p>
+                          <div className="w-full bg-indigo-200/60 rounded-full h-1.5 mt-1 overflow-hidden">
+                            <div
+                              className="bg-indigo-600 h-full rounded-full transition-all"
+                              style={{ width: `${Math.min(100, monthTotals.collectionRate)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Sales vs Collections Comparison Chart */}
+                      {monthlyChartData.length > 0 && (
+                        <div className="px-4 pt-1">
+                          <div className="p-4 border rounded-xl bg-white shadow-sm">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                              <div>
+                                <h5 className="text-xs font-semibold text-gray-800">
+                                  Monthly Trend: Sales vs Collections vs Due
+                                </h5>
+                                <p className="text-[10px] text-muted-foreground">
+                                  Visual comparison of monthly billing and payment realization
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-4 text-xs font-medium">
+                                <span className="flex items-center gap-1.5">
+                                  <span className="w-2.5 h-2.5 rounded bg-blue-600 inline-block" /> Sales
+                                </span>
+                                <span className="flex items-center gap-1.5">
+                                  <span className="w-2.5 h-2.5 rounded bg-emerald-500 inline-block" /> Collections
+                                </span>
+                                <span className="flex items-center gap-1.5">
+                                  <span className="w-2.5 h-2.5 rounded bg-rose-500 inline-block" /> Due
+                                </span>
+                              </div>
+                            </div>
+                            <ResponsiveContainer width="100%" height={240}>
+                              <BarChart data={monthlyChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                                <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                                <YAxis tick={{ fontSize: 9 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                                <Tooltip
+                                  formatter={(val: any, name: any) => [
+                                    `LKR ${fmt(Number(val))}`,
+                                    name === "sales" ? "Total Sales" : name === "collected" ? "Collections (Paid)" : "Due Amount",
+                                  ]}
+                                />
+                                <Bar dataKey="sales" fill="#2563eb" name="sales" radius={[3, 3, 0, 0]} />
+                                <Bar dataKey="collected" fill="#10b981" name="collected" radius={[3, 3, 0, 0]} />
+                                <Bar dataKey="due" fill="#ef4444" name="due" radius={[3, 3, 0, 0]} />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Month-by-Month Breakdown Table */}
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-8"></TableHead>
+                            <TableHead>Month</TableHead>
+                            <TableHead className="text-right">Invoices</TableHead>
+                            <TableHead className="text-right">Total Sales</TableHead>
+                            <TableHead className="text-right">Collections (Paid)</TableHead>
+                            <TableHead className="text-right">Due Amount</TableHead>
+                            <TableHead className="text-right">Collection %</TableHead>
+                            <TableHead className="text-right">Profit</TableHead>
+                            <TableHead className="text-right">Margin</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {/* Totals row */}
+                          <TableRow className="border-b-2 bg-muted/30 font-bold">
+                            <TableCell></TableCell>
+                            <TableCell className="font-bold text-xs">Total — {monthlyData.length} months</TableCell>
+                            <TableCell className="text-right font-bold">{monthTotals.invoiceCount}</TableCell>
+                            <TableCell className="text-right text-blue-700 font-bold">LKR {fmt(monthTotals.sales)}</TableCell>
+                            <TableCell className="text-right text-emerald-700 font-bold">LKR {fmt(monthTotals.collected)}</TableCell>
+                            <TableCell className="text-right text-red-600 font-bold">LKR {fmt(monthTotals.due)}</TableCell>
+                            <TableCell className="text-right font-bold">
+                              <CollectionBadge rate={monthTotals.collectionRate} />
+                            </TableCell>
+                            <TableCell className={`text-right font-bold ${monthTotals.profit >= 0 ? "text-green-700" : "text-red-700"}`}>
+                              LKR {fmt(monthTotals.profit)}
+                            </TableCell>
+                            <TableCell className="text-right text-xs font-bold">
+                              {monthTotals.sales > 0 ? ((monthTotals.profit / monthTotals.sales) * 100).toFixed(1) : "0.0"}%
+                            </TableCell>
+                          </TableRow>
+
+                          {monthlyData.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={9} className="text-center text-muted-foreground text-xs py-8">
+                                No monthly sales and collection records found for this period
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            monthlyData.map((m: any) => {
+                              const isExpanded = expandedMonth === m.month;
+                              return (
+                                <React.Fragment key={m.month}>
+                                  <TableRow
+                                    className="text-xs hover:bg-muted/30 cursor-pointer"
+                                    onClick={() => setExpandedMonth(isExpanded ? null : m.month)}
+                                  >
+                                    <TableCell className="text-center p-0 w-8">
+                                      {m.reps && m.reps.length > 0 && (
+                                        <button
+                                          type="button"
+                                          className="p-1 hover:bg-gray-200 rounded text-muted-foreground"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setExpandedMonth(isExpanded ? null : m.month);
+                                          }}
+                                          title={isExpanded ? "Collapse representatives" : "Expand representatives"}
+                                        >
+                                          {isExpanded ? (
+                                            <ChevronDown className="w-3.5 h-3.5" />
+                                          ) : (
+                                            <ChevronRight className="w-3.5 h-3.5" />
+                                          )}
+                                        </button>
+                                      )}
+                                    </TableCell>
+                                    <TableCell className="font-semibold text-gray-900">
+                                      <div className="flex items-center gap-1.5">
+                                        <span>{m.monthLabel || m.month}</span>
+                                        {m.reps && m.reps.length > 0 && (
+                                          <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 bg-muted/40 font-normal">
+                                            {m.reps.length} reps
+                                          </Badge>
+                                        )}
+                                      </div>
+                                    </TableCell>
+                                    <TableCell className="text-right">{m.invoiceCount}</TableCell>
+                                    <TableCell className="text-right text-blue-700 font-medium">LKR {fmt(m.salesAmount)}</TableCell>
+                                    <TableCell className="text-right text-emerald-700 font-medium">LKR {fmt(m.collectedAmount)}</TableCell>
+                                    <TableCell className={`text-right font-medium ${m.dueAmount > 0 ? "text-red-600" : "text-muted-foreground"}`}>
+                                      {m.dueAmount > 0 ? `LKR ${fmt(m.dueAmount)}` : "—"}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                      <CollectionBadge rate={m.collectionRate} />
+                                    </TableCell>
+                                    <TableCell className={`text-right font-medium ${m.profit >= 0 ? "text-green-700" : "text-red-700"}`}>
+                                      LKR {fmt(m.profit)}
+                                    </TableCell>
+                                    <TableCell className="text-right text-muted-foreground">
+                                      {m.margin.toFixed(1)}%
+                                    </TableCell>
+                                  </TableRow>
+
+                                  {/* Sub-table for Representatives active in this month */}
+                                  {isExpanded && m.reps && m.reps.length > 0 && (
+                                    <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
+                                      <TableCell colSpan={9} className="p-3 pl-8">
+                                        <div className="border border-slate-200 rounded-lg bg-white overflow-hidden shadow-sm">
+                                          <div className="px-3 py-1.5 bg-slate-100/80 border-b flex items-center justify-between">
+                                            <span className="text-[11px] font-semibold text-slate-700">
+                                              Representative Performance · {m.monthLabel || m.month}
+                                            </span>
+                                            <span className="text-[10px] text-muted-foreground">
+                                              {m.reps.length} active reps
+                                            </span>
+                                          </div>
+                                          <Table>
+                                            <TableHeader>
+                                              <TableRow className="text-[10px] bg-slate-50 border-b">
+                                                <TableHead className="h-7 text-slate-600">Representative</TableHead>
+                                                <TableHead className="h-7 text-right text-slate-600">Invoices</TableHead>
+                                                <TableHead className="h-7 text-right text-slate-600">Total Sales</TableHead>
+                                                <TableHead className="h-7 text-right text-slate-600">Collections (Paid)</TableHead>
+                                                <TableHead className="h-7 text-right text-slate-600">Due Amount</TableHead>
+                                                <TableHead className="h-7 text-right text-slate-600">Collection %</TableHead>
+                                              </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                              {m.reps.map((r: any) => {
+                                                const rRate = r.sales > 0 ? (r.collected / r.sales) * 100 : 0;
+                                                return (
+                                                  <TableRow key={r.name} className="text-[11px] hover:bg-slate-50/50">
+                                                    <TableCell className="py-1.5 font-medium">{r.name}</TableCell>
+                                                    <TableCell className="py-1.5 text-right">{r.invoiceCount}</TableCell>
+                                                    <TableCell className="py-1.5 text-right text-blue-700 font-medium">LKR {fmt(r.sales)}</TableCell>
+                                                    <TableCell className="py-1.5 text-right text-emerald-700 font-medium">LKR {fmt(r.collected)}</TableCell>
+                                                    <TableCell className={`py-1.5 text-right font-medium ${r.due > 0 ? "text-red-600" : "text-muted-foreground"}`}>
+                                                      {r.due > 0 ? `LKR ${fmt(r.due)}` : "—"}
+                                                    </TableCell>
+                                                    <TableCell className="py-1.5 text-right">
+                                                      <CollectionBadge rate={rRate} />
+                                                    </TableCell>
+                                                  </TableRow>
+                                                );
+                                              })}
+                                            </TableBody>
+                                          </Table>
+                                        </div>
+                                      </TableCell>
+                                    </TableRow>
+                                  )}
+                                </React.Fragment>
+                              );
+                            })
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
                   )}
 
                 </div>
