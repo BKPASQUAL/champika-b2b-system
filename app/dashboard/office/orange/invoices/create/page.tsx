@@ -293,8 +293,8 @@ export default function CreateInvoicePage() {
 
       setStockLoading(true);
       try {
-        // Fetch stock specifically for the logged-in user
-        const res = await fetch(`/api/rep/stock?userId=${salesRepId}${outOfStockOverride ? "&includeOutOfStock=true" : ""}`);
+        // Fetch stock specifically for the logged-in user (filtered to Orange products)
+        const res = await fetch(`/api/rep/stock?userId=${salesRepId}&supplierLike=Orange${outOfStockOverride ? "&includeOutOfStock=true" : ""}`);
         if (!res.ok) throw new Error("Failed to load stock");
 
         const productsData = await res.json();
@@ -582,7 +582,7 @@ export default function CreateInvoicePage() {
 
       // Refetch products list
       if (salesRepId) {
-        const stockRes = await fetch(`/api/rep/stock?userId=${salesRepId}${outOfStockOverride ? "&includeOutOfStock=true" : ""}`);
+        const stockRes = await fetch(`/api/rep/stock?userId=${salesRepId}&supplierLike=Orange${outOfStockOverride ? "&includeOutOfStock=true" : ""}`);
         if (stockRes.ok) {
           const productsData = await stockRes.json();
           setProducts(
