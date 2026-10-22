@@ -9,6 +9,7 @@ export const BUSINESS_IDS = {
   CHAMPIKA_DISTRIBUTION: "e770d62c-d4bd-4bbc-ba9e-ccb07d7aa9bb",
   WIREMAN_AGENCY: "094b649e-be59-4e2b-b709-7e36ad1ef280",
   SIERRA_AGENCY: "41b55e39-2edb-43ac-9877-dabd23902335",
+  CHAMPIKA_ONLINE: "8f1a23c4-9b5d-4e7a-bf12-9c8e7d6a5b4c",
 } as const;
 
 export const BUSINESS_NAMES = {
@@ -17,6 +18,7 @@ export const BUSINESS_NAMES = {
   [BUSINESS_IDS.CHAMPIKA_DISTRIBUTION]: "Champika Hardware - Distribution",
   [BUSINESS_IDS.WIREMAN_AGENCY]: "Wireman Agency",
   [BUSINESS_IDS.SIERRA_AGENCY]: "Sierra Agency",
+  [BUSINESS_IDS.CHAMPIKA_ONLINE]: "BK Wiring Kade",
 } as const;
 
 // ✅ ADDED: Internal Customer Names for Pinning
@@ -31,6 +33,7 @@ export const BUSINESS_ROUTES = {
   [BUSINESS_IDS.CHAMPIKA_DISTRIBUTION]: "/dashboard/office/distribution",
   [BUSINESS_IDS.WIREMAN_AGENCY]: "/dashboard/office/wireman",
   [BUSINESS_IDS.SIERRA_AGENCY]: "/dashboard/office/sierra",
+  [BUSINESS_IDS.CHAMPIKA_ONLINE]: "/dashboard/admin/storefront",
 } as const;
 
 export const BUSINESS_PO_PREFIXES: Record<string, string> = {
@@ -39,6 +42,7 @@ export const BUSINESS_PO_PREFIXES: Record<string, string> = {
   [BUSINESS_IDS.CHAMPIKA_DISTRIBUTION]: "D",
   [BUSINESS_IDS.WIREMAN_AGENCY]: "W",
   [BUSINESS_IDS.SIERRA_AGENCY]: "S",
+  [BUSINESS_IDS.CHAMPIKA_ONLINE]: "CHO",
 };
 
 export const BUSINESS_THEMES = {
@@ -71,6 +75,12 @@ export const BUSINESS_THEMES = {
     bgClass: "bg-purple-100",
     textClass: "text-purple-600",
     borderClass: "border-purple-600",
+  },
+  [BUSINESS_IDS.CHAMPIKA_ONLINE]: {
+    primary: "amber",
+    bgClass: "bg-amber-100",
+    textClass: "text-amber-600",
+    borderClass: "border-amber-600",
   },
 } as const;
 

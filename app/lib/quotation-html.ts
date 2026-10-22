@@ -110,15 +110,15 @@ export const generateQuotationHTML = async (
     <table style="width:100%;border-collapse:collapse;margin-bottom:0;">
       <tr>
         <td style="vertical-align:top;width:58%;">
-          <div style="font-size:32px;font-weight:900;color:#0f172a;letter-spacing:-0.5px;line-height:1.1;text-transform:uppercase;">CHAMPIKA HARDWARE</div>
+          <div style="font-size:32px;font-weight:900;color:#0f172a;letter-spacing:-0.5px;line-height:1.1;text-transform:uppercase;">${cfg.companyName || "CHAMPIKA HARDWARE"}</div>
           <div style="font-size:10px;color:#475569;margin-top:3px;line-height:1.5;font-weight:500;">
-            ${cfg.division} &bull; ${cfg.address}<br>Tel: ${cfg.tel}
+            ${cfg.division}${cfg.address ? ` &bull; ${cfg.address}` : ""}${cfg.tel ? `<br>Tel: ${cfg.tel}` : ""}
           </div>
         </td>
         <td style="vertical-align:top;text-align:right;width:42%;">
           <table style="margin-left:auto;border-collapse:collapse;">
             <tr>
-              ${isFirst ? `
+              ${isFirst && divisionKey !== "online" ? `
               <td style="vertical-align:top;padding-top:4px;padding-right:12px;">
                 <div style="display:inline-flex;align-items:center;border:2px solid #0f172a;border-radius:8px;padding:6px 10px;background:#fff;">
                   <div style="position:relative;display:flex;align-items:center;justify-content:center;width:40px;height:40px;margin-right:10px;">

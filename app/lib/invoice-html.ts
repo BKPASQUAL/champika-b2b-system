@@ -24,18 +24,20 @@ const formatDate = (dateString: string) => {
 };
 
 export interface DivisionConfig {
+  companyName?: string;
   division: string;
   address: string;
   tel: string;
 }
 
 export const DIVISIONS: Record<string, DivisionConfig> = {
-  distribution: { division: "Distribution Division", address: "Pranawatta Road, Wallabada, Boossa", tel: "0777681663" },
-  retail:       { division: "Retail Division",        address: "Pranawatta Road, Wallabada, Boossa", tel: "077-3151561" },
-  orange:       { division: "Orange Agency",          address: "Pranawatta Road, Wallabada, Boossa", tel: "0777681663" },
-  sierra:       { division: "Sierra Division",        address: "Pranawatta Road, Wallabada, Boossa", tel: "0777681663" },
-  wireman:      { division: "Wireman Division",       address: "Pranawatta Road, Wallabada, Boossa", tel: "0777681663" },
-  admin:        { division: "Head Office",            address: "Pranawatta Road, Wallabada, Boossa", tel: "0777681663" },
+  distribution: { companyName: "CHAMPIKA HARDWARE", division: "Distribution Division", address: "Pranawatta Road, Wallabada, Boossa", tel: "0777681663" },
+  retail:       { companyName: "CHAMPIKA HARDWARE", division: "Retail Division",        address: "Pranawatta Road, Wallabada, Boossa", tel: "077-3151561" },
+  orange:       { companyName: "CHAMPIKA HARDWARE", division: "Orange Agency",          address: "Pranawatta Road, Wallabada, Boossa", tel: "0777681663" },
+  sierra:       { companyName: "CHAMPIKA HARDWARE", division: "Sierra Division",        address: "Pranawatta Road, Wallabada, Boossa", tel: "0777681663" },
+  wireman:      { companyName: "CHAMPIKA HARDWARE", division: "Wireman Division",       address: "Pranawatta Road, Wallabada, Boossa", tel: "0777681663" },
+  admin:        { companyName: "CHAMPIKA HARDWARE", division: "Head Office",            address: "Pranawatta Road, Wallabada, Boossa", tel: "0777681663" },
+  online:       { companyName: "BK WIRING KADE",    division: "Electrical & Wiring Supplies", address: "", tel: "" },
 };
 
 export const generateInvoiceHTML = async (
@@ -155,15 +157,15 @@ export const generateInvoiceHTML = async (
     <table style="width:100%;border-collapse:collapse;margin-bottom:0;">
       <tr>
         <td style="vertical-align:top;width:60%;">
-          <div style="font-size:34px;font-weight:800;color:#000;letter-spacing:-0.3px;line-height:1.1;">CHAMPIKA HARDWARE</div>
+          <div style="font-size:34px;font-weight:800;color:#000;letter-spacing:-0.3px;line-height:1.1;">${cfg.companyName || "CHAMPIKA HARDWARE"}</div>
           <div style="font-size:10px;color:#333;margin-top:2px;line-height:1.5;">
-            ${cfg.division}<br>${cfg.address}<br>Tel: ${cfg.tel}
+            ${cfg.division}${cfg.address ? `<br>${cfg.address}` : ""}${cfg.tel ? `<br>Tel: ${cfg.tel}` : ""}
           </div>
         </td>
         <td style="vertical-align:top;text-align:right;width:40%;">
           <table style="margin-left:auto;border-collapse:collapse;">
             <tr>
-              ${isFirst ? `
+              ${isFirst && divisionKey !== "online" ? `
               <td style="vertical-align:top;padding-top:6px;padding-right:15px;">
                 <div style="display:inline-flex;align-items:center;border:2px solid #000;border-radius:8px;padding:6px 10px;background:#fff;">
                   <div style="position:relative;display:flex;align-items:center;justify-content:center;width:42px;height:42px;margin-right:10px;">

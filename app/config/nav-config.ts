@@ -41,6 +41,7 @@ import {
   KeyRound,
   PackageX,
   Calculator,
+  Globe,
 } from "lucide-react";
 
 export type UserRole = "admin" | "office" | "rep" | "delivery";
@@ -200,6 +201,16 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           name: "Returns",
           href: "/dashboard/admin/inventory/returns",
           icon: Undo2,
+        },
+      ],
+    },
+    {
+      title: "Online Storefront",
+      items: [
+        {
+          name: "BK Wiring Kade Ops",
+          href: "/dashboard/admin/storefront",
+          icon: Globe,
         },
       ],
     },

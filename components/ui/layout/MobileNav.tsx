@@ -17,6 +17,7 @@ import { distributionNavItems } from "@/app/config/distribution-nav-config";
 import { orangeOfficeNavItems } from "@/app/config/orange-nav-config";
 import { wiremanOfficeNavItems } from "@/app/config/wireman-nav-config";
 import { sierraOfficeNavItems } from "@/app/config/sierra-nav-config";
+import { storefrontOfficeNavItems } from "@/app/config/storefront-nav-config";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetClose } from "@/components/ui/sheet";
 import {
   DropdownMenu,
@@ -46,6 +47,7 @@ interface MobileNavProps {
   isOrange?: boolean;
   isWireman?: boolean;
   isSierra?: boolean;
+  isStorefront?: boolean;
 }
 
 export function MobileNav({
@@ -55,10 +57,13 @@ export function MobileNav({
   isOrange = false,
   isWireman = false,
   isSierra = false,
+  isStorefront: isStorefrontProp = false,
 }: MobileNavProps) {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
+
+  const isStorefront = isStorefrontProp || pathname?.startsWith("/dashboard/admin/storefront") || pathname?.startsWith("/dashboard/storefront");
 
   // Fix: iOS PWA — close sheet and restore body state on every route change.
   // Radix Dialog applies scroll-lock styles (overflow:hidden, touch-action:none)
@@ -84,7 +89,8 @@ export function MobileNav({
   }, []);
 
   let navSections;
-  if (isWireman)           navSections = wiremanOfficeNavItems;
+  if (isStorefront)        navSections = storefrontOfficeNavItems;
+  else if (isWireman)      navSections = wiremanOfficeNavItems;
   else if (isSierra)       navSections = sierraOfficeNavItems;
   else if (isOrange)       navSections = orangeOfficeNavItems;
   else if (isRetail)       navSections = retailOfficeNavItems;
@@ -115,9 +121,10 @@ export function MobileNav({
   }, []);
 
   const isAdmin = user.role === "admin";
-  const isOfficePortal = isOrange || isRetail || isDistribution || isWireman || isSierra;
+  const isOfficePortal = isOrange || isRetail || isDistribution || isWireman || isSierra || isStorefront;
 
-  const currentBusinessId = isOrange ? BUSINESS_IDS.ORANGE_AGENCY
+  const currentBusinessId = isStorefront ? BUSINESS_IDS.CHAMPIKA_ONLINE
+    : isOrange       ? BUSINESS_IDS.ORANGE_AGENCY
     : isRetail       ? BUSINESS_IDS.CHAMPIKA_RETAIL
     : isDistribution ? BUSINESS_IDS.CHAMPIKA_DISTRIBUTION
     : isWireman      ? BUSINESS_IDS.WIREMAN_AGENCY
@@ -127,15 +134,15 @@ export function MobileNav({
   const switcherIds = isAdmin ? Object.values(BUSINESS_IDS) : user.accessibleBusinessIds;
   const canSwitch   = isAdmin || (isOfficePortal && switcherIds.length > 1);
 
-  const CurrentIcon   = isWireman ? Zap : isSierra ? Mountain : isOrange ? Globe
+  const CurrentIcon   = isStorefront ? Zap : isWireman ? Zap : isSierra ? Mountain : isOrange ? Globe
     : isRetail ? Store : isDistribution ? Warehouse : LayoutDashboard;
-  const currentLabel  = isWireman ? "Wireman Agency" : isSierra ? "Sierra Agency"
+  const currentLabel  = isStorefront ? "BK Wiring Kade" : isWireman ? "Wireman Agency" : isSierra ? "Sierra Agency"
     : isOrange ? "Orange Agency" : isRetail ? "Champika Retail"
     : isDistribution ? "Distribution" : "Admin Dashboard";
-  const currentIconBg = isWireman ? "bg-red-100" : isSierra ? "bg-purple-100"
+  const currentIconBg = isStorefront ? "bg-amber-100" : isWireman ? "bg-red-100" : isSierra ? "bg-purple-100"
     : isOrange ? "bg-orange-100" : isRetail ? "bg-green-100"
     : isDistribution ? "bg-blue-100" : "bg-gray-100";
-  const currentIconColor = isWireman ? "text-red-600" : isSierra ? "text-purple-600"
+  const currentIconColor = isStorefront ? "text-amber-600" : isWireman ? "text-red-600" : isSierra ? "text-purple-600"
     : isOrange ? "text-orange-600" : isRetail ? "text-green-600"
     : isDistribution ? "text-blue-600" : "text-gray-700";
 
@@ -220,6 +227,7 @@ export function MobileNav({
                     const name = BUSINESS_NAMES[id as keyof typeof BUSINESS_NAMES] ?? id;
                     const isActive = id === currentBusinessId;
                     const dotClass =
+                      id === BUSINESS_IDS.CHAMPIKA_ONLINE      ? "bg-amber-500"  :
                       id === BUSINESS_IDS.ORANGE_AGENCY        ? "bg-orange-500" :
                       id === BUSINESS_IDS.CHAMPIKA_RETAIL       ? "bg-green-500"  :
                       id === BUSINESS_IDS.CHAMPIKA_DISTRIBUTION ? "bg-blue-500"   :

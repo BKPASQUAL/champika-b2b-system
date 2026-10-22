@@ -12,6 +12,7 @@ import { distributionNavItems } from "@/app/config/distribution-nav-config";
 import { orangeOfficeNavItems } from "@/app/config/orange-nav-config";
 import { wiremanOfficeNavItems } from "@/app/config/wireman-nav-config";
 import { sierraOfficeNavItems } from "@/app/config/sierra-nav-config";
+import { storefrontOfficeNavItems } from "@/app/config/storefront-nav-config";
 import { useState, useEffect } from "react";
 import {
   DropdownMenu,
@@ -44,6 +45,7 @@ interface AppSidebarProps {
   isOrange?: boolean;
   isWireman?: boolean;
   isSierra?: boolean;
+  isStorefront?: boolean;
 }
 
 export function AppSidebar({
@@ -53,13 +55,18 @@ export function AppSidebar({
   isOrange = false,
   isWireman = false,
   isSierra = false,
+  isStorefront: isStorefrontProp = false,
 }: AppSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
 
+  const isStorefront = isStorefrontProp || pathname?.startsWith("/dashboard/admin/storefront") || pathname?.startsWith("/dashboard/storefront");
+
   // --- NAVIGATION SELECTION LOGIC ---
   let navSections;
-  if (isWireman) {
+  if (isStorefront) {
+    navSections = storefrontOfficeNavItems;
+  } else if (isWireman) {
     navSections = wiremanOfficeNavItems;
   } else if (isSierra) {
     navSections = sierraOfficeNavItems;
@@ -107,7 +114,9 @@ export function AppSidebar({
   const isAdmin = user.role === "admin";
 
   // Determine which business ID corresponds to the current portal
-  const currentBusinessId = isOrange
+  const currentBusinessId = isStorefront
+    ? BUSINESS_IDS.CHAMPIKA_ONLINE
+    : isOrange
     ? BUSINESS_IDS.ORANGE_AGENCY
     : isRetail
     ? BUSINESS_IDS.CHAMPIKA_RETAIL
@@ -119,7 +128,7 @@ export function AppSidebar({
     ? BUSINESS_IDS.SIERRA_AGENCY
     : null;
 
-  const isOfficePortal = isOrange || isRetail || isDistribution || isWireman || isSierra;
+  const isOfficePortal = isOrange || isRetail || isDistribution || isWireman || isSierra || isStorefront;
 
   // Admins see all portals; office users see their assigned portals (2+)
   const switcherIds = isAdmin
@@ -151,6 +160,17 @@ export function AppSidebar({
     router.push("/login");
   };
 
+  const [currentQuery, setCurrentQuery] = useState("");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setCurrentQuery(window.location.search);
+      const onPop = () => setCurrentQuery(window.location.search);
+      window.addEventListener("popstate", onPop);
+      return () => window.removeEventListener("popstate", onPop);
+    }
+  }, [pathname]);
+
   return (
     <div className={cn(
       isRetail ? "hidden xl:flex" : "hidden lg:flex",
@@ -166,6 +186,7 @@ export function AppSidebar({
                 {/* Icon */}
                 <div className={cn(
                   "h-8 w-8 rounded-lg flex items-center justify-center shrink-0 overflow-hidden",
+                  isStorefront ? "bg-amber-100" :
                   isWireman ? "bg-red-100" :
                   isSierra ? "bg-purple-100" :
                   isOrange ? "bg-orange-100" :
@@ -173,7 +194,8 @@ export function AppSidebar({
                   isDistribution ? "bg-blue-100" :
                   "bg-white ring-1 ring-border"
                 )}>
-                  {isWireman ? <Zap className="h-4 w-4 text-red-600" /> :
+                  {isStorefront ? <Zap className="h-4 w-4 text-amber-600" /> :
+                   isWireman ? <Zap className="h-4 w-4 text-red-600" /> :
                    isSierra ? <Mountain className="h-4 w-4 text-purple-600" /> :
                    isOrange ? <Globe className="h-4 w-4 text-orange-600" /> :
                    isRetail ? <Store className="h-4 w-4 text-green-600" /> :
@@ -183,7 +205,8 @@ export function AppSidebar({
                 {/* Name */}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold truncate leading-tight">
-                    {isWireman ? "Wireman Agency" :
+                    {isStorefront ? "BK Wiring Kade" :
+                     isWireman ? "Wireman Agency" :
                      isSierra ? "Sierra Agency" :
                      isOrange ? "Orange Agency" :
                      isRetail ? "Champika Retail" :
@@ -191,7 +214,7 @@ export function AppSidebar({
                      "Admin Dashboard"}
                   </p>
                   <p className="text-[10px] text-muted-foreground leading-tight">
-                    Switch portal
+                    {isStorefront ? "Online Store Portal" : "Switch portal"}
                   </p>
                 </div>
                 <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0 group-data-[state=open]:rotate-180 transition-transform" />
@@ -224,6 +247,7 @@ export function AppSidebar({
                 const isActive = id === currentBusinessId;
 
                 const dotClass =
+                  id === BUSINESS_IDS.CHAMPIKA_ONLINE ? "bg-amber-500" :
                   id === BUSINESS_IDS.ORANGE_AGENCY ? "bg-orange-500" :
                   id === BUSINESS_IDS.CHAMPIKA_RETAIL ? "bg-green-500" :
                   id === BUSINESS_IDS.CHAMPIKA_DISTRIBUTION ? "bg-blue-500" :
@@ -254,6 +278,11 @@ export function AppSidebar({
             </DropdownMenuContent>
           </DropdownMenu>
 
+        ) : isStorefront ? (
+          <div className="flex items-center gap-2 px-2">
+            <Zap className="h-6 w-6 text-amber-600 shrink-0" />
+            <span className="text-lg font-semibold truncate">BK Wiring Kade</span>
+          </div>
         ) : isWireman ? (
           <div className="flex items-center gap-2 px-2">
             <Zap className="h-6 w-6 text-red-600 shrink-0" />
@@ -305,17 +334,43 @@ export function AppSidebar({
               <div className="space-y-1">
                 {visibleItems.map((item) => {
                   const Icon = item.icon;
-                  const isActive = pathname === item.href;
+                  let isActive = false;
+                  if (isStorefront) {
+                    if (item.href === "/") {
+                      isActive = pathname === "/";
+                    } else if (item.href.includes("?tab=")) {
+                      const tab = item.href.split("?tab=")[1];
+                      isActive = pathname?.startsWith("/dashboard/admin/storefront") && currentQuery.includes(`tab=${tab}`);
+                    } else if (item.href === "/dashboard/admin/storefront") {
+                      isActive = pathname === "/dashboard/admin/storefront" && (!currentQuery || currentQuery === "?tab=orders" || currentQuery === "");
+                    }
+                  } else {
+                    isActive = pathname === item.href;
+                  }
 
                   return (
-                    <Link key={item.href} href={item.href}>
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      target={item.href === "/" ? "_blank" : undefined}
+                      rel={item.href === "/" ? "noopener noreferrer" : undefined}
+                      onClick={() => {
+                        if (item.href.includes("?")) {
+                          setCurrentQuery(item.href.slice(item.href.indexOf("?")));
+                        } else if (item.href === "/dashboard/admin/storefront") {
+                          setCurrentQuery("");
+                        }
+                      }}
+                    >
                       <Button
                         variant="ghost"
                         size="sm"
                         className={cn(
                           "w-full justify-start gap-3 h-10 px-3",
                           isActive
-                            ? isWireman
+                            ? isStorefront
+                              ? "bg-amber-100 text-amber-900 font-semibold hover:bg-amber-200"
+                              : isWireman
                               ? "bg-red-100 text-red-700 hover:bg-red-200"
                               : isSierra
                               ? "bg-purple-100 text-purple-700 hover:bg-purple-200"
