@@ -30,7 +30,9 @@ const productSchema = z.object({
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const onlyActive = searchParams.get("active") === "true";
+    const onlyActive =
+      searchParams.get("active") === "true" ||
+      searchParams.get("is_active") === "true";
 
     const data: any[] = [];
     let page = 0;

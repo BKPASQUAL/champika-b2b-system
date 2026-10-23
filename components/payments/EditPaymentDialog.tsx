@@ -60,6 +60,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { invalidatePaymentCaches } from "@/hooks/useCachedFetch";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 export interface GoodsSettlementItem {
   id: string;
@@ -209,20 +210,36 @@ export function EditPaymentDialog({
     if (!isOpen || method !== "goods") return;
 
     const bId = businessId || paymentData?.invoices?.orders?.business_id;
-    const prodUrl = bId ? `/api/products?business_id=${bId}&is_active=true` : "/api/products?is_active=true";
+    const prodUrl = "/api/products?active=true";
     fetch(prodUrl)
       .then((r) => (r.ok ? r.json() : []))
       .then((data) => {
         let filtered = data || [];
         if (agencyName) {
-          const agLow = agencyName.toLowerCase();
-          filtered = filtered.filter((p: any) => {
-            if (p.retailOnly) return false;
-            const supplier = (p.supplier || p.supplier_name || "").toLowerCase();
-            const brand = (p.brand || "").toLowerCase();
-            const name = (p.name || "").toLowerCase();
-            return supplier.includes(agLow) || brand.includes(agLow) || name.includes(agLow);
-          });
+          const agLow = (agencyName || "").toLowerCase();
+          const isDistribution =
+            bId === BUSINESS_IDS.CHAMPIKA_DISTRIBUTION ||
+            agLow.includes("distribution");
+          const isRetail =
+            bId === BUSINESS_IDS.CHAMPIKA_RETAIL ||
+            agLow.includes("retail");
+
+          if (isDistribution) {
+            filtered = filtered.filter((p: any) => {
+              if (p.retailOnly || p.retail_only || p.subCategory === "Retail Exclusive") return false;
+              return true;
+            });
+          } else if (isRetail) {
+            filtered = filtered.filter((p: any) => true);
+          } else {
+            filtered = filtered.filter((p: any) => {
+              if (p.retailOnly || p.retail_only) return false;
+              const supplier = (p.supplier || p.supplier_name || "").toLowerCase();
+              const brand = (p.brand || "").toLowerCase();
+              const name = (p.name || "").toLowerCase();
+              return supplier.includes(agLow) || brand.includes(agLow) || name.includes(agLow);
+            });
+          }
         }
         const mapped = filtered.map((p: any) => ({
           id: p.id,
@@ -232,6 +249,8 @@ export function EditPaymentDialog({
           stock: p.stock ?? p.stock_quantity ?? 0,
           sellingPrice: Number(p.sellingPrice || p.selling_price || 0),
           costPrice: Number(p.costPrice || p.cost_price || 0),
+          supplier: p.supplier || p.supplier_name || "",
+          brand: p.brand || "",
         }));
         setCatalogProducts(mapped);
       })
@@ -247,14 +266,30 @@ export function EditPaymentDialog({
         .then((data) => {
           let filtered = data || [];
           if (agencyName) {
-            const agLow = agencyName.toLowerCase();
-            filtered = filtered.filter((p: any) => {
-              if (p.retailOnly) return false;
-              const supplier = (p.supplier || p.supplier_name || "").toLowerCase();
-              const brand = (p.brand || "").toLowerCase();
-              const name = (p.name || "").toLowerCase();
-              return supplier.includes(agLow) || brand.includes(agLow) || name.includes(agLow);
-            });
+            const agLow = (agencyName || "").toLowerCase();
+            const isDistribution =
+              bId === BUSINESS_IDS.CHAMPIKA_DISTRIBUTION ||
+              agLow.includes("distribution");
+            const isRetail =
+              bId === BUSINESS_IDS.CHAMPIKA_RETAIL ||
+              agLow.includes("retail");
+
+            if (isDistribution) {
+              filtered = filtered.filter((p: any) => {
+                if (p.retailOnly || p.retail_only || p.subCategory === "Retail Exclusive") return false;
+                return true;
+              });
+            } else if (isRetail) {
+              filtered = filtered.filter((p: any) => true);
+            } else {
+              filtered = filtered.filter((p: any) => {
+                if (p.retailOnly || p.retail_only) return false;
+                const supplier = (p.supplier || p.supplier_name || "").toLowerCase();
+                const brand = (p.brand || "").toLowerCase();
+                const name = (p.name || "").toLowerCase();
+                return supplier.includes(agLow) || brand.includes(agLow) || name.includes(agLow);
+              });
+            }
           }
           const mappedPurchased = filtered.map((p: any) => ({
             ...p,
@@ -739,7 +774,7 @@ export function EditPaymentDialog({
                                   {currentAddProductList.map((p) => (
                                     <CommandItem
                                       key={p.id}
-                                      value={`${p.name} ${p.sku} ${p.companyCode || ""}`}
+                                      value={`${p.name} ${p.sku} ${p.companyCode || ""} ${p.supplier || ""} ${p.brand || ""}`}
                                       onSelect={() => {
                                         setAddProductId(p.id);
                                         const rate = p.latestUnitPrice ?? p.sellingPrice ?? 0;
@@ -756,6 +791,7 @@ export function EditPaymentDialog({
                                       <div className="flex-1 text-xs">
                                         <div className="font-medium">{p.name}</div>
                                         <div className="text-[10px] text-muted-foreground">
+                                          {(p.brand || p.supplier) ? `${p.brand || p.supplier} • ` : ""}
                                           {p.sku} &bull; LKR {(p.sellingPrice || p.latestUnitPrice || 0).toLocaleString()}
                                         </div>
                                       </div>

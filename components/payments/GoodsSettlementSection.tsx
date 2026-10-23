@@ -55,6 +55,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 export interface GoodsSettlementItem {
   id: string;
@@ -185,7 +186,7 @@ export function GoodsSettlementSection({
   useEffect(() => {
     const fetchCatalog = async () => {
       try {
-        const url = businessId ? `/api/products?business_id=${businessId}&is_active=true` : "/api/products?is_active=true";
+        const url = "/api/products?active=true";
         const res = await fetch(url);
         if (res.ok) {
           const pData = await res.json();
@@ -193,14 +194,30 @@ export function GoodsSettlementSection({
           if (productFilter) {
             filtered = filtered.filter(productFilter);
           } else if (agencyName) {
-            const agLow = agencyName.toLowerCase();
-            filtered = filtered.filter((p: any) => {
-              if (p.retailOnly) return false;
-              const supplier = (p.supplier || p.supplier_name || "").toLowerCase();
-              const brand = (p.brand || "").toLowerCase();
-              const name = (p.name || "").toLowerCase();
-              return supplier.includes(agLow) || brand.includes(agLow) || name.includes(agLow);
-            });
+            const agLow = (agencyName || "").toLowerCase();
+            const isDistribution =
+              businessId === BUSINESS_IDS.CHAMPIKA_DISTRIBUTION ||
+              agLow.includes("distribution");
+            const isRetail =
+              businessId === BUSINESS_IDS.CHAMPIKA_RETAIL ||
+              agLow.includes("retail");
+
+            if (isDistribution) {
+              filtered = filtered.filter((p: any) => {
+                if (p.retailOnly || p.retail_only || p.subCategory === "Retail Exclusive") return false;
+                return true;
+              });
+            } else if (isRetail) {
+              filtered = filtered.filter((p: any) => true);
+            } else {
+              filtered = filtered.filter((p: any) => {
+                if (p.retailOnly || p.retail_only) return false;
+                const supplier = (p.supplier || p.supplier_name || "").toLowerCase();
+                const brand = (p.brand || "").toLowerCase();
+                const name = (p.name || "").toLowerCase();
+                return supplier.includes(agLow) || brand.includes(agLow) || name.includes(agLow);
+              });
+            }
           }
           const catalog = filtered.map((p: any) => ({
             id: p.id,
@@ -239,14 +256,30 @@ export function GoodsSettlementSection({
         if (productFilter) {
           filtered = filtered.filter(productFilter);
         } else if (agencyName) {
-          const agLow = agencyName.toLowerCase();
-          filtered = filtered.filter((p: any) => {
-            if (p.retailOnly) return false;
-            const supplier = (p.supplier || p.supplier_name || "").toLowerCase();
-            const brand = (p.brand || "").toLowerCase();
-            const name = (p.name || "").toLowerCase();
-            return supplier.includes(agLow) || brand.includes(agLow) || name.includes(agLow);
-          });
+          const agLow = (agencyName || "").toLowerCase();
+          const isDistribution =
+            businessId === BUSINESS_IDS.CHAMPIKA_DISTRIBUTION ||
+            agLow.includes("distribution");
+          const isRetail =
+            businessId === BUSINESS_IDS.CHAMPIKA_RETAIL ||
+            agLow.includes("retail");
+
+          if (isDistribution) {
+            filtered = filtered.filter((p: any) => {
+              if (p.retailOnly || p.retail_only || p.subCategory === "Retail Exclusive") return false;
+              return true;
+            });
+          } else if (isRetail) {
+            filtered = filtered.filter((p: any) => true);
+          } else {
+            filtered = filtered.filter((p: any) => {
+              if (p.retailOnly || p.retail_only) return false;
+              const supplier = (p.supplier || p.supplier_name || "").toLowerCase();
+              const brand = (p.brand || "").toLowerCase();
+              const name = (p.name || "").toLowerCase();
+              return supplier.includes(agLow) || brand.includes(agLow) || name.includes(agLow);
+            });
+          }
         }
         const mapped = filtered.map((p: any) => ({
           ...p,
@@ -506,7 +539,7 @@ export function GoodsSettlementSection({
                       {(productSource === "invoiced" && purchasedProducts.length > 0 ? purchasedProducts : catalogProducts).map((p: any) => (
                         <CommandItem
                           key={p.id}
-                          value={`${p.name} ${p.sku} ${p.companyCode || ""}`}
+                          value={`${p.name} ${p.sku} ${p.companyCode || ""} ${p.supplier || ""} ${p.brand || ""}`}
                           onSelect={() => {
                             setOwnProductId(p.id);
                             const unitRate = productSource === "invoiced" ? (p.latestUnitPrice ?? p.sellingPrice ?? 0) : (p.sellingPrice ?? 0);
@@ -528,6 +561,7 @@ export function GoodsSettlementSection({
                           <div className="flex-1">
                             <div className="font-medium">{p.name}</div>
                             <div className="text-xs text-muted-foreground">
+                              {(p.brand || p.supplier) ? `${p.brand || p.supplier} • ` : ""}
                               {p.companyCode ? `${p.companyCode} • ` : ""}
                               {p.sku} • Stock: {p.stock ?? p.currentStock ?? 0} • LKR {(p.sellingPrice || p.latestUnitPrice || 0).toLocaleString()}
                               {productSource === "invoiced" && p.totalPurchasedQty !== undefined && ` • Billed: ${p.totalPurchasedQty}`}
@@ -543,7 +577,7 @@ export function GoodsSettlementSection({
                           .map((p: any) => (
                             <CommandItem
                               key={p.id}
-                              value={`${p.name} ${p.sku} ${p.companyCode || ""}`}
+                              value={`${p.name} ${p.sku} ${p.companyCode || ""} ${p.supplier || ""} ${p.brand || ""}`}
                               onSelect={() => {
                                 setOwnProductId(p.id);
                                 setOwnUnitPrice(p.sellingPrice ?? 0);
@@ -562,6 +596,7 @@ export function GoodsSettlementSection({
                               <div className="flex-1">
                                 <div className="font-medium">{p.name}</div>
                                 <div className="text-xs text-muted-foreground">
+                                  {(p.brand || p.supplier) ? `${p.brand || p.supplier} • ` : ""}
                                   {p.companyCode ? `${p.companyCode} • ` : ""}
                                   {p.sku} • Stock: {p.stock ?? 0} • LKR {(p.sellingPrice || 0).toLocaleString()}
                                 </div>
