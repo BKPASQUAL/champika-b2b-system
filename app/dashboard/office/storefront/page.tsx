@@ -30,23 +30,20 @@ export default function StorefrontOverviewPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [inquiries, setInquiries] = useState<any[]>([]);
-  const [backlog, setBacklog] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
   const fetchAllData = async () => {
     setLoading(true);
     try {
-      const [ordersRes, prodsRes, inqRes, backlogRes] = await Promise.all([
+      const [ordersRes, prodsRes, inqRes] = await Promise.all([
         fetch("/api/storefront/manage/orders"),
         fetch("/api/storefront/manage/products"),
         fetch("/api/storefront/manage/inquiries"),
-        fetch("/api/storefront/manage/backlog"),
       ]);
 
       if (ordersRes.ok) setOrders(await ordersRes.json());
       if (prodsRes.ok) setProducts(await prodsRes.json());
       if (inqRes.ok) setInquiries(await inqRes.json());
-      if (backlogRes.ok) setBacklog(await backlogRes.json());
     } catch (err: any) {
       toast.error(err.message || "Failed to load dashboard data");
     } finally {
@@ -60,7 +57,7 @@ export default function StorefrontOverviewPage() {
 
   const pendingOrdersCount = orders.filter((o) => o.orderStatus === "Pending").length;
   const publishedProductsCount = products.filter((p) => p.isPublished).length;
-  const backlogAlertCount = backlog.length;
+  const inStockOnlineCount = products.filter((p) => p.isPublished && p.visibleOnlineStock > 0).length;
   const pendingInquiriesCount = inquiries.filter((i) => i.status !== "resolved").length;
 
   const fmt = (num: number) =>
@@ -78,7 +75,7 @@ export default function StorefrontOverviewPage() {
             </h1>
           </div>
           <p className="text-sm text-slate-500 mt-1">
-            Online Storefront Cockpit • Live Orders, Products, Customer Inquiries & Reorder Backlog
+            Online Storefront Cockpit • Live Orders, Website Catalog &amp; Customer Inquiries
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -146,28 +143,28 @@ export default function StorefrontOverviewPage() {
             </CardHeader>
             <CardContent className="p-4 pt-0">
               <div className="text-2xl font-bold text-slate-900">{publishedProductsCount}</div>
-              <p className="text-xs text-emerald-600 font-medium mt-1">Live in catalog</p>
+              <p className="text-xs text-emerald-600 font-medium mt-1">Live in customer store</p>
             </CardContent>
           </Card>
         </Link>
 
-        <Link href="/dashboard/office/storefront/backlog">
-          <Card className="border-l-4 border-l-rose-500 hover:shadow-md transition-shadow cursor-pointer">
+        <Link href="/dashboard/office/storefront/inquiries">
+          <Card className="border-l-4 border-l-purple-500 hover:shadow-md transition-shadow cursor-pointer">
             <CardHeader className="p-4 pb-2">
               <CardTitle className="text-xs font-semibold text-slate-500 uppercase flex items-center justify-between">
-                <span>Stock Shortages</span>
-                <AlertTriangle className="w-4 h-4 text-rose-500" />
+                <span>Customer Inquiries</span>
+                <MessageSquare className="w-4 h-4 text-purple-500" />
               </CardTitle>
             </CardHeader>
             <CardContent className="p-4 pt-0">
-              <div className="text-2xl font-bold text-rose-600">{backlogAlertCount}</div>
-              <p className="text-xs text-rose-500 font-medium mt-1">Items needing reorder</p>
+              <div className="text-2xl font-bold text-slate-900">{pendingInquiriesCount}</div>
+              <p className="text-xs text-purple-600 font-medium mt-1">Pending messages</p>
             </CardContent>
           </Card>
         </Link>
       </div>
 
-      {/* 4 Operations Hub Quick Cards */}
+      {/* Operations Hub Quick Cards */}
       <div>
         <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-3">
           Operations Sections
@@ -184,10 +181,10 @@ export default function StorefrontOverviewPage() {
                   <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-1 transition-transform" />
                 </div>
                 <CardTitle className="text-base font-bold text-slate-900 mt-3">
-                  Orders & Pipeline
+                  Orders &amp; Pipeline
                 </CardTitle>
                 <CardDescription className="text-xs text-slate-500">
-                  Manage incoming orders, 1-click CHO-XXXX invoicing, and lorry/courier dispatch
+                  Manage incoming customer orders, verify dispatch, and track deliveries
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-4 pt-0">
@@ -203,51 +200,51 @@ export default function StorefrontOverviewPage() {
             </Card>
           </Link>
 
-          {/* Card 2: Products */}
+          {/* Card 2: Website Products */}
           <Link href="/dashboard/office/storefront/products" className="block group">
             <Card className="h-full border border-slate-200 group-hover:border-emerald-500 group-hover:shadow-md transition-all">
               <CardHeader className="p-4 pb-2">
                 <div className="flex items-center justify-between">
                   <div className="p-2.5 rounded-xl bg-emerald-100 text-emerald-700 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
-                    <Package className="w-5 h-5" />
+                    <Globe className="w-5 h-5" />
                   </div>
                   <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-1 transition-transform" />
                 </div>
                 <CardTitle className="text-base font-bold text-slate-900 mt-3">
-                  Products & Pricing
+                  Website Products
                 </CardTitle>
                 <CardDescription className="text-xs text-slate-500">
-                  Publish products, set custom retail pricing, and reserve safety stock for walk-ins
+                  Step 2: Manage live items, custom retail prices, categories &amp; counter buffers
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-4 pt-0">
                 <div className="text-xs font-semibold text-emerald-600 flex items-center gap-1 mt-2">
-                  <span>{publishedProductsCount} Published Live</span>
+                  <span>{publishedProductsCount} Products Live</span>
                 </div>
               </CardContent>
             </Card>
           </Link>
 
-          {/* Card 3: Shortage Backlog */}
-          <Link href="/dashboard/office/storefront/backlog" className="block group">
-            <Card className="h-full border border-slate-200 group-hover:border-rose-500 group-hover:shadow-md transition-all">
+          {/* Card 3: All Catalog Products */}
+          <Link href="/dashboard/office/storefront/catalog" className="block group">
+            <Card className="h-full border border-slate-200 group-hover:border-slate-600 group-hover:shadow-md transition-all">
               <CardHeader className="p-4 pb-2">
                 <div className="flex items-center justify-between">
-                  <div className="p-2.5 rounded-xl bg-rose-100 text-rose-700 group-hover:bg-rose-600 group-hover:text-white transition-colors">
-                    <AlertTriangle className="w-5 h-5" />
+                  <div className="p-2.5 rounded-xl bg-slate-100 text-slate-700 group-hover:bg-slate-900 group-hover:text-white transition-colors">
+                    <Package className="w-5 h-5" />
                   </div>
                   <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-1 transition-transform" />
                 </div>
                 <CardTitle className="text-base font-bold text-slate-900 mt-3">
-                  Shortage Backlog
+                  All Catalog Products
                 </CardTitle>
                 <CardDescription className="text-xs text-slate-500">
-                  Zero-stock items and online customer backorders ready for supplier PO reorders
+                  Step 1: Browse full warehouse inventory &amp; select items for customer store
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-4 pt-0">
-                <div className="text-xs font-semibold text-rose-600 flex items-center gap-1 mt-2">
-                  <span>{backlogAlertCount} Critical Shortages</span>
+                <div className="text-xs font-semibold text-slate-700 flex items-center gap-1 mt-2">
+                  <span>{products.length} Warehouse Items</span>
                 </div>
               </CardContent>
             </Card>
@@ -264,15 +261,15 @@ export default function StorefrontOverviewPage() {
                   <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-1 transition-transform" />
                 </div>
                 <CardTitle className="text-base font-bold text-slate-900 mt-3">
-                  Inquiries & Messages
+                  Inquiries &amp; Messages
                 </CardTitle>
                 <CardDescription className="text-xs text-slate-500">
-                  Customer product queries, BOQ quotation requests, and 1-click WhatsApp replies
+                  Customer product queries, BOQ quotation requests, and direct WhatsApp contact
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-4 pt-0">
                 <div className="text-xs font-semibold text-purple-600 flex items-center gap-1 mt-2">
-                  <span>{inquiries.length} Inquiries</span>
+                  <span>{inquiries.length} Total Messages</span>
                   {pendingInquiriesCount > 0 && (
                     <span className="bg-purple-100 text-purple-800 px-1.5 py-0.2 rounded-full font-bold text-[10px]">
                       {pendingInquiriesCount} pending
@@ -355,20 +352,20 @@ export default function StorefrontOverviewPage() {
           </CardContent>
         </Card>
 
-        {/* Stream 2: Critical Shortage Backlog */}
+        {/* Stream 2: Recent Customer Inquiries */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between p-4 border-b">
             <div>
               <CardTitle className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-rose-600" />
-                Critical Shortage Backlog
+                <MessageSquare className="w-4 h-4 text-purple-600" />
+                Customer Inquiries &amp; Messages
               </CardTitle>
               <CardDescription className="text-xs text-slate-500">
-                Items with 0 physical stock needing supplier PO
+                Queries and quotation requests from store visitors
               </CardDescription>
             </div>
-            <Link href="/dashboard/office/storefront/backlog">
-              <Button variant="ghost" size="sm" className="h-8 text-xs text-rose-600 hover:text-rose-700 gap-1">
+            <Link href="/dashboard/office/storefront/inquiries">
+              <Button variant="ghost" size="sm" className="h-8 text-xs text-purple-600 hover:text-purple-700 gap-1">
                 View All
                 <ArrowRight className="w-3.5 h-3.5" />
               </Button>
@@ -378,31 +375,37 @@ export default function StorefrontOverviewPage() {
             <div className="divide-y">
               {loading ? (
                 <div className="p-8 text-center text-slate-400 text-xs">
-                  <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2 text-rose-600" />
-                  Loading shortages...
+                  <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2 text-purple-600" />
+                  Loading inquiries...
                 </div>
-              ) : backlog.length === 0 ? (
+              ) : inquiries.length === 0 ? (
                 <div className="p-8 text-center text-slate-400 text-xs">
-                  No stock shortages right now!
+                  No inquiries received yet.
                 </div>
               ) : (
-                backlog.slice(0, 5).map((b) => (
-                  <div key={b.id} className="p-3.5 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                inquiries.slice(0, 5).map((inq) => (
+                  <div key={inq.id} className="p-3.5 flex items-center justify-between hover:bg-slate-50 transition-colors">
                     <div>
-                      <div className="font-semibold text-xs text-slate-900 line-clamp-1">{b.name}</div>
-                      <div className="text-[11px] text-slate-400 mt-0.5">
-                        Brand: {b.brand || "General"} • SKU: {b.sku}
+                      <div className="font-semibold text-xs text-slate-900 line-clamp-1">
+                        {inq.name || "Customer"}
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">
+                        {inq.subject || inq.message || "Product inquiry"}
                       </div>
                     </div>
                     <div className="text-right shrink-0">
-                      <span className="font-bold text-xs text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">
-                        0 in stock
-                      </span>
-                      {b.inquiryCount > 0 && (
-                        <div className="text-[10px] text-amber-600 font-medium mt-1">
-                          {b.inquiryCount} backordered
-                        </div>
-                      )}
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "text-[10px] font-medium capitalize",
+                          inq.status === "pending" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-slate-50 text-slate-600"
+                        )}
+                      >
+                        {inq.status || "new"}
+                      </Badge>
+                      <div className="text-[10px] text-slate-400 mt-1">
+                        {inq.phone || inq.email || ""}
+                      </div>
                     </div>
                   </div>
                 ))

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, Suspense } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   Search,
@@ -63,13 +64,35 @@ function ProductsContent() {
     return matchesSearch && matchesCategory && matchesBrand;
   });
 
-  const categories = [
-    { id: "all", label: "All Items" },
-    { id: "cables", label: "House Wires & Cables" },
-    { id: "switches", label: "Switches & Sockets" },
-    { id: "breakers", label: "MCB & Trip Switches" },
-    { id: "conduit", label: "Conduit & Enclosures" },
-  ];
+  const categories = React.useMemo(() => {
+    const list = [{ id: "all", label: "All Items" }];
+    const seen = new Set<string>();
+
+    products.forEach((p) => {
+      const cat = p.category;
+      if (cat && cat !== "General" && !seen.has(cat.toLowerCase())) {
+        seen.add(cat.toLowerCase());
+        list.push({ id: cat, label: cat });
+      }
+    });
+
+    if (list.length === 1) {
+      [
+        "House Wires & Cables",
+        "Switches & Sockets",
+        "Circuit Breakers & Distribution",
+        "Lighting & Bulbs",
+        "Conduit & Enclosures",
+      ].forEach((cat) => {
+        if (!seen.has(cat.toLowerCase())) {
+          seen.add(cat.toLowerCase());
+          list.push({ id: cat, label: cat });
+        }
+      });
+    }
+
+    return list;
+  }, [products]);
 
   const brands = [
     "all",
@@ -194,9 +217,11 @@ function ProductsContent() {
                 </div>
 
                 <div>
-                  <h4 className="font-extrabold text-sm text-slate-900 line-clamp-2 group-hover:text-amber-600 transition-colors">
-                    {product.title}
-                  </h4>
+                  <Link href={`/products/${product.id}`} className="block">
+                    <h4 className="font-extrabold text-sm text-slate-900 line-clamp-2 hover:text-amber-600 transition-colors">
+                      {product.title}
+                    </h4>
+                  </Link>
                   <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-2">
                     <span>SKU: {product.sku}</span>
                     <span>&bull;</span>

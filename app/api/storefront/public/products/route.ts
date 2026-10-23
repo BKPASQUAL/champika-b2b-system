@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
         id: p.id,
         sku: p.sku || "-",
         title: sf.online_title || p.name,
-        category: p.category || "Wiring & Switches",
+        category: sf.category_slug || p.category || "Wiring & Switches",
         subCategory: p.sub_category || "",
         brand: p.brand || p.supplier_name || "Quality Brand",
         price: onlinePrice,
@@ -94,8 +94,8 @@ export async function GET(request: NextRequest) {
         isStockAvailable: isStockAvailable,
         stockStatus: stockStatus,
         allowBackorder: sf.allow_backorder ?? true,
-        leadTimeDays: sf.lead_time_days ?? 2,
         isFeatured: sf.is_featured ?? false,
+        description: sf.online_description || "",
       };
     });
 

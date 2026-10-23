@@ -66,10 +66,11 @@ export async function GET(request: NextRequest) {
         id: p.id,
         sku: p.sku || "-",
         name: p.name,
-        category: p.category || "General",
-        subCategory: p.sub_category || "",
-        brand: p.brand || p.supplier_name || "Generic",
-        supplier: p.supplier_name || "",
+        category: sf.category_slug || p.category || "General",
+        categorySlug: sf.category_slug || p.category || "General",
+        brand: p.brand || "",
+        supplier: p.supplier_name || p.brand || "General",
+        supplierName: p.supplier_name || "",
         costPrice: Number(p.cost_price || 0),
         wholesalePrice: Number(p.selling_price || 0),
         mrp: Number(p.mrp || 0),
@@ -102,7 +103,8 @@ export async function GET(request: NextRequest) {
       result = result.filter(item => 
         item.name.toLowerCase().includes(search) || 
         item.sku.toLowerCase().includes(search) ||
-        item.brand.toLowerCase().includes(search)
+        item.brand.toLowerCase().includes(search) ||
+        item.category.toLowerCase().includes(search)
       );
     }
 
@@ -114,16 +116,45 @@ export async function GET(request: NextRequest) {
 }
 
 // POST /api/storefront/manage/products
-// Upserts storefront settings for a specific product
+// Upserts storefront settings for a specific product or bulk items
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+
+    // Support Bulk Array of items (2-step wizard publish)
+    if (Array.isArray(body.items) && body.items.length > 0) {
+      const payloads = body.items.map((item: any) => ({
+        product_id: item.productId,
+        is_published: item.isPublished !== undefined ? item.isPublished : true,
+        is_featured: item.isFeatured ?? false,
+        online_price: Number(item.onlinePrice || 0),
+        stock_buffer: Number(item.stockBuffer ?? 5),
+        category_slug: item.categorySlug || item.category || null,
+        allow_backorder: item.allowBackorder ?? true,
+        lead_time_days: Number(item.leadTimeDays ?? 2),
+        online_title: item.onlineTitle || null,
+        online_description: item.onlineDescription || null,
+        updated_at: new Date().toISOString(),
+      }));
+
+      const { data, error } = await supabaseAdmin
+        .from("storefront_products")
+        .upsert(payloads, { onConflict: "product_id" })
+        .select();
+
+      if (error) throw error;
+      return NextResponse.json({ success: true, count: data?.length || payloads.length, data });
+    }
+
+    // Single product upsert
     const {
       productId,
       isPublished,
       isFeatured,
       onlinePrice,
       stockBuffer,
+      categorySlug,
+      category,
       allowBackorder,
       leadTimeDays,
       onlineTitle,
@@ -140,6 +171,7 @@ export async function POST(request: NextRequest) {
       is_featured: isFeatured ?? false,
       online_price: Number(onlinePrice || 0),
       stock_buffer: Number(stockBuffer ?? 5),
+      category_slug: categorySlug || category || null,
       allow_backorder: allowBackorder ?? true,
       lead_time_days: Number(leadTimeDays ?? 2),
       online_title: onlineTitle || null,

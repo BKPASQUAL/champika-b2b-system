@@ -50,16 +50,16 @@ export const storefrontOfficeNavItems: StorefrontNavSection[] = [
     title: "Catalog & Pricing",
     items: [
       {
-        name: "Products & Pricing",
+        name: "Website Products",
         href: "/dashboard/office/storefront/products",
-        icon: Package,
-        description: "Online catalog & buffers",
+        icon: Globe,
+        description: "Live website items, categories & pricing",
       },
       {
-        name: "Shortage Backlog",
-        href: "/dashboard/office/storefront/backlog",
-        icon: AlertTriangle,
-        description: "Out-of-stock reorder",
+        name: "All Catalog Products",
+        href: "/dashboard/office/storefront/catalog",
+        icon: Package,
+        description: "Select items from warehouse inventory",
       },
     ],
   },
