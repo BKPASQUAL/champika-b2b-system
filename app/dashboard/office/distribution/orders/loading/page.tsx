@@ -48,6 +48,7 @@ import {
   Folder,
   Eye,
   MoreHorizontal,
+  Undo2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingSheetDialog } from "@/app/dashboard/admin/orders/_components/LoadingSheetDialog";
@@ -66,7 +67,22 @@ interface Order {
   totalAmount: number;
   status: string;
   date?: string;
+  notes?: string;
 }
+
+const isReturnNoteOrder = (order: Order) =>
+  Boolean(
+    order.notes?.includes("[RETURN_NOTE:") ||
+    order.notes?.includes("[DAMAGE_EXCHANGE:") ||
+    order.notes?.includes("[RETURN_GOOD:") ||
+    order.notes?.includes("[DAMAGE_RETURN:") ||
+    order.orderId?.startsWith("RET-") ||
+    order.orderId?.startsWith("RGN-") ||
+    order.orderId?.startsWith("EXC-") ||
+    order.invoiceNo?.startsWith("RET-") ||
+    order.invoiceNo?.startsWith("RGN-") ||
+    order.invoiceNo?.startsWith("EXC-")
+  );
 
 interface LorryGroup {
   id: string;
@@ -367,11 +383,16 @@ export default function DistributionLoadingOrdersPage() {
               filteredOrders.map((order) => {
                 const isSelected = selectedOrders.includes(order.id);
                 const lorryGroup = lorryMap[order.id];
+                const isReturn = isReturnNoteOrder(order);
                 return (
                   <div
                     key={order.id}
                     className={`bg-white border rounded-xl p-4 shadow-sm flex flex-col gap-3 active:scale-[0.99] transition-transform ${
-                      isSelected ? "border-indigo-400 bg-indigo-50/10" : "border-slate-200"
+                      isSelected
+                        ? "border-indigo-400 bg-indigo-50/10"
+                        : isReturn
+                        ? "border-amber-300 bg-amber-50/20"
+                        : "border-slate-200"
                     }`}
                     onClick={() => toggleSelectOrder(order.id)}
                   >
@@ -388,13 +409,27 @@ export default function DistributionLoadingOrdersPage() {
                             e.stopPropagation();
                             router.push(`/dashboard/office/distribution/orders/${order.id}`);
                           }}
-                          className="flex items-center gap-1 font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded text-xs transition-colors hover:bg-indigo-100 hover:text-indigo-900 cursor-pointer"
+                          className={`flex items-center gap-1 font-mono font-bold px-2 py-0.5 rounded text-xs transition-colors cursor-pointer ${
+                            isReturn
+                              ? "text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300"
+                              : "text-indigo-700 bg-indigo-50 hover:bg-indigo-100 hover:text-indigo-900"
+                          }`}
                           title="Click to view order"
                         >
-                          <FileText className="h-3 w-3" />
+                          {isReturn ? (
+                            <Undo2 className="h-3 w-3 text-amber-700 shrink-0" />
+                          ) : (
+                            <FileText className="h-3 w-3" />
+                          )}
                           {order.invoiceNo || "N/A"}
                         </div>
-                        <span className="text-[10px] text-muted-foreground font-mono">({order.orderId})</span>
+                        {isReturn ? (
+                          <Badge className="bg-amber-100 text-amber-900 border-amber-300 text-[10px] px-1.5 py-0 font-semibold">
+                            Return Note
+                          </Badge>
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground font-mono">({order.orderId})</span>
+                        )}
                       </div>
                       {lorryGroup && (
                         <div className="flex items-center gap-1 shrink-0">
@@ -482,11 +517,16 @@ export default function DistributionLoadingOrdersPage() {
                   filteredOrders.map((order) => {
                     const isSelected = selectedOrders.includes(order.id);
                     const lorryGroup = lorryMap[order.id];
+                    const isReturn = isReturnNoteOrder(order);
                     return (
                       <TableRow
                         key={order.id}
                         className={`hover:bg-slate-50 cursor-pointer transition-colors ${
-                          isSelected ? "bg-indigo-50/30" : ""
+                          isSelected
+                            ? "bg-indigo-50/30"
+                            : isReturn
+                            ? "bg-amber-50/25"
+                            : ""
                         }`}
                         onClick={() => toggleSelectOrder(order.id)}
                       >
@@ -503,13 +543,28 @@ export default function DistributionLoadingOrdersPage() {
                           }}
                         >
                           <div className="flex flex-col">
-                            <span
-                              className="font-medium font-mono text-xs flex items-center gap-1 w-fit transition-all text-indigo-700 hover:text-indigo-900 hover:underline cursor-pointer"
-                              title="Click to view order"
-                            >
-                              <FileText className="h-3 w-3" />
-                              {order.invoiceNo || "N/A"}
-                            </span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span
+                                className={`font-medium font-mono text-xs flex items-center gap-1 w-fit transition-all hover:underline cursor-pointer ${
+                                  isReturn
+                                    ? "text-amber-800 hover:text-amber-950 font-bold"
+                                    : "text-indigo-700 hover:text-indigo-900"
+                                }`}
+                                title="Click to view order"
+                              >
+                                {isReturn ? (
+                                  <Undo2 className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                                ) : (
+                                  <FileText className="h-3 w-3" />
+                                )}
+                                {order.invoiceNo || "N/A"}
+                              </span>
+                              {isReturn && (
+                                <Badge className="bg-amber-100 text-amber-900 border-amber-300 text-[10px] px-1.5 py-0 font-semibold shrink-0">
+                                  Return Note
+                                </Badge>
+                              )}
+                            </div>
                             <span className="text-[10px] text-muted-foreground font-mono mt-0.5">
                               {order.orderId}
                             </span>

@@ -617,7 +617,13 @@ export default function RepAnalyticsPage() {
                 </CardHeader>
                 <CardContent className="px-3 pb-3">
                   <div className="text-sm md:text-base font-bold">LKR {fmt(current.totalSales)}</div>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">delivered invoices</p>
+                  {(current as any).totalReturns ? (
+                    <p className="text-[10px] text-red-600 mt-0.5">
+                      Returns −LKR {fmt((current as any).totalReturns)} · Comm −LKR {fmt((current as any).returnCommission || 0)}
+                    </p>
+                  ) : (
+                    <p className="text-[10px] text-muted-foreground mt-0.5">delivered invoices</p>
+                  )}
                 </CardContent>
               </Card>
 

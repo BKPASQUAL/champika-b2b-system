@@ -85,6 +85,7 @@ interface OrderItem {
   id: string;
   orderId: string;
   invoiceId: string | null;
+  returnNoteNumber?: string | null;
   invoiceNo: string;
   customer: string;
   currentAmount: number;
@@ -199,6 +200,7 @@ export default function OfficeReconcileLoadPage({
             id: o.id,
             orderId: o.orderId,
             invoiceId: o.invoiceId,
+            returnNoteNumber: o.returnNoteNumber || null,
             invoiceNo: o.invoiceNo || "N/A",
             customer: o.customer.shopName,
             currentAmount: o.totalAmount,
@@ -266,9 +268,16 @@ export default function OfficeReconcileLoadPage({
     }
   };
 
-  const handleEditInvoice = (invoiceId: string | null) => {
+  const handleEditInvoice = (invoiceId: string | null, returnNoteNumber?: string | null) => {
     if (loadDetails?.status === "Completed") {
       toast.info("Load is completed. Invoices cannot be edited.");
+      return;
+    }
+    // Return-note pickups are edited on the return note itself
+    if (returnNoteNumber) {
+      router.push(
+        `/dashboard/office/distribution/inventory/returns/${encodeURIComponent(returnNoteNumber)}?edit=1&returnTo=/dashboard/office/distribution/orders/loading/reconcile/${id}`
+      );
       return;
     }
     if (!invoiceId) { toast.error("Invoice not found"); return; }
@@ -897,9 +906,9 @@ export default function OfficeReconcileLoadPage({
                                 size="sm"
                                 variant="ghost"
                                 disabled={isCompleted || isCancelled}
-                                onClick={() => handleEditInvoice(order.invoiceId)}
+                                onClick={() => handleEditInvoice(order.invoiceId, order.returnNoteNumber)}
                                 className="h-8 w-8 p-0 text-blue-600 hover:bg-blue-50 disabled:opacity-30"
-                                title={isCancelled ? "Order cancelled" : "Edit Invoice"}
+                                title={isCancelled ? "Order cancelled" : order.returnNoteNumber ? "Edit Return Note" : "Edit Invoice"}
                               >
                                 <Edit3 className="w-3.5 h-3.5" />
                               </Button>

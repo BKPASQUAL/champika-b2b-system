@@ -19,7 +19,8 @@ import { toast } from "sonner";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type CollectionStatus = "immediate" | "on_time" | "late_paid" | "pending" | "overdue_cut";
+// "return" = commission taken back for goods returned (negative amounts, return month)
+type CollectionStatus = "immediate" | "on_time" | "late_paid" | "pending" | "overdue_cut" | "return";
 
 type CardFilter =
   | "all"
@@ -68,6 +69,7 @@ const STATUS_CONFIG: Record<CollectionStatus, { label: string; bg: string; text:
   late_paid:   { label: "Late — Cut",    bg: "bg-red-100",     text: "text-red-800"     },
   pending:     { label: "Pending",       bg: "bg-orange-100",  text: "text-orange-800"  },
   overdue_cut: { label: "Overdue — Cut", bg: "bg-red-100",     text: "text-red-800"     },
+  return:      { label: "Return",        bg: "bg-rose-100",    text: "text-rose-800"    },
 };
 
 const FILTER_LABELS: Record<CardFilter, string> = {
@@ -87,7 +89,7 @@ function applyCardFilter(records: CommissionRecord[], filter: CardFilter): Commi
     case "collected":          return records.filter((r) => r.paidAmount > 0 && r.dueAmount === 0);
     case "pending_collection": return records.filter((r) => r.collectionStatus === "pending");
     case "overdue":            return records.filter((r) => r.collectionStatus === "overdue_cut");
-    case "commission_earned":  return records.filter((r) => r.collectionStatus === "immediate" || r.collectionStatus === "on_time");
+    case "commission_earned":  return records.filter((r) => r.collectionStatus === "immediate" || r.collectionStatus === "on_time" || r.collectionStatus === "return");
     case "immediate":          return records.filter((r) => r.collectionStatus === "immediate");
     case "commission_pending": return records.filter((r) => r.collectionStatus === "pending");
     case "commission_cut":     return records.filter((r) => r.collectionStatus === "late_paid" || r.collectionStatus === "overdue_cut");

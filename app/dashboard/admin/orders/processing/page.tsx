@@ -54,6 +54,7 @@ import { toast } from "sonner";
 import { Order, OrderStatus } from "../types";
 import { downloadLoadingSummary, printLoadingSummary } from "../loading/print-loading-summary";
 import { printBulkInvoices } from "@/app/lib/invoice-print";
+import { isExchangeOrder, getReturnNoteNumber, buildExchangeSummaryHtml } from "@/app/lib/return-note-print";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 
 interface LorryGroup {
@@ -402,7 +403,7 @@ export default function ProcessingOrdersPage() {
               variant="outline"
               onClick={() => {
                 const invoiceIds = filteredOrders
-                  .filter((o) => selectedOrders.includes(o.id) && o.invoiceId)
+                  .filter((o) => selectedOrders.includes(o.id) && o.invoiceId && !isExchangeOrder((o as any).notes))
                   .map((o) => o.invoiceId as string);
                 if (invoiceIds.length === 0) {
                   toast.error("No invoices found for the selected orders.");
@@ -415,6 +416,31 @@ export default function ProcessingOrdersPage() {
               <Printer className="w-4 h-4 mr-2" />
               Print Invoices ({selectedOrders.length})
             </Button>
+            {filteredOrders.some((o) => selectedOrders.includes(o.id) && isExchangeOrder((o as any).notes)) && (
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  const exchangeNotes = filteredOrders
+                    .filter((o) => selectedOrders.includes(o.id) && isExchangeOrder((o as any).notes))
+                    .map((o) => getReturnNoteNumber((o as any).notes))
+                    .filter((x): x is string => !!x);
+                  if (exchangeNotes.length === 0) {
+                    toast.error("No exchange items in the selected orders.");
+                    return;
+                  }
+                  const html = await buildExchangeSummaryHtml(exchangeNotes, "PROCESSING ORDERS — EXCHANGE SUMMARY");
+                  if (!html) {
+                    toast.error("Could not load the exchange items.");
+                    return;
+                  }
+                  printBulkInvoices([], "distribution", html);
+                }}
+                className="bg-white border-blue-200 text-blue-700"
+              >
+                <Printer className="w-4 h-4 mr-2" />
+                Print Exchange Summary
+              </Button>
+            )}
             <Button
               variant="outline"
               onClick={() =>

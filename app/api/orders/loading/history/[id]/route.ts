@@ -45,6 +45,7 @@ export async function GET(
           total_amount,
           status,
           created_at,
+          notes,
           customers (
             id,
             shop_name,
@@ -284,6 +285,9 @@ export async function GET(
             orderId: order.order_id,
             invoiceId: invoiceDetails?.id || null,
             invoiceNo: invoiceDetails?.invoice_no || order.invoice_no || "N/A",
+            // Set when this order is a return-note pickup (printed as a return note)
+            returnNoteNumber:
+              (order.notes || "").match(/\[(?:RETURN_NOTE|DAMAGE_EXCHANGE|DAMAGE_RETURN):\s*([^\]]+)\]/)?.[1]?.trim() || null,
 
             // Amount Logic
             totalAmount: currentTotal, // Final/Current Amount

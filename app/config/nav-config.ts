@@ -470,6 +470,11 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           icon: Receipt,
         },
         {
+          name: "Return Notes",
+          href: "/dashboard/rep/returns",
+          icon: Undo2,
+        },
+        {
           name: "Product Catalog",
           href: "/dashboard/rep/products",
           icon: Store,

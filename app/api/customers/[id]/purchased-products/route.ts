@@ -57,13 +57,16 @@ export async function GET(
       return NextResponse.json([]);
     }
 
-    // 4. Fetch all linked invoices for mapping invoice numbers
+    // 4. Fetch all linked invoices for mapping invoice numbers and totals
     const { data: allLinkedInvoices = [] } = await supabaseAdmin
       .from("invoices")
-      .select("id, invoice_no, manual_invoice_no, order_id, created_at, status")
+      .select("id, invoice_no, manual_invoice_no, order_id, created_at, status, total_amount")
       .in("order_id", allOrderIds);
 
-    const orderInvoiceMap: Record<string, { id: string; invoiceNo: string; manualInvoiceNo: string | null; createdAt: string; status: string }> = {};
+    const orderInvoiceMap: Record<
+      string,
+      { id: string; invoiceNo: string; manualInvoiceNo: string | null; createdAt: string; status: string; totalAmount: number }
+    > = {};
     (allLinkedInvoices || []).forEach((inv: any) => {
       if (inv.order_id) {
         orderInvoiceMap[inv.order_id] = {
@@ -72,6 +75,7 @@ export async function GET(
           manualInvoiceNo: inv.manual_invoice_no || null,
           createdAt: inv.created_at,
           status: inv.status,
+          totalAmount: Number(inv.total_amount) || 0,
         };
       }
     });
@@ -114,7 +118,8 @@ export async function GET(
           order_id,
           order_date,
           status,
-          business_id
+          business_id,
+          total_amount
         )
       `)
       .in("order_id", targetOrderIds)
@@ -158,6 +163,7 @@ export async function GET(
       const totalItemQty = billedQty + freeQty;
       const itemPrice = Number(item.unit_price) || item.products.selling_price || 0;
       const itemTotalVal = Number(item.total_price) || billedQty * itemPrice;
+      const invoiceTotalVal = Number(invInfo?.totalAmount) || Number(orderData?.total_amount) || itemTotalVal;
 
       const historyEntry = {
         orderItemId: item.id,
@@ -165,6 +171,7 @@ export async function GET(
         invoiceId: invInfo?.id || null,
         invoiceNo: invInfo?.invoiceNo || orderData?.order_id || "N/A",
         manualInvoiceNo: invInfo?.manualInvoiceNo || null,
+        invoiceTotal: invoiceTotalVal,
         date: invInfo?.createdAt || orderData?.order_date || item.created_at,
         quantity: billedQty,
         freeQuantity: freeQty,
@@ -188,6 +195,7 @@ export async function GET(
           existing.latestUnitPrice = itemPrice;
           existing.latestInvoiceNo = historyEntry.invoiceNo;
           existing.latestManualInvoiceNo = historyEntry.manualInvoiceNo;
+          existing.latestInvoiceTotal = invoiceTotalVal;
         }
       } else {
         productsMap.set(pId, {
@@ -203,6 +211,7 @@ export async function GET(
           latestUnitPrice: itemPrice,
           latestInvoiceNo: historyEntry.invoiceNo,
           latestManualInvoiceNo: historyEntry.manualInvoiceNo,
+          latestInvoiceTotal: invoiceTotalVal,
           totalPurchasedQty: totalItemQty,
           totalSpent: itemTotalVal,
           purchaseCount: 1,

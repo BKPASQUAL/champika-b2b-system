@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { getRepReturns, deductReturnFromBreakdown, isReturnPickupOrder } from "@/lib/rep-returns";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -28,10 +29,10 @@ export async function GET(request: NextRequest) {
       .single();
 
     // 2. Delivered orders for this rep in range
-    const { data: orders, error: ordersError } = await supabaseAdmin
+    const { data: ordersRaw, error: ordersError } = await supabaseAdmin
       .from("orders")
       .select(`
-        id, order_id, total_amount, status, created_at, order_date, sales_rep_id,
+        id, order_id, total_amount, status, created_at, order_date, sales_rep_id, notes,
         customers (id, shop_name),
         invoices (id, invoice_no, manual_invoice_no, total_amount, paid_amount, status),
         rep_commissions (total_commission_amount, status)
@@ -42,6 +43,8 @@ export async function GET(request: NextRequest) {
       .lte("created_at", toDate);
 
     if (ordersError) throw ordersError;
+    // Return-note pickup / exchange orders are not sales
+    const orders = (ordersRaw || []).filter((o: any) => !isReturnPickupOrder(o.notes));
 
     const allInvoiceIds: string[] = [];
     const allOrderIds: string[] = [];
@@ -54,7 +57,7 @@ export async function GET(request: NextRequest) {
 
     // 3. Payments for collections
     let totalCollections = 0;
-    const monthlyMap: Record<string, { month: string; monthKey: string; sales: number; collections: number }> = {};
+    const monthlyMap: Record<string, { month: string; monthKey: string; sales: number; collections: number; returns?: number }> = {};
 
     if (allInvoiceIds.length > 0) {
       const { data: payments } = await supabaseAdmin
@@ -236,11 +239,38 @@ export async function GET(request: NextRequest) {
       });
     });
 
+    // Returns reduce sales in the month the return was made (invoice month unchanged)
+    const grossSales = totalSales;
+    const repReturns = await getRepReturns(repId, fromDate, toDate);
+    let totalReturns = 0;
+    repReturns.forEach((r) => {
+      totalReturns += r.value;
+      if (!monthlyMap[r.monthKey]) {
+        monthlyMap[r.monthKey] = {
+          month: new Date(r.date).toLocaleString("default", { month: "short", year: "2-digit" }),
+          monthKey: r.monthKey,
+          sales: 0,
+          collections: 0,
+        };
+      }
+      monthlyMap[r.monthKey].sales -= r.value;
+      monthlyMap[r.monthKey].returns = (monthlyMap[r.monthKey].returns || 0) + r.value;
+      deductReturnFromBreakdown(supplierMap, categoryMap, r);
+    });
+    totalReturns = Math.round(totalReturns * 100) / 100;
+    totalSales = Math.round((grossSales - totalReturns) * 100) / 100;
+
+    // Commission on returned items comes off this period too: pending first, then earned
+    const returnCommission = Math.round(repReturns.reduce((s, r) => s + r.commission, 0) * 100) / 100;
+    const fromPending = Math.min(commissionPending, returnCommission);
+    commissionPending = Math.round((commissionPending - fromPending) * 100) / 100;
+    commissionEarned = Math.round((commissionEarned - (returnCommission - fromPending)) * 100) / 100;
+
     const monthly = Object.values(monthlyMap).sort((a, b) => a.monthKey.localeCompare(b.monthKey));
     invoicesList.sort((a, b) => b.date.localeCompare(a.date));
 
     const supplierSales = Object.values(supplierMap)
-      .filter((s) => s.sales > 0 || s.commission > 0 || s.itemsCount > 0)
+      .filter((s) => s.sales !== 0 || s.commission !== 0 || s.itemsCount !== 0)
       .map((s) => ({
         ...s,
         rate: s.sales > 0 ? (s.commission / s.sales) * 100 : 0,
@@ -249,7 +279,7 @@ export async function GET(request: NextRequest) {
       .sort((a, b) => b.sales - a.sales);
 
     const categorySales = Object.values(categoryMap)
-      .filter((c) => c.sales > 0 || c.commission > 0 || c.itemsCount > 0)
+      .filter((c) => c.sales !== 0 || c.commission !== 0 || c.itemsCount !== 0)
       .map((c) => ({
         ...c,
         rate: c.sales > 0 ? (c.commission / c.sales) * 100 : 0,
@@ -266,7 +296,12 @@ export async function GET(request: NextRequest) {
       stats: {
         totalSales,
         totalCollections,
-        totalDue: Math.max(0, totalSales - totalCollections),
+        // Due uses the gross billed amount; return credits are paid off as goods payments
+        totalDue: Math.max(0, grossSales - totalCollections),
+        grossSales,
+        totalReturns,
+        returnCommission,
+        returnCount: repReturns.length,
         pendingCount,
         pendingAmount,
         commissionEarned,

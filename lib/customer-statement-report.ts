@@ -446,6 +446,12 @@ export function buildDoc(
       if (manualRef === "—" && isSoldToCustomer && parentInv.manualInvoiceNo) {
         manualRef = parentInv.manualInvoiceNo;
       }
+      // No manual number: show the system invoice number (e.g. CHD-0040)
+      if (manualRef === "—") {
+        const billNo = billMatch?.[1]?.trim();
+        const refInv = billNo ? invMap.get(billNo) : undefined;
+        manualRef = refInv?.invoiceNo || billNo || (isSoldToCustomer ? parentInv.invoiceNo : "") || "—";
+      }
     }
 
     // 4. Clean Item Name & Extract Quantity (e.g. "3x Sierra 1/113 Brown 100m Coil")
@@ -529,7 +535,7 @@ export function buildDoc(
           }
         } else {
           // Legacy unstructured payment record
-          const manualRef = inv.manualInvoiceNo || "—";
+          const manualRef = inv.manualInvoiceNo || inv.invoiceNo || "—";
           let cleanName = rawDetails.replace(/^(?:goods(?:\s+settlement)?:\s*)/i, "").trim();
           let qty: string | number = 1;
           const qtyMatch = cleanName.match(/^(\d+(?:\.\d+)?)\s*x\s+/i);
@@ -635,7 +641,7 @@ export function buildDoc(
       autoTable(doc, {
         startY: currentY + 3.5,
         margin: { left: M, right: M },
-        head: [["Manual Bill Ref", "Date", "Item Name", "Qty", "Unit Price (LKR)", "Amount (LKR)"]],
+        head: [["Invoice / Manual Ref", "Date", "Item Name", "Qty", "Unit Price (LKR)", "Amount (LKR)"]],
         body: soldTableBody,
         theme: "plain",
         headStyles: {

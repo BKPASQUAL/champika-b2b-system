@@ -187,6 +187,9 @@ export default function RepPortalAnalyticsPage() {
     totalDue: 0,
     commissionEarned: 0,
     commissionPending: 0,
+    totalReturns: 0,
+    grossSales: 0,
+    returnCommission: 0,
   };
 
   return (
@@ -263,7 +266,13 @@ export default function RepPortalAnalyticsPage() {
             ) : (
               <div className="text-lg sm:text-xl font-bold">LKR {fmt(stats.totalSales)}</div>
             )}
-            <p className="text-[10px] text-muted-foreground mt-0.5">Delivered orders</p>
+            {stats.totalReturns ? (
+              <p className="text-[10px] text-red-600 mt-0.5">
+                Returns −LKR {fmt(stats.totalReturns)} · Gross LKR {fmt(stats.grossSales ?? 0)}
+              </p>
+            ) : (
+              <p className="text-[10px] text-muted-foreground mt-0.5">Delivered orders</p>
+            )}
           </CardContent>
         </Card>
 
@@ -295,7 +304,11 @@ export default function RepPortalAnalyticsPage() {
             ) : (
               <div className="text-lg sm:text-xl font-bold text-purple-700">LKR {fmt(stats.commissionEarned)}</div>
             )}
-            <p className="text-[10px] text-muted-foreground mt-0.5">Paid within 60d</p>
+            {stats.returnCommission ? (
+              <p className="text-[10px] text-red-600 mt-0.5">Returns −LKR {fmt(stats.returnCommission)}</p>
+            ) : (
+              <p className="text-[10px] text-muted-foreground mt-0.5">Paid within 60d</p>
+            )}
           </CardContent>
         </Card>
 

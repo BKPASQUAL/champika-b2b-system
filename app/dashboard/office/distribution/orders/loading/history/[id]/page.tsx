@@ -68,6 +68,7 @@ import {
   shareLoadingOutstandingReport,
 } from "@/app/dashboard/admin/orders/loading/history/print-loading-sheet";
 import { printBulkInvoices, generateReturnsSummaryHTML } from "@/app/dashboard/office/distribution/invoices/print-utils";
+import { buildReturnNotesHtml } from "@/app/lib/return-note-print";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { cn } from "@/lib/utils";
 import { Undo2 } from "lucide-react";
@@ -77,6 +78,7 @@ interface OrderDetail {
   orderId: string;
   invoiceNo: string;
   invoiceId?: string;
+  returnNoteNumber?: string | null;
   totalAmount: number;
   originalAmount?: number;
   status: string;
@@ -156,6 +158,7 @@ export default function DistributionLoadingSheetDetailPage({
   const [printInvoicesOpen, setPrintInvoicesOpen] = useState(false);
   const [selectedPrintIds, setSelectedPrintIds] = useState<string[]>([]);
   const [includeReturnsSummary, setIncludeReturnsSummary] = useState(true);
+  const [selectedReturnNotes, setSelectedReturnNotes] = useState<string[]>([]);
 
   const fetchDetails = async () => {
     try {
@@ -407,8 +410,9 @@ export default function DistributionLoadingSheetDetailPage({
           <Button
             variant="secondary"
             onClick={() => {
-              const allIds = loadingSheet.orders.map((o) => o.invoiceId).filter((x): x is string => !!x);
+              const allIds = loadingSheet.orders.filter((o) => !o.returnNoteNumber).map((o) => o.invoiceId).filter((x): x is string => !!x);
               setSelectedPrintIds(allIds);
+              setSelectedReturnNotes(loadingSheet.orders.map((o) => o.returnNoteNumber).filter((x): x is string => !!x));
               const returnsExist = (loadingSheet.orders || []).some((o: any) => (o.returns || []).length > 0);
               setIncludeReturnsSummary(returnsExist);
               setPrintInvoicesOpen(true);
@@ -865,7 +869,7 @@ export default function DistributionLoadingSheetDetailPage({
               Print Invoices & Returns Summary
             </DialogTitle>
             <DialogDescription>
-              Select items to print. {selectedPrintIds.length + (includeReturnsSummary ? 1 : 0)} item(s) selected.
+              Select items to print. {selectedPrintIds.length + selectedReturnNotes.length + (includeReturnsSummary ? 1 : 0)} item(s) selected.
             </DialogDescription>
           </DialogHeader>
 
@@ -875,21 +879,25 @@ export default function DistributionLoadingSheetDetailPage({
             <button
               className="text-xs text-purple-600 hover:underline font-medium"
               onClick={() => {
-                const allIds = loadingSheet.orders.map((o) => o.invoiceId).filter((x): x is string => !!x);
+                const allIds = loadingSheet.orders.filter((o) => !o.returnNoteNumber).map((o) => o.invoiceId).filter((x): x is string => !!x);
+                const allNotes = loadingSheet.orders.map((o) => o.returnNoteNumber).filter((x): x is string => !!x);
                 const returnsExist = (loadingSheet.orders || []).some((o: any) => (o.returns || []).length > 0);
-                const allInvoicesSelected = selectedPrintIds.length === allIds.length;
+                const allInvoicesSelected = selectedPrintIds.length === allIds.length && selectedReturnNotes.length === allNotes.length;
                 const allSelected = allInvoicesSelected && (!returnsExist || includeReturnsSummary);
 
                 if (allSelected) {
                   setSelectedPrintIds([]);
+                  setSelectedReturnNotes([]);
                   setIncludeReturnsSummary(false);
                 } else {
                   setSelectedPrintIds(allIds);
+                  setSelectedReturnNotes(allNotes);
                   setIncludeReturnsSummary(returnsExist);
                 }
               }}
             >
-              {selectedPrintIds.length === loadingSheet.orders.filter((o) => o.invoiceId).length &&
+              {selectedPrintIds.length === loadingSheet.orders.filter((o) => o.invoiceId && !o.returnNoteNumber).length &&
+              selectedReturnNotes.length === loadingSheet.orders.filter((o) => o.returnNoteNumber).length &&
               (!((loadingSheet.orders || []).some((o: any) => (o.returns || []).length > 0)) || includeReturnsSummary)
                 ? "Deselect All"
                 : "Select All"}
@@ -920,7 +928,38 @@ export default function DistributionLoadingSheetDetailPage({
             )}
 
             {loadingSheet.orders.map((order) => {
-              if (!order.invoiceId) return null;
+              const noteNo = order.returnNoteNumber;
+              if (!noteNo) return null;
+              const checked = selectedReturnNotes.includes(noteNo);
+              return (
+                <div
+                  key={`note_${order.id}`}
+                  onClick={() =>
+                    setSelectedReturnNotes((prev) =>
+                      prev.includes(noteNo) ? prev.filter((x) => x !== noteNo) : [...prev, noteNo]
+                    )
+                  }
+                  className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 cursor-pointer transition-colors ${
+                    checked ? "border-orange-400 bg-orange-50/60" : "border-slate-200 hover:border-orange-200 hover:bg-slate-50"
+                  }`}
+                >
+                  <Checkbox checked={checked} onCheckedChange={() => {}} onClick={(e) => e.stopPropagation()} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold font-mono flex items-center gap-1.5">
+                      <Undo2 className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+                      {noteNo}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate">{order.customer.shopName}</p>
+                  </div>
+                  <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100 border-none text-[10px] shrink-0">
+                    Return Note
+                  </Badge>
+                </div>
+              );
+            })}
+
+            {loadingSheet.orders.map((order) => {
+              if (!order.invoiceId || order.returnNoteNumber) return null;
               const checked = selectedPrintIds.includes(order.invoiceId);
               return (
                 <div
@@ -952,12 +991,15 @@ export default function DistributionLoadingSheetDetailPage({
           <DialogFooter>
             <Button variant="outline" onClick={() => setPrintInvoicesOpen(false)}>Cancel</Button>
             <Button
-              disabled={(selectedPrintIds.length === 0 && !includeReturnsSummary) || printingInvoices}
+              disabled={(selectedPrintIds.length === 0 && selectedReturnNotes.length === 0 && !includeReturnsSummary) || printingInvoices}
               onClick={async () => {
                 setPrintingInvoices(true);
                 let extraHtml = "";
+                if (selectedReturnNotes.length > 0) {
+                  extraHtml += await buildReturnNotesHtml(selectedReturnNotes, "distribution");
+                }
                 if (includeReturnsSummary && loadingSheet) {
-                  extraHtml = generateReturnsSummaryHTML(loadingSheet);
+                  extraHtml += generateReturnsSummaryHTML(loadingSheet);
                 }
                 await printBulkInvoices(selectedPrintIds, "distribution", extraHtml);
                 setPrintingInvoices(false);
@@ -968,7 +1010,7 @@ export default function DistributionLoadingSheetDetailPage({
               {printingInvoices
                 ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 : <Printer className="w-4 h-4 mr-2" />}
-              Print {selectedPrintIds.length + (includeReturnsSummary ? 1 : 0) > 0 ? `(${selectedPrintIds.length + (includeReturnsSummary ? 1 : 0)})` : ""}
+              Print {selectedPrintIds.length + selectedReturnNotes.length + (includeReturnsSummary ? 1 : 0) > 0 ? `(${selectedPrintIds.length + selectedReturnNotes.length + (includeReturnsSummary ? 1 : 0)})` : ""}
             </Button>
           </DialogFooter>
         </DialogContent>

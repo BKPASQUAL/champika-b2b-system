@@ -21,6 +21,10 @@ import { useRouter } from "next/navigation";
 
 interface DashboardStats {
   monthlySales: number;
+  grossMonthlySales?: number;
+  monthlyReturns?: number;
+  monthlyReturnCount?: number;
+  monthlyReturnCommission?: number;
   activeOrders: number;
   pendingOrders: number;
   inTransitOrders: number;
@@ -152,7 +156,13 @@ export default function RepDashboardPage() {
         <StatCard
           label="Monthly Sales"
           value={stats ? fmt(stats.monthlySales) : "—"}
-          sub={stats ? `${stats.totalOrders} total orders` : "Loading…"}
+          sub={
+            stats
+              ? stats.monthlyReturns
+                ? `Returns −${fmt(stats.monthlyReturns)} (gross ${fmt(stats.grossMonthlySales ?? 0)})`
+                : `${stats.totalOrders} total orders`
+              : "Loading…"
+          }
           icon={<TrendingUp className="h-4 w-4" />}
           color="green"
           loading={loading}
@@ -176,7 +186,11 @@ export default function RepDashboardPage() {
         <StatCard
           label="My Commission"
           value={stats ? fmt(stats.pendingCommission) : "—"}
-          sub="Pending payout"
+          sub={
+            stats?.monthlyReturnCommission
+              ? `Pending · returns −${fmt(stats.monthlyReturnCommission)}`
+              : "Pending payout"
+          }
           icon={<CreditCard className="h-4 w-4" />}
           color="purple"
           loading={loading}

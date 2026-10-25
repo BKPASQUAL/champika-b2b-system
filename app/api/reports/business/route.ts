@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { BUSINESS_IDS, BUSINESS_NAMES } from "@/app/config/business-constants";
+import { getApprovedReturns, isReturnPickupOrder } from "@/lib/rep-returns";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
         .select(`
           id, invoice_no, manual_invoice_no, total_amount, due_amount, status,
           order:orders!inner (
-            order_id, status, created_at, order_date, business_id, sales_rep_id,
+            order_id, status, created_at, order_date, business_id, sales_rep_id, notes,
             customer:customers (id, shop_name),
             rep:profiles!orders_sales_rep_id_fkey (id, full_name)
           )
@@ -36,7 +37,8 @@ export async function GET(request: NextRequest) {
 
       if (allInvError) throw allInvError;
       if (!batch || batch.length === 0) break;
-      allInvoices.push(...batch);
+      // Return-note pickup / exchange orders are not sales
+      allInvoices.push(...batch.filter((inv: any) => !isReturnPickupOrder(inv.order?.notes)));
       if (batch.length < invLimit) break;
       invStart += invLimit;
     }
@@ -95,6 +97,7 @@ export async function GET(request: NextRequest) {
       pendingClaimCost?: number;
       netProfit?: number | null;
       netMargin?: number | null;
+      isReturn?: boolean;
     };
     type BusinessEntry = {
       id: string; name: string;
@@ -293,6 +296,94 @@ export async function GET(request: NextRequest) {
       }
     });
 
+    // Pass 3 — approved customer returns: deduct in the month the return was made
+    // (the original invoice month is left untouched)
+    const returns = await getApprovedReturns(fromDate, toDate);
+    returns.forEach((r) => {
+      const bizId = r.businessId || BUSINESS_IDS.CHAMPIKA_DISTRIBUTION;
+      ensureBusiness(bizId);
+      const biz = businessMap[bizId];
+      const profit = r.value - r.cost;
+
+      biz.totalRevenue -= r.value;
+      biz.totalCost -= r.cost;
+      biz.totalUnits -= r.quantity;
+
+      if (!biz.productMap[r.productId]) {
+        biz.productMap[r.productId] = {
+          id: r.productId, name: r.productName, sku: r.sku,
+          unitsSold: 0, revenue: 0, cost: 0, profit: 0,
+        };
+      }
+      const p = biz.productMap[r.productId];
+      p.unitsSold -= r.quantity;
+      p.revenue -= r.value;
+      p.cost -= r.cost;
+      p.profit -= profit;
+
+      const cId = r.customerId || "unknown";
+      if (!biz.customerMap[cId]) {
+        biz.customerMap[cId] = {
+          id: cId, name: r.customer, revenue: 0, cost: 0, profit: 0,
+          dueAmount: 0, orderSet: new Set(),
+        };
+      }
+      biz.customerMap[cId].revenue -= r.value;
+      biz.customerMap[cId].cost -= r.cost;
+      biz.customerMap[cId].profit -= profit;
+
+      const repId = r.ownerId || "direct";
+      if (!biz.repMap[repId]) {
+        biz.repMap[repId] = {
+          id: repId, name: "Direct Sales", revenue: 0, cost: 0, profit: 0, dueAmount: 0, invoiceCount: 0,
+        };
+      }
+      biz.repMap[repId].revenue -= r.value;
+      biz.repMap[repId].cost -= r.cost;
+      biz.repMap[repId].profit -= profit;
+
+      // Show the return as a negative line in the invoice list / monthly breakdown
+      orderProfitMap[r.returnNumber] = {
+        revenue: -r.value, cost: -r.cost, freeQty: 0, freeCost: 0, pendingClaimCost: 0,
+      };
+      biz.invoiceList.push({
+        invoiceId: r.returnNumber,
+        orderId: r.returnNumber,
+        invoiceNo: r.invoiceNo ? `${r.returnNumber} (Bill ${r.invoiceNo})` : r.returnNumber,
+        customer: r.customer,
+        date: new Date(r.date).toISOString().split("T")[0],
+        amount: -r.value,
+        due: 0,
+        paymentStatus: "Return",
+        repName: biz.repMap[repId].name,
+        repId,
+        isReturn: true,
+      });
+    });
+
+    // Fill in rep names for reps that only appear through a return
+    const unnamed = new Set<string>();
+    Object.values(businessMap).forEach((b) =>
+      Object.values(b.repMap).forEach((r) => {
+        if (r.id !== "direct" && r.name === "Direct Sales") unnamed.add(r.id);
+      })
+    );
+    if (unnamed.size > 0) {
+      const { data: profs } = await supabaseAdmin
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", [...unnamed]);
+      const names = new Map((profs || []).map((p: any) => [p.id, p.full_name || "Unknown Rep"]));
+      Object.values(businessMap).forEach((b) => {
+        Object.values(b.repMap).forEach((r) => {
+          if (names.has(r.id)) r.name = names.get(r.id)!;
+        });
+        b.invoiceList.forEach((inv) => {
+          if (inv.isReturn && inv.repId && names.has(inv.repId)) inv.repName = names.get(inv.repId)!;
+        });
+      });
+    }
+
     // Build final list
     const businesses = Object.values(businessMap).map((biz) => {
       const invoices = [...biz.invoiceList].map((inv: any) => {
@@ -324,8 +415,13 @@ export async function GET(request: NextRequest) {
         (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
       );
 
-      const totalGrossProfit = invoices.reduce((s, inv) => s + ((inv.profit && inv.profit > 0) ? inv.profit : 0), 0);
-      const totalLoss = invoices.reduce((s, inv) => s + ((inv.profit && inv.profit < 0) ? Math.abs(inv.profit) : 0), 0);
+      // Returns are not a "loss" — they lower gross profit directly
+      const saleRows = invoices.filter((inv) => !inv.isReturn);
+      const returnProfit = invoices.reduce((s, inv) => s + (inv.isReturn ? -(inv.profit || 0) : 0), 0);
+      const returnValue = invoices.reduce((s, inv) => s + (inv.isReturn ? -inv.amount : 0), 0);
+      const totalGrossProfit =
+        saleRows.reduce((s, inv) => s + ((inv.profit && inv.profit > 0) ? inv.profit : 0), 0) - returnProfit;
+      const totalLoss = saleRows.reduce((s, inv) => s + ((inv.profit && inv.profit < 0) ? Math.abs(inv.profit) : 0), 0);
       const totalProfit = biz.totalRevenue - biz.totalCost;
       const netProfit = totalProfit - biz.pendingClaimCost;
 
@@ -394,7 +490,7 @@ export async function GET(request: NextRequest) {
         mEntry.salesAmount += inv.amount;
         mEntry.collectedAmount += invCollected;
         mEntry.dueAmount += invDue;
-        mEntry.invoiceCount += 1;
+        if (!inv.isReturn) mEntry.invoiceCount += 1;
         mEntry.profit += (inv.profit || 0);
 
         const rName = inv.repName || "Direct Sales";
@@ -404,7 +500,7 @@ export async function GET(request: NextRequest) {
         mEntry.repMap[rName].sales += inv.amount;
         mEntry.repMap[rName].collected += invCollected;
         mEntry.repMap[rName].due += invDue;
-        mEntry.repMap[rName].invoiceCount += 1;
+        if (!inv.isReturn) mEntry.repMap[rName].invoiceCount += 1;
       });
 
       const months = Object.values(monthMap).map((m: any) => ({
@@ -423,7 +519,9 @@ export async function GET(request: NextRequest) {
         totalLoss,
         totalProfit,
         totalUnits: biz.totalUnits,
-        invoiceCount: invoices.length,
+        invoiceCount: saleRows.length,
+        totalReturns: returnValue,
+        returnCount: invoices.length - saleRows.length,
         customerCount: biz.customerCountSet.size,
         dueAmount: biz.dueAmount,
         totalCollections: Math.max(0, biz.totalRevenue - biz.dueAmount),
@@ -559,7 +657,7 @@ export async function GET(request: NextRequest) {
       mEntry.salesAmount += inv.amount;
       mEntry.collectedAmount += invCollected;
       mEntry.dueAmount += invDue;
-      mEntry.invoiceCount += 1;
+      if (!inv.isReturn) mEntry.invoiceCount += 1;
       mEntry.profit += (inv.profit || 0);
 
       const rName = inv.repName || "Direct Sales";
@@ -569,7 +667,7 @@ export async function GET(request: NextRequest) {
       mEntry.repMap[rName].sales += inv.amount;
       mEntry.repMap[rName].collected += invCollected;
       mEntry.repMap[rName].due += invDue;
-      mEntry.repMap[rName].invoiceCount += 1;
+      if (!inv.isReturn) mEntry.repMap[rName].invoiceCount += 1;
     });
 
     const overallMonths = Object.values(overallMonthsMap).map((m: any) => ({
@@ -589,6 +687,8 @@ export async function GET(request: NextRequest) {
       totalProfit: overallTotalProfit,
       totalUnits: businesses.reduce((s, b) => s + b.totalUnits, 0),
       invoiceCount: businesses.reduce((s, b) => s + b.invoiceCount, 0),
+      totalReturns: businesses.reduce((s, b) => s + (b.totalReturns || 0), 0),
+      returnCount: businesses.reduce((s, b) => s + (b.returnCount || 0), 0),
       customerCount: businesses.reduce((s, b) => s + b.customerCount, 0),
       dueAmount: overallDueAmount,
       totalCollections: overallTotalCollections,

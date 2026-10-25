@@ -118,23 +118,34 @@ export default function InvoicePrintView({ invoice }: { invoice: any }) {
       `}</style>
 
       {/* ── Sticky action bar ─────────────────────────────────── */}
-      <div className="top-bar">
-        <span className="top-bar-title">Invoice {invoice.invoiceNo}</span>
-        <div className="top-bar-actions">
-          <button
-            className="btn-dl"
-            onClick={() => downloadInvoice(invoice, "distribution")}
-          >
-            Download PDF
-          </button>
-          <button
-            className="btn-print"
-            onClick={() => printInvoice(invoice, "distribution")}
-          >
-            Print
-          </button>
-        </div>
-      </div>
+      {(() => {
+        const isReturn = Boolean(
+          invoice.invoiceNo?.startsWith("RET-") ||
+          invoice.invoiceNo?.startsWith("RGN-") ||
+          invoice.invoiceNo?.startsWith("EXC-") ||
+          invoice.notes?.includes("[RETURN_NOTE:") ||
+          invoice.notes?.includes("[DAMAGE_EXCHANGE:")
+        );
+        return (
+          <div className="top-bar">
+            <span className="top-bar-title">{isReturn ? "Return Note " : "Invoice "}{invoice.invoiceNo}</span>
+            <div className="top-bar-actions">
+              <button
+                className="btn-dl"
+                onClick={() => downloadInvoice(invoice, "distribution")}
+              >
+                {isReturn ? "Download Return PDF" : "Download PDF"}
+              </button>
+              <button
+                className="btn-print"
+                onClick={() => printInvoice(invoice, "distribution")}
+              >
+                Print
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Invoice preview — rendered from the shared HTML template ── */}
       <div className="pdf-outer">

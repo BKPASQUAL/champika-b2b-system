@@ -95,15 +95,101 @@ export const generateInvoiceHTML = async (
   const grandTotal  = invoice.grandTotal || invoice.totalAmount || 0;
   const extraDiscount = Math.max(0, subTotal - grandTotal - cashDiscountAmount - returnsTotal);
 
+  // Detect Return Note documents
+  const isReturnNote = Boolean(
+    invoice.invoiceNo?.startsWith("RET-") ||
+    invoice.orderId?.startsWith("RET-") ||
+    invoice.invoiceNo?.startsWith("RGN-") ||
+    invoice.orderId?.startsWith("RGN-") ||
+    invoice.invoiceNo?.startsWith("EXC-") ||
+    invoice.orderId?.startsWith("EXC-") ||
+    rawNotes?.includes("[RETURN_NOTE:") ||
+    rawNotes?.includes("[DAMAGE_EXCHANGE:") ||
+    rawNotes?.includes("[RETURN_GOOD:") ||
+    rawNotes?.includes("[DAMAGE_RETURN:") ||
+    rawNotes?.toLowerCase().includes("good return note") ||
+    rawNotes?.toLowerCase().includes("damage return note") ||
+    rawNotes?.toLowerCase().includes("customer return")
+  );
+
+  let returnTypeTitle = "GOOD RETURN NOTE";
+  let returnBadgeBg = "#f0fdf4";
+  let returnBadgeColor = "#15803d";
+  let returnBadgeBorder = "#86efac";
+
+  if (rawNotes?.includes("[DAMAGE_EXCHANGE:") || rawNotes?.toLowerCase().includes("exchange")) {
+    returnTypeTitle = "EXCHANGE RETURN NOTE";
+    returnBadgeBg = "#f0f9ff";
+    returnBadgeColor = "#0369a1";
+    returnBadgeBorder = "#7dd3fc";
+  } else if (rawNotes?.includes("[DAMAGE_RETURN:") || rawNotes?.toLowerCase().includes("damage return")) {
+    returnTypeTitle = "DAMAGE RETURN NOTE";
+    returnBadgeBg = "#fef2f2";
+    returnBadgeColor = "#b91c1c";
+    returnBadgeBorder = "#fca5a5";
+  }
+
+  // Extract original invoice reference if present in notes
+  let originalInvoiceNo: string | null = null;
+  const invMatch = rawNotes.match(/\[INV:([^\]]+)\]/);
+  if (invMatch) {
+    originalInvoiceNo = invMatch[1];
+  } else {
+    const bracketMatch = rawNotes.match(/\[([A-Z]{2,4}-[\d]+)\]/);
+    if (bracketMatch) originalInvoiceNo = bracketMatch[1];
+  }
+
+  // Extract unit price if present in notes
+  const priceMatch = rawNotes.match(/\[PRICE:([\d.]+)\]/);
+  const noteExtractedPrice = priceMatch ? parseFloat(priceMatch[1]) : 0;
+
+  // Clean notes for presentation
+  const cleanReturnNotes = notes
+    .replace(/\[RETURN_NOTE:[^\]]+\]/gi, "")
+    .replace(/\[DAMAGE_EXCHANGE:[^\]]+\]/gi, "")
+    .replace(/\[RETURN_GOOD:[^\]]+\]/gi, "")
+    .replace(/\[DAMAGE_RETURN:[^\]]+\]/gi, "")
+    .replace(/\[INV:[^\]]+\]/gi, "")
+    .replace(/\[PRICE:[\d.]+\]/gi, "")
+    .replace(/\[NOTE:[^\]]+\]/gi, "")
+    .replace(/Good Return Note [^\.]+\./gi, "")
+    .replace(/Damage Return Note [^\.]+\./gi, "")
+    .replace(/Replacement item \/ Exchange for Return Note [^\.]+\./gi, "")
+    .replace(/Reason:\s*/gi, "")
+    .trim();
+
+  // Calculate total return value
+  const totalReturnValue = items.reduce((sum: number, it: any) => {
+    const p = Number(it.unitPrice || it.price || noteExtractedPrice || 0);
+    const q = Number(it.quantity || it.qty || 1);
+    return sum + (it.total > 0 ? Number(it.total) : p * q);
+  }, 0);
 
   const ITEMS_PER_PAGE = 17;
   const chunks: any[][] = [];
   for (let i = 0; i < items.length; i += ITEMS_PER_PAGE) {
     chunks.push(items.slice(i, i + ITEMS_PER_PAGE));
   }
-  const totalPages = chunks.length;
+  const totalPages = Math.max(1, chunks.length);
 
-  const makeTableHeader = () => `
+  const makeTableHeader = () => {
+    if (isReturnNote) {
+      return `
+    <table style="width:100%;border-collapse:collapse;margin-bottom:6px;">
+      <thead>
+        <tr style="border-top:2px solid #000;border-bottom:2px solid #000;background:#f0f0f0;">
+          <th style="padding:7px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:center;width:5%;">#</th>
+          <th style="padding:7px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:left;width:16%;">Item Code</th>
+          <th style="padding:7px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:left;width:34%;">Description</th>
+          <th style="padding:7px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:center;width:8%;">Unit</th>
+          <th style="padding:7px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:right;width:12%;">Unit Price</th>
+          <th style="padding:7px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:center;width:11%;">Return Qty</th>
+          <th style="padding:7px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:right;width:14%;">Total Value</th>
+        </tr>
+      </thead>`;
+    }
+
+    return `
     <table style="width:100%;border-collapse:collapse;margin-bottom:6px;">
       <thead>
         <tr style="border-top:2px solid #000;border-bottom:2px solid #000;background:#f0f0f0;">
@@ -118,8 +204,9 @@ export const generateInvoiceHTML = async (
           <th style="padding:7px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:right;width:12%;">Total</th>
         </tr>
       </thead>`;
+  };
 
-  const pages = chunks.map((chunk, pageIdx) => {
+  const pages = (chunks.length > 0 ? chunks : [[]]).map((chunk, pageIdx) => {
     const isFirst = pageIdx === 0;
     const isLast  = pageIdx === totalPages - 1;
     const pageNo  = pageIdx + 1;
@@ -134,6 +221,23 @@ export const generateInvoiceHTML = async (
         const globalIdx = globalStart + idx;
         const isRetail = item.retailOnly || item.retail_only || item.isRetail || item.subCategory === "Retail Exclusive";
         const retailTag = isRetail ? ' <span style="font-size:9px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;padding:1px 4px;border-radius:3px;font-weight:600;margin-left:4px;display:inline-block;">RETAIL</span>' : '';
+
+        if (isReturnNote) {
+          const itemPrice = Number(item.unitPrice || item.price || noteExtractedPrice || 0);
+          const itemQty = Number(item.quantity || item.qty || 1);
+          const lineVal = item.total > 0 ? Number(item.total) : itemPrice * itemQty;
+          return `
+        <tr style="${globalIdx < items.length - 1 ? "border-bottom:1px solid #e8e8e8;" : ""}">
+          <td style="padding:7px 8px;font-size:13px;color:#777;text-align:center;vertical-align:middle;">${globalIdx + 1}</td>
+          <td style="padding:7px 8px;font-size:13px;color:#555;vertical-align:middle;">${item.sku || "-"}</td>
+          <td style="padding:7px 8px;font-size:13px;color:#111;font-weight:600;vertical-align:middle;">${item.productName || item.name || "-"}${retailTag}</td>
+          <td style="padding:7px 8px;font-size:13px;color:#555;text-align:center;vertical-align:middle;">${item.unit || "Pcs"}</td>
+          <td style="padding:7px 8px;font-size:13px;color:#111;text-align:right;white-space:nowrap;vertical-align:middle;">LKR ${fmt(itemPrice)}</td>
+          <td style="padding:7px 8px;font-size:14px;font-weight:800;color:#000;text-align:center;vertical-align:middle;">${itemQty}</td>
+          <td style="padding:7px 8px;font-size:13px;font-weight:800;color:#000;text-align:right;white-space:nowrap;vertical-align:middle;">LKR ${fmt(lineVal)}</td>
+        </tr>`;
+        }
+
         return `
         <tr style="${globalIdx < items.length - 1 ? "border-bottom:1px solid #e8e8e8;" : ""}">
           <td style="padding:7px 8px;font-size:13px;color:#777;text-align:center;vertical-align:middle;">${globalIdx + 1}</td>
@@ -150,21 +254,27 @@ export const generateInvoiceHTML = async (
       .join("");
 
     return `
-  <div class="invoice-page" style="page-break-after:always;width:100%;min-height:277mm;padding:8px 20px 20px;background:#fff;font-family:${FONT_STACK};color:#111;box-sizing:border-box;display:flex;flex-direction:column;">
+  <div class="invoice-page" style="page-break-after:${isLast ? "auto" : "always"};page-break-inside:avoid;width:100%;min-height:250mm;padding:8px 20px 14px;background:#fff;font-family:${FONT_STACK};color:#111;box-sizing:border-box;display:flex;flex-direction:column;">
 
     <table style="width:100%;border-collapse:collapse;margin-bottom:0;">
       <tr>
-        <td style="vertical-align:top;width:60%;">
+        <td style="vertical-align:top;width:55%;">
           <div style="font-size:34px;font-weight:800;color:#000;letter-spacing:-0.3px;line-height:1.1;">CHAMPIKA HARDWARE</div>
+          ${isReturnNote ? `
+          <div style="margin-top:4px;margin-bottom:3px;">
+            <span style="display:inline-block;padding:3px 10px;background:${returnBadgeBg};color:${returnBadgeColor};border:1.5px solid ${returnBadgeBorder};border-radius:4px;font-size:12px;font-weight:900;letter-spacing:0.8px;white-space:nowrap;text-transform:uppercase;">
+              ${returnTypeTitle}
+            </span>
+          </div>` : ""}
           <div style="font-size:10px;color:#333;margin-top:2px;line-height:1.5;">
             ${cfg.division}<br>${cfg.address}<br>Tel: ${cfg.tel}
           </div>
         </td>
-        <td style="vertical-align:top;text-align:right;width:40%;">
+        <td style="vertical-align:top;text-align:right;width:45%;">
           <table style="margin-left:auto;border-collapse:collapse;">
             <tr>
-              ${isFirst ? `
-              <td style="vertical-align:top;padding-top:6px;padding-right:15px;">
+              ${isFirst && !isReturnNote ? `
+              <td style="vertical-align:top;padding-top:6px;padding-right:14px;white-space:nowrap;">
                 <div style="display:inline-flex;align-items:center;border:2px solid #000;border-radius:8px;padding:6px 10px;background:#fff;">
                   <div style="position:relative;display:flex;align-items:center;justify-content:center;width:42px;height:42px;margin-right:10px;">
                     <svg viewBox="0 0 100 100" style="width:100%;height:100%;position:absolute;">
@@ -180,10 +290,11 @@ export const generateInvoiceHTML = async (
                   </div>
                 </div>
               </td>` : ""}
-              <td style="vertical-align:top;text-align:right;">
-                <div style="font-size:18px;font-weight:700;color:#000;letter-spacing:0.5px;">${invoiceNoDisplay}</div>
-                ${invoice.manualInvoiceNo ? `<div style="font-size:12px;font-weight:600;color:#444;margin-top:2px;">Book No: ${invoice.manualInvoiceNo}</div>` : ""}
-                <div style="font-size:11px;color:#333;margin-top:2px;line-height:1.5;">
+              <td style="vertical-align:top;text-align:right;white-space:nowrap;">
+                <div style="font-size:19px;font-weight:800;color:#000;letter-spacing:0.5px;white-space:nowrap;">${invoiceNoDisplay}</div>
+                ${originalInvoiceNo ? `<div style="font-size:11px;font-weight:700;color:#0284c7;margin-top:2px;white-space:nowrap;">Original Bill Ref: ${originalInvoiceNo}</div>` : ""}
+                ${invoice.manualInvoiceNo ? `<div style="font-size:12px;font-weight:600;color:#444;margin-top:2px;white-space:nowrap;">Book No: ${invoice.manualInvoiceNo}</div>` : ""}
+                <div style="font-size:11px;color:#333;margin-top:2px;line-height:1.5;white-space:nowrap;">
                   Date: ${formatDate(invoice.date || invoice.createdAt)}<br>
                   ${salesRep}
                 </div>
@@ -231,7 +342,61 @@ export const generateInvoiceHTML = async (
       <tbody>${chunkRows}</tbody>
     </table>
 
-    ${isLast ? `
+    ${isLast ? (
+      isReturnNote ? `
+    <table style="width:100%;border-collapse:collapse;margin-bottom:8px;">
+      <tr>
+        <td style="width:55%;vertical-align:top;">
+          <div style="border:1px solid #cbd5e1;background:#f8fafc;border-radius:6px;padding:8px 12px;font-size:11px;line-height:1.5;color:#334155;">
+            <div style="font-weight:700;color:#0f172a;margin-bottom:3px;font-size:11px;text-transform:uppercase;letter-spacing:0.3px;">
+              Return Collection Instructions
+            </div>
+            <div>• Lorry driver / rep to verify and collect listed items from customer.</div>
+            ${originalInvoiceNo ? `<div>• Original Invoice Reference: <strong>${originalInvoiceNo}</strong></div>` : ""}
+            ${cleanReturnNotes ? `<div>• Notes: ${cleanReturnNotes}</div>` : ""}
+          </div>
+        </td>
+        <td style="width:45%;vertical-align:top;padding-left:16px;">
+          <table style="width:100%;border-collapse:collapse;">
+            <tr>
+              <td style="padding:4px 0;font-size:12px;color:#333;">Total Items Returned</td>
+              <td style="padding:4px 0;font-size:12px;font-weight:700;color:#000;text-align:right;">
+                ${items.reduce((s: number, it: any) => s + (Number(it.quantity || it.qty) || 0), 0)} Units
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:4px 0 0;border-top:1.5px solid #bbb;"></td>
+              <td style="border-top:1.5px solid #bbb;"></td>
+            </tr>
+            <tr>
+              <td style="padding:4px 0;font-size:13px;font-weight:800;color:#000;">Total Return Value</td>
+              <td style="padding:4px 0;font-size:16px;font-weight:900;color:#000;text-align:right;white-space:nowrap;">
+                LKR ${fmt(totalReturnValue)}
+              </td>
+            </tr>
+            <tr>
+              <td colspan="2" style="padding-top:2px;font-size:10px;color:#64748b;text-align:right;font-style:italic;">
+                ${returnTypeTitle.includes("GOOD") ? "(Credit allocated to customer balance)" : "(Direct exchange / replacement)"}
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    <table style="width:100%;border-collapse:collapse;margin-top:70px;margin-bottom:6px;page-break-inside:avoid;">
+      <tr>
+        <td style="width:45%;text-align:center;padding-top:6px;border-top:1.5px solid #000;vertical-align:top;">
+          <div style="font-size:11px;color:#000;font-weight:700;">Customer Signature &amp; Stamp</div>
+          <div style="font-size:9px;color:#666;margin-top:2px;">(Goods Handed Over By Customer)</div>
+        </td>
+        <td style="width:10%;"></td>
+        <td style="width:45%;text-align:center;padding-top:6px;border-top:1.5px solid #000;vertical-align:top;">
+          <div style="font-size:11px;color:#000;font-weight:700;">Collected By (Driver / Rep) Signature</div>
+          <div style="font-size:9px;color:#666;margin-top:2px;">(Goods Received in Stated Condition)</div>
+        </td>
+      </tr>
+    </table>` : `
     <table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
       <tr>
         <td style="width:55%;">
@@ -268,22 +433,23 @@ export const generateInvoiceHTML = async (
       </tr>
     </table>
 
-    <table style="width:100%;border-collapse:collapse;margin-top:40px;margin-bottom:8px;">
+    <table style="width:100%;border-collapse:collapse;margin-top:24px;margin-bottom:8px;page-break-inside:avoid;">
       <tr>
         <td style="width:55%;"></td>
         <td style="width:45%;text-align:center;padding-top:6px;border-top:1.5px solid #555;">
           <div style="font-size:11px;color:#333;font-weight:600;margin-top:3px;">Customer Signature &amp; Stamp</div>
         </td>
       </tr>
-    </table>` : `
+    </table>`
+    ) : `
     <div style="margin-top:12px;text-align:right;font-size:11px;color:#777;font-style:italic;">
       Continued on next page (${pageNo}/${totalPages})…
     </div>`}
 
     <div style="flex:1;"></div>
 
-    <div style="border-top:1px solid #ddd;padding-top:8px;text-align:center;font-size:11px;color:#777;">
-      Thank you for your business!
+    <div style="border-top:1px solid #ddd;padding-top:6px;text-align:center;font-size:11px;color:#777;page-break-inside:avoid;">
+      ${isReturnNote ? "Customer Return Collection Note — Champika Hardware" : "Thank you for your business!"}
     </div>
   </div>`;
   }).join("");
@@ -303,8 +469,8 @@ export const getDocumentWrapper = (content: string, title: string) => `
         @page { size: A4 portrait; margin: 0; }
         html, body { width: 210mm; margin: 0 auto; padding: 0; }
         body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        .invoice-page { page-break-after: always; width: 210mm !important; padding: 3mm 7mm 7mm !important; }
-        .invoice-page:last-child { page-break-after: auto; }
+        .invoice-page { page-break-after: always; page-break-inside: avoid; width: 210mm !important; min-height: 250mm !important; padding: 4mm 8mm 6mm !important; }
+        .invoice-page:last-child { page-break-after: auto !important; }
       }
     </style>
   </head>
@@ -357,14 +523,101 @@ export const generateHalfPageInvoiceHTML = async (
   const grandTotal    = invoice.grandTotal || invoice.totalAmount || 0;
   const extraDiscount = Math.max(0, subTotal - grandTotal - cashDiscountAmount);
 
+  // Detect Return Note documents
+  const isReturnNote = Boolean(
+    invoice.invoiceNo?.startsWith("RET-") ||
+    invoice.orderId?.startsWith("RET-") ||
+    invoice.invoiceNo?.startsWith("RGN-") ||
+    invoice.orderId?.startsWith("RGN-") ||
+    invoice.invoiceNo?.startsWith("EXC-") ||
+    invoice.orderId?.startsWith("EXC-") ||
+    rawNotes?.includes("[RETURN_NOTE:") ||
+    rawNotes?.includes("[DAMAGE_EXCHANGE:") ||
+    rawNotes?.includes("[RETURN_GOOD:") ||
+    rawNotes?.includes("[DAMAGE_RETURN:") ||
+    rawNotes?.toLowerCase().includes("good return note") ||
+    rawNotes?.toLowerCase().includes("damage return note") ||
+    rawNotes?.toLowerCase().includes("customer return")
+  );
+
+  let returnTypeTitle = "GOOD RETURN NOTE";
+  let returnBadgeBg = "#f0fdf4";
+  let returnBadgeColor = "#15803d";
+  let returnBadgeBorder = "#86efac";
+
+  if (rawNotes?.includes("[DAMAGE_EXCHANGE:") || rawNotes?.toLowerCase().includes("exchange")) {
+    returnTypeTitle = "EXCHANGE RETURN NOTE";
+    returnBadgeBg = "#f0f9ff";
+    returnBadgeColor = "#0369a1";
+    returnBadgeBorder = "#7dd3fc";
+  } else if (rawNotes?.includes("[DAMAGE_RETURN:") || rawNotes?.toLowerCase().includes("damage return")) {
+    returnTypeTitle = "DAMAGE RETURN NOTE";
+    returnBadgeBg = "#fef2f2";
+    returnBadgeColor = "#b91c1c";
+    returnBadgeBorder = "#fca5a5";
+  }
+
+  // Extract original invoice reference if present in notes
+  let originalInvoiceNo: string | null = null;
+  const invMatch = rawNotes.match(/\[INV:([^\]]+)\]/);
+  if (invMatch) {
+    originalInvoiceNo = invMatch[1];
+  } else {
+    const bracketMatch = rawNotes.match(/\[([A-Z]{2,4}-[\d]+)\]/);
+    if (bracketMatch) originalInvoiceNo = bracketMatch[1];
+  }
+
+  // Extract unit price if present in notes
+  const priceMatch = rawNotes.match(/\[PRICE:([\d.]+)\]/);
+  const noteExtractedPrice = priceMatch ? parseFloat(priceMatch[1]) : 0;
+
+  // Clean notes for presentation
+  const cleanReturnNotes = notes
+    .replace(/\[RETURN_NOTE:[^\]]+\]/gi, "")
+    .replace(/\[DAMAGE_EXCHANGE:[^\]]+\]/gi, "")
+    .replace(/\[RETURN_GOOD:[^\]]+\]/gi, "")
+    .replace(/\[DAMAGE_RETURN:[^\]]+\]/gi, "")
+    .replace(/\[INV:[^\]]+\]/gi, "")
+    .replace(/\[PRICE:[\d.]+\]/gi, "")
+    .replace(/\[NOTE:[^\]]+\]/gi, "")
+    .replace(/Good Return Note [^\.]+\./gi, "")
+    .replace(/Damage Return Note [^\.]+\./gi, "")
+    .replace(/Replacement item \/ Exchange for Return Note [^\.]+\./gi, "")
+    .replace(/Reason:\s*/gi, "")
+    .trim();
+
+  // Calculate total return value
+  const totalReturnValue = items.reduce((sum: number, it: any) => {
+    const p = Number(it.unitPrice || it.price || noteExtractedPrice || 0);
+    const q = Number(it.quantity || it.qty || 1);
+    return sum + (it.total > 0 ? Number(it.total) : p * q);
+  }, 0);
+
   const ITEMS_PER_HALF = 8;
   const chunks: any[][] = [];
   for (let i = 0; i < items.length; i += ITEMS_PER_HALF) {
     chunks.push(items.slice(i, i + ITEMS_PER_HALF));
   }
-  const totalPages = chunks.length;
+  const totalPages = Math.max(1, chunks.length);
 
-  const makeTableHeader = () => `
+  const makeTableHeader = () => {
+    if (isReturnNote) {
+      return `
+    <table style="width:100%;border-collapse:collapse;margin-bottom:4px;">
+      <thead>
+        <tr style="border-top:2px solid #000;border-bottom:2px solid #000;background:#f0f0f0;">
+          <th style="padding:4px 5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:center;width:5%;">#</th>
+          <th style="padding:4px 5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:left;width:16%;">Item Code</th>
+          <th style="padding:4px 5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:left;width:34%;">Description</th>
+          <th style="padding:4px 5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:center;width:8%;">Unit</th>
+          <th style="padding:4px 5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:right;width:12%;">Unit Price</th>
+          <th style="padding:4px 5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:center;width:11%;">Return Qty</th>
+          <th style="padding:4px 5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:right;width:14%;">Total Value</th>
+        </tr>
+      </thead>`;
+    }
+
+    return `
     <table style="width:100%;border-collapse:collapse;margin-bottom:4px;">
       <thead>
         <tr style="border-top:2px solid #000;border-bottom:2px solid #000;background:#f0f0f0;">
@@ -379,8 +632,9 @@ export const generateHalfPageInvoiceHTML = async (
           <th style="padding:4px 5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#000;text-align:right;width:12%;">Total</th>
         </tr>
       </thead>`;
+  };
 
-  const sheets = chunks.map((chunk, pageIdx) => {
+  const sheets = (chunks.length > 0 ? chunks : [[]]).map((chunk, pageIdx) => {
     const isFirst = pageIdx === 0;
     const isLast  = pageIdx === totalPages - 1;
     const pageNo  = pageIdx + 1;
@@ -394,6 +648,23 @@ export const generateHalfPageInvoiceHTML = async (
       const gi = globalStart + idx;
       const isRetail = item.retailOnly || item.retail_only || item.isRetail || item.subCategory === "Retail Exclusive";
       const retailTag = isRetail ? ' <span style="font-size:8px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;padding:1px 3px;border-radius:3px;font-weight:600;margin-left:3px;display:inline-block;">RETAIL</span>' : '';
+
+      if (isReturnNote) {
+        const itemPrice = Number(item.unitPrice || item.price || noteExtractedPrice || 0);
+        const itemQty = Number(item.quantity || item.qty || 1);
+        const lineVal = item.total > 0 ? Number(item.total) : itemPrice * itemQty;
+        return `
+        <tr style="${gi < items.length - 1 ? "border-bottom:1px solid #e8e8e8;" : ""}">
+          <td style="padding:4px 5px;font-size:12px;color:#777;text-align:center;vertical-align:middle;">${gi + 1}</td>
+          <td style="padding:4px 5px;font-size:12px;color:#555;vertical-align:middle;">${item.sku || "-"}</td>
+          <td style="padding:4px 5px;font-size:12px;color:#111;font-weight:600;vertical-align:middle;">${item.productName || item.name || "-"}${retailTag}</td>
+          <td style="padding:4px 5px;font-size:12px;color:#555;text-align:center;vertical-align:middle;">${item.unit || "Pcs"}</td>
+          <td style="padding:4px 5px;font-size:12px;color:#111;text-align:right;white-space:nowrap;vertical-align:middle;">LKR ${fmt(itemPrice)}</td>
+          <td style="padding:4px 5px;font-size:13px;font-weight:800;color:#000;text-align:center;vertical-align:middle;">${itemQty}</td>
+          <td style="padding:4px 5px;font-size:12px;font-weight:800;color:#000;text-align:right;white-space:nowrap;vertical-align:middle;">LKR ${fmt(lineVal)}</td>
+        </tr>`;
+      }
+
       return `
         <tr style="${gi < items.length - 1 ? "border-bottom:1px solid #e8e8e8;" : ""}">
           <td style="padding:4px 5px;font-size:12px;color:#777;text-align:center;vertical-align:middle;">${gi + 1}</td>
@@ -413,20 +684,26 @@ export const generateHalfPageInvoiceHTML = async (
 
   <table style="width:100%;border-collapse:collapse;margin-bottom:0;">
     <tr>
-      <td style="vertical-align:middle;width:38%;">
+      <td style="vertical-align:middle;width:45%;">
         <div style="font-size:22px;font-weight:800;color:#000;letter-spacing:-0.3px;line-height:1.1;">CHAMPIKA HARDWARE</div>
+        ${isReturnNote ? `
+        <div style="margin-top:2px;margin-bottom:2px;">
+          <span style="display:inline-block;padding:2px 7px;background:${returnBadgeBg};color:${returnBadgeColor};border:1px solid ${returnBadgeBorder};border-radius:3px;font-size:10px;font-weight:900;letter-spacing:0.5px;white-space:nowrap;text-transform:uppercase;">
+            ${returnTypeTitle}
+          </span>
+        </div>` : ""}
         <div style="font-size:8px;color:#333;margin-top:1px;line-height:1.5;">
           ${cfg.division}<br>${cfg.address}<br>Tel: ${cfg.tel}
         </div>
       </td>
 
-      <td style="width:24%;"></td>
+      <td style="width:5%;"></td>
 
-      <td style="vertical-align:top;text-align:right;width:38%;">
+      <td style="vertical-align:top;text-align:right;width:50%;">
         <table style="margin-left:auto;border-collapse:collapse;">
           <tr>
-            ${isFirst ? `
-            <td style="vertical-align:top;padding-top:6px;padding-right:15px;">
+            ${isFirst && !isReturnNote ? `
+            <td style="vertical-align:top;padding-top:6px;padding-right:12px;white-space:nowrap;">
               <div style="display:inline-flex;align-items:center;border:1.5px solid #000;border-radius:6px;padding:4px 8px;background:#fff;">
                 <div style="position:relative;display:flex;align-items:center;justify-content:center;width:32px;height:32px;margin-right:8px;">
                   <svg viewBox="0 0 100 100" style="width:100%;height:100%;position:absolute;">
@@ -442,10 +719,11 @@ export const generateHalfPageInvoiceHTML = async (
                 </div>
               </div>
             </td>` : ""}
-            <td style="vertical-align:top;text-align:right;">
-              <div style="font-size:14px;font-weight:700;color:#000;letter-spacing:0.5px;">${invoiceNoDisplay}</div>
-              ${invoice.manualInvoiceNo ? `<div style="font-size:9px;font-weight:600;color:#444;margin-top:1px;">Book No: ${invoice.manualInvoiceNo}</div>` : ""}
-              <div style="font-size:9px;color:#333;margin-top:1px;line-height:1.5;">
+            <td style="vertical-align:top;text-align:right;white-space:nowrap;">
+              <div style="font-size:15px;font-weight:800;color:#000;letter-spacing:0.5px;white-space:nowrap;">${invoiceNoDisplay}</div>
+              ${originalInvoiceNo ? `<div style="font-size:9px;font-weight:700;color:#0284c7;margin-top:1px;white-space:nowrap;">Original Ref: ${originalInvoiceNo}</div>` : ""}
+              ${invoice.manualInvoiceNo ? `<div style="font-size:9px;font-weight:600;color:#444;margin-top:1px;white-space:nowrap;">Book No: ${invoice.manualInvoiceNo}</div>` : ""}
+              <div style="font-size:9px;color:#333;margin-top:1px;line-height:1.5;white-space:nowrap;">
                 Date: ${formatDate(invoice.date || invoice.createdAt)}<br>
                 ${salesRep}
               </div>
@@ -493,7 +771,54 @@ export const generateHalfPageInvoiceHTML = async (
       <tbody>${chunkRows}</tbody>
     </table>
 
-  ${isLast ? `
+  ${isLast ? (
+    isReturnNote ? `
+  <table style="width:100%;border-collapse:collapse;margin-top:3px;margin-bottom:3px;">
+    <tr>
+      <td style="width:55%;vertical-align:top;">
+        <div style="border:1px solid #cbd5e1;background:#f8fafc;border-radius:4px;padding:5px 8px;font-size:9px;line-height:1.4;color:#334155;">
+          <div style="font-weight:700;color:#0f172a;margin-bottom:1px;font-size:9px;text-transform:uppercase;">Return Instructions</div>
+          <div>• Collect listed items from customer.</div>
+          ${originalInvoiceNo ? `<div>• Ref Bill: <strong>${originalInvoiceNo}</strong></div>` : ""}
+          ${cleanReturnNotes ? `<div>• Notes: ${cleanReturnNotes}</div>` : ""}
+        </div>
+      </td>
+      <td style="width:45%;vertical-align:top;padding-left:10px;">
+        <table style="width:100%;border-collapse:collapse;">
+          <tr>
+            <td style="padding:2px 0;font-size:10px;color:#333;">Total Return Qty</td>
+            <td style="padding:2px 0;font-size:10px;font-weight:700;color:#000;text-align:right;">
+              ${items.reduce((s: number, it: any) => s + (Number(it.quantity || it.qty) || 0), 0)} Units
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:2px 0 0;border-top:1px solid #bbb;"></td>
+            <td style="border-top:1px solid #bbb;"></td>
+          </tr>
+          <tr>
+            <td style="padding:2px 0;font-size:11px;font-weight:800;color:#000;">Total Return Value</td>
+            <td style="padding:2px 0;font-size:13px;font-weight:900;color:#000;text-align:right;white-space:nowrap;">
+              LKR ${fmt(totalReturnValue)}
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+
+  <table style="width:100%;border-collapse:collapse;margin-top:40px;margin-bottom:3px;">
+    <tr>
+      <td style="width:45%;text-align:center;padding-top:4px;border-top:1.5px solid #000;vertical-align:top;">
+        <div style="font-size:9px;color:#000;font-weight:700;">Customer Signature &amp; Stamp</div>
+        <div style="font-size:8px;color:#666;margin-top:1px;">(Handed Over By)</div>
+      </td>
+      <td style="width:10%;"></td>
+      <td style="width:45%;text-align:center;padding-top:4px;border-top:1.5px solid #000;vertical-align:top;">
+        <div style="font-size:9px;color:#000;font-weight:700;">Collected By (Driver/Rep)</div>
+        <div style="font-size:8px;color:#666;margin-top:1px;">(Received In Good Condition)</div>
+      </td>
+    </tr>
+  </table>` : `
   <table style="width:100%;border-collapse:collapse;margin-top:4px;margin-bottom:4px;">
     <tr>
       <td style="width:55%;">
@@ -529,7 +854,8 @@ export const generateHalfPageInvoiceHTML = async (
         <div style="font-size:10px;color:#333;font-weight:600;margin-top:2px;">Customer Signature &amp; Stamp</div>
       </td>
     </tr>
-  </table>` : `
+  </table>`
+  ) : `
   <div style="margin-top:8px;text-align:right;font-size:10px;color:#777;font-style:italic;">
     Continued on next page (${pageNo}/${totalPages})…
   </div>`}
@@ -537,7 +863,7 @@ export const generateHalfPageInvoiceHTML = async (
   <div style="flex:1;"></div>
 
   <div style="border-top:1px solid #ddd;padding-top:5px;text-align:center;font-size:10px;color:#777;">
-    Thank you for your business!
+    ${isReturnNote ? "Customer Return Collection Note — Champika Hardware" : "Thank you for your business!"}
   </div>
 </div>`;
 

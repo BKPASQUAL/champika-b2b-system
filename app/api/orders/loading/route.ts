@@ -79,6 +79,7 @@ export async function GET(request: NextRequest) {
         totalAmount: order.total_amount,
         status: order.status,
         date: order.order_date,
+        notes: order.notes,
       }));
 
     return NextResponse.json(formattedOrders);

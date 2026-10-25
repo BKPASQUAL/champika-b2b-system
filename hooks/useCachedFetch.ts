@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * useCachedFetch — Stale-While-Revalidate (SWR) caching with in-flight deduplication
  * and instant cross-page navigation.

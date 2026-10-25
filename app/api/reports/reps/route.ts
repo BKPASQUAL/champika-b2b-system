@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { getAllRepReturns, deductReturnFromBreakdown, isReturnPickupOrder } from "@/lib/rep-returns";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -34,10 +35,10 @@ export async function GET(request: NextRequest) {
     if (repsError) throw repsError;
 
     // 2. Delivered orders in period assigned to a rep
-    const { data: orders, error: ordersError } = await supabaseAdmin
+    const { data: ordersRaw, error: ordersError } = await supabaseAdmin
       .from("orders")
       .select(`
-        id, order_id, total_amount, status, created_at, order_date, sales_rep_id,
+        id, order_id, total_amount, status, created_at, order_date, sales_rep_id, notes,
         customers (id, shop_name),
         invoices (id, invoice_no, manual_invoice_no, total_amount, paid_amount, status),
         rep_commissions (total_commission_amount, status)
@@ -47,6 +48,8 @@ export async function GET(request: NextRequest) {
       .lte("created_at", toDate)
       .not("sales_rep_id", "is", null);
     if (ordersError) throw ordersError;
+    // Return-note pickup / exchange orders are not sales
+    const orders = (ordersRaw || []).filter((o: any) => !isReturnPickupOrder(o.notes));
 
     // Build lookup maps from orders
     const allInvoiceIds: string[] = [];
@@ -313,6 +316,38 @@ export async function GET(request: NextRequest) {
       repCategoryMap[repId][catKey].itemsCount += qty;
     });
 
+    // Returns come off the invoice rep's sales & commission in the month the return was made
+    const repReturnTotals: Record<string, { value: number; commission: number; count: number }> = {};
+    const allReturns = await getAllRepReturns(fromDate, toDate);
+    allReturns.forEach((r) => {
+      const rep = repMap[r.ownerId];
+      if (!rep) return;
+      rep.totalSales -= r.value;
+      // Pending commission first, then earned
+      const fromPending = Math.min(rep.commissionPending, r.commission);
+      rep.commissionPending -= fromPending;
+      rep.commissionEarned -= r.commission - fromPending;
+
+      if (!rep.monthlyMap[r.monthKey]) {
+        rep.monthlyMap[r.monthKey] = {
+          month: new Date(r.date).toLocaleString("default", { month: "short", year: "2-digit" }),
+          monthKey: r.monthKey,
+          sales: 0,
+          collections: 0,
+        };
+      }
+      rep.monthlyMap[r.monthKey].sales -= r.value;
+
+      if (!repSupplierMap[r.ownerId]) repSupplierMap[r.ownerId] = {};
+      if (!repCategoryMap[r.ownerId]) repCategoryMap[r.ownerId] = {};
+      deductReturnFromBreakdown(repSupplierMap[r.ownerId], repCategoryMap[r.ownerId], r);
+
+      const t = (repReturnTotals[r.ownerId] ||= { value: 0, commission: 0, count: 0 });
+      t.value += r.value;
+      t.commission += r.commission;
+      t.count += 1;
+    });
+
     // Build final results
     const repsResult = Object.values(repMap).map((rep) => {
       const monthly = Object.values(rep.monthlyMap).sort((a, b) =>
@@ -321,7 +356,7 @@ export async function GET(request: NextRequest) {
       rep.invoices.sort((a, b) => b.date.localeCompare(a.date));
 
       const commissionBySupplier = Object.values(repSupplierMap[rep.id] || {})
-        .filter((s) => s.sales > 0 || s.commission > 0 || s.itemsCount > 0)
+        .filter((s) => s.sales !== 0 || s.commission !== 0 || s.itemsCount !== 0)
         .map((s) => ({
           ...s,
           rate: s.sales > 0 ? (s.commission / s.sales) * 100 : 0,
@@ -330,7 +365,7 @@ export async function GET(request: NextRequest) {
         .sort((a, b) => b.sales - a.sales);
 
       const commissionByCategory = Object.values(repCategoryMap[rep.id] || {})
-        .filter((c) => c.sales > 0 || c.commission > 0 || c.itemsCount > 0)
+        .filter((c) => c.sales !== 0 || c.commission !== 0 || c.itemsCount !== 0)
         .map((c) => ({
           ...c,
           rate: c.sales > 0 ? (c.commission / c.sales) * 100 : 0,
@@ -348,6 +383,9 @@ export async function GET(request: NextRequest) {
         pendingAmount: rep.pendingAmount,
         commissionEarned: rep.commissionEarned,
         commissionPending: rep.commissionPending,
+        totalReturns: Math.round((repReturnTotals[rep.id]?.value || 0) * 100) / 100,
+        returnCommission: Math.round((repReturnTotals[rep.id]?.commission || 0) * 100) / 100,
+        returnCount: repReturnTotals[rep.id]?.count || 0,
         invoiceCount: rep.invoices.length,
         monthly,
         invoices: rep.invoices,

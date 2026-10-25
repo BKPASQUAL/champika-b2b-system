@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { getRepReturns, isReturnPickupOrder } from "@/lib/rep-returns";
 
 export const dynamic = "force-dynamic";
 
@@ -18,10 +19,10 @@ export async function GET(request: NextRequest) {
 
   try {
     // 1. Delivered orders for this rep
-    const { data: orders, error: ordersError } = await supabaseAdmin
+    const { data: ordersRaw, error: ordersError } = await supabaseAdmin
       .from("orders")
       .select(
-        `id, order_id, total_amount, status, created_at, order_date,
+        `id, order_id, total_amount, status, created_at, order_date, notes,
          customers ( shop_name ),
          order_items ( commission_earned ),
          rep_commissions ( id, total_commission_amount, status ),
@@ -32,7 +33,9 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false });
 
     if (ordersError) throw ordersError;
-    if (!orders || orders.length === 0) return NextResponse.json([]);
+    // Return-note pickup / exchange orders are not sales
+    const orders = (ordersRaw || []).filter((o: any) => !isReturnPickupOrder(o.notes));
+    if (orders.length === 0 && (await getRepReturns(repId)).length === 0) return NextResponse.json([]);
 
     // 2. Fetch latest payment date per invoice
     const invoiceIds = orders
@@ -149,7 +152,35 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json(records);
+    // Returns take back commission in the month the return was made,
+    // charged to the rep who made the original invoice
+    const returns = await getRepReturns(repId);
+    const returnRecords = returns
+      .filter((r) => r.commission > 0)
+      .map((r) => ({
+        id: `return_${r.returnNumber}`,
+        orderRef: r.returnNumber,
+        invoiceNo: r.invoiceNo,
+        shopName: r.customer,
+        invoiceDate: new Date(r.date).toISOString(),
+        paymentDate: null,
+        daysToPayment: null,
+        daysSinceInvoice: Math.floor((today.getTime() - new Date(r.date).getTime()) / 86400000),
+        orderTotal: -r.value,
+        paidAmount: 0,
+        dueAmount: 0,
+        commissionAmount: -r.commission,
+        commissionEarned: -r.commission,
+        commissionCut: 0,
+        commissionPending: 0,
+        collectionStatus: "return" as const,
+        payoutStatus: "Pending" as const,
+      }));
+
+    const all = [...records, ...returnRecords].sort(
+      (a, b) => new Date(b.invoiceDate).getTime() - new Date(a.invoiceDate).getTime()
+    );
+    return NextResponse.json(all);
   } catch (error: any) {
     console.error("Commission API Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -25,6 +25,7 @@ import {
   Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
   Card,
@@ -100,6 +101,7 @@ interface ReturnItem {
   price: number;
   totalValue: number;
   supplier?: string;
+  invoiceNo?: string;
 }
 
 interface OrderItem {
@@ -313,11 +315,112 @@ export default function CreateOrderPage() {
     productId: "",
     sku: "",
     quantity: "",
-    returnType: "Exchange" as "Good" | "Damage" | "Exchange",
+    returnType: "Good" as "Good" | "Damage" | "Exchange",
     unit: "",
     price: 0,
     supplier: "",
   });
+
+  const [customerPurchasedProducts, setCustomerPurchasedProducts] = useState<any[]>([]);
+  const [loadingPurchasedProducts, setLoadingPurchasedProducts] = useState(false);
+  const [selectedBillFilter, setSelectedBillFilter] = useState<string>("all");
+  const [billSelectorOpen, setBillSelectorOpen] = useState(false);
+
+  useEffect(() => {
+    if (!customerId) {
+      setCustomerPurchasedProducts([]);
+      return;
+    }
+    setLoadingPurchasedProducts(true);
+    fetch(`/api/customers/${customerId}/purchased-products`)
+      .then((r) => r.json())
+      .then((rawData) => {
+        const list = Array.isArray(rawData) ? rawData : [];
+        const normalized: any[] = [];
+
+        list.forEach((p: any) => {
+          if (Array.isArray(p.history) && p.history.length > 0) {
+            p.history.forEach((h: any) => {
+              normalized.push({
+                productId: p.id || p.productId,
+                productName: p.name || p.productName || "Unknown Product",
+                sku: p.sku || "",
+                unitOfMeasure: p.unit || p.unitOfMeasure || "unit",
+                unitPrice: Number(h.unitPrice) || Number(p.latestUnitPrice) || Number(p.unitPrice) || 0,
+                purchasedQuantity: Number(h.quantity) || Number(h.totalQuantity) || Number(p.totalPurchasedQty) || 0,
+                invoiceNo: h.invoiceNo || p.latestInvoiceNo || p.invoiceNo || "-",
+                manualInvoiceNo: h.manualInvoiceNo || p.latestManualInvoiceNo || null,
+                invoiceId: h.invoiceId || null,
+                orderId: h.orderId || null,
+                invoiceTotal: Number(h.invoiceTotal) || Number(p.latestInvoiceTotal) || Number(h.totalPrice) || 0,
+                lastPurchasedDate: h.date || p.lastPurchasedDate || undefined,
+              });
+            });
+          } else {
+            normalized.push({
+              productId: p.id || p.productId,
+              productName: p.name || p.productName || "Unknown Product",
+              sku: p.sku || "",
+              unitOfMeasure: p.unit || p.unitOfMeasure || "unit",
+              unitPrice: Number(p.latestUnitPrice ?? p.unitPrice ?? 0),
+              purchasedQuantity: Number(p.totalPurchasedQty ?? p.purchasedQuantity ?? 0),
+              invoiceNo: p.latestInvoiceNo || p.invoiceNo || "-",
+              manualInvoiceNo: p.latestManualInvoiceNo || null,
+              invoiceTotal: Number(p.latestInvoiceTotal) || Number(p.totalSpent) || 0,
+              lastPurchasedDate: p.lastPurchasedDate || undefined,
+            });
+          }
+        });
+
+        setCustomerPurchasedProducts(normalized);
+      })
+      .catch((err) => {
+        console.error(err);
+        setCustomerPurchasedProducts([]);
+      })
+      .finally(() => setLoadingPurchasedProducts(false));
+    setSelectedBillFilter("all");
+  }, [customerId]);
+
+  // Unique past bills for bill selector dropdown in order create with invoice value
+  const customerBillsList = useMemo(() => {
+    const map: Record<
+      string,
+      { invoiceNo: string; date?: string; itemCount: number; invoiceTotal: number; calculatedSum: number }
+    > = {};
+    customerPurchasedProducts.forEach((p) => {
+      const inv = p.invoiceNo && p.invoiceNo !== "-" ? p.invoiceNo : null;
+      if (inv) {
+        if (!map[inv]) {
+          map[inv] = {
+            invoiceNo: inv,
+            date: p.lastPurchasedDate ? p.lastPurchasedDate.split("T")[0] : undefined,
+            itemCount: 0,
+            invoiceTotal: p.invoiceTotal || 0,
+            calculatedSum: 0,
+          };
+        }
+        map[inv].itemCount += 1;
+        map[inv].calculatedSum += (p.unitPrice || 0) * (p.purchasedQuantity || 1);
+        if ((!map[inv].invoiceTotal || map[inv].invoiceTotal === 0) && p.invoiceTotal) {
+          map[inv].invoiceTotal = p.invoiceTotal;
+        }
+      }
+    });
+
+    return Object.values(map)
+      .map((b) => ({
+        ...b,
+        invoiceTotal: b.invoiceTotal > 0 ? b.invoiceTotal : b.calculatedSum,
+      }))
+      .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  }, [customerPurchasedProducts]);
+
+  // Filtered available returnable items (if bill selected, filter by that bill; otherwise show all items)
+  const availablePurchasedProducts = useMemo(() => {
+    if (selectedBillFilter === "all" || !selectedBillFilter) return customerPurchasedProducts;
+    return customerPurchasedProducts.filter((p) => p.invoiceNo === selectedBillFilter);
+  }, [customerPurchasedProducts, selectedBillFilter]);
 
   // Popover States
   const [customerOpen, setCustomerOpen] = useState(false);
@@ -376,19 +479,35 @@ export default function CreateOrderPage() {
   };
 
   // --- Return Handlers ---
-  const handleReturnProductSelect = (productId: string) => {
+  const handleReturnProductSelect = (
+    productId: string,
+    invoiceNo?: string,
+    price?: number,
+    itemObj?: any
+  ) => {
+    const purchased =
+      itemObj ||
+      customerPurchasedProducts.find(
+        (p) => p.productId === productId && (!invoiceNo || p.invoiceNo === invoiceNo)
+      );
     const product = products.find((p) => p.id === productId);
-    if (!product) return;
+    if (!product && !purchased) return;
+
+    const rate = price ?? purchased?.unitPrice ?? product?.selling_price ?? 0;
+    const sku = purchased?.sku || product?.sku || "";
+    const unit = purchased?.unitOfMeasure || product?.unit_of_measure || "unit";
+    const supplier = purchased?.category || product?.supplier || "";
 
     setCurrentReturnItem({
-      productId: product.id,
-      sku: product.sku,
+      productId,
+      sku,
       quantity: "",
-      returnType: "Exchange",
-      unit: product.unit_of_measure,
-      price: product.selling_price,
-      supplier: product.supplier || "",
-    });
+      returnType: "Good",
+      unit,
+      price: rate,
+      supplier,
+      invoiceNo: invoiceNo || purchased?.invoiceNo || "",
+    } as any);
 
     setReturnProductOpen(false);
     setTimeout(() => returnQtyInputRef.current?.focus({ preventScroll: true }), 100);
@@ -406,19 +525,27 @@ export default function CreateOrderPage() {
     }
 
     const product = products.find((p) => p.id === currentReturnItem.productId);
-    if (!product) return;
+    const purchased = customerPurchasedProducts.find(
+      (p) => p.productId === currentReturnItem.productId
+    );
+    const productName =
+      (currentReturnItem as any).name ||
+      purchased?.productName ||
+      product?.name ||
+      "Return Product";
 
     const newReturn: ReturnItem = {
       id: editingReturnId || Date.now().toString(),
       productId: currentReturnItem.productId,
-      sku: product.sku,
-      productName: product.name,
-      unit: product.unit_of_measure,
+      sku: currentReturnItem.sku,
+      productName,
+      unit: currentReturnItem.unit,
       quantity: qty,
       returnType: currentReturnItem.returnType,
       price: currentReturnItem.price,
       totalValue: currentReturnItem.price * qty,
-      supplier: product.supplier,
+      supplier: currentReturnItem.supplier,
+      invoiceNo: (currentReturnItem as any).invoiceNo || undefined,
     };
 
     if (editingReturnId) {
@@ -435,7 +562,7 @@ export default function CreateOrderPage() {
       productId: "",
       sku: "",
       quantity: "",
-      returnType: "Exchange",
+      returnType: "Good",
       unit: "",
       price: 0,
       supplier: "",
@@ -870,12 +997,16 @@ export default function CreateOrderPage() {
       paymentStatus: "Unpaid",
       paidAmount: 0,
       items,
-      returnItems: returnItems.map((ri) => ({
-        productId: ri.productId,
-        quantity: ri.quantity,
-        returnType: ri.returnType,
-        reason: "Returned during invoice creation",
-      })),
+      returnItems: returnItems.map((ri: any) => {
+        const invTag = ri.invoiceNo ? `[INV:${ri.invoiceNo}]` : "";
+        const priceTag = `[PRICE:${ri.price}]`;
+        return {
+          productId: ri.productId,
+          quantity: ri.quantity,
+          returnType: ri.returnType,
+          reason: `${invTag} ${priceTag} Returned during invoice creation`.trim(),
+        };
+      }),
       subTotal: subtotal,
       extraDiscountPercent: extraDiscPercVal,
       extraDiscountAmount: extraDiscountAmount,
@@ -1797,9 +1928,163 @@ export default function CreateOrderPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="p-4 sm:p-6 space-y-4">
-              {/* Return Product Row */}
+              {/* 1. Bill / Invoice Selector (Optional Filter - Directly BEFORE Product) */}
+              <div className="space-y-1.5 p-3 rounded-lg bg-orange-50/40 border border-orange-100">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs sm:text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                    <span>1. Select Bill / Invoice</span>
+                    <Badge variant="outline" className="text-[10px] bg-white text-orange-700 border-orange-300 font-medium">
+                      Optional Filter
+                    </Badge>
+                  </Label>
+                  {selectedBillFilter !== "all" && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedBillFilter("all")}
+                      className="text-xs text-orange-600 hover:text-orange-800 hover:underline font-semibold"
+                    >
+                      Reset to Show All Bills
+                    </button>
+                  )}
+                </div>
+                <Popover open={billSelectorOpen} onOpenChange={setBillSelectorOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={billSelectorOpen}
+                      className="w-full justify-between bg-white text-left font-normal h-10 text-xs sm:text-sm border-orange-200 hover:bg-orange-50/40"
+                      disabled={!customerId || customerPurchasedProducts.length === 0}
+                    >
+                      <span className="truncate">
+                        {selectedBillFilter === "all" || !selectedBillFilter ? (
+                          `All Bills (Show all ${customerPurchasedProducts.length} items purchased by customer)`
+                        ) : (
+                          (() => {
+                            const b = customerBillsList.find((item: any) => item.invoiceNo === selectedBillFilter);
+                            if (!b) return `Bill: ${selectedBillFilter}`;
+                            return `Bill: ${b.invoiceNo} ${b.date ? `(${b.date})` : ""} • ${b.invoiceTotal > 0 ? `LKR ${b.invoiceTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} • ` : ""}${b.itemCount} item(s)`;
+                          })()
+                        )}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50 text-orange-500" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className="w-[var(--radix-popover-trigger-width)] min-w-[340px] p-0"
+                    align="start"
+                  >
+                    <Command>
+                      <CommandInput placeholder="Search bill # (e.g. 5212), date, or amount..." />
+                      <CommandList>
+                        <CommandEmpty>No matching bill found.</CommandEmpty>
+                        <CommandGroup className="max-h-64 overflow-y-auto">
+                          {/* Option to show all bills */}
+                          <CommandItem
+                            value="all show all bills all items"
+                            onSelect={() => {
+                              setSelectedBillFilter("all");
+                              setBillSelectorOpen(false);
+                            }}
+                            className="cursor-pointer py-2 text-xs sm:text-sm font-semibold text-orange-950"
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4 shrink-0 text-orange-600",
+                                selectedBillFilter === "all" ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            <div className="flex-1 truncate">
+                              <span>All Bills (Show all {customerPurchasedProducts.length} items)</span>
+                            </div>
+                          </CommandItem>
+
+                          {/* List of bills */}
+                          {customerBillsList.map((b: any) => (
+                            <CommandItem
+                              key={b.invoiceNo}
+                              value={`${b.invoiceNo} ${b.date || ""} ${b.invoiceTotal || ""}`}
+                              onSelect={() => {
+                                const val = b.invoiceNo;
+                                setSelectedBillFilter(val);
+                                if (currentReturnItem.productId) {
+                                  const inBill = customerPurchasedProducts.some(
+                                    (p: any) => p.invoiceNo === val && p.productId === currentReturnItem.productId
+                                  );
+                                  if (!inBill) {
+                                    setCurrentReturnItem({
+                                      productId: "",
+                                      sku: "",
+                                      quantity: "",
+                                      returnType: "Good",
+                                      unit: "",
+                                      price: 0,
+                                      supplier: "",
+                                    });
+                                  }
+                                }
+                                setBillSelectorOpen(false);
+                              }}
+                              className="cursor-pointer py-2 text-xs sm:text-sm"
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4 shrink-0 text-orange-600",
+                                  selectedBillFilter === b.invoiceNo ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              <div className="flex flex-col flex-1 truncate">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-semibold text-slate-900 font-mono">
+                                    Bill: {b.invoiceNo}
+                                  </span>
+                                  {b.invoiceTotal > 0 && (
+                                    <span className="text-xs font-mono font-bold text-emerald-700 ml-2">
+                                      LKR {b.invoiceTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 text-[10px] sm:text-xs text-muted-foreground mt-0.5">
+                                  {b.date && (
+                                    <>
+                                      <span>{b.date}</span>
+                                      <span>&bull;</span>
+                                    </>
+                                  )}
+                                  <span>{b.itemCount} item{b.itemCount !== 1 ? "s" : ""} available to return</span>
+                                </div>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                <p className="text-[11px] text-muted-foreground">
+                  If you select a bill, only items from that bill are shown below. If you don&apos;t select a bill, you can pick any item from all past purchases.
+                </p>
+              </div>
+
+              {/* 2. Return Product Row (Directly after Bill Selector) */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-800">Return Product</Label>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs sm:text-sm font-bold text-slate-800">
+                    2. Return Product (From Customer Purchase History) *
+                  </Label>
+                  {selectedBillFilter !== "all" && (
+                    <Badge className="bg-blue-50 text-blue-700 border border-blue-200 text-[11px] font-mono">
+                      Filtered: Bill {selectedBillFilter}
+                      {(() => {
+                        const matchedBill = customerBillsList.find((b: any) => b.invoiceNo === selectedBillFilter);
+                        return matchedBill && matchedBill.invoiceTotal > 0
+                          ? ` (LKR ${matchedBill.invoiceTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`
+                          : "";
+                      })()}
+                      {" "}&bull; {availablePurchasedProducts.length} item{availablePurchasedProducts.length !== 1 ? "s" : ""}
+                    </Badge>
+                  )}
+                </div>
                 <Popover open={returnProductOpen} onOpenChange={setReturnProductOpen}>
                   <PopoverTrigger asChild>
                     <Button
@@ -1807,47 +2092,90 @@ export default function CreateOrderPage() {
                       role="combobox"
                       aria-expanded={returnProductOpen}
                       className="w-full justify-between bg-white text-left font-normal h-10 text-sm border-orange-200/80 hover:bg-orange-50/40"
+                      disabled={!customerId || customerPurchasedProducts.length === 0}
                     >
                       <span className="truncate">
-                        {currentReturnItem.productId
-                          ? products.find((p) => p.id === currentReturnItem.productId)?.name
-                          : "Select Product to Return"}
+                        {currentReturnItem.productId ? (
+                          <>
+                            {customerPurchasedProducts.find((p) => p.productId === currentReturnItem.productId)?.productName ||
+                              products.find((p) => p.id === currentReturnItem.productId)?.name}
+                            {(currentReturnItem as any).invoiceNo && (
+                              <span className="ml-2 font-mono text-xs text-blue-600 font-bold">
+                                [Bill: {(currentReturnItem as any).invoiceNo}]
+                              </span>
+                            )}
+                          </>
+                        ) : selectedBillFilter !== "all" ? (
+                          `Select Item from Bill ${selectedBillFilter}`
+                        ) : (
+                          "Select Product Previously Sold to Customer"
+                        )}
                       </span>
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50 text-orange-500" />
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent
-                    className="w-[var(--radix-popover-trigger-width)] p-0"
+                    className="w-[var(--radix-popover-trigger-width)] min-w-[340px] p-0"
                     align="start"
                   >
                     <Command>
-                      <CommandInput placeholder="Search return product..." />
+                      <CommandInput placeholder="Search customer's purchased products or bill #..." />
                       <CommandList>
-                        <CommandEmpty>No product found.</CommandEmpty>
-                        <CommandGroup>
-                          {products.map((product) => (
-                            <CommandItem
-                              key={product.id}
-                              value={`${product.name} ${product.sku}`}
-                              onSelect={() => handleReturnProductSelect(product.id)}
-                            >
-                              <Check
-                                className={cn(
-                                  "mr-2 h-4 w-4 shrink-0 text-orange-600",
-                                  currentReturnItem.productId === product.id
-                                    ? "opacity-100"
-                                    : "opacity-0"
-                                )}
-                              />
-                              <div className="flex flex-col">
-                                <span className="font-medium text-xs sm:text-sm text-slate-900">{product.name}</span>
-                                <span className="text-[10px] sm:text-xs text-muted-foreground font-mono">
-                                  {product.sku} · Price: LKR {product.selling_price.toLocaleString()}
-                                </span>
-                              </div>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
+                        {!customerId ? (
+                          <div className="p-3 text-xs text-amber-700 bg-amber-50">
+                            Please select a customer first. Only products previously purchased by the selected customer can be returned.
+                          </div>
+                        ) : loadingPurchasedProducts ? (
+                          <div className="p-3 text-xs text-gray-500 text-center">
+                            Loading customer purchase history...
+                          </div>
+                        ) : availablePurchasedProducts.length === 0 ? (
+                          <CommandEmpty>No purchase history found for this selection.</CommandEmpty>
+                        ) : (
+                          <CommandGroup className="max-h-72 overflow-y-auto">
+                            {availablePurchasedProducts.map((p: any, idx: number) => (
+                              <CommandItem
+                                key={`${p.productId}_${p.invoiceNo}_${idx}`}
+                                value={`${p.productName} ${p.sku} ${p.invoiceNo}`}
+                                onSelect={() => handleReturnProductSelect(p.productId, p.invoiceNo, p.unitPrice, p)}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4 shrink-0 text-orange-600",
+                                    currentReturnItem.productId === p.productId &&
+                                      (currentReturnItem as any).invoiceNo === p.invoiceNo
+                                      ? "opacity-100"
+                                      : "opacity-0"
+                                  )}
+                                />
+                                <div className="flex flex-col flex-1 truncate">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-semibold text-xs sm:text-sm text-slate-900 truncate">
+                                      {p.productName}
+                                    </span>
+                                    <span className="text-xs font-mono font-bold text-emerald-700 ml-2">
+                                      LKR {p.unitPrice?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-[10px] sm:text-xs text-muted-foreground mt-0.5">
+                                    <span className="font-mono">{p.sku}</span>
+                                    <span>&bull;</span>
+                                    <span>Purchased: {p.purchasedQuantity} {p.unitOfMeasure || "units"}</span>
+                                    <span className="text-blue-600 font-semibold font-mono">Bill: {p.invoiceNo}</span>
+                                    {p.invoiceTotal && p.invoiceTotal > 0 ? (
+                                      <>
+                                        <span>&bull;</span>
+                                        <span className="text-emerald-700 font-semibold font-mono">
+                                          Bill Total: LKR {p.invoiceTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </span>
+                                      </>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        )}
                       </CommandList>
                     </Command>
                   </PopoverContent>
@@ -1870,8 +2198,8 @@ export default function CreateOrderPage() {
                       <SelectValue placeholder="Return Type" />
                     </SelectTrigger>
                     <SelectContent>
-                      {/* <SelectItem value="Good">Good Return</SelectItem> */}
-                      {/* <SelectItem value="Damage">Damage Return</SelectItem> */}
+                      <SelectItem value="Good">Good Return</SelectItem>
+                      <SelectItem value="Damage">Damage Return</SelectItem>
                       <SelectItem value="Exchange">Exchange Return</SelectItem>
                     </SelectContent>
                   </Select>

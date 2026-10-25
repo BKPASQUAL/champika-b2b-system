@@ -505,6 +505,11 @@ export default function BusinessAnalyticsPage() {
                     <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
                       <div className="text-sm md:text-xl font-bold text-blue-700">LKR {fmt(current.totalRevenue)}</div>
                       <p className="text-[10px] text-muted-foreground mt-0.5">{fmt(current.totalUnits)} units sold</p>
+                      {(current as any).totalReturns > 0 && (
+                        <p className="text-[10px] text-red-600 mt-0.5">
+                          Returns −LKR {fmt((current as any).totalReturns)} ({(current as any).returnCount})
+                        </p>
+                      )}
                     </CardContent>
                   </Card>
 

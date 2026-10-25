@@ -67,6 +67,7 @@ export interface GoodsSettlementItem {
   invoiceNo?: string;
   manualInvoiceNo?: string;
   returnType: "Good" | "Damage";
+  returnNumber?: string;
   locationId: string;
   locationName: string;
   quantity: number;

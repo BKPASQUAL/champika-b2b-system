@@ -14,6 +14,8 @@ const goodsItemSchema = z.object({
   sku: z.string().optional().nullable(),
   invoiceNo: z.string().optional().nullable(),
   manualInvoiceNo: z.string().optional().nullable(),
+  // Set when the item is an approved return-note credit (stock already handled)
+  returnNumber: z.string().optional().nullable(),
   returnType: z.enum(["Good", "Damage"]).optional().nullable(),
   locationId: z.string().optional().nullable(),
   externalItemName: z.string().optional().nullable(),
@@ -603,7 +605,9 @@ export async function POST(request: NextRequest) {
       // Process inventory return for own products (only on primary payment in multi-invoice settlement)
       if (val.goodsItems && Array.isArray(val.goodsItems) && !val.isSecondaryGoodsSettlement) {
         for (const item of val.goodsItems) {
-          if (item.type === "own_product" && item.productId) {
+          // Items from an approved return note were already put back into stock when the
+          // note was approved — don't add stock or create a second return record for them.
+          if (item.type === "own_product" && item.productId && !item.returnNumber) {
             try {
               const retNumber = `RET-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 100)}`;
               const targetLocationId = item.locationId || "0b68fd7b-6a40-496f-9279-0a003c26b211";

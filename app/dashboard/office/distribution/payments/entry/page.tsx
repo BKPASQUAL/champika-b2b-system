@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Check,
   ChevronsUpDown,
@@ -17,6 +17,9 @@ import {
   Clock,
   Zap,
   SlidersHorizontal,
+  Undo2,
+  Plus,
+  Eye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +29,7 @@ import {
   Card,
   CardContent,
   CardHeader,
+  CardTitle,
   CardDescription,
 } from "@/components/ui/card";
 import {
@@ -166,6 +170,8 @@ export default function DistributionPaymentEntryPage() {
   const [historyModalInvoice, setHistoryModalInvoice] = useState<PendingInvoice | null>(null);
   const [statementInvoices, setStatementInvoices] = useState<StatementInvoice[]>([]);
   const [isCustomStatementOpen, setIsCustomStatementOpen] = useState(false);
+  const [availableReturnCredits, setAvailableReturnCredits] = useState<any[]>([]);
+  const [viewingReturnModal, setViewingReturnModal] = useState<any | null>(null);
 
   useEffect(() => {
     const user = getUserBusinessContext();
@@ -268,7 +274,11 @@ export default function DistributionPaymentEntryPage() {
 
         // 1. All delivered customer invoices for the full Customer Statement Report
         const allCustomerInvoices: StatementInvoice[] = invoicesData
-          .filter((inv: any) => inv.customerId === customerId && inv.orderStatus === "Delivered")
+          .filter(
+            (inv: any) =>
+              inv.customerId === customerId &&
+              (inv.orderStatus === "Delivered" || inv.orderStatus === "Completed")
+          )
           .map((inv: any) => {
             const invKey = inv.orderId || inv.id;
             const history = paymentMap[invKey] || paymentMap[inv.id] || paymentMap[inv.invoiceNo] || [];
@@ -307,10 +317,20 @@ export default function DistributionPaymentEntryPage() {
   useEffect(() => {
     if (selectedCustomerId) {
       fetchPendingInvoices(selectedCustomerId);
+      fetch(
+        `/api/inventory/returns?customerId=${selectedCustomerId}&status=Approved&unsettled=true&returnType=Good&dispatchedOnly=true&all=true`
+      )
+        .then((r) => (r.ok ? r.json() : { data: [] }))
+        .then((d) => {
+          const list = Array.isArray(d.data) ? d.data : [];
+          setAvailableReturnCredits(list.filter((r: any) => r.return_type === "Good"));
+        })
+        .catch(() => setAvailableReturnCredits([]));
     } else {
       setPendingInvoices([]);
       setStatementInvoices([]);
       setSettlements({});
+      setAvailableReturnCredits([]);
     }
   }, [selectedCustomerId, fetchPendingInvoices]);
   useEffect(() => { setSelectedAccountId(""); }, [paymentMethod]);
@@ -346,6 +366,131 @@ export default function DistributionPaymentEntryPage() {
     setReceiptNumber(""); setReceiptBookId(undefined);
     setGoodsItems([]);
     setPendingInvoices([]); setSettlements({});
+    setAvailableReturnCredits([]);
+  };
+
+  const getReturnItemPricing = (ret: any) => {
+    let invoiceNo = "-";
+    let unitPrice = 0;
+    if (ret.reason) {
+      const invMatch = ret.reason.match(/\[INV:([^\]]+)\]/);
+      if (invMatch) invoiceNo = invMatch[1];
+      const priceMatch = ret.reason.match(/\[PRICE:([\d.]+)\]/);
+      if (priceMatch) unitPrice = parseFloat(priceMatch[1]) || 0;
+    }
+    const rate = unitPrice || ret.products?.selling_price || 0;
+    const lineTotal = Math.round(Number(ret.quantity || 0) * rate * 100) / 100;
+    return { invoiceNo, unitPrice: rate, lineTotal };
+  };
+
+  // A payment row that came from a Good Return deduction
+  const isReturnPayment = (p: InvoicePaymentRecord) =>
+    !!(p.goodsSummary?.includes("Return Note") || p.goodsSummary?.includes("Good Return") || p.chequeNo?.includes("RET-"));
+
+  // Total already deducted from an invoice by earlier return settlements
+  const getReturnDeductedAmount = (inv: { payments?: InvoicePaymentRecord[] }) =>
+    (inv.payments || []).filter(isReturnPayment).reduce((sum, p) => sum + Number(p.amount || 0), 0);
+
+  // Return notes already used in a past payment — they must only be deducted once
+  const deductedReturnNumbers = useMemo(() => {
+    const set = new Set<string>();
+    statementInvoices.forEach((inv) =>
+      (inv.payments || []).forEach((p) => {
+        const text = `${p.goodsSummary || ""} ${p.chequeNo || ""} ${p.notes || ""}`;
+        for (const m of text.matchAll(/RET-[\w-]+/g)) set.add(m[0]);
+      })
+    );
+    return set;
+  }, [statementInvoices]);
+
+  const visibleReturnCredits = useMemo(
+    () => availableReturnCredits.filter((r) => !deductedReturnNumbers.has(r.return_number)),
+    [availableReturnCredits, deductedReturnNumbers]
+  );
+
+  const handleApplyReturnCredit = (ret: any) => {
+    const { invoiceNo, unitPrice: rate, lineTotal } = getReturnItemPricing(ret);
+
+    const newGoodsItem: GoodsSettlementItem = {
+      id: `return_${ret.id}`,
+      type: "own_product",
+      isCustomerPurchased: true,
+      productId: ret.product_id,
+      productName: ret.products?.name || "Return Item",
+      sku: ret.products?.sku || "",
+      invoiceNo: invoiceNo !== "-" ? invoiceNo : undefined,
+      returnType: "Good",
+      returnNumber: ret.return_number,
+      locationId: ret.location_id || "0b68fd7b-6a40-496f-9279-0a003c26b211",
+      locationName: ret.locations?.name || "Main Warehouse",
+      quantity: Number(ret.quantity),
+      unitPrice: rate,
+      totalValue: lineTotal,
+    };
+
+    setPaymentMethod("goods");
+    setGoodsItems((prev) => {
+      if (prev.some((it) => it.id === `return_${ret.id}`)) return prev;
+      return [...prev, newGoodsItem];
+    });
+
+    // Automatically allocate this Good Return credit to its dedicated bill first!
+    setTimeout(() => {
+      setSettlements((prev) => {
+        let rem = lineTotal;
+        const next: Record<string, InvoiceSettlement> = { ...prev };
+
+        // 1. PRIORITY: If return specifies a Bill Ref (e.g. CHD-0021), allocate to THAT bill first!
+        if (invoiceNo && invoiceNo !== "-") {
+          const targetInv = pendingInvoices.find(
+            (pi) => pi.invoiceNo === invoiceNo || pi.id === invoiceNo
+          );
+          if (targetInv) {
+            const currentAlloc = next[targetInv.id]?.selected ? next[targetInv.id].settleAmount : 0;
+            const needed = targetInv.balance - currentAlloc;
+            if (needed > 0) {
+              const add = Math.min(needed, rem);
+              next[targetInv.id] = {
+                invoiceId: targetInv.id,
+                selected: true,
+                settleAmount: currentAlloc + add,
+              };
+              rem -= add;
+            }
+          }
+        }
+
+        // 2. Only if remaining credit exists, allocate remainder to other invoices (oldest first)
+        if (rem > 0) {
+          const otherInvoices = [...pendingInvoices]
+            .filter((pi) => pi.invoiceNo !== invoiceNo && pi.id !== invoiceNo)
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+          for (const inv of otherInvoices) {
+            if (rem <= 0) break;
+            const currentAlloc = next[inv.id]?.selected ? next[inv.id].settleAmount : 0;
+            const needed = inv.balance - currentAlloc;
+            if (needed > 0) {
+              const add = Math.min(needed, rem);
+              next[inv.id] = {
+                invoiceId: inv.id,
+                selected: true,
+                settleAmount: currentAlloc + add,
+              };
+              rem -= add;
+            }
+          }
+        }
+
+        return next;
+      });
+    }, 50);
+
+    toast.success(
+      `Applied Good Return ${ret.return_number} (LKR ${lineTotal.toLocaleString()})${
+        invoiceNo !== "-" ? ` directly to Bill ${invoiceNo}` : ""
+      }!`
+    );
   };
 
   const isReceiptOptional = paymentMethod === "bank" || paymentMethod === "goods" || paidOnCustomerBill;
@@ -355,6 +500,7 @@ export default function DistributionPaymentEntryPage() {
     return goodsItems
       .map((item) => {
         const parts = [
+          item.returnNumber ? `Return Note: ${item.returnNumber}` : null,
           item.invoiceNo ? `Bill: ${item.invoiceNo}` : null,
           item.manualInvoiceNo ? `Manual: ${item.manualInvoiceNo}` : null,
           item.isCustomerPurchased !== false ? "CustomerBilled" : "OtherAgencyStock",
@@ -446,7 +592,35 @@ export default function DistributionPaymentEntryPage() {
           failCount++;
         }
       }
-      if (successCount > 0) { toast.success(`Payment recorded successfully!`); resetForm(); invalidatePaymentCaches(); }
+      if (successCount > 0) {
+        // Tag any applied return credits as settled with the settled invoice reference
+        for (const gItem of goodsItems) {
+          if (gItem.id.startsWith("return_")) {
+            const retId = gItem.id.replace("return_", "");
+            const dedicatedBill = gItem.invoiceNo;
+            const settledInvoices = Object.values(settlements)
+              .filter((s) => s.selected && s.settleAmount > 0)
+              .map((s) => {
+                const inv = pendingInvoices.find((pi) => pi.id === s.invoiceId);
+                return inv?.invoiceNo || s.invoiceId;
+              })
+              .join(",");
+
+            const invoiceTag = dedicatedBill || settledInvoices;
+
+            await fetch(`/api/inventory/returns/${retId}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                reason_tag: `[SETTLED_IN_PAYMENT:true] [SETTLED_INVOICE:${invoiceTag}]`,
+              }),
+            }).catch(() => {});
+          }
+        }
+        toast.success(`Payment recorded successfully!`);
+        resetForm();
+        invalidatePaymentCaches();
+      }
       if (failCount > 0) toast.error(`${failCount} payment(s) failed.`);
     } catch { toast.error("An unexpected error occurred"); } finally { setIsSubmitting(false); }
   };
@@ -649,6 +823,115 @@ export default function DistributionPaymentEntryPage() {
         </CardContent>
       </Card>
 
+      {/* Available Return Credits Card (Good Returns Only) */}
+      {selectedCustomerId && visibleReturnCredits.length > 0 && (() => {
+        const totalCredit = visibleReturnCredits.reduce(
+          (sum, r) => sum + getReturnItemPricing(r).lineTotal,
+          0
+        );
+
+        return (
+          <Card className="border-emerald-300 bg-emerald-50/30 shadow-xs">
+            <CardHeader className="py-3 px-4 border-b border-emerald-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div>
+                <CardTitle className="text-sm font-bold text-emerald-950 flex items-center gap-1.5">
+                  <Undo2 className="h-4 w-4 text-emerald-600" />
+                  Approved Customer Good Return Credits ({visibleReturnCredits.length})
+                </CardTitle>
+                <CardDescription className="text-xs text-emerald-800">
+                  This customer has approved Good Return notes that can reduce and settle their unpaid invoices.
+                </CardDescription>
+              </div>
+              <Badge className="w-fit bg-emerald-100 text-emerald-800 border-emerald-300 font-mono text-xs font-bold px-2.5 py-1">
+                Total Available: LKR {totalCredit.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </Badge>
+            </CardHeader>
+            <CardContent className="p-3 space-y-2">
+              {visibleReturnCredits.map((ret) => {
+                const { invoiceNo, unitPrice: rate, lineTotal } = getReturnItemPricing(ret);
+                const isApplied = goodsItems.some((gi) => gi.id === `return_${ret.id}`);
+
+                return (
+                  <div
+                    key={ret.id}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg border border-emerald-200/80 bg-white gap-3 shadow-xs"
+                  >
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono font-bold text-xs text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded">
+                          {ret.return_number}
+                        </span>
+                        {invoiceNo !== "-" && (
+                          <span className="text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
+                            Bill Ref: {invoiceNo}
+                          </span>
+                        )}
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-300 font-semibold"
+                        >
+                          Good Return
+                        </Badge>
+                        {ret.created_at && (
+                          <span className="text-[11px] text-muted-foreground">
+                            {new Date(ret.created_at).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-800 font-medium truncate">
+                        {ret.products?.name} &bull;{" "}
+                        <span className="font-mono text-muted-foreground">{ret.products?.sku}</span>
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {ret.quantity} {ret.products?.unit_of_measure || "units"} @ LKR {rate.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-center">
+                      <span className="font-bold font-mono text-sm text-emerald-700">
+                        LKR {lineTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-8 text-xs font-semibold px-2.5 text-slate-700 border-slate-300 hover:bg-slate-100"
+                        onClick={() => setViewingReturnModal(ret)}
+                        title="View Return Note Details"
+                      >
+                        <Eye className="w-3.5 h-3.5 mr-1 text-slate-600" /> View Note
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={isApplied ? "outline" : "default"}
+                        className={cn(
+                          "h-8 text-xs font-semibold px-3",
+                          isApplied
+                            ? "border-emerald-300 text-emerald-700 bg-emerald-50 cursor-default"
+                            : "bg-emerald-600 hover:bg-emerald-700 text-white"
+                        )}
+                        onClick={() => handleApplyReturnCredit(ret)}
+                        disabled={isApplied}
+                      >
+                        {isApplied ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 mr-1 text-emerald-600" /> Applied
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="w-3.5 h-3.5 mr-1" /> Apply to Settle
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
+        );
+      })()}
+
       {/* Step 2 */}
       <Card>
         <CardHeader className="pb-3">
@@ -780,7 +1063,53 @@ export default function DistributionPaymentEntryPage() {
                             />
                           </TableCell>
                           <TableCell className="font-medium font-mono text-sm">
-                            {inv.invoiceNo}
+                            <div>{inv.invoiceNo}</div>
+                            {/* Return Deducted badge for already settled return */}
+                            {getReturnDeductedAmount(inv) > 0 && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1 rounded mt-0.5">
+                                <Undo2 className="w-2.5 h-2.5" /> Return Deducted ({formatCurrency(getReturnDeductedAmount(inv))})
+                              </span>
+                            )}
+                            {/* Return Deducted badge for currently applied return in this session */}
+                            {goodsItems.some((g) => g.invoiceNo === inv.invoiceNo) && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-1 rounded mt-0.5">
+                                <Undo2 className="w-2.5 h-2.5" /> Return Deducted ({formatCurrency(
+                                  goodsItems
+                                    .filter((g) => g.invoiceNo === inv.invoiceNo)
+                                    .reduce((sum, g) => sum + (g.totalValue || 0), 0)
+                                )})
+                              </span>
+                            )}
+                            {/* Button to deduct return if matching available return credit exists */}
+                            {(() => {
+                              const matchingReturns = visibleReturnCredits.filter((ret) => {
+                                const p = getReturnItemPricing(ret);
+                                return p.invoiceNo === inv.invoiceNo;
+                              });
+                              if (matchingReturns.length === 0) return null;
+                              const isAlreadyApplied = matchingReturns.every((r) =>
+                                goodsItems.some((g) => g.id === `return_${r.id}`)
+                              );
+                              if (isAlreadyApplied) return null;
+
+                              const totalAvail = matchingReturns.reduce(
+                                (sum, r) => sum + getReturnItemPricing(r).lineTotal,
+                                0
+                              );
+
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    matchingReturns.forEach((r) => handleApplyReturnCredit(r));
+                                  }}
+                                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded mt-0.5 transition-colors cursor-pointer"
+                                  title={`Click to deduct return credit from ${inv.invoiceNo}`}
+                                >
+                                  <Undo2 className="w-2.5 h-2.5" /> Deduct Return ({formatCurrency(totalAvail)})
+                                </button>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                             {inv.date ? new Date(inv.date).toLocaleDateString() : "—"}
@@ -800,7 +1129,14 @@ export default function DistributionPaymentEntryPage() {
                                 <Check className="w-3.5 h-3.5 text-emerald-600" /> PAID
                               </Badge>
                             ) : (
-                              <span className="text-orange-600">{formatCurrency(inv.balance)}</span>
+                              <div>
+                                <span className="text-orange-600">{formatCurrency(inv.balance)}</span>
+                                {isSelected && (s?.settleAmount || 0) > 0 && (
+                                  <div className="text-[11px] text-muted-foreground font-normal font-mono">
+                                    Final: {formatCurrency(Math.max(0, inv.balance - (s?.settleAmount || 0)))}
+                                  </div>
+                                )}
+                              </div>
                             )}
                           </TableCell>
                           <TableCell className="text-center">
@@ -865,10 +1201,45 @@ export default function DistributionPaymentEntryPage() {
                             className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
                           />
                           <div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-semibold font-mono text-sm">{inv.invoiceNo}</span>
                               {renderAgeBadge(ageDays)}
+                              {getReturnDeductedAmount(inv) > 0 && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1 rounded">
+                                  <Undo2 className="w-2.5 h-2.5" /> Return Deducted ({formatCurrency(getReturnDeductedAmount(inv))})
+                                </span>
+                              )}
+                              {goodsItems.some((g) => g.invoiceNo === inv.invoiceNo) && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-1 rounded">
+                                  <Undo2 className="w-2.5 h-2.5" /> Return Deducted
+                                </span>
+                              )}
                             </div>
+                            {/* Matching available return button on mobile */}
+                            {(() => {
+                              const matchingReturns = visibleReturnCredits.filter((ret) => {
+                                const p = getReturnItemPricing(ret);
+                                return p.invoiceNo === inv.invoiceNo;
+                              });
+                              if (matchingReturns.length === 0) return null;
+                              const isAlreadyApplied = matchingReturns.every((r) =>
+                                goodsItems.some((g) => g.id === `return_${r.id}`)
+                              );
+                              if (isAlreadyApplied) return null;
+                              const totalAvail = matchingReturns.reduce(
+                                (sum, r) => sum + getReturnItemPricing(r).lineTotal,
+                                0
+                              );
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => matchingReturns.forEach((r) => handleApplyReturnCredit(r))}
+                                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded mt-1 transition-colors cursor-pointer"
+                                >
+                                  <Undo2 className="w-2.5 h-2.5" /> Deduct Return ({formatCurrency(totalAvail)})
+                                </button>
+                              );
+                            })()}
                             <p className="text-xs text-muted-foreground">
                               {inv.date ? new Date(inv.date).toLocaleDateString() : "—"}
                             </p>
@@ -1014,9 +1385,16 @@ export default function DistributionPaymentEntryPage() {
                             <p className="text-muted-foreground text-[11px] mt-0.5 flex flex-wrap items-center gap-1">
                               Method:{" "}
                               {p.method === "goods" ? (
-                                <span className="font-semibold text-amber-800 bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded text-[10px]">
-                                  Goods Settlement
-                                </span>
+                                p.goodsSummary?.includes("Return Note") || p.goodsSummary?.includes("Good Return") || p.chequeNo?.includes("RET-") ? (
+                                  <span className="font-semibold text-emerald-800 bg-emerald-100 border border-emerald-300 px-1.5 py-0.5 rounded text-[10px] inline-flex items-center gap-1">
+                                    <Undo2 className="w-3 h-3 text-emerald-700" />
+                                    Good Return Credit
+                                  </span>
+                                ) : (
+                                  <span className="font-semibold text-amber-800 bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded text-[10px]">
+                                    Goods Settlement
+                                  </span>
+                                )
                               ) : (
                                 <span className="capitalize font-semibold text-slate-700">{p.method}</span>
                               )}
@@ -1025,7 +1403,7 @@ export default function DistributionPaymentEntryPage() {
                                   Receipt #{p.receiptNumber || p.receipt_number}
                                 </span>
                               )}
-                              {p.chequeNo && ` (Cheque #${p.chequeNo})`}
+                              {p.chequeNo && !p.chequeNo.startsWith("Goods:") && ` (Cheque #${p.chequeNo})`}
                               {p.chequeStatus && (
                                 <span className={cn("ml-1 font-semibold", isReturned ? "text-red-700 bg-red-100 px-1.5 py-0.5 rounded border border-red-200" : "text-slate-600")}>
                                   • Status: {p.chequeStatus}{isReturned ? " [CHEQUE RETURNED]" : ""}
@@ -1033,8 +1411,15 @@ export default function DistributionPaymentEntryPage() {
                               )}
                             </p>
                             {p.goodsSummary && (
-                              <div className="mt-1 text-[11px] text-amber-900 bg-amber-50/80 border border-amber-200 rounded px-2 py-1">
-                                <span className="font-semibold text-amber-800">Exchange Items: </span>
+                              <div className={cn(
+                                "mt-1.5 text-[11px] rounded px-2.5 py-1.5 border",
+                                p.goodsSummary?.includes("Return Note") || p.goodsSummary?.includes("Good Return")
+                                  ? "bg-emerald-50 text-emerald-950 border-emerald-200"
+                                  : "bg-amber-50 text-amber-900 border-amber-200"
+                              )}>
+                                <span className="font-bold">
+                                  {p.goodsSummary?.includes("Return Note") ? "Return Note Details: " : "Settlement Items: "}
+                                </span>
                                 {p.goodsSummary}
                               </div>
                             )}
@@ -1050,6 +1435,122 @@ export default function DistributionPaymentEntryPage() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── View Good Return Note Details Dialog Modal ── */}
+      <Dialog
+        open={!!viewingReturnModal}
+        onOpenChange={(open) => !open && setViewingReturnModal(null)}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <div className="flex items-center justify-between">
+              <DialogTitle className="flex items-center gap-2 text-emerald-950">
+                <Undo2 className="w-5 h-5 text-emerald-600" />
+                Good Return Note — {viewingReturnModal?.return_number}
+              </DialogTitle>
+              <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300">
+                Good Return
+              </Badge>
+            </div>
+            <DialogDescription>
+              Customer: <span className="font-semibold text-foreground">{selectedCustomer?.name}</span>
+            </DialogDescription>
+          </DialogHeader>
+
+          {viewingReturnModal && (() => {
+            const { invoiceNo, unitPrice, lineTotal } = getReturnItemPricing(viewingReturnModal);
+            const isApplied = goodsItems.some((gi) => gi.id === `return_${viewingReturnModal.id}`);
+
+            return (
+              <div className="space-y-4 pt-2">
+                <div className="grid grid-cols-2 gap-3 p-3 bg-emerald-50/50 border border-emerald-100 rounded-lg text-xs">
+                  <div>
+                    <span className="text-muted-foreground block text-[11px]">Return Date</span>
+                    <span className="font-semibold text-slate-800">
+                      {viewingReturnModal.return_date
+                        ? new Date(viewingReturnModal.return_date).toLocaleDateString()
+                        : viewingReturnModal.created_at
+                        ? new Date(viewingReturnModal.created_at).toLocaleDateString()
+                        : "—"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[11px]">Original Bill Reference</span>
+                    <span className="font-mono font-bold text-blue-700">
+                      {invoiceNo !== "-" ? invoiceNo : "General Purchase History"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[11px]">Returned Quantity</span>
+                    <span className="font-bold text-slate-900 text-sm">
+                      {viewingReturnModal.quantity} {viewingReturnModal.products?.unit_of_measure || "units"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[11px]">Total Return Credit</span>
+                    <span className="font-mono font-bold text-emerald-700 text-sm">
+                      LKR {lineTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-2 border rounded-lg p-3 text-xs bg-slate-50">
+                  <div className="flex justify-between items-baseline">
+                    <span className="font-semibold text-slate-800">Product:</span>
+                    <span className="font-bold text-slate-900 text-right">{viewingReturnModal.products?.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">SKU / Code:</span>
+                    <span className="font-mono">{viewingReturnModal.products?.sku || "—"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Unit Price:</span>
+                    <span className="font-mono">
+                      LKR {unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  {viewingReturnModal.profiles?.full_name && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Filed By:</span>
+                      <span className="font-medium text-slate-800">{viewingReturnModal.profiles.full_name}</span>
+                    </div>
+                  )}
+                  {viewingReturnModal.reason && (
+                    <div className="border-t pt-2 mt-2">
+                      <span className="text-muted-foreground block text-[11px]">Notes / Reason:</span>
+                      <p className="text-slate-700 mt-0.5 whitespace-pre-wrap">{viewingReturnModal.reason}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <Button variant="outline" onClick={() => setViewingReturnModal(null)}>
+                    Close
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      handleApplyReturnCredit(viewingReturnModal);
+                      setViewingReturnModal(null);
+                    }}
+                    disabled={isApplied}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+                  >
+                    {isApplied ? (
+                      <>
+                        <Check className="w-4 h-4" /> Already Applied
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4" /> Apply Credit to Settle Invoice
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 

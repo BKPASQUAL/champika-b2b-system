@@ -13,6 +13,8 @@ const goodsItemSchema = z.object({
   sku: z.string().optional().nullable(),
   invoiceNo: z.string().optional().nullable(),
   manualInvoiceNo: z.string().optional().nullable(),
+  // Set when the item is an approved return-note credit (stock already handled)
+  returnNumber: z.string().optional().nullable(),
   returnType: z.enum(["Good", "Damage"]).optional().nullable(),
   locationId: z.string().optional().nullable(),
   quantity: z.number().min(0.0001, "Quantity must be greater than 0"),
@@ -195,6 +197,9 @@ export async function GET(
           const billMatch = trimmed.match(/Bill:\s*([^,\)]+)/i);
           if (billMatch) invoiceNo = billMatch[1].trim();
 
+          // "Return Note: RET-..." marks an approved return-note credit
+          const returnNumber = trimmed.match(/Return Note:\s*([^,\)|]+)/i)?.[1]?.trim() || undefined;
+
           const returnType: "Good" | "Damage" = /Damage/i.test(trimmed) ? "Damage" : "Good";
 
           let cleanName = trimmed;
@@ -237,6 +242,7 @@ export async function GET(
             companyCode: matchedProd?.company_code || retProd?.company_code || "",
             invoiceNo: invoiceNo || undefined,
             manualInvoiceNo: manualRef || undefined,
+            returnNumber,
             returnType: returnType,
             locationId: matchedRet?.location_id || "0b68fd7b-6a40-496f-9279-0a003c26b211",
             locationName: retLoc?.name || "Main Warehouse",
@@ -447,7 +453,8 @@ export async function PATCH(
       // If new payment is still goods, insert the updated return records & apply new stock
       if (newMethod === "goods" && val.goodsItems && Array.isArray(val.goodsItems)) {
         for (const item of val.goodsItems) {
-          if (item.productId && item.quantity > 0) {
+          // Skip items from an approved return note — their stock was handled on approval
+          if (item.productId && item.quantity > 0 && !item.returnNumber) {
             const retNumber = `RET-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 100)}`;
             const targetLocId = item.locationId || "0b68fd7b-6a40-496f-9279-0a003c26b211";
             const itemRetType = item.returnType === "Damage" ? "Damage" : "Good";

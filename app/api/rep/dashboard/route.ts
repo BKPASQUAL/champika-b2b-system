@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { getRepReturns } from "@/lib/rep-returns";
 
 export const dynamic = "force-dynamic";
 
@@ -41,12 +42,18 @@ export async function GET(request: NextRequest) {
     const deliveredCount  = statusCounts["Delivered"]  || 0;
     const activeCount     = pendingCount + processingCount + checkingCount + loadingCount + inTransitCount;
 
-    // ── 3. Monthly sales (current calendar month) ─────────────────────────────
+    // ── 3. Monthly sales (current calendar month, minus approved returns) ───
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-    const monthlySales = allOrders
+    const rawSales = allOrders
       .filter((o) => o.created_at >= monthStart && o.status !== "Cancelled")
       .reduce((sum, o) => sum + (o.total_amount || 0), 0);
+
+    // Returns made this month reduce this month's sales (not the invoice's month)
+    const monthReturns = await getRepReturns(repId, monthStart);
+    const totalReturnsValue = Math.round(monthReturns.reduce((s, r) => s + r.value, 0) * 100) / 100;
+
+    const monthlySales = Math.max(0, Math.round((rawSales - totalReturnsValue) * 100) / 100);
 
     // ── 4. Due collections from invoices ──────────────────────────────────────
     let totalDue = 0;
@@ -70,9 +77,16 @@ export async function GET(request: NextRequest) {
       .eq("rep_id", repId)
       .eq("status", "Pending");
 
-    const pendingCommission = (commissions ?? []).reduce(
+    // Commission on items returned this month comes off pending commission
+    const monthlyReturnCommission =
+      Math.round(monthReturns.reduce((s, r) => s + r.commission, 0) * 100) / 100;
+    const grossPendingCommission = (commissions ?? []).reduce(
       (sum, c) => sum + (Number(c.total_commission_amount) || 0),
       0
+    );
+    const pendingCommission = Math.max(
+      0,
+      Math.round((grossPendingCommission - monthlyReturnCommission) * 100) / 100
     );
 
     // ── 6. Recent orders (last 8) ─────────────────────────────────────────────
@@ -92,6 +106,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       stats: {
         monthlySales,
+        grossMonthlySales: Math.round(rawSales * 100) / 100,
+        monthlyReturns: totalReturnsValue,
+        monthlyReturnCount: monthReturns.length,
+        monthlyReturnCommission,
         activeOrders: activeCount,
         pendingOrders: pendingCount,
         inTransitOrders: inTransitCount,

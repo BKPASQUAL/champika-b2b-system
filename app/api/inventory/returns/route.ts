@@ -94,7 +94,28 @@ export async function POST(req: Request) {
       }
     }
 
-    const return_number = `RET-${Date.now().toString().slice(-6)}`;
+    const return_number =
+      body.return_number || `RET-${Date.now().toString().slice(-6)}`;
+    const status = body.status || "Completed";
+
+    // Validate return_batch_id: Postgres column is UUID, so only assign if valid UUID, otherwise append to reason
+    const isValidUuid = (val: any) =>
+      typeof val === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val);
+
+    let return_batch_id: string | null = null;
+    if (body.return_batch_id) {
+      if (isValidUuid(body.return_batch_id)) {
+        return_batch_id = body.return_batch_id;
+      } else {
+        const batchTag = `[BATCH:${body.return_batch_id}]`;
+        if (!reason?.includes(batchTag)) {
+          reason = `${batchTag} ${reason || ""}`.trim();
+        }
+      }
+    }
+
+    const return_date = body.return_date || new Date().toISOString();
 
     // --- 2. Create Return Record ---
     const { data: returnRecord, error: returnError } = await supabaseAdmin
@@ -103,18 +124,25 @@ export async function POST(req: Request) {
         return_number,
         product_id,
         location_id,
-        business_id: business_id || null,
+        business_id: business_id || BUSINESS_IDS.CHAMPIKA_DISTRIBUTION,
         customer_id: customer_id || null,
         quantity: Number(quantity),
         return_type,
         reason: reason || null,
         returned_by: activeUserId,
-        status: "Completed",
+        status,
+        return_batch_id,
+        return_date,
       })
       .select()
       .single();
 
     if (returnError) throw returnError;
+
+    // If status is Pending (e.g. submitted by Rep awaiting office approval), do not alter warehouse stock or balances yet
+    if (status === "Pending") {
+      return NextResponse.json(returnRecord);
+    }
 
     // Trigger inter-branch bill recalculation if returned to Distribution or Retail
     if (
@@ -274,6 +302,13 @@ export async function POST(req: Request) {
             );
           }
 
+          // Mark that this return already reduced the invoice & commission,
+          // so rep sales reports don't deduct it a second time
+          await supabaseAdmin
+            .from("inventory_returns")
+            .update({ reason: `${returnRecord.reason || ""} [INVOICE_ADJUSTED]`.trim() })
+            .eq("id", returnRecord.id);
+
           await supabaseAdmin
             .from("invoices")
             .update({ total_amount: newGrandTotal })
@@ -325,33 +360,80 @@ export async function POST(req: Request) {
   }
 }
 
+// Statuses meaning the lorry has left with the return pickup (or it is finished)
+// (must match the order_status enum — "Dispatched"/"Completed" are not valid values)
+const DISPATCHED_STATUSES = ["In Transit", "Delivered"];
+
+// Keep only return notes whose pickup order has been dispatched / finalized.
+async function filterDispatchedReturns(rows: any[]): Promise<any[]> {
+  const numbers = rows.map((r) => r.return_number).filter(Boolean);
+  if (numbers.length === 0) return [];
+  const customerIds = [...new Set(rows.map((r) => r.customer_id).filter(Boolean))];
+
+  let q = supabaseAdmin
+    .from("orders")
+    .select("order_id, notes, status")
+    .in("status", DISPATCHED_STATUSES)
+    .ilike("notes", "%RETURN_NOTE:%");
+  if (customerIds.length > 0) q = q.in("customer_id", customerIds);
+  const { data: orders } = await q;
+
+  const dispatched = new Set<string>();
+  (orders || []).forEach((o: any) => {
+    const m = (o.notes || "").match(/\[RETURN_NOTE:\s*([^\]]+)\]/);
+    if (m) dispatched.add(m[1].trim());
+    if (o.order_id) dispatched.add(o.order_id);
+  });
+  return rows.filter((r) => dispatched.has(r.return_number));
+}
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const businessId = searchParams.get("businessId");
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "10");
+    const pageParam = searchParams.get("page");
+    const limitParam = searchParams.get("limit");
+    const status = searchParams.get("status");
+    const salesRepId = searchParams.get("salesRepId");
+    const customerId = searchParams.get("customerId");
+    const unsettled = searchParams.get("unsettled");
+    const dispatchedOnly = searchParams.get("dispatchedOnly") === "true";
+    const returnBatchId = searchParams.get("returnBatchId") || searchParams.get("return_batch_id");
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
     const search = (searchParams.get("search") || "").trim();
 
-    // Pagination calculations
-    const start = (page - 1) * limit;
-    const end = start + limit - 1;
-
     let query = supabaseAdmin
       .from("inventory_returns")
       .select(
-        `*, products (name, sku), locations (name), profiles:returned_by (full_name)`,
+        `*, products (id, name, sku, unit_of_measure, selling_price), locations (id, name), profiles:returned_by (id, full_name), customers (id, shop_name, owner_name, route)`,
         { count: "exact" }
       );
 
     if (businessId) query = query.eq("business_id", businessId);
+    if (salesRepId) query = query.eq("returned_by", salesRepId);
+    if (customerId) query = query.eq("customer_id", customerId);
+    if (returnBatchId) query = query.eq("return_batch_id", returnBatchId);
+
+    if (status) {
+      if (status.includes(",")) {
+        const statuses = status.split(",").map((s) => s.trim());
+        query = query.in("status", statuses);
+      } else {
+        query = query.eq("status", status);
+      }
+    }
+
+    const returnType = searchParams.get("returnType") || searchParams.get("return_type");
+    if (returnType) query = query.eq("return_type", returnType);
+
+    if (unsettled === "true") {
+      query = query.not("reason", "ilike", "%[SETTLED_IN_PAYMENT:%");
+    }
 
     // Date Filtering
     if (startDate) query = query.gte("created_at", startDate);
     if (endDate) {
-      // Ensure end date includes the full day (e.g. 23:59:59)
       const endDateTime = new Date(endDate);
       endDateTime.setHours(23, 59, 59, 999);
       query = query.lte("created_at", endDateTime.toISOString());
@@ -364,21 +446,40 @@ export async function GET(req: Request) {
       );
     }
 
-    query = query.order("created_at", { ascending: false }).range(start, end);
+    query = query.order("created_at", { ascending: false });
 
-    const { data, count, error } = await query;
+    if (limitParam && limitParam !== "all" && parseInt(limitParam) > 0) {
+      const page = parseInt(pageParam || "1");
+      const limit = parseInt(limitParam);
+      const start = (page - 1) * limit;
+      const end = start + limit - 1;
+      query = query.range(start, end);
 
-    if (error) {
-      console.error("GET Returns Error:", error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      const { data, count, error } = await query;
+      if (error) {
+        console.error("GET Returns Error:", error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      return NextResponse.json({
+        data,
+        total: count || 0,
+        page,
+        totalPages: Math.ceil((count || 0) / limit),
+      });
+    } else {
+      const { data: rawData, count, error } = await query;
+      if (error) {
+        console.error("GET Returns Error:", error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      const data = dispatchedOnly ? await filterDispatchedReturns(rawData || []) : rawData;
+      return NextResponse.json({
+        data,
+        total: dispatchedOnly ? data?.length || 0 : count || (data?.length || 0),
+        page: 1,
+        totalPages: 1,
+      });
     }
-
-    return NextResponse.json({
-      data,
-      total: count || 0,
-      page,
-      totalPages: Math.ceil((count || 0) / limit),
-    });
   } catch (err: any) {
     console.error("GET Returns Error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
