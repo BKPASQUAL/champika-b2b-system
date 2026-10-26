@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { triggerAgencyBillsForInvoice } from "@/app/lib/inter-branch-billing";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
+import { rebuildFifoCostsSafe } from "@/lib/fifo-rebuild";
 
 export async function POST(
   request: NextRequest,
@@ -254,6 +255,15 @@ export async function POST(
         ? `Invoice Cancelled: ${reason}`
         : "Invoice Cancelled by Admin",
     });
+
+    // Give the cancelled units back to their FIFO stock batches
+    if (!order.is_inter_branch) {
+      const { data: cancelledLines } = await supabaseAdmin
+        .from("order_items")
+        .select("product_id")
+        .eq("order_id", invoice.order_id);
+      await rebuildFifoCostsSafe((cancelledLines || []).map((i: any) => i.product_id));
+    }
 
     return NextResponse.json({ message: "Invoice cancelled successfully" });
   } catch (error: any) {

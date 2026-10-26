@@ -73,7 +73,7 @@ export async function PATCH(
     const { data: currentProduct, error: fetchError } = await supabaseAdmin
       .from("products")
       .select(
-        "price_history, cost_price, selling_price, mrp, supplier_name, category, stock_quantity",
+        "price_history, cost_price, actual_cost_price, selling_price, mrp, supplier_name, category, stock_quantity",
       )
       .eq("id", id)
       .single();
@@ -219,7 +219,9 @@ export async function PATCH(
         .gt("remaining_quantity", 0);
 
       if (!count || count === 0) {
-        const costToUse = Number(currentProduct.cost_price) || 0;
+        // Actual cost (after supplier discounts), not the bill rate
+        const costToUse =
+          Number(currentProduct.actual_cost_price) || Number(currentProduct.cost_price) || 0;
         if (costToUse > 0) {
           await supabaseAdmin.from("product_cost_layers").insert({
             product_id: id,

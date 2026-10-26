@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
+import { rebuildFifoCostsSafe } from "@/lib/fifo-rebuild";
 
 const itemSchema = z.object({
   productId: z.string(),
@@ -327,6 +328,12 @@ export async function PUT(
       .eq("id", id);
 
     if (updateError) throw updateError;
+
+    // Re-run FIFO so invoices pick up the edited bill cost/quantity
+    await rebuildFifoCostsSafe([
+      ...oldItems.map((o: any) => o.product_id),
+      ...val.items.map((i) => i.productId),
+    ]);
 
     return NextResponse.json({ message: "Purchase Updated", id });
   } catch (error: any) {

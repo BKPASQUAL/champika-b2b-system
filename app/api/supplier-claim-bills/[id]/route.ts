@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { revertClaimCosts } from "@/lib/supplier-claim-costs";
+import { rebuildFifoCostsSafe } from "@/lib/fifo-rebuild";
 
 export const dynamic = "force-dynamic";
 
@@ -67,9 +68,14 @@ export async function DELETE(_req: NextRequest, { params }: Ctx) {
   try {
     const { id } = await params;
     // Put the invoice line costs back before removing the claim
+    const { data: claimItems } = await supabaseAdmin
+      .from("supplier_claim_bill_items")
+      .select("product_id")
+      .eq("claim_bill_id", id);
     const restored = await revertClaimCosts(id);
     const { error } = await supabaseAdmin.from("supplier_claim_bills").delete().eq("id", id);
     if (error) throw error;
+    await rebuildFifoCostsSafe((claimItems || []).map((i: any) => i.product_id));
     return NextResponse.json({ success: true, linesRestored: restored });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

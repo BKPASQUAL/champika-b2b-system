@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
 import { applyClaimCosts, revertClaimCosts } from "@/lib/supplier-claim-costs";
+import { rebuildFifoCostsSafe } from "@/lib/fifo-rebuild";
 
 export const dynamic = "force-dynamic";
 
@@ -144,6 +145,9 @@ export async function POST(request: NextRequest) {
       await supabaseAdmin.from("supplier_claim_bills").delete().eq("id", bill.id);
       throw e;
     }
+
+    // Spread the claim over the invoice lines that really used that stock (FIFO)
+    await rebuildFifoCostsSafe(rows.map((r: any) => r.product_id));
 
     return NextResponse.json({ id: bill.id, discountAmount, ...applied }, { status: 201 });
   } catch (error: any) {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
 import { BUSINESS_PO_PREFIXES } from "@/app/config/business-constants";
+import { rebuildFifoCostsSafe } from "@/lib/fifo-rebuild";
 
 // --- Validation Schemas ---
 
@@ -257,6 +258,9 @@ export async function POST(request: NextRequest) {
         remaining_quantity: totalQty,
       });
     }
+
+    // Sales made before this bill was entered now take its cost (FIFO)
+    await rebuildFifoCostsSafe(val.items.map((i) => i.productId));
 
     return NextResponse.json(
       { message: "Purchase Order Created", id: purchase.id },
