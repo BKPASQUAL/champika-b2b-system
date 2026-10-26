@@ -291,7 +291,8 @@ export default function CreateReturnPage() {
     let successCount = 0;
 
     try {
-      const promises = returnItems.map((item) => {
+      // One at a time: items from the same bill must not update its total at the same time
+      for (const item of returnItems) {
         // Prepare Payload
         const payload: any = {
           business_id: selectedBusinessId,
@@ -310,17 +311,13 @@ export default function CreateReturnPage() {
           payload.reason = `[${selectedInvoiceNo}] ${item.reason || ""}`.trim();
         }
 
-        return fetch("/api/inventory/returns", {
+        const res = await fetch("/api/inventory/returns", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
-        }).then((res) => {
-          if (res.ok) successCount++;
-          return res;
         });
-      });
-
-      await Promise.all(promises);
+        if (res.ok) successCount++;
+      }
       toast.success(`Processed ${successCount} returns`);
       router.push("/dashboard/office/distribution/inventory/returns");
     } catch (error) {

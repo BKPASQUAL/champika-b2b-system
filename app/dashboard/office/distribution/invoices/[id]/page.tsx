@@ -151,10 +151,17 @@ export default function DistributionViewInvoicePage({
 
   const fetchReturns = async () => {
     try {
-      const res = await fetch(`/api/invoices/${id}/returns`);
+      const res = await fetch(`/api/invoices/${id}/returns?includeUnlinked=true`);
       if (res.ok) {
         const data = await res.json();
         setReturns(data);
+        // Good returns were just taken off this bill — reload the totals
+        const applied = Number(res.headers.get("X-Returns-Applied") || 0);
+        if (applied > 0) {
+          toast.success(`${applied} good return(s) deducted from this bill`);
+          fetchInvoice(true);
+          fetchHistory();
+        }
       }
     } catch (error) {
       console.error("Failed to fetch returns");
@@ -239,16 +246,61 @@ export default function DistributionViewInvoicePage({
   if (!invoice) return null;
 
   // --- Calculations ---
-  const returnsList = returns || [];
-  const returnsDeduction = returnsList.reduce((acc: number, r: any) => {
-    const rType = r.return_type || r.returnType || "Exchange";
-    if (rType === "Exchange") return acc;
-    return acc + (Number(r.quantity) || 0) * (Number(r.products?.selling_price || r.price || 0));
-  }, 0);
-  const returnsTotal = returnsList.reduce((acc: number, r: any) => {
-    return acc + (Number(r.quantity) || 0) * (Number(r.products?.selling_price || r.price || 0));
-  }, 0);
-  const totalRefunded = returnsTotal;
+  // Only Good returns are shown against the bill
+  const returnsList = (returns || []).filter((r: any) => r.return_type === "Good");
+  // Value a return took off this bill (stored as [CREDIT:x] when applied)
+  const returnCredit = (r: any) =>
+    r.credit != null
+      ? Number(r.credit)
+      : (Number(r.quantity) || 0) * Number(r.products?.selling_price || 0);
+  const adjustedReturns = returnsList.filter((r: any) => r.adjusted);
+  const pendingReturns = returnsList.filter(
+    (r: any) => !r.adjusted && !r.settled_in_payment && !r.linked
+  );
+  // Returns already taken off the bill — the line items show the reduced qty
+  const returnsDeduction = adjustedReturns.reduce((acc: number, r: any) => acc + returnCredit(r), 0);
+  const returnsTotal = returnsDeduction;
+  const pendingReturnsValue = pendingReturns.reduce(
+    (acc: number, r: any) => acc + (Number(r.quantity) || 0) * Number(r.products?.selling_price || 0),
+    0
+  );
+  const totalRefunded = returnsDeduction;
+
+  const renderReturnAction = (ret: any) => {
+    if (ret.adjusted) {
+      return (
+        <Badge variant="outline" className="text-[10px] text-emerald-700 bg-emerald-50 border-emerald-200">
+          Deducted
+        </Badge>
+      );
+    }
+    if (ret.settled_in_payment) {
+      return (
+        <Badge variant="outline" className="text-[10px] text-blue-700 bg-blue-50 border-blue-200">
+          Used in payment
+        </Badge>
+      );
+    }
+    if (ret.linked) {
+      // Older return made against this bill (before deductions were marked)
+      return (
+        <Badge variant="outline" className="text-[10px] text-slate-600 bg-slate-50 border-slate-200">
+          On this bill
+        </Badge>
+      );
+    }
+    // Office returns are deducted automatically when the bill loads.
+    // Anything still here is a rep return waiting for pickup/payment, or one that failed.
+    return (
+      <Badge
+        variant="outline"
+        className="text-[10px] text-amber-700 bg-amber-50 border-amber-200"
+        title="Not deducted from this bill yet"
+      >
+        Not deducted
+      </Badge>
+    );
+  };
 
   const paymentsList: PaymentRecord[] = invoice.payments || [];
   // Use the DB-stored paidAmount (correctly updated on cheque reversals) as the authoritative value
@@ -261,7 +313,7 @@ export default function DistributionViewInvoicePage({
     (acc: number, item: any) => acc + (Number(item.total) || 0),
     0
   );
-  const subTotalGross = itemsSubtotal > 0 ? itemsSubtotal : netTotal + returnsDeduction + extraDiscountAmount + cashDiscountAmount;
+  const subTotalGross = itemsSubtotal > 0 ? itemsSubtotal + returnsDeduction : netTotal + returnsDeduction + extraDiscountAmount + cashDiscountAmount;
   const balanceDue = netTotal - totalPaid;
 
   const totalItemsQty = invoice.items.reduce(
@@ -653,90 +705,89 @@ export default function DistributionViewInvoicePage({
             </Card>
 
 
-            {/* Returns & Adjustments */}
-            {returns.length > 0 && (
-              <Card className="shadow-sm border-l-4 border-l-orange-500 overflow-hidden">
-                <CardHeader className="bg-orange-50/50 border-b py-3">
-                  <div className="flex justify-between items-center">
+            {/* Good Returns against this bill */}
+            {returnsList.length > 0 && (
+              <Card className="shadow-sm border-l-4 border-l-emerald-500 overflow-hidden">
+                <CardHeader className="bg-emerald-50/50 border-b py-3">
+                  <div className="flex justify-between items-center gap-2 flex-wrap">
                     <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                      <Undo2 className="h-5 w-5 text-orange-600" />
-                      Returns & Adjustments
+                      <Undo2 className="h-5 w-5 text-emerald-600" />
+                      Good Returns
                     </CardTitle>
-                    <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-200 border-none">
-                      {returns.length} Record(s) found
+                    <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-none">
+                      {returnsList.length} Record(s)
                     </Badge>
                   </div>
+                  {pendingReturns.length > 0 && (
+                    <p className="text-xs text-amber-700 mt-1">
+                      {pendingReturns.length} good return(s) for items on this bill could not be deducted automatically.
+                    </p>
+                  )}
                 </CardHeader>
-                {/* Desktop table */}
-                <CardContent className="p-0 hidden lg:block">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-orange-50/30 hover:bg-orange-50/30">
-                        <TableHead className="pl-6">Return #</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Product</TableHead>
-                        <TableHead className="text-center">Type</TableHead>
-                        <TableHead className="text-right">Qty</TableHead>
-                        <TableHead className="pr-6">Reason</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {returns.map((ret) => (
-                        <TableRow key={ret.id} className="hover:bg-orange-50/10">
-                          <TableCell className="pl-6 font-mono text-xs font-medium">{ret.return_number}</TableCell>
-                          <TableCell className="text-xs text-muted-foreground">{new Date(ret.created_at).toLocaleDateString()}</TableCell>
-                          <TableCell>
-                            <div className="font-medium text-sm">{ret.products?.name}</div>
-                            <div className="text-[10px] text-muted-foreground">{ret.products?.sku}</div>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <Badge variant="outline" className={cn("text-[10px] h-5 px-1.5", ret.return_type === "Good" ? "text-green-600 bg-green-50 border-green-200" : "text-red-600 bg-red-50 border-red-200")}>
-                              {ret.return_type}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right font-bold text-sm">-{ret.quantity}</TableCell>
-                          <TableCell className="pr-6 text-xs text-muted-foreground max-w-[150px] truncate" title={ret.reason}>
-                            {ret.reason?.replace(`[${invoice.invoiceNo}]`, "").trim() || "-"}
-                          </TableCell>
+                <CardContent className="p-2 lg:p-0 space-y-1.5 lg:space-y-0">
+                  <div className="hidden lg:block">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-emerald-50/30 hover:bg-emerald-50/30">
+                          <TableHead className="pl-6">Return #</TableHead>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Product</TableHead>
+                          <TableHead className="text-right">Qty</TableHead>
+                          <TableHead className="text-right">Value</TableHead>
+                          <TableHead className="text-right pr-6">Bill</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-
-                {/* Mobile / Tablet cards */}
-                <CardContent className="p-2 lg:hidden space-y-1.5">
-                  {returns.map((ret) => (
-                    <div key={ret.id} className="rounded-lg border bg-white p-2.5 space-y-1.5">
+                      </TableHeader>
+                      <TableBody>
+                        {returnsList.map((ret: any) => (
+                          <TableRow key={ret.id} className="hover:bg-emerald-50/10">
+                            <TableCell className="pl-6 font-mono text-xs font-medium">{ret.return_number}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {new Date(ret.return_date || ret.created_at).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell>
+                              <div className="font-medium text-sm">{ret.products?.name}</div>
+                              <div className="text-[10px] text-muted-foreground">{ret.products?.sku}</div>
+                            </TableCell>
+                            <TableCell className="text-right font-bold text-sm">-{ret.quantity}</TableCell>
+                            <TableCell className="text-right font-mono text-sm">
+                              {ret.adjusted
+                                ? `- LKR ${returnCredit(ret).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                                : "-"}
+                            </TableCell>
+                            <TableCell className="text-right pr-6">{renderReturnAction(ret)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  {returnsList.map((ret: any) => (
+                    <div key={ret.id} className="lg:hidden rounded-lg border bg-white p-2.5 space-y-1.5">
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <p className="font-semibold text-sm">{ret.products?.name}</p>
                           <p className="text-xs font-mono text-muted-foreground">{ret.products?.sku}</p>
                         </div>
-                        <Badge variant="outline" className={cn("text-[10px] shrink-0", ret.return_type === "Good" ? "text-green-600 bg-green-50 border-green-200" : "text-red-600 bg-red-50 border-red-200")}>
-                          {ret.return_type}
-                        </Badge>
+                        {renderReturnAction(ret)}
                       </div>
                       <div className="flex items-center gap-3 flex-wrap text-xs text-muted-foreground">
                         <span className="font-mono font-medium text-foreground">{ret.return_number}</span>
-                        <span>{new Date(ret.created_at).toLocaleDateString()}</span>
+                        <span>{new Date(ret.return_date || ret.created_at).toLocaleDateString()}</span>
                         <span className="font-bold text-foreground">Qty: -{ret.quantity}</span>
+                        {ret.adjusted && (
+                          <span className="font-mono text-emerald-700">
+                            - LKR {returnCredit(ret).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </span>
+                        )}
                       </div>
-                      {ret.reason?.replace(`[${invoice.invoiceNo}]`, "").trim() && (
-                        <p className="text-xs text-muted-foreground border-t pt-2">
-                          {ret.reason.replace(`[${invoice.invoiceNo}]`, "").trim()}
-                        </p>
-                      )}
                     </div>
                   ))}
                 </CardContent>
-
-                <CardFooter className="bg-orange-50/30 border-t py-2 flex flex-col sm:flex-row justify-between gap-2">
+                <CardFooter className="bg-emerald-50/30 border-t py-2 flex flex-col sm:flex-row justify-between gap-2">
                   <div className="text-xs text-muted-foreground">
-                    Processed by: {returns[0]?.profiles?.full_name}
+                    Free items returned carry no value; paid qty is reduced first.
                   </div>
-                  <div className="text-sm font-medium text-orange-700">
-                    Total Value of Returns: LKR {totalRefunded.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  <div className="text-sm font-medium text-emerald-700">
+                    Deducted from bill: LKR {totalRefunded.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </div>
                 </CardFooter>
               </Card>
@@ -1004,7 +1055,7 @@ export default function DistributionViewInvoicePage({
                 {returnsDeduction > 0 && (
                   <div className="flex justify-between text-sm text-orange-600">
                     <span className="flex items-center gap-1">
-                      <Undo2 className="w-3 h-3" /> Returns
+                      <Undo2 className="w-3 h-3" /> Good Returns ({adjustedReturns.length})
                     </span>
                     <span className="font-medium font-mono">
                       - LKR{" "}
@@ -1015,10 +1066,13 @@ export default function DistributionViewInvoicePage({
                   </div>
                 )}
 
-                {returnsTotal > returnsDeduction && (
-                  <div className="flex justify-between text-xs text-blue-600 font-medium pt-0.5">
-                    <span>Exchange Items ({returnsList.filter((r: any) => (r.return_type || r.returnType || "Exchange") === "Exchange").length})</span>
-                    <span>(No bill reduction)</span>
+                {pendingReturns.length > 0 && (
+                  <div className="flex justify-between text-xs text-amber-700 font-medium pt-0.5">
+                    <span>Good returns not deducted yet ({pendingReturns.length})</span>
+                    <span className="font-mono">
+                      approx. LKR{" "}
+                      {pendingReturnsValue.toLocaleString("en-LK", { minimumFractionDigits: 2 })}
+                    </span>
                   </div>
                 )}
 

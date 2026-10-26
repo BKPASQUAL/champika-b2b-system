@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
+import { getStandardInvoiceReturns } from "./standard";
+import { autoApplyPendingReturns } from "@/lib/return-invoice-adjust";
 
 export async function GET(
   request: NextRequest,
@@ -12,7 +14,7 @@ export async function GET(
     // 1. Get Invoice Number and order_id first
     const { data: invoice, error: invError } = await supabaseAdmin
       .from("invoices")
-      .select("invoice_no, order_id")
+      .select("invoice_no, order_id, customer_id")
       .eq("id", id)
       .single();
 
@@ -75,42 +77,20 @@ export async function GET(
       return NextResponse.json(ibReturns || []);
     }
 
-    // 3. Standard Invoice: Fetch Returns containing this invoice number or order ID in the reason
-    const searchConditions: string[] = [];
-    if (invoice.invoice_no) {
-      searchConditions.push(`reason.ilike.%${invoice.invoice_no}%`);
+    // 3. Standard Invoice: returns tagged with this bill (plus, on request,
+    // unlinked Good returns of this customer that belong to this bill)
+    if (!request.nextUrl.searchParams.get("includeUnlinked")) {
+      const all = await getStandardInvoiceReturns(id, { ...invoice, customer_id: null });
+      return NextResponse.json(all);
     }
-    if (invoice.order_id) {
-      searchConditions.push(`reason.ilike.%ORD-${invoice.order_id}%`);
+    let returns = await getStandardInvoiceReturns(id, invoice);
+    // Office good returns that belong to this bill but were never deducted:
+    // take them off the bill now, then reload so the page shows the result
+    const applied = await autoApplyPendingReturns(id, returns);
+    if (applied > 0) {
+      returns = await getStandardInvoiceReturns(id, invoice);
+      return NextResponse.json(returns, { headers: { "X-Returns-Applied": String(applied) } });
     }
-
-    const { data: returns, error: retError } = await supabaseAdmin
-      .from("inventory_returns")
-      .select(
-        `
-        id,
-        return_number,
-        created_at,
-        quantity,
-        return_type,
-        reason,
-        product_id,
-        products (
-          name,
-          sku,
-          selling_price,
-          cost_price
-        ),
-        profiles (
-          full_name
-        )
-      `
-      )
-      .or(searchConditions.length > 0 ? searchConditions.join(",") : `reason.ilike.%${id}%`)
-      .order("created_at", { ascending: false });
-
-    if (retError) throw retError;
-
     return NextResponse.json(returns);
   } catch (error: any) {
     console.error("Error fetching invoice returns:", error);

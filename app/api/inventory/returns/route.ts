@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { triggerAgencyBillsForInvoice } from "@/app/lib/inter-branch-billing";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
+import { applyReturnToInvoice } from "@/lib/return-invoice-adjust";
 
 export const dynamic = "force-dynamic";
 
@@ -75,22 +76,45 @@ export async function POST(req: Request) {
     }
 
     // --- 1. Auto-detect Invoice Context ---
-    if ((!invoice_no || invoice_no === "all") && customer_id && product_id) {
-      const { data: latestOrder } = await supabaseAdmin
-        .from("orders")
-        .select("invoice_no, id, created_at, order_items!inner(product_id)")
-        .eq("customer_id", customer_id)
-        .eq("order_items.product_id", product_id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+    // No bill picked ("All Purchased Items"): use the customer's latest bill that
+    // still has this product on it, so the return reduces that bill.
+    // The bill number lives on the invoices table (orders.invoice_no is often empty).
+    if ((!invoice_no || invoice_no === "all") && !invoice_id && customer_id && product_id) {
+      invoice_no = null;
+      const { data: lines } = await supabaseAdmin
+        .from("order_items")
+        .select(
+          "quantity, free_quantity, orders!inner(id, customer_id, created_at, status, invoices(id, invoice_no, status))"
+        )
+        .eq("product_id", product_id)
+        .eq("orders.customer_id", customer_id);
 
-      if (latestOrder && (latestOrder as any).invoice_no) {
-        invoice_no = (latestOrder as any).invoice_no;
-        const tag = `[${invoice_no}]`;
-        if (!reason?.includes(tag)) {
-          reason = `${tag} ${reason || ""}`.trim();
-        }
+      const candidates = (lines || [])
+        .map((l: any) => {
+          const inv = Array.isArray(l.orders?.invoices) ? l.orders.invoices[0] : l.orders?.invoices;
+          return {
+            invoiceId: inv?.id as string | undefined,
+            invoiceNo: inv?.invoice_no as string | undefined,
+            invoiceStatus: inv?.status as string | undefined,
+            orderStatus: l.orders?.status as string | undefined,
+            time: new Date(l.orders?.created_at).getTime(),
+            qtyLeft: Number(l.quantity || 0) + Number(l.free_quantity || 0),
+          };
+        })
+        .filter(
+          (c) =>
+            c.invoiceId &&
+            c.invoiceNo &&
+            !c.invoiceNo.startsWith("RET-") &&
+            c.invoiceStatus !== "Cancelled" &&
+            c.orderStatus !== "Cancelled" &&
+            c.qtyLeft > 0
+        )
+        .sort((a, b) => b.time - a.time);
+
+      if (candidates.length > 0) {
+        invoice_id = candidates[0].invoiceId;
+        invoice_no = candidates[0].invoiceNo;
       }
     }
 
@@ -239,117 +263,24 @@ export async function POST(req: Request) {
 
     // --- 6. Financial Updates (Invoice, Order, Customer Balance) ---
     // "Exchange" returns are a stock swap only — the customer still owes the
-    // full original bill amount, so invoice/order totals and the customer's
-    // outstanding balance must NOT be reduced for this return type.
+    // full original bill amount, so they never reduce the bill.
     if ((invoice_no || invoice_id) && return_type !== "Exchange") {
-      let invoiceQuery = supabaseAdmin
-        .from("invoices")
-        .select(
-          "id, invoice_no, order_id, total_amount, due_amount, customer_id, paid_amount"
-        );
-
-      if (invoice_id) invoiceQuery = invoiceQuery.eq("id", invoice_id);
-      else if (invoice_no)
-        invoiceQuery = invoiceQuery.eq("invoice_no", invoice_no);
-
-      const { data: invoice } = await invoiceQuery.maybeSingle();
-
-      if (invoice && invoice.order_id) {
-        const { data: orderItem } = await supabaseAdmin
-          .from("order_items")
-          .select("*")
-          .eq("order_id", invoice.order_id)
-          .eq("product_id", product_id)
+      const applied = await applyReturnToInvoice(returnRecord.id, {
+        invoiceId: invoice_id,
+        invoiceNo: invoice_no,
+      });
+      // Good return linked to a bill that doesn't contain this product: the bill
+      // wasn't reduced, so keep its value available as a payment credit.
+      if (!applied.ok && return_type === "Good") {
+        const { data: fresh } = await supabaseAdmin
+          .from("inventory_returns")
+          .select("reason")
+          .eq("id", returnRecord.id)
           .maybeSingle();
-
-        if (orderItem) {
-          // Adjust Order Item
-          const oldQty = Number(orderItem.quantity);
-          const returnQty = Number(quantity);
-          const newQty = Math.max(0, oldQty - returnQty);
-          const unitPrice = Number(orderItem.unit_price);
-          const newTotalItemPrice = newQty * unitPrice;
-
-          const oldComm = Number(orderItem.commission_earned || 0);
-          const newComm = newQty * (oldQty > 0 ? oldComm / oldQty : 0);
-
-          await supabaseAdmin
-            .from("order_items")
-            .update({
-              quantity: newQty,
-              total_price: newTotalItemPrice,
-              commission_earned: newComm,
-            })
-            .eq("id", orderItem.id);
-
-          // Recalculate Totals
-          const { data: allItems } = await supabaseAdmin
-            .from("order_items")
-            .select("total_price, commission_earned")
-            .eq("order_id", invoice.order_id);
-
-          let newGrandTotal = 0;
-          let newCommissionTotal = 0;
-
-          if (allItems) {
-            newGrandTotal = allItems.reduce(
-              (sum, item) => sum + Number(item.total_price),
-              0
-            );
-            newCommissionTotal = allItems.reduce(
-              (sum, item) => sum + Number(item.commission_earned || 0),
-              0
-            );
-          }
-
-          // Mark that this return already reduced the invoice & commission,
-          // so rep sales reports don't deduct it a second time
-          await supabaseAdmin
-            .from("inventory_returns")
-            .update({ reason: `${returnRecord.reason || ""} [INVOICE_ADJUSTED]`.trim() })
-            .eq("id", returnRecord.id);
-
-          await supabaseAdmin
-            .from("invoices")
-            .update({ total_amount: newGrandTotal })
-            .eq("id", invoice.id);
-          await supabaseAdmin
-            .from("orders")
-            .update({ total_amount: newGrandTotal })
-            .eq("id", invoice.order_id);
-
-          // Update Customer Balance
-          const diff = Number(invoice.total_amount) - newGrandTotal;
-          if (invoice.customer_id && diff !== 0) {
-            const { data: customer } = await supabaseAdmin
-              .from("customers")
-              .select("outstanding_balance")
-              .eq("id", invoice.customer_id)
-              .maybeSingle();
-
-            if (customer) {
-              const newBal = Number(customer.outstanding_balance || 0) - diff;
-              await supabaseAdmin
-                .from("customers")
-                .update({ outstanding_balance: newBal })
-                .eq("id", invoice.customer_id);
-            }
-          }
-
-          // Update Rep Commission
-          const { data: repComm } = await supabaseAdmin
-            .from("rep_commissions")
-            .select("id")
-            .eq("order_id", invoice.order_id)
-            .maybeSingle();
-
-          if (repComm) {
-            await supabaseAdmin
-              .from("rep_commissions")
-              .update({ total_commission_amount: newCommissionTotal })
-              .eq("id", repComm.id);
-          }
-        }
+        await supabaseAdmin
+          .from("inventory_returns")
+          .update({ reason: `${fresh?.reason || ""} [RETURN_CREDIT]`.trim() })
+          .eq("id", returnRecord.id);
       }
     }
 
@@ -364,8 +295,110 @@ export async function POST(req: Request) {
 // (must match the order_status enum — "Dispatched"/"Completed" are not valid values)
 const DISPATCHED_STATUSES = ["In Transit", "Delivered"];
 
-// Keep only return notes whose pickup order has been dispatched / finalized.
+// A Good return created directly in the office (status "Completed") whose value
+// never reduced any bill. These have no lorry pickup, so they are usable as a
+// payment credit right away. Returns linked to an invoice are skipped unless
+// tagged [RETURN_CREDIT], because older ones may already have reduced that bill.
+function isOfficeReturnCredit(r: any): boolean {
+  if (r.status !== "Completed" || r.return_type !== "Good" || !r.customer_id) return false;
+  const reason: string = r.reason || "";
+  if (reason.includes("[RETURN_CREDIT]")) return true;
+  if (
+    reason.includes("[PAY:") ||
+    reason.includes("[INVOICE_ADJUSTED]") ||
+    reason.includes("[ORD-") ||
+    reason.includes("Return from invoice creation")
+  ) {
+    return false;
+  }
+  // Has an invoice tag like [CHD-1202] -> may already be deducted from that bill
+  return !/\[[A-Z]{1,6}-\d+\]/.test(reason);
+}
+
+// For customer returns with no bill tag, find the bill the customer bought the
+// product on (latest invoice before the return). Adds `purchase_invoice_no`,
+// `settled_invoice_no` (bill a return credit was deducted from) and
+// `invoice_ids` (bill number -> invoice id, for links).
+async function attachBillInfo(rows: any[]): Promise<any[]> {
+  if (!rows || rows.length === 0) return rows || [];
+
+  const tagBill = (reason: string) => {
+    const inv = reason.match(/\[INV:([^\]\s]+)\]/);
+    if (inv) return inv[1];
+    const b = reason.match(/\[([A-Z]{1,6}-\d+)\]/);
+    return b ? b[1] : null;
+  };
+
+  const needLookup = rows.filter(
+    (r) => r.customer_id && r.product_id && !tagBill(r.reason || "")
+  );
+
+  const purchases = new Map<string, { invoice_no: string; date: string }[]>();
+  if (needLookup.length > 0) {
+    const customerIds = [...new Set(needLookup.map((r) => r.customer_id))];
+    const productIds = [...new Set(needLookup.map((r) => r.product_id))];
+    const { data: items } = await supabaseAdmin
+      .from("order_items")
+      .select("product_id, orders!inner(customer_id, created_at, invoices(invoice_no))")
+      .in("product_id", productIds)
+      .in("orders.customer_id", customerIds);
+
+    (items || []).forEach((it: any) => {
+      const ord = it.orders;
+      const inv = Array.isArray(ord?.invoices) ? ord.invoices[0] : ord?.invoices;
+      const invoiceNo = inv?.invoice_no;
+      // Skip return pickup bills (RET-...) which are LKR 0 notes, not purchases
+      if (!invoiceNo || invoiceNo.startsWith("RET-")) return;
+      const key = `${ord.customer_id}|${it.product_id}`;
+      if (!purchases.has(key)) purchases.set(key, []);
+      purchases.get(key)!.push({ invoice_no: invoiceNo, date: ord.created_at });
+    });
+  }
+
+  const enriched = rows.map((r) => {
+    const reason: string = r.reason || "";
+    const settled = reason.match(/\[SETTLED_INVOICE:([^\]]*)\]/);
+    let purchase_invoice_no: string | null = null;
+    const list = purchases.get(`${r.customer_id}|${r.product_id}`);
+    if (list && list.length > 0) {
+      const returnTime = new Date(r.return_date || r.created_at).getTime();
+      const before = list.filter((p) => new Date(p.date).getTime() <= returnTime);
+      const pick = (before.length > 0 ? before : list).sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      )[0];
+      purchase_invoice_no = pick.invoice_no;
+    }
+    return {
+      ...r,
+      purchase_invoice_no,
+      settled_invoice_no: settled?.[1]?.trim() || null,
+    };
+  });
+
+  // Resolve bill numbers to invoice ids so the page can link to them
+  const billNos = new Set<string>();
+  enriched.forEach((r: any) => {
+    const t = tagBill(r.reason || "");
+    if (t) billNos.add(t);
+    if (r.purchase_invoice_no) billNos.add(r.purchase_invoice_no);
+    (r.settled_invoice_no || "").split(",").forEach((s: string) => s.trim() && billNos.add(s.trim()));
+  });
+  const idMap: Record<string, string> = {};
+  if (billNos.size > 0) {
+    const { data: invs } = await supabaseAdmin
+      .from("invoices")
+      .select("id, invoice_no")
+      .in("invoice_no", [...billNos]);
+    (invs || []).forEach((i: any) => (idMap[i.invoice_no] = i.id));
+  }
+  return enriched.map((r: any) => ({ ...r, invoice_ids: idMap }));
+}
+
+// Keep only return notes whose pickup order has been dispatched / finalized,
+// plus office-completed returns that are still available as a bill credit.
 async function filterDispatchedReturns(rows: any[]): Promise<any[]> {
+  const officeCredits = new Set(rows.filter(isOfficeReturnCredit).map((r) => r.id));
+  rows = rows.filter((r) => r.status !== "Completed" || officeCredits.has(r.id));
   const numbers = rows.map((r) => r.return_number).filter(Boolean);
   if (numbers.length === 0) return [];
   const customerIds = [...new Set(rows.map((r) => r.customer_id).filter(Boolean))];
@@ -384,7 +417,7 @@ async function filterDispatchedReturns(rows: any[]): Promise<any[]> {
     if (m) dispatched.add(m[1].trim());
     if (o.order_id) dispatched.add(o.order_id);
   });
-  return rows.filter((r) => dispatched.has(r.return_number));
+  return rows.filter((r) => officeCredits.has(r.id) || dispatched.has(r.return_number));
 }
 
 export async function GET(req: Request) {
@@ -402,6 +435,7 @@ export async function GET(req: Request) {
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
     const search = (searchParams.get("search") || "").trim();
+    const withBills = searchParams.get("withBills") === "true";
 
     let query = supabaseAdmin
       .from("inventory_returns")
@@ -428,7 +462,8 @@ export async function GET(req: Request) {
     if (returnType) query = query.eq("return_type", returnType);
 
     if (unsettled === "true") {
-      query = query.not("reason", "ilike", "%[SETTLED_IN_PAYMENT:%");
+      // Include returns with no reason — NOT ILIKE alone drops NULL rows
+      query = query.or("reason.is.null,reason.not.ilike.%[SETTLED_IN_PAYMENT:%");
     }
 
     // Date Filtering
@@ -461,7 +496,7 @@ export async function GET(req: Request) {
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
       return NextResponse.json({
-        data,
+        data: withBills ? await attachBillInfo(data || []) : data,
         total: count || 0,
         page,
         totalPages: Math.ceil((count || 0) / limit),
@@ -472,7 +507,8 @@ export async function GET(req: Request) {
         console.error("GET Returns Error:", error);
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
-      const data = dispatchedOnly ? await filterDispatchedReturns(rawData || []) : rawData;
+      let data = dispatchedOnly ? await filterDispatchedReturns(rawData || []) : rawData;
+      if (withBills) data = await attachBillInfo(data || []);
       return NextResponse.json({
         data,
         total: dispatchedOnly ? data?.length || 0 : count || (data?.length || 0),

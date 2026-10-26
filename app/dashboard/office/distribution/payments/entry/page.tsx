@@ -318,7 +318,7 @@ export default function DistributionPaymentEntryPage() {
     if (selectedCustomerId) {
       fetchPendingInvoices(selectedCustomerId);
       fetch(
-        `/api/inventory/returns?customerId=${selectedCustomerId}&status=Approved&unsettled=true&returnType=Good&dispatchedOnly=true&all=true`
+        `/api/inventory/returns?customerId=${selectedCustomerId}&status=Approved,Completed&unsettled=true&returnType=Good&dispatchedOnly=true&all=true`
       )
         .then((r) => (r.ok ? r.json() : { data: [] }))
         .then((d) => {
@@ -839,7 +839,7 @@ export default function DistributionPaymentEntryPage() {
                   Approved Customer Good Return Credits ({visibleReturnCredits.length})
                 </CardTitle>
                 <CardDescription className="text-xs text-emerald-800">
-                  This customer has approved Good Return notes that can reduce and settle their unpaid invoices.
+                  This customer has Good Return notes (rep-approved or created in the office) that can reduce and settle their unpaid invoices.
                 </CardDescription>
               </div>
               <Badge className="w-fit bg-emerald-100 text-emerald-800 border-emerald-300 font-mono text-xs font-bold px-2.5 py-1">

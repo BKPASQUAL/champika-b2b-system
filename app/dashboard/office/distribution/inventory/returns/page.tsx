@@ -58,6 +58,8 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import Link from "next/link";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -110,8 +112,9 @@ export default function ReturnsPage() {
         unitPrice = parseFloat(priceMatch[1]) || unitPrice;
         cleanReason = cleanReason.replace(priceMatch[0], "").trim();
       }
-      const bracketMatch = reason.match(/\[([A-Z0-9_-]+)\]/);
-      if (invoiceNo === "-" && bracketMatch && !bracketMatch[1].startsWith("PRICE:")) {
+      // Bill tag like [CHD-1202] (not system tags like [INVOICE_ADJUSTED])
+      const bracketMatch = reason.match(/\[([A-Z]{1,6}-\d+)\]/);
+      if (invoiceNo === "-" && bracketMatch) {
         invoiceNo = bracketMatch[1];
       }
     }
@@ -143,6 +146,8 @@ export default function ReturnsPage() {
         page: page.toString(),
         limit: pageSize.toString(),
         status: "Approved,Completed,Rejected",
+        businessId: BUSINESS_IDS.CHAMPIKA_DISTRIBUTION,
+        withBills: "true",
       });
 
       if (searchQuery) params.append("search", searchQuery);
@@ -642,7 +647,9 @@ export default function ReturnsPage() {
                           r.reason,
                           r.products?.selling_price
                         );
-                        const totalVal =
+                        // Applied returns store the exact amount taken off the bill
+                        const creditTag = (r.reason || "").match(/\[CREDIT:([\d.]+)\]/);
+                        const totalVal = creditTag ? parseFloat(creditTag[1]) :
                           Math.round(Number(r.quantity || 0) * unitPrice * 100) / 100;
 
                         return (
@@ -655,20 +662,64 @@ export default function ReturnsPage() {
                             </TableCell>
                             <TableCell>
                               <div className="font-semibold text-gray-900">
-                                {r.customers?.shop_name || "Unknown Customer"}
+                                {r.customers?.shop_name || (r.return_type === "Damage" ? "Warehouse Damage (No Customer)" : "No Customer")}
                               </div>
                               {r.customers?.route && (
                                 <div className="text-[11px] text-gray-500">{r.customers.route}</div>
                               )}
                             </TableCell>
                             <TableCell>
-                              {invoiceNo !== "-" ? (
-                                <span className="font-mono font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                                  {invoiceNo}
-                                </span>
-                              ) : (
-                                <span className="text-gray-400 font-mono text-xs">-</span>
-                              )}
+                              {(() => {
+                                const billNo =
+                                  invoiceNo !== "-" ? invoiceNo : r.purchase_invoice_no || null;
+                                const settledNo =
+                                  r.settled_invoice_no && r.settled_invoice_no !== billNo
+                                    ? r.settled_invoice_no
+                                    : null;
+                                if (!billNo && !settledNo) {
+                                  return <span className="text-gray-400 font-mono text-xs">-</span>;
+                                }
+                                const billHref = (no: string) =>
+                                  r.invoice_ids?.[no]
+                                    ? `/dashboard/office/distribution/invoices/${r.invoice_ids[no]}`
+                                    : null;
+                                const deducted = (r.reason || "").includes("[INVOICE_ADJUSTED]");
+                                return (
+                                  <div className="space-y-1">
+                                    {billNo && (() => {
+                                      const href = billHref(billNo);
+                                      const cls =
+                                        "inline-block font-mono font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200";
+                                      const title =
+                                        invoiceNo !== "-"
+                                          ? "Bill selected on the return — click to open"
+                                          : "Customer's latest bill for this product — click to open";
+                                      return href ? (
+                                        <Link href={href} className={cn(cls, "hover:bg-blue-100 hover:underline")} title={title}>
+                                          {billNo}
+                                        </Link>
+                                      ) : (
+                                        <span className={cls} title={title}>{billNo}</span>
+                                      );
+                                    })()}
+                                    {deducted && (
+                                      <div className="text-[10px] text-emerald-700 font-medium">Deducted from bill</div>
+                                    )}
+                                    {settledNo && (
+                                      <div className="text-[10px] text-emerald-700 font-medium">
+                                        Deducted from{" "}
+                                        {billHref(settledNo) ? (
+                                          <Link href={billHref(settledNo)!} className="font-mono font-semibold hover:underline">
+                                            {settledNo}
+                                          </Link>
+                                        ) : (
+                                          <span className="font-mono font-semibold">{settledNo}</span>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </TableCell>
                             <TableCell>
                               <div className="font-medium text-gray-900">{r.products?.name}</div>
