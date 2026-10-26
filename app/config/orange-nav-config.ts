@@ -23,6 +23,7 @@ import {
   BookOpen,
   Gift,
   Calculator,
+  BadgePercent,
 } from "lucide-react";
 
 interface OrangeNavItem {
@@ -97,6 +98,11 @@ export const orangeOfficeNavItems: OrangeNavSection[] = [
         name: "Free Issue Claims",
         href: "/dashboard/office/orange/claims",
         icon: Gift,
+      },
+      {
+        name: "Monthly Claim Discounts",
+        href: "/dashboard/office/orange/claims/monthly",
+        icon: BadgePercent,
       },
       {
         name: "Purchases",

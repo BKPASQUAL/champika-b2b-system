@@ -41,6 +41,7 @@ import {
   KeyRound,
   PackageX,
   Calculator,
+  Scale,
 } from "lucide-react";
 
 export type UserRole = "admin" | "office" | "rep" | "delivery";
@@ -215,6 +216,11 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           name: "Monthly Profit & Loss",
           href: "/dashboard/admin/reports/monthly-pnl",
           icon: Calculator,
+        },
+        {
+          name: "Actual Profit",
+          href: "/dashboard/admin/reports/actual-profit",
+          icon: Scale,
         },
         {
           name: "Supplier Analytics",

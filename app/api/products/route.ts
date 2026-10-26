@@ -95,6 +95,7 @@ export async function GET(request: NextRequest) {
         mrp: p.mrp || 0,
         sellingPrice: p.selling_price || 0,
         costPrice: p.cost_price || 0,
+        actualCostPrice: p.actual_cost_price ?? null,
         unitOfMeasure: p.unit_of_measure || "Pcs",
         images: p.images || [],
         commissionType: p.commission_type || "percentage",
