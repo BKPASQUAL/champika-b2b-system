@@ -259,7 +259,7 @@ export const generateInvoiceHTML = async (
     <table style="width:100%;border-collapse:collapse;margin-bottom:0;">
       <tr>
         <td style="vertical-align:top;width:55%;">
-          <div style="font-size:34px;font-weight:800;color:#000;letter-spacing:-0.3px;line-height:1.1;">CHAMPIKA HARDWARE</div>
+          <div style="font-size:34px;font-weight:900;color:#000;letter-spacing:-0.5px;line-height:1.1;white-space:nowrap;">CHAMPIKA HARDWARE</div>
           ${isReturnNote ? `
           <div style="margin-top:4px;margin-bottom:3px;">
             <span style="display:inline-block;padding:3px 10px;background:${returnBadgeBg};color:${returnBadgeColor};border:1.5px solid ${returnBadgeBorder};border-radius:4px;font-size:12px;font-weight:900;letter-spacing:0.8px;white-space:nowrap;text-transform:uppercase;">
@@ -466,10 +466,12 @@ export const getDocumentWrapper = (content: string, title: string) => `
       * { box-sizing: border-box; }
       body { font-family: ${FONT_STACK}; margin: 0; padding: 0; background: #fff; width: 794px; }
       @media print {
-        @page { size: A4 portrait; margin: 0; }
-        html, body { width: 210mm; margin: 0 auto; padding: 0; }
+        /* No fixed paper size: works on A4 and Letter (chosen in the print dialog) */
+        @page { size: portrait; margin: 0; }
+        html, body { width: 100% !important; margin: 0 auto; padding: 0; }
         body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        .invoice-page { page-break-after: always; page-break-inside: avoid; width: 210mm !important; min-height: 250mm !important; padding: 4mm 8mm 6mm !important; }
+        .invoice-page { page-break-after: always; page-break-inside: avoid; width: 100% !important; min-height: 250mm !important; min-height: calc(100vh - 1mm) !important; padding: 2mm 8mm 3mm !important; }
+        /* Page fills the paper height (A4 or Letter), so the "Thank you" footer always sits at the bottom */
         .invoice-page:last-child { page-break-after: auto !important; }
       }
     </style>
@@ -685,7 +687,7 @@ export const generateHalfPageInvoiceHTML = async (
   <table style="width:100%;border-collapse:collapse;margin-bottom:0;">
     <tr>
       <td style="vertical-align:middle;width:45%;">
-        <div style="font-size:22px;font-weight:800;color:#000;letter-spacing:-0.3px;line-height:1.1;">CHAMPIKA HARDWARE</div>
+        <div style="font-size:22px;font-weight:800;color:#000;letter-spacing:-0.3px;line-height:1.1;white-space:nowrap;">CHAMPIKA HARDWARE</div>
         ${isReturnNote ? `
         <div style="margin-top:2px;margin-bottom:2px;">
           <span style="display:inline-block;padding:2px 7px;background:${returnBadgeBg};color:${returnBadgeColor};border:1px solid ${returnBadgeBorder};border-radius:3px;font-size:10px;font-weight:900;letter-spacing:0.5px;white-space:nowrap;text-transform:uppercase;">
@@ -885,10 +887,11 @@ export const getHalfPageDocumentWrapper = (content: string, title: string) => `
       * { box-sizing: border-box; }
       body { font-family: ${FONT_STACK}; margin: 0; padding: 0; background: #fff; width: 794px; }
       @media print {
-        @page { size: A4 portrait; margin: 0; }
-        html, body { width: 210mm; margin: 0 auto; padding: 0; }
+        /* No fixed paper size: works on A4 and Letter. Invoice stays on the top half. */
+        @page { size: portrait; margin: 0; }
+        html, body { width: 100% !important; margin: 0 auto; padding: 0; }
         body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        .a4-sheet { page-break-after: always; width: 210mm !important; height: 297mm !important; }
+        .a4-sheet { page-break-after: always; width: 100% !important; height: auto !important; }
         .a4-sheet:last-child { page-break-after: auto; }
       }
     </style>
