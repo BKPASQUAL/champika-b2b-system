@@ -449,6 +449,10 @@ export async function GET(req: Request) {
     if (customerId) query = query.eq("customer_id", customerId);
     if (returnBatchId) query = query.eq("return_batch_id", returnBatchId);
 
+    // All items saved under one return note share a [NOTE:code] tag
+    const noteCode = (searchParams.get("noteCode") || "").replace(/[^A-Za-z0-9-]/g, "");
+    if (noteCode) query = query.ilike("reason", `%[NOTE:${noteCode}]%`);
+
     if (status) {
       if (status.includes(",")) {
         const statuses = status.split(",").map((s) => s.trim());

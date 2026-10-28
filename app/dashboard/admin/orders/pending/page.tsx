@@ -1,6 +1,7 @@
 // app/dashboard/admin/orders/pending/page.tsx
 "use client";
 
+import { groupReturnsByNote } from "@/app/lib/return-note-group";
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useRouter } from "next/navigation";
@@ -133,6 +134,7 @@ export interface UnifiedPendingItem {
   unitOfMeasure?: string;
   unitRate?: number;
   rawReturn?: any;
+  lineCount?: number;
 }
 
 export default function PendingOrdersPage() {
@@ -219,32 +221,43 @@ export default function PendingOrdersPage() {
       });
     });
 
-    // Map Returns
-    pendingReturns.forEach((r) => {
-      const meta = parseReturnMetadata(r.reason, r.products?.selling_price);
-      const totalLine = Number(r.quantity || 1) * meta.unitPrice;
+    // Map Returns — items saved under the same return note show as one row, like a bill
+    groupReturnsByNote(pendingReturns).forEach(({ noteNo, items }) => {
+      const r = items[0];
+      const metas = items.map((it) => parseReturnMetadata(it.reason, it.products?.selling_price));
+      const totalQty = items.reduce((s, it) => s + Number(it.quantity || 1), 0);
+      const totalValue = items.reduce(
+        (s, it, i) => s + Number(it.quantity || 1) * metas[i].unitPrice,
+        0
+      );
+      const bills = [...new Set(metas.map((m) => m.invoiceNo).filter((b) => b && b !== "-"))];
+      const types = [...new Set(items.map((it) => it.return_type || "Good"))];
+      const single = items.length === 1;
 
       list.push({
         id: r.id,
         isReturn: true,
-        orderId: r.return_number,
-        invoiceNo: r.return_number,
+        orderId: noteNo,
+        invoiceNo: noteNo,
         customerName: r.customers?.owner_name || r.customers?.shop_name || "Customer",
         shopName: r.customers?.shop_name || "Unknown Shop",
         salesRep: r.profiles?.full_name || "Sales Rep",
-        itemCount: Number(r.quantity || 1),
-        totalAmount: totalLine,
+        itemCount: totalQty,
+        totalAmount: totalValue,
         status: "Pending",
         date: r.return_date || r.created_at || new Date().toISOString(),
         route: r.customers?.route || "General",
-        notes: meta.cleanReason,
-        returnType: r.return_type || "Good",
-        originalBillNo: meta.invoiceNo && meta.invoiceNo !== "-" ? meta.invoiceNo : undefined,
-        productName: r.products?.name || "Product",
-        productSku: r.products?.sku,
+        notes: metas[0].cleanReason,
+        returnType: types.length === 1 ? types[0] : undefined,
+        originalBillNo: bills.length > 0 ? bills.join(", ") : undefined,
+        productName: single
+          ? r.products?.name || "Product"
+          : items.map((it) => it.products?.name || "Product").join(", "),
+        productSku: single ? r.products?.sku : undefined,
         unitOfMeasure: r.products?.unit_of_measure || "Pcs",
-        unitRate: meta.unitPrice,
+        unitRate: single ? metas[0].unitPrice : undefined,
         rawReturn: r,
+        lineCount: items.length,
       });
     });
 
@@ -711,7 +724,10 @@ export default function PendingOrdersPage() {
                               <div className="bg-white/80 p-2 rounded border border-amber-200 mt-2 text-xs">
                                 <p className="font-medium text-slate-900">{order.productName}</p>
                                 <div className="flex items-center justify-between text-[11px] text-slate-600 mt-1">
-                                  <span>Qty: {order.itemCount} {order.unitOfMeasure}</span>
+                                  <span>
+                                    Qty: {order.itemCount} {order.unitOfMeasure}
+                                    {(order.lineCount || 1) > 1 ? ` · ${order.lineCount} items` : ""}
+                                  </span>
                                   {order.originalBillNo && (
                                     <span className="font-mono text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
                                       Bill: {order.originalBillNo}
@@ -895,8 +911,10 @@ export default function PendingOrdersPage() {
                             {order.isReturn ? (
                               <div className="flex flex-col items-end">
                                 <span className="font-medium">{order.itemCount} Pcs</span>
-                                {order.returnType && (
+                                {((order.lineCount || 1) > 1 || order.returnType) && (
                                   <span className="text-[10px] text-muted-foreground">
+                                    {(order.lineCount || 1) > 1 ? `${order.lineCount} items` : ""}
+                                    {(order.lineCount || 1) > 1 && order.returnType ? " · " : ""}
                                     {order.returnType}
                                   </span>
                                 )}
