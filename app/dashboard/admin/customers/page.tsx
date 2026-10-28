@@ -51,6 +51,7 @@ export default function CustomersPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [routeFilter, setRouteFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [businessFilter, setBusinessFilter] = useState("all");
   const [sortField, setSortField] = useState<SortField>("shopName");
   const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
   const [currentPage, setCurrentPage] = useState(1);
@@ -86,9 +87,22 @@ export default function CustomersPage() {
     (sum, c) => sum + (c.outstandingBalance || 0),
     0
   );
+  const activeCount = customers.filter((c) => c.status === "Active").length;
+  const owingCount = customers.filter((c) => (c.outstandingBalance || 0) >= 1).length;
+
+  // Customer count per business, biggest first
+  const businessCounts = Object.entries(
+    customers.reduce<Record<string, number>>((acc, c) => {
+      const name = c.businessName || "No business";
+      acc[name] = (acc[name] || 0) + 1;
+      return acc;
+    }, {})
+  ).sort((a, b) => b[1] - a[1]);
 
   // Filter & Sort
   const filteredCustomers = customers.filter((customer) => {
+    if (businessFilter !== "all" && (customer.businessName || "No business") !== businessFilter)
+      return false;
     const matchesSearch =
       customer.shopName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       customer.ownerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -248,6 +262,77 @@ export default function CustomersPage() {
         </div>
       </div>
 
+      {/* Customer counts */}
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Total Customers</CardTitle>
+            <Users className="w-4 h-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{customers.length.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground mt-1">All businesses</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Active</CardTitle>
+            <TrendingUp className="w-4 h-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{activeCount.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {(customers.length - activeCount).toLocaleString()} inactive
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">With Balance</CardTitle>
+            <Users className="w-4 h-4 text-amber-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-amber-600">{owingCount.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground mt-1">Customers owing money</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Total Outstanding</CardTitle>
+            <Wallet className="w-4 h-4 text-red-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">
+              LKR {Math.round(totalOutstanding).toLocaleString()}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">All customer balances</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Count per business — click to filter */}
+      {businessCounts.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant={businessFilter === "all" ? "default" : "outline"}
+            onClick={() => { setBusinessFilter("all"); setCurrentPage(1); }}
+          >
+            All ({customers.length})
+          </Button>
+          {businessCounts.map(([name, count]) => (
+            <Button
+              key={name}
+              size="sm"
+              variant={businessFilter === name ? "default" : "outline"}
+              onClick={() => { setBusinessFilter(name); setCurrentPage(1); }}
+            >
+              {name} ({count})
+            </Button>
+          ))}
+        </div>
+      )}
+
       {/* Filter & Table */}
       <Card>
         <CardHeader>
@@ -257,12 +342,12 @@ export default function CustomersPage() {
               <Input
                 placeholder="Search..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
                 className="pl-9 w-full"
               />
             </div>
             <div className="w-full md:w-auto">
-              <Select value={routeFilter} onValueChange={setRouteFilter}>
+              <Select value={routeFilter} onValueChange={(v) => { setRouteFilter(v); setCurrentPage(1); }}>
                 <SelectTrigger className="w-full md:w-[180px]"><SelectValue placeholder="Route" /></SelectTrigger>
                 <SelectContent>
                   {routes.map((r) => <SelectItem key={r} value={r}>{r === "all" ? "All Routes" : r}</SelectItem>)}
@@ -270,6 +355,10 @@ export default function CustomersPage() {
               </Select>
             </div>
           </div>
+          <p className="text-sm text-muted-foreground">
+            Showing <span className="font-semibold text-foreground">{filteredCustomers.length.toLocaleString()}</span> of{" "}
+            {customers.length.toLocaleString()} customers
+          </p>
         </CardHeader>
         <CardContent>
           <CustomerTable

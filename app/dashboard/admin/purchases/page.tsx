@@ -10,6 +10,10 @@ import { PurchaseHeader } from "./_components/PurchaseHeader";
 import { PurchaseStats } from "./_components/PurchaseStats";
 import { PurchaseFilters } from "./_components/PurchaseFilters";
 import { PurchaseTable } from "./_components/PurchaseTable";
+import { MonthlyPurchaseSummary } from "./_components/MonthlyPurchaseSummary";
+import { downloadPurchaseReport } from "./purchase-report";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Purchase, SortField, SortOrder } from "./types";
 
 export default function PurchasesPage() {
@@ -17,6 +21,11 @@ export default function PurchasesPage() {
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  // Month filter: "YYYY-MM" or "" for all time. Defaults to this month.
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
 
   // Sort & Pagination
   const [sortField, setSortField] = useState<SortField>("purchaseDate");
@@ -54,8 +63,26 @@ export default function PurchasesPage() {
     [rawPurchases]
   );
 
+  // --- 1b. Month Filter ---
+  const monthPurchases = useMemo(
+    () =>
+      selectedMonth
+        ? purchases.filter(
+            (p) => (p.purchaseDate || "").slice(0, 7) === selectedMonth
+          )
+        : purchases,
+    [purchases, selectedMonth]
+  );
+
+  const monthLabel = selectedMonth
+    ? new Date(`${selectedMonth}-01T00:00:00`).toLocaleDateString("en-US", {
+        month: "long",
+        year: "numeric",
+      })
+    : "All Time";
+
   // --- 2. Filter Logic ---
-  const filteredPurchases = purchases.filter((p) => {
+  const filteredPurchases = monthPurchases.filter((p) => {
     const matchesSearch =
       p.purchaseId.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.supplierName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -87,7 +114,7 @@ export default function PurchasesPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, statusFilter]);
+  }, [searchQuery, statusFilter, selectedMonth]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) setSortOrder(sortOrder === "asc" ? "desc" : "asc");
@@ -109,11 +136,34 @@ export default function PurchasesPage() {
       <PurchaseHeader
         onAddClick={() => router.push("/dashboard/admin/purchases/create")}
         onExportExcel={() => toast.info("Export coming soon")}
-        onExportPDF={() => toast.info("Export coming soon")}
+        onExportPDF={() => downloadPurchaseReport(monthPurchases, monthLabel)}
       />
 
-      {/* Stats using real data */}
-      <PurchaseStats purchases={purchases} />
+      {/* Month selector */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm font-medium">Month:</span>
+        <Input
+          type="month"
+          value={selectedMonth}
+          onChange={(e) => setSelectedMonth(e.target.value)}
+          className="w-[180px]"
+        />
+        <Button
+          variant={selectedMonth ? "outline" : "default"}
+          size="sm"
+          onClick={() => setSelectedMonth("")}
+        >
+          All Time
+        </Button>
+      </div>
+
+      {/* Stats for the selected month */}
+      <PurchaseStats purchases={monthPurchases} />
+
+      <MonthlyPurchaseSummary
+        purchases={monthPurchases}
+        monthLabel={monthLabel}
+      />
 
       <Card>
         <CardHeader>
