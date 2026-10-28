@@ -1627,6 +1627,40 @@ export default function RepReturnsPage() {
         </div>
       )}
 
+      {/* ── Mobile / Tablet sticky bottom bar (submit) ── */}
+      {viewMode !== "history" && (
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t shadow-lg px-4 py-3 safe-area-inset-bottom">
+          <div className="flex items-center gap-3 max-w-2xl mx-auto">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-xs text-muted-foreground">Total Return</span>
+                <span className="font-bold text-base text-orange-600 truncate">
+                  LKR {grandTotalReturn.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {returnItems.length} item{returnItems.length !== 1 ? "s" : ""}
+              </div>
+            </div>
+            <Button
+              onClick={handleSubmitReturnNote}
+              disabled={returnItems.length === 0 || !customerId || submitting}
+              className="bg-[#f97316] hover:bg-[#ea580c] text-white font-semibold shrink-0 h-11"
+            >
+              {submitting ? (
+                <>
+                  <Clock className="w-4 h-4 animate-spin mr-2" /> Submitting...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4 mr-2" /> Submit Return Note
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* ═══════════════════════════════════════════════════════════════════ */}
       {/* ── MODE 2: PAST RETURNS HISTORY & APPROVAL STATUS ─────────────── */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
