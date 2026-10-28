@@ -22,6 +22,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Download, RefreshCw, Search, AlertTriangle, Scale } from "lucide-react";
 import { toast } from "sonner";
 import { BUSINESS_NAMES } from "@/app/config/business-constants";
@@ -162,6 +169,154 @@ function Row({
   );
 }
 
+// ─── Product breakdown popup ────────────────────────────────────────────────
+// Shows how one product's actual cost and actual profit were worked out.
+// "Per unit" = amount ÷ all units sold (paid + free), so the per-unit column
+// adds up to the Actual cost shown in the table.
+function ProductBreakdown({ p, freeClaims }: { p: any; freeClaims: any[] }) {
+  const units = p.paidQty + p.freeQty;
+  const per = (v: number) => (units > 0 ? v / units : 0);
+  // % column = share of the base: bill cost for the cost table, sales for the sales table
+  const pctOf = (v: number, base: number) => (base > 0 ? `${((Math.abs(v) / base) * 100).toFixed(1)}%` : "—");
+  const rowsFor = (base: number) => (label: string, v: number, sign?: "-" | "+" | "±", hint?: string, bold?: boolean) => {
+    if (!bold && Math.abs(v) < 0.005) return null; // hide empty steps
+    const shown =
+      sign === "±" ? `${v > 0 ? "+ " : v < 0 ? "- " : ""}${money(Math.abs(v))}` : `${sign ? `${sign} ` : ""}${money(v)}`;
+    const shownPer =
+      sign === "±" ? `${v > 0 ? "+ " : v < 0 ? "- " : ""}${money(Math.abs(per(v)))}` : `${sign ? `${sign} ` : ""}${money(per(v))}`;
+    const green = sign === "-" || (sign === "±" && v < 0);
+    return (
+      <TableRow className={bold ? "bg-muted/40 font-semibold" : ""}>
+        <TableCell>
+          {label}
+          {hint && <div className="text-[11px] text-muted-foreground font-normal">{hint}</div>}
+        </TableCell>
+        <TableCell className={`text-right tabular-nums ${green && !bold ? "text-emerald-600" : ""}`}>{shown}</TableCell>
+        <TableCell className={`text-right tabular-nums ${green && !bold ? "text-emerald-600" : ""}`}>{shownPer}</TableCell>
+        <TableCell className="text-right tabular-nums text-muted-foreground">{pctOf(v, base)}</TableCell>
+      </TableRow>
+    );
+  };
+  const cost = rowsFor(p.bookCost);
+  const sale = rowsFor(p.grossSales);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+        <div><p className="text-xs text-muted-foreground">Paid / free sold</p><p className="font-semibold tabular-nums">{qty(p.paidQty)} / {qty(p.freeQty)}</p></div>
+        <div><p className="text-xs text-muted-foreground">Known cost (bill)</p><p className="font-semibold tabular-nums">{money(p.knownCostRate)}</p></div>
+        <div><p className="text-xs text-muted-foreground">Actual cost</p><p className="font-semibold tabular-nums">{money(p.actualCostRate)}</p></div>
+        <div><p className="text-xs text-muted-foreground">Cost saved per unit</p><p className="font-semibold tabular-nums text-emerald-600">{money(p.knownCostRate - p.actualCostRate)}</p></div>
+      </div>
+
+      <div className="border rounded-md overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>How the actual cost is worked out</TableHead>
+              <TableHead className="text-right">Amount</TableHead>
+              <TableHead className="text-right">Per unit</TableHead>
+              <TableHead className="text-right" title="% of the bill cost">% of cost</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {cost("Cost of paid units (supplier bill rate)", p.bookCost, undefined, `${qty(p.paidQty)} paid × ${money(p.knownCostRate)}`, true)}
+            {cost("Supplier extra discount", p.supplierExtraDiscount, "-", "Extra discount on the purchase bill (e.g. Orange 4%)")}
+            {cost("Supplier free items (on the bill)", p.supplierFreeBenefit, "-", "Free units on the purchase bill, spread over paid units")}
+            {cost("Stock batch difference", p.batchDifference, "±", "FIFO: older/newer stock sold at a different cost")}
+            {cost("Cost of free issues given to customers", p.freeIssueCost, "+", `${qty(p.freeQty)} free units given × actual cost`)}
+            {cost("Supplier free claims received", p.supplierFreeClaims, "-", `${qty(p.freeClaimQty)} free units received from the supplier (free-claim purchases)`)}
+            {cost("Supplier monthly claim discount", p.supplierMonthlyClaims, "-", "Orange after-month claim bills (Monthly Claim Discounts)")}
+            {cost("Total actual cost", p.actualCost, undefined, `÷ ${qty(units)} units (paid + free) = ${money(p.actualCostRate)} per unit`, true)}
+            <TableRow>
+              <TableCell className="font-semibold text-emerald-700">Total saved on cost</TableCell>
+              <TableCell className="text-right tabular-nums font-semibold text-emerald-600">{money(p.bookCost - p.actualCost)}</TableCell>
+              <TableCell className="text-right tabular-nums font-semibold text-emerald-600">{money(units > 0 ? (p.bookCost - p.actualCost) / units : 0)}</TableCell>
+              <TableCell className="text-right tabular-nums font-semibold text-emerald-600">{p.bookCost > 0 ? `${(((p.bookCost - p.actualCost) / p.bookCost) * 100).toFixed(1)}%` : "—"}</TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </div>
+
+      {freeClaims.length > 0 && (
+        <div className="border rounded-md overflow-x-auto">
+          <div className="px-4 pt-3 pb-1">
+            <p className="font-semibold text-sm">Supplier free claims received (in this period)</p>
+            <p className="text-[11px] text-muted-foreground">
+              Free stock the supplier sent at zero cost. Each unit is valued at the item&apos;s actual cost on that date,
+              and that value is taken off the total cost above.
+            </p>
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Purchase</TableHead>
+                <TableHead className="text-right">Free units</TableHead>
+                <TableHead className="text-right">Value / unit</TableHead>
+                <TableHead className="text-right">Taken off cost</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {freeClaims.map((c) => (
+                <TableRow key={c.id}>
+                  <TableCell>{c.date}</TableCell>
+                  <TableCell>
+                    {c.purchaseId || "—"}
+                    {c.invoiceNo && <div className="text-[11px] text-muted-foreground">Bill {c.invoiceNo}</div>}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{qty(c.freeQty)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{money(c.actualRate)}</TableCell>
+                  <TableCell className="text-right tabular-nums text-emerald-600">- {money(c.claimValue)}</TableCell>
+                </TableRow>
+              ))}
+              <TableRow className="bg-muted/40 font-semibold">
+                <TableCell colSpan={2}>Total</TableCell>
+                <TableCell className="text-right tabular-nums">{qty(freeClaims.reduce((s, c) => s + c.freeQty, 0))}</TableCell>
+                <TableCell />
+                <TableCell className="text-right tabular-nums text-emerald-600">- {money(freeClaims.reduce((s, c) => s + c.claimValue, 0))}</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
+      <div className="border rounded-md overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Sales and profit</TableHead>
+              <TableHead className="text-right">Amount</TableHead>
+              <TableHead className="text-right">Per unit</TableHead>
+              <TableHead className="text-right" title="% of sales">% of sales</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sale("Sales (paid qty × selling rate)", p.grossSales, undefined, undefined, true)}
+            {sale("Line discounts", p.lineDiscount, "-")}
+            {sale("Invoice extra discounts", p.extraDiscount, "-")}
+            {sale("Cash discounts", p.cashDiscount, "-")}
+            {sale("Net sales", p.actualSales, undefined, undefined, true)}
+            {sale("Total actual cost", p.actualCost, "-")}
+            <TableRow className="font-bold">
+              <TableCell>Actual profit</TableCell>
+              <TableCell className={`text-right tabular-nums ${tone(p.actualProfit)}`}>{money(p.actualProfit)}</TableCell>
+              <TableCell className={`text-right tabular-nums ${tone(p.actualProfit)}`}>{money(per(p.actualProfit))}</TableCell>
+              <TableCell className={`text-right tabular-nums ${tone(p.actualProfit)}`}>{pct(p.grossSales > 0 ? (p.actualProfit / p.grossSales) * 100 : 0)}</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell className="text-muted-foreground">Book profit (bill cost only)</TableCell>
+              <TableCell className="text-right tabular-nums text-muted-foreground">{money(p.bookProfit)}</TableCell>
+              <TableCell />
+              <TableCell className="text-right tabular-nums text-muted-foreground">{pct(p.bookMargin)}</TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ───────────────────────────────────────────────────────────────────
 export default function ActualProfitReportPage() {
   const [period, setPeriod] = useState("this-month");
@@ -174,6 +329,7 @@ export default function ActualProfitReportPage() {
 
   const [search, setSearch] = useState("");
   const [lossOnly, setLossOnly] = useState(false);
+  const [openProduct, setOpenProduct] = useState<any>(null);
 
   const applyPeriod = (p: string) => {
     setPeriod(p);
@@ -571,7 +727,11 @@ export default function ActualProfitReportPage() {
                         {products.map((p: any) => {
                           const hidden = p.bookProfit > 0 && p.actualProfit < 0;
                           return (
-                            <TableRow key={p.id} className={p.actualProfit < 0 ? "bg-rose-50/60 dark:bg-rose-950/20" : ""}>
+                            <TableRow
+                              key={p.id}
+                              onClick={() => setOpenProduct(p)}
+                              className={`cursor-pointer hover:bg-muted/50 ${p.actualProfit < 0 ? "bg-rose-50/60 dark:bg-rose-950/20" : ""}`}
+                            >
                               <TableCell className="max-w-[280px]">
                                 <div className="font-medium truncate" title={p.name}>{p.name}</div>
                                 <div className="text-[11px] text-muted-foreground">
@@ -778,6 +938,25 @@ export default function ActualProfitReportPage() {
           </Tabs>
         </>
       )}
+
+      <Dialog open={!!openProduct} onOpenChange={(o) => !o && setOpenProduct(null)}>
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{openProduct?.name}</DialogTitle>
+            <DialogDescription>
+              {openProduct?.supplier || "—"}{openProduct?.sku ? ` · ${openProduct.sku}` : ""} · {from} → {to}
+            </DialogDescription>
+          </DialogHeader>
+          {openProduct && (
+            <ProductBreakdown
+              p={openProduct}
+              freeClaims={(data?.purchases?.rows || [])
+                .filter((r: any) => r.isFreeClaim && r.productId === openProduct.id)
+                .sort((a: any, b: any) => String(a.date).localeCompare(String(b.date)))}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

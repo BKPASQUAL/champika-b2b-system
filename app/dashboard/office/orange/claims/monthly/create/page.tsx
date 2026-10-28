@@ -61,6 +61,8 @@ export default function CreateMonthlyClaimPage() {
   const [discountPercent, setDiscountPercent] = useState<string>("");
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<Line[]>([]);
+  // Set when editing a saved claim bill (?edit=<id>)
+  const [editId, setEditId] = useState<string | null>(null);
 
   // Item entry (same flow as the purchase bill)
   const [searchTerm, setSearchTerm] = useState("");
@@ -89,6 +91,33 @@ export default function CreateMonthlyClaimPage() {
         setSuppliers(allSuppliers);
         const orange = allSuppliers.find((s: any) => s.name?.toLowerCase().includes("orange"));
         if (orange) setSupplierId(orange.id);
+
+        // Edit mode: load the saved bill into the form
+        const id = new URLSearchParams(window.location.search).get("edit");
+        if (id) {
+          const bRes = await fetch(`/api/supplier-claim-bills/${id}`);
+          const b = await bRes.json();
+          if (!bRes.ok) throw new Error(b.error || "Failed to load claim bill");
+          setEditId(id);
+          if (b.supplierId) setSupplierId(b.supplierId);
+          setClaimNo(b.claimNo || "");
+          setClaimDate(String(b.claimDate || "").slice(0, 10));
+          setPeriodFrom(String(b.periodFrom || "").slice(0, 10));
+          setPeriodTo(String(b.periodTo || "").slice(0, 10));
+          setDiscountPercent(String(b.discountPercent ?? ""));
+          setNotes(b.notes || "");
+          setLines(
+            (b.items || []).map((i: any, k: number) => ({
+              key: `${i.productId}-${k}`,
+              productId: i.productId,
+              name: i.name,
+              sku: i.sku,
+              quantity: i.quantity,
+              unitPrice: i.unitPrice,
+              actualCost: i.costBefore,
+            })),
+          );
+        }
         setProducts(
           allProducts.filter(
             (p: any) =>
@@ -96,8 +125,8 @@ export default function CreateMonthlyClaimPage() {
               (p.secondarySuppliers || []).some((s: string) => s?.toLowerCase().includes("orange")),
           ),
         );
-      } catch {
-        toast.error("Failed to load products");
+      } catch (e: any) {
+        toast.error(e?.message || "Failed to load products");
       } finally {
         setLoading(false);
       }
@@ -217,6 +246,8 @@ export default function CreateMonthlyClaimPage() {
   };
 
   const removeLine = (key: string) => setLines((prev) => prev.filter((l) => l.key !== key));
+  const updateLine = (key: string, patch: Partial<Line>) =>
+    setLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
 
   // Totals
   const grossTotal = lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
@@ -234,11 +265,12 @@ export default function CreateMonthlyClaimPage() {
     if (!claimNo.trim()) return toast.error("Enter the claim bill number");
     if (lines.length === 0) return toast.error("Add the items on the claim bill");
     if (discountAmount <= 0) return toast.error("Enter the Document Discount %");
+    if (lines.some((l) => l.quantity <= 0)) return toast.error("Every item needs a quantity above 0");
 
     setSaving(true);
     try {
-      const res = await fetch("/api/supplier-claim-bills", {
-        method: "POST",
+      const res = await fetch(editId ? `/api/supplier-claim-bills/${editId}` : "/api/supplier-claim-bills", {
+        method: editId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           businessId: BUSINESS_ID,
@@ -260,7 +292,7 @@ export default function CreateMonthlyClaimPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to save");
       toast.success(
-        `Claim saved. Rs ${money(data.appliedToSold)} taken off ${data.linesUpdated} sold invoice lines, ` +
+        `${editId ? "Claim updated" : "Claim saved"}. Rs ${money(data.appliedToSold)} taken off ${data.linesUpdated} sold invoice lines, ` +
           `Rs ${money(data.appliedToStock)} taken off unsold stock.`,
         { duration: 10000 },
       );
@@ -300,14 +332,18 @@ export default function CreateMonthlyClaimPage() {
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <div className="flex-1">
-          <h1 className="text-3xl font-bold tracking-tight text-orange-900">New Claim Bill</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-orange-900">
+            {editId ? `Edit Claim Bill ${claimNo}` : "New Claim Bill"}
+          </h1>
           <p className="text-muted-foreground mt-1">
-            Enter Orange&apos;s monthly discount bill. Discount only — no stock or supplier payment change.
+            {editId
+              ? "Change anything and save. The old discount is taken off and the new one is applied again."
+              : "Enter Orange's monthly discount bill. Discount only — no stock or supplier payment change."}
           </p>
         </div>
         <Button onClick={save} disabled={lines.length === 0 || saving} className="bg-orange-600 hover:bg-orange-700">
           {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-          Save Claim
+          {editId ? "Update Claim" : "Save Claim"}
         </Button>
       </div>
 
@@ -531,8 +567,22 @@ export default function CreateMonthlyClaimPage() {
                             <div className="font-medium">{l.name}</div>
                             <div className="text-xs text-muted-foreground">{l.sku}</div>
                           </TableCell>
-                          <TableCell className="text-right">{money(l.unitPrice)}</TableCell>
-                          <TableCell className="text-right">{l.quantity}</TableCell>
+                          <TableCell className="text-right">
+                            <Input
+                              type="number"
+                              className="h-8 w-28 ml-auto text-right"
+                              value={l.unitPrice}
+                              onChange={(e) => updateLine(l.key, { unitPrice: Number(e.target.value) || 0 })}
+                            />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Input
+                              type="number"
+                              className="h-8 w-20 ml-auto text-right"
+                              value={l.quantity}
+                              onChange={(e) => updateLine(l.key, { quantity: Number(e.target.value) || 0 })}
+                            />
+                          </TableCell>
                           <TableCell className="text-right font-bold">{money(c.gross)}</TableCell>
                           <TableCell className="text-right text-red-500">
                             {c.share > 0 ? money(c.share) : "-"}

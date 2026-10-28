@@ -19,7 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, Plus, Receipt, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Loader2, Pencil, Plus, Receipt, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
 
@@ -28,12 +28,80 @@ const BUSINESS_ID = BUSINESS_IDS.ORANGE_AGENCY;
 const money = (n: number) =>
   (Number(n) || 0).toLocaleString("en-LK", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// Where one item's discount went: purchase bills in the period, unsold stock,
+// and the customer invoices that sold that stock (FIFO, oldest first).
+function MatchDetail({ match }: { match: any }) {
+  const soldDiscount = match.sales.reduce((s: number, x: any) => s + x.discount, 0);
+  const soldUnits = match.sales.reduce((s: number, x: any) => s + x.units, 0);
+  return (
+    <div className="space-y-3 text-xs">
+      <div>
+        <p className="font-semibold mb-1">Purchase bills in the period</p>
+        {match.purchases.length === 0 ? (
+          <p className="text-rose-600">No purchase of this item from the supplier in the period — discount not applied.</p>
+        ) : (
+          <table className="w-full">
+            <thead className="text-muted-foreground">
+              <tr><th className="text-left font-normal">Date</th><th className="text-left font-normal">Purchase</th><th className="text-right font-normal">Units</th><th className="text-right font-normal">Cost</th><th className="text-right font-normal">Disc / unit</th><th className="text-right font-normal">New cost</th></tr>
+            </thead>
+            <tbody>
+              {match.purchases.map((p: any, k: number) => (
+                <tr key={k}>
+                  <td>{p.date}</td>
+                  <td>{p.purchaseNo}{p.billNo ? ` (bill ${p.billNo})` : ""}</td>
+                  <td className="text-right tabular-nums">{p.units}</td>
+                  <td className="text-right tabular-nums">{money(p.costBefore)}</td>
+                  <td className="text-right tabular-nums text-emerald-600">{money(p.cutPerUnit)}</td>
+                  <td className="text-right tabular-nums font-medium">{money(p.costBefore - p.cutPerUnit)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className="flex gap-6">
+        <p>Unsold stock: <span className="font-semibold tabular-nums">{match.stockUnits}</span> units · discount <span className="font-semibold tabular-nums text-emerald-600">{money(match.stockDiscount)}</span></p>
+        <p>Sold: <span className="font-semibold tabular-nums">{soldUnits}</span> units · discount <span className="font-semibold tabular-nums text-emerald-600">{money(soldDiscount)}</span></p>
+      </div>
+
+      <div>
+        <p className="font-semibold mb-1">Customer invoices that sold this stock (FIFO)</p>
+        {match.sales.length === 0 ? (
+          <p className="text-muted-foreground">None yet — all of it is still in stock, so future sales will get the lower cost.</p>
+        ) : (
+          <table className="w-full">
+            <thead className="text-muted-foreground">
+              <tr><th className="text-left font-normal">Date</th><th className="text-left font-normal">Invoice</th><th className="text-left font-normal">Customer</th><th className="text-right font-normal">Units</th><th className="text-right font-normal">Cost</th><th className="text-right font-normal">Disc / unit</th><th className="text-right font-normal">New cost</th><th className="text-right font-normal">Discount</th></tr>
+            </thead>
+            <tbody>
+              {match.sales.map((s: any, k: number) => (
+                <tr key={k}>
+                  <td>{s.date}</td>
+                  <td>{s.invoiceNo}</td>
+                  <td className="max-w-[180px] truncate" title={s.shop}>{s.shop}</td>
+                  <td className="text-right tabular-nums">{s.units}</td>
+                  <td className="text-right tabular-nums">{money(s.costBefore)}</td>
+                  <td className="text-right tabular-nums text-emerald-600">{money(s.cutPerUnit)}</td>
+                  <td className="text-right tabular-nums font-medium">{money(s.costBefore - s.cutPerUnit)}</td>
+                  <td className="text-right tabular-nums">{money(s.discount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function MonthlyClaimsPage() {
   const [loading, setLoading] = useState(true);
   const [claims, setClaims] = useState<any[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [detail, setDetail] = useState<any>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -60,6 +128,7 @@ export default function MonthlyClaimsPage() {
   const openClaim = async (id: string) => {
     setOpenId(id);
     setDetail(null);
+    setExpanded(null);
     setDetailLoading(true);
     try {
       const res = await fetch(`/api/supplier-claim-bills/${id}`);
@@ -140,15 +209,18 @@ export default function MonthlyClaimsPage() {
                 <TableHead className="text-right">Gross value</TableHead>
                 <TableHead className="text-right">Discount %</TableHead>
                 <TableHead className="text-right">Discount</TableHead>
+                <TableHead className="text-right">Added to sold</TableHead>
+                <TableHead className="text-right">In stock</TableHead>
+                <TableHead className="text-right">Not added</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={6} className="text-center py-10">
+                <TableRow><TableCell colSpan={9} className="text-center py-10">
                   <Loader2 className="h-5 w-5 animate-spin inline mr-2" />Loading…
                 </TableCell></TableRow>
               ) : claims.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
+                <TableRow><TableCell colSpan={9} className="text-center py-10 text-muted-foreground">
                   No claim bills yet. Click &quot;New claim bill&quot; to enter one.
                 </TableCell></TableRow>
               ) : (
@@ -163,6 +235,11 @@ export default function MonthlyClaimsPage() {
                     <TableCell className="text-right tabular-nums">{money(c.grossTotal)}</TableCell>
                     <TableCell className="text-right tabular-nums">{c.discountPercent.toFixed(2)}%</TableCell>
                     <TableCell className="text-right tabular-nums font-semibold text-emerald-600">{money(c.discountAmount)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{money(c.appliedToSold)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{money(c.appliedToStock)}</TableCell>
+                    <TableCell className={`text-right tabular-nums ${c.notAppliedAmount > 0.5 ? "font-semibold text-rose-600" : "text-muted-foreground"}`}>
+                      {money(c.notAppliedAmount)}
+                    </TableCell>
                   </TableRow>
                 ))
               )}
@@ -208,10 +285,19 @@ export default function MonthlyClaimsPage() {
                   </TableHeader>
                   <TableBody>
                     {detail.items.map((i: any) => (
-                      <TableRow key={i.id}>
+                      <React.Fragment key={i.id}>
+                      <TableRow
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => setExpanded(expanded === i.id ? null : i.id)}
+                      >
                         <TableCell className="max-w-[260px]">
-                          <div className="truncate font-medium" title={i.name}>{i.name}</div>
-                          <div className="text-[11px] text-muted-foreground">{i.sku}</div>
+                          <div className="flex items-center gap-1">
+                            {expanded === i.id ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
+                            <div className="truncate font-medium" title={i.name}>{i.name}</div>
+                          </div>
+                          <div className="text-[11px] text-muted-foreground pl-5">
+                            {i.sku} · {i.match.purchases.length} purchase{i.match.purchases.length === 1 ? "" : "s"} · {i.match.sales.length} invoice{i.match.sales.length === 1 ? "" : "s"}
+                          </div>
                         </TableCell>
                         <TableCell className="text-right tabular-nums">{i.quantity}</TableCell>
                         <TableCell className="text-right tabular-nums">{money(i.unitPrice)}</TableCell>
@@ -221,12 +307,25 @@ export default function MonthlyClaimsPage() {
                         <TableCell className="text-right tabular-nums">{money(i.costBefore)}</TableCell>
                         <TableCell className="text-right tabular-nums font-semibold">{money(i.costAfter)}</TableCell>
                       </TableRow>
+                      {expanded === i.id && (
+                        <TableRow className="bg-muted/30 hover:bg-muted/30">
+                          <TableCell colSpan={8} className="p-3">
+                            <MatchDetail match={i.match} />
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      </React.Fragment>
                     ))}
                   </TableBody>
                 </Table>
               </div>
 
-              <div className="flex justify-end">
+              <div className="flex justify-end gap-2">
+                <Link href={`/dashboard/office/orange/claims/monthly/create?edit=${detail.id}`}>
+                  <Button variant="outline">
+                    <Pencil className="h-4 w-4 mr-1" /> Edit claim bill
+                  </Button>
+                </Link>
                 <Button variant="ghost" className="text-rose-600" onClick={deleteClaim}>
                   <Trash2 className="h-4 w-4 mr-1" /> Delete claim bill
                 </Button>

@@ -8,29 +8,9 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
 import { applyClaimCosts, revertClaimCosts } from "@/lib/supplier-claim-costs";
 import { rebuildFifoCostsSafe } from "@/lib/fifo-rebuild";
+import { buildClaimRows, claimSchema } from "@/lib/supplier-claim-input";
 
 export const dynamic = "force-dynamic";
-
-const itemSchema = z.object({
-  productId: z.string().min(1),
-  quantity: z.number().positive(),
-  unitPrice: z.number().min(0),
-  costBefore: z.number().optional().nullable(),
-});
-
-const claimSchema = z.object({
-  businessId: z.string().min(1, "Business is required"),
-  supplierId: z.string().min(1, "Supplier is required"),
-  claimNo: z.string().min(1, "Claim bill number is required"),
-  claimDate: z.string().min(1),
-  periodFrom: z.string().min(1, "Period is required"),
-  periodTo: z.string().min(1, "Period is required"),
-  discountPercent: z.number().min(0).max(100),
-  // Exact discount amount printed on the claim bill (overrides % × gross if given)
-  discountAmount: z.number().min(0).optional().nullable(),
-  notes: z.string().optional().nullable(),
-  items: z.array(itemSchema).min(1, "Add at least one item"),
-});
 
 export async function GET(request: NextRequest) {
   try {
@@ -49,6 +29,32 @@ export async function GET(request: NextRequest) {
     const { data, error } = await q;
     if (error) throw error;
 
+    // How much of each claim was really placed on cost
+    //   applied = on purchases in the period, sold = on customer invoices, rest = still in stock
+    const ids = (data || []).map((c: any) => c.id);
+    const applied: Record<string, { applied: number; sold: number }> = {};
+    for (let i = 0; i < ids.length; i += 50) {
+      let start = 0;
+      while (true) {
+        const { data: adj, error: ae } = await supabaseAdmin
+          .from("supplier_claim_cost_adjustments")
+          .select("claim_bill_id, target_type, units, reduction_per_unit")
+          .in("claim_bill_id", ids.slice(i, i + 50))
+          .in("target_type", ["purchase_item", "order_item"])
+          .order("id")
+          .range(start, start + 999);
+        if (ae) throw ae;
+        (adj || []).forEach((a: any) => {
+          const v = (Number(a.units) || 0) * (Number(a.reduction_per_unit) || 0);
+          const g = (applied[a.claim_bill_id] ||= { applied: 0, sold: 0 });
+          if (a.target_type === "purchase_item") g.applied += v;
+          else g.sold += v;
+        });
+        if (!adj || adj.length < 1000) break;
+        start += 1000;
+      }
+    }
+
     return NextResponse.json(
       (data || []).map((c: any) => ({
         id: c.id,
@@ -65,6 +71,10 @@ export async function GET(request: NextRequest) {
         notes: c.notes,
         itemCount: c.items?.length || 0,
         totalQty: (c.items || []).reduce((s: number, i: any) => s + (Number(i.quantity) || 0), 0),
+        appliedAmount: applied[c.id]?.applied || 0,
+        appliedToSold: Math.min(applied[c.id]?.sold || 0, applied[c.id]?.applied || 0),
+        appliedToStock: Math.max(0, (applied[c.id]?.applied || 0) - (applied[c.id]?.sold || 0)),
+        notAppliedAmount: Math.max(0, (Number(c.discount_amount) || 0) - (applied[c.id]?.applied || 0)),
       })),
     );
   } catch (error: any) {
@@ -89,45 +99,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "This claim bill number already exists for this supplier." }, { status: 409 });
     }
 
-    const lines = val.items.map((i) => ({ ...i, gross: i.quantity * i.unitPrice }));
-    const grossTotal = lines.reduce((s, l) => s + l.gross, 0);
-    const discountAmount =
-      val.discountAmount != null && val.discountAmount > 0
-        ? val.discountAmount
-        : (grossTotal * val.discountPercent) / 100;
+    const { header, itemRows, discountAmount } = buildClaimRows(val);
 
     const { data: bill, error: billErr } = await supabaseAdmin
       .from("supplier_claim_bills")
-      .insert({
-        claim_no: val.claimNo,
-        business_id: val.businessId,
-        supplier_id: val.supplierId,
-        claim_date: val.claimDate,
-        period_from: val.periodFrom,
-        period_to: val.periodTo,
-        gross_total: grossTotal,
-        discount_percent: val.discountPercent,
-        discount_amount: discountAmount,
-        notes: val.notes || null,
-      })
+      .insert(header)
       .select()
       .single();
     if (billErr) throw billErr;
 
-    // Spread the document discount over the lines by value
-    const rows = lines.map((l) => {
-      const share = grossTotal > 0 ? (l.gross / grossTotal) * discountAmount : 0;
-      return {
-        claim_bill_id: bill.id,
-        product_id: l.productId,
-        quantity: l.quantity,
-        unit_price: l.unitPrice,
-        gross_value: l.gross,
-        discount_amount: share,
-        discount_per_unit: l.quantity > 0 ? share / l.quantity : 0,
-        cost_before: l.costBefore ?? null,
-      };
-    });
+    // Document discount spread over the lines by value
+    const rows = itemRows(bill.id);
 
     const { error: itemsErr } = await supabaseAdmin.from("supplier_claim_bill_items").insert(rows);
     if (itemsErr) {
