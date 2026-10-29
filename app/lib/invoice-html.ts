@@ -467,10 +467,11 @@ export const getDocumentWrapper = (content: string, title: string) => `
       body { font-family: ${FONT_STACK}; margin: 0; padding: 0; background: #fff; width: 794px; }
       @media print {
         /* No fixed paper size: works on A4 and Letter (chosen in the print dialog) */
-        @page { size: portrait; margin: 0; }
+        /* Keep a real page margin: printers can't print the outer ~5mm, so margin:0 clipped the right edge */
+        @page { size: portrait; margin: 5mm 8mm 5mm 6mm; }
         html, body { width: 100% !important; margin: 0 auto; padding: 0; }
         body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        .invoice-page { page-break-after: always; page-break-inside: avoid; width: 100% !important; min-height: 250mm !important; min-height: calc(100vh - 1mm) !important; padding: 2mm 8mm 3mm !important; }
+        .invoice-page { page-break-after: always; page-break-inside: avoid; width: 100% !important; min-height: calc(100vh - 1mm) !important; padding: 0 2mm 0 2mm !important; }
         /* Page fills the paper height (A4 or Letter), so the "Thank you" footer always sits at the bottom */
         .invoice-page:last-child { page-break-after: auto !important; }
       }

@@ -108,11 +108,12 @@ export default function InvoicePrintView({ invoice }: { invoice: any }) {
         }
 
         @media print {
-          @page { size: portrait; margin: 0; } /* A4 or Letter, chosen in the print dialog */
+          /* A4 or Letter, chosen in the print dialog. Real margin so the printer doesn't clip the right edge */
+          @page { size: portrait; margin: 5mm 8mm 5mm 6mm; }
           html, body { background: #fff !important; }
           .top-bar    { display: none !important; }
           .pdf-outer  { padding: 0 !important; display: block !important; }
-          .invoice-page { min-height: calc(100vh - 1mm) !important; padding: 2mm 8mm 3mm !important; page-break-inside: avoid; }
+          .invoice-page { min-height: calc(100vh - 1mm) !important; padding: 0 2mm 0 2mm !important; page-break-inside: avoid; }
           .invoice-page:last-child { page-break-after: auto !important; }
           .pdf-scaler { transform: none !important; width: 100% !important; box-shadow: none !important; }
           body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
