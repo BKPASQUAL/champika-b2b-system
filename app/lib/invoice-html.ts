@@ -38,6 +38,18 @@ export const DIVISIONS: Record<string, DivisionConfig> = {
   admin:        { division: "Head Office",            address: "Pranawatta Road, Wallabada, Boossa", tel: "0777681663" },
 };
 
+// Every original bill number on a return note: from each item's billRef and every [INV:x] tag in the notes
+const getBillRefs = (items: any[], rawNotes: string): string[] => [
+  ...new Set(
+    [
+      ...items.map((it: any) => it?.billRef),
+      ...[...(rawNotes || "").matchAll(/\[INV:([^\]]+)\]/g)].map((m) => m[1]),
+    ]
+      .map((b: any) => String(b || "").trim())
+      .filter((b: string) => b && b !== "-")
+  ),
+];
+
 export const generateInvoiceHTML = async (
   invoice: any,
   divisionKey: keyof typeof DIVISIONS = "distribution",
@@ -130,10 +142,12 @@ export const generateInvoiceHTML = async (
   }
 
   // Extract original invoice reference if present in notes
+  // A return note can hold items from several bills: collect every bill number
   let originalInvoiceNo: string | null = null;
-  const invMatch = rawNotes.match(/\[INV:([^\]]+)\]/);
-  if (invMatch) {
-    originalInvoiceNo = invMatch[1];
+  const billRefs = getBillRefs(items, rawNotes);
+  const multiBill = billRefs.length > 1;
+  if (billRefs.length > 0) {
+    originalInvoiceNo = billRefs.join(", ");
   } else {
     const bracketMatch = rawNotes.match(/\[([A-Z]{2,4}-[\d]+)\]/);
     if (bracketMatch) originalInvoiceNo = bracketMatch[1];
@@ -152,6 +166,7 @@ export const generateInvoiceHTML = async (
     .replace(/\[INV:[^\]]+\]/gi, "")
     .replace(/\[PRICE:[\d.]+\]/gi, "")
     .replace(/\[NOTE:[^\]]+\]/gi, "")
+    .replace(/\[RETURN_ITEM:[^\]]+\]/gi, "")
     .replace(/Good Return Note [^\.]+\./gi, "")
     .replace(/Damage Return Note [^\.]+\./gi, "")
     .replace(/Replacement item \/ Exchange for Return Note [^\.]+\./gi, "")
@@ -230,7 +245,7 @@ export const generateInvoiceHTML = async (
         <tr style="${globalIdx < items.length - 1 ? "border-bottom:1px solid #e8e8e8;" : ""}">
           <td style="padding:7px 8px;font-size:13px;color:#777;text-align:center;vertical-align:middle;">${globalIdx + 1}</td>
           <td style="padding:7px 8px;font-size:13px;color:#555;vertical-align:middle;">${item.sku || "-"}</td>
-          <td style="padding:7px 8px;font-size:13px;color:#111;font-weight:600;vertical-align:middle;">${item.productName || item.name || "-"}${retailTag}</td>
+          <td style="padding:7px 8px;font-size:13px;color:#111;font-weight:600;vertical-align:middle;">${item.productName || item.name || "-"}${retailTag}${multiBill && item.billRef ? `<div style="font-size:10px;font-weight:600;color:#0284c7;margin-top:1px;">Bill: ${item.billRef}</div>` : ""}</td>
           <td style="padding:7px 8px;font-size:13px;color:#555;text-align:center;vertical-align:middle;">${item.unit || "Pcs"}</td>
           <td style="padding:7px 8px;font-size:13px;color:#111;text-align:right;white-space:nowrap;vertical-align:middle;">LKR ${fmt(itemPrice)}</td>
           <td style="padding:7px 8px;font-size:14px;font-weight:800;color:#000;text-align:center;vertical-align:middle;">${itemQty}</td>
@@ -292,7 +307,7 @@ export const generateInvoiceHTML = async (
               </td>` : ""}
               <td style="vertical-align:top;text-align:right;white-space:nowrap;">
                 <div style="font-size:19px;font-weight:800;color:#000;letter-spacing:0.5px;white-space:nowrap;">${invoiceNoDisplay}</div>
-                ${originalInvoiceNo ? `<div style="font-size:11px;font-weight:700;color:#0284c7;margin-top:2px;white-space:nowrap;">Original Bill Ref: ${originalInvoiceNo}</div>` : ""}
+                ${originalInvoiceNo ? `<div style="font-size:11px;font-weight:700;color:#0284c7;margin-top:2px;${multiBill ? "white-space:normal;max-width:260px;margin-left:auto;" : "white-space:nowrap;"}">Original Bill Ref${multiBill ? "s" : ""}: ${originalInvoiceNo}</div>` : ""}
                 ${invoice.manualInvoiceNo ? `<div style="font-size:12px;font-weight:600;color:#444;margin-top:2px;white-space:nowrap;">Book No: ${invoice.manualInvoiceNo}</div>` : ""}
                 <div style="font-size:11px;color:#333;margin-top:2px;line-height:1.5;white-space:nowrap;">
                   Date: ${formatDate(invoice.date || invoice.createdAt)}<br>
@@ -352,7 +367,7 @@ export const generateInvoiceHTML = async (
               Return Collection Instructions
             </div>
             <div>• Lorry driver / rep to verify and collect listed items from customer.</div>
-            ${originalInvoiceNo ? `<div>• Original Invoice Reference: <strong>${originalInvoiceNo}</strong></div>` : ""}
+            ${originalInvoiceNo ? `<div>• Original Invoice Reference${multiBill ? "s" : ""}: <strong>${originalInvoiceNo}</strong></div>` : ""}
             ${cleanReturnNotes ? `<div>• Notes: ${cleanReturnNotes}</div>` : ""}
           </div>
         </td>
@@ -392,7 +407,7 @@ export const generateInvoiceHTML = async (
         </td>
         <td style="width:10%;"></td>
         <td style="width:45%;text-align:center;padding-top:6px;border-top:1.5px solid #000;vertical-align:top;">
-          <div style="font-size:11px;color:#000;font-weight:700;">Collected By (Driver / Rep) Signature</div>
+          <div style="font-size:11px;color:#000;font-weight:700;">Company Responsible Person Signature</div>
           <div style="font-size:9px;color:#666;margin-top:2px;">(Goods Received in Stated Condition)</div>
         </td>
       </tr>
@@ -561,10 +576,12 @@ export const generateHalfPageInvoiceHTML = async (
   }
 
   // Extract original invoice reference if present in notes
+  // A return note can hold items from several bills: collect every bill number
   let originalInvoiceNo: string | null = null;
-  const invMatch = rawNotes.match(/\[INV:([^\]]+)\]/);
-  if (invMatch) {
-    originalInvoiceNo = invMatch[1];
+  const billRefs = getBillRefs(items, rawNotes);
+  const multiBill = billRefs.length > 1;
+  if (billRefs.length > 0) {
+    originalInvoiceNo = billRefs.join(", ");
   } else {
     const bracketMatch = rawNotes.match(/\[([A-Z]{2,4}-[\d]+)\]/);
     if (bracketMatch) originalInvoiceNo = bracketMatch[1];
@@ -583,6 +600,7 @@ export const generateHalfPageInvoiceHTML = async (
     .replace(/\[INV:[^\]]+\]/gi, "")
     .replace(/\[PRICE:[\d.]+\]/gi, "")
     .replace(/\[NOTE:[^\]]+\]/gi, "")
+    .replace(/\[RETURN_ITEM:[^\]]+\]/gi, "")
     .replace(/Good Return Note [^\.]+\./gi, "")
     .replace(/Damage Return Note [^\.]+\./gi, "")
     .replace(/Replacement item \/ Exchange for Return Note [^\.]+\./gi, "")
@@ -660,7 +678,7 @@ export const generateHalfPageInvoiceHTML = async (
         <tr style="${gi < items.length - 1 ? "border-bottom:1px solid #e8e8e8;" : ""}">
           <td style="padding:4px 5px;font-size:12px;color:#777;text-align:center;vertical-align:middle;">${gi + 1}</td>
           <td style="padding:4px 5px;font-size:12px;color:#555;vertical-align:middle;">${item.sku || "-"}</td>
-          <td style="padding:4px 5px;font-size:12px;color:#111;font-weight:600;vertical-align:middle;">${item.productName || item.name || "-"}${retailTag}</td>
+          <td style="padding:4px 5px;font-size:12px;color:#111;font-weight:600;vertical-align:middle;">${item.productName || item.name || "-"}${retailTag}${multiBill && item.billRef ? `<div style="font-size:9px;font-weight:600;color:#0284c7;">Bill: ${item.billRef}</div>` : ""}</td>
           <td style="padding:4px 5px;font-size:12px;color:#555;text-align:center;vertical-align:middle;">${item.unit || "Pcs"}</td>
           <td style="padding:4px 5px;font-size:12px;color:#111;text-align:right;white-space:nowrap;vertical-align:middle;">LKR ${fmt(itemPrice)}</td>
           <td style="padding:4px 5px;font-size:13px;font-weight:800;color:#000;text-align:center;vertical-align:middle;">${itemQty}</td>
@@ -724,7 +742,7 @@ export const generateHalfPageInvoiceHTML = async (
             </td>` : ""}
             <td style="vertical-align:top;text-align:right;white-space:nowrap;">
               <div style="font-size:15px;font-weight:800;color:#000;letter-spacing:0.5px;white-space:nowrap;">${invoiceNoDisplay}</div>
-              ${originalInvoiceNo ? `<div style="font-size:9px;font-weight:700;color:#0284c7;margin-top:1px;white-space:nowrap;">Original Ref: ${originalInvoiceNo}</div>` : ""}
+              ${originalInvoiceNo ? `<div style="font-size:9px;font-weight:700;color:#0284c7;margin-top:1px;${multiBill ? "white-space:normal;max-width:200px;margin-left:auto;" : "white-space:nowrap;"}">Original Ref${multiBill ? "s" : ""}: ${originalInvoiceNo}</div>` : ""}
               ${invoice.manualInvoiceNo ? `<div style="font-size:9px;font-weight:600;color:#444;margin-top:1px;white-space:nowrap;">Book No: ${invoice.manualInvoiceNo}</div>` : ""}
               <div style="font-size:9px;color:#333;margin-top:1px;line-height:1.5;white-space:nowrap;">
                 Date: ${formatDate(invoice.date || invoice.createdAt)}<br>
@@ -782,7 +800,7 @@ export const generateHalfPageInvoiceHTML = async (
         <div style="border:1px solid #cbd5e1;background:#f8fafc;border-radius:4px;padding:5px 8px;font-size:9px;line-height:1.4;color:#334155;">
           <div style="font-weight:700;color:#0f172a;margin-bottom:1px;font-size:9px;text-transform:uppercase;">Return Instructions</div>
           <div>• Collect listed items from customer.</div>
-          ${originalInvoiceNo ? `<div>• Ref Bill: <strong>${originalInvoiceNo}</strong></div>` : ""}
+          ${originalInvoiceNo ? `<div>• Ref Bill${multiBill ? "s" : ""}: <strong>${originalInvoiceNo}</strong></div>` : ""}
           ${cleanReturnNotes ? `<div>• Notes: ${cleanReturnNotes}</div>` : ""}
         </div>
       </td>
@@ -817,7 +835,7 @@ export const generateHalfPageInvoiceHTML = async (
       </td>
       <td style="width:10%;"></td>
       <td style="width:45%;text-align:center;padding-top:4px;border-top:1.5px solid #000;vertical-align:top;">
-        <div style="font-size:9px;color:#000;font-weight:700;">Collected By (Driver/Rep)</div>
+        <div style="font-size:9px;color:#000;font-weight:700;">Company Responsible Person</div>
         <div style="font-size:8px;color:#666;margin-top:1px;">(Received In Good Condition)</div>
       </td>
     </tr>

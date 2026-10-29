@@ -568,7 +568,8 @@ export default function RepReturnsPage() {
 
       for (let idx = 0; idx < returnItems.length; idx++) {
         const it = returnItems[idx];
-        const itemReturnNo = `RET-${noteCode}-${idx + 1}`;
+        // Every item in the note shares one return number (items are told apart by [NOTE:] + id)
+        const itemReturnNo = `RET-${noteCode}`;
         const invTag = it.invoiceNo && it.invoiceNo !== "-" ? `[INV:${it.invoiceNo}]` : "";
         const priceTag = `[PRICE:${it.price}]`;
         const noteTag = `[NOTE:${noteCode}]`;

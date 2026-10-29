@@ -404,7 +404,15 @@ export default function DistributionPaymentEntryPage() {
   }, [statementInvoices]);
 
   const visibleReturnCredits = useMemo(
-    () => availableReturnCredits.filter((r) => !deductedReturnNumbers.has(r.return_number)),
+    () => {
+      // Items of one return note share a number; the server already drops settled items one by one,
+      // so only use this number match for numbers that belong to a single item
+      const counts = new Map<string, number>();
+      availableReturnCredits.forEach((r) => counts.set(r.return_number, (counts.get(r.return_number) || 0) + 1));
+      return availableReturnCredits.filter(
+        (r) => (counts.get(r.return_number) || 0) > 1 || !deductedReturnNumbers.has(r.return_number)
+      );
+    },
     [availableReturnCredits, deductedReturnNumbers]
   );
 

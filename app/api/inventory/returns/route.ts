@@ -142,24 +142,32 @@ export async function POST(req: Request) {
     const return_date = body.return_date || new Date().toISOString();
 
     // --- 2. Create Return Record ---
-    const { data: returnRecord, error: returnError } = await supabaseAdmin
-      .from("inventory_returns")
-      .insert({
-        return_number,
-        product_id,
-        location_id,
-        business_id: business_id || BUSINESS_IDS.CHAMPIKA_DISTRIBUTION,
-        customer_id: customer_id || null,
-        quantity: Number(quantity),
-        return_type,
-        reason: reason || null,
-        returned_by: activeUserId,
-        status,
-        return_batch_id,
-        return_date,
-      })
-      .select()
-      .single();
+    const insertReturn = (no: string) =>
+      supabaseAdmin
+        .from("inventory_returns")
+        .insert({
+          return_number: no,
+          product_id,
+          location_id,
+          business_id: business_id || BUSINESS_IDS.CHAMPIKA_DISTRIBUTION,
+          customer_id: customer_id || null,
+          quantity: Number(quantity),
+          return_type,
+          reason: reason || null,
+          returned_by: activeUserId,
+          status,
+          return_batch_id,
+          return_date,
+        })
+        .select()
+        .single();
+
+    let { data: returnRecord, error: returnError } = await insertReturn(return_number);
+    // Items of one return note share a number. If the database insists on unique
+    // numbers, fall back to a numbered suffix instead of failing.
+    for (let n = 2; returnError?.code === "23505" && n <= 50; n++) {
+      ({ data: returnRecord, error: returnError } = await insertReturn(`${return_number}-${n}`));
+    }
 
     if (returnError) throw returnError;
 
@@ -415,6 +423,8 @@ async function filterDispatchedReturns(rows: any[]): Promise<any[]> {
   (orders || []).forEach((o: any) => {
     const m = (o.notes || "").match(/\[RETURN_NOTE:\s*([^\]]+)\]/);
     if (m) dispatched.add(m[1].trim());
+    // Other items of a multi-item return note that share this pickup order
+    for (const it of (o.notes || "").matchAll(/\[RETURN_ITEM:\s*([^\]]+)\]/g)) dispatched.add(it[1].trim());
     if (o.order_id) dispatched.add(o.order_id);
   });
   return rows.filter((r) => officeCredits.has(r.id) || dispatched.has(r.return_number));

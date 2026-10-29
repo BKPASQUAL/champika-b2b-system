@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
+import { getReturnNoteCode } from "@/app/lib/return-note-group";
 
 export const dynamic = "force-dynamic";
 
@@ -188,16 +189,69 @@ export async function POST(
     // checked like a normal order, so it starts at "Approved". Good/Damage returns are
     // pickups only and go straight to "Loading". Either way the bill is LKR 0 (no payment).
     const targetOrderStatus = ret.return_type === "Exchange" ? "Approved" : "Loading";
-    const refNo = ret.return_number || `RET-${Date.now().toString().slice(-6)}`;
+    const isExchange = ret.return_type === "Exchange";
+    const noteCode = getReturnNoteCode(ret.reason);
+    // A multi-item return note gets ONE pickup order + invoice (RET-<code>), not one per item
+    const refNo = noteCode
+      ? `RET-${noteCode}`
+      : ret.return_number || `RET-${Date.now().toString().slice(-6)}`;
 
-    // Check if an order already exists for this return note
-    const { data: existingReturnOrder } = await supabaseAdmin
-      .from("orders")
-      .select("id, status")
-      .or(`order_id.eq.${refNo},invoice_no.eq.${refNo},notes.ilike.%${refNo}%`)
-      .maybeSingle();
+    // Another item of the same note already approved? Add this item to that order.
+    let noteOrder: any = null;
+    if (noteCode && ret.customer_id) {
+      const { data: candidates } = await supabaseAdmin
+        .from("orders")
+        .select("id, status, notes")
+        .eq("customer_id", ret.customer_id)
+        .in("status", ["Approved", "Loading"])
+        .ilike("notes", `%[NOTE:${noteCode}]%`);
+      noteOrder =
+        (candidates || []).find(
+          (o: any) => /\[DAMAGE_EXCHANGE:/.test(o.notes || "") === isExchange
+        ) || null;
+    }
 
-    if (existingReturnOrder) {
+    if (noteOrder) {
+      const itemTag = `[RETURN_ITEM: ${ret.return_number}]`;
+      // Items that share the note's number are already covered by the order's tag
+      let notes: string = (noteOrder.notes || "").includes(`: ${ret.return_number}]`)
+        ? noteOrder.notes || ""
+        : `${noteOrder.notes || ""} ${itemTag}`.trim();
+      // Keep this item's original bill number so the printed note lists every bill
+      const invNo = ret.reason?.match(/\[INV:([^\]]+)\]/)?.[1]?.trim();
+      if (invNo && invNo !== "-" && !notes.includes(`[INV:${invNo}]`)) notes = `${notes} [INV:${invNo}]`;
+      const { data: updatedOrd } = await supabaseAdmin
+        .from("orders")
+        .update({ notes })
+        .eq("id", noteOrder.id)
+        .select()
+        .single();
+      loadingOrder = updatedOrd || noteOrder;
+
+      await supabaseAdmin.from("order_items").insert({
+        order_id: noteOrder.id,
+        product_id: ret.product_id,
+        quantity: qty,
+        free_quantity: 0,
+        unit_price: unitPrice,
+        total_price: 0,
+        commission_earned: 0,
+      });
+    }
+
+    // Check if an order already exists for this (single-item) return note
+    const { data: existingReturnOrder } = noteOrder
+      ? { data: null }
+      : await supabaseAdmin
+          .from("orders")
+          .select("id, status")
+          .or(`order_id.eq.${refNo},invoice_no.eq.${refNo},notes.ilike.%${ret.return_number || refNo}]%`)
+          .limit(1)
+          .maybeSingle();
+
+    if (noteOrder) {
+      // already handled above
+    } else if (existingReturnOrder) {
       // Ensure its status is Loading so it is ready for delivery lorry selection
       const { data: updatedOrd } = await supabaseAdmin
         .from("orders")
@@ -218,7 +272,16 @@ export async function POST(
       }
 
       let orderNotes = "";
-      if (ret.return_type === "Exchange") {
+      if (noteCode) {
+        // Tag with the item number (used to look the note up) plus [NOTE:code] to group later items
+        const label = isExchange ? "Exchange" : ret.return_type === "Good" ? "Good" : "Damage";
+        const tag = isExchange ? "DAMAGE_EXCHANGE" : "RETURN_NOTE";
+        const reasonText = (ret.reason || "").replace(/\[(?:NOTE|PRICE):[^\]]*\]/g, "").trim();
+        const title = isExchange
+          ? `Replacement item / Exchange for Return Note ${refNo}.`
+          : `${label} Return Note ${refNo}.`;
+        orderNotes = `[${tag}: ${ret.return_number}] [NOTE:${noteCode}] ${title} Reason: ${reasonText || `${label} Return`}. Collect items from customer.`;
+      } else if (ret.return_type === "Exchange") {
         orderNotes = `[DAMAGE_EXCHANGE: ${ret.return_number}] Replacement item / Exchange for Return Note ${ret.return_number}. Reason: ${ret.reason || "Damage Exchange"}. Collect items from customer.`;
       } else if (ret.return_type === "Good") {
         orderNotes = `[RETURN_NOTE: ${ret.return_number}] Good Return Note ${ret.return_number} (${qty} x ${ret.products?.name || "Product"}). Reason: ${ret.reason || "Good Return"}. Collect items from customer.`;

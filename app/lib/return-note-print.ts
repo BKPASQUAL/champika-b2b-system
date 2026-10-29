@@ -1,4 +1,5 @@
 import { generateInvoiceHTML, DIVISIONS } from "./invoice-html";
+import { getReturnNoteCode } from "./return-note-group";
 
 // Pull the return note number out of an order's notes, e.g. "[RETURN_NOTE: RET-524834-2]"
 export function getReturnNoteNumber(notes?: string | null): string | null {
@@ -6,16 +7,41 @@ export function getReturnNoteNumber(notes?: string | null): string | null {
   return m ? m[1].trim() : null;
 }
 
-// Same print data the Return Note Details page uses, built from a return record
-function toPrintData(ret: any) {
-  const returnNo = ret.return_number;
+// Fetch a return item plus the other items saved under the same return note ([NOTE:code])
+async function fetchNoteItems(no: string): Promise<any[]> {
+  const ret = await fetch(`/api/inventory/returns/${encodeURIComponent(no)}`).then((r) => (r.ok ? r.json() : null));
+  if (!ret) return [];
+  const code = getReturnNoteCode(ret.reason);
+  if (!code || !ret.customer_id) return [ret];
+  const res = await fetch(
+    `/api/inventory/returns?noteCode=${encodeURIComponent(code)}&customerId=${ret.customer_id}&limit=all`
+  ).catch(() => null);
+  const rows: any[] = res && res.ok ? (await res.json()).data || [] : [];
+  // Exchange items travel on their own order, so keep them apart from good/damage items
+  const isEx = ret.return_type === "Exchange";
+  const same = rows.filter((r) => r.status !== "Rejected" && (r.return_type === "Exchange") === isEx);
+  if (!same.some((r) => r.id === ret.id)) return [ret];
+  return same.sort((a, b) =>
+    (a.return_number || "").localeCompare(b.return_number || "", undefined, { numeric: true })
+  );
+}
+
+const priceOf = (it: any) =>
+  parseFloat((it.reason || "").match(/\[PRICE:([\d.]+)\]/)?.[1] || "") || Number(it.products?.selling_price) || 0;
+
+// Same print data the Return Note Details page uses, built from the items of one return note
+function toPrintData(items: any[]) {
+  const ret = items[0];
+  const code = getReturnNoteCode(ret.reason);
+  const multi = items.length > 1;
+  const returnNo = multi && code ? `RET-${code}` : ret.return_number;
   const returnType = ret.return_type || "Good";
   const reason: string = ret.reason || "";
   const invNo = reason.match(/\[INV:([^\]]+)\]/)?.[1]?.trim();
-  const priceTag = parseFloat(reason.match(/\[PRICE:([\d.]+)\]/)?.[1] || "");
-  const unitPrice = priceTag || Number(ret.products?.selling_price) || 0;
+  const unitPrice = priceOf(ret);
   const cleanReason = reason.replace(/\[[^\]]*\]/g, "").trim();
-  const qty = Number(ret.quantity) || 0;
+  const qty = items.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+  const label = multi ? `${items.length} items` : ret.products?.name || "Product";
 
   const tag =
     returnType === "Exchange"
@@ -31,9 +57,9 @@ function toPrintData(ret: any) {
     salesRep: ret.profiles?.full_name || "Unknown",
     grandTotal: 0,
     totalAmount: 0,
-    notes: `${tag} ${returnType} Return Note ${returnNo} (${qty} x ${ret.products?.name || "Product"}). Reason: ${
+    notes: `${tag} ${returnType} Return Note ${returnNo} (${qty} x ${label}). Reason: ${
       invNo ? `[INV:${invNo}] ` : ""
-    }[PRICE:${unitPrice}] ${cleanReason || "Customer return"}. Collect items from customer.`,
+    }${multi ? "" : `[PRICE:${unitPrice}] `}${cleanReason || "Customer return"}. Collect items from customer.`,
     customer: {
       shop: ret.customers?.shop_name || "Unknown Customer",
       name: ret.customers?.owner_name || ret.customers?.shop_name || "",
@@ -41,18 +67,17 @@ function toPrintData(ret: any) {
       phone: ret.customers?.phone || "",
       route: ret.customers?.route || "",
     },
-    items: [
-      {
-        sku: ret.products?.sku || "-",
-        productName: ret.products?.name || "Product",
-        unitPrice,
-        quantity: qty,
-        unit: ret.products?.unit_of_measure || "Pcs",
-        freeQuantity: 0,
-        discountPercent: 0,
-        total: 0,
-      },
-    ],
+    items: items.map((it) => ({
+      sku: it.products?.sku || "-",
+      productName: it.products?.name || "Product",
+      billRef: (it.reason || "").match(/\[INV:([^\]]+)\]/)?.[1]?.trim(),
+      unitPrice: priceOf(it),
+      quantity: Number(it.quantity) || 0,
+      unit: it.products?.unit_of_measure || "Pcs",
+      freeQuantity: 0,
+      discountPercent: 0,
+      total: 0,
+    })),
   };
 }
 
@@ -69,13 +94,15 @@ const esc = (v: any) =>
  * (good replacement) and collect back (damaged). Used instead of an invoice.
  */
 export async function buildExchangeSummaryHtml(returnNumbers: string[], title = "Customer Exchange Summary"): Promise<string> {
-  const records = (
-    await Promise.all(
-      returnNumbers.map((no) =>
-        fetch(`/api/inventory/returns/${encodeURIComponent(no)}`).then((r) => (r.ok ? r.json() : null))
-      )
-    )
-  ).filter(Boolean);
+  // Include every item of each return note, once
+  const seen = new Set<string>();
+  const records = (await Promise.all(returnNumbers.map(fetchNoteItems)))
+    .flat()
+    .filter((r: any) => {
+      if (!r || seen.has(r.id)) return false;
+      seen.add(r.id);
+      return true;
+    });
   if (records.length === 0) return "";
 
   // Group by customer
@@ -172,13 +199,15 @@ export async function buildReturnNotesHtml(
   returnNumbers: string[],
   divisionKey: keyof typeof DIVISIONS = "distribution"
 ): Promise<string> {
-  const records = await Promise.all(
-    returnNumbers.map((no) =>
-      fetch(`/api/inventory/returns/${encodeURIComponent(no)}`).then((r) => (r.ok ? r.json() : null))
-    )
-  );
+  // One page per return note, even when the note has several items
+  const seen = new Set<string>();
+  const notes = (await Promise.all(returnNumbers.map(fetchNoteItems))).filter((items) => {
+    if (items.length === 0 || seen.has(items[0].id)) return false;
+    seen.add(items[0].id);
+    return true;
+  });
   const pages = await Promise.all(
-    records.filter(Boolean).map((ret) => generateInvoiceHTML(toPrintData(ret) as any, divisionKey))
+    notes.map((items) => generateInvoiceHTML(toPrintData(items) as any, divisionKey))
   );
   return pages.join("");
 }

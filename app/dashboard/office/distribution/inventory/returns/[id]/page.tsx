@@ -471,6 +471,7 @@ export default function ReturnDetailPage({
         items: noteLines.map((l) => ({
           sku: l.item.products?.sku || "-",
           productName: l.item.products?.name || "Product",
+          billRef: l.meta.invoiceNo && l.meta.invoiceNo !== "-" ? l.meta.invoiceNo : undefined,
           unitPrice: l.price,
           quantity: l.qty,
           unit: l.item.products?.unit_of_measure || "Pcs",
