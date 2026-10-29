@@ -38,6 +38,40 @@ function returnUnitPrice(r: any, prod: any): number {
   return tagged || Number(prod?.selling_price) || 0;
 }
 
+/**
+ * Return number -> state of its pickup order: "done" when the order was delivered on a
+ * finalized (Completed) load, "open" while it is still waiting / on the road / cancelled.
+ * Numbers with no pickup order are left out of the map.
+ */
+async function getPickupStates(rows: any[]): Promise<Map<string, "done" | "open">> {
+  const states = new Map<string, "done" | "open">();
+  const customerIds = [...new Set(rows.map((r) => r.customer_id).filter(Boolean))];
+  if (customerIds.length === 0) return states;
+
+  const orders: any[] = [];
+  for (let i = 0; i < customerIds.length; i += 100) {
+    const { data } = await supabaseAdmin
+      .from("orders")
+      .select("notes, status, loading_sheets(status)")
+      .in("customer_id", customerIds.slice(i, i + 100))
+      .or("notes.ilike.%[RETURN_NOTE:%,notes.ilike.%[DAMAGE_RETURN:%");
+    orders.push(...(data || []));
+  }
+
+  orders.forEach((o) => {
+    const sheet = Array.isArray(o.loading_sheets) ? o.loading_sheets[0] : o.loading_sheets;
+    const done = o.status === "Delivered" && sheet?.status === "Completed";
+    const tags = (o.notes || "").matchAll(/\[(?:RETURN_NOTE|DAMAGE_RETURN|RETURN_ITEM):\s*([^\]]+)\]/g);
+    for (const m of tags) {
+      const no = m[1].trim();
+      // If any pickup for this number is finished, the goods were collected
+      if (done) states.set(no, "done");
+      else if (!states.has(no)) states.set(no, "open");
+    }
+  });
+  return states;
+}
+
 function returnInvoiceNo(r: any): string | null {
   const m = (r.reason || "").match(/\[INV:([^\]]+)\]/);
   return m ? m[1].trim() : null;
@@ -78,10 +112,18 @@ export async function getApprovedReturns(from?: string, to?: string): Promise<Re
     const ms = new Date(r.return_date || r.created_at).getTime();
     return ms >= fromMs && ms <= toMs;
   });
-  if (inRange.length === 0) return [];
+  if (inRange.length === 0) {
+    return [];
+  }
+
+  // Only count a return once its pickup load is finalized (goods actually collected).
+  // Returns with no pickup order at all (older notes) still count as before.
+  const pickupState = await getPickupStates(inRange);
+  const counted = inRange.filter((r: any) => pickupState.get(r.return_number) !== "open");
+  if (counted.length === 0) return [];
 
   // Map invoice number -> original order (rep + business)
-  const invoiceNos = [...new Set(inRange.map(returnInvoiceNo).filter(Boolean))] as string[];
+  const invoiceNos = [...new Set(counted.map(returnInvoiceNo).filter(Boolean))] as string[];
   const invMap = new Map<string, { orderId: string; repId: string | null; businessId: string | null }>();
   if (invoiceNos.length > 0) {
     const list = invoiceNos.map((n) => `"${n.replace(/"/g, "")}"`).join(",");
@@ -118,7 +160,7 @@ export async function getApprovedReturns(from?: string, to?: string): Promise<Re
     });
   }
 
-  return inRange
+  return counted
     .map((r: any) => {
       const invoiceNo = returnInvoiceNo(r);
       const inv = invoiceNo ? invMap.get(invoiceNo) : undefined;
