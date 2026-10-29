@@ -299,10 +299,6 @@ export async function POST(req: Request) {
   }
 }
 
-// Statuses meaning the lorry has left with the return pickup (or it is finished)
-// (must match the order_status enum — "Dispatched"/"Completed" are not valid values)
-const DISPATCHED_STATUSES = ["In Transit", "Delivered"];
-
 // A Good return created directly in the office (status "Completed") whose value
 // never reduced any bill. These have no lorry pickup, so they are usable as a
 // payment credit right away. Returns linked to an invoice are skipped unless
@@ -402,7 +398,7 @@ async function attachBillInfo(rows: any[]): Promise<any[]> {
   return enriched.map((r: any) => ({ ...r, invoice_ids: idMap }));
 }
 
-// Keep only return notes whose pickup order has been dispatched / finalized,
+// Keep only return notes whose pickup load has been finalized (order Delivered, load Completed),
 // plus office-completed returns that are still available as a bill credit.
 async function filterDispatchedReturns(rows: any[]): Promise<any[]> {
   const officeCredits = new Set(rows.filter(isOfficeReturnCredit).map((r) => r.id));
@@ -413,14 +409,20 @@ async function filterDispatchedReturns(rows: any[]): Promise<any[]> {
 
   let q = supabaseAdmin
     .from("orders")
-    .select("order_id, notes, status")
-    .in("status", DISPATCHED_STATUSES)
+    .select("order_id, notes, status, loading_sheets(status)")
+    .eq("status", "Delivered")
     .ilike("notes", "%RETURN_NOTE:%");
   if (customerIds.length > 0) q = q.in("customer_id", customerIds);
   const { data: orders } = await q;
 
+  // Only pickups on a finalized (Completed) load: the goods are really back with us
+  const finalized = (orders || []).filter((o: any) => {
+    const sheet = Array.isArray(o.loading_sheets) ? o.loading_sheets[0] : o.loading_sheets;
+    return sheet?.status === "Completed";
+  });
+
   const dispatched = new Set<string>();
-  (orders || []).forEach((o: any) => {
+  finalized.forEach((o: any) => {
     const m = (o.notes || "").match(/\[RETURN_NOTE:\s*([^\]]+)\]/);
     if (m) dispatched.add(m[1].trim());
     // Other items of a multi-item return note that share this pickup order
