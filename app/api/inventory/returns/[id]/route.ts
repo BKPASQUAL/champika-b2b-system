@@ -41,6 +41,27 @@ async function findReturnRecord(identifier: string, selectFields = "*"): Promise
   return null;
 }
 
+// Pickup order statuses where the lorry has not left yet (items can still be added/removed)
+const PRE_DISPATCH_STATUSES = ["Pending", "Approved", "Processing", "Checking", "Loading"];
+
+/** The LKR 0 pickup order created when this return (or its note) was approved. */
+async function findPickupOrder(ret: any): Promise<{ id: string; order_id: string; status: string } | null> {
+  if (!ret?.customer_id) return null;
+  const noteCode = (ret.reason || "").match(/\[NOTE:([^\]]+)\]/)?.[1]?.trim();
+  const filters = [`notes.ilike.%: ${ret.return_number}]%`];
+  if (noteCode) filters.push(`notes.ilike.%[NOTE:${noteCode}]%`);
+  const { data } = await supabaseAdmin
+    .from("orders")
+    .select("id, order_id, status, notes")
+    .eq("customer_id", ret.customer_id)
+    .neq("status", "Cancelled")
+    .or(filters.join(","))
+    .order("created_at", { ascending: false });
+  const isEx = ret.return_type === "Exchange";
+  const match = (data || []).find((o: any) => /\[DAMAGE_EXCHANGE:/.test(o.notes || "") === isEx);
+  return match ? { id: match.id, order_id: match.order_id, status: match.status } : null;
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -70,7 +91,14 @@ export async function GET(
       }
     }
 
-    return NextResponse.json({ ...data, source_invoice: sourceInvoice });
+    // Where the pickup is, so the page knows if items can still be added/removed
+    const pickup = data.status === "Approved" ? await findPickupOrder(data) : null;
+
+    return NextResponse.json({
+      ...data,
+      source_invoice: sourceInvoice,
+      pickup_order: pickup ? { order_id: pickup.order_id, status: pickup.status } : null,
+    });
   } catch (error: any) {
     console.error("GET /api/inventory/returns/[id] error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -258,8 +286,46 @@ export async function DELETE(
     const { product_id, location_id, quantity, return_type, business_id, return_number } = retRecord;
     const qty = Number(quantity || 0);
 
-    // 2. Reverse Stock Adjustments
-    if (product_id && qty > 0) {
+    if ((retRecord.reason || "").includes("[SETTLED_IN_PAYMENT:")) {
+      return NextResponse.json(
+        { error: "This return was already deducted in a payment and can't be deleted." },
+        { status: 400 }
+      );
+    }
+
+    // Approved items sit on a pickup order: take the line off it (only before the lorry leaves)
+    if (retRecord.status === "Approved") {
+      const pickup = await findPickupOrder(retRecord);
+      if (pickup) {
+        if (!PRE_DISPATCH_STATUSES.includes(pickup.status)) {
+          return NextResponse.json(
+            { error: `Pickup order ${pickup.order_id} is already ${pickup.status}. This item can't be removed now.` },
+            { status: 400 }
+          );
+        }
+        const { data: lines } = await supabaseAdmin
+          .from("order_items")
+          .select("id, quantity")
+          .eq("order_id", pickup.id)
+          .eq("product_id", product_id);
+        const line = (lines || []).find((l: any) => Number(l.quantity) === qty) || (lines || [])[0];
+        if (line) await supabaseAdmin.from("order_items").delete().eq("id", line.id);
+
+        // Last item gone: remove the empty pickup order and its LKR 0 invoice
+        const { count } = await supabaseAdmin
+          .from("order_items")
+          .select("id", { count: "exact", head: true })
+          .eq("order_id", pickup.id);
+        if (!count) {
+          await supabaseAdmin.from("invoices").delete().eq("order_id", pickup.id);
+          await supabaseAdmin.from("orders").delete().eq("id", pickup.id);
+        }
+      }
+    }
+
+    // 2. Reverse Stock Adjustments — only when approval/completion actually added the stock
+    const stockWasAdded = retRecord.status === "Approved" || retRecord.status === "Completed";
+    if (stockWasAdded && product_id && qty > 0) {
       const isDamage = return_type !== "Good";
 
       // Reverse in location stock

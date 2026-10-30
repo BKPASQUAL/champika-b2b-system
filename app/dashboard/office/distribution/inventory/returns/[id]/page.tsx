@@ -19,7 +19,10 @@ import {
   Layers,
   FileText,
   ExternalLink,
+  Plus,
+  Trash2,
 } from "lucide-react";
+import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import { Button } from "@/components/ui/button";
 import { printInvoice } from "@/app/lib/invoice-print";
 import { Input } from "@/components/ui/input";
@@ -121,6 +124,23 @@ const pendingListPath = () =>
     ? "/dashboard/admin/orders/pending"
     : "/dashboard/office/distribution/orders/pending";
 
+type ItemEdit = { qty: number; price: number; type: "Good" | "Damage" | "Exchange"; remarks: string };
+type NewItem = ItemEdit & { key: string; optionId: string };
+type PurchasedOption = {
+  id: string; // productId|invoiceNo
+  productId: string;
+  name: string;
+  sku: string;
+  unit: string;
+  invoiceNo: string;
+  price: number;
+  qty: number;
+};
+
+// An item can be edited until it is rejected or already used in a payment
+const isItemEditable = (it: any) =>
+  it.status !== "Rejected" && !(it.reason || "").includes("[SETTLED_IN_PAYMENT:");
+
 export default function ReturnDetailPage({
   params,
 }: {
@@ -143,6 +163,31 @@ export default function ReturnDetailPage({
   const [editUnitPrice, setEditUnitPrice] = useState<number>(0);
   const [editReturnType, setEditReturnType] = useState<"Good" | "Damage" | "Exchange">("Good");
   const [editRemarks, setEditRemarks] = useState<string>("");
+  // Edit values for the other items in the same return note (keyed by item id)
+  const [otherEdits, setOtherEdits] = useState<Record<string, ItemEdit>>({});
+  // Items added / removed while editing (saved together with Save Changes)
+  const [newItems, setNewItems] = useState<NewItem[]>([]);
+  const [deletedIds, setDeletedIds] = useState<string[]>([]);
+  // Products this customer bought, one entry per bill (for adding items)
+  const [purchased, setPurchased] = useState<PurchasedOption[]>([]);
+  const updateNewItem = (key: string, patch: Partial<NewItem>) =>
+    setNewItems((prev) => prev.map((n) => (n.key === key ? { ...n, ...patch } : n)));
+  const setOtherEdit = (itemId: string, patch: Partial<ItemEdit>) =>
+    setOtherEdits((prev) => ({ ...prev, [itemId]: { ...prev[itemId], ...patch } }));
+  const resetOtherEdits = (rows: any[], mainId: string) => {
+    const init: Record<string, ItemEdit> = {};
+    rows.forEach((r) => {
+      if (r.id === mainId) return;
+      const m = parseReturnMetadata(r.reason, r.products?.selling_price);
+      init[r.id] = {
+        qty: Number(r.quantity || 1),
+        price: m.unitPrice,
+        type: r.return_type || "Good",
+        remarks: m.cleanReason,
+      };
+    });
+    setOtherEdits(init);
+  };
 
   // Approval / Rejection States
   const [actionProcessing, setActionProcessing] = useState(false);
@@ -181,6 +226,7 @@ export default function ReturnDetailPage({
 
       // Load every item of this return note so it shows like one bill
       setSiblings([]);
+      setOtherEdits({});
       if (meta.noteCode && data.customer_id) {
         const sibRes = await fetch(
           `/api/inventory/returns?noteCode=${encodeURIComponent(meta.noteCode)}&customerId=${data.customer_id}&limit=all`
@@ -191,6 +237,7 @@ export default function ReturnDetailPage({
             (a.return_number || "").localeCompare(b.return_number || "", undefined, { numeric: true })
           );
           setSiblings(rows);
+          resetOtherEdits(rows, data.id);
         }
       }
     } catch (err: any) {
@@ -214,6 +261,38 @@ export default function ReturnDetailPage({
     fetchReturnDetail();
   }, [id]);
 
+  // Load what this customer bought (per bill) once editing starts, for "Add Item"
+  const customerIdForAdd = returnRecord?.customer_id;
+  useEffect(() => {
+    if (!isEditing || !customerIdForAdd || purchased.length > 0) return;
+    fetch(`/api/customers/${customerIdForAdd}/purchased-products`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((list: any[]) => {
+        const opts = new Map<string, PurchasedOption>();
+        (Array.isArray(list) ? list : []).forEach((p: any) => {
+          const productId = p.id || p.productId;
+          const hist: any[] = Array.isArray(p.history) && p.history.length > 0 ? p.history : [p];
+          hist.forEach((h: any) => {
+            const invoiceNo = h.invoiceNo || p.latestInvoiceNo || p.invoiceNo || "-";
+            const key = `${productId}|${invoiceNo}`;
+            if (!productId || opts.has(key)) return;
+            opts.set(key, {
+              id: key,
+              productId,
+              name: p.name || p.productName || "Product",
+              sku: p.sku || "",
+              unit: p.unit || p.unitOfMeasure || "Pcs",
+              invoiceNo,
+              price: Number(h.unitPrice) || Number(p.latestUnitPrice) || Number(p.unitPrice) || 0,
+              qty: Number(h.quantity) || Number(h.totalQuantity) || Number(p.totalPurchasedQty) || 0,
+            });
+          });
+        });
+        setPurchased([...opts.values()]);
+      })
+      .catch(() => setPurchased([]));
+  }, [isEditing, customerIdForAdd, purchased.length]);
+
   const meta = parseReturnMetadata(returnRecord?.reason, returnRecord?.products?.selling_price);
   const sourceInvoice = returnRecord?.source_invoice;
   const hasInvoice = meta.invoiceNo && meta.invoiceNo !== "-";
@@ -231,6 +310,12 @@ export default function ReturnDetailPage({
       ? `RET-${meta.noteCode}`
       : returnRecord?.return_number || `RET-${id.substring(0, 8)}`;
   const pendingNoteItems = noteItems.filter((it) => it.status === "Pending");
+
+  // Items can be added/removed until the lorry leaves with the pickup (needs a note code to group them)
+  const pickupStatus: string | undefined = returnRecord?.pickup_order?.status;
+  const pickupLeft = !!pickupStatus && !["Pending", "Approved", "Processing", "Checking", "Loading"].includes(pickupStatus);
+  const canChangeItems = isEditing && !!meta.noteCode && !pickupLeft;
+  const visibleNoteItems = noteItems.filter((it) => !deletedIds.includes(it.id));
 
   // Open Invoice Sheet Handler (a specific bill number can be passed for other items in the note)
   const handleOpenInvoice = async (billArg?: unknown) => {
@@ -286,35 +371,148 @@ export default function ReturnDetailPage({
       toast.error("Unit rate cannot be negative");
       return;
     }
+    // Other items of the note that were changed (settled items can't be edited)
+    const changedOthers = noteItems.filter((it) => {
+      const e = otherEdits[it.id];
+      if (!e || it.id === returnRecord?.id || !isItemEditable(it) || deletedIds.includes(it.id)) return false;
+      const m = parseReturnMetadata(it.reason, it.products?.selling_price);
+      return (
+        e.qty !== Number(it.quantity || 1) ||
+        e.price !== m.unitPrice ||
+        e.type !== (it.return_type || "Good") ||
+        e.remarks !== m.cleanReason
+      );
+    });
+    if (changedOthers.some((it) => otherEdits[it.id].qty <= 0 || otherEdits[it.id].price < 0)) {
+      toast.error("Every item needs a quantity above zero and a rate of zero or more");
+      return;
+    }
+    if (newItems.some((n) => !n.optionId)) {
+      toast.error("Pick a product for every new item, or remove the empty row");
+      return;
+    }
+    if (newItems.some((n) => n.qty <= 0 || n.price < 0)) {
+      toast.error("New items need a quantity above zero and a rate of zero or more");
+      return;
+    }
+    const mainDeleted = deletedIds.includes(returnRecord?.id);
+    const remainingCount = noteItems.filter((it) => !deletedIds.includes(it.id)).length + newItems.length;
+    if (remainingCount === 0) {
+      toast.error("A return note needs at least one item. Use Reject to cancel the whole note.");
+      return;
+    }
 
     setSaving(true);
     try {
-      const invTag = meta.invoiceNo && meta.invoiceNo !== "-" ? `[INV:${meta.invoiceNo}]` : "";
-      const noteTag = meta.noteCode ? `[NOTE:${meta.noteCode}]` : "";
-      const priceTag = `[PRICE:${editUnitPrice}]`;
-      const combinedReason = `${invTag} ${priceTag} ${noteTag} ${editRemarks}`.trim();
+      // 1. Add new items to this note (same number + note code). If the note is already
+      //    approved, approve them too so stock is added and they join the same pickup order.
+      const noteApproved = noteItems.some((it) => it.status === "Approved");
+      const addedIds: string[] = [];
+      for (const n of newItems) {
+        const opt = purchased.find((p) => p.id === n.optionId)!;
+        const invTagN = opt.invoiceNo && opt.invoiceNo !== "-" ? `[INV:${opt.invoiceNo}]` : "";
+        const res = await fetch("/api/inventory/returns", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            return_number: noteNumber,
+            product_id: opt.productId,
+            location_id: returnRecord.location_id || undefined,
+            business_id: returnRecord.business_id || undefined,
+            customer_id: returnRecord.customer_id,
+            quantity: n.qty,
+            return_type: n.type,
+            reason: `${invTagN} [PRICE:${n.price}] [NOTE:${meta.noteCode}] ${n.remarks || "Customer return"}`.trim(),
+            status: "Pending",
+            return_date: returnRecord.return_date || returnRecord.created_at,
+            returned_by: returnRecord.returned_by,
+            invoice_no: opt.invoiceNo && opt.invoiceNo !== "-" ? opt.invoiceNo : undefined,
+          }),
+        });
+        const created = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(`${opt.name}: ${created.error || "Failed to add item"}`);
+        addedIds.push(created.id);
+        if (noteApproved) {
+          const ap = await fetch(`/api/inventory/returns/${created.id}/approve`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "approve" }),
+          });
+          if (!ap.ok) {
+            const err = await ap.json().catch(() => ({}));
+            throw new Error(`${opt.name} was added but not approved: ${err.error || "approval failed"}`);
+          }
+        }
+      }
 
-      const targetId = returnRecord?.id || id;
-      const res = await fetch(`/api/inventory/returns/${encodeURIComponent(targetId)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          quantity: editQty,
-          unit_price: editUnitPrice,
-          return_type: editReturnType,
-          reason: combinedReason,
-        }),
-      });
+      // 2. Save the other changed items, each with its own bill and note tags
+      for (const it of changedOthers) {
+        const e = otherEdits[it.id];
+        const m = parseReturnMetadata(it.reason, it.products?.selling_price);
+        const itInv = m.invoiceNo && m.invoiceNo !== "-" ? `[INV:${m.invoiceNo}]` : "";
+        const itNote = m.noteCode ? `[NOTE:${m.noteCode}]` : "";
+        const res = await fetch(`/api/inventory/returns/${encodeURIComponent(it.id)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            quantity: e.qty,
+            unit_price: e.price,
+            return_type: e.type,
+            reason: `${itInv} [PRICE:${e.price}] ${itNote} ${e.remarks}`.trim(),
+          }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(`${it.products?.name || "Item"}: ${err.error || "Failed to save"}`);
+        }
+      }
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed to save edits");
+      if (!mainDeleted) {
+        const invTag = meta.invoiceNo && meta.invoiceNo !== "-" ? `[INV:${meta.invoiceNo}]` : "";
+        const noteTag = meta.noteCode ? `[NOTE:${meta.noteCode}]` : "";
+        const priceTag = `[PRICE:${editUnitPrice}]`;
+        const combinedReason = `${invTag} ${priceTag} ${noteTag} ${editRemarks}`.trim();
+
+        const targetId = returnRecord?.id || id;
+        const res = await fetch(`/api/inventory/returns/${encodeURIComponent(targetId)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            quantity: editQty,
+            unit_price: editUnitPrice,
+            return_type: editReturnType,
+            reason: combinedReason,
+          }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || "Failed to save edits");
+        }
+      }
+
+      // 3. Remove deleted items (server reverses stock and takes them off the pickup order)
+      for (const delId of deletedIds) {
+        const res = await fetch(`/api/inventory/returns/${encodeURIComponent(delId)}`, { method: "DELETE" });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          const name = noteItems.find((it) => it.id === delId)?.products?.name || "Item";
+          throw new Error(`${name}: ${err.error || "Failed to delete"}`);
+        }
       }
 
       toast.success("Return note details updated successfully!");
       setIsEditing(false);
+      setNewItems([]);
+      setDeletedIds([]);
       if (returnTo) {
         router.push(returnTo);
+        return;
+      }
+      if (mainDeleted) {
+        // The item this page was opened on is gone: show the note through another of its items
+        const nextId = noteItems.find((it) => !deletedIds.includes(it.id))?.id || addedIds[0];
+        router.replace(window.location.pathname.replace(/[^/]+$/, nextId));
         return;
       }
       fetchReturnDetail();
@@ -421,18 +619,19 @@ export default function ReturnDetailPage({
   const isPending = pendingNoteItems.length > 0;
 
   // One line per item in the note; the item opened on this page uses the edit values
-  const noteLines = noteItems.map((it) => {
+  const noteLines = visibleNoteItems.map((it) => {
     const isMain = it.id === returnRecord.id;
     const m = parseReturnMetadata(it.reason, it.products?.selling_price);
-    const qty = isMain ? displayQty : Number(it.quantity || 0);
-    const price = isMain ? displayUnitPrice : m.unitPrice;
-    const type: string = isMain ? editReturnType : it.return_type || "Good";
+    const oe = !isMain && isEditing ? otherEdits[it.id] : undefined;
+    const qty = isMain ? displayQty : oe ? oe.qty : Number(it.quantity || 0);
+    const price = isMain ? displayUnitPrice : oe ? oe.price : m.unitPrice;
+    const type: string = isMain ? editReturnType : oe ? oe.type : it.return_type || "Good";
     return { item: it, isMain, meta: m, qty, price, type, total: qty * price };
   });
-  const noteTotal = noteLines.reduce((s, l) => s + l.total, 0);
-  const noteUnits = noteLines.reduce((s, l) => s + l.qty, 0);
-  const otherItemPath = (itemId: string) =>
-    `${window.location.pathname.replace(/[^/]+$/, itemId)}?edit=1`;
+  // Totals include items being added in edit mode
+  const noteTotal =
+    noteLines.reduce((s, l) => s + l.total, 0) + newItems.reduce((s, n) => s + n.qty * n.price, 0);
+  const noteUnits = noteLines.reduce((s, l) => s + l.qty, 0) + newItems.reduce((s, n) => s + n.qty, 0);
 
   const handlePrintReturnNote = async () => {
     if (!returnRecord) return;
@@ -547,6 +746,9 @@ export default function ReturnDetailPage({
                   setEditUnitPrice(meta.unitPrice);
                   setEditReturnType(returnRecord.return_type || "Good");
                   setEditRemarks(meta.cleanReason);
+                  resetOtherEdits(siblings, returnRecord.id);
+                  setNewItems([]);
+                  setDeletedIds([]);
                   if (returnTo) router.push(returnTo);
                 }}
                 disabled={saving}
@@ -816,13 +1018,15 @@ export default function ReturnDetailPage({
                   <TableBody>
                     {noteLines.map((line, idx) => {
                       const { item, isMain, meta: rowMeta } = line;
-                      const rowEditing = isEditing && isMain;
+                      // Every item of the note is editable in edit mode (except rejected / already settled)
+                      const rowEditing = isEditing && (isMain || (isItemEditable(item) && !!otherEdits[item.id]));
                       const rowHasInvoice = rowMeta.invoiceNo && rowMeta.invoiceNo !== "-";
-                      const canEditOther =
-                        !isMain &&
-                        !isEditing &&
-                        (item.status === "Pending" ||
-                          (item.status === "Approved" && !(item.reason || "").includes("[SETTLED_IN_PAYMENT:")));
+                      const oe = otherEdits[item.id];
+                      const rowRemarks = isMain ? editRemarks : oe?.remarks ?? "";
+                      const setRowRemarks = (v: string) => (isMain ? setEditRemarks(v) : setOtherEdit(item.id, { remarks: v }));
+                      const setRowPrice = (v: number) => (isMain ? setEditUnitPrice(v) : setOtherEdit(item.id, { price: v }));
+                      const setRowQty = (v: number) => (isMain ? setEditQty(v) : setOtherEdit(item.id, { qty: v }));
+                      const setRowType = (v: ItemEdit["type"]) => (isMain ? setEditReturnType(v) : setOtherEdit(item.id, { type: v }));
                       return (
                         <TableRow key={item.id} className={rowEditing ? "bg-blue-50/40" : ""}>
                           <TableCell className="text-muted-foreground font-medium">{idx + 1}</TableCell>
@@ -840,15 +1044,10 @@ export default function ReturnDetailPage({
                                   {item.status}
                                 </Badge>
                               )}
-                              {canEditOther && (
-                                <button
-                                  type="button"
-                                  onClick={() => router.push(otherItemPath(item.id))}
-                                  className="text-blue-600 hover:text-blue-800"
-                                  title="Edit this item"
-                                >
-                                  <Edit className="w-3.5 h-3.5" />
-                                </button>
+                              {isEditing && !isItemEditable(item) && (
+                                <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                                  {item.status === "Rejected" ? "Rejected" : "Settled in payment"} · locked
+                                </Badge>
                               )}
                             </div>
                             <div className="flex items-center gap-2 mt-0.5">
@@ -865,8 +1064,8 @@ export default function ReturnDetailPage({
                             {rowEditing ? (
                               <div className="mt-2">
                                 <Input
-                                  value={editRemarks}
-                                  onChange={(e) => setEditRemarks(e.target.value)}
+                                  value={rowRemarks}
+                                  onChange={(e) => setRowRemarks(e.target.value)}
                                   placeholder="Customer remarks / defect reason..."
                                   className="text-xs h-8 bg-white max-w-sm"
                                 />
@@ -913,8 +1112,8 @@ export default function ReturnDetailPage({
                                 type="number"
                                 min="0"
                                 step="any"
-                                value={editUnitPrice}
-                                onChange={(e) => setEditUnitPrice(parseFloat(e.target.value) || 0)}
+                                value={line.price}
+                                onChange={(e) => setRowPrice(parseFloat(e.target.value) || 0)}
                                 className="w-24 text-right h-8 ml-auto bg-white font-semibold"
                               />
                             ) : (
@@ -927,8 +1126,8 @@ export default function ReturnDetailPage({
                               <Input
                                 type="number"
                                 min="1"
-                                value={editQty}
-                                onChange={(e) => setEditQty(Math.max(1, parseInt(e.target.value) || 1))}
+                                value={line.qty}
+                                onChange={(e) => setRowQty(Math.max(1, parseInt(e.target.value) || 1))}
                                 className="w-16 text-center h-8 mx-auto bg-white font-semibold"
                               />
                             ) : (
@@ -946,8 +1145,8 @@ export default function ReturnDetailPage({
                           <TableCell className="text-right">
                             {rowEditing ? (
                               <Select
-                                value={editReturnType}
-                                onValueChange={(val: any) => setEditReturnType(val)}
+                                value={line.type}
+                                onValueChange={(val: any) => setRowType(val)}
                               >
                                 <SelectTrigger className="h-8 text-xs w-36 ml-auto bg-white font-medium">
                                   <SelectValue />
@@ -971,11 +1170,161 @@ export default function ReturnDetailPage({
                                 {line.type === "Good" ? "Good Return" : line.type === "Exchange" ? "Damage Exchange" : "Damaged Stock"}
                               </span>
                             )}
+                            {canChangeItems && isItemEditable(item) && visibleNoteItems.length + newItems.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => setDeletedIds((prev) => [...prev, item.id])}
+                                className="mt-1.5 ml-auto flex items-center gap-1 text-[11px] text-red-600 hover:text-red-800"
+                                title="Remove this item from the note"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" /> Remove
+                              </button>
+                            )}
                           </TableCell>
                         </TableRow>
                       );
                     })}
-                    {isMultiItem && (
+
+                    {/* New items being added in edit mode */}
+                    {newItems.map((n, nIdx) => {
+                      const opt = purchased.find((p) => p.id === n.optionId);
+                      return (
+                        <TableRow key={n.key} className="bg-emerald-50/40">
+                          <TableCell className="text-muted-foreground font-medium">{noteLines.length + nIdx + 1}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2 mb-1">
+                              <Badge className="text-[10px] bg-emerald-100 text-emerald-800 border-none">New</Badge>
+                            </div>
+                            <SearchableDropdown
+                              options={purchased.map((p) => ({
+                                id: p.id,
+                                name: p.name,
+                                info: `${p.sku} · Bill ${p.invoiceNo} · bought ${p.qty} @ LKR ${p.price.toLocaleString()}`,
+                              }))}
+                              value={n.optionId}
+                              onChange={(val) => {
+                                const p = purchased.find((x) => x.id === val);
+                                updateNewItem(n.key, { optionId: val, price: p?.price ?? n.price });
+                              }}
+                              placeholder={purchased.length ? "Search product bought by this customer..." : "Loading products..."}
+                              className="max-w-sm"
+                            />
+                            <Input
+                              value={n.remarks}
+                              onChange={(e) => updateNewItem(n.key, { remarks: e.target.value })}
+                              placeholder="Customer remarks / defect reason..."
+                              className="text-xs h-8 bg-white max-w-sm mt-2"
+                            />
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {opt && opt.invoiceNo !== "-" ? (
+                              <span className="font-mono text-xs text-blue-700">{opt.invoiceNo}</span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground italic">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Input
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={n.price}
+                              onChange={(e) => updateNewItem(n.key, { price: parseFloat(e.target.value) || 0 })}
+                              className="w-24 text-right h-8 ml-auto bg-white font-semibold"
+                            />
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Input
+                              type="number"
+                              min="1"
+                              value={n.qty}
+                              onChange={(e) => updateNewItem(n.key, { qty: Math.max(1, parseInt(e.target.value) || 1) })}
+                              className="w-16 text-center h-8 mx-auto bg-white font-semibold"
+                            />
+                          </TableCell>
+                          <TableCell className="text-center text-muted-foreground">-</TableCell>
+                          <TableCell className="text-center text-muted-foreground">-</TableCell>
+                          <TableCell className="text-right font-bold text-sm">
+                            {(n.qty * n.price).toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Select value={n.type} onValueChange={(val: any) => updateNewItem(n.key, { type: val })}>
+                              <SelectTrigger className="h-8 text-xs w-36 ml-auto bg-white font-medium">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Good">Good Return</SelectItem>
+                                <SelectItem value="Damage">Damaged Stock</SelectItem>
+                                <SelectItem value="Exchange">Damage Exchange</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <button
+                              type="button"
+                              onClick={() => setNewItems((prev) => prev.filter((x) => x.key !== n.key))}
+                              className="mt-1.5 ml-auto flex items-center gap-1 text-[11px] text-red-600 hover:text-red-800"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" /> Remove
+                            </button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+
+                    {canChangeItems && (
+                      <TableRow className="hover:bg-transparent">
+                        <TableCell colSpan={9} className="py-2">
+                          <div className="flex flex-wrap items-center gap-3">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                setNewItems((prev) => [
+                                  ...prev,
+                                  {
+                                    key: `new-${Date.now()}`,
+                                    optionId: "",
+                                    qty: 1,
+                                    price: 0,
+                                    type: (returnRecord.return_type || "Good") as ItemEdit["type"],
+                                    remarks: "",
+                                  },
+                                ])
+                              }
+                              className="border-dashed text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                            >
+                              <Plus className="w-4 h-4 mr-1" /> Add Item
+                            </Button>
+                            {deletedIds.map((delId) => {
+                              const it = noteItems.find((x) => x.id === delId);
+                              return (
+                                <span
+                                  key={delId}
+                                  className="inline-flex items-center gap-1.5 text-xs bg-red-50 text-red-700 border border-red-200 rounded px-2 py-1"
+                                >
+                                  Removing: {it?.products?.name || "Item"}
+                                  <button
+                                    type="button"
+                                    onClick={() => setDeletedIds((prev) => prev.filter((x) => x !== delId))}
+                                    className="font-semibold underline"
+                                  >
+                                    Undo
+                                  </button>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {isEditing && meta.noteCode && pickupLeft && (
+                      <TableRow className="hover:bg-transparent">
+                        <TableCell colSpan={9} className="py-2 text-xs text-muted-foreground">
+                          Items can't be added or removed: pickup order {returnRecord.pickup_order?.order_id} is already {pickupStatus}.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {(isMultiItem || newItems.length > 0) && (
                       <TableRow className="bg-muted/40 font-semibold">
                         <TableCell colSpan={4} className="text-right text-sm">
                           Total
