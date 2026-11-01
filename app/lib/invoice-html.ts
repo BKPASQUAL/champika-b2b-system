@@ -1043,11 +1043,12 @@ export const getHalfPageDocumentWrapper = (content: string, title: string) => `
       * { box-sizing: border-box; }
       body { font-family: ${FONT_STACK}; margin: 0; padding: 0; background: #fff; width: 794px; }
       @media print {
-        /* No fixed paper size: works on A4 and Letter. Invoice stays on the top half. */
-        @page { size: portrait; margin: 0; }
-        html, body { width: 100% !important; margin: 0 auto; padding: 0; }
+        /* A5 landscape (210mm x 148mm): the invoice is 210mm wide, so a portrait
+           page (148mm wide) cuts off the right-side columns. */
+        @page { size: A5 landscape; margin: 0; }
+        html, body { width: 210mm !important; margin: 0; padding: 0; }
         body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        .a4-sheet { page-break-after: always; width: 100% !important; height: auto !important; }
+        .a4-sheet { page-break-after: always; width: 210mm !important; height: 148mm !important; overflow: hidden; }
         .a4-sheet:last-child { page-break-after: auto; }
       }
     </style>
