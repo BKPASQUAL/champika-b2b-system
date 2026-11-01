@@ -53,7 +53,8 @@ export async function GET(
             unit_of_measure,
             images,
             selling_price,
-            cost_price
+            cost_price,
+            mrp
           )
         )
       `
@@ -163,6 +164,7 @@ export async function GET(
         unit: item.products?.unit_of_measure || "unit",
         image: item.products?.images?.[0] || null,
         price: item.unit_price,
+        mrp: item.products?.mrp || 0,
         sellingPrice: item.products?.selling_price ?? item.unit_price,
         costPrice: Number(item.actual_unit_cost) > 0
           ? Number(item.actual_unit_cost)

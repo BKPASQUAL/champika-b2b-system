@@ -302,6 +302,8 @@ export default function CreateOrderPage() {
   const [extraDiscount, setExtraDiscount] = useState<string>("");
   const [paymentMethod, setPaymentMethod] = useState<string>("");
   const [cashDiscount, setCashDiscount] = useState<string>("");
+  // "MRP" = bill prints MRP | Disc % | Unit Price (also when printed at loading)
+  const [printFormat, setPrintFormat] = useState<"STANDARD" | "MRP">("STANDARD");
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
 
   // Returns State
@@ -450,7 +452,7 @@ export default function CreateOrderPage() {
   const hasDraftInput = (items.length > 0 || returnItems.length > 0 || customerId !== null) && !submitting;
   const { clearDraft, loadDraft } = useFormDraft(
     "invoice_draft_rep",
-    { customerId, orderDate, items, returnItems, extraDiscount },
+    { customerId, orderDate, items, returnItems, extraDiscount, printFormat },
     !loading && hasDraftInput
   );
 
@@ -474,6 +476,7 @@ export default function CreateOrderPage() {
     if (draft.items?.length) setItems(draft.items);
     if (draft.returnItems?.length) setReturnItems(draft.returnItems);
     if (draft.extraDiscount !== undefined) setExtraDiscount(draft.extraDiscount);
+    if (draft.printFormat === "MRP" || draft.printFormat === "STANDARD") setPrintFormat(draft.printFormat);
     setDraftRestoreOpen(false);
     toast.success("Draft restored successfully");
   };
@@ -1012,6 +1015,7 @@ export default function CreateOrderPage() {
       extraDiscountAmount: extraDiscountAmount,
       grandTotal: grandTotal,
       notes: "",
+      printFormat,
       performedByName: currentUser.name ?? null,
       performedByEmail: currentUser.email ?? null,
       performedByRole: currentUser.role ?? "rep",
@@ -1417,6 +1421,34 @@ export default function CreateOrderPage() {
                       <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+              </div>
+
+              {/* Bill print style */}
+              <div className="space-y-2">
+                <Label className="text-xs sm:text-sm font-semibold">Bill Type</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { value: "STANDARD", label: "Normal Bill", hint: "Price | Disc | Total" },
+                    { value: "MRP", label: "MRP Bill", hint: "MRP | Disc % | Unit Price" },
+                  ] as const).map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setPrintFormat(opt.value)}
+                      className={cn(
+                        "rounded-md border px-3 py-2 text-left transition-colors",
+                        printFormat === opt.value
+                          ? opt.value === "MRP"
+                            ? "border-purple-500 bg-purple-50 ring-1 ring-purple-500"
+                            : "border-primary bg-primary/5 ring-1 ring-primary"
+                          : "hover:bg-muted/50"
+                      )}
+                    >
+                      <div className="text-xs sm:text-sm font-semibold">{opt.label}</div>
+                      <div className="text-[10px] sm:text-xs text-muted-foreground">{opt.hint}</div>
+                    </button>
+                  ))}
                 </div>
               </div>
             </CardContent>

@@ -58,6 +58,8 @@ const invoiceSchema = z.object({
   extraDiscountAmount: z.number().default(0),
   grandTotal: z.number(),
   notes: z.string().optional().nullable(),
+  // "MRP" = bill prints MRP | Disc% | Unit Price (saved as a [PRINT_FORMAT:MRP] tag in order notes)
+  printFormat: z.enum(["STANDARD", "MRP"]).optional().nullable(),
   orderStatus: z
     .enum([
       "Pending",
@@ -88,6 +90,48 @@ const invoiceSchema = z.object({
 });
 
 // --- GET: Fetch All Invoices ---
+// Fetch rows where `column` is in `ids`, in batches (keeps URLs short and each query fast)
+async function fetchByIds(table: string, select: string, column: string, ids: string[]): Promise<any[]> {
+  const BATCH = 200;
+  const CONCURRENCY = 6;
+  const batches: string[][] = [];
+  for (let i = 0; i < ids.length; i += BATCH) batches.push(ids.slice(i, i + BATCH));
+
+  const rows: any[] = [];
+  for (let i = 0; i < batches.length; i += CONCURRENCY) {
+    const results = await Promise.all(
+      batches.slice(i, i + CONCURRENCY).map(async (batch) => {
+        // Page inside the batch too — PostgREST caps each response at 1000 rows
+        const out: any[] = [];
+        for (let from = 0; ; from += 1000) {
+          const { data, error } = await supabaseAdmin
+            .from(table)
+            .select(select)
+            .in(column, batch)
+            .order("id")
+            .range(from, from + 999);
+          if (error) throw error;
+          out.push(...(data || []));
+          if (!data || data.length < 1000) break;
+        }
+        return out;
+      })
+    );
+    for (const r of results) rows.push(...r);
+  }
+  return rows;
+}
+
+function groupBy(rows: any[], key: string): Map<string, any[]> {
+  const map = new Map<string, any[]>();
+  for (const row of rows) {
+    const k = row[key];
+    if (!map.has(k)) map.set(k, []);
+    map.get(k)!.push(row);
+  }
+  return map;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -119,24 +163,7 @@ export async function GET(request: NextRequest) {
             sales_rep_id,
             profiles!orders_sales_rep_id_fkey (
               full_name
-            ),
-            order_items (
-              quantity,
-              free_quantity,
-              actual_unit_cost,
-              total_price
             )
-          ),
-          payments (
-            id,
-            amount,
-            payment_date,
-            receipt_number,
-            is_cancelled,
-            method,
-            cheque_no,
-            cheque_date,
-            cheque_status
           )
         `
         )
@@ -168,6 +195,32 @@ export async function GET(request: NextRequest) {
       } else {
         hasMore = false;
       }
+    }
+
+    // Order items and payments are loaded separately, in batches by id.
+    // Joining them into the query above made each page take 6s+ and hit the
+    // database statement timeout; a direct lookup by id takes ~0.2s per batch.
+    const orderIds = [...new Set(rawInvoices.map((inv: any) => inv.order_id).filter(Boolean))];
+    const invoiceIds = rawInvoices.map((inv: any) => inv.id);
+    const [allItems, allPayments] = await Promise.all([
+      fetchByIds(
+        "order_items",
+        "order_id, quantity, free_quantity, actual_unit_cost, total_price",
+        "order_id",
+        orderIds
+      ),
+      fetchByIds(
+        "payments",
+        "id, invoice_id, amount, payment_date, receipt_number, is_cancelled, method, cheque_no, cheque_date, cheque_status",
+        "invoice_id",
+        invoiceIds
+      ),
+    ]);
+    const itemsByOrder = groupBy(allItems, "order_id");
+    const paymentsByInvoice = groupBy(allPayments, "invoice_id");
+    for (const inv of rawInvoices) {
+      if (inv.orders) inv.orders.order_items = itemsByOrder.get(inv.order_id) || [];
+      inv.payments = paymentsByInvoice.get(inv.id) || [];
     }
 
     // Map to frontend format
@@ -356,6 +409,9 @@ export async function POST(request: NextRequest) {
     }
     if (val.cashDiscountPercent > 0 || val.cashDiscountAmount > 0) {
       combinedNotes = `[CASH_DISCOUNT_PERCENT:${val.cashDiscountPercent}][CASH_DISCOUNT_AMOUNT:${val.cashDiscountAmount}]` + combinedNotes;
+    }
+    if (val.printFormat === "MRP") {
+      combinedNotes = `[PRINT_FORMAT:MRP]` + combinedNotes;
     }
 
     const { data: orderData, error: orderError } = await supabaseAdmin

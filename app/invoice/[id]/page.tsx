@@ -38,6 +38,7 @@ async function getInvoice(id: string) {
     items: (items || []).map((item: any) => ({
       sku: item.products?.sku || "-",
       productName: item.products?.name || "Unknown Product",
+      mrp: item.products?.mrp || 0,
       unitPrice: item.unit_price,
       quantity: item.quantity,
       unit: item.products?.unit_of_measure || "Pcs",

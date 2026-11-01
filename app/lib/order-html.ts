@@ -49,6 +49,7 @@ export const printOrder = async (order: any, items: any[]) => {
     items: items.map((item) => ({
       sku: item.sku,
       productName: item.name,
+      mrp: item.mrp || 0,
       unitPrice: item.price,
       quantity: item.qty,
       unit: item.unit,

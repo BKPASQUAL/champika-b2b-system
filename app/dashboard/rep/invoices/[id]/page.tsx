@@ -184,13 +184,13 @@ export default function RepInvoiceDetailPage({
   const paymentStatusLabel = balanceDue <= 0 ? "Paid" : totalPaid > 0 ? "Partial" : "Unpaid";
 
   return (
-    <div className="bg-muted/40 min-h-full">
-      <div className="space-y-8">
+    <div className="bg-muted/40 min-h-full overflow-x-hidden">
+      <div className="space-y-6 sm:space-y-8 min-w-0">
 
         {/* ── Top Header ── */}
-        <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
-          <div className="space-y-1">
-            <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-3 xl:gap-6">
+          <div className="space-y-1 min-w-0">
+            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
               <Button
                 variant="outline"
                 size="icon"
@@ -199,12 +199,17 @@ export default function RepInvoiceDetailPage({
               >
                 <ArrowLeft className="w-4 h-4" />
               </Button>
-              <h1 className="text-2xl font-bold tracking-tight">
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
                 Invoice {invoice.invoiceNo}
               </h1>
               {renderDeliveryBadge(invoice.orderStatus || "Pending")}
+              {invoice.printFormat === "MRP" && (
+                <Badge variant="outline" className="border-purple-300 bg-purple-50 text-purple-700">
+                  MRP Bill
+                </Badge>
+              )}
             </div>
-            <p className="text-sm text-muted-foreground ml-11">
+            <p className="text-xs sm:text-sm text-muted-foreground ml-10 sm:ml-11">
               Created on{" "}
               {new Date(invoice.date).toLocaleDateString(undefined, {
                 weekday: "long",
@@ -215,7 +220,7 @@ export default function RepInvoiceDetailPage({
             </p>
           </div>
 
-          <div className="flex items-center gap-2 ml-11 md:ml-0 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap sm:ml-11 xl:ml-0">
             {invoice?.orderStatus === "Pending" && (
               <Button
                 variant="default"
@@ -274,13 +279,13 @@ export default function RepInvoiceDetailPage({
         </div>
 
         {/* ── Main 3-col grid ── */}
-        <div className="grid gap-6 lg:grid-cols-3">
+        <div className="grid gap-6 lg:grid-cols-3 min-w-0 *:min-w-0">
 
           {/* ── LEFT COLUMN (spans 2) ── */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-6 min-w-0">
 
             {/* Stakeholders */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 *:min-w-0">
               <Card className="shadow-sm border-l-4 border-l-blue-500">
                 <CardHeader className="pb-2">
                   <CardDescription className="text-xs font-semibold uppercase tracking-wider text-blue-600">
@@ -303,9 +308,9 @@ export default function RepInvoiceDetailPage({
                       </div>
                     )}
                     {invoice.customer?.address && (
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <MapPin className="w-3 h-3 shrink-0" />
-                        <span>{invoice.customer.address}</span>
+                      <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                        <MapPin className="w-3 h-3 shrink-0 mt-0.5" />
+                        <span className="wrap-break-word">{invoice.customer.address}</span>
                       </div>
                     )}
                   </div>
@@ -343,16 +348,75 @@ export default function RepInvoiceDetailPage({
                 </div>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="overflow-x-auto">
+                {/* Phones & tablets: one card per item (table needs a wide screen) */}
+                <div className="xl:hidden divide-y">
+                  {invoice.items.map((item: any, idx: number) => (
+                    <div key={item.id} className="px-4 sm:px-6 py-3 space-y-2">
+                      <div className="flex items-start gap-3">
+                        <div className="h-7 w-7 rounded bg-slate-100 flex items-center justify-center text-xs font-semibold text-slate-500 shrink-0">
+                          {idx + 1}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-sm text-foreground wrap-break-word">{item.productName}</p>
+                          <p className="text-xs font-mono text-muted-foreground mt-0.5">{item.sku}</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 sm:grid-cols-5 gap-x-2 gap-y-2 rounded-md bg-slate-50 px-3 py-2 text-xs">
+                        <div>
+                          <p className="text-[10px] uppercase text-muted-foreground">Qty</p>
+                          <p className="font-semibold">
+                            {item.quantity} <span className="font-normal text-muted-foreground">{item.unit}</span>
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase text-muted-foreground">Free</p>
+                          <p className="font-semibold">{item.freeQuantity > 0 ? item.freeQuantity : "-"}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] uppercase text-muted-foreground">Price</p>
+                          <p className="font-mono">
+                            {(item.unitPrice || 0).toLocaleString("en-LK", { minimumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                        <div className="sm:text-center">
+                          <p className="text-[10px] uppercase text-muted-foreground">Disc</p>
+                          <p className={item.discountPercent > 0 ? "font-medium text-red-600" : "text-muted-foreground"}>
+                            {item.discountPercent > 0 ? `-${item.discountPercent}%` : "-"}
+                          </p>
+                        </div>
+                        <div className="col-span-2 sm:col-span-1 text-right">
+                          <p className="text-[10px] uppercase text-muted-foreground">Total</p>
+                          <p className="font-mono font-semibold">
+                            {(item.total || 0).toLocaleString("en-LK", { minimumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="px-4 sm:px-6 py-3 bg-slate-50/50 flex items-center justify-between gap-3">
+                    <span className="text-xs text-muted-foreground">
+                      Qty <span className="font-semibold text-foreground">{totalItemsQty}</span>
+                      {totalFreeQty > 0 && (
+                        <> · Free <span className="font-semibold text-foreground">{totalFreeQty}</span></>
+                      )}
+                    </span>
+                    <span className="font-bold font-mono text-sm whitespace-nowrap">
+                      LKR {subTotalGross.toLocaleString("en-LK", { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Wide screens: table */}
+                <div className="hidden xl:block overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-slate-50/50 hover:bg-slate-50/50">
-                        <TableHead className="w-[35%] pl-6">Product Details</TableHead>
-                        <TableHead className="text-center w-[10%]">Qty</TableHead>
-                        <TableHead className="text-center w-[10%]">Free</TableHead>
-                        <TableHead className="text-right w-[15%]">Price</TableHead>
-                        <TableHead className="text-center w-[10%]">Disc.</TableHead>
-                        <TableHead className="text-right w-[20%] pr-6">Total</TableHead>
+                        <TableHead className="pl-6">Product Details</TableHead>
+                        <TableHead className="text-center whitespace-nowrap">Qty</TableHead>
+                        <TableHead className="text-center">Free</TableHead>
+                        <TableHead className="text-right">Price</TableHead>
+                        <TableHead className="text-center">Disc.</TableHead>
+                        <TableHead className="text-right pr-6">Total</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -441,7 +505,41 @@ export default function RepInvoiceDetailPage({
                     No payments recorded for this invoice yet.
                   </div>
                 ) : (
-                  <Table>
+                  <>
+                  {/* Phones: one card per payment */}
+                  <div className="sm:hidden divide-y">
+                    {paymentsList.map((pay) => (
+                      <div key={pay.id} className="px-4 py-3 flex items-start justify-between gap-3">
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="font-normal text-xs">{pay.method}</Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(pay.payment_date).toLocaleDateString()}
+                            </span>
+                          </div>
+                          {pay.method === "Cheque" && (
+                            <p className="text-[11px] text-muted-foreground">
+                              <span className="font-mono text-foreground">{pay.cheque_no}</span>
+                              {pay.cheque_date && <> · Due {new Date(pay.cheque_date).toLocaleDateString()}</>}
+                              {pay.cheque_status && <> · {pay.cheque_status}</>}
+                            </p>
+                          )}
+                        </div>
+                        <span className="font-mono font-medium text-sm whitespace-nowrap">
+                          LKR {Number(pay.amount).toLocaleString("en-LK", { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    ))}
+                    <div className="px-4 py-3 bg-emerald-50/30 flex justify-between text-sm">
+                      <span className="text-emerald-700 font-medium">Total Paid</span>
+                      <span className="font-bold font-mono text-emerald-700">
+                        LKR {totalPaid.toLocaleString("en-LK", { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="hidden sm:block overflow-x-auto">
+                  <Table className="min-w-[480px]">
                     <TableHeader>
                       <TableRow className="bg-emerald-50/30 hover:bg-emerald-50/30">
                         <TableHead className="pl-6">Date</TableHead>
@@ -495,6 +593,8 @@ export default function RepInvoiceDetailPage({
                       </TableRow>
                     </TableFooter>
                   </Table>
+                  </div>
+                  </>
                 )}
               </CardContent>
             </Card>
@@ -619,7 +719,7 @@ export default function RepInvoiceDetailPage({
             </Card>
 
             {/* Payment Summary — sticky */}
-            <Card className="shadow-sm border-t-4 border-t-primary sticky top-6">
+            <Card className="shadow-sm border-t-4 border-t-primary lg:sticky lg:top-6">
               <CardHeader className="bg-muted/20 pb-4">
                 <CardTitle className="flex items-center gap-2">
                   <CreditCard className="w-5 h-5 text-primary" />
@@ -700,12 +800,12 @@ export default function RepInvoiceDetailPage({
 
                 <Separator className="my-2" />
 
-                <div className="flex justify-between items-end pb-2">
-                  <span className="font-bold text-lg">Balance Due</span>
+                <div className="flex flex-wrap justify-between items-end gap-x-3 pb-2">
+                  <span className="font-bold text-base sm:text-lg">Balance Due</span>
                   <div className="text-right">
                     <span
                       className={cn(
-                        "block font-bold text-2xl font-mono tracking-tight",
+                        "block font-bold text-xl sm:text-2xl font-mono tracking-tight",
                         balanceDue > 0 ? "text-red-600" : "text-emerald-600"
                       )}
                     >

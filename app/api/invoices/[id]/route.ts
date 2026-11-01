@@ -251,7 +251,10 @@ export async function GET(
     const cdaMatch = rawNotes.match(/\[CASH_DISCOUNT_AMOUNT:([\d.]+)\]/);
     if (cdaMatch) cashDiscountAmount = parseFloat(cdaMatch[1]);
 
+    const printFormat = /\[PRINT_FORMAT:MRP\]/.test(rawNotes) ? "MRP" : "STANDARD";
+
     const cleanNotes = rawNotes
+      .replace(/\[PRINT_FORMAT:[^\]]+\]/g, "")
       .replace(/\[PAYMENT_METHOD:[^\]]+\]/g, "")
       .replace(/\[CASH_DISCOUNT_PERCENT:[\d.]+\]/g, "")
       .replace(/\[CASH_DISCOUNT_AMOUNT:[\d.]+\]/g, "")
@@ -270,6 +273,7 @@ export async function GET(
       salesRepId: invoice.orders?.sales_rep_id,
       orderStatus: invoice.orders?.status,
       notes: cleanNotes,
+      printFormat,
       paymentMethod,
       cashDiscountPercent,
       cashDiscountAmount,
@@ -623,6 +627,12 @@ export async function PATCH(
       const cdaTag = val.cashDiscountAmount ? `[CASH_DISCOUNT_AMOUNT:${val.cashDiscountAmount}]` : "";
 
       updatedNotes = `${pmTag}${cdpTag}${cdaTag}${cleanBase ? "\n" + cleanBase : ""}`;
+    }
+
+    // Keep the MRP bill format when the invoice is edited (edit forms don't send the tag back)
+    const storedNotes = (currentInvoice.orders as any)?.notes || "";
+    if (/\[PRINT_FORMAT:MRP\]/.test(storedNotes) && !/\[PRINT_FORMAT:MRP\]/.test(updatedNotes)) {
+      updatedNotes = `[PRINT_FORMAT:MRP]${updatedNotes}`;
     }
 
     // Update Order

@@ -26,6 +26,7 @@ import {
   Printer,
   Receipt,
   Share2,
+  Tags,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -269,6 +270,16 @@ export default function DistributionInvoicesPage() {
             }
           >
             <Search className="w-4 h-4 mr-2" /> Search Invoice
+          </Button>
+
+          <Button
+            variant="outline"
+            onClick={() =>
+              router.push("/dashboard/office/distribution/invoices/create-mrp")
+            }
+            className="border-purple-300 text-purple-700 hover:bg-purple-50 hover:text-purple-800"
+          >
+            <Tags className="w-4 h-4 mr-2" /> MRP Invoice
           </Button>
 
           <Button

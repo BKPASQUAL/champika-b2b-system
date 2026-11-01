@@ -153,7 +153,22 @@ export const generateInvoiceHTML = async (
     if (cdaMatch) cashDiscountAmount = parseFloat(cdaMatch[1]);
   }
 
+  // MRP bill: MRP | Disc% (off MRP) | final Unit Price | Total
+  const isMrpFormat =
+    invoice.printFormat === "MRP" || rawNotes.includes("[PRINT_FORMAT:MRP]");
+  // Show the "Add. Disc %" column only when some item has an extra item discount
+  const mrpHasAddDisc =
+    isMrpFormat && (invoice.items || []).some((i: any) => Number(i.discountPercent) > 0);
+  // Show the "Free" column only when some item has free quantity
+  const mrpHasFree =
+    isMrpFormat && (invoice.items || []).some((i: any) => Number(i.freeQuantity || i.free || 0) > 0);
+  // Column widths (%) for the MRP bill; Description takes the rest
+  const MRP_COL = { num: 3, code: 9, val: 9, total: 14 };
+  const mrpValueCols = 4 + (mrpHasFree ? 1 : 0) + (mrpHasAddDisc ? 1 : 0); // qty, mrp, disc, unit + optional
+  const mrpDescWidth = 100 - MRP_COL.num - MRP_COL.code - MRP_COL.total - MRP_COL.val * mrpValueCols;
+
   const notes = rawNotes
+    .replace(/\[PRINT_FORMAT:[^\]]+\]/g, "")
     .replace(/\[PAYMENT_METHOD:[^\]]+\]/g, "")
     .replace(/\[CASH_DISCOUNT_PERCENT:[\d.]+\]/g, "")
     .replace(/\[CASH_DISCOUNT_AMOUNT:[\d.]+\]/g, "")
@@ -261,6 +276,29 @@ export const generateInvoiceHTML = async (
       </thead>`;
     }
 
+    if (isMrpFormat) {
+      // Fixed layout: Qty / Free / MRP / Disc / Add Disc / Unit Price all share one width,
+      // and Description gets whatever is left.
+      const th = (label: string, align: string, width: number) =>
+        `<th style="padding:7px 4px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:#000;text-align:${align};width:${width}%;white-space:nowrap;">${label}</th>`;
+      return `
+    <table style="width:100%;border-collapse:collapse;margin-bottom:6px;table-layout:fixed;">
+      <thead>
+        <tr style="border-top:2px solid #000;border-bottom:2px solid #000;background:#f0f0f0;">
+          ${th("#", "center", MRP_COL.num)}
+          ${th("Item Code", "left", MRP_COL.code)}
+          ${th("Description", "left", mrpDescWidth)}
+          ${th("Qty", "center", MRP_COL.val)}
+          ${mrpHasFree ? th("Free", "center", MRP_COL.val) : ""}
+          ${th("MRP", "center", MRP_COL.val)}
+          ${th("Disc %", "center", MRP_COL.val)}
+          ${mrpHasAddDisc ? th("Add Disc", "center", MRP_COL.val) : ""}
+          ${th("Unit Price", "center", MRP_COL.val)}
+          ${th("Total", "right", MRP_COL.total)}
+        </tr>
+      </thead>`;
+    }
+
     return `
     <table style="width:100%;border-collapse:collapse;margin-bottom:6px;">
       <thead>
@@ -307,6 +345,38 @@ export const generateInvoiceHTML = async (
           <td style="padding:7px 8px;font-size:13px;color:#111;text-align:right;white-space:nowrap;vertical-align:middle;">LKR ${fmt(itemPrice)}</td>
           <td style="padding:7px 8px;font-size:14px;font-weight:800;color:#000;text-align:center;vertical-align:middle;">${itemQty}</td>
           <td style="padding:7px 8px;font-size:13px;font-weight:800;color:#000;text-align:right;white-space:nowrap;vertical-align:middle;">LKR ${fmt(lineVal)}</td>
+        </tr>`;
+        }
+
+        if (isMrpFormat) {
+          const qty = Number(item.quantity) || 0;
+          const free = Number(item.freeQuantity || item.free || 0);
+          const lineTotal = Number(item.total) || 0;
+          const basePrice = Number(item.unitPrice || item.price || 0);
+          // Final price per unit after the additional (item) discount
+          const netUnit = qty > 0 ? lineTotal / qty : basePrice;
+          const mrp = Number(item.mrp) || 0;
+          const addDiscPct = Number(item.discountPercent) || 0;
+          // Disc % = MRP → selling price; Add. Disc % = the extra item discount on top
+          const discFrom = mrpHasAddDisc ? basePrice : netUnit;
+          const discPct = mrp > 0 && mrp > discFrom ? ((mrp - discFrom) / mrp) * 100 : 0;
+          const discLabel = discPct > 0 ? `${Number(discPct.toFixed(2))}%` : "-";
+          const addDiscLabel = addDiscPct > 0 ? `${Number(addDiscPct.toFixed(2))}%` : "-";
+          // Shared style for the equal-width value columns
+          const val = (content: string, extra = "") =>
+            `<td style="padding:7px 3px;font-size:11.5px;color:#111;text-align:center;white-space:nowrap;vertical-align:middle;${extra}">${content}</td>`;
+          return `
+        <tr style="${globalIdx < items.length - 1 ? "border-bottom:1px solid #e8e8e8;" : ""}">
+          <td style="padding:7px 4px;font-size:12px;color:#777;text-align:center;vertical-align:middle;">${globalIdx + 1}</td>
+          <td style="padding:7px 4px;font-size:12px;color:#555;vertical-align:middle;overflow-wrap:anywhere;">${item.sku || "-"}</td>
+          <td style="padding:7px 6px 7px 4px;font-size:13px;color:#111;font-weight:500;vertical-align:middle;line-height:1.3;">${item.productName || item.name || "-"}${retailTag}</td>
+          ${val(`${qty} ${item.unit || "Pcs"}`, "font-weight:700;")}
+          ${mrpHasFree ? val(free > 0 ? String(free) : "-", "font-weight:700;") : ""}
+          ${val(mrp > 0 ? fmt(mrp) : "-", "color:#555;")}
+          ${val(discLabel)}
+          ${mrpHasAddDisc ? val(addDiscLabel) : ""}
+          ${val(fmt(netUnit), "font-weight:600;")}
+          <td style="padding:7px 4px;font-size:12px;font-weight:700;color:#111;text-align:right;white-space:nowrap;vertical-align:middle;">LKR ${fmt(lineTotal)}</td>
         </tr>`;
         }
 
@@ -591,6 +661,7 @@ export const generateHalfPageInvoiceHTML = async (
   }
 
   const notes = rawNotes
+    .replace(/\[PRINT_FORMAT:[^\]]+\]/g, "")
     .replace(/\[PAYMENT_METHOD:[^\]]+\]/g, "")
     .replace(/\[CASH_DISCOUNT_PERCENT:[\d.]+\]/g, "")
     .replace(/\[CASH_DISCOUNT_AMOUNT:[\d.]+\]/g, "")
