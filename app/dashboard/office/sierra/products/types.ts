@@ -42,6 +42,7 @@ export interface Product {
 export type SortField =
   | "name"
   | "category"
+  | "productFamily"
   | "brand"
   | "supplier"
   | "stock"

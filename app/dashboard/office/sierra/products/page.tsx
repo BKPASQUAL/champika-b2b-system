@@ -142,12 +142,17 @@ export default function SierraProductsPage() {
     if (aValue === null || aValue === undefined) aValue = "";
     if (bValue === null || bValue === undefined) bValue = "";
 
-    if (typeof aValue === "string") aValue = aValue.toLowerCase();
-    if (typeof bValue === "string") bValue = bValue.toLowerCase();
+    if (typeof aValue === "string") aValue = aValue.toLowerCase().trim();
+    if (typeof bValue === "string") bValue = bValue.toLowerCase().trim();
+
+    // Blank text values (e.g. no Product Family) always go last
+    if (aValue === "" && bValue !== "") return 1;
+    if (bValue === "" && aValue !== "") return -1;
 
     if (aValue < bValue) return sortOrder === "asc" ? -1 : 1;
     if (aValue > bValue) return sortOrder === "asc" ? 1 : -1;
-    return 0;
+    // Same value → keep products in name order
+    return a.name.localeCompare(b.name);
   });
 
   const totalPages = Math.ceil(sortedProducts.length / itemsPerPage);

@@ -36,6 +36,7 @@ export type SortField =
   | "name"
   | "category"
   | "subCategory"
+  | "productFamily"
   | "brand"
   | "supplier"
   | "stock"

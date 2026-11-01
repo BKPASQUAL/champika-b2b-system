@@ -20,6 +20,7 @@ import { ProductFilters } from "./_components/ProductFilters";
 import { ProductTable } from "./_components/ProductTable";
 import { ProductDialogs } from "./_components/ProductDialogs";
 import { ProductReportDialog } from "./_components/ProductReportDialog";
+import { BulkEditDialog } from "./_components/BulkEditDialog";
 import { SelectionDiscountDialog } from "@/components/SelectionDiscountDialog";
 import { useDiscountFeature } from "@/hooks/useDiscountFeature";
 
@@ -70,6 +71,7 @@ export default function ProductsPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isDiscountDialogOpen, setIsDiscountDialogOpen] = useState(false);
   const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
+  const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   // Row selection
@@ -179,12 +181,17 @@ export default function ProductsPage() {
     if (aValue === null || aValue === undefined) aValue = "";
     if (bValue === null || bValue === undefined) bValue = "";
 
-    if (typeof aValue === "string") aValue = aValue.toLowerCase();
-    if (typeof bValue === "string") bValue = bValue.toLowerCase();
+    if (typeof aValue === "string") aValue = aValue.toLowerCase().trim();
+    if (typeof bValue === "string") bValue = bValue.toLowerCase().trim();
+
+    // Blank text values (e.g. no Product Family) always go last
+    if (aValue === "" && bValue !== "") return 1;
+    if (bValue === "" && aValue !== "") return -1;
 
     if (aValue < bValue) return sortOrder === "asc" ? -1 : 1;
     if (aValue > bValue) return sortOrder === "asc" ? 1 : -1;
-    return 0;
+    // Same value → keep products in name order
+    return a.name.localeCompare(b.name);
   });
 
   const totalPages = Math.ceil(sortedProducts.length / itemsPerPage);
@@ -354,7 +361,7 @@ export default function ProductsPage() {
       <ProductStats products={products} />
 
       {/* ── Selection Action Bar ── */}
-      {discountEnabled && selectedIds.size > 0 && (
+      {selectedIds.size > 0 && (
         <div className="flex items-center justify-between rounded-lg border border-purple-200 bg-purple-50 px-4 py-3">
           <span className="text-sm font-medium text-purple-800">
             {selectAllMode
@@ -380,11 +387,19 @@ export default function ProductsPage() {
               Clear selection
             </button>
             <button
-              className="inline-flex items-center gap-1.5 rounded-md bg-purple-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-purple-700 transition-colors"
-              onClick={() => setIsDiscountDialogOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-purple-300 bg-white px-3 py-1.5 text-sm font-medium text-purple-700 hover:bg-purple-100 transition-colors"
+              onClick={() => setIsBulkEditOpen(true)}
             >
-              Apply Discount
+              Bulk Edit
             </button>
+            {discountEnabled && (
+              <button
+                className="inline-flex items-center gap-1.5 rounded-md bg-purple-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-purple-700 transition-colors"
+                onClick={() => setIsDiscountDialogOpen(true)}
+              >
+                Apply Discount
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -426,7 +441,7 @@ export default function ProductsPage() {
             sortField={sortField}
             sortOrder={sortOrder}
             onSort={handleSort}
-            selectedIds={discountEnabled ? selectedIds : new Set<string>()}
+            selectedIds={selectedIds}
             onSelectionChange={(ids) => {
               setSelectedIds(ids);
               if (ids.size === 0) setSelectAllMode(false);
@@ -486,6 +501,18 @@ export default function ProductsPage() {
         open={isDiscountDialogOpen}
         onOpenChange={setIsDiscountDialogOpen}
         selectedIds={Array.from(selectedIds)}
+        onSuccess={() => {
+          setSelectedIds(new Set());
+          setSelectAllMode(false);
+          fetchData();
+        }}
+      />
+
+      <BulkEditDialog
+        open={isBulkEditOpen}
+        onOpenChange={setIsBulkEditOpen}
+        products={products.filter((p) => selectedIds.has(p.id))}
+        categories={categories}
         onSuccess={() => {
           setSelectedIds(new Set());
           setSelectAllMode(false);

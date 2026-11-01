@@ -143,6 +143,9 @@ export function ProductTable({
               <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => onSort("category")}>
                 <div className="flex items-center">Category {getSortIcon("category")}</div>
               </TableHead>
+              <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => onSort("productFamily")}>
+                <div className="flex items-center whitespace-nowrap">Product Family {getSortIcon("productFamily")}</div>
+              </TableHead>
               <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => onSort("supplier")}>
                 <div className="flex items-center">Supplier {getSortIcon("supplier")}</div>
               </TableHead>
@@ -168,7 +171,7 @@ export function ProductTable({
             {/* ── Select-all banner ── */}
             {allPageSelected && allFilteredCount > products.length && showPagination && (
               <TableRow className="bg-purple-50 hover:bg-purple-50">
-                <TableCell colSpan={showCost ? 13 : 12} className="py-2 text-center text-sm text-purple-800">
+                <TableCell colSpan={showCost ? 14 : 13} className="py-2 text-center text-sm text-purple-800">
                   All <strong>{products.length}</strong> products on this page are selected.{" "}
                   <button
                     className="font-semibold underline hover:text-purple-900"
@@ -181,7 +184,7 @@ export function ProductTable({
             )}
             {selectedIds.size === allFilteredCount && allFilteredCount > 0 && !showPagination && (
               <TableRow className="bg-purple-100 hover:bg-purple-100">
-                <TableCell colSpan={showCost ? 13 : 12} className="py-2 text-center text-sm text-purple-800 font-medium">
+                <TableCell colSpan={showCost ? 14 : 13} className="py-2 text-center text-sm text-purple-800 font-medium">
                   All <strong>{allFilteredCount}</strong> products are selected.
                 </TableCell>
               </TableRow>
@@ -189,7 +192,7 @@ export function ProductTable({
 
             {products.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={showCost ? 13 : 12} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={showCost ? 14 : 13} className="text-center py-8 text-muted-foreground">
                   No products found
                 </TableCell>
               </TableRow>
@@ -251,6 +254,15 @@ export function ProductTable({
                           </span>
                         )}
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      {product.productFamily ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                          {product.productFamily}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">—</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
@@ -395,6 +407,11 @@ export function ProductTable({
                       {product.subCategory && (
                         <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
                           {product.subCategory}
+                        </span>
+                      )}
+                      {product.productFamily && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-100 text-amber-800">
+                          {product.productFamily}
                         </span>
                       )}
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-100 text-blue-700">

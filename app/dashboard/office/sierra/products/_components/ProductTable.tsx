@@ -177,6 +177,11 @@ export function ProductTable({
                     <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 text-slate-700 border">
                       <Tag className="w-2.5 h-2.5 mr-1" /> {product.category}
                     </span>
+                    {product.productFamily && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-100 text-amber-800">
+                        {product.productFamily}
+                      </span>
+                    )}
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-orange-100 text-orange-700">
                       Commission: {product.commissionValue ?? 0}%
                     </span>
@@ -270,6 +275,15 @@ export function ProductTable({
                 </div>
               </TableHead>
 
+              <TableHead
+                className="cursor-pointer hover:bg-red-100/50"
+                onClick={() => onSort("productFamily")}
+              >
+                <div className="flex items-center text-red-900 whitespace-nowrap">
+                  Product Family {getSortIcon("productFamily")}
+                </div>
+              </TableHead>
+
               <TableHead className="text-right text-red-900">
                 Commission
               </TableHead>
@@ -317,7 +331,7 @@ export function ProductTable({
             {/* ── Select-all banner ── */}
             {allPageSelected && allFilteredCount > products.length && !showPagination === false && (
               <TableRow className="bg-purple-50 hover:bg-purple-50">
-                <TableCell colSpan={showCost ? 11 : 10} className="py-2 text-center text-sm text-purple-800">
+                <TableCell colSpan={showCost ? 12 : 11} className="py-2 text-center text-sm text-purple-800">
                   All <strong>{products.length}</strong> products on this page are selected.{" "}
                   <button
                     className="font-semibold underline hover:text-purple-900"
@@ -330,7 +344,7 @@ export function ProductTable({
             )}
             {selectedIds.size === allFilteredCount && allFilteredCount > 0 && !showPagination && (
               <TableRow className="bg-purple-100 hover:bg-purple-100">
-                <TableCell colSpan={showCost ? 11 : 10} className="py-2 text-center text-sm text-purple-800 font-medium">
+                <TableCell colSpan={showCost ? 12 : 11} className="py-2 text-center text-sm text-purple-800 font-medium">
                   All <strong>{allFilteredCount}</strong> products are selected.
                 </TableCell>
               </TableRow>
@@ -339,7 +353,7 @@ export function ProductTable({
             {products.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={showCost ? 11 : 10}
+                  colSpan={showCost ? 12 : 11}
                   className="text-center py-8 text-muted-foreground"
                 >
                   No Sierra products found matching your criteria.
@@ -407,6 +421,17 @@ export function ProductTable({
                     <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-700 border">
                       <Tag className="w-3 h-3 mr-1" /> {product.category}
                     </span>
+                  </TableCell>
+
+                  {/* Product Family Column */}
+                  <TableCell>
+                    {product.productFamily ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                        {product.productFamily}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">—</span>
+                    )}
                   </TableCell>
 
                   {/* Commission Column */}
