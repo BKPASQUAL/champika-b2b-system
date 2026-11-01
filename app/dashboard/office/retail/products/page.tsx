@@ -306,6 +306,56 @@ export default function RetailProductCatalogPage() {
     }
   };
 
+  // ── Quick Retail Only on/off ─────────────────────────────────────────────
+  // Switch changes are kept here until "Save Changes" is clicked.
+  const [pendingRetailOnly, setPendingRetailOnly] = useState<Record<string, boolean>>({});
+  const [savingRetailOnly, setSavingRetailOnly] = useState(false);
+  const pendingCount = Object.keys(pendingRetailOnly).length;
+
+  const isRetailOnlyOn = (p: Product) =>
+    p.id in pendingRetailOnly ? pendingRetailOnly[p.id] : !!p.retailOnly;
+
+  const handleToggleRetailOnly = (product: Product, value: boolean) => {
+    setPendingRetailOnly((prev) => {
+      const next = { ...prev };
+      // Back to the saved value = no change
+      if (value === !!product.retailOnly) delete next[product.id];
+      else next[product.id] = value;
+      return next;
+    });
+  };
+
+  const handleSaveRetailOnly = async () => {
+    const entries = Object.entries(pendingRetailOnly);
+    if (entries.length === 0) return;
+    setSavingRetailOnly(true);
+    const results = await Promise.allSettled(
+      entries.map(async ([id, value]) => {
+        const res = await fetch(`/api/products/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ retailOnly: value }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "Failed");
+        }
+        return id;
+      })
+    );
+    const failed: Record<string, boolean> = {};
+    results.forEach((r, i) => {
+      if (r.status === "rejected") failed[entries[i][0]] = entries[i][1];
+    });
+    const savedCount = entries.length - Object.keys(failed).length;
+    if (savedCount > 0) toast.success(`Saved ${savedCount} Retail Only change${savedCount !== 1 ? "s" : ""}`);
+    if (Object.keys(failed).length > 0)
+      toast.error(`${Object.keys(failed).length} change(s) failed to save — please try again`);
+    setPendingRetailOnly(failed); // keep only the failed ones
+    setSavingRetailOnly(false);
+    refetchProducts();
+  };
+
   // ── Report Handlers ─────────────────────────────────────────────────────
   const handleCostPricePrint = () => {
     generateCostAndPriceReport(filteredProducts, {
@@ -515,6 +565,55 @@ export default function RetailProductCatalogPage() {
               {retailOnlyView ? "Retail Only" : "All Products"}
             </button>
           </div>
+
+          {/* ── Bulk Retail Only bar ── */}
+          <div className="flex flex-wrap items-center gap-2 pt-3">
+            <span className="text-xs text-muted-foreground mr-1">This page:</span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs border-purple-200 text-purple-700 hover:bg-purple-50"
+              disabled={savingRetailOnly || paginatedProducts.length === 0}
+              onClick={() => paginatedProducts.forEach((p) => handleToggleRetailOnly(p, true))}
+            >
+              <ToggleRight className="w-3.5 h-3.5 mr-1" /> All Retail ON
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              disabled={savingRetailOnly || paginatedProducts.length === 0}
+              onClick={() => paginatedProducts.forEach((p) => handleToggleRetailOnly(p, false))}
+            >
+              <ToggleLeft className="w-3.5 h-3.5 mr-1" /> All Retail OFF
+            </Button>
+
+            {pendingCount > 0 && (
+              <div className="ml-auto flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5">
+                <span className="text-xs font-medium text-amber-800">
+                  {pendingCount} unsaved change{pendingCount !== 1 ? "s" : ""}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  disabled={savingRetailOnly}
+                  onClick={() => setPendingRetailOnly({})}
+                >
+                  Discard
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-7 text-xs bg-purple-600 hover:bg-purple-700 text-white"
+                  disabled={savingRetailOnly}
+                  onClick={handleSaveRetailOnly}
+                >
+                  {savingRetailOnly && <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />}
+                  Save Changes
+                </Button>
+              </div>
+            )}
+          </div>
         </CardHeader>
 
         <CardContent className="p-0">
@@ -580,20 +679,21 @@ export default function RetailProductCatalogPage() {
                       Stock <SortIcon field="stock" />
                     </div>
                   </TableHead>
+                  <TableHead className="text-center">Retail Only</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {l1 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
                       <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
                       Loading products...
                     </TableCell>
                   </TableRow>
                 ) : paginatedProducts.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
                       <Package className="w-8 h-8 mx-auto mb-2 opacity-40" />
                       {retailOnlyView
                         ? 'No retail-only products. Mark products as "Retail Only" in admin or add one here.'
@@ -686,6 +786,20 @@ export default function RetailProductCatalogPage() {
                         }>
                           {product.stock} {product.unitOfMeasure}
                         </span>
+                      </TableCell>
+
+                      {/* Retail Only toggle */}
+                      <TableCell className="text-center">
+                        <div className="flex flex-col items-center gap-0.5">
+                          <Switch
+                            checked={isRetailOnlyOn(product)}
+                            disabled={savingRetailOnly}
+                            onCheckedChange={(v) => handleToggleRetailOnly(product, v)}
+                          />
+                          {product.id in pendingRetailOnly && (
+                            <span className="text-[10px] font-medium text-amber-600">unsaved</span>
+                          )}
+                        </div>
                       </TableCell>
 
                       {/* Actions */}
@@ -822,6 +936,17 @@ export default function RetailProductCatalogPage() {
 
                       {/* Actions */}
                       <div className="flex items-center gap-1">
+                        <label className="flex items-center gap-1.5 mr-1 text-xs text-purple-700">
+                          <Switch
+                            checked={isRetailOnlyOn(product)}
+                            disabled={savingRetailOnly}
+                            onCheckedChange={(v) => handleToggleRetailOnly(product, v)}
+                          />
+                          Retail
+                          {product.id in pendingRetailOnly && (
+                            <span className="text-[10px] text-amber-600">•</span>
+                          )}
+                        </label>
                         <Button
                           variant="outline"
                           size="sm"
