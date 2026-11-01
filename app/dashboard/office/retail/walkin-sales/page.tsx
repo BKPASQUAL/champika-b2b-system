@@ -17,7 +17,11 @@ import {
   Pencil,
   X,
   AlertTriangle,
+  Undo2,
+  Search,
+  FileText,
 } from "lucide-react";
+import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -262,6 +266,38 @@ export default function CreateRetailInvoicePage() {
 
   // Items State
   const [items, setItems] = useState<InvoiceItem[]>([]);
+
+  // Good returns: items the customer brings back, value taken off this bill
+  const [goodReturns, setGoodReturns] = useState<
+    {
+      id: string;
+      productId: string;
+      sku: string;
+      productName: string;
+      unit: string;
+      quantity: number;
+      unitPrice: number;
+      total: number;
+      fromInvoiceId: string | null;
+      fromInvoiceNo: string | null;
+    }[]
+  >([]);
+  const [returnProducts, setReturnProducts] = useState<Product[]>([]);
+  // Optional: the bill the customer bought the items on → only its items are shown
+  const [retInvoices, setRetInvoices] = useState<
+    { id: string; invoiceNo: string; manualInvoiceNo: string | null; date: string; customerName: string; total: number }[]
+  >([]);
+  const [retInvoiceId, setRetInvoiceId] = useState("");
+  const [retInvoice, setRetInvoice] = useState<{
+    id: string;
+    invoiceNo: string;
+    lines: { productId: string; name: string; sku: string; unit: string; sold: number; returned: number; left: number; unitPrice: number }[];
+  } | null>(null);
+  const [retInvoiceLoading, setRetInvoiceLoading] = useState(false);
+  const [retProductId, setRetProductId] = useState("");
+  const [retQty, setRetQty] = useState<number | "">("");
+  const [retPrice, setRetPrice] = useState<number | "">("");
+  const [editingReturnId, setEditingReturnId] = useState<string | null>(null);
   const [extraDiscount, setExtraDiscount] = useState<number>(0);
 
   // Popover States
@@ -396,6 +432,134 @@ export default function CreateRetailInvoicePage() {
     } finally {
       setStockLoading(false);
     }
+  };
+
+  // Products for the returns picker — include out-of-stock ones (the item may be sold out now)
+  useEffect(() => {
+    if (!userId) return;
+    fetch(`/api/rep/stock?userId=${userId}&includeOutOfStock=true`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => {
+        if (!Array.isArray(data)) return;
+        setReturnProducts(
+          data.map((p: any) => ({
+            id: p.id,
+            sku: p.sku,
+            name: p.name,
+            selling_price: p.selling_price || 0,
+            retail_price: p.retail_price ?? null,
+            mrp: p.mrp || 0,
+            stock_quantity: p.stock_quantity || 0,
+            unit_of_measure: p.unit_of_measure || "unit",
+            supplier: p.supplier || "",
+            retailOnly: p.retailOnly ?? p.retail_only ?? false,
+          }))
+        );
+      })
+      .catch(() => {});
+  }, [userId]);
+
+  // "From Invoice" search: look up retail bills by number as the user types
+  const [retInvoiceSearch, setRetInvoiceSearch] = useState("");
+  const [retInvoiceSearchOpen, setRetInvoiceSearchOpen] = useState(false);
+  const [retInvoiceSearching, setRetInvoiceSearching] = useState(false);
+  useEffect(() => {
+    if (!retInvoiceSearchOpen) return;
+    const q = retInvoiceSearch.trim();
+    const t = setTimeout(() => {
+      setRetInvoiceSearching(true);
+      fetch(`/api/retail/invoice-lookup${q ? `?search=${encodeURIComponent(q)}` : ""}`)
+        .then((r) => (r.ok ? r.json() : []))
+        .then((data) => setRetInvoices(Array.isArray(data) ? data : []))
+        .catch(() => setRetInvoices([]))
+        .finally(() => setRetInvoiceSearching(false));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [retInvoiceSearch, retInvoiceSearchOpen]);
+
+  // Pick (or clear) the bill the returned items came from
+  const selectReturnInvoice = async (id: string, keepProduct = false) => {
+    setRetInvoiceId(id);
+    if (!keepProduct) {
+      setRetProductId("");
+      setRetQty("");
+      setRetPrice("");
+    }
+    if (!id) {
+      setRetInvoice(null);
+      return;
+    }
+    setRetInvoiceLoading(true);
+    try {
+      const res = await fetch(`/api/retail/invoice-lookup?id=${id}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load invoice");
+      setRetInvoice(data);
+    } catch (e: any) {
+      toast.error(e.message);
+      setRetInvoiceId("");
+      setRetInvoice(null);
+    } finally {
+      setRetInvoiceLoading(false);
+    }
+  };
+
+  // How many of this product can still come back from the picked bill
+  const returnQtyLeft = (productId: string) => {
+    const line = retInvoice?.lines.find((l) => l.productId === productId);
+    if (!retInvoice || !line) return null;
+    const onThisSale = goodReturns
+      .filter((r) => r.fromInvoiceId === retInvoice.id && r.productId === productId && r.id !== editingReturnId)
+      .reduce((s, r) => s + r.quantity, 0);
+    return Math.max(0, line.left - onThisSale);
+  };
+
+  const handleAddReturn = () => {
+    const line = retInvoice?.lines.find((l) => l.productId === retProductId);
+    const product = returnProducts.find((p) => p.id === retProductId);
+    const qty = retQty === "" ? 0 : Number(retQty);
+    const price = retPrice === "" ? 0 : Number(retPrice);
+    if (!line && !product) return toast.error("Select the returned product");
+    if (qty <= 0) return toast.error("Enter the return quantity");
+    if (price <= 0) return toast.error("Enter the return price");
+    const left = returnQtyLeft(retProductId);
+    if (left !== null && qty > left) {
+      return toast.error(`Only ${left} left to return from ${retInvoice?.invoiceNo}`);
+    }
+    const row = {
+      id: editingReturnId ?? Date.now().toString(),
+      productId: retProductId,
+      sku: line?.sku ?? product?.sku ?? "",
+      productName: line?.name ?? product?.name ?? "",
+      unit: line?.unit ?? product?.unit_of_measure ?? "unit",
+      quantity: qty,
+      unitPrice: price,
+      total: Math.round(qty * price * 100) / 100,
+      fromInvoiceId: line && retInvoice ? retInvoice.id : null,
+      fromInvoiceNo: line && retInvoice ? retInvoice.invoiceNo : null,
+    };
+    setGoodReturns((prev) =>
+      editingReturnId ? prev.map((r) => (r.id === editingReturnId ? row : r)) : [...prev, row]
+    );
+    resetReturnForm();
+  };
+
+  // Keeps the picked invoice so more items from it can be added
+  const resetReturnForm = () => {
+    setEditingReturnId(null);
+    setRetProductId("");
+    setRetQty("");
+    setRetPrice("");
+  };
+
+  const handleEditReturn = async (id: string) => {
+    const r = goodReturns.find((x) => x.id === id);
+    if (!r) return;
+    if ((r.fromInvoiceId || "") !== retInvoiceId) await selectReturnInvoice(r.fromInvoiceId || "", true);
+    setEditingReturnId(id);
+    setRetProductId(r.productId);
+    setRetQty(r.quantity);
+    setRetPrice(r.unitPrice);
   };
 
   // --- 1. Get Business Context and Fetch Initial Data ---
@@ -815,6 +979,19 @@ export default function CreateRetailInvoicePage() {
       toast.error("Please add items to the invoice.");
       return;
     }
+    if (grandTotal < 0) {
+      toast.error("Good returns are more than the bill. Add more items or remove a return.");
+      return;
+    }
+    // A return product picked but never added would be silently dropped
+    if (retProductId && !editingReturnId) {
+      toast.error('Click "Add Return" to add the selected return item, or clear it before saving.');
+      return;
+    }
+    if (editingReturnId) {
+      toast.error('Click "Update Return" to finish editing the return item before saving.');
+      return;
+    }
 
     setLoading(true);
 
@@ -833,6 +1010,13 @@ export default function CreateRetailInvoicePage() {
       paymentType: paymentType,
       paymentStatus: paymentType === "Cash" ? "Paid" : "Unpaid",
       paidAmount: paymentType === "Cash" ? grandTotal : 0,
+      goodReturns: goodReturns.map((r) => ({
+        productId: r.productId,
+        quantity: r.quantity,
+        unitPrice: r.unitPrice,
+        total: r.total,
+        fromInvoiceId: r.fromInvoiceId,
+      })),
     };
 
     try {
@@ -897,7 +1081,8 @@ export default function CreateRetailInvoicePage() {
   );
 
   const extraDiscountAmount = (subtotal * extraDiscount) / 100;
-  const grandTotal = subtotal - extraDiscountAmount;
+  const goodReturnsTotal = goodReturns.reduce((sum, r) => sum + r.total, 0);
+  const grandTotal = Math.round((subtotal - extraDiscountAmount - goodReturnsTotal) * 100) / 100;
 
   const availableProducts = products.filter(
     (p) => !items.some((i) => i.productId === p.id) || p.id === currentItem.productId
@@ -1756,6 +1941,287 @@ export default function CreateRetailInvoicePage() {
               )}
             </CardContent>
           </Card>
+
+          {/* 4. Good Returns — customer brings items back, value comes off this bill */}
+          <Card className="border-orange-200">
+            <CardHeader className="pb-3 sm:pb-4">
+              <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                <Undo2 className="w-4 h-4 text-orange-600" /> Good Returns
+              </CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
+                Items the customer brought back. They go back to stock and their value is taken off this bill.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-3 sm:p-4 pt-0 sm:pt-0 space-y-3">
+              {/* Optional: bill the items were bought on */}
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  From Invoice (optional)
+                </Label>
+                {retInvoice ? (
+                  // Picked invoice
+                  <div className="flex items-center justify-between gap-2 rounded-md border border-orange-200 bg-orange-50 px-3 py-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText className="w-4 h-4 text-orange-600 shrink-0" />
+                      <span className="font-mono font-semibold text-sm">{retInvoice.invoiceNo}</span>
+                      <span className="text-xs text-muted-foreground truncate">
+                        {retInvoices.find((i) => i.id === retInvoice.id)?.customerName || ""}
+                      </span>
+                    </div>
+                    <Button type="button" variant="outline" size="sm" onClick={() => selectReturnInvoice("")} title="Show all products">
+                      <X className="w-4 h-4 sm:mr-1" />
+                      <span className="hidden sm:inline">All Products</span>
+                    </Button>
+                  </div>
+                ) : (
+                  // Search box + results
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      value={retInvoiceSearch}
+                      onChange={(e) => {
+                        setRetInvoiceSearch(e.target.value);
+                        setRetInvoiceSearchOpen(true);
+                      }}
+                      onFocus={() => setRetInvoiceSearchOpen(true)}
+                      onBlur={() => setTimeout(() => setRetInvoiceSearchOpen(false), 200)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && retInvoices[0]) {
+                          e.preventDefault();
+                          selectReturnInvoice(retInvoices[0].id);
+                          setRetInvoiceSearch("");
+                          setRetInvoiceSearchOpen(false);
+                        }
+                        if (e.key === "Escape") setRetInvoiceSearchOpen(false);
+                      }}
+                      placeholder="Search invoice number (e.g. CHR-0012) — leave empty for all products"
+                      className="pl-9 pr-9"
+                    />
+                    {retInvoiceSearching ? (
+                      <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
+                    ) : retInvoiceSearch ? (
+                      <button
+                        type="button"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        onClick={() => setRetInvoiceSearch("")}
+                        aria-label="Clear search"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    ) : null}
+
+                    {retInvoiceSearchOpen && (
+                      <div className="absolute z-50 mt-1 w-full max-h-72 overflow-auto rounded-md border bg-popover shadow-md">
+                        <p className="px-3 pt-2 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                          {retInvoiceSearch.trim() ? "Matching invoices" : "Latest invoices"}
+                        </p>
+                        {retInvoices.length === 0 ? (
+                          <p className="px-3 py-4 text-sm text-center text-muted-foreground">
+                            {retInvoiceSearching ? "Searching…" : "No invoice found"}
+                          </p>
+                        ) : (
+                          retInvoices.map((inv) => (
+                            <button
+                              key={inv.id}
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                selectReturnInvoice(inv.id);
+                                setRetInvoiceSearch("");
+                                setRetInvoiceSearchOpen(false);
+                              }}
+                              className="w-full flex items-center justify-between gap-3 px-3 py-2 text-left hover:bg-orange-50"
+                            >
+                              <div className="min-w-0">
+                                <p className="font-mono text-sm font-semibold">
+                                  {inv.invoiceNo}
+                                  {inv.manualInvoiceNo && (
+                                    <span className="font-sans font-normal text-muted-foreground"> · {inv.manualInvoiceNo}</span>
+                                  )}
+                                </p>
+                                <p className="text-xs text-muted-foreground truncate">
+                                  {inv.customerName} · {new Date(inv.date).toLocaleDateString("en-GB")}
+                                </p>
+                              </div>
+                              <span className="text-sm font-semibold shrink-0">LKR {inv.total.toLocaleString()}</span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+                <p className="text-[11px] text-muted-foreground">
+                  {retInvoiceLoading
+                    ? "Loading invoice items…"
+                    : retInvoice
+                      ? `Showing only the ${retInvoice.lines.length} item(s) on ${retInvoice.invoiceNo}, at the price they were sold.`
+                      : "No invoice picked — showing all products."}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-[1fr_110px_140px_auto] gap-2 items-end">
+                <div className="col-span-2 sm:col-span-1 space-y-1">
+                  <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Returned Product
+                    {retProductId && returnQtyLeft(retProductId) !== null && (
+                      <span className="ml-2 normal-case text-orange-600">({returnQtyLeft(retProductId)} left to return)</span>
+                    )}
+                  </Label>
+                  <SearchableDropdown
+                    options={
+                      retInvoice
+                        ? retInvoice.lines.map((l) => ({
+                            id: l.productId,
+                            name: l.name,
+                            info: `${l.sku} · sold ${l.sold}${l.returned > 0 ? `, returned ${l.returned}` : ""} · LKR ${l.unitPrice.toLocaleString()}`,
+                          }))
+                        : returnProducts.map((p) => ({ id: p.id, name: p.name, info: p.sku }))
+                    }
+                    value={retProductId}
+                    onChange={(id) => {
+                      setRetProductId(id);
+                      const line = retInvoice?.lines.find((l) => l.productId === id);
+                      if (line) {
+                        setRetPrice(line.unitPrice);
+                        if (retQty === "") setRetQty(Math.min(1, line.left));
+                        return;
+                      }
+                      const p = returnProducts.find((x) => x.id === id);
+                      if (p) setRetPrice(p.retail_price ?? p.selling_price);
+                    }}
+                    placeholder={retInvoice ? `Select item from ${retInvoice.invoiceNo}` : "Select returned product"}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Qty</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={retQty}
+                    onChange={(e) => setRetQty(e.target.value === "" ? "" : Number(e.target.value))}
+                    placeholder="0"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Price (each)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={retPrice}
+                    onChange={(e) => setRetPrice(e.target.value === "" ? "" : Number(e.target.value))}
+                    placeholder="0.00"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  onClick={handleAddReturn}
+                  className="col-span-2 sm:col-span-1 bg-orange-600 hover:bg-orange-700"
+                >
+                  {editingReturnId ? (
+                    <><Pencil className="w-4 h-4 mr-1" /> Update Return</>
+                  ) : (
+                    <><Plus className="w-4 h-4 mr-1" /> Add Return</>
+                  )}
+                </Button>
+              </div>
+              {(retProductId || editingReturnId) && (
+                <div className="flex justify-end -mt-1">
+                  <button
+                    type="button"
+                    onClick={resetReturnForm}
+                    className="text-xs text-muted-foreground hover:text-foreground underline"
+                  >
+                    {editingReturnId ? "Cancel edit" : "Clear selection"}
+                  </button>
+                </div>
+              )}
+
+              {/* Good return items — same layout as Invoice Items */}
+              <div className="flex items-center justify-between pt-1">
+                <p className="text-sm font-medium">Good Return Items</p>
+                <p className="text-xs text-muted-foreground">{goodReturns.length} item(s) added</p>
+              </div>
+              {goodReturns.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-muted-foreground rounded-lg border border-dashed">
+                  <Undo2 className="w-7 h-7 mb-2 opacity-40" />
+                  <p className="text-sm">No returns added</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {goodReturns.map((r, idx) => {
+                    const isEditing = editingReturnId === r.id;
+                    return (
+                      <div
+                        key={r.id}
+                        className={cn(
+                          "flex items-center gap-3 rounded-lg border border-l-4 border-l-orange-500 bg-card px-3 py-2.5 transition-colors",
+                          isEditing ? "bg-blue-50/60 border-blue-200" : "hover:bg-muted/40"
+                        )}
+                      >
+                        {/* Index */}
+                        <span className="text-xs text-muted-foreground w-5 shrink-0 text-center font-medium">
+                          {idx + 1}
+                        </span>
+
+                        {/* Product info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-medium text-sm leading-tight">{r.productName}</span>
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded border shrink-0 bg-orange-100 text-orange-700 border-orange-200">
+                              Good Return
+                            </span>
+                            {r.fromInvoiceNo && (
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded border shrink-0 bg-slate-100 text-slate-600 border-slate-200">
+                                From {r.fromInvoiceNo}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-x-2.5 gap-y-0 mt-1 text-xs text-muted-foreground">
+                            <span className="font-mono text-[11px]">{r.sku}</span>
+                            <span>·</span>
+                            <span>{r.quantity} {r.unit}</span>
+                            <span>·</span>
+                            <span>LKR {r.unitPrice.toLocaleString()}</span>
+                          </div>
+                        </div>
+
+                        {/* Total + actions */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className="font-bold text-sm text-orange-700 min-w-[60px] text-right">
+                            −{r.total.toLocaleString()}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className={cn("h-7 w-7 shrink-0", isEditing && "bg-blue-100 text-blue-600")}
+                            onClick={() => handleEditReturn(r.id)}
+                          >
+                            <Pencil className="w-3.5 h-3.5 text-blue-500" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 shrink-0"
+                            onClick={() => {
+                              setGoodReturns((prev) => prev.filter((x) => x.id !== r.id));
+                              if (editingReturnId === r.id) resetReturnForm();
+                            }}
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div className="flex justify-between rounded-lg bg-orange-50 border border-orange-100 px-3 py-2.5 text-sm font-semibold text-orange-800">
+                    <span>Total Returns</span>
+                    <span>− LKR {goodReturnsTotal.toLocaleString()}</span>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         {/* RIGHT COLUMN — desktop sidebar + landscape POS */}
@@ -1933,6 +2399,14 @@ export default function CreateRetailInvoicePage() {
                   </div>
                 )}
               </div>
+
+              {/* Good returns taken off the bill */}
+              {goodReturnsTotal > 0 && (
+                <div className="flex justify-between text-xs text-orange-700 bg-orange-50 border border-orange-100 rounded-lg px-3 py-2">
+                  <span className="flex items-center gap-1"><Undo2 className="w-3 h-3" /> Good Returns ({goodReturns.length})</span>
+                  <span className="font-semibold">− LKR {goodReturnsTotal.toLocaleString()}</span>
+                </div>
+              )}
 
               {/* Grand Total block */}
               <div className="rounded-xl bg-green-50 border border-green-100 p-3.5">

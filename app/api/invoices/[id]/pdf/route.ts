@@ -98,6 +98,32 @@ export async function GET(
       })),
     };
 
+    // ── 1b. Retail walk-in good returns (shown under the items) ────────
+    if (divisionKey === "retail" && invoice.invoice_no) {
+      const { data: rets } = await supabaseAdmin
+        .from("inventory_returns")
+        .select("quantity, reason, products (name, sku)")
+        .ilike("reason", `[${invoice.invoice_no}] [WALKIN_RETURN]%`);
+      const returns = (rets || []).map((r: any) => {
+        const reason = String(r.reason || "");
+        const qty = Number(r.quantity) || 0;
+        const price = Number((reason.match(/\[PRICE:([\d.]+)\]/) || [])[1] || 0);
+        const credit = (reason.match(/\[CREDIT:([\d.]+)\]/) || [])[1];
+        return {
+          sku: r.products?.sku || "-",
+          productName: r.products?.name || "Unknown Product",
+          price,
+          quantity: qty,
+          totalValue: credit ? Number(credit) : qty * price,
+          walkIn: true,
+        };
+      });
+      if (returns.length > 0) {
+        (invoiceData as any).returns = returns;
+        (invoiceData as any).returnsTotal = returns.reduce((t, r) => t + r.totalValue, 0);
+      }
+    }
+
     // ── 2. Build HTML ───────────────────────────────────────────────────
     const invoiceHtml = await generateInvoiceHTML(
       invoiceData,

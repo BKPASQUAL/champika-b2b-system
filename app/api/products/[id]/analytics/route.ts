@@ -82,6 +82,14 @@ export async function GET(
 
     if (returnError) throw returnError;
 
+    // Cost used to reverse profit on retail walk-in good returns
+    const { data: productCost } = await supabaseAdmin
+      .from("products")
+      .select("cost_price, actual_cost_price")
+      .eq("id", id)
+      .maybeSingle();
+    const returnUnitCost = Number(productCost?.actual_cost_price || productCost?.cost_price || 0);
+
     // --- 4. Fetch AUDIT LOGS (Stock Adjustments) ---
     const { data: auditLogs, error: auditError } = await supabaseAdmin
       .from("audit_logs")
@@ -197,6 +205,9 @@ export async function GET(
         : item.reason || "-";
 
       const txDate = item.return_date ? item.return_date.split("T")[0] : item.created_at.split("T")[0];
+      // Retail walk-in good return: value was taken off a new bill, not the sale line
+      const isWalkIn = (item.reason || "").includes("[WALKIN_RETURN]");
+      const walkInPrice = isWalkIn ? Number((item.reason || "").match(/\[PRICE:([\d.]+)\]/)?.[1] || 0) : 0;
 
       history.push({
         id: item.id,
@@ -212,9 +223,12 @@ export async function GET(
         reference: displayRef,
         invoiceNo: displayInvoiceNo,
         location: item.location?.name || "Main Warehouse",
-        notes: item.reason || (isGoodsSettlement ? "Settled via Goods" : "-"),
-        buyingPrice: 0,
-        sellingPrice: 0,
+        notes: isWalkIn
+          ? "Walk-in good return"
+          : item.reason || (isGoodsSettlement ? "Settled via Goods" : "-"),
+        isWalkInReturn: isWalkIn,
+        buyingPrice: isWalkIn ? returnUnitCost : 0,
+        sellingPrice: walkInPrice,
         businessId: item.business_id,
         businessName: getBusinessName(item.business_id),
       });
@@ -286,6 +300,35 @@ export async function GET(
     let totalUnitsSold = 0;
 
     finalTransactions.forEach((tx: any) => {
+      // Walk-in good returns reduce sales (the sale line itself was not reduced)
+      if (tx.type === "RETURN" && tx.isWalkInReturn) {
+        const date = new Date(tx.timestamp);
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+        const qty = Math.abs(tx.quantity);
+        const revenue = qty * tx.sellingPrice;
+        const profit = revenue - qty * tx.buyingPrice;
+        if (!monthlyStats[monthKey]) {
+          monthlyStats[monthKey] = {
+            name: date.toLocaleString("default", { month: "short", year: "2-digit" }),
+            revenue: 0,
+            profit: 0,
+            units: 0,
+            dateStr: monthKey,
+          };
+        }
+        monthlyStats[monthKey].revenue -= revenue;
+        monthlyStats[monthKey].profit -= profit;
+        monthlyStats[monthKey].units -= qty;
+        const businessName = tx.businessName || "Unknown";
+        if (businessStats[businessName]) {
+          businessStats[businessName].value -= revenue;
+          businessStats[businessName].profit -= profit;
+        }
+        totalRevenue -= revenue;
+        totalProfit -= profit;
+        totalUnitsSold -= qty;
+        return;
+      }
       if (tx.type === "SALE" && tx.status === "Delivered") {
         const date = new Date(tx.timestamp);
         const monthKey = `${date.getFullYear()}-${String(

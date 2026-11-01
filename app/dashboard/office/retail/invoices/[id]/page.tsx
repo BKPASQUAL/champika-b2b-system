@@ -240,9 +240,16 @@ export default function RetailViewInvoicePage({
   // --- Calculations ---
 
   // 1. Total Refunded Value
-  const totalRefunded = returns.reduce((acc, r) => {
-    return acc + r.quantity * (r.products?.selling_price || 0);
-  }, 0);
+  // Walk-in good returns carry the value entered at the counter ([CREDIT:x])
+  const returnValue = (r: ReturnRecord) => {
+    const credit = (r.reason || "").match(/\[CREDIT:([\d.]+)\]/);
+    return credit ? parseFloat(credit[1]) : r.quantity * (r.products?.selling_price || 0);
+  };
+  const totalRefunded = returns.reduce((acc, r) => acc + returnValue(r), 0);
+  // These were taken off the bill total (bill lines were not reduced)
+  const walkInReturnsTotal = returns
+    .filter((r) => (r.reason || "").includes("[WALKIN_RETURN]"))
+    .reduce((acc, r) => acc + returnValue(r), 0);
 
   // 2. Payments
   const paymentsList: PaymentRecord[] = invoice.payments || [];
@@ -257,7 +264,7 @@ export default function RetailViewInvoicePage({
 
   // 5. Subtotal (Net Total + Extra Discount)
   // This reconstructs the total BEFORE the extra bill-wise discount was applied
-  const subTotalBeforeExtraDiscount = netTotal + extraDiscountAmount;
+  const subTotalBeforeExtraDiscount = netTotal + extraDiscountAmount + walkInReturnsTotal;
 
   // 6. Balance Due (Net Total - Paid)
   const balanceDue = netTotal - totalPaid;
@@ -652,7 +659,7 @@ export default function RetailViewInvoicePage({
                   {/* Mobile card layout */}
                   <div className="sm:hidden divide-y">
                     {returns.map((ret) => {
-                      const itemValue = ret.quantity * (ret.products?.selling_price || 0);
+                      const itemValue = returnValue(ret);
                       return (
                         <div key={ret.id} className="p-4 space-y-3">
                           <div className="flex justify-between items-start gap-2">
@@ -680,7 +687,7 @@ export default function RetailViewInvoicePage({
                           </div>
                           {ret.reason && (
                             <div className="text-[11px] text-muted-foreground pl-1 border-l-2 border-slate-200 italic">
-                              {ret.reason.replace(`[${invoice.invoiceNo}]`, "").trim() || "-"}
+                              {ret.reason.replace(`[${invoice.invoiceNo}]`, "").replace(/\[[A-Z_]+(:[^\]]*)?\]/g, "").trim() || "-"}
                             </div>
                           )}
                           <div className="flex justify-between items-center pt-2 border-t text-xs">
@@ -758,6 +765,7 @@ export default function RetailViewInvoicePage({
                             >
                               {ret.reason
                                 ?.replace(`[${invoice.invoiceNo}]`, "")
+                                .replace(/\[[A-Z_]+(:[^\]]*)?\]/g, "")
                                 .trim() || "-"}
                             </TableCell>
                           </TableRow>
@@ -1029,7 +1037,7 @@ export default function RetailViewInvoicePage({
 
                 <div className="flex justify-between text-sm text-orange-600">
                   <span className="flex items-center gap-1">
-                    <Undo2 className="w-3 h-3" /> Returns
+                    <Undo2 className="w-3 h-3" /> {walkInReturnsTotal > 0 ? "Good Returns" : "Returns"}
                   </span>
                   <span className="font-medium font-mono">
                     - LKR{" "}

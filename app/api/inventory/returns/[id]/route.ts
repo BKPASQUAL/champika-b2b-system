@@ -1,6 +1,7 @@
 // app/api/inventory/returns/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { undoReturnOnInvoice } from "@/lib/return-invoice-adjust";
 
 const isUuid = (val: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
@@ -40,9 +41,6 @@ async function findReturnRecord(identifier: string, selectFields = "*"): Promise
 
   return null;
 }
-
-// Pickup order statuses where the lorry has not left yet (items can still be added/removed)
-const PRE_DISPATCH_STATUSES = ["Pending", "Approved", "Processing", "Checking", "Loading"];
 
 /** The LKR 0 pickup order created when this return (or its note) was approved. */
 async function findPickupOrder(ret: any): Promise<{ id: string; order_id: string; status: string } | null> {
@@ -293,16 +291,21 @@ export async function DELETE(
       );
     }
 
-    // Approved items sit on a pickup order: take the line off it (only before the lorry leaves)
+    // If this return already reduced a bill, put the bill and customer balance back first
+    if ((retRecord.reason || "").includes("[INVOICE_ADJUSTED]")) {
+      const undo = await undoReturnOnInvoice(retRecord);
+      if (!undo.ok) {
+        return NextResponse.json(
+          { error: `Couldn't undo the bill reduction: ${undo.error}` },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Approved items sit on a pickup order: take the line off it (at any pickup stage)
     if (retRecord.status === "Approved") {
       const pickup = await findPickupOrder(retRecord);
       if (pickup) {
-        if (!PRE_DISPATCH_STATUSES.includes(pickup.status)) {
-          return NextResponse.json(
-            { error: `Pickup order ${pickup.order_id} is already ${pickup.status}. This item can't be removed now.` },
-            { status: 400 }
-          );
-        }
         const { data: lines } = await supabaseAdmin
           .from("order_items")
           .select("id, quantity")

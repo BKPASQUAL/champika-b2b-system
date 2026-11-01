@@ -14,6 +14,63 @@ const fmt = (amount: number) =>
     maximumFractionDigits: 2,
   }).format(amount || 0);
 
+// Retail walk-in good returns, printed under the bill items
+const walkInReturnsOf = (invoice: any): any[] =>
+  (invoice.returns || []).filter((r: any) => r.walkIn);
+
+const goodReturnsTableHTML = (rows: any[], compact: boolean): string => {
+  if (rows.length === 0) return "";
+  const pad = compact ? "4px 5px" : "6px 8px";
+  const fs = compact ? 11 : 12;
+  const total = rows.reduce((t: number, r: any) => t + Number(r.totalValue || 0), 0);
+  const body = rows
+    .map(
+      (r: any, i: number) => `
+        <tr style="border-bottom:1px solid #eee;">
+          <td style="padding:${pad};font-size:${fs}px;color:#777;text-align:center;">${i + 1}</td>
+          <td style="padding:${pad};font-size:${fs}px;color:#555;">${r.sku || "-"}</td>
+          <td style="padding:${pad};font-size:${fs}px;color:#111;font-weight:500;">${r.productName || "-"}</td>
+          <td style="padding:${pad};font-size:${fs}px;color:#111;text-align:right;white-space:nowrap;">LKR ${fmt(r.price)}</td>
+          <td style="padding:${pad};font-size:${fs}px;font-weight:700;color:#111;text-align:center;">${r.quantity}</td>
+          <td style="padding:${pad};font-size:${fs}px;font-weight:700;color:#c00;text-align:right;white-space:nowrap;">- LKR ${fmt(r.totalValue)}</td>
+        </tr>`
+    )
+    .join("");
+  return `
+    <div style="font-size:${compact ? 10 : 11}px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#000;margin:${compact ? "4px 0 2px" : "8px 0 4px"};">Good Returns</div>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:6px;">
+      <thead>
+        <tr style="border-top:1.5px solid #000;border-bottom:1.5px solid #000;background:#f7f7f7;">
+          <th style="padding:${pad};font-size:9px;font-weight:700;text-transform:uppercase;text-align:center;width:4%;">#</th>
+          <th style="padding:${pad};font-size:9px;font-weight:700;text-transform:uppercase;text-align:left;width:16%;">Item Code</th>
+          <th style="padding:${pad};font-size:9px;font-weight:700;text-transform:uppercase;text-align:left;">Description</th>
+          <th style="padding:${pad};font-size:9px;font-weight:700;text-transform:uppercase;text-align:right;width:15%;">Price</th>
+          <th style="padding:${pad};font-size:9px;font-weight:700;text-transform:uppercase;text-align:center;width:8%;">Qty</th>
+          <th style="padding:${pad};font-size:9px;font-weight:700;text-transform:uppercase;text-align:right;width:17%;">Value</th>
+        </tr>
+      </thead>
+      <tbody>${body}
+        <tr style="border-top:1.5px solid #000;">
+          <td colspan="5" style="padding:${pad};font-size:${fs}px;font-weight:700;text-align:right;">Total Returns</td>
+          <td style="padding:${pad};font-size:${fs}px;font-weight:800;color:#c00;text-align:right;white-space:nowrap;">- LKR ${fmt(total)}</td>
+        </tr>
+      </tbody>
+    </table>`;
+};
+
+// "Total Items" line under the sale items, shown when the bill also has good returns
+const itemsTotalRowHTML = (total: number, compact: boolean): string => {
+  const pad = compact ? "4px 5px" : "6px 8px";
+  const fs = compact ? 11 : 12;
+  return `
+    <table style="width:100%;border-collapse:collapse;margin-bottom:${compact ? 2 : 4}px;">
+      <tr style="border-top:1.5px solid #000;">
+        <td style="padding:${pad};font-size:${fs}px;font-weight:700;text-align:right;">Total Items</td>
+        <td style="padding:${pad};font-size:${fs}px;font-weight:800;color:#111;text-align:right;white-space:nowrap;width:17%;">LKR ${fmt(total)}</td>
+      </tr>
+    </table>`;
+};
+
 const formatDate = (dateString: string) => {
   if (!dateString) return "-";
   return new Date(dateString).toLocaleDateString("en-GB", {
@@ -356,6 +413,8 @@ export const generateInvoiceHTML = async (
     ${makeTableHeader()}
       <tbody>${chunkRows}</tbody>
     </table>
+    ${isLast && !isReturnNote && divisionKey === "retail" && walkInReturnsOf(invoice).length > 0 ? itemsTotalRowHTML(subTotal, false) : ""}
+    ${isLast && !isReturnNote && divisionKey === "retail" ? goodReturnsTableHTML(walkInReturnsOf(invoice), false) : ""}
 
     ${isLast ? (
       isReturnNote ? `
@@ -424,7 +483,7 @@ export const generateInvoiceHTML = async (
               <td style="padding:5px 0;font-size:12px;color:#000;text-align:right;white-space:nowrap;">LKR ${fmt(subTotal)}</td>
             </tr>
             ${returnsTotal > 0 ? `<tr>
-              <td style="padding:5px 0;font-size:12px;color:#c00;">Returns &amp; Adjustments</td>
+              <td style="padding:5px 0;font-size:12px;color:#c00;">${divisionKey === "retail" && walkInReturnsOf(invoice).length > 0 ? "Good Returns" : "Returns &amp; Adjustments"}</td>
               <td style="padding:5px 0;font-size:12px;color:#c00;text-align:right;white-space:nowrap;">- LKR ${fmt(returnsTotal)}</td>
             </tr>` : ""}
             ${extraDiscount > 1 ? `<tr>
@@ -539,7 +598,8 @@ export const generateHalfPageInvoiceHTML = async (
 
   const subTotal      = items.reduce((s: number, i: any) => s + (i.total || 0), 0);
   const grandTotal    = invoice.grandTotal || invoice.totalAmount || 0;
-  const extraDiscount = Math.max(0, subTotal - grandTotal - cashDiscountAmount);
+  const walkInReturnsTotal = divisionKey !== "retail" ? 0 : walkInReturnsOf(invoice).reduce((t: number, r: any) => t + Number(r.totalValue || 0), 0);
+  const extraDiscount = Math.max(0, subTotal - grandTotal - cashDiscountAmount - walkInReturnsTotal);
 
   // Detect Return Note documents
   const isReturnNote = Boolean(
@@ -791,6 +851,8 @@ export const generateHalfPageInvoiceHTML = async (
   ${makeTableHeader()}
       <tbody>${chunkRows}</tbody>
     </table>
+  ${isLast && !isReturnNote && divisionKey === "retail" && walkInReturnsOf(invoice).length > 0 ? itemsTotalRowHTML(subTotal, true) : ""}
+  ${isLast && !isReturnNote && divisionKey === "retail" ? goodReturnsTableHTML(walkInReturnsOf(invoice), true) : ""}
 
   ${isLast ? (
     isReturnNote ? `
@@ -851,6 +913,10 @@ export const generateHalfPageInvoiceHTML = async (
             <td style="padding:3px 0;font-size:11px;color:#333;">Subtotal</td>
             <td style="padding:3px 0;font-size:11px;color:#000;text-align:right;white-space:nowrap;">LKR ${fmt(subTotal)}</td>
           </tr>
+          ${walkInReturnsTotal > 0 ? `<tr>
+            <td style="padding:3px 0;font-size:11px;color:#c00;">Good Returns</td>
+            <td style="padding:3px 0;font-size:11px;color:#c00;text-align:right;white-space:nowrap;">- LKR ${fmt(walkInReturnsTotal)}</td>
+          </tr>` : ""}
           ${extraDiscount > 1 ? `<tr>
             <td style="padding:3px 0;font-size:11px;color:#333;">Extra Discount</td>
             <td style="padding:3px 0;font-size:11px;color:#000;text-align:right;white-space:nowrap;">- LKR ${fmt(extraDiscount)}</td>

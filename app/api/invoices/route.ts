@@ -30,6 +30,17 @@ const returnItemInputSchema = z.object({
   reason: z.string().optional().nullable(),
 });
 
+// Retail walk-in: good items the customer brings back, taken off this bill
+const goodReturnSchema = z.object({
+  productId: z.string(),
+  quantity: z.number().positive(),
+  unitPrice: z.number().min(0),
+  total: z.number().min(0),
+  // Original bill the item was bought on (optional) — stored as id so that bill
+  // does not list this return as its own
+  fromInvoiceId: z.string().uuid().optional().nullable(),
+});
+
 const invoiceSchema = z.object({
   customerId: z.string().min(1, "Customer is required"),
   salesRepId: z.string().min(1).optional().nullable(),
@@ -73,6 +84,7 @@ const invoiceSchema = z.object({
   performedByEmail: z.string().optional().nullable(),
   userId: z.string().optional().nullable(),
   isIncorrect: z.boolean().optional().default(false),
+  goodReturns: z.array(goodReturnSchema).optional(),
 });
 
 // --- GET: Fetch All Invoices ---
@@ -1049,6 +1061,74 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // 9.6 Walk-in good returns: back into shop stock, value already taken off grandTotal.
+    // Tagged with the bill number so the bill shows them; [WALKIN_RETURN] marks that
+    // the bill lines were NOT reduced (the value was deducted from the total instead).
+    if (val.goodReturns && val.goodReturns.length > 0 && returnLocationId) {
+      const stamp = Date.now().toString().slice(-6);
+      for (let idx = 0; idx < val.goodReturns.length; idx++) {
+        const g = val.goodReturns[idx];
+        const value = Math.round(g.total * 100) / 100;
+        const insertReturn = (no: string) =>
+          supabaseAdmin.from("inventory_returns").insert({
+            return_number: no,
+            product_id: g.productId,
+            location_id: returnLocationId,
+            business_id: resolvedBusinessId,
+            customer_id: val.customerId,
+            quantity: g.quantity,
+            return_type: "Good",
+            reason: `[${invoiceNo}] [WALKIN_RETURN] Walk-in good return [PRICE:${g.unitPrice}] [CREDIT:${value}]${g.fromInvoiceId ? ` [FROM_INV_ID:${g.fromInvoiceId}]` : ""}`,
+            returned_by: val.salesRepId,
+            status: "Completed",
+          });
+        let { error: grErr } = await insertReturn(`RET-${stamp}-W${idx + 1}`);
+        if (grErr?.code === "23505") ({ error: grErr } = await insertReturn(`RET-${Date.now().toString().slice(-7)}-W${idx + 1}`));
+        if (grErr) console.error("[invoices] walk-in return insert failed:", grErr);
+
+        const { data: locStock } = await supabaseAdmin
+          .from("product_stocks")
+          .select("id, quantity")
+          .eq("product_id", g.productId)
+          .eq("location_id", returnLocationId)
+          .maybeSingle();
+        if (locStock) {
+          await supabaseAdmin
+            .from("product_stocks")
+            .update({ quantity: Number(locStock.quantity || 0) + g.quantity, last_updated: new Date().toISOString() })
+            .eq("id", locStock.id);
+        } else {
+          await supabaseAdmin.from("product_stocks").insert({
+            product_id: g.productId,
+            location_id: returnLocationId,
+            quantity: g.quantity,
+            damaged_quantity: 0,
+            last_updated: new Date().toISOString(),
+          });
+        }
+
+        const { data: prod } = await supabaseAdmin
+          .from("products")
+          .select("name, stock_quantity")
+          .eq("id", g.productId)
+          .maybeSingle();
+        if (prod) {
+          await supabaseAdmin
+            .from("products")
+            .update({ stock_quantity: Number(prod.stock_quantity || 0) + g.quantity })
+            .eq("id", g.productId);
+          await supabaseAdmin.from("account_transactions").insert({
+            transaction_type: "INVENTORY_RETURN",
+            description: `Walk-in good return: ${g.quantity} units of ${prod.name} (LKR ${value.toLocaleString()}) on ${invoiceNo}`,
+            amount: 0,
+            transaction_date: new Date().toISOString(),
+            business_id: resolvedBusinessId,
+            metadata: { product_id: g.productId, quantity: g.quantity, type: "Good", invoice_no: invoiceNo, value },
+          });
+        }
+      }
+    }
+
     // 10. Save Activity Record (non-critical — never fail the whole request)
     let activityRecordId: string | null = null;
     try {
@@ -1130,7 +1210,7 @@ export async function POST(request: NextRequest) {
     ) {
       try {
         const invoiceProductIds = val.items.map((i) => i.productId);
-        const returnProductIds = (val.returnItems || []).map((r: any) => r.productId).filter(Boolean);
+        const returnProductIds = [...(val.returnItems || []), ...(val.goodReturns || [])].map((r: any) => r.productId).filter(Boolean);
         const allProductIds = [...new Set([...invoiceProductIds, ...returnProductIds])];
         await triggerAgencyBillsForInvoice(resolvedBusinessId, allProductIds);
       } catch (err) {

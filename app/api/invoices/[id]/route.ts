@@ -212,6 +212,13 @@ export async function GET(
       const unitPrice = isInterBranch
         ? Number(r.products?.cost_price || r.products?.selling_price || 0)
         : Number(r.products?.selling_price || 0);
+      // Walk-in good returns keep the price/value entered at the counter
+      const reason: string = r.reason || "";
+      const walkIn = reason.includes("[WALKIN_RETURN]");
+      const tagPrice = reason.match(/\[PRICE:([\d.]+)\]/);
+      const tagCredit = reason.match(/\[CREDIT:([\d.]+)\]/);
+      const qty = Number(r.quantity) || 0;
+      const price = walkIn && tagPrice ? parseFloat(tagPrice[1]) : unitPrice;
       return {
         id: r.id,
         productId: r.product_id,
@@ -220,8 +227,9 @@ export async function GET(
         unit: r.products?.unit_of_measure || "Unit",
         quantity: r.quantity,
         returnType: r.return_type || "Good",
-        price: unitPrice,
-        totalValue: (Number(r.quantity) || 0) * unitPrice,
+        price,
+        totalValue: walkIn && tagCredit ? parseFloat(tagCredit[1]) : qty * price,
+        walkIn,
         createdAt: r.created_at,
       };
     });
@@ -335,6 +343,10 @@ export async function GET(
       // Returns
       returns,
       returnsTotal,
+      // Retail walk-in good returns (value taken off this bill's total)
+      walkInReturnsTotal: returns
+        .filter((r: any) => r.walkIn)
+        .reduce((sum: number, r: any) => sum + r.totalValue, 0),
     };
 
     return NextResponse.json(fullInvoice);

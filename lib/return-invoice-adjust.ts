@@ -233,6 +233,126 @@ export async function applyReturnToInvoice(
 }
 
 /**
+ * Undo applyReturnToInvoice when a return is deleted:
+ * - puts the qty back on the bill line (paid + free)
+ * - adds the credit back to the bill total, order total and customer balance
+ * - restores the rep's commission for that line
+ * Does nothing if the return never reduced a bill.
+ */
+export async function undoReturnOnInvoice(ret: any): Promise<ApplyReturnResult> {
+  const reason: string = ret?.reason || "";
+  if (!reason.includes("[INVOICE_ADJUSTED]")) return { ok: true, credit: 0 };
+
+  // The bill adjustment log has the exact bill and quantities
+  const { data: txs } = await supabaseAdmin
+    .from("account_transactions")
+    .select("metadata")
+    .eq("transaction_type", "INVENTORY_RETURN")
+    .eq("metadata->>return_id", ret.id)
+    .eq("metadata->>kind", "RETURN_BILL_ADJUSTMENT")
+    .order("transaction_date", { ascending: false })
+    .limit(1);
+  const meta: any = txs?.[0]?.metadata || {};
+
+  const credit = parseFloat(reason.match(/\[CREDIT:([\d.]+)\]/)?.[1] || "0") || 0;
+  const paidBack = meta.paid_qty_reduced != null ? Number(meta.paid_qty_reduced) : Number(ret.quantity || 0);
+  const freeBack = meta.free_qty_reduced != null ? Number(meta.free_qty_reduced) : 0;
+
+  let invQuery = supabaseAdmin
+    .from("invoices")
+    .select("id, invoice_no, order_id, total_amount, paid_amount, customer_id");
+  if (meta.invoice_id) invQuery = invQuery.eq("id", meta.invoice_id);
+  else {
+    const billNo = meta.invoice_no || reason.match(/\[INV:([^\]]+)\]/)?.[1]?.trim();
+    if (!billNo) return { ok: false, error: "Can't find the bill this return reduced" };
+    invQuery = invQuery.eq("invoice_no", billNo);
+  }
+  const { data: invoice } = await invQuery.maybeSingle();
+  if (!invoice) return { ok: false, error: "Can't find the bill this return reduced" };
+
+  const newTotal = Math.round((Number(invoice.total_amount || 0) + credit) * 100) / 100;
+  const paid = Number(invoice.paid_amount || 0);
+  const newDue = Math.max(0, Math.round((newTotal - paid) * 100) / 100);
+  const newStatus = newDue <= 0 ? "Paid" : paid > 0 ? "Partial" : "Unpaid";
+
+  const { error: invErr } = await supabaseAdmin
+    .from("invoices")
+    .update({ total_amount: newTotal, status: newStatus })
+    .eq("id", invoice.id);
+  if (invErr) return { ok: false, error: `Could not update bill: ${invErr.message}` };
+
+  if (invoice.order_id) {
+    await supabaseAdmin.from("orders").update({ total_amount: newTotal }).eq("id", invoice.order_id);
+
+    const { data: line } = await supabaseAdmin
+      .from("order_items")
+      .select("id, quantity, free_quantity, total_price, commission_earned")
+      .eq("order_id", invoice.order_id)
+      .eq("product_id", ret.product_id)
+      .maybeSingle();
+    if (line) {
+      const curQty = Number(line.quantity || 0);
+      const restoredQty = curQty + paidBack;
+      const curComm = Number(line.commission_earned || 0);
+      const restoredComm = curQty > 0 ? (curComm / curQty) * restoredQty : curComm;
+      await supabaseAdmin
+        .from("order_items")
+        .update({
+          quantity: restoredQty,
+          free_quantity: Number(line.free_quantity || 0) + freeBack,
+          total_price: Math.round((Number(line.total_price || 0) + credit) * 100) / 100,
+          commission_earned: restoredComm,
+        })
+        .eq("id", line.id);
+
+      const { data: allItems } = await supabaseAdmin
+        .from("order_items")
+        .select("commission_earned")
+        .eq("order_id", invoice.order_id);
+      const commTotal = (allItems || []).reduce((s: number, it: any) => s + Number(it.commission_earned || 0), 0);
+      await supabaseAdmin
+        .from("rep_commissions")
+        .update({ total_commission_amount: commTotal })
+        .eq("order_id", invoice.order_id);
+    }
+  }
+
+  if (invoice.customer_id && credit !== 0) {
+    const { data: customer } = await supabaseAdmin
+      .from("customers")
+      .select("outstanding_balance")
+      .eq("id", invoice.customer_id)
+      .maybeSingle();
+    if (customer) {
+      await supabaseAdmin
+        .from("customers")
+        .update({ outstanding_balance: Number(customer.outstanding_balance || 0) + credit })
+        .eq("id", invoice.customer_id);
+    }
+  }
+
+  await supabaseAdmin.from("account_transactions").insert({
+    transaction_type: "INVENTORY_RETURN_REVERSAL",
+    description: `Deleted return ${ret.return_number}: bill ${invoice.invoice_no} put back up by LKR ${credit.toLocaleString()}`,
+    amount: credit,
+    transaction_date: new Date().toISOString(),
+    business_id: ret.business_id || null,
+    metadata: {
+      return_id: ret.id,
+      return_number: ret.return_number,
+      invoice_id: invoice.id,
+      invoice_no: invoice.invoice_no,
+      product_id: ret.product_id,
+      paid_qty_restored: paidBack,
+      free_qty_restored: freeBack,
+      kind: "RETURN_BILL_ADJUSTMENT_UNDO",
+    },
+  });
+
+  return { ok: true, credit, invoiceNo: invoice.invoice_no, newTotal, newDue };
+}
+
+/**
  * Apply every not-yet-deducted office Good return that belongs to this bill.
  * Returns how many were applied.
  */

@@ -296,6 +296,76 @@ export async function GET(request: NextRequest) {
       }
     });
 
+    // Pass 2b — retail walk-in good returns. The bill total is already net of the return,
+    // but its lines still hold the full sale, so take the returned goods' value and cost
+    // back off that bill (cost, product, customer and rep figures).
+    const orderByInvoiceNo = new Map<string, any>();
+    (allInvoices || []).forEach((inv: any) => {
+      if (inv.invoice_no && inv.order) orderByInvoiceNo.set(inv.invoice_no, inv.order);
+    });
+    const walkInReturns: any[] = [];
+    {
+      let wStart = 0;
+      while (true) {
+        const { data: batch, error: wErr } = await supabaseAdmin
+          .from("inventory_returns")
+          .select("product_id, quantity, reason, products(name, sku, cost_price, actual_cost_price)")
+          .ilike("reason", "%[WALKIN_RETURN]%")
+          .range(wStart, wStart + 999);
+        if (wErr) throw wErr;
+        if (!batch || batch.length === 0) break;
+        walkInReturns.push(...batch);
+        if (batch.length < 1000) break;
+        wStart += 1000;
+      }
+    }
+    walkInReturns.forEach((r: any) => {
+      const billNo = (String(r.reason || "").match(/^\[([^\]]+)\]/) || [])[1];
+      const order = billNo ? orderByInvoiceNo.get(billNo) : null;
+      if (!order || !COUNTED_STATUSES.includes(order.status)) return;
+      const biz = businessMap[order.business_id];
+      if (!biz || !biz.invoicedOrderIds.has(order.order_id)) return;
+
+      const prod: any = Array.isArray(r.products) ? r.products[0] : r.products;
+      const qty = Number(r.quantity) || 0;
+      const value = Number((String(r.reason).match(/\[CREDIT:([\d.]+)\]/) || [])[1] || 0);
+      const cost = qty * (Number(prod?.actual_cost_price) || Number(prod?.cost_price) || 0);
+
+      biz.totalCost -= cost;
+      biz.totalUnits -= qty;
+      const op = orderProfitMap[order.order_id];
+      if (op) {
+        op.revenue -= value;
+        op.cost -= cost;
+      }
+
+      const pid = r.product_id;
+      if (!biz.productMap[pid]) {
+        biz.productMap[pid] = {
+          id: pid, name: prod?.name || "", sku: prod?.sku || "",
+          unitsSold: 0, revenue: 0, cost: 0, profit: 0,
+        };
+      }
+      const p = biz.productMap[pid];
+      p.unitsSold -= qty;
+      p.revenue -= value;
+      p.cost -= cost;
+      p.profit -= value - cost;
+
+      const cId = order.customer?.id || "unknown";
+      if (biz.customerMap[cId]) {
+        biz.customerMap[cId].revenue -= value;
+        biz.customerMap[cId].cost -= cost;
+        biz.customerMap[cId].profit -= value - cost;
+      }
+      const repId = order.sales_rep_id || "direct";
+      if (biz.repMap[repId]) {
+        biz.repMap[repId].revenue -= value;
+        biz.repMap[repId].cost -= cost;
+        biz.repMap[repId].profit -= value - cost;
+      }
+    });
+
     // Pass 3 — approved customer returns: deduct in the month the return was made
     // (the original invoice month is left untouched)
     const returns = await getApprovedReturns(fromDate, toDate);

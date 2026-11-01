@@ -149,6 +149,8 @@ export default function EditRetailInvoicePage({
   // Items State
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [extraDiscount, setExtraDiscount] = useState<number>(0);
+  // Walk-in good returns saved with this bill (taken off the total, shown read-only)
+  const [goodReturns, setGoodReturns] = useState<any[]>([]);
 
   // Popover States
   const [customerOpen, setCustomerOpen] = useState(false);
@@ -258,6 +260,7 @@ export default function EditRetailInvoicePage({
 
         // 5. Populate Form with Invoice Data
         setInvoiceNumber(invoice.invoiceNo);
+        setGoodReturns((invoice.returns || []).filter((r: any) => r.walkIn));
         setInvoiceDate(invoice.date);
         setCustomerId(invoice.customerId);
         setPaymentType(
@@ -408,6 +411,10 @@ export default function EditRetailInvoicePage({
       toast.error("Invoice must have at least one item");
       return;
     }
+    if (grandTotal < 0) {
+      toast.error("Good returns are more than the bill. Add more items.");
+      return;
+    }
 
     setLoading(true);
 
@@ -463,7 +470,8 @@ export default function EditRetailInvoicePage({
   const grossTotal = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
 
   const extraDiscountAmount = (subtotal * extraDiscount) / 100;
-  const grandTotal = subtotal - extraDiscountAmount;
+  const goodReturnsTotal = goodReturns.reduce((sum, r) => sum + Number(r.totalValue || 0), 0);
+  const grandTotal = Math.round((subtotal - extraDiscountAmount - goodReturnsTotal) * 100) / 100;
 
   const availableProducts = products.filter(
     (p) => !items.some((i) => i.productId === p.id)
@@ -1058,6 +1066,42 @@ export default function EditRetailInvoicePage({
               </div>
             </CardContent>
           </Card>
+
+          {/* Good returns saved with this walk-in bill */}
+          {goodReturns.length > 0 && (
+            <Card className="border-orange-200">
+              <CardHeader>
+                <CardTitle className="text-orange-700">Good Returns</CardTitle>
+                <CardDescription>
+                  Returned on this bill and taken off the total. These can't be changed here.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {goodReturns.map((r, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between gap-3 rounded-md border border-l-4 border-l-orange-500 bg-orange-50/40 px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm truncate">
+                        {idx + 1}. {r.productName}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {r.sku || "-"} · {r.quantity} × LKR {Number(r.price || 0).toLocaleString()}
+                      </p>
+                    </div>
+                    <span className="font-semibold text-orange-700 whitespace-nowrap">
+                      - LKR {Number(r.totalValue || 0).toLocaleString()}
+                    </span>
+                  </div>
+                ))}
+                <div className="flex justify-between pt-2 border-t text-sm font-semibold text-orange-700">
+                  <span>Total Returns</span>
+                  <span>- LKR {goodReturnsTotal.toLocaleString()}</span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* RIGHT COLUMN */}
@@ -1102,6 +1146,12 @@ export default function EditRetailInvoicePage({
                   <span className="text-muted-foreground">Extra Discount:</span>
                   <span className="text-destructive">- LKR {extraDiscountAmount.toLocaleString()}</span>
                 </div>
+                {goodReturnsTotal > 0 && (
+                  <div className="flex justify-between text-sm text-orange-600">
+                    <span>Good Returns ({goodReturns.length}):</span>
+                    <span className="font-semibold">- LKR {goodReturnsTotal.toLocaleString()}</span>
+                  </div>
+                )}
               </div>
 
               <div className="border-t pt-4">

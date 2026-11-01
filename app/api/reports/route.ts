@@ -273,6 +273,76 @@ export async function GET(request: Request) {
       });
     });
 
+    // 7b. Retail walk-in good returns: the item came back on a new bill, but the
+    // original sale line was not reduced — take it off sales here.
+    let walkInQuery = supabaseAdmin
+      .from("inventory_returns")
+      .select(
+        `id, return_number, quantity, reason, created_at, business_id,
+        product:products (id, name, category, cost_price, actual_cost_price),
+        customer:customers (id, shop_name, business_id, business:businesses(id, name))`,
+      )
+      .ilike("reason", "%[WALKIN_RETURN]%")
+      .gte("created_at", fromDate)
+      .lte("created_at", `${toDate}T23:59:59.999`);
+    if (businessId) walkInQuery = walkInQuery.eq("business_id", businessId);
+    const { data: walkInReturns } = await walkInQuery;
+
+    walkInReturns?.forEach((ret: any) => {
+      const qty = Number(ret.quantity) || 0;
+      const credit = Number((ret.reason || "").match(/\[CREDIT:([\d.]+)\]/)?.[1] || 0);
+      const unitCost = Number(ret.product?.actual_cost_price || ret.product?.cost_price || 0);
+      const cost = qty * unitCost;
+      const profit = credit - cost;
+      const monthKey = initMonth(new Date(ret.created_at));
+
+      totalRevenue -= credit;
+      totalCostOfGoods -= cost;
+      monthlyMap[monthKey].revenue -= credit;
+      monthlyMap[monthKey].cogs -= cost;
+      monthlyMap[monthKey].grossProfit -= profit;
+
+      const pId = ret.product?.id;
+      if (pId) {
+        if (!productsMap[pId])
+          productsMap[pId] = {
+            id: pId,
+            name: ret.product.name,
+            category: ret.product.category,
+            sold: 0,
+            revenue: 0,
+            cost: 0,
+            loss: 0,
+          };
+        productsMap[pId].sold -= qty;
+        productsMap[pId].revenue -= credit;
+        productsMap[pId].cost -= cost;
+      }
+
+      const bId = ret.customer?.business_id;
+      if (bId && businessMap[bId]) {
+        businessMap[bId].revenue -= credit;
+        businessMap[bId].cost -= cost;
+        businessMap[bId].profit -= profit;
+      }
+      const cId = ret.customer?.id;
+      if (cId && customersMap[cId]) {
+        customersMap[cId].revenue -= credit;
+        customersMap[cId].profit -= profit;
+      }
+
+      transactionsList.push({
+        id: ret.return_number,
+        type: "Return",
+        date: ret.created_at.split("T")[0],
+        customer: ret.customer?.shop_name || "Walk-in",
+        business: ret.customer?.business?.name || "-",
+        amount: -credit,
+        profit: -profit,
+        status: "Good Return",
+      });
+    });
+
     // 8. Process Expenses
     expenses?.forEach((exp: any) => {
       const amount = Number(exp.amount) || 0;

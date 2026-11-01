@@ -21,6 +21,7 @@ import {
   ExternalLink,
   Plus,
   Trash2,
+  Pencil,
 } from "lucide-react";
 import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import { Button } from "@/components/ui/button";
@@ -315,6 +316,8 @@ export default function ReturnDetailPage({
   const pickupStatus: string | undefined = returnRecord?.pickup_order?.status;
   const pickupLeft = !!pickupStatus && !["Pending", "Approved", "Processing", "Checking", "Loading"].includes(pickupStatus);
   const canChangeItems = isEditing && !!meta.noteCode && !pickupLeft;
+  // Removing is allowed at any pickup stage (the server takes the line off the pickup order and reverses stock/bill)
+  const canRemoveItems = isEditing && !!meta.noteCode;
   const visibleNoteItems = noteItems.filter((it) => !deletedIds.includes(it.id));
 
   // Open Invoice Sheet Handler (a specific bill number can be passed for other items in the note)
@@ -1013,6 +1016,7 @@ export default function ReturnDetailPage({
                       <TableHead className="text-center w-16 text-muted-foreground">Disc%</TableHead>
                       <TableHead className="text-right w-28">Total</TableHead>
                       <TableHead className="text-right w-36 text-orange-600">Condition</TableHead>
+                      <TableHead className="text-center w-24">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1170,16 +1174,46 @@ export default function ReturnDetailPage({
                                 {line.type === "Good" ? "Good Return" : line.type === "Exchange" ? "Damage Exchange" : "Damaged Stock"}
                               </span>
                             )}
-                            {canChangeItems && isItemEditable(item) && visibleNoteItems.length + newItems.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => setDeletedIds((prev) => [...prev, item.id])}
-                                className="mt-1.5 ml-auto flex items-center gap-1 text-[11px] text-red-600 hover:text-red-800"
-                                title="Remove this item from the note"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" /> Remove
-                              </button>
-                            )}
+                          </TableCell>
+
+                          <TableCell className="text-center">
+                            {(() => {
+                              const editable = isItemEditable(item);
+                              const deleteBlock = !editable
+                                ? "This item is locked"
+                                : !meta.noteCode
+                                ? "This return has no note to remove items from"
+                                : visibleNoteItems.length + newItems.length <= 1
+                                ? "A return note needs at least one item"
+                                : "";
+                              return (
+                                <div className="flex items-center justify-center gap-1">
+                                  <button
+                                    type="button"
+                                    disabled={!editable}
+                                    onClick={() => setIsEditing(true)}
+                                    className={`p-1.5 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                                      rowEditing ? "bg-blue-100 text-blue-700" : "text-blue-600 hover:bg-blue-50"
+                                    }`}
+                                    title={editable ? "Edit this item" : "This item is locked"}
+                                  >
+                                    <Pencil className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={!!deleteBlock}
+                                    onClick={() => {
+                                      setIsEditing(true);
+                                      setDeletedIds((prev) => (prev.includes(item.id) ? prev : [...prev, item.id]));
+                                    }}
+                                    className="p-1.5 rounded-md text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                                    title={deleteBlock ? `Can't remove: ${deleteBlock}` : "Remove this item from the note"}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              );
+                            })()}
                           </TableCell>
                         </TableRow>
                       );
@@ -1258,22 +1292,26 @@ export default function ReturnDetailPage({
                                 <SelectItem value="Exchange">Damage Exchange</SelectItem>
                               </SelectContent>
                             </Select>
+                          </TableCell>
+                          <TableCell className="text-center">
                             <button
                               type="button"
                               onClick={() => setNewItems((prev) => prev.filter((x) => x.key !== n.key))}
-                              className="mt-1.5 ml-auto flex items-center gap-1 text-[11px] text-red-600 hover:text-red-800"
+                              className="p-1.5 rounded-md text-red-600 hover:bg-red-50 transition-colors"
+                              title="Remove this new item"
                             >
-                              <Trash2 className="w-3.5 h-3.5" /> Remove
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           </TableCell>
                         </TableRow>
                       );
                     })}
 
-                    {canChangeItems && (
+                    {canRemoveItems && (canChangeItems || deletedIds.length > 0) && (
                       <TableRow className="hover:bg-transparent">
-                        <TableCell colSpan={9} className="py-2">
+                        <TableCell colSpan={10} className="py-2">
                           <div className="flex flex-wrap items-center gap-3">
+                            {canChangeItems && (
                             <Button
                               type="button"
                               variant="outline"
@@ -1295,6 +1333,7 @@ export default function ReturnDetailPage({
                             >
                               <Plus className="w-4 h-4 mr-1" /> Add Item
                             </Button>
+                            )}
                             {deletedIds.map((delId) => {
                               const it = noteItems.find((x) => x.id === delId);
                               return (
@@ -1319,8 +1358,8 @@ export default function ReturnDetailPage({
                     )}
                     {isEditing && meta.noteCode && pickupLeft && (
                       <TableRow className="hover:bg-transparent">
-                        <TableCell colSpan={9} className="py-2 text-xs text-muted-foreground">
-                          Items can't be added or removed: pickup order {returnRecord.pickup_order?.order_id} is already {pickupStatus}.
+                        <TableCell colSpan={10} className="py-2 text-xs text-muted-foreground">
+                          New items can't be added: pickup order {returnRecord.pickup_order?.order_id} is already {pickupStatus}. You can still remove items.
                         </TableCell>
                       </TableRow>
                     )}
@@ -1334,7 +1373,7 @@ export default function ReturnDetailPage({
                         <TableCell className="text-right text-sm font-bold">
                           {noteTotal.toLocaleString()}
                         </TableCell>
-                        <TableCell />
+                        <TableCell colSpan={2} />
                       </TableRow>
                     )}
                   </TableBody>
