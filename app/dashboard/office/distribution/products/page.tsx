@@ -145,7 +145,7 @@ export default function ProductsPage() {
     const haystack = [
       product.name, product.category, product.sku, product.supplier,
       product.brand ?? "", product.subCategory ?? "",
-      product.modelType ?? "", product.sizeSpec ?? "",
+      product.modelType ?? "", product.productFamily ?? "", product.sizeSpec ?? "",
       product.companyCode ?? "",
     ].join(" ").toLowerCase();
     const matchesSearch =
@@ -448,6 +448,7 @@ export default function ProductsPage() {
                 subBrand: p.subBrand || "",
                 modelType: p.modelType || "",
                 subModel: p.subModel || "",
+                productFamily: p.productFamily || "",
                 sizeSpec: p.sizeSpec || "",
                 supplier: p.supplier,
                 stock: p.stock,

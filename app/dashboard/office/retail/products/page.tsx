@@ -221,7 +221,7 @@ export default function RetailProductCatalogPage() {
       sku: p.sku, name: p.name, category: p.category,
       subCategory: p.subCategory || "", brand: p.brand || "",
       subBrand: p.subBrand || "", modelType: p.modelType || "",
-      subModel: p.subModel || "", sizeSpec: p.sizeSpec || "",
+      subModel: p.subModel || "", productFamily: p.productFamily || "", sizeSpec: p.sizeSpec || "",
       supplier: p.supplier, stock: p.stock, minStock: p.minStock,
       mrp: p.mrp, sellingPrice: p.sellingPrice, costPrice: p.costPrice,
       images: p.images || [], unitOfMeasure: p.unitOfMeasure || "Pcs",

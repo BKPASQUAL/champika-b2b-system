@@ -890,7 +890,7 @@ export default function SierraProductDetailsPage({
                   </label>
                   <div className="mt-1">
                     {product.brand || "N/A"}
-                    {product.modelType ? ` - ${product.modelType}` : ""}
+                    {product.productFamily ? ` - ${product.productFamily}` : ""}
                   </div>
                 </div>
               </div>

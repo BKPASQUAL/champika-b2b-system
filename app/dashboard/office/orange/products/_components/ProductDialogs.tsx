@@ -72,7 +72,7 @@ export function ProductDialogs({
 }: ProductDialogsProps) {
   // Settings Data
   const { data: brands } = useSettings("brand");
-  const { data: models } = useSettings("model");
+  const { data: families, refresh: refreshFamilies } = useSettings("family");
   const { data: specs, refresh: refreshSpecs } = useSettings("spec");
   const { data: packSizes } = useSettings("pack_size");
 
@@ -103,41 +103,72 @@ export function ProductDialogs({
     (b) => b.parent_id && b.parent_id === selectedBrandId,
   );
 
-  const categoryModels = models.filter((m) => {
-    if (m.parent_id) return false;
-    if (selectedSubCatId) {
-      return m.category_id === selectedSubCatId;
-    }
-    return m.category_id === selectedCatId;
-  });
+  // Product families belong to the sub category (or the category if no sub category)
+  const familyScopeId = selectedSubCatId || selectedCatId;
+  const productFamilies = families.filter(
+    (f) => !f.parent_id && f.category_id === familyScopeId,
+  );
 
-  const selectedModelId = categoryModels.find(
-    (m) => m.name.trim() === formData.modelType?.trim(),
+  const selectedFamilyId = productFamilies.find(
+    (f) => f.name.trim() === formData.productFamily?.trim(),
   )?.id;
 
-  const subModels = models.filter((m) => {
-    const isChild = m.parent_id && m.parent_id === selectedModelId;
-    if (!isChild) return false;
-    if (selectedSubCatId && m.category_id) {
-      return m.category_id === selectedSubCatId;
+  // New specs attach to the family if one is picked, else the sub category / category
+  const specParentId = selectedFamilyId || selectedSubCatId || selectedCatId;
+
+  const categorySpecs = specs
+    .filter(
+      (s) =>
+        (selectedFamilyId && s.parent_id === selectedFamilyId) ||
+        (selectedSubCatId && s.parent_id === selectedSubCatId) ||
+        (selectedCatId && s.parent_id === selectedCatId),
+    )
+    // Same spec name can exist at more than one level; show it once
+    .filter(
+      (s, i, arr) =>
+        arr.findIndex((x) => x.name.trim() === s.name.trim()) === i,
+    );
+
+  // --- Add New Product Family Logic ---
+  const [isAddingFamily, setIsAddingFamily] = useState(false);
+  const [newFamilyName, setNewFamilyName] = useState("");
+  const [isSavingFamily, setIsSavingFamily] = useState(false);
+
+  const handleAddFamily = async () => {
+    const name = newFamilyName.trim();
+    if (!name || !familyScopeId) return;
+
+    setIsSavingFamily(true);
+    try {
+      const res = await fetch("/api/settings/categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          type: "family",
+          category_id: familyScopeId,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to add product family");
+      }
+
+      toast.success("Product family added");
+      refreshFamilies();
+      setNewFamilyName("");
+      setIsAddingFamily(false);
+      setFormData({ ...formData, productFamily: name });
+    } catch (error) {
+      console.error(error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to add product family",
+      );
+    } finally {
+      setIsSavingFamily(false);
     }
-    return true;
-  });
-
-  const selectedSubModelId = subModels.find(
-    (m) => m.name.trim() === formData.subModel?.trim(),
-  )?.id;
-
-  const effectiveModelId =
-    selectedSubModelId || selectedModelId || selectedSubCatId || selectedCatId;
-
-  const categorySpecs = specs.filter((s) => {
-    if (selectedSubModelId && s.parent_id === selectedSubModelId) return true;
-    if (selectedModelId && s.parent_id === selectedModelId) return true;
-    if (selectedSubCatId && s.parent_id === selectedSubCatId) return true;
-    if (selectedCatId && s.parent_id === selectedCatId) return true;
-    return false;
-  });
+  };
 
   // --- Add New Spec Logic ---
   const [isAddingSpec, setIsAddingSpec] = useState(false);
@@ -145,7 +176,7 @@ export function ProductDialogs({
   const [isSavingSpec, setIsSavingSpec] = useState(false);
 
   const handleAddSpec = async () => {
-    if (!newSpecName.trim() || !effectiveModelId) return;
+    if (!newSpecName.trim() || !specParentId) return;
 
     setIsSavingSpec(true);
     try {
@@ -155,7 +186,7 @@ export function ProductDialogs({
         body: JSON.stringify({
           name: newSpecName.trim(),
           type: "spec",
-          parent_id: effectiveModelId,
+          parent_id: specParentId,
           category_id: selectedSubCatId || selectedCatId,
         }),
       });
@@ -304,6 +335,7 @@ export function ProductDialogs({
                     subCategory: "",
                     modelType: "",
                     subModel: "",
+                    productFamily: "",
                     sizeSpec: "",
                   });
                 }}
@@ -331,6 +363,7 @@ export function ProductDialogs({
                     subCategory: val === "none" ? "" : val,
                     modelType: "",
                     subModel: "",
+                    productFamily: "",
                     sizeSpec: "",
                   })
                 }
@@ -352,120 +385,82 @@ export function ProductDialogs({
               </Select>
             </div>
 
-            {/* Brand */}
+            {/* Product Family */}
             <div className="space-y-2">
-              <Label>Brand</Label>
-              <Select
-                value={formData.brand}
-                onValueChange={(val) =>
-                  setFormData({
-                    ...formData,
-                    brand: val === "none" ? "" : val,
-                    subBrand: "",
-                  })
-                }
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select Brand" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  {mainBrands.map((b) => (
-                    <SelectItem key={b.id} value={b.name}>
-                      {b.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+              <div className="flex items-center justify-between">
+                <Label>Product Family</Label>
+                {formData.category && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs text-blue-600 hover:text-blue-800"
+                    onClick={() => {
+                      setIsAddingFamily(!isAddingFamily);
+                      setNewFamilyName("");
+                    }}
+                  >
+                    <Plus className="w-3 h-3 mr-1" />
+                    {isAddingFamily ? "Cancel" : "Add New"}
+                  </Button>
+                )}
+              </div>
 
-            {/* Sub Brand */}
-            <div className="space-y-2">
-              <Label>Sub Brand</Label>
-              <Select
-                value={formData.subBrand}
-                onValueChange={(val) =>
-                  setFormData({
-                    ...formData,
-                    subBrand: val === "none" ? "" : val,
-                  })
-                }
-                disabled={!formData.brand}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select Sub Brand" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  {subBrands.map((b) => (
-                    <SelectItem key={b.id} value={b.name}>
-                      {b.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Model */}
-            <div className="space-y-2">
-              <Label>Model</Label>
-              <Select
-                value={formData.modelType}
-                onValueChange={(val) =>
-                  setFormData({
-                    ...formData,
-                    modelType: val === "none" ? "" : val,
-                    subModel: "",
-                    sizeSpec: "",
-                  })
-                }
-                disabled={!formData.category}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select Model" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  {categoryModels.length > 0 ? (
-                    categoryModels.map((m) => (
-                      <SelectItem key={m.id} value={m.name}>
-                        {m.name}
+              {isAddingFamily ? (
+                <div className="flex gap-2">
+                  <Input
+                    value={newFamilyName}
+                    onChange={(e) => setNewFamilyName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddFamily();
+                      }
+                    }}
+                    placeholder={`New family in ${formData.subCategory || formData.category}`}
+                    className="h-9"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handleAddFamily}
+                    disabled={!newFamilyName.trim() || isSavingFamily}
+                  >
+                    {isSavingFamily ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              ) : (
+                <Select
+                  value={formData.productFamily || ""}
+                  onValueChange={(val) =>
+                    setFormData({
+                      ...formData,
+                      productFamily: val === "none" ? "" : val,
+                    })
+                  }
+                  disabled={!formData.category}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select Product Family" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {productFamilies.length > 0 ? (
+                      productFamilies.map((f) => (
+                        <SelectItem key={f.id} value={f.name}>
+                          {f.name}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="no-families" disabled>
+                        No families yet - click Add New
                       </SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value="no-models" disabled>
-                      No models for this selection
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Sub Model */}
-            <div className="space-y-2">
-              <Label>Sub Model</Label>
-              <Select
-                value={formData.subModel}
-                onValueChange={(val) =>
-                  setFormData({
-                    ...formData,
-                    subModel: val === "none" ? "" : val,
-                  })
-                }
-                disabled={!formData.modelType}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select Sub Model" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  {subModels.map((m) => (
-                    <SelectItem key={m.id} value={m.name}>
-                      {m.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                    )}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
 
             {/* Specification */}
@@ -538,6 +533,60 @@ export function ProductDialogs({
                   </SelectContent>
                 </Select>
               )}
+            </div>
+
+            {/* Brand */}
+            <div className="space-y-2">
+              <Label>Brand</Label>
+              <Select
+                value={formData.brand}
+                onValueChange={(val) =>
+                  setFormData({
+                    ...formData,
+                    brand: val === "none" ? "" : val,
+                    subBrand: "",
+                  })
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select Brand" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {mainBrands.map((b) => (
+                    <SelectItem key={b.id} value={b.name}>
+                      {b.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Sub Brand */}
+            <div className="space-y-2">
+              <Label>Sub Brand</Label>
+              <Select
+                value={formData.subBrand}
+                onValueChange={(val) =>
+                  setFormData({
+                    ...formData,
+                    subBrand: val === "none" ? "" : val,
+                  })
+                }
+                disabled={!formData.brand}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select Sub Brand" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {subBrands.map((b) => (
+                    <SelectItem key={b.id} value={b.name}>
+                      {b.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Pricing Section */}

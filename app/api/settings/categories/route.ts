@@ -9,6 +9,7 @@ const schema = z.object({
     "category",
     "brand",
     "model",
+    "family",
     "spec",
     "supplier",
     "route",

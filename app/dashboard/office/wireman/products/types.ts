@@ -11,6 +11,7 @@ export interface Product {
   subBrand?: string;
   modelType?: string;
   subModel?: string;
+  productFamily?: string;
   sizeSpec?: string;
   supplier: string;
   stock: number;
@@ -63,6 +64,7 @@ export interface ProductFormData {
   subBrand: string;
   modelType: string;
   subModel: string;
+  productFamily?: string;
   sizeSpec: string;
   supplier: string;
   stock: number | string;

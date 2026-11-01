@@ -18,9 +18,12 @@ import {
   Check,
   Calculator,
   Loader2,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ProductHierarchyManager } from "./ProductHierarchyManager";
+import { BulkAddFamiliesDialog } from "./BulkAddFamiliesDialog";
 import { Label } from "@/components/ui/label";
 import {
   Card,
@@ -76,6 +79,10 @@ interface Category {
   children?: Category[];
 }
 
+// "Categories" -> "Category", "Product Families" -> "Product Family"
+const singular = (label?: string) =>
+  !label ? "" : label.endsWith("ies") ? label.slice(0, -3) + "y" : label.replace(/s$/, "");
+
 export function CategorySettings() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [allCategories, setAllCategories] = useState<Category[]>([]);
@@ -109,6 +116,20 @@ export function CategorySettings() {
     saving: boolean;
   } | null>(null);
 
+  // Product families shown under each sub category in the Categories tab
+  const [categoryFamilies, setCategoryFamilies] = useState<Category[]>([]);
+  const [inlineAddFamily, setInlineAddFamily] = useState<{
+    scopeId: string;
+    value: string;
+    saving: boolean;
+  } | null>(null);
+
+  // "Add Product Families" popup (scopeId = sub category to pre-select)
+  const [bulkFamilies, setBulkFamilies] = useState<{ open: boolean; scopeId: string | null }>({
+    open: false,
+    scopeId: null,
+  });
+
   const [loading, setLoading] = useState(true);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [newName, setNewName] = useState("");
@@ -137,7 +158,7 @@ export function CategorySettings() {
   }>({ open: false, sourceId: null, sourceCategoryId: null, newName: "", cloning: false, loadingSpecs: false, specsByParent: {} });
 
   const [activeType, setActiveType] = useState<
-    "category" | "brand" | "model" | "spec" | "route" | "lorry" | "pack_size"
+    "category" | "brand" | "family" | "spec" | "route" | "lorry" | "pack_size"
   >("category");
 
   useEffect(() => {
@@ -145,7 +166,7 @@ export function CategorySettings() {
       const params = new URLSearchParams(window.location.search);
       const subtab = params.get("subtab") as any;
       if (
-        ["category", "brand", "model", "spec", "route", "lorry", "pack_size"].includes(subtab)
+        ["category", "brand", "family", "spec", "route", "lorry", "pack_size"].includes(subtab)
       ) {
         setActiveType(subtab);
       }
@@ -175,7 +196,7 @@ export function CategorySettings() {
       color: "text-blue-600",
       bgColor: "bg-blue-50 dark:bg-blue-950/30",
       borderColor: "border-blue-200 dark:border-blue-800",
-      description: "Manage product categories and sub-categories",
+      description: "Manage categories, sub categories, product families and specifications in one place",
     },
     {
       value: "brand",
@@ -187,13 +208,13 @@ export function CategorySettings() {
       description: "Manage brands and sub-brands",
     },
     {
-      value: "model",
-      label: "Models",
+      value: "family",
+      label: "Product Families",
       icon: Layers,
       color: "text-green-600",
       bgColor: "bg-green-50 dark:bg-green-950/30",
       borderColor: "border-green-200 dark:border-green-800",
-      description: "Manage product models by category",
+      description: "Manage product families by sub category",
     },
     {
       value: "spec",
@@ -202,7 +223,7 @@ export function CategorySettings() {
       color: "text-orange-600",
       bgColor: "bg-orange-50 dark:bg-orange-950/30",
       borderColor: "border-orange-200 dark:border-orange-800",
-      description: "Manage product specifications by model",
+      description: "Manage product specifications by product family",
     },
     {
       value: "route",
@@ -255,7 +276,13 @@ export function CategorySettings() {
       if (!res.ok) throw new Error("Failed to load");
       const data = await res.json();
 
-      if (activeType === "model" || activeType === "spec") {
+      if (activeType === "category") {
+        const famRes = await fetch("/api/settings/categories?type=family");
+        const famData = famRes.ok ? await famRes.json() : [];
+        setCategoryFamilies(Array.isArray(famData) ? famData : []);
+      }
+
+      if (activeType === "family" || activeType === "spec") {
         setCategories(data);
       } else {
         const roots = data.filter((c: Category) => !c.parent_id);
@@ -275,7 +302,7 @@ export function CategorySettings() {
   // Fetch Sub Categories when Category is selected
   useEffect(() => {
     if (
-      (activeType === "model" || activeType === "spec") &&
+      (activeType === "family" || activeType === "spec") &&
       selectedCategoryId
     ) {
       const subs = fullCategoryList.filter(
@@ -293,7 +320,7 @@ export function CategorySettings() {
       const targetId = selectedSubCategoryId || selectedCategoryId;
 
       // Fetch ALL models for this category/subcategory
-      fetch(`/api/settings/categories?type=model&category_id=${targetId}`)
+      fetch(`/api/settings/categories?type=family&category_id=${targetId}`)
         .then((res) => res.json())
         .then((data) => {
           setAllCategoryModels(data); // Store EVERYTHING (Main + Subs)
@@ -351,7 +378,7 @@ export function CategorySettings() {
 
   useEffect(() => {
     if (activeType === "spec") {
-      fetch("/api/settings/categories?type=model")
+      fetch("/api/settings/categories?type=family")
         .then((res) => res.json())
         .then((data) => setAllModelsForSpec(data))
         .catch(() => setAllModelsForSpec([]));
@@ -380,8 +407,8 @@ export function CategorySettings() {
       return;
     }
 
-    if (activeType === "model" && !selectedParent && !selectedCategoryId) {
-      toast.error("Please select a category for this model");
+    if (activeType === "family" && !selectedParent && !selectedCategoryId) {
+      toast.error("Please select a category for this product family");
       return;
     }
 
@@ -398,7 +425,7 @@ export function CategorySettings() {
         description: activeType === "pack_size" ? newDescription : undefined,
       };
 
-      if (activeType === "model") {
+      if (activeType === "family") {
         if (selectedParent) {
           payload.category_id = null; // Sub-models inherit
         } else {
@@ -671,6 +698,136 @@ export function CategorySettings() {
     }
   };
 
+  const handleInlineAddFamily = async () => {
+    const name = inlineAddFamily?.value.trim();
+    if (!name || !inlineAddFamily?.scopeId) return;
+    setInlineAddFamily((prev) => (prev ? { ...prev, saving: true } : prev));
+    try {
+      const res = await fetch("/api/settings/categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          type: "family",
+          category_id: inlineAddFamily.scopeId,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to add");
+      }
+      toast.success(
+        <div className="flex items-center gap-2">
+          <Check className="h-4 w-4" />
+          <span>Product family added</span>
+        </div>
+      );
+      setInlineAddFamily(null);
+      fetchCategories(true);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to add product family"
+      );
+      setInlineAddFamily((prev) => (prev ? { ...prev, saving: false } : prev));
+    }
+  };
+
+  // Product families of one category / sub category, with edit, delete and inline add
+  const renderFamilies = (scopeId: string, scopeName: string, showAdd: boolean) => {
+    const families = categoryFamilies.filter(
+      (f) => !f.parent_id && f.category_id === scopeId
+    );
+    const isAdding = inlineAddFamily?.scopeId === scopeId;
+    if (families.length === 0 && !showAdd) return null;
+
+    return (
+      <div className="ml-6 pl-2 border-l border-dashed border-muted-foreground/20 space-y-0.5">
+        {families.map((fam) => (
+          <div
+            key={fam.id}
+            className="group flex items-center justify-between pl-1 pr-1 py-1 rounded-md hover:bg-muted/50 transition-colors"
+          >
+            <div className="flex items-center gap-1.5 text-xs min-w-0">
+              <Layers className="h-3 w-3 text-green-600 shrink-0" />
+              <span className="truncate">{fam.name}</span>
+            </div>
+            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => openEditDialog(fam.id, fam.name, fam.description || "")}
+                className="h-5 w-5 p-0 hover:bg-primary/10 hover:text-primary"
+                title="Edit"
+              >
+                <Pencil className="h-3 w-3" />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => confirmDelete(fam.id, fam.name)}
+                className="h-5 w-5 p-0 hover:bg-destructive/10 hover:text-destructive"
+                title="Delete"
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </div>
+          </div>
+        ))}
+
+        {showAdd &&
+          (isAdding && inlineAddFamily ? (
+            <div className="flex items-center gap-1.5 py-1">
+              <Input
+                autoFocus
+                placeholder={`Family in ${scopeName}...`}
+                value={inlineAddFamily.value}
+                onChange={(e) =>
+                  setInlineAddFamily((prev) =>
+                    prev ? { ...prev, value: e.target.value } : prev
+                  )
+                }
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleInlineAddFamily();
+                  if (e.key === "Escape") setInlineAddFamily(null);
+                }}
+                className="h-7 text-xs flex-1"
+                disabled={inlineAddFamily.saving}
+              />
+              <Button
+                size="sm"
+                onClick={handleInlineAddFamily}
+                disabled={inlineAddFamily.saving || !inlineAddFamily.value.trim()}
+                className="h-7 px-2 bg-green-600 hover:bg-green-700 text-white"
+              >
+                {inlineAddFamily.saving ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Check className="h-3 w-3" />
+                )}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setInlineAddFamily(null)}
+                disabled={inlineAddFamily.saving}
+                className="h-7 px-2 text-xs"
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setInlineAddFamily({ scopeId, value: "", saving: false })}
+              className="flex items-center gap-1 pl-1 py-1 text-[11px] text-muted-foreground hover:text-green-700 transition-colors"
+            >
+              <Plus className="h-3 w-3" />
+              Add Product Family
+            </button>
+          ))}
+      </div>
+    );
+  };
+
   const renderSpecList = () => {
     // Build specs indexed by their parent_id
     const specsByParentId: Record<string, Category[]> = {};
@@ -880,7 +1037,7 @@ export function CategorySettings() {
                         </Badge>
                         {models.length > 0 && (
                           <Badge variant="outline" className="text-xs px-2 py-0.5 text-muted-foreground">
-                            {models.length} model{models.length !== 1 ? "s" : ""}
+                            {models.length} famil{models.length !== 1 ? "ies" : "y"}
                           </Badge>
                         )}
                       </div>
@@ -897,7 +1054,7 @@ export function CategorySettings() {
                     <div className="flex items-center gap-2 px-3 py-1.5 bg-orange-100/50 dark:bg-orange-950/20">
                       <FileText className="h-3 w-3 text-orange-600" />
                       <span className="text-[10px] font-semibold text-orange-700 dark:text-orange-400 uppercase tracking-wide">
-                        All Models
+                        All Families
                       </span>
                       <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-orange-300 ml-auto">
                         {catDirectSpecs.length}
@@ -1105,10 +1262,16 @@ export function CategorySettings() {
             >
               <Accordion type="single" collapsible className="w-full">
                 <AccordionItem value={categoryId} className="border-b-0">
+                  <div
+                    className={cn(
+                      "flex items-center gap-2",
+                      activeTab?.bgColor,
+                      activeType === "family" && "pr-3"
+                    )}
+                  >
                   <AccordionTrigger
                     className={cn(
-                      "px-4 py-3 hover:no-underline",
-                      activeTab?.bgColor,
+                      "flex-1 px-4 py-3 hover:no-underline",
                       "rounded-t-lg data-[state=closed]:rounded-b-lg"
                     )}
                   >
@@ -1133,15 +1296,24 @@ export function CategorySettings() {
                       </Badge>
                     </div>
                   </AccordionTrigger>
+                  {activeType === "family" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setBulkFamilies({ open: true, scopeId: categoryId })}
+                      className="h-8 px-2.5 text-xs bg-background text-green-700 border-green-200 hover:bg-green-50 shrink-0"
+                      title={`Add product families to ${categoryName}`}
+                    >
+                      <Plus className="h-3.5 w-3.5 mr-1" />
+                      Add Product Family
+                    </Button>
+                  )}
+                  </div>
 
                   <AccordionContent className="pt-0">
                     <Separator />
                     <div className="p-3 space-y-2">
                       {items.map((item) => {
-                        const subModels = activeType === "model"
-                          ? categories.filter((c) => c.parent_id === item.id)
-                          : [];
-
                         return (
                           <div key={item.id} className="rounded-lg border bg-card overflow-hidden">
                             {/* Model / Spec row */}
@@ -1154,31 +1326,15 @@ export function CategorySettings() {
                                 </div>
                                 <div className="min-w-0">
                                   <span className="text-sm font-medium truncate block">{item.name}</span>
-                                  {activeType === "model" && subModels.length > 0 && (
-                                    <span className="text-[10px] text-muted-foreground">
-                                      {subModels.length} sub-model{subModels.length !== 1 ? "s" : ""}
-                                    </span>
-                                  )}
                                   {activeType === "spec" &&
                                     (item.parent_id === categoryId || item.parent_id === selectedCategoryId) && (
                                       <span className="text-[10px] text-blue-600 font-semibold bg-blue-100 dark:bg-blue-950 px-1 rounded">
-                                        ALL MODELS
+                                        ALL FAMILIES
                                       </span>
                                     )}
                                 </div>
                               </div>
                               <div className="flex items-center gap-1 shrink-0 ml-2">
-                                {activeType === "model" && (
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => openCloneDialog(item)}
-                                    className="h-7 w-7 p-0 hover:bg-green-50 hover:text-green-600"
-                                    title="Clone model"
-                                  >
-                                    <Copy className="h-3.5 w-3.5" />
-                                  </Button>
-                                )}
                                 <Button
                                   size="sm"
                                   variant="ghost"
@@ -1200,51 +1356,6 @@ export function CategorySettings() {
                               </div>
                             </div>
 
-                            {/* Sub-Models list + Add button */}
-                            {activeType === "model" && (
-                              <div className="px-3 pb-2 pt-1 space-y-1 border-t bg-background">
-                                {subModels.map((sub) => (
-                                  <div
-                                    key={sub.id}
-                                    className="group flex items-center justify-between pl-3 pr-1 py-1.5 rounded-md hover:bg-muted/50 transition-colors"
-                                  >
-                                    <div className="flex items-center gap-1.5 text-sm min-w-0">
-                                      <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
-                                      <span className="truncate">{sub.name}</span>
-                                    </div>
-                                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() => openEditDialog(sub.id, sub.name, sub.description || "")}
-                                        className="h-6 w-6 p-0 hover:bg-primary/10 hover:text-primary"
-                                        title="Edit"
-                                      >
-                                        <Pencil className="h-3 w-3" />
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() => confirmDelete(sub.id, sub.name)}
-                                        className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
-                                        title="Delete"
-                                      >
-                                        <Trash2 className="h-3 w-3" />
-                                      </Button>
-                                    </div>
-                                  </div>
-                                ))}
-
-                                {/* Inline Add Sub Model button */}
-                                <button
-                                  onClick={() => openAddDialog(item.id)}
-                                  className="w-full flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-md text-xs text-muted-foreground hover:text-primary hover:bg-primary/5 transition-colors border border-dashed border-muted-foreground/20 hover:border-primary/40 mt-1"
-                                >
-                                  <Plus className="h-3 w-3" />
-                                  Add Sub Model
-                                </button>
-                              </div>
-                            )}
                           </div>
                         );
                       })}
@@ -1409,9 +1520,17 @@ export function CategorySettings() {
             {/* Children + Add Sub button */}
             {(activeType === "category" || activeType === "brand") && (
               <div className="px-3 py-2 space-y-1 bg-background">
+                {/* Main category with no sub categories: families sit on the category itself */}
+                {activeType === "category" &&
+                  renderFamilies(
+                    item.id,
+                    item.name,
+                    !item.children || item.children.length === 0
+                  )}
+
                 {item.children && item.children.map((child) => (
+                  <div key={child.id}>
                   <div
-                    key={child.id}
                     className="group flex items-center justify-between pl-3 pr-1 py-1.5 rounded-md hover:bg-muted/50 transition-colors"
                   >
                     <div className="flex items-center gap-1.5 text-sm min-w-0">
@@ -1439,6 +1558,8 @@ export function CategorySettings() {
                       </Button>
                     </div>
                   </div>
+                  {activeType === "category" && renderFamilies(child.id, child.name, true)}
+                  </div>
                 ))}
 
                 {/* Inline Add Sub button */}
@@ -1447,7 +1568,7 @@ export function CategorySettings() {
                   className="w-full flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-md text-xs text-muted-foreground hover:text-primary hover:bg-primary/5 transition-colors border border-dashed border-muted-foreground/20 hover:border-primary/40 mt-1"
                 >
                   <Plus className="h-3 w-3" />
-                  Add Sub {activeTab?.label.slice(0, -1)}
+                  Add Sub {singular(activeTab?.label)}
                 </button>
               </div>
             )}
@@ -1464,6 +1585,12 @@ export function CategorySettings() {
 
   return (
     <>
+      <BulkAddFamiliesDialog
+        open={bulkFamilies.open}
+        onOpenChange={(o) => setBulkFamilies((b) => ({ ...b, open: o }))}
+        scopeId={bulkFamilies.scopeId}
+        onCreated={() => fetchCategories(true)}
+      />
       <div className="space-y-6">
         {/* Header Section */}
         <div className="flex items-center justify-between">
@@ -1479,11 +1606,19 @@ export function CategorySettings() {
             <DialogTrigger asChild>
               <Button
                 size="lg"
-                className="gap-2"
-                onClick={() => openAddDialog(null)}
+                className={cn("gap-2", activeType === "category" && "hidden")}
+                onClick={(e) => {
+                  if (activeType === "family") {
+                    // Families use the multi-add popup instead
+                    e.preventDefault();
+                    setBulkFamilies({ open: true, scopeId: null });
+                    return;
+                  }
+                  openAddDialog(null);
+                }}
               >
                 <Plus className="h-4 w-4" />
-                Add {activeTab?.label.slice(0, -1)}
+                Add {singular(activeTab?.label)}
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[500px]">
@@ -1495,8 +1630,8 @@ export function CategorySettings() {
                     />
                   )}
                   {selectedParent
-                    ? `Add Sub-${activeTab?.label.slice(0, -1)}`
-                    : `Add New ${activeTab?.label.slice(0, -1)}`}
+                    ? `Add Sub-${singular(activeTab?.label)}`
+                    : `Add New ${singular(activeTab?.label)}`}
                 </DialogTitle>
                 <DialogDescription>
                   {selectedParent
@@ -1509,7 +1644,7 @@ export function CategorySettings() {
 
               <div className="space-y-6 py-4">
                 {/* 1. Category Selector (For Models and Specs) */}
-                {(activeType === "model" || activeType === "spec") &&
+                {(activeType === "family" || activeType === "spec") &&
                   !selectedParent && (
                     <div className="space-y-3">
                       <Label
@@ -1545,7 +1680,7 @@ export function CategorySettings() {
                   )}
 
                 {/* 2. Sub Category Selector (For Model AND Spec) */}
-                {(activeType === "model" || activeType === "spec") &&
+                {(activeType === "family" || activeType === "spec") &&
                   selectedCategoryId &&
                   !selectedParent && (
                     <div className="space-y-3">
@@ -1593,7 +1728,7 @@ export function CategorySettings() {
                 {activeType === "spec" && selectedCategoryId && (
                   <div className="space-y-3">
                     <Label htmlFor="model" className="text-base font-semibold">
-                      Main Model{" "}
+                      Product Family{" "}
                       <span className="text-muted-foreground text-xs">
                         (Optional - Leave empty to apply to{" "}
                         {selectedSubCategoryId
@@ -1610,7 +1745,7 @@ export function CategorySettings() {
                       }}
                     >
                       <SelectTrigger id="model" className="h-11">
-                        <SelectValue placeholder="Select a model (Optional)..." />
+                        <SelectValue placeholder="Select a product family (optional)..." />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">
@@ -1637,7 +1772,7 @@ export function CategorySettings() {
                 )}
 
                 {/* 4. Sub Model Selector (ONLY for Specs, if Main Model selected) */}
-                {activeType === "spec" && selectedModelId && (
+                {activeType === "spec" && selectedModelId && availableSubModels.length > 0 && (
                   <div className="space-y-3">
                     <Label
                       htmlFor="subModel"
@@ -1753,7 +1888,7 @@ export function CategorySettings() {
                 </Button>
                 <Button type="button" onClick={handleAdd} disabled={loading}>
                   <Plus className="h-4 w-4 mr-2" />
-                  Add {activeTab?.label.slice(0, -1)}
+                  Add {singular(activeTab?.label)}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -1805,9 +1940,11 @@ export function CategorySettings() {
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </CardContent>
           </Card>
+        ) : activeType === "category" ? (
+          <ProductHierarchyManager />
         ) : activeType === "spec" ? (
           renderSpecList()
-        ) : activeType === "model" ? (
+        ) : activeType === "family" ? (
           renderCategoryBasedList()
         ) : (
           renderHierarchicalList()
@@ -1949,7 +2086,7 @@ export function CategorySettings() {
               {activeTab && (
                 <activeTab.icon className={cn("h-5 w-5", activeTab.color)} />
               )}
-              Edit {activeTab?.label.slice(0, -1)}
+              Edit {singular(activeTab?.label)}
             </DialogTitle>
             <DialogDescription>
               Update the name{activeType === "pack_size" ? " and quantity" : ""} of this item.

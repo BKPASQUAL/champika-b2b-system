@@ -148,7 +148,7 @@ export default function OrangeProductsPage() {
       product.sku,
       product.brand ?? "",
       product.subCategory ?? "",
-      product.modelType ?? "",
+      product.modelType ?? "", product.productFamily ?? "",
       product.sizeSpec ?? "",
       product.companyCode ?? "",
     ]
@@ -429,6 +429,7 @@ export default function OrangeProductsPage() {
                 subBrand: p.subBrand || "",
                 modelType: p.modelType || "",
                 subModel: p.subModel || "",
+                productFamily: p.productFamily || "",
                 sizeSpec: p.sizeSpec || "",
                 supplier: "Orange (Orel Corporation)",
                 stock: p.stock,

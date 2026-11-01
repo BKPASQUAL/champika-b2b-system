@@ -12,6 +12,7 @@ const updateSchema = z.object({
   subBrand: z.string().optional(),
   modelType: z.string().optional(),
   subModel: z.string().optional(),
+  productFamily: z.string().optional(),
   sizeSpec: z.string().optional(),
   supplier: z.string().optional(),
   stock: z.number().optional(),
@@ -127,6 +128,8 @@ export async function PATCH(
     if (val.modelType !== undefined)
       dbUpdates.model_type = val.modelType || null;
     if (val.subModel !== undefined) dbUpdates.sub_model = val.subModel || null;
+    if (val.productFamily !== undefined)
+      dbUpdates.product_family = val.productFamily || null;
     if (val.sizeSpec !== undefined) dbUpdates.size_spec = val.sizeSpec || null;
     if (val.supplier) dbUpdates.supplier_name = val.supplier;
     if (val.stock !== undefined) dbUpdates.stock_quantity = val.stock;
@@ -315,6 +318,7 @@ export async function GET(
       subBrand: productData.sub_brand,
       modelType: productData.model_type,
       subModel: productData.sub_model,
+      productFamily: productData.product_family || "",
       sizeSpec: productData.size_spec,
       supplier: productData.supplier_name,
       stock:

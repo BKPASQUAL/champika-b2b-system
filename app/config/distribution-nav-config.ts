@@ -26,6 +26,7 @@ import {
   BookOpen,
   CheckCircle2,
   Boxes,
+  FolderTree,
 } from "lucide-react";
 
 interface DistNavItem {
@@ -186,6 +187,12 @@ export const distributionNavItems: DistNavSection[] = [
         href: "/dashboard/office/distribution/products/bulk-price",
         icon: Tags,
         description: "Edit MRP, cost & selling prices in bulk",
+      },
+      {
+        name: "Product Setup",
+        href: "/dashboard/office/distribution/settings/product-setup",
+        icon: FolderTree,
+        description: "Categories, sub categories, product families & specs",
       },
       {
         name: "Stock Control",

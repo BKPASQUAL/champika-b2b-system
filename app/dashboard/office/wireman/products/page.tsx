@@ -114,7 +114,7 @@ export default function WiremanProductsPage() {
     const haystack = [
       product.name, product.category, product.sku,
       product.brand ?? "", product.subCategory ?? "",
-      product.modelType ?? "", product.sizeSpec ?? "",
+      product.modelType ?? "", product.productFamily ?? "", product.sizeSpec ?? "",
       product.companyCode ?? "",
     ].join(" ").toLowerCase();
     const matchesSearch =
@@ -398,6 +398,7 @@ export default function WiremanProductsPage() {
                 subBrand: p.subBrand || "",
                 modelType: p.modelType || "",
                 subModel: p.subModel || "",
+                productFamily: p.productFamily || "",
                 sizeSpec: p.sizeSpec || "",
                 supplier: WIREMAN_SUPPLIER_NAME,
                 stock: p.stock,
