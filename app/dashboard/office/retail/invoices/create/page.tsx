@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MrpDiscountInput } from "@/components/ui/mrp-discount-input";
 import {
   Card,
   CardContent,
@@ -1135,7 +1136,7 @@ export default function CreateRetailInvoicePage() {
               </div>
 
               {/* Price Row */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                 <div className="space-y-2">
                   <Label>MRP</Label>
                   <Input
@@ -1150,6 +1151,15 @@ export default function CreateRetailInvoicePage() {
                     }
                     onKeyDown={handleKeyDown}
                     placeholder="0.00"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>MRP Disc %</Label>
+                  <MrpDiscountInput
+                    mrp={currentItem.mrp}
+                    unitPrice={currentItem.unitPrice}
+                    onUnitPriceChange={(price) => setCurrentItem((prev) => ({ ...prev, unitPrice: price }))}
+                    onKeyDown={handleKeyDown}
                   />
                 </div>
                 <div className="space-y-2">

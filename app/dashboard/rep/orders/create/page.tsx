@@ -27,6 +27,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { MrpDiscountInput } from "@/components/ui/mrp-discount-input";
 import {
   Card,
   CardContent,
@@ -1687,7 +1688,7 @@ export default function CreateOrderPage() {
               </div>
 
               {/* MRP / Unit Price / Discount / Total — 2 cols on mobile, 4 on md+ */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4">
                 <div className="space-y-2">
                   <Label className="text-xs sm:text-sm">MRP</Label>
                   <Input
@@ -1699,6 +1700,15 @@ export default function CreateOrderPage() {
                     onKeyDown={handleKeyDown}
                     placeholder="0.00"
                     className="text-sm"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs sm:text-sm">MRP Disc %</Label>
+                  <MrpDiscountInput
+                    mrp={currentItem.mrp}
+                    unitPrice={currentItem.unitPrice}
+                    onUnitPriceChange={(price) => setCurrentItem((prev) => ({ ...prev, unitPrice: price }))}
+                    onKeyDown={handleKeyDown}
                   />
                 </div>
                 <div className="space-y-2">

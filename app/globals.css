@@ -119,6 +119,16 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Hide the up/down arrows on number inputs */
+  input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
 }
 
 /* ── iOS PWA: fix Radix UI stuck scroll-lock ──────────────────────────────

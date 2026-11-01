@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MrpDiscountInput } from "@/components/ui/mrp-discount-input";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Card,
@@ -1068,20 +1069,29 @@ export default function CreateInvoiceForm({ printFormat = "STANDARD" }: { printF
               </div>
 
               {/* Price Row - ALWAYS VISIBLE */}
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <div className="space-y-2">
                   <Label>MRP</Label>
                   <Input
                     type="number"
                     value={currentItem.mrp || ""}
-                    onChange={(e) =>
+                    onChange={(e) => {
                       setCurrentItem({
                         ...currentItem,
                         mrp: Number(e.target.value),
-                      })
-                    }
+                      });
+                    }}
                     onKeyDown={handleKeyDown}
                     placeholder="0.00"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>MRP Disc %</Label>
+                  <MrpDiscountInput
+                    mrp={currentItem.mrp}
+                    unitPrice={currentItem.unitPrice}
+                    onUnitPriceChange={(price) => setCurrentItem((prev) => ({ ...prev, unitPrice: price }))}
+                    onKeyDown={handleKeyDown}
                   />
                 </div>
                 <div className="space-y-2">
@@ -1089,12 +1099,12 @@ export default function CreateInvoiceForm({ printFormat = "STANDARD" }: { printF
                   <Input
                     type="number"
                     value={currentItem.unitPrice || ""}
-                    onChange={(e) =>
+                    onChange={(e) => {
                       setCurrentItem({
                         ...currentItem,
                         unitPrice: Number(e.target.value),
-                      })
-                    }
+                      });
+                    }}
                     onKeyDown={handleKeyDown}
                     placeholder="0.00"
                   />

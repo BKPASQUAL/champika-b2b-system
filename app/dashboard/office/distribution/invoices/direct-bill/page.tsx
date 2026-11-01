@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MrpDiscountInput } from "@/components/ui/mrp-discount-input";
 import {
   Card,
   CardContent,
@@ -750,7 +751,7 @@ export default function DirectBillPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <div className="space-y-2">
                   <Label>MRP</Label>
                   <Input
@@ -759,6 +760,15 @@ export default function DirectBillPage() {
                     onChange={(e) => setCurrentItem({ ...currentItem, mrp: Number(e.target.value) })}
                     onKeyDown={handleKeyDown}
                     placeholder="0.00"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>MRP Disc %</Label>
+                  <MrpDiscountInput
+                    mrp={currentItem.mrp}
+                    unitPrice={currentItem.unitPrice}
+                    onUnitPriceChange={(price) => setCurrentItem((prev) => ({ ...prev, unitPrice: price }))}
+                    onKeyDown={handleKeyDown}
                   />
                 </div>
                 <div className="space-y-2">
