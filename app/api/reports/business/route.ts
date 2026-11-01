@@ -5,6 +5,8 @@ import { getApprovedReturns, isReturnPickupOrder } from "@/lib/rep-returns";
 
 export const dynamic = "force-dynamic";
 
+const marginOf = (profit: number, base: number) => (base > 0 ? (profit / base) * 100 : 0);
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -73,15 +75,16 @@ export async function GET(request: NextRequest) {
     type ProductEntry = {
       id: string; name: string; sku: string;
       unitsSold: number; revenue: number; cost: number; profit: number;
+      noCostRevenue: number; noCostUnits: number;
     };
     type CustomerEntry = {
       id: string; name: string;
-      revenue: number; cost: number; profit: number;
+      revenue: number; cost: number; profit: number; noCostRevenue: number;
       dueAmount: number; orderSet: Set<string>;
     };
     type RepEntry = {
       id: string; name: string;
-      revenue: number; cost: number; profit: number;
+      revenue: number; cost: number; profit: number; noCostRevenue: number;
       dueAmount: number; invoiceCount: number;
     };
     type InvoiceEntry = {
@@ -97,11 +100,13 @@ export async function GET(request: NextRequest) {
       pendingClaimCost?: number;
       netProfit?: number | null;
       netMargin?: number | null;
+      noCostAmount?: number;
       isReturn?: boolean;
     };
     type BusinessEntry = {
       id: string; name: string;
       totalRevenue: number; totalCost: number; totalUnits: number;
+      noCostUnits: number;
       invoicedOrderIds: Set<string>;
       customerCountSet: Set<string>;
       dueAmount: number;
@@ -122,6 +127,7 @@ export async function GET(request: NextRequest) {
           id: bizId,
           name: BUSINESS_NAMES[bizId as keyof typeof BUSINESS_NAMES] || "Unknown",
           totalRevenue: 0, totalCost: 0, totalUnits: 0,
+          noCostUnits: 0,
           invoicedOrderIds: new Set(),
           customerCountSet: new Set(),
           dueAmount: 0,
@@ -184,6 +190,7 @@ export async function GET(request: NextRequest) {
           revenue: 0,
           cost: 0,
           profit: 0,
+          noCostRevenue: 0,
           dueAmount: 0,
           invoiceCount: 0,
         };
@@ -194,7 +201,9 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    const orderProfitMap: Record<string, { revenue: number; cost: number; freeQty: number; freeCost: number; pendingClaimCost: number }> = {};
+    // noCostRevenue = sales of lines with no cost entered. Those lines are left out of
+    // profit (their profit is unknown) and shown separately instead.
+    const orderProfitMap: Record<string, { revenue: number; cost: number; noCostRevenue: number; freeQty: number; freeCost: number; pendingClaimCost: number }> = {};
 
     // Pass 2 — order items: cost + products + customers, ONLY for invoiced orders
     (orderItems || []).forEach((item: any) => {
@@ -215,12 +224,16 @@ export async function GET(request: NextRequest) {
       const cost = qty * (Number(item.actual_unit_cost) || 0);
       const freeCost = freeQty * (Number(item.actual_unit_cost) || 0);
       const pendingClaim = item.claim_status !== "Approved" ? freeCost : 0;
+      const hasCost = (Number(item.actual_unit_cost) || 0) > 0;
+      const noCostRev = hasCost ? 0 : itemRevenue;
+      const costedProfit = hasCost ? itemRevenue - cost : 0;
 
       const oid = order.order_id;
       if (!orderProfitMap[oid]) {
-        orderProfitMap[oid] = { revenue: 0, cost: 0, freeQty: 0, freeCost: 0, pendingClaimCost: 0 };
+        orderProfitMap[oid] = { revenue: 0, cost: 0, noCostRevenue: 0, freeQty: 0, freeCost: 0, pendingClaimCost: 0 };
       }
       orderProfitMap[oid].revenue += itemRevenue;
+      orderProfitMap[oid].noCostRevenue += noCostRev;
       orderProfitMap[oid].cost += cost;
       orderProfitMap[oid].freeQty += freeQty;
       orderProfitMap[oid].freeCost += freeCost;
@@ -228,6 +241,7 @@ export async function GET(request: NextRequest) {
 
       biz.totalCost += cost;
       biz.totalUnits += qty;
+      if (!hasCost) biz.noCostUnits += qty;
       biz.totalFreeQty += freeQty;
       biz.totalFreeCost += freeCost;
       biz.pendingClaimCost += pendingClaim;
@@ -240,13 +254,15 @@ export async function GET(request: NextRequest) {
         if (!biz.productMap[pid]) {
           biz.productMap[pid] = {
             id: pid, name: item.product.name || "", sku: item.product.sku || "",
-            unitsSold: 0, revenue: 0, cost: 0, profit: 0,
+            unitsSold: 0, revenue: 0, cost: 0, profit: 0, noCostRevenue: 0, noCostUnits: 0,
           };
         }
         biz.productMap[pid].unitsSold += qty;
         biz.productMap[pid].revenue += itemRevenue;
         biz.productMap[pid].cost += cost;
-        biz.productMap[pid].profit += itemRevenue - cost;
+        biz.productMap[pid].profit += costedProfit;
+        biz.productMap[pid].noCostRevenue += noCostRev;
+        if (!hasCost) biz.productMap[pid].noCostUnits += qty;
       }
 
       // Customers
@@ -254,13 +270,14 @@ export async function GET(request: NextRequest) {
       const cName = order.customer?.shop_name || "Unknown";
       if (!biz.customerMap[cId]) {
         biz.customerMap[cId] = {
-          id: cId, name: cName, revenue: 0, cost: 0, profit: 0,
+          id: cId, name: cName, revenue: 0, cost: 0, profit: 0, noCostRevenue: 0,
           dueAmount: 0, orderSet: new Set(),
         };
       }
       biz.customerMap[cId].revenue += itemRevenue;
       biz.customerMap[cId].cost += cost;
-      biz.customerMap[cId].profit += itemRevenue - cost;
+      biz.customerMap[cId].profit += costedProfit;
+      biz.customerMap[cId].noCostRevenue += noCostRev;
       biz.customerMap[cId].orderSet.add(order.order_id);
 
       // Representatives aggregation in Pass 2
@@ -273,13 +290,15 @@ export async function GET(request: NextRequest) {
           revenue: 0,
           cost: 0,
           profit: 0,
+          noCostRevenue: 0,
           dueAmount: 0,
           invoiceCount: 0,
         };
       }
       biz.repMap[repId].revenue += itemRevenue;
       biz.repMap[repId].cost += cost;
-      biz.repMap[repId].profit += itemRevenue - cost;
+      biz.repMap[repId].profit += costedProfit;
+      biz.repMap[repId].noCostRevenue += noCostRev;
     });
 
     // Attach customer due amounts from invoice pass
@@ -330,39 +349,48 @@ export async function GET(request: NextRequest) {
       const qty = Number(r.quantity) || 0;
       const value = Number((String(r.reason).match(/\[CREDIT:([\d.]+)\]/) || [])[1] || 0);
       const cost = qty * (Number(prod?.actual_cost_price) || Number(prod?.cost_price) || 0);
+      const hasCost = cost > 0;
+      const noCostVal = hasCost ? 0 : value;
+      const retProfit = hasCost ? value - cost : 0;
 
       biz.totalCost -= cost;
       biz.totalUnits -= qty;
+      if (!hasCost) biz.noCostUnits -= qty;
       const op = orderProfitMap[order.order_id];
       if (op) {
         op.revenue -= value;
         op.cost -= cost;
+        op.noCostRevenue -= noCostVal;
       }
 
       const pid = r.product_id;
       if (!biz.productMap[pid]) {
         biz.productMap[pid] = {
           id: pid, name: prod?.name || "", sku: prod?.sku || "",
-          unitsSold: 0, revenue: 0, cost: 0, profit: 0,
+          unitsSold: 0, revenue: 0, cost: 0, profit: 0, noCostRevenue: 0, noCostUnits: 0,
         };
       }
       const p = biz.productMap[pid];
       p.unitsSold -= qty;
       p.revenue -= value;
       p.cost -= cost;
-      p.profit -= value - cost;
+      p.profit -= retProfit;
+      p.noCostRevenue -= noCostVal;
+      if (!hasCost) p.noCostUnits -= qty;
 
       const cId = order.customer?.id || "unknown";
       if (biz.customerMap[cId]) {
         biz.customerMap[cId].revenue -= value;
         biz.customerMap[cId].cost -= cost;
-        biz.customerMap[cId].profit -= value - cost;
+        biz.customerMap[cId].profit -= retProfit;
+        biz.customerMap[cId].noCostRevenue -= noCostVal;
       }
       const repId = order.sales_rep_id || "direct";
       if (biz.repMap[repId]) {
         biz.repMap[repId].revenue -= value;
         biz.repMap[repId].cost -= cost;
-        biz.repMap[repId].profit -= value - cost;
+        biz.repMap[repId].profit -= retProfit;
+        biz.repMap[repId].noCostRevenue -= noCostVal;
       }
     });
 
@@ -373,16 +401,19 @@ export async function GET(request: NextRequest) {
       const bizId = r.businessId || BUSINESS_IDS.CHAMPIKA_DISTRIBUTION;
       ensureBusiness(bizId);
       const biz = businessMap[bizId];
-      const profit = r.value - r.cost;
+      const hasCost = r.cost > 0;
+      const profit = hasCost ? r.value - r.cost : 0;
+      const noCostVal = hasCost ? 0 : r.value;
 
       biz.totalRevenue -= r.value;
       biz.totalCost -= r.cost;
       biz.totalUnits -= r.quantity;
+      if (!hasCost) biz.noCostUnits -= r.quantity;
 
       if (!biz.productMap[r.productId]) {
         biz.productMap[r.productId] = {
           id: r.productId, name: r.productName, sku: r.sku,
-          unitsSold: 0, revenue: 0, cost: 0, profit: 0,
+          unitsSold: 0, revenue: 0, cost: 0, profit: 0, noCostRevenue: 0, noCostUnits: 0,
         };
       }
       const p = biz.productMap[r.productId];
@@ -390,31 +421,35 @@ export async function GET(request: NextRequest) {
       p.revenue -= r.value;
       p.cost -= r.cost;
       p.profit -= profit;
+      p.noCostRevenue -= noCostVal;
+      if (!hasCost) p.noCostUnits -= r.quantity;
 
       const cId = r.customerId || "unknown";
       if (!biz.customerMap[cId]) {
         biz.customerMap[cId] = {
-          id: cId, name: r.customer, revenue: 0, cost: 0, profit: 0,
+          id: cId, name: r.customer, revenue: 0, cost: 0, profit: 0, noCostRevenue: 0,
           dueAmount: 0, orderSet: new Set(),
         };
       }
       biz.customerMap[cId].revenue -= r.value;
       biz.customerMap[cId].cost -= r.cost;
       biz.customerMap[cId].profit -= profit;
+      biz.customerMap[cId].noCostRevenue -= noCostVal;
 
       const repId = r.ownerId || "direct";
       if (!biz.repMap[repId]) {
         biz.repMap[repId] = {
-          id: repId, name: "Direct Sales", revenue: 0, cost: 0, profit: 0, dueAmount: 0, invoiceCount: 0,
+          id: repId, name: "Direct Sales", revenue: 0, cost: 0, profit: 0, noCostRevenue: 0, dueAmount: 0, invoiceCount: 0,
         };
       }
       biz.repMap[repId].revenue -= r.value;
       biz.repMap[repId].cost -= r.cost;
       biz.repMap[repId].profit -= profit;
+      biz.repMap[repId].noCostRevenue -= noCostVal;
 
       // Show the return as a negative line in the invoice list / monthly breakdown
       orderProfitMap[r.returnNumber] = {
-        revenue: -r.value, cost: -r.cost, freeQty: 0, freeCost: 0, pendingClaimCost: 0,
+        revenue: -r.value, cost: -r.cost, noCostRevenue: -noCostVal, freeQty: 0, freeCost: 0, pendingClaimCost: 0,
       };
       biz.invoiceList.push({
         invoiceId: r.returnNumber,
@@ -458,19 +493,32 @@ export async function GET(request: NextRequest) {
     const businesses = Object.values(businessMap).map((biz) => {
       const invoices = [...biz.invoiceList].map((inv: any) => {
         const profitEntry = orderProfitMap[inv.orderId];
-        const profit = profitEntry ? inv.amount - profitEntry.cost : null;
+        // Split the bill into the part with a cost entered and the part without.
+        // Bill-level discounts are spread across both by line value.
+        let costedShare = 1;
+        if (profitEntry && Math.abs(profitEntry.revenue) > 0) {
+          costedShare = (profitEntry.revenue - profitEntry.noCostRevenue) / profitEntry.revenue;
+        } else if (profitEntry && profitEntry.noCostRevenue !== 0) {
+          costedShare = 0;
+        }
+        costedShare = Math.min(1, Math.max(0, costedShare));
+        const hasCostedPart = !!profitEntry && costedShare > 0;
+        const costedAmount = hasCostedPart ? inv.amount * costedShare : 0;
+        const noCostAmount = inv.amount - costedAmount;
+        const profit = hasCostedPart ? costedAmount - profitEntry.cost : null;
         const grossProfit = profit !== null ? (profit > 0 ? profit : 0) : null;
         const loss = profit !== null ? (profit < 0 ? Math.abs(profit) : 0) : null;
-        const profitMargin = profit !== null && inv.amount > 0 ? (profit / inv.amount) * 100 : null;
+        const profitMargin = profit !== null && costedAmount > 0 ? (profit / costedAmount) * 100 : null;
         
         const freeQty = profitEntry ? profitEntry.freeQty : 0;
         const freeCost = profitEntry ? profitEntry.freeCost : 0;
         const pendingClaimCost = profitEntry ? profitEntry.pendingClaimCost : 0;
         const netProfit = profit !== null ? profit - pendingClaimCost : null;
-        const netMargin = profitEntry && inv.amount > 0 && netProfit !== null ? (netProfit / inv.amount) * 100 : null;
+        const netMargin = costedAmount > 0 && netProfit !== null ? (netProfit / costedAmount) * 100 : null;
 
         return {
           ...inv,
+          noCostAmount,
           profit,
           grossProfit,
           loss,
@@ -492,11 +540,14 @@ export async function GET(request: NextRequest) {
       const totalGrossProfit =
         saleRows.reduce((s, inv) => s + ((inv.profit && inv.profit > 0) ? inv.profit : 0), 0) - returnProfit;
       const totalLoss = saleRows.reduce((s, inv) => s + ((inv.profit && inv.profit < 0) ? Math.abs(inv.profit) : 0), 0);
-      const totalProfit = biz.totalRevenue - biz.totalCost;
+      // Profit only counts sales that have a cost entered
+      const noCostSales = invoices.reduce((s, inv) => s + (inv.noCostAmount || 0), 0);
+      const costedRevenue = biz.totalRevenue - noCostSales;
+      const totalProfit = invoices.reduce((s, inv) => s + (inv.profit || 0), 0);
       const netProfit = totalProfit - biz.pendingClaimCost;
 
       const products = Object.values(biz.productMap)
-        .map((p) => ({ ...p, margin: p.revenue > 0 ? (p.profit / p.revenue) * 100 : 0 }))
+        .map((p) => ({ ...p, margin: marginOf(p.profit, p.revenue - p.noCostRevenue) }))
         .sort((a, b) => b.revenue - a.revenue);
 
       const customers = Object.values(biz.customerMap)
@@ -505,11 +556,12 @@ export async function GET(request: NextRequest) {
           return {
             id: c.id, name: c.name,
             revenue: c.revenue, cost: c.cost, profit: c.profit,
+            noCostRevenue: c.noCostRevenue,
             dueAmount: c.dueAmount,
             collected,
             collectionRate: c.revenue > 0 ? (collected / c.revenue) * 100 : 0,
             invoiceCount: c.orderSet.size,
-            margin: c.revenue > 0 ? (c.profit / c.revenue) * 100 : 0,
+            margin: marginOf(c.profit, c.revenue - c.noCostRevenue),
           };
         })
         .sort((a, b) => b.revenue - a.revenue);
@@ -520,11 +572,12 @@ export async function GET(request: NextRequest) {
           return {
             id: r.id, name: r.name,
             revenue: r.revenue, cost: r.cost, profit: r.profit,
+            noCostRevenue: r.noCostRevenue,
             dueAmount: r.dueAmount,
             collected,
             collectionRate: r.revenue > 0 ? (collected / r.revenue) * 100 : 0,
             invoiceCount: r.invoiceCount,
-            margin: r.revenue > 0 ? (r.profit / r.revenue) * 100 : 0,
+            margin: marginOf(r.profit, r.revenue - r.noCostRevenue),
           };
         })
         .sort((a, b) => b.revenue - a.revenue);
@@ -548,11 +601,13 @@ export async function GET(request: NextRequest) {
             dueAmount: 0,
             invoiceCount: 0,
             profit: 0,
+            noCostSales: 0,
             repMap: {},
           };
         }
 
         const mEntry = monthMap[monthKey];
+        mEntry.noCostSales += inv.noCostAmount || 0;
         const isDue = ["Unpaid", "Partial", "Overdue"].includes(inv.paymentStatus);
         const invDue = isDue ? (Number(inv.due) || 0) : 0;
         const invCollected = Math.max(0, inv.amount - invDue);
@@ -576,7 +631,7 @@ export async function GET(request: NextRequest) {
       const months = Object.values(monthMap).map((m: any) => ({
         ...m,
         collectionRate: m.salesAmount > 0 ? (m.collectedAmount / m.salesAmount) * 100 : 0,
-        margin: m.salesAmount > 0 ? (m.profit / m.salesAmount) * 100 : 0,
+        margin: marginOf(m.profit, m.salesAmount - m.noCostSales),
         reps: Object.values(m.repMap).sort((a: any, b: any) => b.sales - a.sales),
       })).sort((a, b) => a.month.localeCompare(b.month));
 
@@ -598,10 +653,13 @@ export async function GET(request: NextRequest) {
         collectionRate: biz.totalRevenue > 0 ? (Math.max(0, biz.totalRevenue - biz.dueAmount) / biz.totalRevenue) * 100 : 0,
         pendingClaimCost: biz.pendingClaimCost,
         netProfit,
-        netMargin: biz.totalRevenue > 0 ? (netProfit / biz.totalRevenue) * 100 : 0,
+        netMargin: marginOf(netProfit, costedRevenue),
         totalFreeQty: biz.totalFreeQty,
         totalFreeCost: biz.totalFreeCost,
-        margin: biz.totalRevenue > 0 ? (totalGrossProfit / biz.totalRevenue) * 100 : 0,
+        margin: marginOf(totalGrossProfit, costedRevenue),
+        noCostSales,
+        noCostUnits: biz.noCostUnits,
+        noCostProductCount: products.filter((p) => p.noCostRevenue > 0).length,
         products,
         customers,
         reps,
@@ -625,6 +683,8 @@ export async function GET(request: NextRequest) {
           allProductsMap[p.id].revenue += p.revenue;
           allProductsMap[p.id].cost += p.cost;
           allProductsMap[p.id].profit += p.profit;
+          allProductsMap[p.id].noCostRevenue += p.noCostRevenue;
+          allProductsMap[p.id].noCostUnits += p.noCostUnits;
         }
       });
       biz.customers.forEach((c: any) => {
@@ -634,6 +694,7 @@ export async function GET(request: NextRequest) {
           allCustomersMap[c.id].revenue += c.revenue;
           allCustomersMap[c.id].cost += c.cost;
           allCustomersMap[c.id].profit += c.profit;
+          allCustomersMap[c.id].noCostRevenue += c.noCostRevenue;
           allCustomersMap[c.id].dueAmount += c.dueAmount;
           allCustomersMap[c.id].collected += c.collected;
           allCustomersMap[c.id].invoiceCount += c.invoiceCount;
@@ -646,6 +707,7 @@ export async function GET(request: NextRequest) {
           allRepsMap[r.id].revenue += r.revenue;
           allRepsMap[r.id].cost += r.cost;
           allRepsMap[r.id].profit += r.profit;
+          allRepsMap[r.id].noCostRevenue += r.noCostRevenue;
           allRepsMap[r.id].dueAmount += r.dueAmount;
           allRepsMap[r.id].collected += r.collected;
           allRepsMap[r.id].invoiceCount += r.invoiceCount;
@@ -655,7 +717,7 @@ export async function GET(request: NextRequest) {
     });
 
     const overallProducts = Object.values(allProductsMap)
-      .map((p: any) => ({ ...p, margin: p.revenue > 0 ? (p.profit / p.revenue) * 100 : 0 }))
+      .map((p: any) => ({ ...p, margin: marginOf(p.profit, p.revenue - p.noCostRevenue) }))
       .sort((a: any, b: any) => b.revenue - a.revenue);
 
     const overallCustomers = Object.values(allCustomersMap)
@@ -665,7 +727,7 @@ export async function GET(request: NextRequest) {
           ...c,
           collected,
           collectionRate: c.revenue > 0 ? (collected / c.revenue) * 100 : 0,
-          margin: c.revenue > 0 ? (c.profit / c.revenue) * 100 : 0,
+          margin: marginOf(c.profit, c.revenue - c.noCostRevenue),
         };
       })
       .sort((a: any, b: any) => b.revenue - a.revenue);
@@ -677,7 +739,7 @@ export async function GET(request: NextRequest) {
           ...r,
           collected,
           collectionRate: r.revenue > 0 ? (collected / r.revenue) * 100 : 0,
-          margin: r.revenue > 0 ? (r.profit / r.revenue) * 100 : 0,
+          margin: marginOf(r.profit, r.revenue - r.noCostRevenue),
         };
       })
       .sort((a: any, b: any) => b.revenue - a.revenue);
@@ -690,7 +752,9 @@ export async function GET(request: NextRequest) {
     const overallTotalCost = businesses.reduce((s, b) => s + b.totalCost, 0);
     const overallTotalGrossProfit = businesses.reduce((s, b) => s + (b.totalGrossProfit || 0), 0);
     const overallTotalLoss = businesses.reduce((s, b) => s + (b.totalLoss || 0), 0);
-    const overallTotalProfit = overallTotalRevenue - overallTotalCost;
+    const overallTotalProfit = businesses.reduce((s, b) => s + b.totalProfit, 0);
+    const overallNoCostSales = businesses.reduce((s, b) => s + b.noCostSales, 0);
+    const overallCostedRevenue = overallTotalRevenue - overallNoCostSales;
     const overallPendingClaimCost = businesses.reduce((s, b) => s + b.pendingClaimCost, 0);
     const overallNetProfit = overallTotalProfit - overallPendingClaimCost;
     const overallDueAmount = businesses.reduce((s, b) => s + b.dueAmount, 0);
@@ -715,11 +779,13 @@ export async function GET(request: NextRequest) {
           dueAmount: 0,
           invoiceCount: 0,
           profit: 0,
+          noCostSales: 0,
           repMap: {},
         };
       }
 
       const mEntry = overallMonthsMap[monthKey];
+      mEntry.noCostSales += inv.noCostAmount || 0;
       const isDue = ["Unpaid", "Partial", "Overdue"].includes(inv.paymentStatus);
       const invDue = isDue ? (Number(inv.due) || 0) : 0;
       const invCollected = Math.max(0, inv.amount - invDue);
@@ -743,7 +809,7 @@ export async function GET(request: NextRequest) {
     const overallMonths = Object.values(overallMonthsMap).map((m: any) => ({
       ...m,
       collectionRate: m.salesAmount > 0 ? (m.collectedAmount / m.salesAmount) * 100 : 0,
-      margin: m.salesAmount > 0 ? (m.profit / m.salesAmount) * 100 : 0,
+      margin: marginOf(m.profit, m.salesAmount - m.noCostSales),
       reps: Object.values(m.repMap).sort((a: any, b: any) => b.sales - a.sales),
     })).sort((a, b) => a.month.localeCompare(b.month));
 
@@ -765,10 +831,13 @@ export async function GET(request: NextRequest) {
       collectionRate: overallTotalRevenue > 0 ? (overallTotalCollections / overallTotalRevenue) * 100 : 0,
       pendingClaimCost: overallPendingClaimCost,
       netProfit: overallNetProfit,
-      netMargin: overallTotalRevenue > 0 ? (overallNetProfit / overallTotalRevenue) * 100 : 0,
+      netMargin: marginOf(overallNetProfit, overallCostedRevenue),
       totalFreeQty: businesses.reduce((s, b) => s + b.totalFreeQty, 0),
       totalFreeCost: businesses.reduce((s, b) => s + b.totalFreeCost, 0),
-      margin: overallTotalRevenue > 0 ? (overallTotalGrossProfit / overallTotalRevenue) * 100 : 0,
+      margin: marginOf(overallTotalGrossProfit, overallCostedRevenue),
+      noCostSales: overallNoCostSales,
+      noCostUnits: businesses.reduce((s, b) => s + b.noCostUnits, 0),
+      noCostProductCount: overallProducts.filter((p: any) => p.noCostRevenue > 0).length,
       products: overallProducts,
       customers: overallCustomers,
       reps: overallReps,

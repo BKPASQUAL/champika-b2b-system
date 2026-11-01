@@ -109,6 +109,7 @@ export function ProductFilters({
               <SelectItem value="in-stock">In Stock</SelectItem>
               <SelectItem value="low">Low Stock</SelectItem>
               <SelectItem value="out-of-stock">Out of Stock</SelectItem>
+              <SelectItem value="no-cost">No Cost Added</SelectItem>
             </SelectContent>
           </Select>
           <Button variant="outline" size="sm" onClick={onToggleCost} className="gap-1.5 text-xs h-9 col-span-2">
@@ -178,6 +179,7 @@ export function ProductFilters({
             <SelectItem value="in-stock">In Stock</SelectItem>
             <SelectItem value="low">Low Stock</SelectItem>
             <SelectItem value="out-of-stock">Out of Stock</SelectItem>
+            <SelectItem value="no-cost">No Cost Added</SelectItem>
           </SelectContent>
         </Select>
         <Button variant="outline" size="sm" onClick={onToggleCost} className="gap-1.5 text-xs h-9 shrink-0">

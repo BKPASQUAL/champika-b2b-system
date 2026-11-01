@@ -91,6 +91,7 @@ export function ProductFilters({
             <SelectItem value="in-stock">In Stock</SelectItem>
             <SelectItem value="low">Low Stock</SelectItem>
             <SelectItem value="out-of-stock">Out of Stock</SelectItem>
+            <SelectItem value="no-cost">No Cost Added</SelectItem>
           </SelectContent>
         </Select>
       </div>

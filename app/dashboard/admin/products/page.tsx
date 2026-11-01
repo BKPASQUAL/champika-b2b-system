@@ -149,6 +149,8 @@ export default function ProductsPage() {
     if (stockFilter === "out-of-stock") matchesStock = product.stock === 0;
     else if (stockFilter === "low")
       matchesStock = product.stock > 0 && product.stock < product.minStock;
+    else if (stockFilter === "no-cost")
+      matchesStock = !(Number(product.costPrice) > 0);
     else if (stockFilter === "in-stock")
       matchesStock = product.stock >= product.minStock;
 

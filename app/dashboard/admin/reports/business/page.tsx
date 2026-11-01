@@ -152,6 +152,7 @@ export default function BusinessAnalyticsPage() {
   const [detailSearch, setDetailSearch] = useState("");
   const [selectedMonthRep, setSelectedMonthRep] = useState<string>("all");
   const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
+  const [onlyNoCost, setOnlyNoCost] = useState(false);
 
   const fetchData = async (from = dateFilter.from, to = dateFilter.to) => {
     setLoading(true);
@@ -209,13 +210,14 @@ export default function BusinessAnalyticsPage() {
   }, [current, detailSearch]);
 
   const filteredProducts = useMemo(() => {
-    const list: any[] = current?.products || [];
+    let list: any[] = current?.products || [];
+    if (onlyNoCost) list = list.filter((p) => (p.noCostRevenue || 0) > 0);
     if (!detailSearch) return list;
     const q = detailSearch.toLowerCase();
     return list.filter(
       (p) => p.name?.toLowerCase().includes(q) || p.sku?.toLowerCase().includes(q)
     );
-  }, [current, detailSearch]);
+  }, [current, detailSearch, onlyNoCost]);
 
   const filteredReps = useMemo(() => {
     const list: any[] = current?.reps || [];
@@ -250,6 +252,7 @@ export default function BusinessAnalyticsPage() {
     const revenue = filteredCustomers.reduce((s, c) => s + c.revenue, 0);
     const cost = filteredCustomers.reduce((s, c) => s + c.cost, 0);
     const profit = filteredCustomers.reduce((s, c) => s + c.profit, 0);
+    const costedRevenue = revenue - filteredCustomers.reduce((s, c) => s + (c.noCostRevenue || 0), 0);
     const dueAmount = filteredCustomers.reduce((s, c) => s + c.dueAmount, 0);
     const collected = filteredCustomers.reduce((s, c) => s + (c.collected !== undefined ? c.collected : Math.max(0, c.revenue - c.dueAmount)), 0);
     const invoiceCount = filteredCustomers.reduce((s, c) => s + c.invoiceCount, 0);
@@ -260,6 +263,7 @@ export default function BusinessAnalyticsPage() {
       dueAmount,
       collected,
       collectionRate: revenue > 0 ? (collected / revenue) * 100 : 0,
+      costedRevenue,
       invoiceCount,
     };
   }, [filteredCustomers]);
@@ -269,12 +273,14 @@ export default function BusinessAnalyticsPage() {
     revenue: filteredProducts.reduce((s, p) => s + p.revenue, 0),
     cost: filteredProducts.reduce((s, p) => s + p.cost, 0),
     profit: filteredProducts.reduce((s, p) => s + p.profit, 0),
+    noCostRevenue: filteredProducts.reduce((s, p) => s + (p.noCostRevenue || 0), 0),
   }), [filteredProducts]);
 
   const repTotals = useMemo(() => {
     const revenue = filteredReps.reduce((s, r) => s + r.revenue, 0);
     const cost = filteredReps.reduce((s, r) => s + r.cost, 0);
     const profit = filteredReps.reduce((s, r) => s + r.profit, 0);
+    const costedRevenue = revenue - filteredReps.reduce((s, r) => s + (r.noCostRevenue || 0), 0);
     const dueAmount = filteredReps.reduce((s, r) => s + r.dueAmount, 0);
     const collected = filteredReps.reduce((s, r) => s + (r.collected !== undefined ? r.collected : Math.max(0, r.revenue - r.dueAmount)), 0);
     const invoiceCount = filteredReps.reduce((s, r) => s + r.invoiceCount, 0);
@@ -285,6 +291,7 @@ export default function BusinessAnalyticsPage() {
       dueAmount,
       collected,
       collectionRate: revenue > 0 ? (collected / revenue) * 100 : 0,
+      costedRevenue,
       invoiceCount,
     };
   }, [filteredReps]);
@@ -494,7 +501,7 @@ export default function BusinessAnalyticsPage() {
               {/* Row 1: Sales & Profits Reconciliation */}
               <div>
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Sales & Profits Reconciliation (Claims Lag)</p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">
                   {/* Total Sales */}
                   <Card className="bg-blue-50/50 border-blue-100">
                     <CardHeader className="pb-1 pt-3 px-3 md:px-4">
@@ -570,6 +577,29 @@ export default function BusinessAnalyticsPage() {
                     <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
                       <div className="text-sm md:text-xl font-bold text-slate-800">LKR {fmt(current.netProfit || 0)}</div>
                       <p className="text-[10px] text-muted-foreground mt-0.5">{(current.netMargin || 0).toFixed(1)}% net margin</p>
+                    </CardContent>
+                  </Card>
+
+                  {/* Sales Without Cost — not counted in any profit figure */}
+                  <Card
+                    className={`cursor-pointer transition-shadow hover:shadow-md ${(current.noCostSales || 0) > 0 ? "bg-amber-50 border-amber-300" : "bg-gray-50/50 border-gray-200"}`}
+                    onClick={() => { setDetailTab("products"); setDetailSearch(""); setOnlyNoCost(true); }}
+                    title="Show products sold without a cost"
+                  >
+                    <CardHeader className="pb-1 pt-3 px-3 md:px-4">
+                      <CardTitle className={`text-[10px] md:text-xs font-medium flex items-center gap-1 ${(current.noCostSales || 0) > 0 ? "text-amber-700" : "text-gray-600"}`}>
+                        <AlertCircle className="h-3 w-3" /> Sales Without Cost
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-3 md:px-4 pb-3 md:pb-4">
+                      <div className={`text-sm md:text-xl font-bold ${(current.noCostSales || 0) > 0 ? "text-amber-700" : "text-gray-800"}`}>
+                        LKR {fmt(current.noCostSales || 0)}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">
+                        {(current.noCostSales || 0) > 0
+                          ? `${current.noCostProductCount || 0} products · not in profit`
+                          : "all sales have a cost"}
+                      </p>
                     </CardContent>
                   </Card>
                 </div>
@@ -1001,7 +1031,13 @@ export default function BusinessAnalyticsPage() {
                               {/* Expected Profit */}
                               <TableCell className="text-right font-mono tabular-nums font-semibold">
                                 {inv.profit === null || inv.profit === undefined ? (
-                                  <span className="text-[10px] text-muted-foreground/50">—</span>
+                                  (inv.noCostAmount || 0) !== 0 ? (
+                                    <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded font-semibold font-sans">
+                                      No cost
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] text-muted-foreground/50">—</span>
+                                  )
                                 ) : inv.profit < 0 ? (
                                   <div className="flex flex-col items-end">
                                     <span className="text-rose-600 font-bold bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 text-xs">
@@ -1017,6 +1053,11 @@ export default function BusinessAnalyticsPage() {
                                     <span className="text-[9px] font-normal text-green-600">
                                       {inv.profitMargin !== null ? `+${inv.profitMargin.toFixed(1)}%` : ""}
                                     </span>
+                                    {(inv.noCostAmount || 0) > 0.01 && (
+                                      <span className="text-[9px] font-sans font-normal text-amber-700">
+                                        excl. LKR {fmt(inv.noCostAmount)} no cost
+                                      </span>
+                                    )}
                                   </div>
                                 )}
                               </TableCell>
@@ -1024,7 +1065,7 @@ export default function BusinessAnalyticsPage() {
                               {/* Realized Net Profit */}
                               <TableCell className="text-right font-mono tabular-nums font-semibold">
                                 {inv.netProfit === null || inv.netProfit === undefined ? (
-                                  <span className="text-[10px] text-muted-foreground/50">—</span>
+                                  <span className="text-[10px] text-muted-foreground/50">{(inv.noCostAmount || 0) !== 0 ? "No cost" : "—"}</span>
                                 ) : inv.netProfit < 0 ? (
                                   <div className="flex flex-col items-end">
                                     <span className="text-rose-600 font-bold">
@@ -1112,7 +1153,7 @@ export default function BusinessAnalyticsPage() {
                             LKR {fmt(custTotals.profit)}
                           </TableCell>
                           <TableCell className="text-right text-xs font-bold">
-                            {custTotals.revenue > 0 ? ((custTotals.profit / custTotals.revenue) * 100).toFixed(1) : "0.0"}%
+                            {custTotals.costedRevenue > 0 ? ((custTotals.profit / custTotals.costedRevenue) * 100).toFixed(1) : "0.0"}%
                           </TableCell>
                         </TableRow>
                         {filteredCustomers.length === 0 ? (
@@ -1160,6 +1201,23 @@ export default function BusinessAnalyticsPage() {
 
                   {/* ── Products Tab ── */}
                   {detailTab === "products" && (
+                    <>
+                    <div className="flex items-center gap-2 px-4 pb-3">
+                      <button
+                        type="button"
+                        onClick={() => setOnlyNoCost(false)}
+                        className={`px-3 py-1 text-[11px] rounded-lg border font-medium ${!onlyNoCost ? "bg-black text-white border-black" : "text-gray-700 border-gray-200 hover:bg-gray-100"}`}
+                      >
+                        All products
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setOnlyNoCost(true)}
+                        className={`px-3 py-1 text-[11px] rounded-lg border font-medium ${onlyNoCost ? "bg-amber-600 text-white border-amber-600" : "text-amber-700 border-amber-200 hover:bg-amber-50"}`}
+                      >
+                        Without cost ({(current.products || []).filter((p: any) => (p.noCostRevenue || 0) > 0).length})
+                      </button>
+                    </div>
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -1187,10 +1245,19 @@ export default function BusinessAnalyticsPage() {
                             LKR {fmt(prodTotals.cost)}
                           </TableCell>
                           <TableCell className={`text-right font-bold ${prodTotals.profit >= 0 ? "text-green-700" : "text-red-700"}`}>
-                            LKR {fmt(prodTotals.profit)}
+                            <div className="flex flex-col items-end">
+                              <span>LKR {fmt(prodTotals.profit)}</span>
+                              {prodTotals.noCostRevenue > 0 && (
+                                <span className="text-[10px] text-amber-700 font-semibold">
+                                  excl. LKR {fmt(prodTotals.noCostRevenue)} no cost
+                                </span>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="text-right text-xs font-bold">
-                            {prodTotals.revenue > 0 ? ((prodTotals.profit / prodTotals.revenue) * 100).toFixed(1) : "0.0"}%
+                            {prodTotals.revenue - prodTotals.noCostRevenue > 0
+                              ? ((prodTotals.profit / (prodTotals.revenue - prodTotals.noCostRevenue)) * 100).toFixed(1)
+                              : "0.0"}%
                           </TableCell>
                         </TableRow>
                         {filteredProducts.length === 0 ? (
@@ -1211,17 +1278,38 @@ export default function BusinessAnalyticsPage() {
                               <TableCell className="text-right text-muted-foreground">
                                 LKR {fmt(p.cost)}
                               </TableCell>
-                              <TableCell className={`text-right font-medium ${p.profit >= 0 ? "text-green-700" : "text-red-700"}`}>
-                                LKR {fmt(p.profit)}
-                              </TableCell>
-                              <TableCell className="text-right text-muted-foreground">
-                                {p.margin.toFixed(1)}%
-                              </TableCell>
+                              {(p.noCostRevenue || 0) > 0 && p.revenue - p.noCostRevenue <= 0.01 ? (
+                                <>
+                                  <TableCell className="text-right">
+                                    <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded font-semibold">
+                                      No cost
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="text-right text-muted-foreground">—</TableCell>
+                                </>
+                              ) : (
+                                <>
+                                  <TableCell className={`text-right font-medium ${p.profit >= 0 ? "text-green-700" : "text-red-700"}`}>
+                                    <div className="flex flex-col items-end">
+                                      <span>LKR {fmt(p.profit)}</span>
+                                      {(p.noCostRevenue || 0) > 0 && (
+                                        <span className="text-[9px] text-amber-700">
+                                          excl. LKR {fmt(p.noCostRevenue)} no cost
+                                        </span>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="text-right text-muted-foreground">
+                                    {p.margin.toFixed(1)}%
+                                  </TableCell>
+                                </>
+                              )}
                             </TableRow>
                           ))
                         )}
                       </TableBody>
                     </Table>
+                    </>
                   )}
 
                   {/* ── Reps Tab ── */}
@@ -1266,7 +1354,7 @@ export default function BusinessAnalyticsPage() {
                             LKR {fmt(repTotals.profit)}
                           </TableCell>
                           <TableCell className="text-right text-xs font-bold">
-                            {repTotals.revenue > 0 ? ((repTotals.profit / repTotals.revenue) * 100).toFixed(1) : "0.0"}%
+                            {repTotals.costedRevenue > 0 ? ((repTotals.profit / repTotals.costedRevenue) * 100).toFixed(1) : "0.0"}%
                           </TableCell>
                         </TableRow>
                         {filteredReps.length === 0 ? (
