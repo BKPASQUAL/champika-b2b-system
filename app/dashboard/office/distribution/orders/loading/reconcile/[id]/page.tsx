@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, use, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { Checkbox } from "@/components/ui/checkbox";
+import { clearReconcileTicks, useReconcileTicks, type TickSnapshot } from "@/hooks/useReconcileTicks";
 import {
   Card,
   CardContent,
@@ -90,10 +92,32 @@ interface OrderItem {
   customer: string;
   currentAmount: number;
   originalAmount: number;
+  editCount: number; // invoice edit-history entries
   status: string;
   paymentStatus: string;
   returns?: ReconcileReturnItem[];
 }
+
+// Status/notes picked on this page are saved per load in the browser
+const reconcileStateKey = (loadId: string) => `reconcile-state:${loadId}`;
+function readSavedReconcile(loadId: string): ReconcileState {
+  try {
+    const raw = localStorage.getItem(reconcileStateKey(loadId));
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+// What a tick remembers about an invoice (see hooks/useReconcileTicks.ts)
+const snapshotOf = (o: OrderItem): TickSnapshot => ({
+  amount: o.currentAmount,
+  edits: o.editCount,
+  returnsSig: (o.returns || [])
+    .map((r) => `${r.id}:${r.quantity}:${r.actualCondition || r.returnType}`)
+    .sort()
+    .join("|"),
+});
 
 interface ExpenseItem {
   id: string;
@@ -150,6 +174,10 @@ export default function OfficeReconcileLoadPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  // This page is also used by the admin portal (re-exported there)
+  const pathname = usePathname();
+  const isAdmin = pathname?.startsWith("/dashboard/admin");
+  const basePath = isAdmin ? "/dashboard/admin" : "/dashboard/office/distribution";
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -160,6 +188,17 @@ export default function OfficeReconcileLoadPage({
   const [isExpenseDialogOpen, setIsExpenseDialogOpen] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState<string | null>(null);
   const [reconcileData, setReconcileData] = useState<ReconcileState>({});
+
+  // ── Per-invoice "checked" ticks ──
+  const tickItems = useMemo(
+    () => (loading ? null : orders.map((o) => ({ id: o.id, snapshot: snapshotOf(o) }))),
+    [orders, loading]
+  );
+  const ticks = useReconcileTicks(id, tickItems);
+  // Cancelled orders don't need checking
+  const tickable = orders.filter((o) => reconcileData[o.id]?.status !== "Cancelled");
+  const tickedCount = tickable.filter((o) => ticks.isTicked(o.id)).length;
+  const allTicked = tickable.length > 0 && tickedCount === tickable.length;
 
   const fetchData = async () => {
     try {
@@ -187,12 +226,18 @@ export default function OfficeReconcileLoadPage({
       const ordersWithHistory = await Promise.all(
         data.orders.map(async (o: any) => {
           let originalAmount = o.totalAmount;
+          let editCount = 0;
           if (o.invoiceId) {
             try {
               const histRes = await fetch(`/api/invoices/${o.invoiceId}/history`);
               if (histRes.ok) {
                 const history = await histRes.json();
-                if (history.length > 0) originalAmount = history[history.length - 1].previousTotal;
+                // Only real edits count; status changes are also in history
+                // but don't carry an amount. History is newest first, so the
+                // last edit holds the amount the invoice was created with.
+                const edits = (history || []).filter((h: any) => h.isAmountEdit);
+                editCount = edits.length;
+                if (edits.length > 0) originalAmount = Number(edits[edits.length - 1].previousTotal) || 0;
               }
             } catch {}
           }
@@ -205,6 +250,7 @@ export default function OfficeReconcileLoadPage({
             customer: o.customer.shopName,
             currentAmount: o.totalAmount,
             originalAmount,
+            editCount,
             status: o.status,
             paymentStatus: "Credit",
             returns: o.returns || [],
@@ -215,12 +261,18 @@ export default function OfficeReconcileLoadPage({
       setOrders(ordersWithHistory);
       setReconcileData((prev) => {
         if (Object.keys(prev).length > 0) return prev;
+        // Restore status/notes picked before leaving to edit an invoice
+        const saved = readSavedReconcile(id);
         const init: ReconcileState = {};
         ordersWithHistory.forEach((o: OrderItem) => {
+          const defaultStatus =
+            o.status === "In Transit" || o.status === "Loading" ? "Delivered" : o.status;
+          const s = saved[o.id];
           init[o.id] = {
-            status: o.status === "In Transit" || o.status === "Loading" ? "Delivered" : o.status,
-            paymentStatus: "Credit",
-            notes: "",
+            // A saved pick only applies while the order is still on the lorry
+            status: s?.status && (o.status === "In Transit" || o.status === "Loading") ? s.status : defaultStatus,
+            paymentStatus: s?.paymentStatus || "Credit",
+            notes: s?.notes || "",
           };
         });
         return init;
@@ -236,6 +288,17 @@ export default function OfficeReconcileLoadPage({
     setLoading(true);
     fetchData();
   }, [id]);
+
+  // Save status/notes picks so they survive going to the invoice edit page
+  useEffect(() => {
+    if (loading || Object.keys(reconcileData).length === 0) return;
+    if (loadDetails?.status === "Completed") return;
+    try {
+      localStorage.setItem(reconcileStateKey(id), JSON.stringify(reconcileData));
+    } catch {
+      /* storage unavailable */
+    }
+  }, [reconcileData, loading, id, loadDetails?.status]);
 
   const updateOrderState = (orderId: string, field: string, value: any) => {
     if (loadDetails?.status === "Completed") return;
@@ -276,13 +339,13 @@ export default function OfficeReconcileLoadPage({
     // Return-note pickups are edited on the return note itself
     if (returnNoteNumber) {
       router.push(
-        `/dashboard/office/distribution/inventory/returns/${encodeURIComponent(returnNoteNumber)}?edit=1&returnTo=/dashboard/office/distribution/orders/loading/reconcile/${id}`
+        `${basePath}/inventory/returns/${encodeURIComponent(returnNoteNumber)}?edit=1&returnTo=${basePath}/orders/loading/reconcile/${id}`
       );
       return;
     }
     if (!invoiceId) { toast.error("Invoice not found"); return; }
     router.push(
-      `/dashboard/office/distribution/invoices/${invoiceId}/edit?returnTo=/dashboard/office/distribution/orders/loading/reconcile/${id}`
+      `${basePath}/invoices/${invoiceId}/edit?returnTo=${basePath}/orders/loading/reconcile/${id}`
     );
   };
 
@@ -317,6 +380,10 @@ export default function OfficeReconcileLoadPage({
 
   const handleFinalize = async () => {
     if (!currentUser?.id) { toast.error("You must be logged in to reconcile."); return; }
+    if (!allTicked) {
+      toast.error(`Please check and tick every invoice first (${tickable.length - tickedCount} left).`);
+      return;
+    }
     setSubmitting(true);
     try {
       const payload = {
@@ -336,7 +403,13 @@ export default function OfficeReconcileLoadPage({
       });
       if (!res.ok) throw new Error();
       toast.success("Load Reconciled & Closed Successfully!");
-      router.push("/dashboard/office/distribution/orders/loading/history");
+      clearReconcileTicks(id);
+      try {
+        localStorage.removeItem(reconcileStateKey(id));
+      } catch {
+        /* ignore */
+      }
+      router.push(`${basePath}/orders/loading/history`);
     } catch {
       toast.error("Failed to finalize reconciliation");
     } finally {
@@ -465,14 +538,17 @@ export default function OfficeReconcileLoadPage({
                 size="lg"
                 className="bg-black hover:bg-gray-800 text-white shadow-md"
                 onClick={handleFinalize}
-                disabled={submitting || isUserMissing}
+                disabled={submitting || isUserMissing || !allTicked}
+                title={allTicked ? undefined : "Tick every invoice to enable"}
               >
                 {submitting ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 ) : (
                   <Lock className="w-4 h-4 mr-2" />
                 )}
-                Finalize & Close Load
+                {allTicked
+                  ? "Finalize & Close Load"
+                  : `Tick all invoices (${tickable.length - tickedCount} left)`}
               </Button>
             )}
           </div>
@@ -727,19 +803,50 @@ export default function OfficeReconcileLoadPage({
           <div className="md:col-span-2">
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle>Order Reconciliation</CardTitle>
-                <CardDescription>
-                  {isCompleted
-                    ? "This load has been closed. Records are locked."
-                    : "Set delivery status and payment method for each invoice."}
-                </CardDescription>
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                  <div>
+                    <CardTitle>Order Reconciliation</CardTitle>
+                    <CardDescription>
+                      {isCompleted
+                        ? "This load has been closed. Records are locked."
+                        : "Check each invoice and tick it. All invoices must be ticked before closing the load."}
+                    </CardDescription>
+                  </div>
+                  {!isCompleted && (
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border shrink-0",
+                        allTicked
+                          ? "bg-green-50 text-green-700 border-green-200"
+                          : "bg-amber-50 text-amber-700 border-amber-200"
+                      )}
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      {tickedCount} / {tickable.length} checked
+                    </span>
+                  )}
+                </div>
               </CardHeader>
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-slate-50 hover:bg-slate-50">
-                        <TableHead className="pl-4 min-w-[110px]">Invoice</TableHead>
+                        <TableHead className="pl-4 w-10">
+                          <Checkbox
+                            aria-label="Tick all invoices"
+                            disabled={isCompleted || tickable.length === 0}
+                            checked={isCompleted || allTicked}
+                            onCheckedChange={(v) =>
+                              ticks.setAll(
+                                tickable.map((o) => ({ id: o.id, snapshot: snapshotOf(o) })),
+                                v === true
+                              )
+                            }
+                            className="data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
+                          />
+                        </TableHead>
+                        <TableHead className="min-w-[110px]">Invoice</TableHead>
                         <TableHead className="min-w-[130px]">Customer</TableHead>
                         <TableHead className="min-w-[100px]">Returns</TableHead>
                         <TableHead className="min-w-[150px]">Delivery Status</TableHead>
@@ -755,6 +862,8 @@ export default function OfficeReconcileLoadPage({
                         const currentStatus = state.status || "Delivered";
                         const diff = order.currentAmount - order.originalAmount;
                         const isCancelled = currentStatus === "Cancelled";
+                        const ticked = isCompleted || ticks.isTicked(order.id);
+                        const change = !isCompleted && !ticked ? ticks.changeFor(order.id) : undefined;
 
                         return (
                           <TableRow
@@ -763,17 +872,44 @@ export default function OfficeReconcileLoadPage({
                               "transition-colors",
                               isCancelled
                                 ? "bg-rose-50/40 opacity-70"
-                                : idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"
+                                : change
+                                  ? "bg-amber-50 hover:bg-amber-100/60"
+                                  : ticked && !isCompleted
+                                    ? "bg-green-50/50"
+                                    : idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"
                             )}
                           >
+                            {/* Checked tick */}
+                            <TableCell className="pl-4 align-top pt-4">
+                              <Checkbox
+                                aria-label={`Tick ${order.invoiceNo}`}
+                                disabled={isCompleted || isCancelled}
+                                checked={ticked}
+                                onCheckedChange={(v) => ticks.setTicked(order.id, snapshotOf(order), v === true)}
+                                className="data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
+                              />
+                            </TableCell>
+
                             {/* Invoice Number — primary identifier */}
-                            <TableCell className="pl-4">
+                            <TableCell>
                               <div className="text-sm font-bold font-mono tracking-wide">
                                 {order.invoiceNo}
                               </div>
                               <div className="text-xs text-muted-foreground mt-0.5">
                                 {order.orderId}
                               </div>
+                              {change && (
+                                <div className="mt-1 inline-flex flex-col gap-0.5 rounded border border-amber-300 bg-amber-100 px-1.5 py-1 text-[10px] font-medium text-amber-800">
+                                  <span className="font-bold uppercase tracking-wide">Changed — re-check</span>
+                                  {Math.abs(change.toAmount - change.fromAmount) > 0.005 && (
+                                    <span className="font-mono">
+                                      LKR {change.fromAmount.toLocaleString()} → {change.toAmount.toLocaleString()}
+                                    </span>
+                                  )}
+                                  {change.edited && <span>Invoice items edited</span>}
+                                  {change.returnsChanged && <span>Returns changed</span>}
+                                </div>
+                              )}
                             </TableCell>
 
                             <TableCell>
@@ -857,11 +993,14 @@ export default function OfficeReconcileLoadPage({
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="Approved">Approved</SelectItem>
-                                    <SelectItem value="Processing">Processing</SelectItem>
-                                    <SelectItem value="Checking">Checking</SelectItem>
-                                    <SelectItem value="Loading">Loading</SelectItem>
+                                    {/* Only Delivered, or back to Loading */}
                                     <SelectItem value="Delivered">Delivered</SelectItem>
+                                    <SelectItem value="Loading">Loading</SelectItem>
+                                    {!["Delivered", "Loading"].includes(currentStatus) && (
+                                      <SelectItem value={currentStatus} disabled>
+                                        {currentStatus}
+                                      </SelectItem>
+                                    )}
                                   </SelectContent>
                                 </Select>
                               )}
@@ -932,14 +1071,16 @@ export default function OfficeReconcileLoadPage({
             size="lg"
             className="w-full bg-black hover:bg-gray-800 text-white"
             onClick={handleFinalize}
-            disabled={submitting || isUserMissing}
+            disabled={submitting || isUserMissing || !allTicked}
           >
             {submitting ? (
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
             ) : (
               <Lock className="w-4 h-4 mr-2" />
             )}
-            Finalize &amp; Close Load
+            {allTicked
+              ? "Finalize & Close Load"
+              : `Tick all invoices (${tickable.length - tickedCount} left)`}
           </Button>
         </div>
       )}

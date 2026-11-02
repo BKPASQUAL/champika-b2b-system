@@ -48,6 +48,9 @@ export async function GET(
         reason: h.change_reason || "General Update",
         // We can process 'previous_data' here if we want to show specific diffs
         previousTotal: prevData.total_amount || 0,
+        // True for real invoice edits (amount/items saved). Status-only
+        // changes (Approved → Processing, etc.) don't store an amount.
+        isAmountEdit: prevData.total_amount != null,
         previousStatus: prevData.status || prevData.orders?.status || prevData.orderStatus || "N/A",
         newStatus: prevData.new_status || null,
         // ✅ ADDED: Return previous items to calculate free quantity history
