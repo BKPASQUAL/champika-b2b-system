@@ -58,6 +58,10 @@ import {
   ShoppingBag,
   Menu,
   Building2,
+  Layers,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { TablePagination } from "@/components/ui/TablePagination";
@@ -147,7 +151,8 @@ export default function SupplierAnalyticsPage() {
   const [selectedSupplier, setSelectedSupplier] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [detailTab, setDetailTab] = useState<"products" | "customers" | "invoices" | "businesses" | "months">("products");
+  const [detailTab, setDetailTab] = useState<"products" | "families" | "customers" | "invoices" | "businesses" | "months">("products");
+  const [famSort, setFamSort] = useState<{ key: "family" | "stockQty" | "unitsSold" | "revenue" | "cost" | "profit" | "margin"; dir: "asc" | "desc" }>({ key: "revenue", dir: "desc" });
 
   const PER_PAGE = 10;
   const [productPage, setProductPage] = useState(1);
@@ -199,6 +204,48 @@ export default function SupplierAnalyticsPage() {
       p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q) || p.category.toLowerCase().includes(q)
     );
   }, [current, search]);
+
+  const filteredFamilies = useMemo(() => {
+    let list: any[] = current?.families || [];
+    const q = search.toLowerCase();
+    if (q) {
+      list = list.filter(
+        (f) =>
+          f.family?.toLowerCase().includes(q) ||
+          f.category?.toLowerCase().includes(q) ||
+          f.subCategory?.toLowerCase().includes(q)
+      );
+    }
+    return [...list].sort((a, b) => {
+      // "No Family" always last
+      if (a.family === "No Family" && b.family !== "No Family") return 1;
+      if (b.family === "No Family" && a.family !== "No Family") return -1;
+      const av = a[famSort.key];
+      const bv = b[famSort.key];
+      const cmp = typeof av === "string" ? av.localeCompare(bv) : (Number(av) || 0) - (Number(bv) || 0);
+      return famSort.dir === "asc" ? cmp : -cmp;
+    });
+  }, [current, search, famSort]);
+
+  const famTotals = useMemo(() => {
+    const t = filteredFamilies.reduce(
+      (s, f) => ({
+        stockQty: s.stockQty + (f.stockQty || 0),
+        stockCostValue: s.stockCostValue + (f.stockCostValue || 0),
+        unitsSold: s.unitsSold + (f.unitsSold || 0),
+        revenue: s.revenue + (f.revenue || 0),
+        cost: s.cost + (f.cost || 0),
+        profit: s.profit + (f.profit || 0),
+      }),
+      { stockQty: 0, stockCostValue: 0, unitsSold: 0, revenue: 0, cost: 0, profit: 0 }
+    );
+    return { ...t, margin: t.revenue > 0 ? (t.profit / t.revenue) * 100 : 0 };
+  }, [filteredFamilies]);
+
+  const toggleFamSort = (key: typeof famSort.key) =>
+    setFamSort((s) =>
+      s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: key === "family" ? "asc" : "desc" }
+    );
 
   const filteredCustomers = useMemo(() => {
     if (!current) return [];
@@ -524,6 +571,19 @@ export default function SupplierAnalyticsPage() {
                       <ShoppingBag className="h-4 w-4 shrink-0" />
                       <span>Products</span>
                       <span className="text-sky-500 font-bold ml-0.5">({filteredProducts.length})</span>
+                    </button>
+
+                    <button
+                      onClick={() => { setDetailTab("families"); setSearch(""); }}
+                      className={`px-4 py-2 text-xs font-semibold rounded-xl gap-2 transition-all flex items-center whitespace-nowrap border ${
+                        detailTab === "families"
+                          ? "bg-black text-white border-black shadow-sm"
+                          : "text-gray-800 hover:bg-gray-100/80 border-transparent"
+                      }`}
+                    >
+                      <Layers className="h-4 w-4 shrink-0" />
+                      <span>Product Families</span>
+                      <span className="text-sky-500 font-bold ml-0.5">({current?.families?.length || 0})</span>
                     </button>
 
                     <button
@@ -934,6 +994,131 @@ export default function SupplierAnalyticsPage() {
                       totalItems={filteredInvoices.length}
                       itemsPerPage={PER_PAGE}
                     />
+                  </>
+                )}
+
+                {/* Product Families Tab */}
+                {detailTab === "families" && (
+                  <>
+                    {/* Mobile card list */}
+                    <div className="sm:hidden divide-y">
+                      {filteredFamilies.length === 0 ? (
+                        <p className="text-center py-10 text-sm text-muted-foreground">No product families found.</p>
+                      ) : (
+                        filteredFamilies.map((f: any, i: number) => (
+                          <div key={i} className="p-3 space-y-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${f.family === "No Family" ? "bg-gray-100 text-gray-500" : "bg-amber-100 text-amber-800"}`}>
+                                  {f.family}
+                                </span>
+                                <p className="text-[11px] text-muted-foreground mt-1">
+                                  {f.category}{f.subCategory ? ` › ${f.subCategory}` : ""} · {f.productCount} products
+                                </p>
+                              </div>
+                              <Badge variant={f.margin >= 20 ? "default" : "secondary"} className="text-[10px] shrink-0">
+                                {f.margin.toFixed(1)}%
+                              </Badge>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 text-xs">
+                              <div>
+                                <p className="text-[10px] text-muted-foreground">Revenue</p>
+                                <p className="font-medium">LKR {fmt(f.revenue)}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-muted-foreground">Profit</p>
+                                <p className={`font-semibold ${f.profit >= 0 ? "text-green-600" : "text-red-600"}`}>LKR {fmt(f.profit)}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-muted-foreground">Stock</p>
+                                <p className="font-medium">{fmt(f.stockQty)}</p>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    {/* Desktop table */}
+                    <div className="hidden sm:block overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            {([
+                              ["family", "Product Family", false],
+                              [null, "Category", false],
+                              ["stockQty", "Stock", true],
+                              [null, "Stock Value", true],
+                              ["unitsSold", "Units Sold", true],
+                              ["revenue", "Revenue", true],
+                              ["cost", "Cost", true],
+                              ["profit", "Profit", true],
+                              ["margin", "Margin", true],
+                            ] as const).map(([key, label, right]) => (
+                              <TableHead
+                                key={label}
+                                className={`${right ? "text-right" : ""} ${key ? "cursor-pointer select-none hover:bg-muted/50" : ""}`}
+                                onClick={key ? () => toggleFamSort(key) : undefined}
+                              >
+                                <span className={`inline-flex items-center gap-1 ${right ? "justify-end w-full" : ""}`}>
+                                  {label}
+                                  {key && (famSort.key === key
+                                    ? (famSort.dir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)
+                                    : <ArrowUpDown className="h-3 w-3 opacity-40" />)}
+                                </span>
+                              </TableHead>
+                            ))}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredFamilies.length > 0 && (
+                            <TableRow className="border-b-2 bg-muted/30 font-bold text-xs">
+                              <TableCell colSpan={2}>Total — {filteredFamilies.length} families</TableCell>
+                              <TableCell className="text-right">{fmt(famTotals.stockQty)}</TableCell>
+                              <TableCell className="text-right text-muted-foreground">LKR {fmt(famTotals.stockCostValue)}</TableCell>
+                              <TableCell className="text-right">{fmt(famTotals.unitsSold)}</TableCell>
+                              <TableCell className="text-right text-blue-700">LKR {fmt(famTotals.revenue)}</TableCell>
+                              <TableCell className="text-right text-muted-foreground">LKR {fmt(famTotals.cost)}</TableCell>
+                              <TableCell className={`text-right ${famTotals.profit >= 0 ? "text-green-600" : "text-red-600"}`}>LKR {fmt(famTotals.profit)}</TableCell>
+                              <TableCell className="text-right">{famTotals.margin.toFixed(1)}%</TableCell>
+                            </TableRow>
+                          )}
+                          {filteredFamilies.map((f: any, i: number) => (
+                            <TableRow key={i} className="text-xs hover:bg-muted/30">
+                              <TableCell>
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${f.family === "No Family" ? "bg-gray-100 text-gray-500" : "bg-amber-100 text-amber-800"}`}>
+                                  {f.family}
+                                </span>
+                                <span className="ml-1.5 text-[10px] text-muted-foreground">{f.productCount} products</span>
+                              </TableCell>
+                              <TableCell>
+                                {f.category}
+                                {f.subCategory && <span className="text-muted-foreground"> › {f.subCategory}</span>}
+                              </TableCell>
+                              <TableCell className="text-right">{fmt(f.stockQty)}</TableCell>
+                              <TableCell className="text-right text-muted-foreground">LKR {fmt(f.stockCostValue)}</TableCell>
+                              <TableCell className="text-right">{fmt(f.unitsSold)}</TableCell>
+                              <TableCell className="text-right text-blue-700 font-semibold">LKR {fmt(f.revenue)}</TableCell>
+                              <TableCell className="text-right text-muted-foreground">LKR {fmt(f.cost)}</TableCell>
+                              <TableCell className={`text-right font-semibold ${f.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                                LKR {fmt(f.profit)}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Badge variant={f.margin >= 20 ? "default" : "secondary"} className="text-[10px]">
+                                  {f.margin.toFixed(1)}%
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          {filteredFamilies.length === 0 && (
+                            <TableRow>
+                              <TableCell colSpan={9} className="text-center h-20 text-muted-foreground text-sm">
+                                No product families found.
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
                   </>
                 )}
 

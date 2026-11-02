@@ -845,7 +845,46 @@ export async function GET(request: NextRequest) {
       months: overallMonths,
     };
 
-    return NextResponse.json({ overall, businesses });
+    // ── Group product numbers by Product Family ─────────────────────────────
+    const familyInfo: Record<string, { family: string; category: string; subCategory: string | null }> = {};
+    const productIds = overallProducts.map((p: any) => p.id).filter(Boolean);
+    for (let i = 0; i < productIds.length; i += 200) {
+      const { data: fams } = await supabaseAdmin
+        .from("products")
+        .select("id, product_family, category, sub_category")
+        .in("id", productIds.slice(i, i + 200));
+      (fams || []).forEach((p: any) => {
+        familyInfo[p.id] = {
+          family: (p.product_family || "").trim() || "No Family",
+          category: p.category || "Uncategorised",
+          subCategory: p.sub_category || null,
+        };
+      });
+    }
+    const groupByFamily = (products: any[]) => {
+      const map: Record<string, any> = {};
+      products.forEach((p: any) => {
+        const info = familyInfo[p.id] || { family: "No Family", category: "Uncategorised", subCategory: null };
+        const key = `${info.family}||${info.category}||${info.subCategory ?? ""}`;
+        const e = (map[key] ||= {
+          ...info, productCount: 0, unitsSold: 0, revenue: 0, cost: 0, profit: 0, noCostRevenue: 0,
+        });
+        e.productCount += 1;
+        e.unitsSold += p.unitsSold || 0;
+        e.revenue += p.revenue || 0;
+        e.cost += p.cost || 0;
+        e.profit += p.profit || 0;
+        e.noCostRevenue += p.noCostRevenue || 0;
+      });
+      return Object.values(map)
+        .filter((f: any) => Math.abs(f.revenue) > 0.005 || f.unitsSold !== 0)
+        .map((f: any) => ({ ...f, margin: marginOf(f.profit, f.revenue - f.noCostRevenue) }))
+        .sort((a: any, b: any) => b.revenue - a.revenue);
+    };
+    const overallWithFamilies = { ...overall, families: groupByFamily(overallProducts) };
+    const businessesWithFamilies = businesses.map((b) => ({ ...b, families: groupByFamily(b.products) }));
+
+    return NextResponse.json({ overall: overallWithFamilies, businesses: businessesWithFamilies });
   } catch (error: any) {
     console.error("Business analytics error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });

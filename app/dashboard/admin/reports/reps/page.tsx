@@ -57,6 +57,7 @@ import {
   Percent,
   Factory,
   Package,
+  Layers,
 } from "lucide-react";
 import { toast } from "sonner";
 import { TablePagination } from "@/components/ui/TablePagination";
@@ -65,6 +66,7 @@ import {
   ReportDateFilterValue,
   calculateRange,
 } from "../_components/ReportDateFilter";
+import { FamilySalesTable, mergeFamilyRows } from "./_components/FamilySalesTable";
 
 const fmt = (n: number) =>
   n.toLocaleString("en-LK", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -260,6 +262,7 @@ export default function RepAnalyticsPage() {
       totalSales: totalRepSales,
       commissionBySupplier: combinedSuppliers,
       commissionByCategory: combinedCategories,
+      salesByFamily: mergeFamilyRows(reps.map((r) => r.salesByFamily || [])),
       invoices: allInvoices,
     };
   }, [reps]);
@@ -592,6 +595,12 @@ export default function RepAnalyticsPage() {
                 </CardContent>
               </Card>
             )}
+
+            {/* Sales & profit by product family */}
+            <FamilySalesTable
+              rows={overallCurrent?.salesByFamily || []}
+              title="Sales & Profit by Product Family — All Reps"
+            />
           </div>
         ) : !current ? (
           <div className="flex items-center justify-center h-64 text-muted-foreground">
@@ -912,6 +921,14 @@ export default function RepAnalyticsPage() {
                         <Package className="h-4 w-4 shrink-0" />
                         <span>Category Sales</span>
                         <span className="text-sky-500 font-bold ml-0.5">({current.commissionByCategory?.length || 0})</span>
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="families"
+                        className="flex-none data-[state=active]:bg-black data-[state=active]:text-white text-gray-800 hover:bg-gray-100/80 rounded-xl px-4 py-2 text-xs font-semibold gap-2 transition-all flex items-center whitespace-nowrap border border-transparent data-[state=active]:border-black shadow-none data-[state=active]:shadow-sm"
+                      >
+                        <Layers className="h-4 w-4 shrink-0" />
+                        <span>Family Sales &amp; Profit</span>
+                        <span className="text-sky-500 font-bold ml-0.5">({current.salesByFamily?.length || 0})</span>
                       </TabsTrigger>
                       <TabsTrigger
                         value="commission"
@@ -1278,6 +1295,16 @@ export default function RepAnalyticsPage() {
                         )}
                       </Table>
                     </div>
+                  </TabsContent>
+
+                  {/* Product Family Sales & Profit Tab */}
+                  <TabsContent value="families" className="mt-0 p-4">
+                    <FamilySalesTable
+                      key={current.id}
+                      rows={current.salesByFamily || []}
+                      title={`${current.name} — Product Family`}
+                      bare
+                    />
                   </TabsContent>
 
                   {/* Commission Detail Tab */}

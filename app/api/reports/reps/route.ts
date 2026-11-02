@@ -39,6 +39,7 @@ export async function GET(request: NextRequest) {
       .from("orders")
       .select(`
         id, order_id, total_amount, status, created_at, order_date, sales_rep_id, notes,
+        extra_discount_amount,
         customers (id, shop_name),
         invoices (id, invoice_no, manual_invoice_no, total_amount, paid_amount, status),
         rep_commissions (total_commission_amount, status)
@@ -100,8 +101,8 @@ export async function GET(request: NextRequest) {
           supabaseAdmin
             .from("order_items")
             .select(`
-              order_id, quantity, unit_price, commission_earned,
-              product:products (supplier_name, category, sub_category)
+              order_id, quantity, free_quantity, unit_price, total_price, commission_earned, actual_unit_cost,
+              product:products (id, supplier_name, category, sub_category, product_family, cost_price, actual_cost_price)
             `)
             .in("order_id", batch)
         );
@@ -316,9 +317,88 @@ export async function GET(request: NextRequest) {
       repCategoryMap[repId][catKey].itemsCount += qty;
     });
 
+    // ── Per Product Family: sales, cost & profit ─────────────────────────────
+    // Same rules as the Actual Profit report:
+    //   sales = line total − share of invoice extra discount − share of cash discount
+    //   cost  = (paid + free qty) × FIFO unit cost (order_items.actual_unit_cost)
+    type FamilyEntry = {
+      family: string; category: string; subCategory: string | null;
+      qty: number; sales: number; cost: number;
+    };
+    const repFamilyMap: Record<string, Record<string, FamilyEntry>> = {};
+    const addFamily = (
+      repId: string, family: string, category: string, subCategory: string | null,
+      qty: number, sales: number, cost: number,
+    ) => {
+      const map = (repFamilyMap[repId] ||= {});
+      const key = `${family}||${category}||${subCategory ?? ""}`;
+      const e = (map[key] ||= { family, category, subCategory, qty: 0, sales: 0, cost: 0 });
+      e.qty += qty;
+      e.sales += sales;
+      e.cost += cost;
+    };
+
+    // Orders that count toward the rep's totals (inter-branch sales are left out above)
+    const countedOrders: Record<string, { extra: number; cash: number }> = {};
+    (orders || []).forEach((o: any) => {
+      if (!repMap[o.sales_rep_id]) return;
+      const shop = (o.customers?.shop_name || "").toLowerCase();
+      if (shop.includes("champika hardware")) return;
+      const cashMatch = String(o.notes || "").match(/\[CASH_DISCOUNT_AMOUNT:([\d.]+)\]/);
+      countedOrders[o.id] = {
+        extra: Number(o.extra_discount_amount) || 0,
+        cash: cashMatch ? Number(cashMatch[1]) || 0 : 0,
+      };
+    });
+    const lineTotalOf = (it: any) =>
+      it.total_price !== null && it.total_price !== undefined
+        ? Number(it.total_price) || 0
+        : (Number(it.quantity) || 0) * (Number(it.unit_price) || 0);
+    const orderSubtotal: Record<string, number> = {};
+    rawOrderItems.forEach((it: any) => {
+      if (!countedOrders[it.order_id]) return;
+      orderSubtotal[it.order_id] = (orderSubtotal[it.order_id] || 0) + lineTotalOf(it);
+    });
+
+    rawOrderItems.forEach((it: any) => {
+      const meta = countedOrders[it.order_id];
+      if (!meta) return;
+      const repId = orderRepIdMap[it.order_id];
+      if (!repId) return;
+      const prod = it.product || {};
+      const family = (prod.product_family || "").trim() || "No Family";
+      const lineTotal = lineTotalOf(it);
+      const subtotal = orderSubtotal[it.order_id] || 0;
+      const share = subtotal > 0 ? lineTotal / subtotal : 0;
+      const sales = lineTotal - share * meta.extra - share * meta.cash;
+      const unitCost =
+        it.actual_unit_cost !== null && it.actual_unit_cost !== undefined
+          ? Number(it.actual_unit_cost) || 0
+          : Number(prod.actual_cost_price) || Number(prod.cost_price) || 0;
+      const qty = Number(it.quantity) || 0;
+      const free = Number(it.free_quantity) || 0;
+      addFamily(
+        repId, family, prod.category || "Uncategorised", prod.sub_category || null,
+        qty, sales, (qty + free) * unitCost,
+      );
+    });
+
     // Returns come off the invoice rep's sales & commission in the month the return was made
     const repReturnTotals: Record<string, { value: number; commission: number; count: number }> = {};
     const allReturns = await getAllRepReturns(fromDate, toDate);
+
+    // Product family of returned products (they may not be in this period's sales)
+    const returnFamily: Record<string, string> = {};
+    const returnProductIds = Array.from(new Set(allReturns.map((r) => r.productId).filter(Boolean)));
+    if (returnProductIds.length > 0) {
+      const { data: retProds } = await supabaseAdmin
+        .from("products")
+        .select("id, product_family")
+        .in("id", returnProductIds);
+      (retProds || []).forEach((p: any) => {
+        returnFamily[p.id] = (p.product_family || "").trim() || "No Family";
+      });
+    }
     allReturns.forEach((r) => {
       const rep = repMap[r.ownerId];
       if (!rep) return;
@@ -341,6 +421,10 @@ export async function GET(request: NextRequest) {
       if (!repSupplierMap[r.ownerId]) repSupplierMap[r.ownerId] = {};
       if (!repCategoryMap[r.ownerId]) repCategoryMap[r.ownerId] = {};
       deductReturnFromBreakdown(repSupplierMap[r.ownerId], repCategoryMap[r.ownerId], r);
+      addFamily(
+        r.ownerId, returnFamily[r.productId] || "No Family", r.category || "Uncategorised",
+        r.subCategory || null, -r.quantity, -r.value, -r.cost,
+      );
 
       const t = (repReturnTotals[r.ownerId] ||= { value: 0, commission: 0, count: 0 });
       t.value += r.value;
@@ -373,6 +457,17 @@ export async function GET(request: NextRequest) {
         }))
         .sort((a, b) => b.sales - a.sales);
 
+      const salesByFamily = Object.values(repFamilyMap[rep.id] || {})
+        .filter((f) => Math.abs(f.sales) > 0.005 || Math.abs(f.cost) > 0.005 || f.qty !== 0)
+        .map((f) => ({
+          ...f,
+          sales: Math.round(f.sales * 100) / 100,
+          cost: Math.round(f.cost * 100) / 100,
+          profit: Math.round((f.sales - f.cost) * 100) / 100,
+          marginPct: f.sales > 0 ? ((f.sales - f.cost) / f.sales) * 100 : 0,
+        }))
+        .sort((a, b) => b.sales - a.sales);
+
       return {
         id: rep.id,
         name: rep.name,
@@ -391,6 +486,7 @@ export async function GET(request: NextRequest) {
         invoices: rep.invoices,
         commissionBySupplier,
         commissionByCategory,
+        salesByFamily,
       };
     }).sort((a, b) => b.totalSales - a.totalSales);
 

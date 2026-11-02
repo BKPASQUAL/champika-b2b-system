@@ -138,6 +138,7 @@ export default function ViewOrderPage({
   const [unpaidInvoices, setUnpaidInvoices] = useState<any[]>([]);
   const [returnsList, setReturnsList] = useState<any[]>([]);
   const [deletedReturnIds, setDeletedReturnIds] = useState<Set<string>>(new Set());
+  const [editingReturnId, setEditingReturnId] = useState<string | null>(null);
   const [returnProductOpen, setReturnProductOpen] = useState(false);
   const [newReturnItem, setNewReturnItem] = useState({
     productId: "",
@@ -226,8 +227,15 @@ export default function ViewOrderPage({
           }
         }
       }
-      setReturnsList(fetchedReturns);
+      // Use the saved return value ([PRICE:x] in reason) when there is one
+      setReturnsList(
+        fetchedReturns.map((r: any) => {
+          const m = String(r.reason || "").match(/\[PRICE:([\d.]+)\]/);
+          return m && r.price == null ? { ...r, price: parseFloat(m[1]) } : r;
+        })
+      );
       setDeletedReturnIds(new Set());
+      setEditingReturnId(null);
       setInvoicesLoaded(true);
 
       const mappedItems = data.items.map((item: any) => {
@@ -486,6 +494,16 @@ export default function ViewOrderPage({
     );
   };
 
+  const handleReturnFieldChange = (returnId: string, field: "returnType" | "price", value: string) => {
+    setReturnsList((prev) =>
+      prev.map((ret) => {
+        if (ret.id !== returnId) return ret;
+        if (field === "returnType") return { ...ret, return_type: value, returnType: value };
+        return { ...ret, price: Math.max(0, parseFloat(value) || 0), priceEdited: true };
+      })
+    );
+  };
+
   const handleRemoveReturnItem = (returnId: string) => {
     setReturnsList((prev) => prev.filter((ret) => ret.id !== returnId));
     setDeletedReturnIds((prev) => new Set(prev).add(returnId));
@@ -581,6 +599,7 @@ export default function ViewOrderPage({
             productId: r.productId || r.product_id,
             quantity: r.quantity,
             returnType: r.return_type || r.returnType || "Exchange",
+            price: Number(r.price || r.products?.selling_price || r.sellingPrice || 0),
             isNew: r.isNew,
           })),
           deletedReturnIds: Array.from(deletedReturnIds),
@@ -1583,8 +1602,8 @@ export default function ViewOrderPage({
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="Exchange">Exchange Return</SelectItem>
-                            {/* <SelectItem value="Good">Good Return</SelectItem> */}
-                            {/* <SelectItem value="Damage">Damage Return</SelectItem> */}
+                            <SelectItem value="Good">Good Return</SelectItem>
+                            <SelectItem value="Damage">Damage Return</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -1648,8 +1667,10 @@ export default function ViewOrderPage({
                           <TableHead className="w-10 pl-4">#</TableHead>
                           <TableHead>Product</TableHead>
                           <TableHead className="text-center w-28">Type</TableHead>
-                          <TableHead className="text-center w-24 pr-4">Qty</TableHead>
-                          {isEditing && <TableHead className="w-12 text-center"></TableHead>}
+                          <TableHead className="text-center w-24">Qty</TableHead>
+                          <TableHead className="text-right w-28">Value (LKR)</TableHead>
+                          <TableHead className="text-right w-28 pr-4">Total</TableHead>
+                          {isEditing && <TableHead className="w-20 text-center"></TableHead>}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1658,14 +1679,31 @@ export default function ViewOrderPage({
                           const productName = item.products?.name || item.productName || "Unknown Product";
                           const sku = item.products?.sku || item.sku || "";
                           const unit = item.products?.unit_of_measure || item.unit || "";
+                          const unitValue = Number(item.price || item.products?.selling_price || item.sellingPrice || 0);
+                          const rowEditing = isEditing && editingReturnId === item.id;
                           return (
-                            <TableRow key={item.id || idx}>
+                            <TableRow key={item.id || idx} className={rowEditing ? "bg-orange-50/40" : undefined}>
                               <TableCell className="pl-4 text-muted-foreground">{idx + 1}</TableCell>
                               <TableCell>
                                 <div className="font-semibold text-slate-900">{productName}</div>
                                 <div className="text-xs text-muted-foreground font-mono">{sku}</div>
                               </TableCell>
                               <TableCell className="text-center">
+                                {rowEditing ? (
+                                  <Select
+                                    value={returnType}
+                                    onValueChange={(val) => handleReturnFieldChange(item.id, "returnType", val)}
+                                  >
+                                    <SelectTrigger className="h-8 w-28 text-xs border-orange-200">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="Exchange">Exchange</SelectItem>
+                                      <SelectItem value="Good">Good</SelectItem>
+                                      <SelectItem value="Damage">Damage</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                ) : (
                                 <span
                                   className={cn(
                                     "text-[10px] font-bold px-2.5 py-0.5 rounded-full border uppercase tracking-wider",
@@ -1678,9 +1716,10 @@ export default function ViewOrderPage({
                                 >
                                   {returnType}
                                 </span>
+                                )}
                               </TableCell>
-                              <TableCell className="text-center font-semibold pr-4">
-                                {isEditing ? (
+                              <TableCell className="text-center font-semibold">
+                                {rowEditing ? (
                                   <div className="flex items-center justify-center gap-1">
                                     <Input
                                       type="number"
@@ -1697,8 +1736,39 @@ export default function ViewOrderPage({
                                   </span>
                                 )}
                               </TableCell>
+                              <TableCell className="text-right">
+                                {rowEditing ? (
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    className="w-24 ml-auto text-right h-8 border-orange-200"
+                                    value={unitValue}
+                                    onChange={(e) => handleReturnFieldChange(item.id, "price", e.target.value)}
+                                  />
+                                ) : (
+                                  <span>{unitValue.toLocaleString()}</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right font-semibold pr-4">
+                                {((Number(item.quantity) || 0) * unitValue).toLocaleString()}
+                              </TableCell>
                               {isEditing && (
-                                <TableCell className="text-center">
+                                <TableCell className="text-center whitespace-nowrap">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className={cn(
+                                      "h-8 w-8",
+                                      rowEditing
+                                        ? "text-green-600 hover:text-green-700 hover:bg-green-50"
+                                        : "text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                    )}
+                                    title={rowEditing ? "Done" : "Edit return"}
+                                    onClick={() => setEditingReturnId(rowEditing ? null : item.id)}
+                                  >
+                                    {rowEditing ? <Check className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
+                                  </Button>
                                   <Button
                                     variant="ghost"
                                     size="icon"

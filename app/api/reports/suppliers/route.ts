@@ -200,6 +200,7 @@ export async function GET(request: NextRequest) {
               .from("products")
               .select(`
                 id, name, sku, supplier_name, cost_price, selling_price, category,
+                sub_category, product_family,
                 product_stocks (quantity)
               `)
               .range(pageIdx * PAGE_SIZE, (pageIdx + 1) * PAGE_SIZE - 1)
@@ -496,11 +497,44 @@ export async function GET(request: NextRequest) {
       orderCustomerSet[key].add(oid);
     });
 
+    // Product family lookup (for the Product Families tab)
+    const familyInfo: Record<string, { family: string; category: string; subCategory: string | null }> = {};
+    (products || []).forEach((p: any) => {
+      familyInfo[p.id] = {
+        family: (p.product_family || "").trim() || "No Family",
+        category: p.category || "Uncategorised",
+        subCategory: p.sub_category || null,
+      };
+    });
+
     // 5. Build final supplier summaries
     const suppliers = Object.entries(supplierMap).map(([name, data]) => {
       const productList = Object.values(data.products).map((p) => ({
         ...p, margin: p.revenue > 0 ? (p.profit / p.revenue) * 100 : 0,
       })).sort((a, b) => b.unitsSold - a.unitsSold);
+
+      // Group products by Product Family (only families with sales or stock)
+      const famMap: Record<string, any> = {};
+      productList.forEach((p) => {
+        if (p.unitsSold === 0 && p.revenue === 0 && p.stockQty === 0) return;
+        const info = familyInfo[p.id] || { family: "No Family", category: p.category || "Uncategorised", subCategory: null };
+        const key = `${info.family}||${info.category}||${info.subCategory ?? ""}`;
+        const f = (famMap[key] ||= {
+          ...info, productCount: 0, stockQty: 0, stockCostValue: 0,
+          unitsSold: 0, freeQty: 0, revenue: 0, cost: 0, profit: 0,
+        });
+        f.productCount += 1;
+        f.stockQty += p.stockQty;
+        f.stockCostValue += p.stockCostValue;
+        f.unitsSold += p.unitsSold;
+        f.freeQty += p.freeQty;
+        f.revenue += p.revenue;
+        f.cost += p.cost;
+        f.profit += p.profit;
+      });
+      const familyList = Object.values(famMap)
+        .map((f: any) => ({ ...f, margin: f.revenue > 0 ? (f.profit / f.revenue) * 100 : 0 }))
+        .sort((a: any, b: any) => b.revenue - a.revenue);
 
       const customerList = Object.values(data.customers).map((c) => {
         const key = `${name}__${c.id}`;
@@ -584,6 +618,7 @@ export async function GET(request: NextRequest) {
         netProfit,
         netMargin,
         products: productList,
+        families: familyList,
         customers: customerList,
         invoices: invoiceList,
         businesses: businessList,

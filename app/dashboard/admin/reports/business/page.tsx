@@ -62,6 +62,10 @@ import {
   Banknote,
   CheckCircle2,
   CalendarDays,
+  Layers,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { BUSINESS_THEMES, BUSINESS_IDS } from "@/app/config/business-constants";
@@ -148,7 +152,8 @@ export default function BusinessAnalyticsPage() {
   const [businesses, setBusinesses] = useState<any[]>([]);
   const [selectedId, setSelectedId] = useState<string>("overall");
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [detailTab, setDetailTab] = useState<"invoices" | "customers" | "products" | "reps" | "months">("invoices");
+  const [detailTab, setDetailTab] = useState<"invoices" | "customers" | "products" | "families" | "reps" | "months">("invoices");
+  const [famSort, setFamSort] = useState<{ key: "family" | "unitsSold" | "revenue" | "cost" | "profit" | "margin"; dir: "asc" | "desc" }>({ key: "revenue", dir: "desc" });
   const [detailSearch, setDetailSearch] = useState("");
   const [selectedMonthRep, setSelectedMonthRep] = useState<string>("all");
   const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
@@ -218,6 +223,48 @@ export default function BusinessAnalyticsPage() {
       (p) => p.name?.toLowerCase().includes(q) || p.sku?.toLowerCase().includes(q)
     );
   }, [current, detailSearch, onlyNoCost]);
+
+  const filteredFamilies = useMemo(() => {
+    let list: any[] = current?.families || [];
+    if (detailSearch) {
+      const q = detailSearch.toLowerCase();
+      list = list.filter(
+        (f) =>
+          f.family?.toLowerCase().includes(q) ||
+          f.category?.toLowerCase().includes(q) ||
+          f.subCategory?.toLowerCase().includes(q)
+      );
+    }
+    return [...list].sort((a, b) => {
+      // "No Family" always last
+      if (a.family === "No Family" && b.family !== "No Family") return 1;
+      if (b.family === "No Family" && a.family !== "No Family") return -1;
+      const av = a[famSort.key];
+      const bv = b[famSort.key];
+      const cmp = typeof av === "string" ? av.localeCompare(bv) : (Number(av) || 0) - (Number(bv) || 0);
+      return famSort.dir === "asc" ? cmp : -cmp;
+    });
+  }, [current, detailSearch, famSort]);
+
+  const famTotals = useMemo(() => {
+    const t = filteredFamilies.reduce(
+      (s, f) => ({
+        unitsSold: s.unitsSold + (f.unitsSold || 0),
+        revenue: s.revenue + (f.revenue || 0),
+        cost: s.cost + (f.cost || 0),
+        profit: s.profit + (f.profit || 0),
+        noCostRevenue: s.noCostRevenue + (f.noCostRevenue || 0),
+      }),
+      { unitsSold: 0, revenue: 0, cost: 0, profit: 0, noCostRevenue: 0 }
+    );
+    const costed = t.revenue - t.noCostRevenue;
+    return { ...t, margin: costed > 0 ? (t.profit / costed) * 100 : 0 };
+  }, [filteredFamilies]);
+
+  const toggleFamSort = (key: typeof famSort.key) =>
+    setFamSort((s) =>
+      s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: key === "family" ? "asc" : "desc" }
+    );
 
   const filteredReps = useMemo(() => {
     const list: any[] = current?.reps || [];
@@ -876,6 +923,19 @@ export default function BusinessAnalyticsPage() {
                     </button>
 
                     <button
+                      onClick={() => { setDetailTab("families"); setDetailSearch(""); }}
+                      className={`px-4 py-2 text-xs font-semibold rounded-xl gap-2 transition-all flex items-center whitespace-nowrap border ${
+                        detailTab === "families"
+                          ? "bg-black text-white border-black shadow-sm"
+                          : "text-gray-800 hover:bg-gray-100/80 border-transparent"
+                      }`}
+                    >
+                      <Layers className="h-4 w-4 shrink-0" />
+                      <span>Product Families</span>
+                      <span className="text-sky-500 font-bold ml-0.5">({current.families?.length || 0})</span>
+                    </button>
+
+                    <button
                       onClick={() => { setDetailTab("reps"); setDetailSearch(""); }}
                       className={`px-4 py-2 text-xs font-semibold rounded-xl gap-2 transition-all flex items-center whitespace-nowrap border ${
                         detailTab === "reps"
@@ -1310,6 +1370,100 @@ export default function BusinessAnalyticsPage() {
                       </TableBody>
                     </Table>
                     </>
+                  )}
+
+                  {/* ── Product Families Tab ── */}
+                  {detailTab === "families" && (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          {([
+                            ["family", "Product Family", false],
+                            [null, "Category", false],
+                            ["unitsSold", "Units Sold", true],
+                            ["revenue", "Revenue", true],
+                            ["cost", "Cost", true],
+                            ["profit", "Profit", true],
+                            ["margin", "Margin", true],
+                          ] as const).map(([key, label, right]) => (
+                            <TableHead
+                              key={label}
+                              className={`${right ? "text-right" : ""} ${key ? "cursor-pointer select-none hover:bg-muted/50" : ""}`}
+                              onClick={key ? () => toggleFamSort(key) : undefined}
+                            >
+                              <span className={`inline-flex items-center gap-1 ${right ? "justify-end w-full" : ""}`}>
+                                {label}
+                                {key && (famSort.key === key
+                                  ? (famSort.dir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)
+                                  : <ArrowUpDown className="h-3 w-3 opacity-40" />)}
+                              </span>
+                            </TableHead>
+                          ))}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {/* Totals row */}
+                        <TableRow className="border-b-2 bg-muted/30 font-bold">
+                          <TableCell className="font-bold text-xs" colSpan={2}>
+                            Total — {filteredFamilies.length} families
+                          </TableCell>
+                          <TableCell className="text-right font-bold">{fmt(famTotals.unitsSold)}</TableCell>
+                          <TableCell className="text-right text-blue-700 font-bold">LKR {fmt(famTotals.revenue)}</TableCell>
+                          <TableCell className="text-right font-bold text-muted-foreground">LKR {fmt(famTotals.cost)}</TableCell>
+                          <TableCell className={`text-right font-bold ${famTotals.profit >= 0 ? "text-green-700" : "text-red-700"}`}>
+                            <div className="flex flex-col items-end">
+                              <span>LKR {fmt(famTotals.profit)}</span>
+                              {famTotals.noCostRevenue > 0 && (
+                                <span className="text-[10px] text-amber-700 font-semibold">
+                                  excl. LKR {fmt(famTotals.noCostRevenue)} no cost
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right text-xs font-bold">{famTotals.margin.toFixed(1)}%</TableCell>
+                        </TableRow>
+                        {filteredFamilies.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={7} className="text-center text-muted-foreground text-xs py-8">
+                              No product family sales found
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          filteredFamilies.map((f: any, i: number) => (
+                            <TableRow key={i} className="text-xs">
+                              <TableCell>
+                                <span
+                                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                                    f.family === "No Family" ? "bg-gray-100 text-gray-500" : "bg-amber-100 text-amber-800"
+                                  }`}
+                                >
+                                  {f.family}
+                                </span>
+                                <span className="ml-1.5 text-[10px] text-muted-foreground">{f.productCount} products</span>
+                              </TableCell>
+                              <TableCell>
+                                {f.category}
+                                {f.subCategory && <span className="text-muted-foreground"> › {f.subCategory}</span>}
+                              </TableCell>
+                              <TableCell className="text-right">{fmt(f.unitsSold)}</TableCell>
+                              <TableCell className="text-right text-blue-700 font-medium">LKR {fmt(f.revenue)}</TableCell>
+                              <TableCell className="text-right text-muted-foreground">LKR {fmt(f.cost)}</TableCell>
+                              <TableCell className={`text-right font-medium ${f.profit >= 0 ? "text-green-700" : "text-red-700"}`}>
+                                <div className="flex flex-col items-end">
+                                  <span>LKR {fmt(f.profit)}</span>
+                                  {(f.noCostRevenue || 0) > 0 && (
+                                    <span className="text-[9px] text-amber-700">excl. LKR {fmt(f.noCostRevenue)} no cost</span>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <MarginBadge margin={f.margin} />
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
                   )}
 
                   {/* ── Reps Tab ── */}

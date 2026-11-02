@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -25,7 +25,6 @@ import {
   Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { MrpDiscountInput } from "@/components/ui/mrp-discount-input";
 import {
@@ -250,6 +249,8 @@ export default function CreateOrderPage() {
 
   // Data State
   const [products, setProducts] = useState<Product[]>([]);
+  // All products (incl. out of stock) for the exchange return picker
+  const [returnProducts, setReturnProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<{ id: string; name: string; phone?: string; ownerName?: string; }[]>([]);
 
   // User State
@@ -318,7 +319,7 @@ export default function CreateOrderPage() {
     productId: "",
     sku: "",
     quantity: "",
-    returnType: "Good" as "Good" | "Damage" | "Exchange",
+    returnType: "Exchange" as "Good" | "Damage" | "Exchange",
     unit: "",
     price: 0,
     supplier: "",
@@ -326,8 +327,6 @@ export default function CreateOrderPage() {
 
   const [customerPurchasedProducts, setCustomerPurchasedProducts] = useState<any[]>([]);
   const [loadingPurchasedProducts, setLoadingPurchasedProducts] = useState(false);
-  const [selectedBillFilter, setSelectedBillFilter] = useState<string>("all");
-  const [billSelectorOpen, setBillSelectorOpen] = useState(false);
 
   useEffect(() => {
     if (!customerId) {
@@ -382,48 +381,7 @@ export default function CreateOrderPage() {
         setCustomerPurchasedProducts([]);
       })
       .finally(() => setLoadingPurchasedProducts(false));
-    setSelectedBillFilter("all");
   }, [customerId]);
-
-  // Unique past bills for bill selector dropdown in order create with invoice value
-  const customerBillsList = useMemo(() => {
-    const map: Record<
-      string,
-      { invoiceNo: string; date?: string; itemCount: number; invoiceTotal: number; calculatedSum: number }
-    > = {};
-    customerPurchasedProducts.forEach((p) => {
-      const inv = p.invoiceNo && p.invoiceNo !== "-" ? p.invoiceNo : null;
-      if (inv) {
-        if (!map[inv]) {
-          map[inv] = {
-            invoiceNo: inv,
-            date: p.lastPurchasedDate ? p.lastPurchasedDate.split("T")[0] : undefined,
-            itemCount: 0,
-            invoiceTotal: p.invoiceTotal || 0,
-            calculatedSum: 0,
-          };
-        }
-        map[inv].itemCount += 1;
-        map[inv].calculatedSum += (p.unitPrice || 0) * (p.purchasedQuantity || 1);
-        if ((!map[inv].invoiceTotal || map[inv].invoiceTotal === 0) && p.invoiceTotal) {
-          map[inv].invoiceTotal = p.invoiceTotal;
-        }
-      }
-    });
-
-    return Object.values(map)
-      .map((b) => ({
-        ...b,
-        invoiceTotal: b.invoiceTotal > 0 ? b.invoiceTotal : b.calculatedSum,
-      }))
-      .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
-  }, [customerPurchasedProducts]);
-
-  // Filtered available returnable items (if bill selected, filter by that bill; otherwise show all items)
-  const availablePurchasedProducts = useMemo(() => {
-    if (selectedBillFilter === "all" || !selectedBillFilter) return customerPurchasedProducts;
-    return customerPurchasedProducts.filter((p) => p.invoiceNo === selectedBillFilter);
-  }, [customerPurchasedProducts, selectedBillFilter]);
 
   // Popover States
   const [customerOpen, setCustomerOpen] = useState(false);
@@ -506,7 +464,7 @@ export default function CreateOrderPage() {
       productId,
       sku,
       quantity: "",
-      returnType: "Good",
+      returnType: "Exchange",
       unit,
       price: rate,
       supplier,
@@ -528,7 +486,9 @@ export default function CreateOrderPage() {
       return;
     }
 
-    const product = products.find((p) => p.id === currentReturnItem.productId);
+    const product =
+      products.find((p) => p.id === currentReturnItem.productId) ||
+      returnProducts.find((p) => p.id === currentReturnItem.productId);
     const purchased = customerPurchasedProducts.find(
       (p) => p.productId === currentReturnItem.productId
     );
@@ -566,7 +526,7 @@ export default function CreateOrderPage() {
       productId: "",
       sku: "",
       quantity: "",
-      returnType: "Good",
+      returnType: "Exchange",
       unit: "",
       price: 0,
       supplier: "",
@@ -581,7 +541,7 @@ export default function CreateOrderPage() {
         productId: "",
         sku: "",
         quantity: "",
-        returnType: "Good",
+        returnType: "Exchange",
         unit: "",
         price: 0,
         supplier: "",
@@ -595,7 +555,7 @@ export default function CreateOrderPage() {
       productId: item.productId,
       sku: item.sku,
       quantity: item.quantity.toString(),
-      returnType: item.returnType,
+      returnType: "Exchange",
       unit: item.unit,
       price: item.price,
       supplier: item.supplier || "",
@@ -692,8 +652,8 @@ export default function CreateOrderPage() {
         const productsData = await productsRes.json();
         const productsList = Array.isArray(productsData) ? productsData : [];
 
-        setProducts(
-          productsList
+        const toProducts = (list: any[]): Product[] =>
+          list
             .filter((p: any) => allowRetail || (p.subCategory !== "Retail Exclusive" && !p.retailOnly && !p.retail_only))
             .map((p: any) => ({
               id: p.id,
@@ -704,8 +664,17 @@ export default function CreateOrderPage() {
               stock_quantity: p.stock_quantity,
               unit_of_measure: p.unit_of_measure || "unit",
               supplier: p.supplier,
-            }))
-        );
+            }));
+        setProducts(toProducts(productsList));
+
+        // Exchange returns can be any product, even with 0 stock
+        if (overrideEnabled) {
+          setReturnProducts(toProducts(productsList));
+        } else {
+          const allRes = await fetch(`/api/rep/stock?userId=${userId}&includeOutOfStock=true`);
+          const allData = allRes.ok ? await allRes.json() : productsList;
+          setReturnProducts(toProducts(Array.isArray(allData) ? allData : productsList));
+        }
 
         // 4. Fetch Customers — filtered to rep's own business
         const customersUrl = bizId
@@ -1970,163 +1939,11 @@ export default function CreateOrderPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="p-4 sm:p-6 space-y-4">
-              {/* 1. Bill / Invoice Selector (Optional Filter - Directly BEFORE Product) */}
-              <div className="space-y-1.5 p-3 rounded-lg bg-orange-50/40 border border-orange-100">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs sm:text-sm font-bold text-slate-800 flex items-center gap-1.5">
-                    <span>1. Select Bill / Invoice</span>
-                    <Badge variant="outline" className="text-[10px] bg-white text-orange-700 border-orange-300 font-medium">
-                      Optional Filter
-                    </Badge>
-                  </Label>
-                  {selectedBillFilter !== "all" && (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedBillFilter("all")}
-                      className="text-xs text-orange-600 hover:text-orange-800 hover:underline font-semibold"
-                    >
-                      Reset to Show All Bills
-                    </button>
-                  )}
-                </div>
-                <Popover open={billSelectorOpen} onOpenChange={setBillSelectorOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={billSelectorOpen}
-                      className="w-full justify-between bg-white text-left font-normal h-10 text-xs sm:text-sm border-orange-200 hover:bg-orange-50/40"
-                      disabled={!customerId || customerPurchasedProducts.length === 0}
-                    >
-                      <span className="truncate">
-                        {selectedBillFilter === "all" || !selectedBillFilter ? (
-                          `All Bills (Show all ${customerPurchasedProducts.length} items purchased by customer)`
-                        ) : (
-                          (() => {
-                            const b = customerBillsList.find((item: any) => item.invoiceNo === selectedBillFilter);
-                            if (!b) return `Bill: ${selectedBillFilter}`;
-                            return `Bill: ${b.invoiceNo} ${b.date ? `(${b.date})` : ""} • ${b.invoiceTotal > 0 ? `LKR ${b.invoiceTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} • ` : ""}${b.itemCount} item(s)`;
-                          })()
-                        )}
-                      </span>
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50 text-orange-500" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent
-                    className="w-[var(--radix-popover-trigger-width)] min-w-[340px] p-0"
-                    align="start"
-                  >
-                    <Command>
-                      <CommandInput placeholder="Search bill # (e.g. 5212), date, or amount..." />
-                      <CommandList>
-                        <CommandEmpty>No matching bill found.</CommandEmpty>
-                        <CommandGroup className="max-h-64 overflow-y-auto">
-                          {/* Option to show all bills */}
-                          <CommandItem
-                            value="all show all bills all items"
-                            onSelect={() => {
-                              setSelectedBillFilter("all");
-                              setBillSelectorOpen(false);
-                            }}
-                            className="cursor-pointer py-2 text-xs sm:text-sm font-semibold text-orange-950"
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4 shrink-0 text-orange-600",
-                                selectedBillFilter === "all" ? "opacity-100" : "opacity-0"
-                              )}
-                            />
-                            <div className="flex-1 truncate">
-                              <span>All Bills (Show all {customerPurchasedProducts.length} items)</span>
-                            </div>
-                          </CommandItem>
-
-                          {/* List of bills */}
-                          {customerBillsList.map((b: any) => (
-                            <CommandItem
-                              key={b.invoiceNo}
-                              value={`${b.invoiceNo} ${b.date || ""} ${b.invoiceTotal || ""}`}
-                              onSelect={() => {
-                                const val = b.invoiceNo;
-                                setSelectedBillFilter(val);
-                                if (currentReturnItem.productId) {
-                                  const inBill = customerPurchasedProducts.some(
-                                    (p: any) => p.invoiceNo === val && p.productId === currentReturnItem.productId
-                                  );
-                                  if (!inBill) {
-                                    setCurrentReturnItem({
-                                      productId: "",
-                                      sku: "",
-                                      quantity: "",
-                                      returnType: "Good",
-                                      unit: "",
-                                      price: 0,
-                                      supplier: "",
-                                    });
-                                  }
-                                }
-                                setBillSelectorOpen(false);
-                              }}
-                              className="cursor-pointer py-2 text-xs sm:text-sm"
-                            >
-                              <Check
-                                className={cn(
-                                  "mr-2 h-4 w-4 shrink-0 text-orange-600",
-                                  selectedBillFilter === b.invoiceNo ? "opacity-100" : "opacity-0"
-                                )}
-                              />
-                              <div className="flex flex-col flex-1 truncate">
-                                <div className="flex items-center justify-between">
-                                  <span className="font-semibold text-slate-900 font-mono">
-                                    Bill: {b.invoiceNo}
-                                  </span>
-                                  {b.invoiceTotal > 0 && (
-                                    <span className="text-xs font-mono font-bold text-emerald-700 ml-2">
-                                      LKR {b.invoiceTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-2 text-[10px] sm:text-xs text-muted-foreground mt-0.5">
-                                  {b.date && (
-                                    <>
-                                      <span>{b.date}</span>
-                                      <span>&bull;</span>
-                                    </>
-                                  )}
-                                  <span>{b.itemCount} item{b.itemCount !== 1 ? "s" : ""} available to return</span>
-                                </div>
-                              </div>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-                <p className="text-[11px] text-muted-foreground">
-                  If you select a bill, only items from that bill are shown below. If you don&apos;t select a bill, you can pick any item from all past purchases.
-                </p>
-              </div>
-
-              {/* 2. Return Product Row (Directly after Bill Selector) */}
+              {/* Return Product — all products (exchange returns don't need a bill) */}
               <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs sm:text-sm font-bold text-slate-800">
-                    2. Return Product (From Customer Purchase History) *
-                  </Label>
-                  {selectedBillFilter !== "all" && (
-                    <Badge className="bg-blue-50 text-blue-700 border border-blue-200 text-[11px] font-mono">
-                      Filtered: Bill {selectedBillFilter}
-                      {(() => {
-                        const matchedBill = customerBillsList.find((b: any) => b.invoiceNo === selectedBillFilter);
-                        return matchedBill && matchedBill.invoiceTotal > 0
-                          ? ` (LKR ${matchedBill.invoiceTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`
-                          : "";
-                      })()}
-                      {" "}&bull; {availablePurchasedProducts.length} item{availablePurchasedProducts.length !== 1 ? "s" : ""}
-                    </Badge>
-                  )}
-                </div>
+                <Label className="text-xs sm:text-sm font-bold text-slate-800">
+                  Return Product *
+                </Label>
                 <Popover open={returnProductOpen} onOpenChange={setReturnProductOpen}>
                   <PopoverTrigger asChild>
                     <Button
@@ -2134,90 +1951,65 @@ export default function CreateOrderPage() {
                       role="combobox"
                       aria-expanded={returnProductOpen}
                       className="w-full justify-between bg-white text-left font-normal h-10 text-sm border-orange-200/80 hover:bg-orange-50/40"
-                      disabled={!customerId || customerPurchasedProducts.length === 0}
+                      disabled={!customerId}
                     >
                       <span className="truncate">
-                        {currentReturnItem.productId ? (
-                          <>
-                            {customerPurchasedProducts.find((p) => p.productId === currentReturnItem.productId)?.productName ||
-                              products.find((p) => p.id === currentReturnItem.productId)?.name}
-                            {(currentReturnItem as any).invoiceNo && (
-                              <span className="ml-2 font-mono text-xs text-blue-600 font-bold">
-                                [Bill: {(currentReturnItem as any).invoiceNo}]
-                              </span>
-                            )}
-                          </>
-                        ) : selectedBillFilter !== "all" ? (
-                          `Select Item from Bill ${selectedBillFilter}`
-                        ) : (
-                          "Select Product Previously Sold to Customer"
-                        )}
+                        {currentReturnItem.productId
+                          ? returnProducts.find((p) => p.id === currentReturnItem.productId)?.name ||
+                            products.find((p) => p.id === currentReturnItem.productId)?.name ||
+                            (currentReturnItem as any).name
+                          : customerId
+                          ? "Select Product to Exchange"
+                          : "Select a customer first"}
                       </span>
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50 text-orange-500" />
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent
-                    className="w-[var(--radix-popover-trigger-width)] min-w-[340px] p-0"
+                    className="w-(--radix-popover-trigger-width) min-w-[340px] p-0"
                     align="start"
                   >
                     <Command>
-                      <CommandInput placeholder="Search customer's purchased products or bill #..." />
+                      <CommandInput placeholder="Search product name or SKU..." />
                       <CommandList>
-                        {!customerId ? (
-                          <div className="p-3 text-xs text-amber-700 bg-amber-50">
-                            Please select a customer first. Only products previously purchased by the selected customer can be returned.
-                          </div>
-                        ) : loadingPurchasedProducts ? (
-                          <div className="p-3 text-xs text-gray-500 text-center">
-                            Loading customer purchase history...
-                          </div>
-                        ) : availablePurchasedProducts.length === 0 ? (
-                          <CommandEmpty>No purchase history found for this selection.</CommandEmpty>
-                        ) : (
-                          <CommandGroup className="max-h-72 overflow-y-auto">
-                            {availablePurchasedProducts.map((p: any, idx: number) => (
-                              <CommandItem
-                                key={`${p.productId}_${p.invoiceNo}_${idx}`}
-                                value={`${p.productName} ${p.sku} ${p.invoiceNo}`}
-                                onSelect={() => handleReturnProductSelect(p.productId, p.invoiceNo, p.unitPrice, p)}
-                              >
-                                <Check
-                                  className={cn(
-                                    "mr-2 h-4 w-4 shrink-0 text-orange-600",
-                                    currentReturnItem.productId === p.productId &&
-                                      (currentReturnItem as any).invoiceNo === p.invoiceNo
-                                      ? "opacity-100"
-                                      : "opacity-0"
-                                  )}
-                                />
-                                <div className="flex flex-col flex-1 truncate">
-                                  <div className="flex items-center justify-between">
-                                    <span className="font-semibold text-xs sm:text-sm text-slate-900 truncate">
-                                      {p.productName}
-                                    </span>
-                                    <span className="text-xs font-mono font-bold text-emerald-700 ml-2">
-                                      LKR {p.unitPrice?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-2 text-[10px] sm:text-xs text-muted-foreground mt-0.5">
-                                    <span className="font-mono">{p.sku}</span>
-                                    <span>&bull;</span>
-                                    <span>Purchased: {p.purchasedQuantity} {p.unitOfMeasure || "units"}</span>
-                                    <span className="text-blue-600 font-semibold font-mono">Bill: {p.invoiceNo}</span>
-                                    {p.invoiceTotal && p.invoiceTotal > 0 ? (
-                                      <>
-                                        <span>&bull;</span>
-                                        <span className="text-emerald-700 font-semibold font-mono">
-                                          Bill Total: LKR {p.invoiceTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                        </span>
-                                      </>
-                                    ) : null}
-                                  </div>
+                        <CommandEmpty>No product found.</CommandEmpty>
+                        <CommandGroup className="max-h-72 overflow-y-auto">
+                          {returnProducts.map((p) => (
+                            <CommandItem
+                              key={p.id}
+                              value={`${p.name} ${p.sku}`}
+                              onSelect={() => {
+                                const lastPrice = customerPurchasedProducts.find(
+                                  (cp: any) => cp.productId === p.id
+                                )?.unitPrice;
+                                handleReturnProductSelect(p.id, undefined, lastPrice ?? p.selling_price, {
+                                  sku: p.sku,
+                                  unitOfMeasure: p.unit_of_measure,
+                                  category: p.supplier,
+                                  invoiceNo: "",
+                                });
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4 shrink-0 text-orange-600",
+                                  currentReturnItem.productId === p.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              <div className="flex flex-col flex-1 truncate">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-semibold text-xs sm:text-sm text-slate-900 truncate">
+                                    {p.name}
+                                  </span>
+                                  <span className="text-xs font-mono font-bold text-emerald-700 ml-2">
+                                    LKR {Number(p.selling_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </span>
                                 </div>
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        )}
+                                <span className="font-mono text-[10px] sm:text-xs text-muted-foreground">{p.sku}</span>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
                       </CommandList>
                     </Command>
                   </PopoverContent>
@@ -2240,8 +2032,6 @@ export default function CreateOrderPage() {
                       <SelectValue placeholder="Return Type" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Good">Good Return</SelectItem>
-                      <SelectItem value="Damage">Damage Return</SelectItem>
                       <SelectItem value="Exchange">Exchange Return</SelectItem>
                     </SelectContent>
                   </Select>

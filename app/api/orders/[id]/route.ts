@@ -413,13 +413,50 @@ export async function PATCH(
       for (const ret of returnsList) {
         retIdx++;
         if (ret.id && !ret.isNew && !String(ret.id).startsWith("new-")) {
+          const { data: oldRet } = await supabaseAdmin
+            .from("inventory_returns")
+            .select("product_id, quantity, return_type, reason")
+            .eq("id", ret.id)
+            .maybeSingle();
+          if (!oldRet) continue;
+
+          const newType = ret.returnType || ret.return_type || "Exchange";
+          const newQty = Number(ret.quantity) || 0;
+          const price = Number(ret.price);
+          let reason: string = oldRet.reason || "";
+          if (Number.isFinite(price) && price >= 0) {
+            reason = /\[PRICE:[\d.]+\]/.test(reason)
+              ? reason.replace(/\[PRICE:[\d.]+\]/, `[PRICE:${price}]`)
+              : `${reason} [PRICE:${price}]`.trim();
+          }
+
           await supabaseAdmin
             .from("inventory_returns")
-            .update({
-              quantity: ret.quantity,
-              return_type: ret.returnType || ret.return_type || "Exchange",
-            })
+            .update({ quantity: newQty, return_type: newType, reason })
             .eq("id", ret.id);
+
+          // Move stock: undo the old return's effect, apply the new one
+          const oldQty = Number(oldRet.quantity) || 0;
+          const oldGood = oldRet.return_type === "Good";
+          const newGood = newType === "Good";
+          const goodDiff = (newGood ? newQty : 0) - (oldGood ? oldQty : 0);
+          const damagedDiff = (newGood ? 0 : newQty) - (oldGood ? 0 : oldQty);
+          if (goodDiff !== 0 || damagedDiff !== 0) {
+            const { data: prod } = await supabaseAdmin
+              .from("products")
+              .select("stock_quantity, damaged_quantity")
+              .eq("id", oldRet.product_id)
+              .single();
+            if (prod) {
+              await supabaseAdmin
+                .from("products")
+                .update({
+                  stock_quantity: Math.max(0, (prod.stock_quantity || 0) + goodDiff),
+                  damaged_quantity: Math.max(0, (prod.damaged_quantity || 0) + damagedDiff),
+                })
+                .eq("id", oldRet.product_id);
+            }
+          }
         } else if (ret.productId && ret.quantity > 0) {
           const { data: inv } = await supabaseAdmin
             .from("invoices")
@@ -428,9 +465,11 @@ export async function PATCH(
             .maybeSingle();
 
           const invNo = inv?.invoice_no;
+          const priceTag =
+            Number.isFinite(Number(ret.price)) && Number(ret.price) > 0 ? ` [PRICE:${Number(ret.price)}]` : "";
           const reasonText = invNo
-            ? `[${invNo}] [ORD-${id}] Order return`
-            : `[ORD-${id}] Order return`;
+            ? `[${invNo}] [ORD-${id}] Order return${priceTag}`
+            : `[ORD-${id}] Order return${priceTag}`;
 
           const returnNumber = `RET-${Date.now().toString().slice(-6)}-${retIdx}`;
 
