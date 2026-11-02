@@ -42,6 +42,7 @@ import {
   PackageX,
   Calculator,
   Scale,
+  Wallet,
 } from "lucide-react";
 
 export type UserRole = "admin" | "office" | "rep" | "delivery";
@@ -491,6 +492,11 @@ export const roleNavItems: Record<UserRole, NavSection[]> = {
           icon: BookOpen,
         },
         { name: "My Customers", href: "/dashboard/rep/customers", icon: Users },
+        {
+          name: "Customer Account",
+          href: "/dashboard/rep/customer-account",
+          icon: Wallet,
+        },
         {
           name: "Due Invoices",
           href: "/dashboard/rep/invoices/due",

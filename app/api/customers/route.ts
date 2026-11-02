@@ -28,6 +28,47 @@ export async function GET(request: NextRequest) {
 
     let query;
 
+    if (repId && searchParams.get("billedOnly") === "true") {
+      // Only customers this rep has created a (non-cancelled) bill for.
+      // Page through orders, since Supabase returns at most 1000 rows per call.
+      const customerMap = new Map<string, any>();
+      const pageSize = 1000;
+      for (let from = 0; ; from += pageSize) {
+        const { data: rows, error } = await supabaseAdmin
+          .from("orders")
+          .select("customer_id, customers!inner(*, businesses(name))")
+          .eq("sales_rep_id", repId)
+          .neq("status", "Cancelled")
+          .not("customer_id", "is", null)
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        for (const r of rows || []) {
+          const c: any = Array.isArray(r.customers) ? r.customers[0] : r.customers;
+          if (c) customerMap.set(c.id, c);
+        }
+        if (!rows || rows.length < pageSize) break;
+      }
+
+      const billed = Array.from(customerMap.values()).sort((a, b) =>
+        String(a.shop_name || "").localeCompare(String(b.shop_name || ""))
+      );
+
+      return NextResponse.json(
+        billed.map((c: any) => ({
+          id: c.id,
+          customerId: c.id.substring(0, 8).toUpperCase(),
+          shopName: c.shop_name,
+          ownerName: c.owner_name || "",
+          phone: c.phone,
+          address: c.address || "",
+          route: c.route || "General",
+          status: c.status,
+          businessId: c.business_id,
+          businessName: c.businesses?.name || "N/A",
+        }))
+      );
+    }
+
     if (repId) {
       // Rep View: customers with rep's orders OR directly assigned to rep
       const { data: repOrders } = await supabaseAdmin
