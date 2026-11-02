@@ -7,6 +7,7 @@
  */
 import { NextRequest } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { getSerialsByOrderItem } from "@/lib/order-serials";
 import {
   generateInvoiceHTML,
   getDocumentWrapper,
@@ -69,6 +70,8 @@ export async function GET(
       )
       .eq("order_id", invoice.order_id);
 
+    const serialsByItem = await getSerialsByOrderItem(invoice.order_id);
+
     const invoiceData = {
       id: invoice.id,
       invoiceNo: invoice.invoice_no,
@@ -94,6 +97,7 @@ export async function GET(
         freeQuantity: item.free_quantity || 0,
         discountPercent: item.discount_percent || 0,
         total: item.total_price,
+        serials: serialsByItem[item.id] || [],
         supplier:
           item.products?.supplier_name || item.products?.brand || null,
       })),

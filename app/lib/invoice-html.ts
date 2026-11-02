@@ -8,6 +8,56 @@ import QRCode from "qrcode";
 const FONT_STACK =
   "-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, Helvetica, sans-serif";
 
+// "Serial Numbers" table after the items — only items that had serials entered
+const serialsTableHTML = (items: any[], compact: boolean): string => {
+  const esc = (v: any) =>
+    String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
+  const withSerials = (items || []).filter((i: any) => Array.isArray(i?.serials) && i.serials.length > 0);
+  if (!withSerials.length) return "";
+
+  const pad = compact ? "3px 5px" : "5px 8px";
+  const fs = compact ? 10 : 11.5;
+  const cell = `padding:${pad};font-size:${fs}px;vertical-align:top;`;
+  let n = 0;
+  const body = withSerials
+    .map((item: any, itemIdx: number) => {
+      const list: string[] = item.serials.filter(Boolean);
+      const isLastItem = itemIdx === withSerials.length - 1;
+      return list
+        .map((sn, i) => {
+          n++;
+          const lastRowOfItem = i === list.length - 1;
+          const border = lastRowOfItem && !isLastItem ? "border-bottom:1px solid #bbb;" : "";
+          const first = i === 0
+            ? `<td rowspan="${list.length}" style="${cell}color:#555;border-bottom:${isLastItem ? "none" : "1px solid #bbb"};">${esc(item.sku || "-")}</td>
+          <td rowspan="${list.length}" style="${cell}color:#111;font-weight:600;border-bottom:${isLastItem ? "none" : "1px solid #bbb"};">${esc(item.productName || item.name || "-")}<div style="font-size:${fs - 1.5}px;font-weight:500;color:#777;">${list.length} unit(s)</div></td>`
+            : "";
+          return `
+        <tr style="${border}">
+          ${first}
+          <td style="${cell}color:#777;text-align:center;">${i + 1}</td>
+          <td style="${cell}color:#000;font-weight:600;font-family:Consolas,'Courier New',monospace;letter-spacing:0.3px;">${esc(sn)}</td>
+        </tr>`;
+        })
+        .join("");
+    })
+    .join("");
+
+  return `
+    <div style="font-size:${compact ? 10 : 11}px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#000;margin:${compact ? "4px 0 2px" : "10px 0 4px"};">Serial Numbers</div>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:${compact ? 4 : 8}px;page-break-inside:avoid;border-bottom:1.5px solid #000;">
+      <thead>
+        <tr style="border-top:1.5px solid #000;border-bottom:1.5px solid #000;background:#f7f7f7;">
+          <th style="padding:${pad};font-size:9px;font-weight:700;text-transform:uppercase;text-align:left;width:16%;">Item Code</th>
+          <th style="padding:${pad};font-size:9px;font-weight:700;text-transform:uppercase;text-align:left;width:34%;">Description</th>
+          <th style="padding:${pad};font-size:9px;font-weight:700;text-transform:uppercase;text-align:center;width:6%;">#</th>
+          <th style="padding:${pad};font-size:9px;font-weight:700;text-transform:uppercase;text-align:left;">Serial No.</th>
+        </tr>
+      </thead>
+      <tbody>${body}</tbody>
+    </table>`;
+};
+
 const fmt = (amount: number) =>
   new Intl.NumberFormat("en-LK", {
     minimumFractionDigits: 2,
@@ -528,7 +578,8 @@ export const generateInvoiceHTML = async (
       </tr>
     </table>
 
-    <table style="width:100%;border-collapse:collapse;margin-top:70px;margin-bottom:6px;page-break-inside:avoid;">
+    ${!isReturnNote ? serialsTableHTML(items, false) : ""}
+    <table style="width:100%;border-collapse:collapse;margin-top:80px;margin-bottom:6px;page-break-inside:avoid;">
       <tr>
         <td style="width:45%;text-align:center;padding-top:6px;border-top:1.5px solid #000;vertical-align:top;">
           <div style="font-size:11px;color:#000;font-weight:700;">Customer Signature &amp; Stamp</div>
@@ -577,7 +628,8 @@ export const generateInvoiceHTML = async (
       </tr>
     </table>
 
-    <table style="width:100%;border-collapse:collapse;margin-top:24px;margin-bottom:8px;page-break-inside:avoid;">
+    ${!isReturnNote ? serialsTableHTML(items, false) : ""}
+    <table style="width:100%;border-collapse:collapse;margin-top:80px;margin-bottom:8px;page-break-inside:avoid;">
       <tr>
         <td style="width:55%;"></td>
         <td style="width:45%;text-align:center;padding-top:6px;border-top:1.5px solid #555;">
@@ -960,7 +1012,8 @@ export const generateHalfPageInvoiceHTML = async (
     </tr>
   </table>
 
-  <table style="width:100%;border-collapse:collapse;margin-top:40px;margin-bottom:3px;">
+  ${!isReturnNote ? serialsTableHTML(items, true) : ""}
+  <table style="width:100%;border-collapse:collapse;margin-top:45px;margin-bottom:3px;">
     <tr>
       <td style="width:45%;text-align:center;padding-top:4px;border-top:1.5px solid #000;vertical-align:top;">
         <div style="font-size:9px;color:#000;font-weight:700;">Customer Signature &amp; Stamp</div>
@@ -1005,7 +1058,8 @@ export const generateHalfPageInvoiceHTML = async (
     </tr>
   </table>
 
-  <table style="width:100%;border-collapse:collapse;margin-top:16px;margin-bottom:4px;">
+  ${!isReturnNote ? serialsTableHTML(items, true) : ""}
+  <table style="width:100%;border-collapse:collapse;margin-top:45px;margin-bottom:4px;">
     <tr>
       <td style="width:55%;"></td>
       <td style="width:45%;text-align:center;padding-top:5px;border-top:1.5px solid #555;">

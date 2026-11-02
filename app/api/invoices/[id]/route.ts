@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { getSerialsByOrderItem } from "@/lib/order-serials";
 import { z } from "zod";
 import { BUSINESS_NAMES, BUSINESS_IDS } from "@/app/config/business-constants";
 import { checkCustomerOverdueStatus, markCustomerUnlockAsUsed } from "@/lib/customer-overdue";
@@ -121,6 +122,8 @@ export async function GET(
       .eq("order_id", invoice.order_id);
 
     if (itemsError) throw itemsError;
+
+    const serialsByItem = await getSerialsByOrderItem(invoice.order_id);
 
     // 3. Fetch Payments
     const { data: payments, error: paymentsError } = await supabaseAdmin
@@ -317,6 +320,7 @@ export async function GET(
         supplier: item.products?.supplier_name || "",
         retailOnly: item.products?.retail_only || false,
         retailPrice: item.products?.retail_price || null,
+        serials: serialsByItem[item.id] || [],
 
         // Pricing & Qty
         price: item.unit_price,

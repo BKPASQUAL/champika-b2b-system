@@ -56,6 +56,7 @@ export const printOrder = async (order: any, items: any[]) => {
       freeQuantity: item.free || 0,
       discountPercent: item.discountPercent || 0,
       total: item.total,
+      serials: (item.serials || []).map((s: any) => (typeof s === "string" ? s : s.serialNo)),
     })),
   };
 
