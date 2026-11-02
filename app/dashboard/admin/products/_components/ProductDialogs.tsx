@@ -303,6 +303,21 @@ export function ProductDialogs({
                     Retail Only
                   </Label>
                 </div>
+                <div
+                  className="flex items-center space-x-2 border p-2 rounded-lg bg-blue-50 border-blue-200"
+                  title="Ask for a serial number for every unit when the order is checked"
+                >
+                  <Switch
+                    id="track-serial-mode"
+                    checked={!!formData.trackSerial}
+                    onCheckedChange={(val) =>
+                      setFormData({ ...formData, trackSerial: val })
+                    }
+                  />
+                  <Label htmlFor="track-serial-mode" className="cursor-pointer text-xs text-blue-700">
+                    Serial No.
+                  </Label>
+                </div>
               </div>
             </div>
           </DialogHeader>

@@ -116,6 +116,7 @@ export default function ProductsPage() {
     unitOfMeasure: "Pcs",
     isActive: true,
     retailOnly: false,
+    trackSerial: false,
     retailPrice: "",
     companyCode: "",
   });
@@ -286,6 +287,7 @@ export default function ProductsPage() {
       unitOfMeasure: "Pcs",
       isActive: true,
       retailOnly: false,
+      trackSerial: false,
       retailPrice: "",
       companyCode: "",
     });
@@ -404,6 +406,7 @@ export default function ProductsPage() {
                 unitOfMeasure: p.unitOfMeasure || "Pcs",
                 isActive: p.isActive,
                 retailOnly: p.retailOnly ?? false,
+                trackSerial: p.trackSerial ?? false,
                 retailPrice: p.retailPrice ?? "",
                 companyCode: p.companyCode || "",
               });

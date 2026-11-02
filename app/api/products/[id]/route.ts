@@ -24,6 +24,7 @@ const updateSchema = z.object({
   images: z.array(z.string()).optional(),
   isActive: z.boolean().optional(),
   retailOnly: z.boolean().optional(),
+  trackSerial: z.boolean().optional(),
   retailPrice: z.number().min(0).optional().nullable(),
 });
 
@@ -184,6 +185,15 @@ export async function PATCH(
 
     if (error) throw error;
 
+    // Saved separately so product edits still work before add_serial_numbers.sql is run
+    if (val.trackSerial !== undefined) {
+      const { error: serialErr } = await supabaseAdmin
+        .from("products")
+        .update({ track_serial: val.trackSerial })
+        .eq("id", id);
+      if (serialErr) console.warn("track_serial not saved:", serialErr.message);
+    }
+
     // When cost price is manually changed, leave existing cost layers untouched.
     // FIFO will consume old-cost stock first at the old cost price.
     // New purchases will add new layers at the new cost price.
@@ -319,6 +329,7 @@ export async function GET(
       modelType: productData.model_type,
       subModel: productData.sub_model,
       productFamily: productData.product_family || "",
+      trackSerial: productData.track_serial ?? false,
       sizeSpec: productData.size_spec,
       supplier: productData.supplier_name,
       stock:

@@ -25,6 +25,7 @@ import {
   Printer,
   XCircle,
   Undo2,
+  ScanBarcode,
 } from "lucide-react";
 import { printOrder } from "@/app/lib/order-html";
 import { Button } from "@/components/ui/button";
@@ -69,6 +70,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { SerialNumberEntry, SerialEntry } from "@/components/orders/SerialNumberEntry";
 
 interface OrderItem {
   id: string;
@@ -81,7 +83,13 @@ interface OrderItem {
   qty: number;
   free: number;
   total: number;
+  trackSerial?: boolean;
+  serials?: SerialEntry[];
 }
+
+// Items that need serial numbers are only verified once every unit has one
+const serialsOk = (item: OrderItem) =>
+  !item.trackSerial || (item.serials?.length || 0) === item.qty + item.free;
 
 export default function CheckOrderPage({
   params,
@@ -167,6 +175,11 @@ export default function CheckOrderPage({
   // --- QC Logic (Checkboxes) ---
   const toggleItemCheck = (itemId: string) => {
     if (isEditing) return; // Disable checking while editing
+    const item = items.find((i) => i.id === itemId);
+    if (item && !checkedItems[itemId] && !serialsOk(item)) {
+      toast.error(`Enter all serial numbers for ${item.name} first`);
+      return;
+    }
     setCheckedItems((prev) => ({
       ...prev,
       [itemId]: !prev[itemId],
@@ -180,9 +193,12 @@ export default function CheckOrderPage({
     } else {
       const allChecked: Record<string, boolean> = {};
       items.forEach((item) => {
-        allChecked[item.id] = true;
+        if (serialsOk(item)) allChecked[item.id] = true;
       });
       setCheckedItems(allChecked);
+      if (items.some((i) => !serialsOk(i))) {
+        toast.warning("Items still missing serial numbers were not ticked");
+      }
     }
   };
 
@@ -205,6 +221,47 @@ export default function CheckOrderPage({
         return item;
       })
     );
+  };
+
+  // Serial added / removed: update the item and tick it once all serials are in
+  const handleSerialsChange = (itemId: string, serials: SerialEntry[]) => {
+    setItems((prev) => prev.map((i) => (i.id === itemId ? { ...i, serials } : i)));
+    const item = items.find((i) => i.id === itemId);
+    if (item) {
+      setCheckedItems((c) => ({ ...c, [itemId]: serialsOk({ ...item, serials }) }));
+    }
+  };
+
+  // Turn on serial numbers for this product straight from the checking table
+  const [enablingSerialFor, setEnablingSerialFor] = useState<string | null>(null);
+  const enableSerials = async (item: OrderItem) => {
+    setEnablingSerialFor(item.productId);
+    try {
+      const res = await fetch(`/api/orders/${id}/serials`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId: item.productId, enabled: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not turn on serial numbers");
+      setItems((prev) =>
+        prev.map((i) =>
+          i.productId === item.productId ? { ...i, trackSerial: true, serials: i.serials || [] } : i
+        )
+      );
+      setCheckedItems((c) => {
+        const next = { ...c };
+        items.forEach((i) => {
+          if (i.productId === item.productId) next[i.id] = false;
+        });
+        return next;
+      });
+      toast.success(`Serial numbers turned on for ${item.name}`);
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setEnablingSerialFor(null);
+    }
   };
 
   const handleRemoveItem = (itemId: string) => {
@@ -314,7 +371,7 @@ export default function CheckOrderPage({
   // --- Calculations ---
   const totalItems = items.length + returnsList.length;
   const checkedCount =
-    Object.values(checkedItems).filter(Boolean).length +
+    items.filter((i) => checkedItems[i.id] && serialsOk(i)).length +
     Object.values(checkedReturnItems).filter(Boolean).length;
   const progressPercentage =
     totalItems > 0 ? (checkedCount / totalItems) * 100 : 0;
@@ -632,12 +689,13 @@ export default function CheckOrderPage({
                   </TableHeader>
                   <TableBody>
                     {items.map((item) => {
-                      const isChecked = checkedItems[item.id] || false;
+                      const isChecked = (checkedItems[item.id] || false) && serialsOk(item);
                       return (
+                        <React.Fragment key={item.id}>
                         <TableRow
-                          key={item.id}
                           className={cn(
                             "transition-colors",
+                            item.trackSerial && !isEditing && "border-b-0",
                             !isEditing && "cursor-pointer",
                             isChecked && !isEditing
                               ? "bg-slate-50"
@@ -701,6 +759,25 @@ export default function CheckOrderPage({
                                   <span className="text-xs text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
                                     Rs. {item.price.toFixed(2)}
                                   </span>
+                                  {!item.trackSerial && !isEditing && (
+                                    <button
+                                      type="button"
+                                      className="inline-flex items-center gap-1 text-xs text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 px-1.5 py-0.5 rounded disabled:opacity-50"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        enableSerials(item);
+                                      }}
+                                      disabled={enablingSerialFor === item.productId}
+                                      title="Ask for a serial number for every unit of this product"
+                                    >
+                                      {enablingSerialFor === item.productId ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                      ) : (
+                                        <ScanBarcode className="h-3 w-3" />
+                                      )}
+                                      + Serial No.
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -792,6 +869,24 @@ export default function CheckOrderPage({
                             </TableCell>
                           )}
                         </TableRow>
+                        {item.trackSerial && !isEditing && (
+                          <TableRow className="hover:bg-transparent">
+                            <TableCell />
+                            <TableCell colSpan={3} className="pt-0 pb-3">
+                              <SerialNumberEntry
+                                orderId={id}
+                                orderItemId={item.id}
+                                productName={item.name}
+                                needed={item.qty + item.free}
+                                serials={item.serials || []}
+                                onChange={(list) => handleSerialsChange(item.id, list)}
+                                userId={currentUser?.id}
+                                disabled={processing}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        )}
+                        </React.Fragment>
                       );
                     })}
                   </TableBody>

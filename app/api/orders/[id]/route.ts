@@ -68,6 +68,36 @@ export async function GET(
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
+    // Serial numbers. Loaded separately and errors ignored, so orders still
+    // load if add_serial_numbers.sql has not been run yet.
+    const serialsByItem: Record<string, { id: string; serialNo: string }[]> = {};
+    const serialProductIds = new Set<string>();
+    const productIds = [
+      ...new Set((order.order_items || []).map((i: any) => i.product_id).filter(Boolean)),
+    ];
+    if (productIds.length > 0) {
+      const { data: trackRows, error: trackErr } = await supabaseAdmin
+        .from("products")
+        .select("id, track_serial")
+        .in("id", productIds)
+        .eq("track_serial", true);
+      if (!trackErr) {
+        for (const r of trackRows || []) serialProductIds.add(r.id);
+      }
+    }
+    if (serialProductIds.size > 0) {
+      const { data: serialRows, error: serialErr } = await supabaseAdmin
+        .from("order_item_serials")
+        .select("id, order_item_id, serial_no, created_at")
+        .eq("order_id", id)
+        .order("created_at", { ascending: true });
+      if (!serialErr) {
+        for (const s of serialRows || []) {
+          (serialsByItem[s.order_item_id] ||= []).push({ id: s.id, serialNo: s.serial_no });
+        }
+      }
+    }
+
     // Determine Invoice Number (Check order record first, then invoices table)
     const invoiceNumber =
       order.invoice_no || order.invoices?.[0]?.invoice_no || null;
@@ -173,6 +203,8 @@ export async function GET(
         free: item.free_quantity,
         disc: 0,
         total: item.total_price,
+        trackSerial: serialProductIds.has(item.product_id),
+        serials: serialsByItem[item.id] || [],
       })),
 
       // Returns
@@ -801,6 +833,8 @@ export async function PATCH(
       }
 
       if ((status === "Cancelled" || status === "Rejected") && currentOrder.status !== "Cancelled" && currentOrder.status !== "Rejected") {
+        await supabaseAdmin.from("order_item_serials").delete().eq("order_id", id);
+
         const locationIds = await getRepLocationIds(currentOrder.sales_rep_id);
 
         const { data: orderItems, error: itemsError } = await supabaseAdmin

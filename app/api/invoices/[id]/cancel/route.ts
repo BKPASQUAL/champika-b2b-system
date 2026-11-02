@@ -223,6 +223,12 @@ export async function POST(
       })
       .eq("id", invoice.order_id);
 
+    // Free up serial numbers so those units can be sold again
+    await supabaseAdmin
+      .from("order_item_serials")
+      .delete()
+      .eq("order_id", invoice.order_id);
+
     // If cancelled invoice belongs to Champika Retail or Distribution, trigger agency bill recalculation
     if (
       orderData?.business_id === BUSINESS_IDS.CHAMPIKA_DISTRIBUTION ||

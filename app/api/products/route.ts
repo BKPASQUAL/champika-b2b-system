@@ -25,6 +25,7 @@ const productSchema = z.object({
   unitOfMeasure: z.string().optional(),
   isActive: z.boolean().optional(),
   retailOnly: z.boolean().optional(),
+  trackSerial: z.boolean().optional(),
   retailPrice: z.number().min(0).nullable().optional(),
 });
 
@@ -104,6 +105,7 @@ export async function GET(request: NextRequest) {
         commissionValue: p.commission_value || 0,
         isActive: p.is_active ?? true,
         retailOnly: p.retail_only ?? false,
+        trackSerial: p.track_serial ?? false,
         retailPrice: p.retail_price ?? null,
         discountPercent:
           p.mrp > 0 ? ((p.mrp - (p.selling_price || 0)) / p.mrp) * 100 : 0,
@@ -244,6 +246,15 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (productError) throw productError;
+
+    // Saved separately so new products still save before add_serial_numbers.sql is run
+    if (val.trackSerial) {
+      const { error: serialErr } = await supabaseAdmin
+        .from("products")
+        .update({ track_serial: true })
+        .eq("id", product.id);
+      if (serialErr) console.warn("track_serial not saved:", serialErr.message);
+    }
 
     // Create Initial Stock Entry in Main Warehouse
     // Create Initial Stock Entry (support custom target location or resolve via userId)
