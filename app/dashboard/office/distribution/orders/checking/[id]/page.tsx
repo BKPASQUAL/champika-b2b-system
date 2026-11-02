@@ -25,7 +25,6 @@ import {
   Printer,
   XCircle,
   Undo2,
-  ScanBarcode,
 } from "lucide-react";
 import { printOrder } from "@/app/lib/order-html";
 import { Button } from "@/components/ui/button";
@@ -229,38 +228,6 @@ export default function CheckOrderPage({
     const item = items.find((i) => i.id === itemId);
     if (item) {
       setCheckedItems((c) => ({ ...c, [itemId]: serialsOk({ ...item, serials }) }));
-    }
-  };
-
-  // Turn on serial numbers for this product straight from the checking table
-  const [enablingSerialFor, setEnablingSerialFor] = useState<string | null>(null);
-  const enableSerials = async (item: OrderItem) => {
-    setEnablingSerialFor(item.productId);
-    try {
-      const res = await fetch(`/api/orders/${id}/serials`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId: item.productId, enabled: true }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Could not turn on serial numbers");
-      setItems((prev) =>
-        prev.map((i) =>
-          i.productId === item.productId ? { ...i, trackSerial: true, serials: i.serials || [] } : i
-        )
-      );
-      setCheckedItems((c) => {
-        const next = { ...c };
-        items.forEach((i) => {
-          if (i.productId === item.productId) next[i.id] = false;
-        });
-        return next;
-      });
-      toast.success(`Serial numbers turned on for ${item.name}`);
-    } catch (e: any) {
-      toast.error(e.message);
-    } finally {
-      setEnablingSerialFor(null);
     }
   };
 
@@ -759,25 +726,6 @@ export default function CheckOrderPage({
                                   <span className="text-xs text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
                                     Rs. {item.price.toFixed(2)}
                                   </span>
-                                  {!item.trackSerial && !isEditing && (
-                                    <button
-                                      type="button"
-                                      className="inline-flex items-center gap-1 text-xs text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 px-1.5 py-0.5 rounded disabled:opacity-50"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        enableSerials(item);
-                                      }}
-                                      disabled={enablingSerialFor === item.productId}
-                                      title="Ask for a serial number for every unit of this product"
-                                    >
-                                      {enablingSerialFor === item.productId ? (
-                                        <Loader2 className="h-3 w-3 animate-spin" />
-                                      ) : (
-                                        <ScanBarcode className="h-3 w-3" />
-                                      )}
-                                      + Serial No.
-                                    </button>
-                                  )}
                                 </div>
                               </div>
                             </div>
