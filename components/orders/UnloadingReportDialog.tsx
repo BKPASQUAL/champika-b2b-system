@@ -54,6 +54,10 @@ interface ApiOrder {
   customer: string;
   status: string;
   editedAfterLoading: boolean;
+  loadedAmount: number;
+  currentAmount: number;
+  // Set for return-note pickups: items collected from the shop
+  pickup: { kind: string; items: { productId: string; quantity: number; condition: "Good" | "Damage" }[] } | null;
   loaded: ApiLine[];
   current: ApiLine[];
 }
@@ -81,6 +85,13 @@ interface GoodRow {
   total: number;
 }
 
+interface InvoiceRow {
+  invoiceNo: string;
+  customer: string;
+  label: "Rescheduled" | "Cancel Request" | "Cancelled" | "Edited" | "Not collected";
+  detail: string;
+}
+
 interface DamageRow {
   key: string;
   name: string;
@@ -98,12 +109,14 @@ export function UnloadingReportDialog({
   onOpenChange,
   loadId,
   statuses,
+  cancelReasons = {},
   returns,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   loadId: string;
   statuses: Record<string, string>; // orderId -> status picked on the page
+  cancelReasons?: Record<string, string>; // orderId -> reason, for Cancel Request
   returns: UnloadReturnInput[];
 }) {
   const [data, setData] = useState<ApiData | null>(null);
@@ -134,8 +147,59 @@ export function UnloadingReportDialog({
       return good.get(key)!;
     };
 
+    const damage = new Map<string, DamageRow & { invoiceSet: Set<string> }>();
+    const addDamage = (key: string, name: string, sku: string, unit: string, qty: number, invoiceNo: string) => {
+      if (!damage.has(key)) {
+        damage.set(key, { key, name, sku, unit, qty: 0, invoices: "", invoiceSet: new Set() });
+      }
+      const d = damage.get(key)!;
+      d.qty += qty;
+      d.invoiceSet.add(invoiceNo);
+    };
+
+    // Invoices that didn't go as loaded: rescheduled, cancel requested, edited
+    const invoiceRows: InvoiceRow[] = [];
+    const lkr = (n: number) => n.toLocaleString("en-LK", { maximumFractionDigits: 2 });
+
     data.orders.forEach((o) => {
       const status = statuses[o.orderId] || o.status;
+
+      if (o.pickup) {
+        if (status !== "Delivered") {
+          invoiceRows.push({ invoiceNo: o.invoiceNo, customer: o.customer, label: "Not collected", detail: "Return pickup — collect on a later load" });
+        }
+      } else if (status === "Cancel Request") {
+        invoiceRows.push({
+          invoiceNo: o.invoiceNo,
+          customer: o.customer,
+          label: "Cancel Request",
+          detail: `LKR ${lkr(o.currentAmount)}${cancelReasons[o.orderId] ? ` — ${cancelReasons[o.orderId]}` : ""}`,
+        });
+      } else if (status === "Cancelled") {
+        invoiceRows.push({ invoiceNo: o.invoiceNo, customer: o.customer, label: "Cancelled", detail: `LKR ${lkr(o.currentAmount)}` });
+      } else if (status !== "Delivered") {
+        invoiceRows.push({ invoiceNo: o.invoiceNo, customer: o.customer, label: "Rescheduled", detail: `LKR ${lkr(o.currentAmount)} — deliver on a later load` });
+      } else if (o.editedAfterLoading) {
+        const diff = o.currentAmount - o.loadedAmount;
+        invoiceRows.push({
+          invoiceNo: o.invoiceNo,
+          customer: o.customer,
+          label: "Edited",
+          detail: `LKR ${lkr(o.loadedAmount)} → ${lkr(o.currentAmount)} (${diff >= 0 ? "+" : ""}${lkr(diff)})`,
+        });
+      }
+
+      // Return-note pickup: once collected (Delivered), its items come back
+      // as returns. Not collected = never on the lorry, nothing to unload.
+      if (o.pickup) {
+        if (status !== "Delivered") return;
+        o.pickup.items.forEach((l) => {
+          const p = prod(l.productId);
+          if (l.condition === "Damage") addDamage(l.productId, p.name, p.sku, p.unit, l.quantity, o.invoiceNo);
+          else goodRow(l.productId, p.name, p.sku, p.unit).goodReturn += l.quantity;
+        });
+        return;
+      }
 
       if (status !== "Delivered") {
         // Whole order comes back
@@ -157,17 +221,11 @@ export function UnloadingReportDialog({
       });
     });
 
-    const damage = new Map<string, DamageRow & { invoiceSet: Set<string> }>();
     returns.forEach((r) => {
       const key = r.productId || r.productName;
       const unit = data.products[r.productId]?.unit || "Pcs";
       if (r.condition === "Damage") {
-        if (!damage.has(key)) {
-          damage.set(key, { key, name: r.productName, sku: r.sku, unit, qty: 0, invoices: "", invoiceSet: new Set() });
-        }
-        const d = damage.get(key)!;
-        d.qty += r.quantity;
-        d.invoiceSet.add(r.invoiceNo);
+        addDamage(key, r.productName, r.sku, unit, r.quantity, r.invoiceNo);
       } else {
         goodRow(key, r.productName, r.sku, unit).goodReturn += r.quantity;
       }
@@ -182,13 +240,23 @@ export function UnloadingReportDialog({
       .map(({ invoiceSet, ...d }) => ({ ...d, invoices: Array.from(invoiceSet).join(", ") }))
       .sort((a, b) => a.name.localeCompare(b.name));
 
+    const order: Record<InvoiceRow["label"], number> = {
+      "Cancel Request": 0,
+      Cancelled: 1,
+      Rescheduled: 2,
+      "Not collected": 3,
+      Edited: 4,
+    };
+    invoiceRows.sort((a, b) => order[a.label] - order[b.label] || a.invoiceNo.localeCompare(b.invoiceNo));
+
     return {
+      invoiceRows,
       goodRows,
       damageRows,
       goodTotal: goodRows.reduce((t, g) => t + g.total, 0),
       damageTotal: damageRows.reduce((t, d) => t + d.qty, 0),
     };
-  }, [data, statuses, returns]);
+  }, [data, statuses, cancelReasons, returns]);
 
   const buildPdf = () => {
     if (!data || !report) return null;
@@ -238,6 +306,31 @@ export function UnloadingReportDialog({
     const after = () => {
       y = (doc as any).lastAutoTable.finalY + 9;
     };
+
+    // Invoice status: rescheduled / cancel request / edited
+    if (report.invoiceRows.length > 0) {
+      section(`INVOICE STATUS (${report.invoiceRows.length})`, [30, 58, 138]);
+      autoTable(doc, {
+        startY: y,
+        margin: { left: M, right: M },
+        head: [["Invoice", "Customer", "Status", "Details"]],
+        body: report.invoiceRows.map((r) => [r.invoiceNo, r.customer, r.label, r.detail]),
+        headStyles: headStyle([30, 58, 138]),
+        styles: body,
+        columnStyles: { 0: { fontStyle: "bold", cellWidth: 26 }, 2: { fontStyle: "bold", cellWidth: 28 } },
+        didParseCell: (cell) => {
+          if (cell.section !== "body" || cell.column.index !== 2) return;
+          const label = String(cell.cell.raw);
+          cell.cell.styles.textColor =
+            label === "Cancel Request" || label === "Cancelled"
+              ? [190, 18, 60]
+              : label === "Edited"
+                ? [180, 83, 9]
+                : [29, 78, 216];
+        },
+      });
+      after();
+    }
 
     // A. Good stock
     section(`A. GOOD STOCK BACK TO STORE (${fmtQty(report.goodTotal)} units)`, [21, 128, 61]);
@@ -335,7 +428,16 @@ export function UnloadingReportDialog({
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   };
 
-  const empty = report && report.goodRows.length === 0 && report.damageRows.length === 0;
+  const empty =
+    report && report.goodRows.length === 0 && report.damageRows.length === 0 && report.invoiceRows.length === 0;
+
+  const labelClass: Record<InvoiceRow["label"], string> = {
+    "Cancel Request": "bg-rose-100 text-rose-700 border-rose-200",
+    Cancelled: "bg-rose-100 text-rose-700 border-rose-200",
+    Rescheduled: "bg-blue-100 text-blue-700 border-blue-200",
+    "Not collected": "bg-slate-100 text-slate-700 border-slate-200",
+    Edited: "bg-amber-100 text-amber-800 border-amber-200",
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -373,6 +475,37 @@ export function UnloadingReportDialog({
                   <p className="text-lg font-bold text-red-700">{fmtQty(report.damageTotal)} units</p>
                 </div>
               </div>
+
+              {/* Invoice status */}
+              {report.invoiceRows.length > 0 && (
+                <Block title="Invoice status" tone="info">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-blue-50 hover:bg-blue-50">
+                        <TableHead>Invoice</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Details</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {report.invoiceRows.map((r) => (
+                        <TableRow key={`${r.invoiceNo}-${r.label}`}>
+                          <TableCell>
+                            <div className="font-mono text-xs font-semibold">{r.invoiceNo}</div>
+                            <div className="text-[11px] text-muted-foreground">{r.customer}</div>
+                          </TableCell>
+                          <TableCell>
+                            <span className={`inline-flex px-2 py-0.5 rounded-full border text-[11px] font-semibold whitespace-nowrap ${labelClass[r.label]}`}>
+                              {r.label}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-xs">{r.detail}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Block>
+              )}
 
               {/* A. Good stock */}
               <Block title="Good stock back to store" tone="good">
@@ -485,13 +618,15 @@ function Block({
   children,
 }: {
   title: string;
-  tone: "good" | "damage";
+  tone: "good" | "damage" | "info";
   children: React.ReactNode;
 }) {
+  const text = { good: "text-green-700", damage: "text-red-700", info: "text-blue-800" }[tone];
+  const border = { good: "border-green-200", damage: "border-red-200", info: "border-blue-200" }[tone];
   return (
     <div>
-      <h3 className={`text-sm font-semibold mb-2 ${tone === "good" ? "text-green-700" : "text-red-700"}`}>{title}</h3>
-      <div className={`rounded-md border overflow-x-auto ${tone === "good" ? "border-green-200" : "border-red-200"}`}>
+      <h3 className={`text-sm font-semibold mb-2 ${text}`}>{title}</h3>
+      <div className={`rounded-md border overflow-x-auto ${border}`}>
         {children}
       </div>
     </div>

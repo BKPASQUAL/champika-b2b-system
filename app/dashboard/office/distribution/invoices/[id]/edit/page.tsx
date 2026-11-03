@@ -1194,6 +1194,10 @@ export default function DistributionEditInvoicePage({
                       <SelectItem value="Checking">Checking</SelectItem>
                       <SelectItem value="Loading">Loading</SelectItem>
                       <SelectItem value="Delivered">Delivered</SelectItem>
+                      {/* Show the real status (e.g. "In Transit" when edited from reconciliation) instead of a blank box */}
+                      {orderStatus && !["Pending", "Processing", "Checking", "Loading", "Delivered"].includes(orderStatus) && (
+                        <SelectItem value={orderStatus}>{orderStatus}</SelectItem>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>

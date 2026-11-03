@@ -173,7 +173,18 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { return_type, reason_tag, status, reason, quantity, unit_price, location_id, actual_condition } = body;
+    const {
+      return_type,
+      reason_tag,
+      status,
+      reason,
+      quantity,
+      unit_price,
+      location_id,
+      actual_condition,
+      customer_id,
+      return_date,
+    } = body;
 
     const existing = await findReturnRecord(id, "*");
 
@@ -218,6 +229,30 @@ export async function PATCH(
     if (status) {
       updatePayload.status = status;
     }
+
+    if (return_date) {
+      const d = new Date(return_date);
+      if (isNaN(d.getTime())) {
+        return NextResponse.json({ error: "Invalid return_date" }, { status: 400 });
+      }
+      updatePayload.return_date = d.toISOString();
+    }
+
+    // Moving the return to another customer. Not allowed once its credit was
+    // used against a bill or payment (that money already sits on the old customer).
+    const customerChanging = !!customer_id && customer_id !== existing.customer_id;
+    if (customerChanging) {
+      if (/\[(?:SETTLED_IN_PAYMENT|SETTLED_INVOICE|INVOICE_ADJUSTED)/.test(existing.reason || "")) {
+        return NextResponse.json(
+          { error: "This return was already settled against a bill or payment, so its customer can't be changed." },
+          { status: 400 }
+        );
+      }
+      updatePayload.customer_id = customer_id;
+    }
+    // Look up the pickup order while the return still points at the old customer
+    const pickupBeforeMove =
+      customerChanging && existing.status === "Approved" ? await findPickupOrder(existing) : null;
 
     let updatedReason = reason !== undefined ? reason : existing.reason || "";
 
@@ -275,6 +310,12 @@ export async function PATCH(
     // Approved returns already moved stock and created a pickup order — keep both in line
     if (existing.status === "Approved" && changesValue) {
       await syncApprovedReturn(existing, data);
+    }
+
+    // The pickup order (and its LKR 0 bill) follows the return to the new customer
+    if (pickupBeforeMove) {
+      await supabaseAdmin.from("orders").update({ customer_id }).eq("id", pickupBeforeMove.id);
+      await supabaseAdmin.from("invoices").update({ customer_id }).eq("order_id", pickupBeforeMove.id);
     }
 
     return NextResponse.json(data);

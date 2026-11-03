@@ -22,6 +22,7 @@ import {
   Plus,
   Trash2,
   Pencil,
+  Check,
 } from "lucide-react";
 import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import { Button } from "@/components/ui/button";
@@ -138,6 +139,18 @@ type PurchasedOption = {
   qty: number;
 };
 
+// Local yyyy-mm-dd for a date input
+const toDateInput = (value?: string | null) => {
+  if (!value) return "";
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
+// Credit already used against a bill/payment — customer can't change any more
+const isSettled = (it: any) => /\[(?:SETTLED_IN_PAYMENT|SETTLED_INVOICE|INVOICE_ADJUSTED)/.test(it?.reason || "");
+
 // An item can be edited until it is rejected or already used in a payment
 const isItemEditable = (it: any) =>
   it.status !== "Rejected" && !(it.reason || "").includes("[SETTLED_IN_PAYMENT:");
@@ -169,8 +182,14 @@ export default function ReturnDetailPage({
   // Items added / removed while editing (saved together with Save Changes)
   const [newItems, setNewItems] = useState<NewItem[]>([]);
   const [deletedIds, setDeletedIds] = useState<string[]>([]);
+  // The item row currently open for editing (one at a time, like the invoice table)
+  const [activeRowId, setActiveRowId] = useState<string | null>(null);
   // Products this customer bought, one entry per bill (for adding items)
   const [purchased, setPurchased] = useState<PurchasedOption[]>([]);
+  // Note-level edits: customer and return date (applied to every item of the note)
+  const [editCustomerId, setEditCustomerId] = useState<string>("");
+  const [editReturnDate, setEditReturnDate] = useState<string>(""); // yyyy-mm-dd
+  const [customerOptions, setCustomerOptions] = useState<{ id: string; name: string; info?: string }[]>([]);
   const updateNewItem = (key: string, patch: Partial<NewItem>) =>
     setNewItems((prev) => prev.map((n) => (n.key === key ? { ...n, ...patch } : n)));
   const setOtherEdit = (itemId: string, patch: Partial<ItemEdit>) =>
@@ -224,6 +243,8 @@ export default function ReturnDetailPage({
       setEditUnitPrice(meta.unitPrice);
       setEditReturnType(data.return_type || "Good");
       setEditRemarks(meta.cleanReason);
+      setEditCustomerId(data.customer_id || "");
+      setEditReturnDate(toDateInput(data.return_date || data.created_at));
 
       // Load every item of this return note so it shows like one bill
       setSiblings([]);
@@ -262,8 +283,34 @@ export default function ReturnDetailPage({
     fetchReturnDetail();
   }, [id]);
 
+  // Opened in edit mode from another screen: open the item this page is for
+  const openedRowFor = React.useRef<string | null>(null);
+  useEffect(() => {
+    if (!isEditing || !returnRecord?.id || openedRowFor.current === returnRecord.id) return;
+    openedRowFor.current = returnRecord.id;
+    setActiveRowId((prev) => prev ?? returnRecord.id);
+  }, [isEditing, returnRecord?.id]);
+
+  // Customer list for changing the note's customer
+  const businessIdForCustomers = returnRecord?.business_id;
+  useEffect(() => {
+    if (!isEditing || customerOptions.length > 0) return;
+    fetch(businessIdForCustomers ? `/api/customers?businessId=${businessIdForCustomers}` : "/api/customers")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((list: any[]) =>
+        setCustomerOptions(
+          (Array.isArray(list) ? list : []).map((c: any) => ({
+            id: c.id,
+            name: c.shopName || c.shop_name || "Customer",
+            info: [c.ownerName, c.phone, c.route].filter(Boolean).join(" · "),
+          }))
+        )
+      )
+      .catch(() => setCustomerOptions([]));
+  }, [isEditing, businessIdForCustomers, customerOptions.length]);
+
   // Load what this customer bought (per bill) once editing starts, for "Add Item"
-  const customerIdForAdd = returnRecord?.customer_id;
+  const customerIdForAdd = editCustomerId || returnRecord?.customer_id;
   useEffect(() => {
     if (!isEditing || !customerIdForAdd || purchased.length > 0) return;
     fetch(`/api/customers/${customerIdForAdd}/purchased-products`)
@@ -314,7 +361,9 @@ export default function ReturnDetailPage({
 
   // Items can be added/removed until the lorry leaves with the pickup (needs a note code to group them)
   const pickupStatus: string | undefined = returnRecord?.pickup_order?.status;
-  const pickupLeft = !!pickupStatus && !["Pending", "Approved", "Processing", "Checking", "Loading"].includes(pickupStatus);
+  // "In Transit" still allows adding: items collected at the shop join the same pickup
+  const pickupLeft =
+    !!pickupStatus && !["Pending", "Approved", "Processing", "Checking", "Loading", "In Transit"].includes(pickupStatus);
   const canChangeItems = isEditing && !!meta.noteCode && !pickupLeft;
   // Removing is allowed at any pickup stage (the server takes the line off the pickup order and reverses stock/bill)
   const canRemoveItems = isEditing && !!meta.noteCode;
@@ -405,8 +454,33 @@ export default function ReturnDetailPage({
       return;
     }
 
+    const originalDate = toDateInput(returnRecord?.return_date || returnRecord?.created_at);
+    const customerChanged = !!editCustomerId && editCustomerId !== returnRecord?.customer_id;
+    const dateChanged = !!editReturnDate && editReturnDate !== originalDate;
+    // Noon local time so the day doesn't shift across time zones
+    const returnDateIso = editReturnDate ? new Date(`${editReturnDate}T12:00:00`).toISOString() : undefined;
+
     setSaving(true);
     try {
+      // 0. Customer / return date apply to every item of the note (done first so
+      //    new items below join the pickup order of the new customer)
+      if (customerChanged || dateChanged) {
+        for (const it of noteItems.filter((x) => !deletedIds.includes(x.id))) {
+          const res = await fetch(`/api/inventory/returns/${encodeURIComponent(it.id)}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ...(customerChanged ? { customer_id: editCustomerId } : {}),
+              ...(dateChanged ? { return_date: returnDateIso } : {}),
+            }),
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(`${it.products?.name || "Item"}: ${err.error || "Failed to update customer/date"}`);
+          }
+        }
+      }
+
       // 1. Add new items to this note (same number + note code). If the note is already
       //    approved, approve them too so stock is added and they join the same pickup order.
       const noteApproved = noteItems.some((it) => it.status === "Approved");
@@ -422,12 +496,12 @@ export default function ReturnDetailPage({
             product_id: opt.productId,
             location_id: returnRecord.location_id || undefined,
             business_id: returnRecord.business_id || undefined,
-            customer_id: returnRecord.customer_id,
+            customer_id: editCustomerId || returnRecord.customer_id,
             quantity: n.qty,
             return_type: n.type,
             reason: `${invTagN} [PRICE:${n.price}] [NOTE:${meta.noteCode}] ${n.remarks || "Customer return"}`.trim(),
             status: "Pending",
-            return_date: returnRecord.return_date || returnRecord.created_at,
+            return_date: returnDateIso || returnRecord.return_date || returnRecord.created_at,
             returned_by: returnRecord.returned_by,
             invoice_no: opt.invoiceNo && opt.invoiceNo !== "-" ? opt.invoiceNo : undefined,
           }),
@@ -505,7 +579,7 @@ export default function ReturnDetailPage({
       }
 
       toast.success("Return note details updated successfully!");
-      setIsEditing(false);
+      setIsEditing(false); setActiveRowId(null);
       setNewItems([]);
       setDeletedIds([]);
       if (returnTo) {
@@ -695,21 +769,21 @@ export default function ReturnDetailPage({
   return (
     <div className="space-y-4 mx-auto pb-20">
       {/* ── TOP HEADER (FULL WIDTH) ── */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-start gap-2 sm:gap-3 min-w-0">
           <Button
             variant="ghost"
             size="icon"
             onClick={() => router.back()}
-            className="h-9 w-9"
+            className="h-9 w-9 shrink-0"
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-blue-900">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-3xl font-bold tracking-tight text-blue-900">
               {isEditing ? "Edit Return Note" : "Return Note Details"}
             </h1>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex flex-wrap items-center gap-2 mt-1">
               <p className="text-sm text-muted-foreground font-mono">
                 Return Note #{noteNumber}
               </p>
@@ -737,14 +811,14 @@ export default function ReturnDetailPage({
         </div>
 
         {/* Action Buttons Top Right */}
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 md:justify-end md:shrink-0">
           {isEditing ? (
             <>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  setIsEditing(false);
+                  setIsEditing(false); setActiveRowId(null);
                   setEditQty(Number(returnRecord.quantity || 1));
                   setEditUnitPrice(meta.unitPrice);
                   setEditReturnType(returnRecord.return_type || "Good");
@@ -752,6 +826,9 @@ export default function ReturnDetailPage({
                   resetOtherEdits(siblings, returnRecord.id);
                   setNewItems([]);
                   setDeletedIds([]);
+                  if (editCustomerId !== returnRecord.customer_id) setPurchased([]);
+                  setEditCustomerId(returnRecord.customer_id || "");
+                  setEditReturnDate(toDateInput(returnRecord.return_date || returnRecord.created_at));
                   if (returnTo) router.push(returnTo);
                 }}
                 disabled={saving}
@@ -794,7 +871,7 @@ export default function ReturnDetailPage({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setIsEditing(true)}
+                    onClick={() => { setIsEditing(true); setActiveRowId(returnRecord.id); }}
                     className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:text-blue-800"
                   >
                     <Edit className="w-4 h-4 mr-2" /> Edit Return
@@ -825,7 +902,7 @@ export default function ReturnDetailPage({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setIsEditing(true)}
+                  onClick={() => { setIsEditing(true); setActiveRowId(returnRecord.id); }}
                   className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:text-blue-800"
                 >
                   <Edit className="w-4 h-4 mr-2" /> Edit Return
@@ -837,9 +914,9 @@ export default function ReturnDetailPage({
       </div>
 
       {/* ── TWO COLUMN MAIN LAYOUT ── */}
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
         {/* LEFT COLUMN (2 Cols) */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-4 sm:space-y-6 min-w-0">
           {/* Customer & Invoice Card */}
           <Card>
             <CardHeader>
@@ -853,7 +930,7 @@ export default function ReturnDetailPage({
                     <Label className="text-xs text-blue-600 font-semibold uppercase tracking-wide">
                       Return Note Number
                     </Label>
-                    <div className="text-2xl font-bold text-blue-900 mt-1 font-mono flex items-center gap-2">
+                    <div className="text-xl sm:text-2xl font-bold text-blue-900 mt-1 font-mono flex flex-wrap items-center gap-2">
                       {noteNumber}
                       <Badge variant="outline" className="text-xs border-blue-300 text-blue-800 bg-white">
                         {isMultiItem ? `Return Note · ${noteLines.length} items` : "Return Note"}
@@ -922,67 +999,90 @@ export default function ReturnDetailPage({
                 </div>
               </div>
 
-              <div className="grid md:grid-cols-2 gap-4">
-                {/* Customer Box with Outstanding Balance Amount */}
-                <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground font-semibold uppercase">
-                    Customer
-                  </Label>
-                  <div className="p-3 border rounded-lg bg-muted/30 space-y-2">
-                    <div className="flex items-start gap-2">
-                      <User className="w-4 h-4 text-muted-foreground mt-0.5" />
-                      <div>
-                        <div className="font-semibold text-slate-900">
-                          {returnRecord.customers?.shop_name || "Unknown Customer"}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {returnRecord.customers?.owner_name || returnRecord.customers?.route || "-"}
-                        </div>
-                        <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                          <Phone className="w-3 h-3" />
-                          {returnRecord.customers?.phone || "N/A"}
-                        </div>
-                      </div>
-                    </div>
-                    <Separator className="opacity-50" />
-                    {/* Customer Outstanding Amount */}
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-muted-foreground font-medium">Customer Balance:</span>
-                      <span className="font-bold text-red-600">
-                        LKR {Number(returnRecord.customers?.outstanding_balance || 0).toLocaleString()}
+              {/* Customer · Sales Rep · Return Date — one row */}
+              <div className="grid gap-4 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_200px]">
+                {/* Customer */}
+                <div className="space-y-1.5 min-w-0">
+                  <Label className="text-xs text-muted-foreground font-semibold uppercase">Customer</Label>
+                  {isEditing ? (
+                    <SearchableDropdown
+                      options={customerOptions}
+                      value={editCustomerId}
+                      onChange={(cid) => {
+                        if (cid === editCustomerId) return;
+                        setEditCustomerId(cid);
+                        // New-item choices come from this customer's bills
+                        setPurchased([]);
+                        setNewItems([]);
+                      }}
+                      placeholder={customerOptions.length ? "Change customer..." : "Loading customers..."}
+                      disabled={noteItems.some(isSettled) || customerOptions.length === 0}
+                    />
+                  ) : (
+                    <div className="h-10 px-3 border rounded-md bg-muted/30 flex items-center gap-2 min-w-0">
+                      <User className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span className="font-semibold text-slate-900 truncate">
+                        {returnRecord.customers?.shop_name || "Unknown Customer"}
                       </span>
                     </div>
+                  )}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    <span>{returnRecord.customers?.owner_name || returnRecord.customers?.route || "-"}</span>
+                    <span className="flex items-center gap-1">
+                      <Phone className="w-3 h-3" />
+                      {returnRecord.customers?.phone || "N/A"}
+                    </span>
+                    <span className="ml-auto">
+                      Balance{" "}
+                      <strong className="text-red-600">
+                        LKR {Number(returnRecord.customers?.outstanding_balance || 0).toLocaleString()}
+                      </strong>
+                    </span>
                   </div>
+                  {isEditing &&
+                    (noteItems.some(isSettled) ? (
+                      <p className="text-[11px] text-muted-foreground">
+                        Customer can't be changed: this return was already settled against a bill or payment.
+                      </p>
+                    ) : editCustomerId && editCustomerId !== returnRecord.customer_id ? (
+                      <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                        The whole note and its pickup move to{" "}
+                        <strong>{customerOptions.find((c) => c.id === editCustomerId)?.name}</strong> when you save.
+                      </p>
+                    ) : null)}
                 </div>
 
-                {/* Sales Rep Box */}
-                <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground font-semibold uppercase">
-                    Sales Rep
-                  </Label>
-                  <div className="p-3 border rounded-lg bg-muted/30">
-                    <div className="flex items-center gap-2">
-                      <Briefcase className="w-4 h-4 text-muted-foreground" />
-                      <div>
-                        <span className="font-medium text-slate-900 block">
-                          {returnRecord.profiles?.full_name || "Sales Rep"}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          Role: {returnRecord.profiles?.role || "Field Sales Rep"}
-                        </span>
-                      </div>
+                {/* Sales Rep */}
+                <div className="space-y-1.5 min-w-0">
+                  <Label className="text-xs text-muted-foreground font-semibold uppercase">Sales Rep</Label>
+                  <div className="h-10 px-3 border rounded-md bg-muted/30 flex items-center gap-2 min-w-0">
+                    <Briefcase className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <span className="font-medium text-slate-900 truncate">
+                      {returnRecord.profiles?.full_name || "Sales Rep"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground capitalize">
+                    {returnRecord.profiles?.role || "Field Sales Rep"}
+                  </p>
+                </div>
+
+                {/* Return Date */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground font-semibold uppercase">Return Date</Label>
+                  {isEditing ? (
+                    <Input
+                      type="date"
+                      value={editReturnDate}
+                      onChange={(e) => setEditReturnDate(e.target.value)}
+                      className="h-10"
+                    />
+                  ) : (
+                    <div className="h-10 px-3 border rounded-md bg-muted/30 flex items-center text-sm font-medium">
+                      {returnRecord.return_date || returnRecord.created_at
+                        ? new Date(returnRecord.return_date || returnRecord.created_at).toLocaleDateString("en-GB")
+                        : "—"}
                     </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Billing / Return Date */}
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground font-semibold uppercase">Return Date</Label>
-                <div className="text-sm font-medium">
-                  {returnRecord.created_at
-                    ? new Date(returnRecord.created_at).toLocaleDateString()
-                    : "—"}
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -1003,27 +1103,29 @@ export default function ReturnDetailPage({
               </div>
             </CardHeader>
             <CardContent>
-              <div className="border rounded-md">
+              {/* Wide screens: same layout as the invoice items table */}
+              <div className="hidden xl:block border rounded-md">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-muted/50">
+                    <TableRow>
                       <TableHead className="w-12">#</TableHead>
                       <TableHead>Product</TableHead>
-                      <TableHead className="text-center w-36 text-blue-900 font-semibold">Selected Invoice</TableHead>
-                      <TableHead className="text-right w-24">Price</TableHead>
                       <TableHead className="text-center w-20">Qty</TableHead>
-                      <TableHead className="text-center w-16 text-muted-foreground">Free</TableHead>
-                      <TableHead className="text-center w-16 text-muted-foreground">Disc%</TableHead>
+                      <TableHead className="text-center w-16">Free</TableHead>
+                      <TableHead className="text-right w-28">Unit Price</TableHead>
+                      <TableHead className="text-center w-16">Disc%</TableHead>
                       <TableHead className="text-right w-28">Total</TableHead>
-                      <TableHead className="text-right w-36 text-orange-600">Condition</TableHead>
-                      <TableHead className="text-center w-24">Actions</TableHead>
+                      <TableHead className="text-center w-36">Condition</TableHead>
+                      <TableHead className="w-24 text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {noteLines.map((line, idx) => {
                       const { item, isMain, meta: rowMeta } = line;
-                      // Every item of the note is editable in edit mode (except rejected / already settled)
-                      const rowEditing = isEditing && (isMain || (isItemEditable(item) && !!otherEdits[item.id]));
+                      const editable = isItemEditable(item);
+                      // Only the row whose pencil was clicked shows inputs (like the invoice table)
+                      const rowEditing =
+                        isEditing && activeRowId === item.id && editable && (isMain || !!otherEdits[item.id]);
                       const rowHasInvoice = rowMeta.invoiceNo && rowMeta.invoiceNo !== "-";
                       const oe = otherEdits[item.id];
                       const rowRemarks = isMain ? editRemarks : oe?.remarks ?? "";
@@ -1031,86 +1133,79 @@ export default function ReturnDetailPage({
                       const setRowPrice = (v: number) => (isMain ? setEditUnitPrice(v) : setOtherEdit(item.id, { price: v }));
                       const setRowQty = (v: number) => (isMain ? setEditQty(v) : setOtherEdit(item.id, { qty: v }));
                       const setRowType = (v: ItemEdit["type"]) => (isMain ? setEditReturnType(v) : setOtherEdit(item.id, { type: v }));
+                      const deleteBlock = !editable
+                        ? "This item is locked"
+                        : !meta.noteCode
+                        ? "This return has no note to remove items from"
+                        : visibleNoteItems.length + newItems.length <= 1
+                        ? "A return note needs at least one item"
+                        : "";
                       return (
-                        <TableRow key={item.id} className={rowEditing ? "bg-blue-50/40" : ""}>
-                          <TableCell className="text-muted-foreground font-medium">{idx + 1}</TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2 font-medium text-sm">
+                        <TableRow key={item.id} className={rowEditing ? "bg-blue-50" : ""}>
+                          <TableCell className="align-top pt-4">{idx + 1}</TableCell>
+                          <TableCell className="align-top">
+                            <div className="font-medium flex flex-wrap items-center gap-2">
                               {item.products?.name || "Return Product Item"}
-                              <Badge
-                                variant="outline"
-                                className="text-[10px] bg-amber-50 text-amber-700 border-amber-200"
-                              >
-                                Return
-                              </Badge>
                               {isMultiItem && item.status !== "Pending" && (
-                                <Badge variant="outline" className="text-[10px]">
+                                <span className="text-[10px] bg-slate-100 text-slate-600 border border-slate-200 rounded px-1 py-0.5 font-semibold">
                                   {item.status}
-                                </Badge>
+                                </span>
                               )}
-                              {isEditing && !isItemEditable(item) && (
-                                <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                                  {item.status === "Rejected" ? "Rejected" : "Settled in payment"} · locked
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <span className="text-xs text-muted-foreground font-mono">
-                                {item.products?.sku || "SKU-0001"}
-                              </span>
-                              {isMultiItem && (
-                                <span className="text-[10px] text-muted-foreground font-mono">
-                                  {item.return_number}
+                              {isEditing && !editable && (
+                                <span className="text-[10px] bg-slate-100 text-slate-500 border border-slate-200 rounded px-1 py-0.5 font-semibold">
+                                  {item.status === "Rejected" ? "Rejected" : "Settled"} · locked
                                 </span>
                               )}
                             </div>
-                            {/* Customer Remarks */}
-                            {rowEditing ? (
-                              <div className="mt-2">
-                                <Input
-                                  value={rowRemarks}
-                                  onChange={(e) => setRowRemarks(e.target.value)}
-                                  placeholder="Customer remarks / defect reason..."
-                                  className="text-xs h-8 bg-white max-w-sm"
-                                />
-                              </div>
-                            ) : (
-                              rowMeta.cleanReason && (
-                                <div className="text-xs text-muted-foreground mt-1 italic">
-                                  Remarks: {rowMeta.cleanReason}
-                                </div>
-                              )
-                            )}
-                          </TableCell>
-
-                          {/* Selected Invoice Column (Clickable to view invoice bill) */}
-                          <TableCell className="text-center">
-                            {rowHasInvoice ? (
-                              <div className="inline-flex flex-col items-center">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground mt-0.5">
+                              <span className="font-mono">{item.products?.sku || "-"}</span>
+                              {isMultiItem && <span className="font-mono">· {item.return_number}</span>}
+                              <span>·</span>
+                              {rowHasInvoice ? (
                                 <button
                                   type="button"
                                   onClick={() => handleOpenInvoice(rowMeta.invoiceNo)}
-                                  className="inline-flex items-center gap-1 font-mono text-xs border border-blue-300 bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold px-2 py-0.5 rounded shadow-2xs transition cursor-pointer hover:border-blue-400"
-                                  title="Click to view original invoice bill"
+                                  className="inline-flex items-center gap-1 font-mono text-blue-700 hover:underline"
+                                  title="View the original bill"
                                 >
-                                  <FileText className="w-3 h-3 text-blue-600" />
+                                  <FileText className="w-3 h-3" />
                                   {rowMeta.invoiceNo}
-                                  <ExternalLink className="w-2.5 h-2.5 text-blue-500" />
+                                  <ExternalLink className="w-2.5 h-2.5" />
                                 </button>
-                                {isMain && sourceInvoice && (
-                                  <span className="text-[10px] text-muted-foreground mt-0.5 whitespace-nowrap">
-                                    LKR {Number(sourceInvoice.total_amount || 0).toLocaleString()}
-                                  </span>
-                                )}
-                              </div>
+                              ) : (
+                                <span className="italic">Direct return</span>
+                              )}
+                            </div>
+                            {rowEditing ? (
+                              <Input
+                                value={rowRemarks}
+                                onChange={(e) => setRowRemarks(e.target.value)}
+                                placeholder="Customer remarks / defect reason..."
+                                className="text-xs h-8 bg-white max-w-sm mt-2"
+                              />
                             ) : (
-                              <span className="text-xs text-muted-foreground italic">
-                                Direct Return
-                              </span>
+                              rowMeta.cleanReason && (
+                                <div className="text-xs text-muted-foreground mt-0.5 italic">{rowMeta.cleanReason}</div>
+                              )
                             )}
                           </TableCell>
-
-                          <TableCell className="text-right font-medium">
+                          <TableCell className="text-center align-top pt-4">
+                            {rowEditing ? (
+                              <Input
+                                type="number"
+                                min="1"
+                                value={line.qty}
+                                onChange={(e) => setRowQty(Math.max(1, parseInt(e.target.value) || 1))}
+                                className="w-16 text-center h-8 mx-auto bg-white font-semibold -mt-1.5"
+                              />
+                            ) : (
+                              <>
+                                {line.qty} {item.products?.unit_of_measure || ""}
+                              </>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center align-top pt-4">-</TableCell>
+                          <TableCell className="text-right align-top pt-4">
                             {rowEditing ? (
                               <Input
                                 type="number"
@@ -1118,41 +1213,18 @@ export default function ReturnDetailPage({
                                 step="any"
                                 value={line.price}
                                 onChange={(e) => setRowPrice(parseFloat(e.target.value) || 0)}
-                                className="w-24 text-right h-8 ml-auto bg-white font-semibold"
+                                className="w-24 text-right h-8 ml-auto bg-white font-semibold -mt-1.5"
                               />
                             ) : (
                               line.price.toLocaleString()
                             )}
                           </TableCell>
-
-                          <TableCell className="text-center font-medium">
+                          <TableCell className="text-center align-top pt-4">-</TableCell>
+                          <TableCell className="text-right font-bold align-top pt-4">{line.total.toLocaleString()}</TableCell>
+                          <TableCell className="text-center align-top pt-3">
                             {rowEditing ? (
-                              <Input
-                                type="number"
-                                min="1"
-                                value={line.qty}
-                                onChange={(e) => setRowQty(Math.max(1, parseInt(e.target.value) || 1))}
-                                className="w-16 text-center h-8 mx-auto bg-white font-semibold"
-                              />
-                            ) : (
-                              line.qty
-                            )}
-                          </TableCell>
-
-                          <TableCell className="text-center text-muted-foreground">-</TableCell>
-                          <TableCell className="text-center text-muted-foreground">-</TableCell>
-
-                          <TableCell className="text-right font-bold text-sm">
-                            {line.total.toLocaleString()}
-                          </TableCell>
-
-                          <TableCell className="text-right">
-                            {rowEditing ? (
-                              <Select
-                                value={line.type}
-                                onValueChange={(val: any) => setRowType(val)}
-                              >
-                                <SelectTrigger className="h-8 text-xs w-36 ml-auto bg-white font-medium">
+                              <Select value={line.type} onValueChange={(val: any) => setRowType(val)}>
+                                <SelectTrigger className="h-8 text-xs w-36 mx-auto bg-white font-medium">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1163,7 +1235,7 @@ export default function ReturnDetailPage({
                               </Select>
                             ) : (
                               <span
-                                className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border uppercase tracking-wider ${
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wide whitespace-nowrap ${
                                   line.type === "Good"
                                     ? "bg-green-50 text-green-700 border-green-200"
                                     : line.type === "Exchange"
@@ -1171,49 +1243,38 @@ export default function ReturnDetailPage({
                                     : "bg-red-50 text-red-700 border-red-200"
                                 }`}
                               >
-                                {line.type === "Good" ? "Good Return" : line.type === "Exchange" ? "Damage Exchange" : "Damaged Stock"}
+                                {line.type === "Good" ? "Good Return" : line.type === "Exchange" ? "Exchange" : "Damaged"}
                               </span>
                             )}
                           </TableCell>
-
-                          <TableCell className="text-center">
-                            {(() => {
-                              const editable = isItemEditable(item);
-                              const deleteBlock = !editable
-                                ? "This item is locked"
-                                : !meta.noteCode
-                                ? "This return has no note to remove items from"
-                                : visibleNoteItems.length + newItems.length <= 1
-                                ? "A return note needs at least one item"
-                                : "";
-                              return (
-                                <div className="flex items-center justify-center gap-1">
-                                  <button
-                                    type="button"
-                                    disabled={!editable}
-                                    onClick={() => setIsEditing(true)}
-                                    className={`p-1.5 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-                                      rowEditing ? "bg-blue-100 text-blue-700" : "text-blue-600 hover:bg-blue-50"
-                                    }`}
-                                    title={editable ? "Edit this item" : "This item is locked"}
-                                  >
-                                    <Pencil className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    disabled={!!deleteBlock}
-                                    onClick={() => {
-                                      setIsEditing(true);
-                                      setDeletedIds((prev) => (prev.includes(item.id) ? prev : [...prev, item.id]));
-                                    }}
-                                    className="p-1.5 rounded-md text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                                    title={deleteBlock ? `Can't remove: ${deleteBlock}` : "Remove this item from the note"}
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              );
-                            })()}
+                          <TableCell className="text-right align-top pt-2">
+                            <div className="flex gap-1 justify-end">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                disabled={!editable}
+                                onClick={() => {
+                                  setIsEditing(true);
+                                  setActiveRowId((prev) => (prev === item.id ? null : item.id));
+                                }}
+                                className={rowEditing ? "bg-blue-100 text-blue-700" : ""}
+                                title={editable ? (rowEditing ? "Done editing this item" : "Edit this item") : "This item is locked"}
+                              >
+                                {rowEditing ? <Check className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                disabled={!!deleteBlock}
+                                onClick={() => {
+                                  setIsEditing(true);
+                                  setDeletedIds((prev) => (prev.includes(item.id) ? prev : [...prev, item.id]));
+                                }}
+                                title={deleteBlock ? `Can't remove: ${deleteBlock}` : "Remove this item from the note"}
+                              >
+                                <Trash2 className="w-4 h-4 text-destructive" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       );
@@ -1223,11 +1284,16 @@ export default function ReturnDetailPage({
                     {newItems.map((n, nIdx) => {
                       const opt = purchased.find((p) => p.id === n.optionId);
                       return (
-                        <TableRow key={n.key} className="bg-emerald-50/40">
-                          <TableCell className="text-muted-foreground font-medium">{noteLines.length + nIdx + 1}</TableCell>
-                          <TableCell>
+                        <TableRow key={n.key} className="bg-emerald-50/60">
+                          <TableCell className="align-top pt-4">{noteLines.length + nIdx + 1}</TableCell>
+                          <TableCell className="align-top">
                             <div className="flex items-center gap-2 mb-1">
-                              <Badge className="text-[10px] bg-emerald-100 text-emerald-800 border-none">New</Badge>
+                              <span className="text-[10px] bg-emerald-100 text-emerald-800 rounded px-1 py-0.5 font-semibold">
+                                New
+                              </span>
+                              {opt && opt.invoiceNo !== "-" && (
+                                <span className="font-mono text-xs text-blue-700">{opt.invoiceNo}</span>
+                              )}
                             </div>
                             <SearchableDropdown
                               options={purchased.map((p) => ({
@@ -1250,14 +1316,17 @@ export default function ReturnDetailPage({
                               className="text-xs h-8 bg-white max-w-sm mt-2"
                             />
                           </TableCell>
-                          <TableCell className="text-center">
-                            {opt && opt.invoiceNo !== "-" ? (
-                              <span className="font-mono text-xs text-blue-700">{opt.invoiceNo}</span>
-                            ) : (
-                              <span className="text-xs text-muted-foreground italic">—</span>
-                            )}
+                          <TableCell className="text-center align-top pt-3">
+                            <Input
+                              type="number"
+                              min="1"
+                              value={n.qty}
+                              onChange={(e) => updateNewItem(n.key, { qty: Math.max(1, parseInt(e.target.value) || 1) })}
+                              className="w-16 text-center h-8 mx-auto bg-white font-semibold"
+                            />
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-center align-top pt-4">-</TableCell>
+                          <TableCell className="text-right align-top pt-3">
                             <Input
                               type="number"
                               min="0"
@@ -1267,23 +1336,13 @@ export default function ReturnDetailPage({
                               className="w-24 text-right h-8 ml-auto bg-white font-semibold"
                             />
                           </TableCell>
-                          <TableCell className="text-center">
-                            <Input
-                              type="number"
-                              min="1"
-                              value={n.qty}
-                              onChange={(e) => updateNewItem(n.key, { qty: Math.max(1, parseInt(e.target.value) || 1) })}
-                              className="w-16 text-center h-8 mx-auto bg-white font-semibold"
-                            />
-                          </TableCell>
-                          <TableCell className="text-center text-muted-foreground">-</TableCell>
-                          <TableCell className="text-center text-muted-foreground">-</TableCell>
-                          <TableCell className="text-right font-bold text-sm">
+                          <TableCell className="text-center align-top pt-4">-</TableCell>
+                          <TableCell className="text-right font-bold align-top pt-4">
                             {(n.qty * n.price).toLocaleString()}
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-center align-top pt-3">
                             <Select value={n.type} onValueChange={(val: any) => updateNewItem(n.key, { type: val })}>
-                              <SelectTrigger className="h-8 text-xs w-36 ml-auto bg-white font-medium">
+                              <SelectTrigger className="h-8 text-xs w-36 mx-auto bg-white font-medium">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -1293,15 +1352,15 @@ export default function ReturnDetailPage({
                               </SelectContent>
                             </Select>
                           </TableCell>
-                          <TableCell className="text-center">
-                            <button
-                              type="button"
+                          <TableCell className="text-right align-top pt-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               onClick={() => setNewItems((prev) => prev.filter((x) => x.key !== n.key))}
-                              className="p-1.5 rounded-md text-red-600 hover:bg-red-50 transition-colors"
                               title="Remove this new item"
                             >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                              <Trash2 className="w-4 h-4 text-destructive" />
+                            </Button>
                           </TableCell>
                         </TableRow>
                       );
@@ -1309,30 +1368,30 @@ export default function ReturnDetailPage({
 
                     {canRemoveItems && (canChangeItems || deletedIds.length > 0) && (
                       <TableRow className="hover:bg-transparent">
-                        <TableCell colSpan={10} className="py-2">
+                        <TableCell colSpan={9} className="py-2">
                           <div className="flex flex-wrap items-center gap-3">
                             {canChangeItems && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                setNewItems((prev) => [
-                                  ...prev,
-                                  {
-                                    key: `new-${Date.now()}`,
-                                    optionId: "",
-                                    qty: 1,
-                                    price: 0,
-                                    type: (returnRecord.return_type || "Good") as ItemEdit["type"],
-                                    remarks: "",
-                                  },
-                                ])
-                              }
-                              className="border-dashed text-emerald-700 border-emerald-300 hover:bg-emerald-50"
-                            >
-                              <Plus className="w-4 h-4 mr-1" /> Add Item
-                            </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  setNewItems((prev) => [
+                                    ...prev,
+                                    {
+                                      key: `new-${Date.now()}`,
+                                      optionId: "",
+                                      qty: 1,
+                                      price: 0,
+                                      type: (returnRecord.return_type || "Good") as ItemEdit["type"],
+                                      remarks: "",
+                                    },
+                                  ])
+                                }
+                                className="border-dashed text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                              >
+                                <Plus className="w-4 h-4 mr-1" /> Add Item
+                              </Button>
                             )}
                             {deletedIds.map((delId) => {
                               const it = noteItems.find((x) => x.id === delId);
@@ -1358,33 +1417,360 @@ export default function ReturnDetailPage({
                     )}
                     {isEditing && meta.noteCode && pickupLeft && (
                       <TableRow className="hover:bg-transparent">
-                        <TableCell colSpan={10} className="py-2 text-xs text-muted-foreground">
+                        <TableCell colSpan={9} className="py-2 text-xs text-muted-foreground">
                           New items can't be added: pickup order {returnRecord.pickup_order?.order_id} is already {pickupStatus}. You can still remove items.
                         </TableCell>
                       </TableRow>
                     )}
                     {(isMultiItem || newItems.length > 0) && (
-                      <TableRow className="bg-muted/40 font-semibold">
-                        <TableCell colSpan={4} className="text-right text-sm">
+                      <TableRow className="bg-muted/40 font-semibold hover:bg-muted/40">
+                        <TableCell colSpan={2} className="text-right text-sm">
                           Total
                         </TableCell>
                         <TableCell className="text-center">{noteUnits}</TableCell>
-                        <TableCell colSpan={2} />
-                        <TableCell className="text-right text-sm font-bold">
-                          {noteTotal.toLocaleString()}
-                        </TableCell>
+                        <TableCell colSpan={3} />
+                        <TableCell className="text-right font-bold">{noteTotal.toLocaleString()}</TableCell>
                         <TableCell colSpan={2} />
                       </TableRow>
                     )}
                   </TableBody>
                 </Table>
               </div>
+
+              {/* Phones & tablets: one card per item (the table above shows on wide screens) */}
+              <div className="xl:hidden space-y-3">
+                {noteLines.map((line, idx) => {
+                  const { item, isMain, meta: rowMeta } = line;
+                  const rowEditing = isEditing && activeRowId === item.id && isItemEditable(item) && (isMain || !!otherEdits[item.id]);
+                  const rowHasInvoice = rowMeta.invoiceNo && rowMeta.invoiceNo !== "-";
+                  const oe = otherEdits[item.id];
+                  const rowRemarks = isMain ? editRemarks : oe?.remarks ?? "";
+                  const setRowRemarks = (v: string) => (isMain ? setEditRemarks(v) : setOtherEdit(item.id, { remarks: v }));
+                  const setRowPrice = (v: number) => (isMain ? setEditUnitPrice(v) : setOtherEdit(item.id, { price: v }));
+                  const setRowQty = (v: number) => (isMain ? setEditQty(v) : setOtherEdit(item.id, { qty: v }));
+                  const setRowType = (v: ItemEdit["type"]) => (isMain ? setEditReturnType(v) : setOtherEdit(item.id, { type: v }));
+                  const editable = isItemEditable(item);
+                  const deleteBlock = !editable
+                    ? "This item is locked"
+                    : !meta.noteCode
+                    ? "This return has no note to remove items from"
+                    : visibleNoteItems.length + newItems.length <= 1
+                    ? "A return note needs at least one item"
+                    : "";
+                  return (
+                    <div
+                      key={item.id}
+                      className={`rounded-lg border p-3 space-y-3 ${rowEditing ? "bg-blue-50/40 border-blue-200" : "bg-white"}`}
+                    >
+                      {/* Product + actions */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
+                            <span className="text-muted-foreground">{idx + 1}.</span>
+                            <span className="break-words">{item.products?.name || "Return Product Item"}</span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                            <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">
+                              Return
+                            </Badge>
+                            {isMultiItem && item.status !== "Pending" && (
+                              <Badge variant="outline" className="text-[10px]">
+                                {item.status}
+                              </Badge>
+                            )}
+                            {isEditing && !editable && (
+                              <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                                {item.status === "Rejected" ? "Rejected" : "Settled in payment"} · locked
+                              </Badge>
+                            )}
+                            <span className="text-[11px] text-muted-foreground font-mono">
+                              {item.products?.sku || "SKU-0001"}
+                              {isMultiItem ? ` · ${item.return_number}` : ""}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            disabled={!editable}
+                            onClick={() => { setIsEditing(true); setActiveRowId((prev) => (prev === item.id ? null : item.id)); }}
+                            className={`p-2 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                              rowEditing ? "bg-blue-100 text-blue-700" : "text-blue-600 hover:bg-blue-50"
+                            }`}
+                            title={editable ? "Edit this item" : "This item is locked"}
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!!deleteBlock}
+                            onClick={() => {
+                              setIsEditing(true);
+                              setDeletedIds((prev) => (prev.includes(item.id) ? prev : [...prev, item.id]));
+                            }}
+                            className="p-2 rounded-md text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                            title={deleteBlock ? `Can't remove: ${deleteBlock}` : "Remove this item from the note"}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Invoice */}
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-muted-foreground">Invoice:</span>
+                        {rowHasInvoice ? (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenInvoice(rowMeta.invoiceNo)}
+                            className="inline-flex items-center gap-1 font-mono border border-blue-300 bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold px-2 py-0.5 rounded"
+                          >
+                            <FileText className="w-3 h-3" />
+                            {rowMeta.invoiceNo}
+                            <ExternalLink className="w-2.5 h-2.5" />
+                          </button>
+                        ) : (
+                          <span className="italic text-muted-foreground">Direct Return</span>
+                        )}
+                      </div>
+
+                      {/* Price · Qty · Total */}
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <p className="text-[11px] text-muted-foreground mb-1">Price</p>
+                          {rowEditing ? (
+                            <Input
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={line.price}
+                              onChange={(e) => setRowPrice(parseFloat(e.target.value) || 0)}
+                              className="h-9 text-right bg-white font-semibold"
+                            />
+                          ) : (
+                            <p className="text-sm font-medium">{line.price.toLocaleString()}</p>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-[11px] text-muted-foreground mb-1">Qty</p>
+                          {rowEditing ? (
+                            <Input
+                              type="number"
+                              min="1"
+                              value={line.qty}
+                              onChange={(e) => setRowQty(Math.max(1, parseInt(e.target.value) || 1))}
+                              className="h-9 text-center bg-white font-semibold"
+                            />
+                          ) : (
+                            <p className="text-sm font-medium">{line.qty}</p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[11px] text-muted-foreground mb-1">Total</p>
+                          <p className="text-sm font-bold h-9 flex items-center justify-end">{line.total.toLocaleString()}</p>
+                        </div>
+                      </div>
+
+                      {/* Condition */}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] text-muted-foreground">Condition</span>
+                        {rowEditing ? (
+                          <Select value={line.type} onValueChange={(val: any) => setRowType(val)}>
+                            <SelectTrigger className="h-9 text-xs w-44 bg-white font-medium">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Good">Good Return</SelectItem>
+                              <SelectItem value="Damage">Damaged Stock</SelectItem>
+                              <SelectItem value="Exchange">Damage Exchange</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <span
+                            className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border uppercase tracking-wider ${
+                              line.type === "Good"
+                                ? "bg-green-50 text-green-700 border-green-200"
+                                : line.type === "Exchange"
+                                ? "bg-blue-50 text-blue-700 border-blue-200"
+                                : "bg-red-50 text-red-700 border-red-200"
+                            }`}
+                          >
+                            {line.type === "Good" ? "Good Return" : line.type === "Exchange" ? "Damage Exchange" : "Damaged Stock"}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Remarks */}
+                      {rowEditing ? (
+                        <Input
+                          value={rowRemarks}
+                          onChange={(e) => setRowRemarks(e.target.value)}
+                          placeholder="Customer remarks / defect reason..."
+                          className="text-xs h-9 bg-white"
+                        />
+                      ) : (
+                        rowMeta.cleanReason && (
+                          <p className="text-xs text-muted-foreground italic">Remarks: {rowMeta.cleanReason}</p>
+                        )
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* New items */}
+                {newItems.map((n, nIdx) => {
+                  const opt = purchased.find((p) => p.id === n.optionId);
+                  return (
+                    <div key={n.key} className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 text-sm">
+                          <span className="text-muted-foreground">{noteLines.length + nIdx + 1}.</span>
+                          <Badge className="text-[10px] bg-emerald-100 text-emerald-800 border-none">New</Badge>
+                          {opt && opt.invoiceNo !== "-" && (
+                            <span className="font-mono text-xs text-blue-700">{opt.invoiceNo}</span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setNewItems((prev) => prev.filter((x) => x.key !== n.key))}
+                          className="p-2 rounded-md text-red-600 hover:bg-red-50 transition-colors"
+                          title="Remove this new item"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <SearchableDropdown
+                        options={purchased.map((p) => ({
+                          id: p.id,
+                          name: p.name,
+                          info: `${p.sku} · Bill ${p.invoiceNo} · bought ${p.qty} @ LKR ${p.price.toLocaleString()}`,
+                        }))}
+                        value={n.optionId}
+                        onChange={(val) => {
+                          const p = purchased.find((x) => x.id === val);
+                          updateNewItem(n.key, { optionId: val, price: p?.price ?? n.price });
+                        }}
+                        placeholder={purchased.length ? "Search product bought by this customer..." : "Loading products..."}
+                      />
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <p className="text-[11px] text-muted-foreground mb-1">Price</p>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="any"
+                            value={n.price}
+                            onChange={(e) => updateNewItem(n.key, { price: parseFloat(e.target.value) || 0 })}
+                            className="h-9 text-right bg-white font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <p className="text-[11px] text-muted-foreground mb-1">Qty</p>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={n.qty}
+                            onChange={(e) => updateNewItem(n.key, { qty: Math.max(1, parseInt(e.target.value) || 1) })}
+                            className="h-9 text-center bg-white font-semibold"
+                          />
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[11px] text-muted-foreground mb-1">Total</p>
+                          <p className="text-sm font-bold h-9 flex items-center justify-end">
+                            {(n.qty * n.price).toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] text-muted-foreground">Condition</span>
+                        <Select value={n.type} onValueChange={(val: any) => updateNewItem(n.key, { type: val })}>
+                          <SelectTrigger className="h-9 text-xs w-44 bg-white font-medium">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Good">Good Return</SelectItem>
+                            <SelectItem value="Damage">Damaged Stock</SelectItem>
+                            <SelectItem value="Exchange">Damage Exchange</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Input
+                        value={n.remarks}
+                        onChange={(e) => updateNewItem(n.key, { remarks: e.target.value })}
+                        placeholder="Customer remarks / defect reason..."
+                        className="text-xs h-9 bg-white"
+                      />
+                    </div>
+                  );
+                })}
+
+                {/* Add item / items being removed */}
+                {canRemoveItems && (canChangeItems || deletedIds.length > 0) && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {canChangeItems && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setNewItems((prev) => [
+                            ...prev,
+                            {
+                              key: `new-${Date.now()}`,
+                              optionId: "",
+                              qty: 1,
+                              price: 0,
+                              type: (returnRecord.return_type || "Good") as ItemEdit["type"],
+                              remarks: "",
+                            },
+                          ])
+                        }
+                        className="w-full sm:w-auto border-dashed text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                      >
+                        <Plus className="w-4 h-4 mr-1" /> Add Item
+                      </Button>
+                    )}
+                    {deletedIds.map((delId) => {
+                      const it = noteItems.find((x) => x.id === delId);
+                      return (
+                        <span
+                          key={delId}
+                          className="inline-flex items-center gap-1.5 text-xs bg-red-50 text-red-700 border border-red-200 rounded px-2 py-1"
+                        >
+                          Removing: {it?.products?.name || "Item"}
+                          <button
+                            type="button"
+                            onClick={() => setDeletedIds((prev) => prev.filter((x) => x !== delId))}
+                            className="font-semibold underline"
+                          >
+                            Undo
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+                {isEditing && meta.noteCode && pickupLeft && (
+                  <p className="text-xs text-muted-foreground">
+                    New items can't be added: pickup order {returnRecord.pickup_order?.order_id} is already {pickupStatus}.
+                    You can still remove items.
+                  </p>
+                )}
+
+                {/* Total */}
+                {(isMultiItem || newItems.length > 0) && (
+                  <div className="flex items-center justify-between rounded-lg bg-muted/40 border px-3 py-2 text-sm font-semibold">
+                    <span>Total · {noteUnits} units</span>
+                    <span className="font-bold">LKR {noteTotal.toLocaleString()}</span>
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
         </div>
 
         {/* RIGHT COLUMN (1 Col) - Return Summary (Just the Amounts) */}
-        <div className="lg:col-span-1 space-y-6 sticky top-6 self-start">
+        <div className="lg:col-span-1 space-y-6 lg:sticky lg:top-6 self-start min-w-0">
           <Card>
             <CardHeader className="pb-4">
               <CardTitle className="text-lg">Return Summary</CardTitle>

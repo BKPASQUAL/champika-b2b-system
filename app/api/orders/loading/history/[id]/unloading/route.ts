@@ -35,7 +35,7 @@ export async function GET(
       .select(
         `id, load_id, lorry_number, helper_name, loading_date, dispatched_at, created_at, status,
          profiles!loading_sheets_driver_id_fkey (full_name),
-         orders (id, order_id, invoice_no, status, notes,
+         orders (id, order_id, invoice_no, status, notes, total_amount,
            customers (shop_name),
            order_items (product_id, quantity, free_quantity))`
       )
@@ -75,6 +75,29 @@ export async function GET(
       historyByInvoice.get(h.invoice_id)!.push(h);
     });
 
+    // Return-note pickups (LKR 0 orders): items collected FROM the shop.
+    // Their notes carry [RETURN_NOTE|DAMAGE_EXCHANGE|DAMAGE_RETURN: no] and
+    // [RETURN_ITEM: no] tags naming the return records.
+    const pickupKind = (notes: string) =>
+      (notes || "").match(/\[(RETURN_NOTE|DAMAGE_EXCHANGE|DAMAGE_RETURN):\s*[^\]]+\]/)?.[1] || null;
+    const returnNos = Array.from(
+      new Set(
+        orders.flatMap((o) =>
+          Array.from(
+            String(o.notes || "").matchAll(/\[(?:RETURN_NOTE|DAMAGE_EXCHANGE|DAMAGE_RETURN|RETURN_ITEM):\s*([^\]]+)\]/g)
+          ).map((m) => m[1].trim())
+        )
+      )
+    );
+    const { data: returnRecords = [] } = returnNos.length
+      ? await supabaseAdmin
+          .from("inventory_returns")
+          .select("return_number, product_id, return_type, actual_condition")
+          .in("return_number", returnNos)
+      : { data: [] as any[] };
+    const returnByNo = new Map<string, any>();
+    (returnRecords || []).forEach((r: any) => returnByNo.set(r.return_number, r));
+
     const sheetStart = (sheet as any).dispatched_at || (sheet as any).created_at;
     const loadTag = String((sheet as any).load_id || "").toLowerCase();
 
@@ -83,6 +106,8 @@ export async function GET(
       const current = sumByProduct(o.order_items);
       let loaded = current;
       let editedAfterLoading = false;
+      const currentAmount = Number(o.total_amount) || 0;
+      let loadedAmount = currentAmount;
 
       if (inv) {
         const hist = historyByInvoice.get(inv.id) || [];
@@ -102,18 +127,50 @@ export async function GET(
         );
         if (firstEdit) {
           loaded = sumByProduct(firstEdit.previous_data.items);
+          loadedAmount = Number(firstEdit.previous_data.total_amount) || 0;
           editedAfterLoading = true;
         }
       }
 
       const customer = Array.isArray(o.customers) ? o.customers[0] : o.customers;
+
+      // Pickup: condition of each collected product, from its return record
+      // (Exchange → its inspected condition, Damage unless marked Good).
+      // Falls back to the note type: Good Return Note = Good, damage notes = Damage.
+      const kind = pickupKind(o.notes);
+      let pickup: { kind: string; items: { productId: string; quantity: number; condition: "Good" | "Damage" }[] } | null =
+        null;
+      if (kind) {
+        const tagged = Array.from(
+          String(o.notes || "").matchAll(/\[(?:RETURN_NOTE|DAMAGE_EXCHANGE|DAMAGE_RETURN|RETURN_ITEM):\s*([^\]]+)\]/g)
+        )
+          .map((m) => returnByNo.get(m[1].trim()))
+          .filter(Boolean);
+        const conditionFor = (productId: string): "Good" | "Damage" => {
+          const rec = tagged.find((r: any) => r.product_id === productId);
+          if (rec) {
+            if (rec.actual_condition === "Good" || rec.actual_condition === "Damage") return rec.actual_condition;
+            if (rec.return_type === "Good") return "Good";
+            return "Damage";
+          }
+          return kind === "RETURN_NOTE" ? "Good" : "Damage";
+        };
+        pickup = {
+          kind,
+          items: current.map((l) => ({ ...l, condition: conditionFor(l.productId) })),
+        };
+      }
+
       return {
+        pickup,
         orderId: o.id,
         orderNo: o.order_id,
         invoiceNo: inv?.manual_invoice_no || inv?.invoice_no || o.invoice_no || "N/A",
         customer: customer?.shop_name || "Unknown",
         status: o.status,
         editedAfterLoading,
+        loadedAmount,
+        currentAmount,
         loaded,
         current,
       };

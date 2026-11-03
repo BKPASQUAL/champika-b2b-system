@@ -203,7 +203,9 @@ export async function POST(
         .from("orders")
         .select("id, status, notes")
         .eq("customer_id", ret.customer_id)
-        .in("status", ["Approved", "Loading"])
+        // "In Transit": items added while the lorry is out (picked up at the shop)
+        // join the same pickup so they show on that load's reconciliation
+        .in("status", ["Approved", "Loading", "In Transit"])
         .ilike("notes", `%[NOTE:${noteCode}]%`);
       noteOrder =
         (candidates || []).find(

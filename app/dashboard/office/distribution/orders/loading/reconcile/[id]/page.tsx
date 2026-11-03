@@ -3,6 +3,15 @@
 import React, { useState, useEffect, use, useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { clearReconcileTicks, useReconcileTicks, type TickSnapshot } from "@/hooks/useReconcileTicks";
 import {
   Card,
@@ -128,11 +137,19 @@ interface ExpenseItem {
   category: string;
 }
 
+// Delivery Status choices on this page:
+//   "Delivered"
+//   "Loading"        — shown as "Reschedule": back to Loading, deliver later
+//   "Cancel Request" — back to Loading AND a cancel request is filed
+//                      (approved in Orders → Cancel Requests)
+const CANCEL_REQUEST = "Cancel Request";
+
 interface ReconcileState {
   [orderId: string]: {
     status: string;
     paymentStatus: string;
     notes: string;
+    cancelReason?: string;
   };
 }
 
@@ -191,11 +208,19 @@ export default function OfficeReconcileLoadPage({
   const [expenseToDelete, setExpenseToDelete] = useState<string | null>(null);
   const [reconcileData, setReconcileData] = useState<ReconcileState>({});
   const [unloadOpen, setUnloadOpen] = useState(false);
+  const [cancelDialog, setCancelDialog] = useState<{ orderId: string; reason: string } | null>(null);
 
   // Inputs for the Unloading Report: statuses picked here + returns collected
   const unloadStatuses = useMemo(() => {
     const m: Record<string, string> = {};
     Object.entries(reconcileData).forEach(([oid, s]) => (m[oid] = s.status));
+    return m;
+  }, [reconcileData]);
+  const unloadCancelReasons = useMemo(() => {
+    const m: Record<string, string> = {};
+    Object.entries(reconcileData).forEach(([oid, s]) => {
+      if (s.cancelReason) m[oid] = s.cancelReason;
+    });
     return m;
   }, [reconcileData]);
   const unloadReturns = useMemo<UnloadReturnInput[]>(
@@ -224,8 +249,13 @@ export default function OfficeReconcileLoadPage({
     [orders, loading]
   );
   const ticks = useReconcileTicks(id, tickItems);
-  // Cancelled orders don't need checking
-  const tickable = orders.filter((o) => reconcileData[o.id]?.status !== "Cancelled");
+  // Only delivered invoices need checking. Reschedule (Loading), Cancel Request
+  // and Cancelled go back to the store, so they count as ticked automatically.
+  const isAutoTicked = (orderId: string) => {
+    const s = reconcileData[orderId]?.status;
+    return s === "Loading" || s === CANCEL_REQUEST || s === "Cancelled";
+  };
+  const tickable = orders.filter((o) => !isAutoTicked(o.id));
   const tickedCount = tickable.filter((o) => ticks.isTicked(o.id)).length;
   const allTicked = tickable.length > 0 && tickedCount === tickable.length;
 
@@ -302,6 +332,7 @@ export default function OfficeReconcileLoadPage({
             status: s?.status && (o.status === "In Transit" || o.status === "Loading") ? s.status : defaultStatus,
             paymentStatus: s?.paymentStatus || "Credit",
             notes: s?.notes || "",
+            cancelReason: s?.cancelReason || "",
           };
         });
         return init;
@@ -423,6 +454,13 @@ export default function OfficeReconcileLoadPage({
       toast.error(`Please check and tick every invoice first (${tickable.length - tickedCount} left).`);
       return;
     }
+    const cancelRows = Object.entries(reconcileData).filter(([, d]) => d.status === CANCEL_REQUEST);
+    const missingReason = cancelRows.find(([, d]) => !d.cancelReason?.trim());
+    if (missingReason) {
+      const inv = orders.find((o) => o.id === missingReason[0])?.invoiceNo || "";
+      toast.error(`Add a cancel reason for ${inv}.`);
+      return;
+    }
     setSubmitting(true);
     try {
       const payload = {
@@ -430,7 +468,10 @@ export default function OfficeReconcileLoadPage({
         userId: currentUser.id,
         updates: Object.entries(reconcileData).map(([orderId, data]) => ({
           orderId,
-          ...data,
+          paymentStatus: data.paymentStatus,
+          notes: data.notes,
+          // Reschedule and Cancel Request both go back to Loading
+          status: data.status === CANCEL_REQUEST ? "Loading" : data.status,
           finalAmount: orders.find((o) => o.id === orderId)?.currentAmount || 0,
         })),
         closeLoad: true,
@@ -441,6 +482,23 @@ export default function OfficeReconcileLoadPage({
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error();
+
+      // File cancel requests (order is in Loading now, so the API accepts it)
+      const failed: string[] = [];
+      for (const [orderId, d] of cancelRows) {
+        const r = await fetch(`/api/orders/${orderId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "request_cancel", reason: d.cancelReason, userId: currentUser.id }),
+        }).catch(() => null);
+        if (!r || !r.ok) failed.push(orders.find((o) => o.id === orderId)?.invoiceNo || orderId);
+      }
+      if (failed.length) {
+        toast.warning(`Load closed, but cancel request failed for: ${failed.join(", ")}. Please request it from the order.`);
+      } else if (cancelRows.length) {
+        toast.success(`${cancelRows.length} cancel request(s) sent to Cancel Requests.`);
+      }
+
       toast.success("Load Reconciled & Closed Successfully!");
       clearReconcileTicks(id);
       try {
@@ -479,6 +537,7 @@ export default function OfficeReconcileLoadPage({
   const checkingCount = Object.values(reconcileData).filter((s) => s.status === "Checking").length;
   const loadingCount = Object.values(reconcileData).filter((s) => s.status === "Loading").length;
   const deliveredCount = Object.values(reconcileData).filter((s) => s.status === "Delivered").length;
+  const cancelRequestCount = Object.values(reconcileData).filter((s) => s.status === CANCEL_REQUEST).length;
 
   const deliveredValue = orders.reduce((sum, o) => {
     const s = reconcileData[o.id]?.status;
@@ -666,7 +725,12 @@ export default function OfficeReconcileLoadPage({
           )}
           {loadingCount > 0 && (
             <Badge className="bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100">
-              {loadingCount} Loading
+              {loadingCount} Reschedule
+            </Badge>
+          )}
+          {cancelRequestCount > 0 && (
+            <Badge className="bg-rose-100 text-rose-700 border-rose-200 hover:bg-rose-100">
+              {cancelRequestCount} Cancel Request
             </Badge>
           )}
           {deliveredCount > 0 && (
@@ -927,7 +991,8 @@ export default function OfficeReconcileLoadPage({
                         const currentStatus = state.status || "Delivered";
                         const diff = order.currentAmount - order.originalAmount;
                         const isCancelled = currentStatus === "Cancelled";
-                        const ticked = isCompleted || ticks.isTicked(order.id);
+                        const autoTicked = !isCompleted && isAutoTicked(order.id);
+                        const ticked = isCompleted || autoTicked || ticks.isTicked(order.id);
                         const change = !isCompleted && !ticked ? ticks.changeFor(order.id) : undefined;
 
                         return (
@@ -948,7 +1013,8 @@ export default function OfficeReconcileLoadPage({
                             <TableCell className="pl-4 align-top pt-4">
                               <Checkbox
                                 aria-label={`Tick ${order.invoiceNo}`}
-                                disabled={isCompleted || isCancelled}
+                                disabled={isCompleted || isCancelled || autoTicked}
+                                title={autoTicked ? "Auto-ticked: going back to the store" : undefined}
                                 checked={ticked}
                                 onCheckedChange={(v) => ticks.setTicked(order.id, snapshotOf(order), v === true)}
                                 className="data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
@@ -1040,9 +1106,16 @@ export default function OfficeReconcileLoadPage({
                                   {currentStatus}
                                 </span>
                               ) : (
+                                <div className="space-y-1">
                                 <Select
                                   value={currentStatus}
-                                  onValueChange={(val) => updateOrderState(order.id, "status", val)}
+                                  onValueChange={(val) => {
+                                    if (val === CANCEL_REQUEST) {
+                                      setCancelDialog({ orderId: order.id, reason: state.cancelReason || "" });
+                                      return;
+                                    }
+                                    updateOrderState(order.id, "status", val);
+                                  }}
                                 >
                                   <SelectTrigger
                                     className={cn(
@@ -1053,21 +1126,35 @@ export default function OfficeReconcileLoadPage({
                                       currentStatus === "Checking" && "border-cyan-200 bg-cyan-50 text-cyan-700",
                                       currentStatus === "Loading" && "border-blue-200 bg-blue-50 text-blue-700",
                                       currentStatus === "Delivered" && "border-green-200 bg-green-50 text-green-700",
+                                      currentStatus === CANCEL_REQUEST && "border-rose-200 bg-rose-50 text-rose-700",
                                     )}
                                   >
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    {/* Only Delivered, or back to Loading */}
                                     <SelectItem value="Delivered">Delivered</SelectItem>
-                                    <SelectItem value="Loading">Loading</SelectItem>
-                                    {!["Delivered", "Loading"].includes(currentStatus) && (
+                                    {/* Back to Loading, deliver on a later load */}
+                                    <SelectItem value="Loading">Reschedule</SelectItem>
+                                    {/* Back to Loading + cancel request for approval */}
+                                    <SelectItem value={CANCEL_REQUEST}>Cancel Request</SelectItem>
+                                    {!["Delivered", "Loading", CANCEL_REQUEST].includes(currentStatus) && (
                                       <SelectItem value={currentStatus} disabled>
                                         {currentStatus}
                                       </SelectItem>
                                     )}
                                   </SelectContent>
                                 </Select>
+                                {currentStatus === CANCEL_REQUEST && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setCancelDialog({ orderId: order.id, reason: state.cancelReason || "" })}
+                                    className="block w-full text-left text-[10px] text-rose-700 truncate hover:underline"
+                                    title={state.cancelReason}
+                                  >
+                                    Reason: {state.cancelReason || "add reason"}
+                                  </button>
+                                )}
+                                </div>
                               )}
                             </TableCell>
 
@@ -1150,12 +1237,50 @@ export default function OfficeReconcileLoadPage({
         </div>
       )}
 
+      {/* ── Cancel Request reason ── */}
+      <Dialog open={!!cancelDialog} onOpenChange={(o) => !o && setCancelDialog(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cancel Request</DialogTitle>
+            <DialogDescription>
+              {orders.find((o) => o.id === cancelDialog?.orderId)?.invoiceNo} goes back to Loading and a cancel
+              request is sent to Orders → Cancel Requests when you close the load.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            autoFocus
+            placeholder="Reason (e.g. shop closed, customer refused the goods)"
+            value={cancelDialog?.reason || ""}
+            onChange={(e) => setCancelDialog((d) => (d ? { ...d, reason: e.target.value } : d))}
+            rows={3}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelDialog(null)}>
+              Back
+            </Button>
+            <Button
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+              disabled={!cancelDialog?.reason.trim()}
+              onClick={() => {
+                if (!cancelDialog) return;
+                updateOrderState(cancelDialog.orderId, "cancelReason", cancelDialog.reason.trim());
+                updateOrderState(cancelDialog.orderId, "status", CANCEL_REQUEST);
+                setCancelDialog(null);
+              }}
+            >
+              Set Cancel Request
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* ── Unloading Report ── */}
       <UnloadingReportDialog
         open={unloadOpen}
         onOpenChange={setUnloadOpen}
         loadId={id}
         statuses={unloadStatuses}
+        cancelReasons={unloadCancelReasons}
         returns={unloadReturns}
       />
 
