@@ -19,8 +19,8 @@ const FONT = "Calibri, 'Segoe UI', Arial, Helvetica, sans-serif";
 const TOP_SPACE = "33.1mm";
 
 // Table rows per page; the totals + signature block needs about this many rows of space
-const ROWS_PER_PAGE = 26;
-const FOOTER_ROWS = 9;
+const ROWS_PER_PAGE = 21;
+const FOOTER_ROWS = 8;
 
 const esc = (v: unknown) =>
   String(v ?? "").replace(/[&<>"]/g, (c) =>
@@ -136,7 +136,7 @@ export const generateOrangeInvoiceHTML = (invoice: any): string => {
   const invoiceNo = manualRef.startsWith("CINV") ? manualRef : invoice.invoiceNo || "-";
   const printedAt = formatPrintTime(new Date());
 
-  const cell = "border:1px solid #000;padding:2px 4px;font-size:11px;";
+  const cell = "border:1px solid #000;padding:2px 4px;font-size:14px;";
   const th = (label: string, width: string, align = "left") =>
     `<th style="${cell}font-weight:400;text-align:${align};width:${width};vertical-align:middle;line-height:1.15;">${label}</th>`;
 
@@ -157,9 +157,9 @@ export const generateOrangeInvoiceHTML = (invoice: any): string => {
       </thead>`;
 
   const rowHTML = (r: Row) => {
-    const td = "padding:3px 4px;font-size:11.5px;white-space:nowrap;overflow:hidden;";
+    const td = "padding:3px 4px;font-size:14.5px;white-space:nowrap;overflow:hidden;";
     if (r.kind === "group") {
-      return `<tr><td colspan="9" style="padding:4px 4px 2px;text-align:center;font-size:11.5px;font-weight:700;text-decoration:underline;">${esc(r.name)}</td></tr>`;
+      return `<tr><td colspan="9" style="padding:4px 4px 2px;text-align:center;font-size:14.5px;font-weight:700;text-decoration:underline;">${esc(r.name)}</td></tr>`;
     }
     const it = r.item;
     const price = Number(it.unitPrice ?? it.price) || 0;
@@ -192,7 +192,7 @@ export const generateOrangeInvoiceHTML = (invoice: any): string => {
 
   const footerHTML = `
     <div style="border-top:1px solid #000;margin-top:2px;"></div>
-    <table style="width:55%;margin-left:auto;border-collapse:collapse;font-size:12px;margin-top:6px;">
+    <table style="width:55%;margin-left:auto;border-collapse:collapse;font-size:15px;margin-top:6px;">
       ${totalLine("Gross Value Total", grossTotal)}
       ${itemDiscount > 0.009 ? totalLine("Item Discount", itemDiscount, true) : ""}
       ${extraDiscount > 0.009 ? totalLine(`Extra Discount${invoice.extraDiscountPercent ? ` (${invoice.extraDiscountPercent}%)` : ""}`, extraDiscount, true) : ""}
@@ -205,10 +205,10 @@ export const generateOrangeInvoiceHTML = (invoice: any): string => {
         </td>
       </tr>
     </table>
-    ${notes ? `<div style="font-size:11px;margin-top:6px;">Note: ${esc(notes)}</div>` : ""}
-    <div style="font-size:11.5px;font-weight:700;margin-top:14px;">Free Items is marked with "***"</div>
-    <div style="font-size:11.5px;margin-top:12px;">Accepted above items in order</div>
-    <table style="width:100%;border-collapse:collapse;margin-top:30px;font-size:11.5px;font-weight:700;page-break-inside:avoid;">
+    ${notes ? `<div style="font-size:14px;margin-top:6px;">Note: ${esc(notes)}</div>` : ""}
+    <div style="font-size:14.5px;font-weight:700;margin-top:14px;">Free Items is marked with "***"</div>
+    <div style="font-size:14.5px;margin-top:12px;">Accepted above items in order</div>
+    <table style="width:100%;border-collapse:collapse;margin-top:30px;font-size:14.5px;font-weight:700;page-break-inside:avoid;">
       <tr>
         <td style="width:33%;">Prepared By <span style="display:inline-block;width:90px;border-bottom:1px solid #888;"></span></td>
         <td style="width:34%;text-align:center;">Issued By <span style="display:inline-block;width:90px;border-bottom:1px solid #888;"></span></td>
@@ -228,24 +228,24 @@ export const generateOrangeInvoiceHTML = (invoice: any): string => {
     <table style="width:100%;border-collapse:collapse;">
       <tr>
         <td style="vertical-align:bottom;">
-          <div style="font-size:12.5px;font-weight:700;">${esc(ORANGE_INVOICE_COMPANY.name)}</div>
-          <div style="font-size:11.5px;margin-top:2px;">${esc(ORANGE_INVOICE_COMPANY.address)}</div>
-          <div style="font-size:11.5px;margin-top:2px;">Tel : ${esc(ORANGE_INVOICE_COMPANY.tel)}</div>
+          <div style="font-size:15.5px;font-weight:700;">${esc(ORANGE_INVOICE_COMPANY.name)}</div>
+          <div style="font-size:14.5px;margin-top:2px;">${esc(ORANGE_INVOICE_COMPANY.address)}</div>
+          <div style="font-size:14.5px;margin-top:2px;">Tel : ${esc(ORANGE_INVOICE_COMPANY.tel)}</div>
         </td>
         <td style="vertical-align:top;text-align:right;">
-          <span style="display:inline-block;border-top:1px solid #000;padding-top:1px;font-size:10.5px;font-family:'Times New Roman',serif;">${printedAt}</span>
+          <span style="display:inline-block;border-top:1px solid #000;padding-top:1px;font-size:13px;font-family:'Times New Roman',serif;">${printedAt}</span>
         </td>
       </tr>
     </table>
-    <div style="text-align:center;font-size:20px;font-weight:700;margin:4px 0 6px;">INVOICE</div>` : ""}
+    <div style="text-align:center;font-size:25px;font-weight:700;margin:4px 0 6px;">INVOICE</div>` : ""}
 
-    <table style="width:100%;border-collapse:collapse;font-size:12px;">
+    <table style="width:100%;border-collapse:collapse;font-size:15px;">
       <tr>
         <td style="vertical-align:top;width:58%;">
           <div style="padding:2px 0;">Invoiced To &nbsp;&nbsp;&nbsp;:</div>
           <div style="padding:2px 0;">${esc(shop)}</div>
           ${address ? `<div style="padding:2px 0;">${esc(address)}</div>` : ""}
-          <table style="border-collapse:collapse;font-size:12px;width:80%;">
+          <table style="border-collapse:collapse;font-size:15px;width:80%;">
             ${infoRow("Outlet Tel", esc(outletTel))}
             ${infoRow("Outlet Vat No", "")}
             ${infoRow("Distributor Vat No", "")}
@@ -253,7 +253,7 @@ export const generateOrangeInvoiceHTML = (invoice: any): string => {
           </table>
         </td>
         <td style="vertical-align:top;width:42%;">
-          <table style="border-collapse:collapse;font-size:12px;width:100%;">
+          <table style="border-collapse:collapse;font-size:15px;width:100%;">
             ${infoRow("Invoice No", esc(invoiceNo))}
             ${infoRow("Invoice Date", formatInvoiceDate(invoice.createdAt || invoice.date))}
             ${infoRow("Sales Person", esc(String(invoice.salesRep || "-").toUpperCase()))}
@@ -264,7 +264,7 @@ export const generateOrangeInvoiceHTML = (invoice: any): string => {
       </tr>
     </table>
 
-    <div style="font-size:11.5px;margin:4px 0 2px;">Orderd Products</div>
+    <div style="font-size:14.5px;margin:4px 0 2px;">Orderd Products</div>
     ${tableHead}
       <tbody>${pageRows.map(rowHTML).join("")}</tbody>
     </table>
@@ -272,7 +272,7 @@ export const generateOrangeInvoiceHTML = (invoice: any): string => {
     ${isLast ? footerHTML : ""}
 
     <div style="flex:1;"></div>
-    <div style="text-align:right;font-size:12px;font-weight:700;padding-top:8px;">Page ${pageNo} of ${totalPages}</div>
+    <div style="text-align:right;font-size:15px;font-weight:700;padding-top:8px;">Page ${pageNo} of ${totalPages}</div>
   </div>`;
     })
     .join("");
