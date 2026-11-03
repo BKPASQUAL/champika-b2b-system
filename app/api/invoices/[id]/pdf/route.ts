@@ -89,7 +89,7 @@ export async function GET(
       salesRep: invoice.orders?.profiles?.full_name || "Unknown",
       items: (items || []).map((item: any) => ({
         sku: item.products?.sku || "-",
-        productName: item.products?.name || "Unknown Product",
+        productName: item.custom_name || item.products?.name || "Unknown Product",
         mrp: item.products?.mrp || 0,
         unitPrice: item.unit_price,
         quantity: item.quantity,

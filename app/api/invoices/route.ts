@@ -12,6 +12,7 @@ const invoiceItemSchema = z.object({
   productId: z.string(),
   sku: z.string().optional().nullable(),
   productName: z.string().optional().nullable(),
+  customName: z.string().optional().nullable(), // per-invoice printed name
   quantity: z.number().min(1),
   freeQuantity: z.number().default(0),
   unit: z.string().optional().nullable().or(z.literal("")),
@@ -641,6 +642,8 @@ export async function POST(request: NextRequest) {
       return {
         order_id: orderData.id,
         product_id: item.productId,
+        // Only send when set, so normal invoices don't depend on the column
+        ...(item.customName?.trim() ? { custom_name: item.customName.trim() } : {}),
         quantity: item.quantity,
         free_quantity: item.freeQuantity,
         unit_price: item.unitPrice,

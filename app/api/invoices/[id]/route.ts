@@ -10,6 +10,7 @@ const invoiceItemSchema = z.object({
   productId: z.string(),
   sku: z.string().optional().nullable(),
   productName: z.string().optional().nullable(),
+  customName: z.string().optional().nullable(), // undefined = keep existing
   quantity: z.number().min(1),
   freeQuantity: z.number().default(0),
   unit: z.string().optional().nullable(),
@@ -310,8 +311,10 @@ export async function GET(
         sku: item.products?.sku || "N/A",
 
         // Product Identity
-        productName: item.products?.name || "Unknown Product",
-        name: item.products?.name, // Alias for some UIs
+        productName: item.custom_name || item.products?.name || "Unknown Product",
+        name: item.custom_name || item.products?.name, // Alias for some UIs
+        customName: item.custom_name || null,
+        originalProductName: item.products?.name || "",
         description: item.products?.description || "",
         category: item.products?.category || "",
         brand: item.products?.brand || "",
@@ -714,9 +717,22 @@ export async function PATCH(
     }
 
     // Insert New Items (with actual_unit_cost preserved/fetched)
-    const newItemsData = val.items.map((item) => ({
+    // Keep existing custom names when the editing page doesn't send one
+    const oldCustomNameMap: Record<string, string> = {};
+    for (const ci of currentItems || []) {
+      if (ci.custom_name) oldCustomNameMap[ci.product_id] = ci.custom_name;
+    }
+
+    const newItemsData = val.items.map((item) => {
+      const customName =
+        item.customName !== undefined
+          ? item.customName?.trim() || null
+          : oldCustomNameMap[item.productId] ?? null;
+      return {
       order_id: currentInvoice.order_id,
       product_id: item.productId,
+      // Only send when set, so normal invoices don't depend on the column
+      ...(customName ? { custom_name: customName } : {}),
       quantity: item.quantity,
       free_quantity: item.freeQuantity,
       unit_price: item.unitPrice,
@@ -726,7 +742,8 @@ export async function PATCH(
       discount_amount: item.discountAmount,
       actual_unit_cost:
         oldCostMap[item.productId] ?? freshCostMap[item.productId] ?? 0,
-    }));
+      };
+    });
 
     const { error: insertError } = await supabaseAdmin
       .from("order_items")

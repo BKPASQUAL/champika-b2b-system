@@ -43,6 +43,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { InvoiceNameOverride } from "@/components/invoices/InvoiceNameOverride";
 import {
   Card,
   CardContent,
@@ -112,6 +113,7 @@ interface InvoiceItem {
   productId: string;
   sku: string;
   productName: string;
+  customName?: string; // printed on this invoice instead of productName
   quantity: number;
   freeQuantity: number;
   unit: string;
@@ -247,6 +249,7 @@ export default function DistributionEditInvoicePage({
     unitPrice: 0,
     discountPercent: "",
     stockAvailable: 0,
+    customName: "", // optional name printed on this invoice only
   });
 
   const qtyInputRef = useRef<HTMLInputElement>(null);
@@ -497,7 +500,8 @@ export default function DistributionEditInvoicePage({
           id: item.id || Math.random().toString(),
           productId: item.productId || item.product_id,
           sku: item.sku,
-          productName: item.productName || item.name,
+          productName: item.originalProductName || item.productName || item.name,
+          customName: item.customName || undefined,
           unit: item.unit,
           quantity: item.quantity,
           freeQuantity: item.freeQuantity,
@@ -641,6 +645,7 @@ export default function DistributionEditInvoicePage({
       unitPrice: defaultUnitPrice,
       discountPercent: "",
       stockAvailable: product.stock_quantity + bonusStock,
+      customName: "",
     });
 
     setProductOpen(false);
@@ -685,6 +690,10 @@ export default function DistributionEditInvoicePage({
       productId: currentItem.productId,
       sku: currentItem.sku,
       productName: product?.name || currentItem.sku,
+      customName:
+        currentItem.customName.trim() && currentItem.customName.trim() !== product?.name
+          ? currentItem.customName.trim()
+          : undefined,
       unit: currentItem.unit,
       quantity: qty,
       freeQuantity: free,
@@ -714,6 +723,7 @@ export default function DistributionEditInvoicePage({
       unitPrice: 0,
       discountPercent: "",
       stockAvailable: 0,
+      customName: "",
     });
   };
 
@@ -733,6 +743,7 @@ export default function DistributionEditInvoicePage({
       unitPrice: item.unitPrice,
       discountPercent: String(item.discountPercent),
       stockAvailable: currentDbStock + item.quantity + item.freeQuantity,
+      customName: item.customName || "",
     });
   };
 
@@ -748,6 +759,7 @@ export default function DistributionEditInvoicePage({
       unitPrice: 0,
       discountPercent: "",
       stockAvailable: 0,
+      customName: "",
     });
   };
 
@@ -827,7 +839,8 @@ export default function DistributionEditInvoicePage({
       paymentMethod,
       cashDiscountPercent: paymentMethod === "Cash & Discount" ? (parseFloat(cashDiscount) || 0) : 0,
       cashDiscountAmount: paymentMethod === "Cash & Discount" ? cashDiscountAmount : 0,
-      items,
+      // null customName = clear any rename on that item
+      items: items.map((i) => ({ ...i, customName: i.customName ?? null })),
       grandTotal,
       extraDiscountPercent: extraDiscPercVal,
       extraDiscountAmount,
@@ -1346,6 +1359,14 @@ export default function DistributionEditInvoicePage({
                       </Command>
                     </PopoverContent>
                   </Popover>
+                  <InvoiceNameOverride
+                    productId={currentItem.productId}
+                    productName={products.find((p) => p.id === currentItem.productId)?.name}
+                    value={currentItem.customName}
+                    onChange={(v) => setCurrentItem((prev) => ({ ...prev, customName: v }))}
+                    onKeyDown={handleKeyDown}
+                    disabled={isReadOnly}
+                  />
                 </div>
               </div>
 
@@ -1534,7 +1555,15 @@ export default function DistributionEditInvoicePage({
                             <TableCell>{idx + 1}</TableCell>
                             <TableCell>
                               <div className="font-medium flex items-center gap-2">
-                                {item.productName}
+                                {item.customName || item.productName}
+                                {item.customName && (
+                                  <span
+                                    className="text-[10px] bg-blue-100 text-blue-700 border border-blue-200 rounded px-1 py-0.5 font-semibold"
+                                    title={`Original: ${item.productName}`}
+                                  >
+                                    Renamed
+                                  </span>
+                                )}
                                 {item.retailOnly && (
                                   <span className="text-[10px] bg-amber-100 text-amber-800 border border-amber-300 rounded px-1 py-0.5 font-semibold">
                                     Retail

@@ -7,6 +7,8 @@ import {
   ArrowLeft,
   Plus,
   Trash2,
+  Pencil,
+  X,
   Save,
   Package,
   Loader2,
@@ -28,6 +30,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MrpDiscountInput } from "@/components/ui/mrp-discount-input";
+import { InvoiceNameOverride } from "@/components/invoices/InvoiceNameOverride";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Card,
@@ -93,6 +96,7 @@ interface InvoiceItem {
   productId: string;
   sku: string;
   productName: string;
+  customName?: string; // printed on this invoice instead of productName
   quantity: number;
   freeQuantity: number;
   unit: string;
@@ -210,9 +214,14 @@ export default function CreateInvoiceForm({ printFormat = "STANDARD" }: { printF
     unitPrice: 0,
     discountPercent: "",
     stockAvailable: 0,
+    customName: "", // optional name printed on this invoice only
   });
 
   const qtyInputRef = useRef<HTMLInputElement>(null);
+  const addProductsRef = useRef<HTMLDivElement>(null);
+
+  // Item currently being edited from the Invoice Items table (null = adding new)
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
 
   // --- Global Keyboard Shortcuts ---
   useEffect(() => {
@@ -374,6 +383,7 @@ export default function CreateInvoiceForm({ printFormat = "STANDARD" }: { printF
       unitPrice: defaultUnitPrice,
       discountPercent: "", // Reset to empty
       stockAvailable: product.stock_quantity,
+      customName: "",
     });
 
     setTimeout(() => {
@@ -421,10 +431,14 @@ export default function CreateInvoiceForm({ printFormat = "STANDARD" }: { printF
     const netTotal = grossTotal - discountAmount;
 
     const newItem: InvoiceItem = {
-      id: Date.now().toString(),
+      id: editingItemId ?? Date.now().toString(),
       productId: currentItem.productId,
       sku: product.sku,
       productName: product.name,
+      customName:
+        currentItem.customName.trim() && currentItem.customName.trim() !== product.name
+          ? currentItem.customName.trim()
+          : undefined,
       unit: product.unit_of_measure,
       quantity: qty,
       freeQuantity: free,
@@ -437,9 +451,19 @@ export default function CreateInvoiceForm({ printFormat = "STANDARD" }: { printF
       retailOnly: product.retailOnly,
     };
 
-    setItems([...items, newItem]);
+    if (editingItemId) {
+      // Replace the edited row in place (keeps its position in the table)
+      setItems(items.map((item) => (item.id === editingItemId ? newItem : item)));
+      toast.success("Item updated");
+    } else {
+      setItems([...items, newItem]);
+    }
 
-    // Reset Form
+    resetCurrentItem();
+  };
+
+  const resetCurrentItem = () => {
+    setEditingItemId(null);
     setCurrentItem({
       productId: "",
       sku: "",
@@ -450,11 +474,37 @@ export default function CreateInvoiceForm({ printFormat = "STANDARD" }: { printF
       unitPrice: 0,
       discountPercent: "",
       stockAvailable: 0,
+      customName: "",
     });
+  };
+
+  // Load a row from the Invoice Items table back into the form for editing
+  const handleEditItem = (item: InvoiceItem) => {
+    const product = products.find((p) => p.id === item.productId);
+    setEditingItemId(item.id);
+    setCurrentItem({
+      productId: item.productId,
+      sku: item.sku,
+      quantity: String(item.quantity),
+      freeQuantity: item.freeQuantity ? String(item.freeQuantity) : "",
+      unit: item.unit,
+      mrp: item.mrp,
+      unitPrice: item.unitPrice,
+      discountPercent: item.discountPercent ? String(item.discountPercent) : "",
+      stockAvailable: product?.stock_quantity ?? 0,
+      customName: item.customName || "",
+    });
+
+    addProductsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setTimeout(() => {
+      qtyInputRef.current?.focus({ preventScroll: true });
+      qtyInputRef.current?.select();
+    }, 300);
   };
 
   const handleRemoveItem = (id: string) => {
     setItems(items.filter((item) => item.id !== id));
+    if (editingItemId === id) resetCurrentItem();
   };
 
   // --- Totals Calculation ---
@@ -601,7 +651,7 @@ export default function CreateInvoiceForm({ printFormat = "STANDARD" }: { printF
   };
 
   const availableProducts = products.filter(
-    (p) => !items.some((i) => i.productId === p.id)
+    (p) => !items.some((i) => i.productId === p.id && i.id !== editingItemId)
   );
 
   // Calculate current item discount amount for display
@@ -822,6 +872,7 @@ export default function CreateInvoiceForm({ printFormat = "STANDARD" }: { printF
                                       unitPrice: 0,
                                       discountPercent: "",
                                       stockAvailable: 0,
+                                      customName: "",
                                     });
                                   } else if (items.length > 0) {
                                     return; // Cancel change
@@ -915,11 +966,16 @@ export default function CreateInvoiceForm({ printFormat = "STANDARD" }: { printF
           ) : (
             <>
               {/* 2. Add Items */}
-              <Card>
+              <Card
+                ref={addProductsRef}
+                className={cn("scroll-mt-4", editingItemId && "ring-2 ring-amber-400")}
+              >
             <CardHeader>
-              <CardTitle>Add Products</CardTitle>
+              <CardTitle>{editingItemId ? "Edit Product" : "Add Products"}</CardTitle>
               <CardDescription>
-                Search and add products to the invoice
+                {editingItemId
+                  ? "Change the details and click Update Item"
+                  : "Search and add products to the invoice"}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -1004,6 +1060,13 @@ export default function CreateInvoiceForm({ printFormat = "STANDARD" }: { printF
                       </Command>
                     </PopoverContent>
                   </Popover>
+                  <InvoiceNameOverride
+                    productId={currentItem.productId}
+                    productName={products.find((p) => p.id === currentItem.productId)?.name}
+                    value={currentItem.customName}
+                    onChange={(v) => setCurrentItem((prev) => ({ ...prev, customName: v }))}
+                    onKeyDown={handleKeyDown}
+                  />
                 </div>
               </div>
 
@@ -1137,15 +1200,33 @@ export default function CreateInvoiceForm({ printFormat = "STANDARD" }: { printF
               </div>
 
               {/* Add Button - ALWAYS VISIBLE */}
-              <Button
-                onClick={handleAddItem}
-                className="w-full bg-blue-600 hover:bg-blue-700"
-                variant="default"
-                disabled={!currentItem.productId}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add to Invoice
-              </Button>
+              {editingItemId ? (
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleAddItem}
+                    className="flex-1 bg-amber-600 hover:bg-amber-700"
+                    variant="default"
+                    disabled={!currentItem.productId}
+                  >
+                    <Check className="w-4 h-4 mr-2" />
+                    Update Item
+                  </Button>
+                  <Button variant="outline" onClick={resetCurrentItem}>
+                    <X className="w-4 h-4 mr-2" />
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  onClick={handleAddItem}
+                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  variant="default"
+                  disabled={!currentItem.productId}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add to Invoice
+                </Button>
+              )}
             </CardContent>
           </Card>
 
@@ -1169,7 +1250,7 @@ export default function CreateInvoiceForm({ printFormat = "STANDARD" }: { printF
                       </TableHead>
                       <TableHead className="text-center w-20">Disc%</TableHead>
                       <TableHead className="text-right w-28">Total</TableHead>
-                      <TableHead className="w-12"></TableHead>
+                      <TableHead className="w-24"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1191,12 +1272,23 @@ export default function CreateInvoiceForm({ printFormat = "STANDARD" }: { printF
                         return (
                         <TableRow
                           key={item.id}
-                          className={isModified ? "bg-red-50 hover:bg-red-100" : ""}
+                          className={cn(
+                            isModified && "bg-red-50 hover:bg-red-100",
+                            editingItemId === item.id && "bg-amber-50 hover:bg-amber-100 outline-2 outline-amber-400"
+                          )}
                         >
                           <TableCell>{idx + 1}</TableCell>
                           <TableCell>
                             <div className="font-medium flex items-center gap-2">
-                              {item.productName}
+                              {item.customName || item.productName}
+                              {item.customName && (
+                                <span
+                                  className="text-[10px] bg-blue-100 text-blue-700 border border-blue-200 rounded px-1 py-0.5 font-semibold"
+                                  title={`Original: ${item.productName}`}
+                                >
+                                  Renamed
+                                </span>
+                              )}
                               {item.retailOnly && (
                                 <span className="text-[10px] bg-amber-100 text-amber-800 border border-amber-300 rounded px-1 py-0.5 font-semibold">
                                   Retail
@@ -1245,13 +1337,24 @@ export default function CreateInvoiceForm({ printFormat = "STANDARD" }: { printF
                             {item.total.toLocaleString()}
                           </TableCell>
                           <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleRemoveItem(item.id)}
-                            >
-                              <Trash2 className="w-4 h-4 text-destructive" />
-                            </Button>
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Edit item"
+                                onClick={() => handleEditItem(item)}
+                              >
+                                <Pencil className="w-4 h-4 text-blue-600" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Remove item"
+                                onClick={() => handleRemoveItem(item.id)}
+                              >
+                                <Trash2 className="w-4 h-4 text-destructive" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                         );
