@@ -56,6 +56,7 @@ export async function GET(request: NextRequest) {
       total_amount,
       load_id,
       status,
+      business_id,
       customers (shop_name),
       invoices (invoice_no, status)
     `;
@@ -110,6 +111,7 @@ export async function GET(request: NextRequest) {
         shopName: (o.customers as any)?.[0]?.shop_name ?? (o.customers as any)?.shop_name ?? "Unknown",
         totalAmount: o.total_amount,
         status: o.status,
+        businessId: o.business_id ?? null,
       });
     }
 
@@ -138,7 +140,7 @@ export async function GET(request: NextRequest) {
       return !groupOrders.every((o: any) => o.status === "Delivered");
     });
 
-    const result = [
+    const allGroups = [
       ...activeDraftGroups.map((g: any) => ({
         id: g.id,
         loadId: g.load_id,
@@ -165,6 +167,26 @@ export async function GET(request: NextRequest) {
           .reduce((sum: number, o: any) => sum + (o.totalAmount || 0), 0),
       })),
     ];
+
+    // Each portal (Distribution / Orange / Sierra) only sees lorries holding its
+    // own orders. Applied after the cleanup above so it never touches another
+    // business's folders. A lorry with no orders yet is shown to everyone.
+    const result = businessId
+      ? allGroups
+          .filter(
+            (g: any) =>
+              g.orders.length === 0 ||
+              g.orders.some((o: any) => o.businessId === businessId)
+          )
+          .map((g: any) => {
+            const orders = g.orders.filter((o: any) => o.businessId === businessId);
+            return {
+              ...g,
+              orders,
+              totalAmount: orders.reduce((sum: number, o: any) => sum + (o.totalAmount || 0), 0),
+            };
+          })
+      : allGroups;
 
     return NextResponse.json(result, {
       headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0" },

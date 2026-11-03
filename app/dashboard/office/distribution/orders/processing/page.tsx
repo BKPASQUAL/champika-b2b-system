@@ -56,6 +56,7 @@ import { downloadLoadingSummary, printLoadingSummary } from "../loading/print-lo
 import { printBulkInvoices } from "@/app/lib/invoice-print";
 import { isExchangeOrder, getReturnNoteNumber, buildExchangeSummaryHtml } from "@/app/lib/return-note-print";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { useOrderPortal } from "@/app/dashboard/office/distribution/orders/_components/useOrderPortal";
 
 interface LorryGroup {
   id: string;
@@ -81,6 +82,7 @@ const STATUS_OPTIONS_OFFICE: { value: OrderStatus; label: string }[] = [
 
 export default function DistributionProcessingOrdersPage() {
   const router = useRouter();
+  const { basePath, businessId } = useOrderPortal();
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [groups, setGroups] = useState<LorryGroup[]>([]);
@@ -117,8 +119,8 @@ export default function DistributionProcessingOrdersPage() {
     setLoading(true);
     try {
       const [ordersRes, groupsRes, lorryRes] = await Promise.all([
-        fetch("/api/orders?status=Processing", { cache: "no-store" }),
-        fetch("/api/loading-groups", { cache: "no-store" }),
+        fetch(`/api/orders?status=Processing&businessId=${businessId}`, { cache: "no-store" }),
+        fetch(`/api/loading-groups?businessId=${businessId}`, { cache: "no-store" }),
         fetch("/api/settings/categories?type=lorry", { cache: "no-store" }),
       ]);
       if (ordersRes.ok) {
@@ -601,7 +603,7 @@ export default function DistributionProcessingOrdersPage() {
                           className="flex justify-between items-start gap-2 cursor-pointer"
                           onClick={() => {
                             if (locked) { toast.info(`In use by ${order.lockedBy}`); return; }
-                            router.push(`/dashboard/office/distribution/orders/processing/${order.id}`);
+                            router.push(`${basePath}/orders/processing/${order.id}`);
                           }}
                         >
                           <div className="flex flex-col min-w-0">
@@ -652,7 +654,7 @@ export default function DistributionProcessingOrdersPage() {
                         size="sm"
                         className="w-full mt-1 bg-blue-600 hover:bg-blue-700 text-white h-9"
                         disabled={selectedOrders.length > 0 && !isSelected}
-                        onClick={() => router.push(`/dashboard/office/distribution/orders/processing/${order.id}`)}
+                        onClick={() => router.push(`${basePath}/orders/processing/${order.id}`)}
                       >
                         Pack Order <ArrowRight className="ml-2 h-3 w-3" />
                       </Button>
@@ -769,7 +771,7 @@ export default function DistributionProcessingOrdersPage() {
                               size="sm"
                               className="bg-blue-600 hover:bg-blue-700 text-white h-8 text-xs"
                               disabled={selectedOrders.length > 0 && !isSelected}
-                              onClick={() => router.push(`/dashboard/office/distribution/orders/processing/${order.id}`)}
+                              onClick={() => router.push(`${basePath}/orders/processing/${order.id}`)}
                             >
                               Pack <ArrowRight className="ml-1 h-3 w-3" />
                             </Button>

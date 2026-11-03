@@ -29,6 +29,8 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { getAgencySupplierKeyword } from "@/app/config/business-constants";
 
 // --- Types ---
 interface Product {
@@ -189,7 +191,14 @@ export default function RepProductsPage() {
         const suppliersData = suppliersRes && suppliersRes.ok ? await suppliersRes.json() : [];
         const settingSuppliersData = settingSuppliersRes && settingSuppliersRes.ok ? await settingSuppliersRes.json() : [];
 
-        const b2bData = data.filter((p: any) => p.subCategory !== "Retail Exclusive" && !p.retailOnly);
+        // Orange / Sierra reps only see their own agency's products
+        const agencyKeyword = getAgencySupplierKeyword(getUserBusinessContext()?.businessId);
+        const b2bData = data.filter(
+          (p: any) =>
+            p.subCategory !== "Retail Exclusive" &&
+            !p.retailOnly &&
+            (!agencyKeyword || (p.supplier || "").toLowerCase().includes(agencyKeyword))
+        );
         setProducts(b2bData);
         setSuppliers([...suppliersData, ...settingSuppliersData]);
       } catch (error) {
@@ -217,6 +226,11 @@ export default function RepProductsPage() {
         });
       }
     });
+    // Orange / Sierra reps only sell one agency, so the supplier buttons are hidden
+    const agencyKeyword = getAgencySupplierKeyword(getUserBusinessContext()?.businessId);
+    if (agencyKeyword) {
+      return [];
+    }
     return cleaned;
   }, [suppliers]);
 

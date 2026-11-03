@@ -1,5 +1,6 @@
 "use client";
 
+import { getAgencySupplierKeyword } from "@/app/config/business-constants";
 import React, { useState, useEffect, useRef, use } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -927,8 +928,13 @@ export default function EditOrderPage({
         });
       }
     });
+    // Orange / Sierra reps only sell one agency, so the supplier buttons are hidden
+    const agencyKeyword = getAgencySupplierKeyword(userBusinessId);
+    if (agencyKeyword) {
+      return [];
+    }
     return cleaned;
-  }, [suppliers]);
+  }, [suppliers, userBusinessId]);
 
   const availableProducts = products.filter(
     (p) => !items.some((i) => i.productId === p.id)

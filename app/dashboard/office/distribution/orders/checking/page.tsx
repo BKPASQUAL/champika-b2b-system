@@ -53,6 +53,7 @@ import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { downloadLoadingSummary, printLoadingSummary } from "../loading/print-loading-summary";
 import { printBulkInvoices } from "@/app/lib/invoice-print";
 import { isExchangeOrder, getReturnNoteNumber, buildExchangeSummaryHtml } from "@/app/lib/return-note-print";
+import { useOrderPortal } from "@/app/dashboard/office/distribution/orders/_components/useOrderPortal";
 
 interface LorryGroup {
   id: string;
@@ -79,6 +80,7 @@ const STATUS_OPTIONS_OFFICE: { value: OrderStatus; label: string }[] = [
 
 export default function DistributionCheckingOrdersPage() {
   const router = useRouter();
+  const { basePath, businessId } = useOrderPortal();
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [groups, setGroups] = useState<LorryGroup[]>([]);
@@ -108,8 +110,8 @@ export default function DistributionCheckingOrdersPage() {
     setLoading(true);
     try {
       const [ordersRes, groupsRes, lorryRes] = await Promise.all([
-        fetch("/api/orders?status=Checking"),
-        fetch("/api/loading-groups"),
+        fetch(`/api/orders?status=Checking&businessId=${businessId}`),
+        fetch(`/api/loading-groups?businessId=${businessId}`),
         fetch("/api/settings/categories?type=lorry"),
       ]);
       if (ordersRes.ok) {
@@ -464,7 +466,7 @@ export default function DistributionCheckingOrdersPage() {
                           className="flex justify-between items-start gap-2 cursor-pointer"
                           onClick={() => {
                             if (locked) { toast.info(`In use by ${order.lockedBy}`); return; }
-                            router.push(`/dashboard/office/distribution/orders/checking/${order.id}`);
+                            router.push(`${basePath}/orders/checking/${order.id}`);
                           }}
                         >
                           <div className="flex flex-col min-w-0">
@@ -515,7 +517,7 @@ export default function DistributionCheckingOrdersPage() {
                         size="sm"
                         className="w-full mt-1 bg-purple-600 hover:bg-purple-700 text-white h-9"
                         disabled={selectedOrders.length > 0 && !isSelected}
-                        onClick={() => router.push(`/dashboard/office/distribution/orders/checking/${order.id}`)}
+                        onClick={() => router.push(`${basePath}/orders/checking/${order.id}`)}
                       >
                         Check Order <ArrowRight className="ml-2 h-3 w-3" />
                       </Button>
@@ -632,7 +634,7 @@ export default function DistributionCheckingOrdersPage() {
                               size="sm"
                               className="bg-purple-600 hover:bg-purple-700 text-white h-8 text-xs"
                               disabled={selectedOrders.length > 0 && !isSelected}
-                              onClick={() => router.push(`/dashboard/office/distribution/orders/checking/${order.id}`)}
+                              onClick={() => router.push(`${basePath}/orders/checking/${order.id}`)}
                             >
                               Check <ArrowRight className="ml-1 h-3 w-3" />
                             </Button>

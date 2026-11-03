@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { useOrderPortal } from "@/app/dashboard/office/distribution/orders/_components/useOrderPortal";
 
 interface LorryOrder {
   id: string;
@@ -70,6 +71,7 @@ interface ApprovedOrder {
 }
 
 export default function DistributionApprovedOrdersPage() {
+  const { businessId } = useOrderPortal();
   const [groups, setGroups] = useState<LorryGroup[]>([]);
   const [orders, setOrders] = useState<ApprovedOrder[]>([]);
   const [lorries, setLorries] = useState<{ id: string; name: string; phone?: string; ownerName?: string; }[]>([]);
@@ -99,8 +101,8 @@ export default function DistributionApprovedOrdersPage() {
     setLoading(true);
     try {
       const [ordersRes, groupsRes, lorryRes] = await Promise.all([
-        fetch("/api/orders?status=Approved", { cache: "no-store" }),
-        fetch("/api/loading-groups", { cache: "no-store" }),
+        fetch(`/api/orders?status=Approved&businessId=${businessId}`, { cache: "no-store" }),
+        fetch(`/api/loading-groups?businessId=${businessId}`, { cache: "no-store" }),
         fetch("/api/settings/categories?type=lorry", { cache: "no-store" }),
       ]);
       if (ordersRes.ok) {

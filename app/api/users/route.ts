@@ -176,7 +176,8 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (error instanceof ZodError) {
       return NextResponse.json(
-        { error: "Validation Error", details: error.issues },
+        // Show the actual reason (e.g. bad phone format) instead of a generic message
+        { error: error.issues[0]?.message || "Validation Error", details: error.issues },
         { status: 400 }
       );
     }

@@ -79,6 +79,7 @@ import { ExpenseFormDialog } from "@/app/dashboard/admin/expenses/_components/Ex
 import { ExpenseFormData } from "@/app/dashboard/admin/expenses/types";
 import { cn } from "@/lib/utils";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
+import { getOrderPortal } from "@/app/dashboard/office/distribution/orders/_components/useOrderPortal";
 
 interface ReconcileReturnItem {
   id: string;
@@ -196,7 +197,12 @@ export default function OfficeReconcileLoadPage({
   // This page is also used by the admin portal (re-exported there)
   const pathname = usePathname();
   const isAdmin = pathname?.startsWith("/dashboard/admin");
-  const basePath = isAdmin ? "/dashboard/admin" : "/dashboard/office/distribution";
+  // Also shared by the Orange / Sierra office portals
+  const portal = getOrderPortal(pathname);
+  const basePath = isAdmin ? "/dashboard/admin" : portal.basePath;
+  const returnsPath = isAdmin ? `${basePath}/inventory/returns` : portal.returnsPath;
+  // Admin keeps the old behaviour (lorry expenses go to Distribution)
+  const expenseBusinessId = isAdmin ? BUSINESS_IDS.CHAMPIKA_DISTRIBUTION : portal.businessId;
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -257,7 +263,7 @@ export default function OfficeReconcileLoadPage({
   };
   const tickable = orders.filter((o) => !isAutoTicked(o.id));
   const tickedCount = tickable.filter((o) => ticks.isTicked(o.id)).length;
-  const allTicked = tickable.length > 0 && tickedCount === tickable.length;
+  const allTicked = orders.length > 0 && tickedCount === tickable.length;
 
   const fetchData = async () => {
     try {
@@ -409,7 +415,7 @@ export default function OfficeReconcileLoadPage({
     // Return-note pickups are edited on the return note itself
     if (returnNoteNumber) {
       router.push(
-        `${basePath}/inventory/returns/${encodeURIComponent(returnNoteNumber)}?edit=1&returnTo=${basePath}/orders/loading/reconcile/${id}`
+        `${returnsPath}/${encodeURIComponent(returnNoteNumber)}?edit=1&returnTo=${basePath}/orders/loading/reconcile/${id}`
       );
       return;
     }
@@ -424,7 +430,7 @@ export default function OfficeReconcileLoadPage({
       const res = await fetch("/api/expenses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...data, loadId: id, businessId: BUSINESS_IDS.CHAMPIKA_DISTRIBUTION }),
+        body: JSON.stringify({ ...data, loadId: id, businessId: expenseBusinessId }),
       });
       if (!res.ok) throw new Error();
       toast.success("Expense added");

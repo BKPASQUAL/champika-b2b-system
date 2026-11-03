@@ -54,6 +54,7 @@ import { toast } from "sonner";
 import { LoadingSheetDialog } from "@/app/dashboard/admin/orders/_components/LoadingSheetDialog";
 import { downloadLoadingSummary, printLoadingSummary } from "./print-loading-summary";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { useOrderPortal } from "@/app/dashboard/office/distribution/orders/_components/useOrderPortal";
 
 
 interface Order {
@@ -94,11 +95,12 @@ interface LorryGroup {
 
 export default function DistributionLoadingOrdersPage() {
   const router = useRouter();
+  const { basePath, businessId } = useOrderPortal();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [lorryFilter, setLorryFilter] = useState<string>(() =>
     typeof window !== "undefined"
-      ? sessionStorage.getItem("loading_lorryFilter") ?? "all"
+      ? sessionStorage.getItem(`loading_lorryFilter_${businessId}`) ?? "all"
       : "all"
   );
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
@@ -114,7 +116,7 @@ export default function DistributionLoadingOrdersPage() {
     data: orders = [],
     loading: ordersLoading,
     refetch: fetchOrders,
-  } = useCachedFetch<Order[]>("/api/orders/loading", [], () =>
+  } = useCachedFetch<Order[]>(`/api/orders/loading?businessId=${businessId}`, [], () =>
     toast.error("Failed to load orders")
   );
 
@@ -122,7 +124,7 @@ export default function DistributionLoadingOrdersPage() {
     data: groups = [],
     loading: groupsLoading,
     refetch: fetchGroups,
-  } = useCachedFetch<LorryGroup[]>("/api/loading-groups", [], () =>
+  } = useCachedFetch<LorryGroup[]>(`/api/loading-groups?businessId=${businessId}`, [], () =>
     toast.error("Failed to load lorry groups")
   );
 
@@ -159,7 +161,7 @@ export default function DistributionLoadingOrdersPage() {
   const filteredOrders = useMemo(() => {
     const q = searchQuery.toLowerCase();
     return orders.filter((order) => {
-      if (lorryFilter !== "all") {
+      if (lorryFilter !== "all" && groupKeys.some(([k]) => k === lorryFilter)) {
         const g = lorryMap[order.id];
         const key = g ? g.lorryNumber || g.loadId : null;
         if (key !== lorryFilter) return false;
@@ -172,11 +174,11 @@ export default function DistributionLoadingOrdersPage() {
         (order.salesRepName && order.salesRepName.toLowerCase().includes(q))
       );
     });
-  }, [orders, searchQuery, lorryFilter, lorryMap]);
+  }, [orders, searchQuery, lorryFilter, lorryMap, groupKeys]);
 
   const setFilter = (val: string) => {
     setLorryFilter(val);
-    sessionStorage.setItem("loading_lorryFilter", val);
+    sessionStorage.setItem(`loading_lorryFilter_${businessId}`, val);
   };
 
   const toggleSelectOrder = (id: string) =>
@@ -196,7 +198,7 @@ export default function DistributionLoadingOrdersPage() {
     setAddToExistingOpen(true);
     setLoadingSheets(true);
     try {
-      const res = await fetch("/api/orders/loading/history");
+      const res = await fetch(`/api/orders/loading/history?businessId=${businessId}`);
       if (res.ok) {
         const data = await res.json();
         setExistingSheets(data.filter((s: any) => s.status === "In Transit"));
@@ -223,7 +225,7 @@ export default function DistributionLoadingOrdersPage() {
       setAddToExistingOpen(false);
       setSelectedOrders([]);
       refetchAll();
-      router.push(`/dashboard/office/distribution/orders/loading/history/${selectedSheetId}`);
+      router.push(`${basePath}/orders/loading/history/${selectedSheetId}`);
     } catch (e: any) {
       toast.error(e.message);
     } finally {
@@ -250,7 +252,7 @@ export default function DistributionLoadingOrdersPage() {
       if (!res.ok) throw new Error(result.error || "Failed to create load");
       toast.success(`Load Sheet ${result.loadId} Created!`);
       refetchAll();
-      router.push("/dashboard/office/distribution/orders/loading/history");
+      router.push(`${basePath}/orders/loading/history`);
     } catch (error: any) {
       toast.error(error.message);
     }
@@ -280,7 +282,7 @@ export default function DistributionLoadingOrdersPage() {
           </Button>
           <Button
             variant="outline"
-            onClick={() => router.push("/dashboard/office/distribution/orders/loading/history")}
+            onClick={() => router.push(`${basePath}/orders/loading/history`)}
             className="bg-white"
           >
             <History className="w-4 h-4 mr-2" /> History
@@ -407,7 +409,7 @@ export default function DistributionLoadingOrdersPage() {
                         <div
                           onClick={(e) => {
                             e.stopPropagation();
-                            router.push(`/dashboard/office/distribution/orders/${order.id}`);
+                            router.push(`${basePath}/orders/${order.id}`);
                           }}
                           className={`flex items-center gap-1 font-mono font-bold px-2 py-0.5 rounded text-xs transition-colors cursor-pointer ${
                             isReturn
@@ -467,7 +469,7 @@ export default function DistributionLoadingOrdersPage() {
                           variant="ghost"
                           size="sm"
                           className="h-7 text-xs font-semibold text-indigo-600 hover:text-indigo-800 hover:bg-slate-50 px-2"
-                          onClick={() => router.push(`/dashboard/office/distribution/orders/${order.id}`)}
+                          onClick={() => router.push(`${basePath}/orders/${order.id}`)}
                         >
                           <Eye className="w-3.5 h-3.5 mr-1" /> View Order
                         </Button>
@@ -539,7 +541,7 @@ export default function DistributionLoadingOrdersPage() {
                         <TableCell
                           onClick={(e) => {
                             e.stopPropagation();
-                            router.push(`/dashboard/office/distribution/orders/${order.id}`);
+                            router.push(`${basePath}/orders/${order.id}`);
                           }}
                         >
                           <div className="flex flex-col">
@@ -613,7 +615,7 @@ export default function DistributionLoadingOrdersPage() {
                             size="sm"
                             variant="outline"
                             className="h-8 text-xs hover:bg-slate-100 hover:text-slate-900 border-slate-200"
-                            onClick={() => router.push(`/dashboard/office/distribution/orders/${order.id}`)}
+                            onClick={() => router.push(`${basePath}/orders/${order.id}`)}
                           >
                             <Eye className="w-3.5 h-3.5 mr-1" /> View Order
                           </Button>

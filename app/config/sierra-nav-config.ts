@@ -24,6 +24,7 @@ import {
   CalendarClock,
   Calculator,
 } from "lucide-react";
+import { buildOrderWorkflowNav } from "@/app/config/order-workflow-nav";
 
 interface SierraNavItem {
   name: string;
@@ -49,6 +50,7 @@ export const sierraOfficeNavItems: SierraNavSection[] = [
       },
     ],
   },
+  buildOrderWorkflowNav("/dashboard/office/sierra"),
   {
     title: "Customer Finance",
     items: [

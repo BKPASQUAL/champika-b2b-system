@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, use } from "react";
+import { getOrderPortal } from "@/app/dashboard/office/distribution/orders/_components/useOrderPortal";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -120,11 +121,13 @@ const parseReturnMetadata = (
   return { invoiceNo, unitPrice, noteCode, cleanReason };
 };
 
-// This page is shared by the office and admin portals — go back to the right Pending list
+// This page is shared by the office portals (Distribution / Orange / Sierra) and
+// admin — go back to the right Pending list
+const currentPath = () => (typeof window !== "undefined" ? window.location.pathname : "");
 const pendingListPath = () =>
-  typeof window !== "undefined" && window.location.pathname.startsWith("/dashboard/admin")
+  currentPath().startsWith("/dashboard/admin")
     ? "/dashboard/admin/orders/pending"
-    : "/dashboard/office/distribution/orders/pending";
+    : `${getOrderPortal(currentPath()).basePath}/orders/pending`;
 
 type ItemEdit = { qty: number; price: number; type: "Good" | "Damage" | "Exchange"; remarks: string };
 type NewItem = ItemEdit & { key: string; optionId: string };
@@ -1879,7 +1882,7 @@ export default function ReturnDetailPage({
                   size="sm"
                   onClick={() =>
                     window.open(
-                      `/dashboard/office/distribution/invoices/${fullInvoiceDetails.id || sourceInvoice?.id}`,
+                      `${getOrderPortal(currentPath()).basePath}/invoices/${fullInvoiceDetails.id || sourceInvoice?.id}`,
                       "_blank"
                     )
                   }

@@ -7,6 +7,7 @@ import { UserRole } from "@/app/config/nav-config";
 import { AppSidebar } from "@/components/ui/layout/AppSidebar";
 import { MobileNav } from "@/components/ui/layout/MobileNav";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { getAgencySupplierKeyword, getBusinessName } from "@/app/config/business-constants";
 import { Button } from "@/components/ui/button";
 import { Loader2, Plus } from "lucide-react";
 
@@ -17,6 +18,7 @@ export default function RepDashboardLayout({
 }) {
   const router = useRouter();
   const [isAuthorized, setIsAuthorized] = useState(false);
+  const [businessName, setBusinessName] = useState("Champika HW");
 
   useEffect(() => {
     const user = getUserBusinessContext();
@@ -27,6 +29,10 @@ export default function RepDashboardLayout({
     if (user.role !== "rep") {
       router.replace("/login");
       return;
+    }
+    // Orange / Sierra reps see their agency name
+    if (getAgencySupplierKeyword(user.businessId)) {
+      setBusinessName(getBusinessName(user.businessId));
     }
     setIsAuthorized(true);
   }, [router]);
@@ -54,7 +60,7 @@ export default function RepDashboardLayout({
         {/* Mobile Header (Visible only on small screens) */}
         <header className="lg:hidden h-16 bg-white border-b flex items-center px-3 sm:px-4 shrink-0 z-30 gap-2 sm:gap-3">
           <MobileNav role={userRole} />
-          <span className="font-bold text-gray-700 flex-1 truncate text-sm sm:text-base">Champika HW</span>
+          <span className="font-bold text-gray-700 flex-1 truncate text-sm sm:text-base">{businessName}</span>
           <Link href="/dashboard/rep/orders/create">
             <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white gap-1 sm:gap-1.5 shrink-0 text-xs sm:text-sm h-8 sm:h-9 px-2.5 sm:px-3">
               <Plus className="h-4 w-4" />
@@ -67,7 +73,7 @@ export default function RepDashboardLayout({
         {/* Desktop Header (Visible only on large screens) */}
         <header className="hidden lg:flex h-16 bg-white border-b items-center justify-between px-8 shrink-0 z-10">
           <h1 className="text-sm font-semibold text-gray-500">
-            Sales Representative Portal
+            Sales Representative Portal · {businessName}
           </h1>
           <div className="flex items-center gap-4">
             <Link href="/dashboard/rep/orders/create">

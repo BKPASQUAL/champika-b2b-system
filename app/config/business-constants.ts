@@ -75,6 +75,16 @@ export const BUSINESS_THEMES = {
 } as const;
 
 /**
+ * Agency reps (Orange / Sierra) only see their own agency's products.
+ * Returns the supplier-name keyword for the agency, or null for everyone else.
+ */
+export function getAgencySupplierKeyword(businessId?: string | null): string | null {
+  if (businessId === BUSINESS_IDS.ORANGE_AGENCY) return "orange";
+  if (businessId === BUSINESS_IDS.SIERRA_AGENCY) return "sierra";
+  return null;
+}
+
+/**
  * Get business route by business ID
  */
 export function getBusinessRoute(businessId: string | null): string {

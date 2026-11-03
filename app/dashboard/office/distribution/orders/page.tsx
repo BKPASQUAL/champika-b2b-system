@@ -24,15 +24,17 @@ import { OrderStats } from "./_components/OrderStats";
 import { OrderFilters } from "./_components/OrderFilters";
 import { OrderTable } from "./_components/OrderTable";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { useOrderPortal } from "@/app/dashboard/office/distribution/orders/_components/useOrderPortal";
 
 export default function OrdersPage() {
   const router = useRouter();
+  const { basePath, businessId } = useOrderPortal();
 
   // Redirect non-admin users away from this page
   React.useEffect(() => {
     const user = getUserBusinessContext();
     if (user && user.role !== "admin") {
-      router.replace("/dashboard/office/distribution/orders/pending");
+      router.replace(`${basePath}/orders/pending`);
     }
   }, [router]);
 
@@ -53,7 +55,7 @@ export default function OrdersPage() {
     error,
     refetch: fetchOrders,
     setData: setOrders,
-  } = useCachedFetch<Order[]>("/api/orders", []);
+  } = useCachedFetch<Order[]>(`/api/orders?businessId=${businessId}`, []);
 
   const { data: repUsers = [] } = useCachedFetch<any[]>("/api/users?role=rep", []);
   const reps = useMemo(() => repUsers.map((u: any) => u.fullName), [repUsers]);
@@ -211,7 +213,7 @@ export default function OrdersPage() {
             totalPages={totalPages}
             onPageChange={setCurrentPage}
             onView={(order) =>
-              router.push(`/dashboard/office/distribution/orders/${order.id}`)
+              router.push(`${basePath}/orders/${order.id}`)
             }
             onUpdateStatus={handleUpdateStatus}
           />

@@ -140,6 +140,7 @@ export async function getNextInvoiceNumber(
   };
 
   const resolvedBusinessId = businessId || BUSINESS_IDS.CHAMPIKA_DISTRIBUTION;
+
   const prefix = INVOICE_PREFIXES[resolvedBusinessId] ?? "INV";
   const isDistribution = resolvedBusinessId === BUSINESS_IDS.CHAMPIKA_DISTRIBUTION;
 
@@ -190,4 +191,32 @@ export async function getNextInvoiceNumber(
     invoiceNo: `${prefix}-${String(maxSeq + 1 + offset).padStart(4, "0")}`,
     isFromRepBook: false,
   };
+}
+
+// ── Orange Agency manual ref (CINV number) ─────────────────────────────────
+// Orange bills keep the OR-xxxx invoice number, and get an automatic Manual Ref
+// that continues the Orel distributor numbering: CINV + 12 digits.
+// First number used when no CINV ref exists yet (the Orel list ended at ...3832).
+export const ORANGE_INVOICE_PREFIX = "CINV";
+export const ORANGE_INVOICE_DIGITS = 12;
+export const ORANGE_FIRST_INVOICE_NUMBER = 5400003833;
+
+export async function getNextOrangeManualRef(offset = 0): Promise<string> {
+  const { data } = await supabaseAdmin
+    .from("invoices")
+    .select("manual_invoice_no")
+    .like("manual_invoice_no", `${ORANGE_INVOICE_PREFIX}%`)
+    .order("manual_invoice_no", { ascending: false })
+    .limit(50);
+
+  // Same width for every number, so text order == number order
+  const last = Math.max(
+    0,
+    ...(data ?? []).map((inv: any) => {
+      const n = parseInt(String(inv.manual_invoice_no).slice(ORANGE_INVOICE_PREFIX.length), 10);
+      return Number.isFinite(n) ? n : 0;
+    })
+  );
+  const next = Math.max(last + 1, ORANGE_FIRST_INVOICE_NUMBER) + offset;
+  return `${ORANGE_INVOICE_PREFIX}${String(next).padStart(ORANGE_INVOICE_DIGITS, "0")}`;
 }

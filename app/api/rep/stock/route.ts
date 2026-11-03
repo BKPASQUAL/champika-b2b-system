@@ -1,6 +1,7 @@
 // app/api/rep/stock/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { getAgencySupplierKeyword } from "@/app/config/business-constants";
 
 export async function GET(request: NextRequest) {
   try {
@@ -28,6 +29,15 @@ export async function GET(request: NextRequest) {
     }
 
     const locationIds = assignments.map((a) => a.location_id);
+
+    // Agency reps (Orange / Sierra) only sell their own agency's products.
+    // Their stock sits in the shared Main Warehouse, so filter by supplier.
+    const { data: repProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("business_id")
+      .eq("id", userId)
+      .maybeSingle();
+    const agencySupplier = getAgencySupplierKeyword(repProfile?.business_id);
 
     // 2. Build the Query & Aggregate Data
     if (includeOutOfStock) {
@@ -72,6 +82,9 @@ export async function GET(request: NextRequest) {
         }
         if (supplierLike) {
           query = query.ilike("supplier_name", `%${supplierLike}%`);
+        }
+        if (agencySupplier) {
+          query = query.ilike("supplier_name", `%${agencySupplier}%`);
         }
 
         const { data: pageData, error: productsError } = await query;
@@ -150,6 +163,9 @@ export async function GET(request: NextRequest) {
         }
         if (supplierLike) {
           query = query.ilike("products.supplier_name", `%${supplierLike}%`);
+        }
+        if (agencySupplier) {
+          query = query.ilike("products.supplier_name", `%${agencySupplier}%`);
         }
 
         const { data: pageData, error: stockError } = await query;

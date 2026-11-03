@@ -25,12 +25,14 @@ import {
   Calculator,
   BadgePercent,
 } from "lucide-react";
+import { buildOrderWorkflowNav } from "@/app/config/order-workflow-nav";
 
 interface OrangeNavItem {
   name: string;
   href: string;
   icon: LucideIcon;
   description?: string;
+  adminOnly?: boolean;
 }
 
 interface OrangeNavSection {
@@ -49,6 +51,7 @@ export const orangeOfficeNavItems: OrangeNavSection[] = [
       },
     ],
   },
+  buildOrderWorkflowNav("/dashboard/office/orange"),
   {
     title: "Customer Finance",
     items: [

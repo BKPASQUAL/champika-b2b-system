@@ -16,13 +16,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ArrowLeft, Truck, Loader2, ClipboardCheck } from "lucide-react";
-import { BUSINESS_IDS } from "@/app/config/business-constants";
+import { useOrderPortal } from "@/app/dashboard/office/distribution/orders/_components/useOrderPortal";
 
 export default function DistributionReconcileListPage() {
   const router = useRouter();
-  const distributionBusinessId = BUSINESS_IDS.CHAMPIKA_DISTRIBUTION;
+  const { basePath, businessId } = useOrderPortal();
   const { data: allLoads = [], loading } = useCachedFetch<any[]>(
-    `/api/orders/loading/history?businessId=${distributionBusinessId}`,
+    `/api/orders/loading/history?businessId=${businessId}`,
     []
   );
   const loads = useMemo(
@@ -96,7 +96,7 @@ export default function DistributionReconcileListPage() {
                         size="sm"
                         onClick={() =>
                           router.push(
-                            `/dashboard/office/distribution/orders/loading/reconcile/${load.id}`
+                            `${basePath}/orders/loading/reconcile/${load.id}`
                           )
                         }
                         className="bg-green-600 hover:bg-green-700"

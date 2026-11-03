@@ -54,6 +54,7 @@ import {
   downloadLoadingOutstandingReport,
   shareLoadingOutstandingReport,
 } from "@/app/dashboard/admin/orders/loading/history/print-loading-sheet";
+import { useOrderPortal } from "@/app/dashboard/office/distribution/orders/_components/useOrderPortal";
 
 interface OrderRow {
   id: string;
@@ -79,6 +80,7 @@ interface LoadingHistory {
 
 export default function DistributionDeliveryHistoryPage() {
   const router = useRouter();
+  const { basePath, businessId } = useOrderPortal();
 
   const [history, setHistory] = useState<LoadingHistory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,7 +95,7 @@ export default function DistributionDeliveryHistoryPage() {
   const fetchHistory = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/orders/loading/history");
+      const res = await fetch(`/api/orders/loading/history?businessId=${businessId}`);
       if (!res.ok) throw new Error("Failed to fetch delivery history");
       setHistory(await res.json());
     } catch {
@@ -276,7 +278,7 @@ export default function DistributionDeliveryHistoryPage() {
                       <React.Fragment key={load.id}>
                         <TableRow
                           className="hover:bg-muted/50 cursor-pointer group"
-                          onClick={() => router.push(`/dashboard/office/distribution/orders/loading/history/${load.id}`)}
+                          onClick={() => router.push(`${basePath}/orders/loading/history/${load.id}`)}
                         >
                           <TableCell onClick={(e) => toggleExpand(e, load.id)} className="pl-3">
                             {isExpanded
@@ -367,7 +369,7 @@ export default function DistributionDeliveryHistoryPage() {
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           if (hasInvoice) {
-                                            window.open(`/dashboard/office/distribution/invoices/${o.invoiceId}`, "_blank");
+                                            window.open(`${basePath}/invoices/${o.invoiceId}`, "_blank");
                                           } else {
                                             toast.error("Invoice details not available");
                                           }

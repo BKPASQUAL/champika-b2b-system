@@ -4,6 +4,8 @@
  * No browser-only imports (no jsPDF, no html2canvas, no toast).
  */
 import QRCode from "qrcode";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
+import { generateOrangeInvoiceHTML } from "./invoice-html-orange";
 
 const FONT_STACK =
   "-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, Helvetica, sans-serif";
@@ -245,6 +247,15 @@ export const generateInvoiceHTML = async (
     rawNotes?.toLowerCase().includes("damage return note") ||
     rawNotes?.toLowerCase().includes("customer return")
   );
+
+  // Orange Agency invoices use their own distributor-style layout
+  // (return notes keep the standard layout)
+  if (
+    !isReturnNote &&
+    (divisionKey === "orange" || invoice.businessId === BUSINESS_IDS.ORANGE_AGENCY)
+  ) {
+    return generateOrangeInvoiceHTML(invoice);
+  }
 
   let returnTypeTitle = "GOOD RETURN NOTE";
   let returnBadgeBg = "#f0fdf4";

@@ -90,9 +90,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { BUSINESS_IDS } from "@/app/config/business-constants";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { printOrder } from "@/app/lib/order-html";
+import { useOrderPortal } from "@/app/dashboard/office/distribution/orders/_components/useOrderPortal";
 
 interface Product {
   id: string;
@@ -129,7 +129,7 @@ export default function ViewOrderPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
-  const distributionBusinessId = BUSINESS_IDS.CHAMPIKA_DISTRIBUTION;
+  const { basePath, businessId } = useOrderPortal();
 
   const [order, setOrder] = useState<any | null>(null);
   const [items, setItems] = useState<OrderItem[]>([]);
@@ -310,7 +310,7 @@ export default function ViewOrderPage({
               }))
           );
         } else {
-          const res = await fetch(`/api/rep/stock?userId=${order.salesRepId}&businessId=${distributionBusinessId}`);
+          const res = await fetch(`/api/rep/stock?userId=${order.salesRepId}&businessId=${businessId}`);
           if (!res.ok) throw new Error();
           const data = await res.json();
           setProducts(
@@ -635,7 +635,7 @@ export default function ViewOrderPage({
       });
       if (!res.ok) throw new Error("Failed to approve order");
       toast.success("Order Approved!");
-      router.push("/dashboard/office/distribution/orders/pending");
+      router.push(`${basePath}/orders/pending`);
     } catch (error: any) {
       toast.error(error.message || "Failed to update status");
     } finally {
@@ -655,7 +655,7 @@ export default function ViewOrderPage({
       });
       if (!res.ok) throw new Error("Failed to cancel order");
       toast.success("Order Cancelled.");
-      router.push("/dashboard/office/distribution/orders/pending");
+      router.push(`${basePath}/orders/pending`);
     } catch (error: any) {
       toast.error(error.message || "Failed to cancel order");
     } finally {

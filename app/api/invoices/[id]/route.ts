@@ -75,7 +75,8 @@ export async function GET(
           extra_discount_percent,
           extra_discount_amount,
           profiles!orders_sales_rep_id_fkey (
-            full_name
+            full_name,
+            phone
           ),
           creator:profiles!orders_created_by_fkey (
             full_name,
@@ -275,6 +276,9 @@ export async function GET(
         : invoice.created_at.split("T")[0],
       customerId: invoice.customer_id,
       salesRepId: invoice.orders?.sales_rep_id,
+      salesRepPhone: invoice.orders?.profiles?.phone || "",
+      businessId: invoice.orders?.business_id || invoice.business_id || null,
+      createdAt: invoice.created_at,
       orderStatus: invoice.orders?.status,
       notes: cleanNotes,
       printFormat,

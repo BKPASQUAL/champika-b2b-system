@@ -70,6 +70,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { SerialNumberEntry, SerialEntry } from "@/components/orders/SerialNumberEntry";
+import { useOrderPortal } from "@/app/dashboard/office/distribution/orders/_components/useOrderPortal";
 
 interface OrderItem {
   id: string;
@@ -97,6 +98,7 @@ export default function CheckOrderPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const { basePath } = useOrderPortal();
 
   useOrderLock(id);
 
@@ -383,7 +385,7 @@ export default function CheckOrderPage({
         localStorage.setItem("checking_last_invoice", order.invoiceNo);
       }
       toast.success("QC Passed! Order moved to Loading.");
-      router.push("/dashboard/office/distribution/orders/checking");
+      router.push(`${basePath}/orders/checking`);
     } catch (error) {
       toast.error("Something went wrong");
     } finally {

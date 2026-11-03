@@ -26,6 +26,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useOrderPortal } from "@/app/dashboard/office/distribution/orders/_components/useOrderPortal";
 
 interface ActiveLoad {
   id: string;
@@ -41,8 +42,9 @@ interface ActiveLoad {
 
 export default function DistributionActiveLoadsPage() {
   const router = useRouter();
+  const { basePath, businessId } = useOrderPortal();
   const { data: allLoads = [], loading } = useCachedFetch<any[]>(
-    "/api/orders/loading/history",
+    `/api/orders/loading/history?businessId=${businessId}`,
     [],
     () => toast.error("Error loading active deliveries")
   );
@@ -144,7 +146,7 @@ export default function DistributionActiveLoadsPage() {
                           onClick={() =>
                             // Navigate to Reconcile page (if implemented) or History detail
                             router.push(
-                              `/dashboard/office/distribution/orders/loading/reconcile/${load.id}`
+                              `${basePath}/orders/loading/reconcile/${load.id}`
                             )
                           }
                         >

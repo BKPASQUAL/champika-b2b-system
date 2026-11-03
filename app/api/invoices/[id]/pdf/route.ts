@@ -49,8 +49,9 @@ export async function GET(
         `*,
          customers (id, shop_name, owner_name, phone, address),
          orders (
-           id, sales_rep_id, status, order_date, notes,
-           profiles!orders_sales_rep_id_fkey (full_name)
+           id, sales_rep_id, status, order_date, notes, business_id,
+           extra_discount_percent, extra_discount_amount,
+           profiles!orders_sales_rep_id_fkey (full_name, phone)
          )`
       )
       .eq("id", id)
@@ -87,6 +88,13 @@ export async function GET(
         address: invoice.customers?.address || "",
       },
       salesRep: invoice.orders?.profiles?.full_name || "Unknown",
+      // Used by the Orange Agency layout
+      salesRepPhone: invoice.orders?.profiles?.phone || "",
+      businessId: invoice.orders?.business_id || invoice.business_id || null,
+      createdAt: invoice.created_at,
+      manualInvoiceNo: invoice.manual_invoice_no || "",
+      extraDiscountPercent: invoice.orders?.extra_discount_percent || 0,
+      extraDiscountAmount: invoice.orders?.extra_discount_amount || 0,
       items: (items || []).map((item: any) => ({
         sku: item.products?.sku || "-",
         productName: item.custom_name || item.products?.name || "Unknown Product",

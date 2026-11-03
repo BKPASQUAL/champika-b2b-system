@@ -72,6 +72,7 @@ import { buildReturnNotesHtml } from "@/app/lib/return-note-print";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
 import { cn } from "@/lib/utils";
 import { Undo2 } from "lucide-react";
+import { useOrderPortal } from "@/app/dashboard/office/distribution/orders/_components/useOrderPortal";
 
 interface OrderDetail {
   id: string;
@@ -125,6 +126,7 @@ export default function DistributionLoadingSheetDetailPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const { basePath, businessId } = useOrderPortal();
 
   const [loadingSheet, setLoadingSheet] = useState<LoadingSheetDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -226,7 +228,7 @@ export default function DistributionLoadingSheetDetailPage({
     setAddSearch("");
     setLoadingAvailable(true);
     try {
-      const res = await fetch("/api/orders/loading");
+      const res = await fetch(`/api/orders/loading?businessId=${businessId}`);
       if (res.ok) setAvailableOrders(await res.json());
     } catch {
       toast.error("Failed to load available orders");
@@ -587,7 +589,7 @@ export default function DistributionLoadingSheetDetailPage({
                         <span className="text-xs text-muted-foreground block">Order: {order.orderId}</span>
                         {order.invoiceId ? (
                           <button
-                            onClick={() => window.open(`/dashboard/office/distribution/invoices/${order.invoiceId}`, "_blank")}
+                            onClick={() => window.open(`${basePath}/invoices/${order.invoiceId}`, "_blank")}
                             className="text-sm font-bold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1 mt-0.5"
                             title="Click to view invoice"
                           >

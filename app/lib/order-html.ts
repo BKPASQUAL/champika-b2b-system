@@ -3,6 +3,7 @@
  * Prints orders using the same invoice design (invoice-html.ts).
  */
 import { generateInvoiceHTML, getDocumentWrapper } from "./invoice-html";
+import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 const printHTML = (htmlContent: string) => {
   const iframe = document.createElement("iframe");
@@ -28,7 +29,27 @@ const printHTML = (htmlContent: string) => {
 };
 
 export const printOrder = async (order: any, items: any[]) => {
+  // Orange Agency orders print in the Orange invoice design. Use the saved
+  // invoice when there is one (it carries rep phone, invoice time, book no).
+  if (order.businessId === BUSINESS_IDS.ORANGE_AGENCY && order.invoiceId) {
+    try {
+      const res = await fetch(`/api/invoices/${order.invoiceId}`);
+      if (res.ok) {
+        const invoice = await res.json();
+        const html = await generateInvoiceHTML(invoice, "orange");
+        printHTML(getDocumentWrapper(html, invoice.invoiceNo || "Invoice"));
+        return;
+      }
+    } catch {
+      // fall through to printing from the order data below
+    }
+  }
+
   const invoiceData = {
+    businessId: order.businessId || null,
+    paymentMethod: order.paymentMethod || "",
+    cashDiscountPercent: order.cashDiscountPercent || 0,
+    cashDiscountAmount: order.cashDiscountAmount || 0,
     // Use invoice number as the primary reference if available, else order ID
     invoiceNo: order.invoiceNo || order.orderId || "-",
     manualInvoiceNo: null,

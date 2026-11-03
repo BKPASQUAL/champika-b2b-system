@@ -3,7 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
 import { BUSINESS_IDS, BUSINESS_NAMES } from "@/app/config/business-constants";
 import { triggerAgencyBillsForInvoice } from "@/app/lib/inter-branch-billing";
-import { getOrCreateActiveRepBook, getNextInvoiceNumber } from "@/lib/invoice-books";
+import { getOrCreateActiveRepBook, getNextInvoiceNumber, getNextOrangeManualRef } from "@/lib/invoice-books";
 import { checkCustomerOverdueStatus, markCustomerUnlockAsUsed } from "@/lib/customer-overdue";
 
 // --- Validation Schemas ---
@@ -386,6 +386,11 @@ export async function POST(request: NextRequest) {
     // 2. Generate Invoice Number with per-business prefix or Sales Rep assigned Invoice Book
     // -------------------------------------------------------------
     const initialInv = await getNextInvoiceNumber(resolvedBusinessId, val.salesRepId, 0);
+
+    // Orange Agency: the Manual Ref is generated automatically (CINV005400003833 …)
+    const manualRef: string | null =
+      val.manual_invoice_no ||
+      (resolvedBusinessId === BUSINESS_IDS.ORANGE_AGENCY ? await getNextOrangeManualRef() : null);
     let invoiceNo = initialInv.invoiceNo;
     let usedRepBookId = initialInv.isFromRepBook ? initialInv.bookId : null;
     // -------------------------------------------------------------
@@ -703,7 +708,7 @@ export async function POST(request: NextRequest) {
         .from("invoices")
         .insert({
           invoice_no: invoiceNo,
-          manual_invoice_no: val.manual_invoice_no || null,
+          manual_invoice_no: manualRef,
           order_id: orderData.id,
           customer_id: val.customerId,
           total_amount: val.grandTotal,
@@ -1233,7 +1238,7 @@ export async function POST(request: NextRequest) {
         record_type: recordType,
         entity_type: "invoice",
         entity_id: invoiceData.id,
-        entity_no: val.manual_invoice_no || invoiceNo,
+        entity_no: manualRef || invoiceNo,
         customer_id: val.customerId,
         customer_name: customer?.shop_name ?? null,
         amount: val.grandTotal,
@@ -1281,7 +1286,7 @@ export async function POST(request: NextRequest) {
       {
         message: "Order created successfully",
         invoiceNo: invoiceNo,
-        manualInvoiceNo: val.manual_invoice_no,
+        manualInvoiceNo: manualRef,
         orderId: orderId,
         data: invoiceData,
         activityRecordId,

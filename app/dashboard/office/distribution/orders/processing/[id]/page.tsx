@@ -68,6 +68,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useOrderPortal } from "@/app/dashboard/office/distribution/orders/_components/useOrderPortal";
 
 interface OrderItem {
   id: string;
@@ -89,6 +90,7 @@ export default function ProcessOrderPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const { basePath } = useOrderPortal();
 
   useOrderLock(id);
 
@@ -355,7 +357,7 @@ export default function ProcessOrderPage({
       if (!res.ok) throw new Error("Failed to update order");
 
       toast.success("Order moved to Checking!");
-      router.push("/dashboard/office/distribution/orders/processing");
+      router.push(`${basePath}/orders/processing`);
     } catch (error) {
       toast.error("Something went wrong");
     } finally {

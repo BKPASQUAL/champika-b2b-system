@@ -173,6 +173,7 @@ export async function GET(
       cashDiscountAmount,
       salesRep: order.profiles?.full_name || "Unknown",
       salesRepId: order.sales_rep_id,
+      businessId: order.business_id || null,
       customerId: order.customer_id,
       notes: order.notes,
 

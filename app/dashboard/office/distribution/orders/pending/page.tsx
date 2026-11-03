@@ -60,6 +60,7 @@ import {
   printLoadingSummary,
 } from "../loading/print-loading-summary";
 import { printBulkInvoices } from "@/app/lib/invoice-print";
+import { useOrderPortal } from "@/app/dashboard/office/distribution/orders/_components/useOrderPortal";
 
 interface ParsedReturnMeta {
   invoiceNo: string;
@@ -139,6 +140,7 @@ export interface UnifiedPendingItem {
 
 export default function DistributionPendingOrdersPage() {
   const router = useRouter();
+  const { basePath, businessId, returnsPath } = useOrderPortal();
 
   // 1. Fetch Orders
   const {
@@ -146,7 +148,7 @@ export default function DistributionPendingOrdersPage() {
     loading: ordersLoading,
     refetch: refetchOrders,
   } = useCachedFetch<Order[]>(
-    "/api/orders?status=Pending",
+    `/api/orders?status=Pending&businessId=${businessId}`,
     [],
     () => toast.error("Failed to load orders")
   );
@@ -158,7 +160,7 @@ export default function DistributionPendingOrdersPage() {
   const fetchPendingReturns = useCallback(async () => {
     setReturnsLoading(true);
     try {
-      const res = await fetch("/api/inventory/returns?status=Pending&limit=all");
+      const res = await fetch(`/api/inventory/returns?status=Pending&limit=all&businessId=${businessId}`);
       if (res.ok) {
         const json = await res.json();
         setPendingReturns(json.data || []);
@@ -667,8 +669,8 @@ export default function DistributionPendingOrdersPage() {
                           <div
                             className="flex-1 min-w-0 cursor-pointer"
                             onClick={() => {
-                              if (order.isReturn) router.push(`/dashboard/office/distribution/inventory/returns/${order.id}`);
-                              else router.push(`/dashboard/office/distribution/orders/${order.id}`);
+                              if (order.isReturn) router.push(`${returnsPath}/${order.id}`);
+                              else router.push(`${basePath}/orders/${order.id}`);
                             }}
                           >
                             <div className="flex items-center justify-between mb-1">
@@ -757,8 +759,8 @@ export default function DistributionPendingOrdersPage() {
                           className="w-full mt-1 bg-yellow-600 hover:bg-yellow-700 text-white h-9"
                           disabled={selectedOrders.length > 0 && !selectedOrders.includes(order.id)}
                           onClick={() => {
-                            if (order.isReturn) router.push(`/dashboard/office/distribution/inventory/returns/${order.id}`);
-                            else router.push(`/dashboard/office/distribution/orders/${order.id}`);
+                            if (order.isReturn) router.push(`${returnsPath}/${order.id}`);
+                            else router.push(`${basePath}/orders/${order.id}`);
                           }}
                         >
                           Process Order <ArrowRight className="ml-2 h-3 w-3" />
@@ -944,8 +946,8 @@ export default function DistributionPendingOrdersPage() {
                               className="bg-yellow-600 hover:bg-yellow-700 text-white h-8 text-xs font-semibold"
                               disabled={selectedOrders.length > 0 && !selectedOrders.includes(order.id)}
                               onClick={() => {
-                                if (order.isReturn) router.push(`/dashboard/office/distribution/inventory/returns/${order.id}`);
-                                else router.push(`/dashboard/office/distribution/orders/${order.id}`);
+                                if (order.isReturn) router.push(`${returnsPath}/${order.id}`);
+                                else router.push(`${basePath}/orders/${order.id}`);
                               }}
                             >
                               Process <ArrowRight className="ml-1 h-3 w-3" />

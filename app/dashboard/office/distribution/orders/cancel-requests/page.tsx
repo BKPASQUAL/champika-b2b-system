@@ -47,11 +47,11 @@ import {
 import { toast } from "sonner";
 import { Order } from "@/app/dashboard/admin/orders/types";
 import { getUserBusinessContext } from "@/app/middleware/businessAuth";
-import { BUSINESS_IDS } from "@/app/config/business-constants";
+import { useOrderPortal } from "@/app/dashboard/office/distribution/orders/_components/useOrderPortal";
 
 export default function DistributionCancelRequestsPage() {
   const router = useRouter();
-  const distributionBusinessId = BUSINESS_IDS.CHAMPIKA_DISTRIBUTION;
+  const { basePath, businessId } = useOrderPortal();
 
   // Dialog & Sheet States
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -72,7 +72,7 @@ export default function DistributionCancelRequestsPage() {
     loading,
     refetch: refetchOrders,
   } = useCachedFetch<Order[]>(
-    `/api/orders?status=Processing,Checking,Loading&businessId=${distributionBusinessId}`,
+    `/api/orders?status=Processing,Checking,Loading&businessId=${businessId}`,
     [],
     () => toast.error("Failed to load orders")
   );
@@ -312,7 +312,7 @@ export default function DistributionCancelRequestsPage() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => router.push("/dashboard/office/distribution")}
+            onClick={() => router.push(`${basePath}`)}
             className="h-9 w-9"
           >
             <ArrowLeft className="w-5 h-5" />
