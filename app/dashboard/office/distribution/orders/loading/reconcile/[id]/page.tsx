@@ -61,7 +61,9 @@ import {
   TrendingDown,
   ClipboardList,
   Undo2,
+  PackageOpen,
 } from "lucide-react";
+import { UnloadingReportDialog, type UnloadReturnInput } from "@/components/orders/UnloadingReportDialog";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ExpenseFormDialog } from "@/app/dashboard/admin/expenses/_components/ExpenseDialogs";
@@ -188,6 +190,33 @@ export default function OfficeReconcileLoadPage({
   const [isExpenseDialogOpen, setIsExpenseDialogOpen] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState<string | null>(null);
   const [reconcileData, setReconcileData] = useState<ReconcileState>({});
+  const [unloadOpen, setUnloadOpen] = useState(false);
+
+  // Inputs for the Unloading Report: statuses picked here + returns collected
+  const unloadStatuses = useMemo(() => {
+    const m: Record<string, string> = {};
+    Object.entries(reconcileData).forEach(([oid, s]) => (m[oid] = s.status));
+    return m;
+  }, [reconcileData]);
+  const unloadReturns = useMemo<UnloadReturnInput[]>(
+    () =>
+      orders.flatMap((o) =>
+        (o.returns || []).map((r) => ({
+          orderId: o.id,
+          invoiceNo: o.invoiceNo,
+          customer: o.customer,
+          productId: r.productId,
+          productName: r.productName,
+          sku: r.sku,
+          quantity: r.quantity,
+          // Same rule as the Lorry Returns Summary: unless marked Good
+          // (or a plain Good return), it's a damaged return
+          condition: (r.actualCondition || (r.returnType === "Good" ? "Good" : "Damage")) as "Good" | "Damage",
+          returnType: r.returnType,
+        }))
+      ),
+    [orders]
+  );
 
   // ── Per-invoice "checked" ticks ──
   const tickItems = useMemo(
@@ -308,26 +337,36 @@ export default function OfficeReconcileLoadPage({
     }));
   };
 
-  const handleToggleReturnType = async (returnId: string, currentCondition: "Good" | "Damage") => {
+  // Set a returned item's physical condition (Good / Damage).
+  // Exchange returns: only actual_condition is saved, so they keep showing as
+  // "Exchange"; stock moves when the load is finalized.
+  // Normal returns: the return type itself is Good or Damage.
+  const handleSetReturnCondition = async (ret: ReconcileReturnItem, condition: "Good" | "Damage") => {
     if (loadDetails?.status === "Completed") {
       toast.info("Load is completed. Returns cannot be modified.");
       return;
     }
-    const newCondition = currentCondition === "Good" ? "Damage" : "Good";
+    const isExchange = ret.returnType === "Exchange";
+    const patch = (r: ReconcileReturnItem): ReconcileReturnItem =>
+      isExchange ? { ...r, actualCondition: condition } : { ...r, returnType: condition, actualCondition: null };
+
+    // Show the change straight away
+    const previous = orders;
+    setOrders((prev) =>
+      prev.map((o) => ({ ...o, returns: o.returns?.map((r) => (r.id === ret.id ? patch(r) : r)) }))
+    );
+
     try {
-      // For "Exchange" returns this only sets their physical condition
-      // (actual_condition) — the API keeps return_type as "Exchange" so it
-      // keeps displaying as Exchange everywhere (invoices, this screen).
-      const res = await fetch(`/api/inventory/returns/${returnId}`, {
+      const res = await fetch(`/api/inventory/returns/${ret.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ return_type: newCondition }),
+        body: JSON.stringify(isExchange ? { actual_condition: condition } : { return_type: condition }),
       });
-      if (!res.ok) throw new Error();
-      toast.success(`Marked item as ${newCondition}`);
-      fetchData();
-    } catch {
-      toast.error("Failed to update return condition");
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "");
+      toast.success(`${ret.productName} marked as ${condition}`);
+    } catch (e: any) {
+      setOrders(previous);
+      toast.error(e.message || "Failed to update return condition");
     }
   };
 
@@ -523,7 +562,16 @@ export default function OfficeReconcileLoadPage({
           </div>
 
           {/* Desktop action button */}
-          <div className="hidden md:block shrink-0">
+          <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+            <Button
+              size="lg"
+              variant="outline"
+              className="border-orange-200 text-orange-700 hover:bg-orange-50 w-full sm:w-auto"
+              onClick={() => setUnloadOpen(true)}
+            >
+              <PackageOpen className="w-4 h-4 mr-2" /> Unloading Report
+            </Button>
+            <div className="hidden md:block">
             {isCompleted ? (
               <Button
                 size="lg"
@@ -551,6 +599,7 @@ export default function OfficeReconcileLoadPage({
                   : `Tick all invoices (${tickable.length - tickedCount} left)`}
               </Button>
             )}
+            </div>
           </div>
         </div>
 
@@ -765,21 +814,37 @@ export default function OfficeReconcileLoadPage({
                                       {ret.sku} · {ret.quantity} Pcs · LKR {ret.totalValue.toLocaleString()}
                                     </p>
                                   </div>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    disabled={isCompleted}
-                                    onClick={() => handleToggleReturnType(ret.id, effectiveCondition)}
-                                    className={cn(
-                                      "h-6 text-[10px] font-bold px-2 shrink-0 transition-all",
-                                      isGood
-                                        ? "bg-green-50 text-green-700 border-green-300 hover:bg-green-100"
-                                        : "bg-red-50 text-red-700 border-red-300 hover:bg-red-100"
-                                    )}
-                                    title="Click to toggle physical condition"
-                                  >
-                                    {isGood ? "✓ Good Stock" : "⚠ Damage"}
-                                  </Button>
+                                  {/* Good / Damage — the selected one is filled */}
+                                  <div className="flex shrink-0 rounded-md border border-slate-200 overflow-hidden">
+                                    <button
+                                      type="button"
+                                      disabled={isCompleted}
+                                      onClick={() => !isGood && handleSetReturnCondition(ret, "Good")}
+                                      className={cn(
+                                        "h-6 px-2 text-[10px] font-bold transition-colors disabled:cursor-not-allowed",
+                                        isGood
+                                          ? "bg-green-600 text-white"
+                                          : "bg-white text-slate-500 hover:bg-green-50 hover:text-green-700"
+                                      )}
+                                      title="Mark as good stock"
+                                    >
+                                      ✓ Good
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={isCompleted}
+                                      onClick={() => isGood && handleSetReturnCondition(ret, "Damage")}
+                                      className={cn(
+                                        "h-6 px-2 text-[10px] font-bold border-l border-slate-200 transition-colors disabled:cursor-not-allowed",
+                                        !isGood
+                                          ? "bg-red-600 text-white"
+                                          : "bg-white text-slate-500 hover:bg-red-50 hover:text-red-700"
+                                      )}
+                                      title="Mark as damaged"
+                                    >
+                                      ⚠ Damage
+                                    </button>
+                                  </div>
                                 </div>
                               );
                             })}
@@ -1084,6 +1149,15 @@ export default function OfficeReconcileLoadPage({
           </Button>
         </div>
       )}
+
+      {/* ── Unloading Report ── */}
+      <UnloadingReportDialog
+        open={unloadOpen}
+        onOpenChange={setUnloadOpen}
+        loadId={id}
+        statuses={unloadStatuses}
+        returns={unloadReturns}
+      />
 
       {/* ── Expense Add Dialog ── */}
       <ExpenseFormDialog

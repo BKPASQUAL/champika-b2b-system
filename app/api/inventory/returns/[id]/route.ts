@@ -173,12 +173,29 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { return_type, reason_tag, status, reason, quantity, unit_price, location_id } = body;
+    const { return_type, reason_tag, status, reason, quantity, unit_price, location_id, actual_condition } = body;
 
     const existing = await findReturnRecord(id, "*");
 
     if (!existing) {
       return NextResponse.json({ error: "Return record not found" }, { status: 404 });
+    }
+
+    // Physical condition set on the Reconcile page (Good / Damage). Only this
+    // field changes: Exchange returns stay "Exchange", and the stock move
+    // happens when the load is finalized (see api/orders/loading/reconcile).
+    if (actual_condition !== undefined) {
+      if (actual_condition !== null && !["Good", "Damage"].includes(actual_condition)) {
+        return NextResponse.json({ error: "Invalid actual_condition" }, { status: 400 });
+      }
+      const { data, error } = await supabaseAdmin
+        .from("inventory_returns")
+        .update({ actual_condition })
+        .eq("id", existing.id)
+        .select()
+        .single();
+      if (error) throw error;
+      return NextResponse.json(data);
     }
 
     const updatePayload: Record<string, any> = {};
