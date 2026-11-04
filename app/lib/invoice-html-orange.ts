@@ -133,7 +133,7 @@ export const generateOrangeInvoiceHTML = (invoice: any): string => {
   const outletTel = invoice.customer?.phone || invoice.phone || "";
   // Bill shows the CINV Manual Ref when there is one, else the system number (old OR-xxxx bills)
   const manualRef = String(invoice.manualInvoiceNo || "");
-  const invoiceNo = manualRef.startsWith("CINV") ? manualRef : invoice.invoiceNo || "-";
+  const invoiceNo = manualRef.trim() || invoice.invoiceNo || "-";
   const printedAt = formatPrintTime(new Date());
 
   const cell = "border:1px solid #000;padding:2px 4px;font-size:14px;";
