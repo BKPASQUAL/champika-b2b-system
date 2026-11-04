@@ -369,7 +369,7 @@ export default function CreateInvoiceForm({ printFormat = "STANDARD" }: { printF
     const product = products.find((p) => p.id === productId);
     if (!product) return;
 
-    const defaultUnitPrice = (product.retailOnly || product.retail_price) 
+    const defaultUnitPrice = product.retailOnly // retail price only for retail-only items; normal items use distribution price
       ? (product.retail_price || product.selling_price) 
       : product.selling_price;
 
@@ -444,7 +444,7 @@ export default function CreateInvoiceForm({ printFormat = "STANDARD" }: { printF
       freeQuantity: free,
       mrp: currentItem.mrp,
       unitPrice: currentItem.unitPrice,
-      originalPrice: product.selling_price,
+      originalPrice: product.retailOnly ? (product.retail_price || product.selling_price) : product.selling_price,
       discountPercent: discPerc,
       discountAmount: discountAmount,
       total: netTotal,
@@ -1050,7 +1050,7 @@ export default function CreateInvoiceForm({ printFormat = "STANDARD" }: { printF
                                   <div className="text-xs text-muted-foreground">
                                     {product.sku} • Stock:{" "}
                                     {product.stock_quantity} • LKR{" "}
-                                    {(product.retail_price ?? product.selling_price).toLocaleString()}
+                                    {(product.retailOnly ? (product.retail_price ?? product.selling_price) : product.selling_price).toLocaleString()}
                                   </div>
                                 </div>
                               </CommandItem>

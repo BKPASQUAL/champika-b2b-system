@@ -631,7 +631,7 @@ export default function DistributionEditInvoicePage({
       }
     }
 
-    const defaultUnitPrice = (product.retailOnly || product.retail_price)
+    const defaultUnitPrice = product.retailOnly // retail price only for retail-only items; normal items use distribution price
       ? (product.retail_price || product.selling_price)
       : product.selling_price;
 
@@ -699,7 +699,7 @@ export default function DistributionEditInvoicePage({
       freeQuantity: free,
       mrp: currentItem.mrp,
       unitPrice: currentItem.unitPrice,
-      originalPrice: product?.selling_price || currentItem.unitPrice,
+      originalPrice: (product?.retailOnly ? (product?.retail_price || product?.selling_price) : product?.selling_price) || currentItem.unitPrice,
       discountPercent: discPerc,
       discountAmount,
       total,
@@ -1349,7 +1349,7 @@ export default function DistributionEditInvoicePage({
                                   </div>
                                   <div className="text-xs text-muted-foreground">
                                     {product.sku} • Stock: {product.stock_quantity} • LKR{" "}
-                                    {(product.retail_price ?? product.selling_price).toLocaleString()}
+                                    {(product.retailOnly ? (product.retail_price ?? product.selling_price) : product.selling_price).toLocaleString()}
                                   </div>
                                 </div>
                               </CommandItem>
