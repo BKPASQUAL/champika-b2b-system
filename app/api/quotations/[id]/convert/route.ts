@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { BUSINESS_IDS } from "@/app/config/business-constants";
+import { sortLayersFifo } from "@/lib/fifo-rebuild";
 
 // POST: convert quotation to a retail invoice
 export async function POST(
@@ -98,7 +99,7 @@ export async function POST(
         .in("id", productIds),
       supabaseAdmin
         .from("product_cost_layers")
-        .select("id, product_id, cost_price, remaining_quantity")
+        .select("id, product_id, cost_price, remaining_quantity, purchase_id, created_at, purchases (purchase_date)")
         .in("product_id", productIds)
         .gt("remaining_quantity", 0)
         .order("created_at", { ascending: true }),
@@ -106,7 +107,8 @@ export async function POST(
 
     const products = productsRes.data || [];
     const layerMap: Record<string, any[]> = {};
-    (costLayersRes.data || []).forEach((layer: any) => {
+    // Same order as the FIFO rebuild (bill date), so invoice costs match it
+    sortLayersFifo((costLayersRes.data || []) as any[]).forEach((layer: any) => {
       if (!layerMap[layer.product_id]) layerMap[layer.product_id] = [];
       layerMap[layer.product_id].push({
         id: layer.id,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
+import { rebuildFifoCostsSafe } from "@/lib/fifo-rebuild";
 
 const updateSchema = z.object({
   sku: z.string().optional(),
@@ -246,6 +247,9 @@ export async function PATCH(
         }
       }
     }
+
+    // A new stock-count batch changes the estimated cost of sales still waiting for a bill
+    await rebuildFifoCostsSafe([id]);
 
     return NextResponse.json({ message: "Product updated" });
   } catch (error: any) {

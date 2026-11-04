@@ -5,6 +5,7 @@ import { BUSINESS_IDS, BUSINESS_NAMES } from "@/app/config/business-constants";
 import { triggerAgencyBillsForInvoice } from "@/app/lib/inter-branch-billing";
 import { getOrCreateActiveRepBook, getNextInvoiceNumber, getNextOrangeManualRef } from "@/lib/invoice-books";
 import { checkCustomerOverdueStatus, markCustomerUnlockAsUsed } from "@/lib/customer-overdue";
+import { sortLayersFifo } from "@/lib/fifo-rebuild";
 
 // --- Validation Schemas ---
 
@@ -458,7 +459,9 @@ export async function POST(request: NextRequest) {
           cost_price,
           remaining_quantity,
           purchase_id,
+          created_at,
           purchases (
+            purchase_date,
             supplier_id,
             suppliers (
               id,
@@ -498,7 +501,8 @@ export async function POST(request: NextRequest) {
 
     // Build mutable in-memory FIFO layer queue per product
     const layerMap: Record<string, any[]> = {};
-    (costLayersRes.data || []).forEach((layer: any) => {
+    // Same order as the FIFO rebuild (bill date), so invoice costs match it
+    sortLayersFifo((costLayersRes.data || []) as any[]).forEach((layer: any) => {
       if (!layerMap[layer.product_id]) layerMap[layer.product_id] = [];
       layerMap[layer.product_id].push({
         id: layer.id,

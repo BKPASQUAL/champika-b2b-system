@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
 import { BUSINESS_PO_PREFIXES } from "@/app/config/business-constants";
-import { rebuildFifoCostsSafe } from "@/lib/fifo-rebuild";
+import { rebuildFifoCostsSafe, isLatestBillForProduct } from "@/lib/fifo-rebuild";
 
 // --- Validation Schemas ---
 
@@ -213,14 +213,18 @@ export async function POST(request: NextRequest) {
         .eq("id", item.productId)
         .single();
 
+      // Only the newest bill (by bill date) sets the product's current cost/prices
+      const latest = await isLatestBillForProduct(item.productId, val.purchase_date, purchase.id);
       await supabaseAdmin
         .from("products")
         .update({
           stock_quantity: (currentProduct?.stock_quantity || 0) + totalQty,
-          cost_price: item.unitPrice,
-          actual_cost_price: processedItem.actual_unit_cost,
-          mrp: item.mrp,
-          selling_price: item.sellingPrice,
+          ...(latest && {
+            cost_price: item.unitPrice,
+            actual_cost_price: processedItem.actual_unit_cost,
+            mrp: item.mrp,
+            selling_price: item.sellingPrice,
+          }),
         })
         .eq("id", item.productId);
 

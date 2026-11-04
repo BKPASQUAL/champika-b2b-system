@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
-import { rebuildFifoCostsSafe } from "@/lib/fifo-rebuild";
+import { rebuildFifoCostsSafe, isLatestBillForProduct } from "@/lib/fifo-rebuild";
 
 const itemSchema = z.object({
   productId: z.string(),
@@ -223,7 +223,31 @@ export async function PUT(
       }
     }
 
-    // 5. Delete old cost layers and items
+    // 5a. Monthly claim discounts are linked to this bill's line ids. The lines are
+    // re-created below with new ids, so keep the claim rows to move them over.
+    const oldItemIds = oldItems.map((o: any) => o.id);
+    const { data: claimRows } = oldItemIds.length
+      ? await supabaseAdmin
+          .from("supplier_claim_cost_adjustments")
+          .select("id, target_id, reduction_per_unit, created_at")
+          .eq("target_type", "purchase_item")
+          .in("target_id", oldItemIds)
+          .order("created_at", { ascending: true })
+      : { data: [] as any[] };
+
+    // Claim rows on this bill's old stock batches: the FIFO rebuild re-creates them
+    const { data: oldLayers } = await supabaseAdmin
+      .from("product_cost_layers").select("id").eq("purchase_id", id);
+    const oldLayerIds = (oldLayers || []).map((l: any) => l.id);
+    if (oldLayerIds.length) {
+      await supabaseAdmin
+        .from("supplier_claim_cost_adjustments")
+        .delete()
+        .eq("target_type", "cost_layer")
+        .in("target_id", oldLayerIds);
+    }
+
+    // 5b. Delete old cost layers and items
     await supabaseAdmin.from("product_cost_layers").delete().eq("purchase_id", id);
     await supabaseAdmin.from("purchase_items").delete().eq("purchase_id", id);
 
@@ -252,11 +276,55 @@ export async function PUT(
       };
     });
 
-    const { error: itemsError } = await supabaseAdmin
+    const { data: newItems, error: itemsError } = await supabaseAdmin
       .from("purchase_items")
-      .insert(itemsData);
+      .insert(itemsData)
+      .select("id, product_id");
 
     if (itemsError) throw itemsError;
+
+    // 6b. Move claim discounts from old lines to the new lines (same product, same order)
+    const postClaimCost: number[] = itemsData.map((d) => d.actual_unit_cost);
+    if (claimRows && claimRows.length) {
+      // New line id per itemsData index
+      const newIdQueue: Record<string, string[]> = {};
+      (newItems || []).forEach((x: any) => (newIdQueue[x.product_id] ||= []).push(x.id));
+      const newIds = itemsData.map((d) => newIdQueue[d.product_id]?.shift());
+
+      // Old line → new line index (nth line of a product → nth line of that product)
+      const idxQueue: Record<string, number[]> = {};
+      itemsData.forEach((d, i) => (idxQueue[d.product_id] ||= []).push(i));
+      const oldToNewIdx: Record<string, number> = {};
+      oldItems.forEach((o: any) => {
+        const idx = idxQueue[o.product_id]?.shift();
+        if (idx !== undefined) oldToNewIdx[o.id] = idx;
+      });
+      const newIdAt = (idx: number) => newIds[idx];
+
+      for (const row of claimRows) {
+        const idx = oldToNewIdx[row.target_id];
+        const newId = idx !== undefined ? newIdAt(idx) : undefined;
+        if (!newId) continue; // product removed from the bill: discount no longer applies
+        const before = postClaimCost[idx];
+        const cut = Math.min(Number(row.reduction_per_unit) || 0, Math.max(0, before));
+        postClaimCost[idx] = before - cut;
+        await supabaseAdmin
+          .from("supplier_claim_cost_adjustments")
+          .update({
+            target_id: newId,
+            units: itemsData[idx].quantity + itemsData[idx].free_quantity,
+            reduction_per_unit: cut,
+            cost_before: before,
+          })
+          .eq("id", row.id);
+      }
+      for (let i = 0; i < itemsData.length; i++) {
+        const newId = newIdAt(i);
+        if (newId && Math.abs(postClaimCost[i] - itemsData[i].actual_unit_cost) > 0.0001) {
+          await supabaseAdmin.from("purchase_items").update({ actual_unit_cost: postClaimCost[i] }).eq("id", newId);
+        }
+      }
+    }
 
     // 7. Update stock and cost layers for new items
     for (let i = 0; i < val.items.length; i++) {
@@ -270,14 +338,18 @@ export async function PUT(
         .eq("id", item.productId)
         .single();
 
+      // Only the newest bill (by bill date) sets the product's current cost/prices
+      const latest = await isLatestBillForProduct(item.productId, val.purchase_date, id);
       await supabaseAdmin
         .from("products")
         .update({
           stock_quantity: (currentProduct?.stock_quantity || 0) + totalQty,
-          cost_price: item.unitPrice,
-          actual_cost_price: processedItem.actual_unit_cost,
-          mrp: item.mrp,
-          selling_price: item.sellingPrice,
+          ...(latest && {
+            cost_price: item.unitPrice,
+            actual_cost_price: postClaimCost[i],
+            mrp: item.mrp,
+            selling_price: item.sellingPrice,
+          }),
         })
         .eq("id", item.productId);
 

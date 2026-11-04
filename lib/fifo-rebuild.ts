@@ -78,6 +78,37 @@ export type RebuildResult = {
   products: ProductRebuild[];
 };
 
+// FIFO order of a stock batch: purchase batches by bill date, stock counts by entry time.
+// Invoices must take stock in this same order, or their cost differs from the rebuild.
+export function fifoLayerKey(layer: { purchase_id?: string | null; created_at?: any; purchases?: any; purchase?: any }) {
+  const p = layer.purchases ?? layer.purchase;
+  const pd = Array.isArray(p) ? p[0]?.purchase_date : p?.purchase_date;
+  return layer.purchase_id && pd ? `${String(pd).slice(0, 10)}T00:00:00.000Z` : iso(layer.created_at);
+}
+
+export function sortLayersFifo<T extends { purchase_id?: string | null; created_at?: any }>(layers: T[]): T[] {
+  return [...layers].sort((a, b) => {
+    const ka = fifoLayerKey(a);
+    const kb = fifoLayerKey(b);
+    return ka === kb ? iso(a.created_at).localeCompare(iso(b.created_at)) : ka.localeCompare(kb);
+  });
+}
+
+// True when no other bill for this product has a later bill date.
+// An old bill entered late must not overwrite the product's current cost/prices.
+export async function isLatestBillForProduct(productId: string, purchaseDate: string, excludePurchaseId?: string) {
+  let q = supabaseAdmin
+    .from("purchase_items")
+    .select("id, purchase:purchases!inner (id, purchase_date)")
+    .eq("product_id", productId)
+    .gt("purchase.purchase_date", String(purchaseDate).slice(0, 10))
+    .limit(1);
+  if (excludePurchaseId) q = q.neq("purchase_id", excludePurchaseId);
+  const { data, error } = await q;
+  if (error) return true; // on doubt, behave as before
+  return !data || data.length === 0;
+}
+
 let fifoStartCache: string | null = null;
 // FIFO start = first stock-count batch (the seed run when FIFO was switched on)
 async function fifoStart(): Promise<string> {
