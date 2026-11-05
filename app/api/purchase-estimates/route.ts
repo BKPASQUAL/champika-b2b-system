@@ -27,7 +27,7 @@ const estimateSchema = z.object({
   supplier_name: z.string().optional(),
   reference_no: z.string().optional().default(""),
   estimate_date: z.string(),
-  arrival_date: z.string().optional().or(z.literal("")),
+  arrival_date: z.string().nullable().optional().or(z.literal("")),
   items: z.array(estimateItemSchema).min(1, "At least one item is required"),
   gross_total: z.number().optional().default(0),
   line_discount_total: z.number().optional().default(0),

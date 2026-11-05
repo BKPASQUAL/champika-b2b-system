@@ -25,7 +25,7 @@ const purchaseSchema = z.object({
   // ✅ UPDATE: Invoice Number is now REQUIRED
   invoice_number: z.string().min(1, "Invoice Number is required"),
   purchase_date: z.string(),
-  arrival_date: z.string().optional().or(z.literal("")),
+  arrival_date: z.string().nullable().optional().or(z.literal("")),
   total_amount: z.number(),
   extra_discount: z.number().optional().default(0),
   items: z.array(itemSchema).min(1, "At least one item is required"),
