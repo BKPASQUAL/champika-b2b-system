@@ -390,8 +390,6 @@ export const generateInvoiceHTML = async (
     const chunkRows = chunk
       .map((item: any, idx: number) => {
         const globalIdx = globalStart + idx;
-        const isRetail = item.retailOnly || item.retail_only || item.isRetail || item.subCategory === "Retail Exclusive";
-        const retailTag = isRetail ? ' <span style="font-size:9px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;padding:1px 4px;border-radius:3px;font-weight:600;margin-left:4px;display:inline-block;">RETAIL</span>' : '';
 
         if (isReturnNote) {
           const itemPrice = Number(item.unitPrice || item.price || noteExtractedPrice || 0);
@@ -401,7 +399,7 @@ export const generateInvoiceHTML = async (
         <tr style="${globalIdx < items.length - 1 ? "border-bottom:1px solid #e8e8e8;" : ""}">
           <td style="padding:7px 8px;font-size:13px;color:#777;text-align:center;vertical-align:middle;">${globalIdx + 1}</td>
           <td style="padding:7px 8px;font-size:13px;color:#555;vertical-align:middle;">${item.sku || "-"}</td>
-          <td style="padding:7px 8px;font-size:13px;color:#111;font-weight:600;vertical-align:middle;">${item.productName || item.name || "-"}${retailTag}${multiBill && item.billRef ? `<div style="font-size:10px;font-weight:600;color:#0284c7;margin-top:1px;">Bill: ${item.billRef}</div>` : ""}</td>
+          <td style="padding:7px 8px;font-size:13px;color:#111;font-weight:600;vertical-align:middle;">${item.productName || item.name || "-"}${multiBill && item.billRef ? `<div style="font-size:10px;font-weight:600;color:#0284c7;margin-top:1px;">Bill: ${item.billRef}</div>` : ""}</td>
           <td style="padding:7px 8px;font-size:13px;color:#555;text-align:center;vertical-align:middle;">${item.unit || "Pcs"}</td>
           <td style="padding:7px 8px;font-size:13px;color:#111;text-align:right;white-space:nowrap;vertical-align:middle;">LKR ${fmt(itemPrice)}</td>
           <td style="padding:7px 8px;font-size:14px;font-weight:800;color:#000;text-align:center;vertical-align:middle;">${itemQty}</td>
@@ -430,7 +428,7 @@ export const generateInvoiceHTML = async (
         <tr style="${globalIdx < items.length - 1 ? "border-bottom:1px solid #e8e8e8;" : ""}">
           <td style="padding:7px 4px;font-size:12px;color:#777;text-align:center;vertical-align:middle;">${globalIdx + 1}</td>
           <td style="padding:7px 4px;font-size:12px;color:#555;vertical-align:middle;overflow-wrap:anywhere;">${item.sku || "-"}</td>
-          <td style="padding:7px 6px 7px 4px;font-size:13px;color:#111;font-weight:500;vertical-align:middle;line-height:1.3;">${item.productName || item.name || "-"}${retailTag}</td>
+          <td style="padding:7px 6px 7px 4px;font-size:13px;color:#111;font-weight:500;vertical-align:middle;line-height:1.3;">${item.productName || item.name || "-"}</td>
           ${val(`${qty} ${item.unit || "Pcs"}`, "font-weight:700;")}
           ${mrpHasFree ? val(free > 0 ? String(free) : "-", "font-weight:700;") : ""}
           ${val(mrp > 0 ? fmt(mrp) : "-", "color:#555;")}
@@ -445,7 +443,7 @@ export const generateInvoiceHTML = async (
         <tr style="${globalIdx < items.length - 1 ? "border-bottom:1px solid #e8e8e8;" : ""}">
           <td style="padding:7px 8px;font-size:13px;color:#777;text-align:center;vertical-align:middle;">${globalIdx + 1}</td>
           <td style="padding:7px 8px;font-size:13px;color:#555;vertical-align:middle;">${item.sku || "-"}</td>
-          <td style="padding:7px 8px;font-size:13px;color:#111;font-weight:500;vertical-align:middle;">${item.productName || item.name || "-"}${retailTag}</td>
+          <td style="padding:7px 8px;font-size:13px;color:#111;font-weight:500;vertical-align:middle;">${item.productName || item.name || "-"}</td>
           <td style="padding:7px 8px;font-size:13px;color:#111;text-align:right;white-space:nowrap;vertical-align:middle;">LKR ${fmt(item.unitPrice || item.price)}</td>
           <td style="padding:7px 8px;font-size:13px;font-weight:700;color:#111;text-align:center;vertical-align:middle;">${item.quantity}</td>
           <td style="padding:7px 8px;font-size:13px;color:#555;text-align:center;vertical-align:middle;">${item.unit || "Pcs"}</td>
@@ -861,8 +859,6 @@ export const generateHalfPageInvoiceHTML = async (
 
     const chunkRows = chunk.map((item: any, idx: number) => {
       const gi = globalStart + idx;
-      const isRetail = item.retailOnly || item.retail_only || item.isRetail || item.subCategory === "Retail Exclusive";
-      const retailTag = isRetail ? ' <span style="font-size:8px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;padding:1px 3px;border-radius:3px;font-weight:600;margin-left:3px;display:inline-block;">RETAIL</span>' : '';
 
       if (isReturnNote) {
         const itemPrice = Number(item.unitPrice || item.price || noteExtractedPrice || 0);
@@ -872,7 +868,7 @@ export const generateHalfPageInvoiceHTML = async (
         <tr style="${gi < items.length - 1 ? "border-bottom:1px solid #e8e8e8;" : ""}">
           <td style="padding:4px 5px;font-size:12px;color:#777;text-align:center;vertical-align:middle;">${gi + 1}</td>
           <td style="padding:4px 5px;font-size:12px;color:#555;vertical-align:middle;">${item.sku || "-"}</td>
-          <td style="padding:4px 5px;font-size:12px;color:#111;font-weight:600;vertical-align:middle;">${item.productName || item.name || "-"}${retailTag}${multiBill && item.billRef ? `<div style="font-size:9px;font-weight:600;color:#0284c7;">Bill: ${item.billRef}</div>` : ""}</td>
+          <td style="padding:4px 5px;font-size:12px;color:#111;font-weight:600;vertical-align:middle;">${item.productName || item.name || "-"}${multiBill && item.billRef ? `<div style="font-size:9px;font-weight:600;color:#0284c7;">Bill: ${item.billRef}</div>` : ""}</td>
           <td style="padding:4px 5px;font-size:12px;color:#555;text-align:center;vertical-align:middle;">${item.unit || "Pcs"}</td>
           <td style="padding:4px 5px;font-size:12px;color:#111;text-align:right;white-space:nowrap;vertical-align:middle;">LKR ${fmt(itemPrice)}</td>
           <td style="padding:4px 5px;font-size:13px;font-weight:800;color:#000;text-align:center;vertical-align:middle;">${itemQty}</td>
@@ -884,7 +880,7 @@ export const generateHalfPageInvoiceHTML = async (
         <tr style="${gi < items.length - 1 ? "border-bottom:1px solid #e8e8e8;" : ""}">
           <td style="padding:4px 5px;font-size:12px;color:#777;text-align:center;vertical-align:middle;">${gi + 1}</td>
           <td style="padding:4px 5px;font-size:12px;color:#555;vertical-align:middle;">${item.sku || "-"}</td>
-          <td style="padding:4px 5px;font-size:12px;color:#111;font-weight:500;vertical-align:middle;">${item.productName || item.name || "-"}${retailTag}</td>
+          <td style="padding:4px 5px;font-size:12px;color:#111;font-weight:500;vertical-align:middle;">${item.productName || item.name || "-"}</td>
           <td style="padding:4px 5px;font-size:12px;color:#111;text-align:right;white-space:nowrap;vertical-align:middle;">LKR ${fmt(item.unitPrice || item.price)}</td>
           <td style="padding:4px 5px;font-size:12px;font-weight:700;color:#111;text-align:center;vertical-align:middle;">${item.quantity}</td>
           <td style="padding:4px 5px;font-size:12px;color:#555;text-align:center;vertical-align:middle;">${item.unit || "Pcs"}</td>
