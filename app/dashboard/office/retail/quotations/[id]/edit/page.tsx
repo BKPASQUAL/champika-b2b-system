@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MrpDiscountInput } from "@/components/ui/mrp-discount-input";
 import {
   Card,
   CardContent,
@@ -576,11 +577,20 @@ export default function EditQuotationPage({ params }: { params: Promise<{ id: st
               </div>
 
               {/* Price row */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-semibold text-muted-foreground uppercase">MRP</Label>
                   <Input type="number" value={currentItem.mrp} className="h-11"
                     onChange={(e) => setCurrentItem({ ...currentItem, mrp: e.target.value === "" ? "" : Number(e.target.value) })} placeholder="0.00" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold text-muted-foreground uppercase">MRP Disc %</Label>
+                  <MrpDiscountInput
+                    mrp={currentItem.mrp}
+                    unitPrice={currentItem.unitPrice}
+                    onUnitPriceChange={(price) => setCurrentItem((prev) => ({ ...prev, unitPrice: price }))}
+                    className="h-11"
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs font-semibold text-muted-foreground uppercase">Unit Price</Label>
