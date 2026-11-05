@@ -35,15 +35,16 @@ export async function GET(request: NextRequest) {
     const onlyActive =
       searchParams.get("active") === "true" ||
       searchParams.get("is_active") === "true";
+    // fields=invoice: only the columns invoice screens need (much smaller and faster)
+    const invoiceFields = searchParams.get("fields") === "invoice";
 
-    const data: any[] = [];
-    let page = 0;
-    const pageSize = 1000;
-    while (true) {
-      let query = supabaseAdmin
-        .from("products")
-        .select(
-          `
+    const selectCols = invoiceFields
+      ? `
+          id, sku, name, selling_price, mrp, stock_quantity,
+          unit_of_measure, supplier_name, retail_only, retail_price, created_at,
+          product_stocks ( quantity )
+        `
+      : `
           *,
           product_stocks (
             quantity,
@@ -52,9 +53,15 @@ export async function GET(request: NextRequest) {
           product_suppliers (
             supplier_name
           )
-        `,
-        )
+        `;
+
+    const pageSize = 1000;
+    const fetchPage = async (page: number) => {
+      let query = supabaseAdmin
+        .from("products")
+        .select(selectCols)
         .order("created_at", { ascending: false })
+        .order("id", { ascending: true })
         .range(page * pageSize, (page + 1) * pageSize - 1);
 
       if (onlyActive) {
@@ -63,10 +70,42 @@ export async function GET(request: NextRequest) {
 
       const { data: pageData, error } = await query;
       if (error) throw error;
-      if (!pageData || pageData.length === 0) break;
-      data.push(...pageData);
-      if (pageData.length < pageSize) break;
-      page++;
+      return (pageData || []) as any[];
+    };
+
+    // Load pages a few at a time in parallel instead of one after another
+    const data: any[] = [];
+    const PARALLEL_PAGES = 3;
+    for (let start = 0; ; start += PARALLEL_PAGES) {
+      const pages = await Promise.all(
+        Array.from({ length: PARALLEL_PAGES }, (_, i) => fetchPage(start + i)),
+      );
+      let done = false;
+      for (const pageData of pages) {
+        data.push(...pageData);
+        if (pageData.length < pageSize) { done = true; break; }
+      }
+      if (done) break;
+    }
+
+    if (invoiceFields) {
+      return NextResponse.json(
+        data.map((p) => ({
+          id: p.id,
+          sku: p.sku,
+          name: p.name,
+          supplier: p.supplier_name,
+          stock:
+            p.product_stocks && p.product_stocks.length > 0
+              ? p.product_stocks.reduce((sum: number, s: any) => sum + (Number(s.quantity) || 0), 0)
+              : p.stock_quantity || 0,
+          mrp: p.mrp || 0,
+          sellingPrice: p.selling_price || 0,
+          retailPrice: p.retail_price ?? null,
+          unitOfMeasure: p.unit_of_measure || "Pcs",
+          retailOnly: p.retail_only ?? false,
+        })),
+      );
     }
 
     const mapped = data.map((p) => {

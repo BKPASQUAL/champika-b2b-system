@@ -319,16 +319,21 @@ export default function CreateRetailInvoicePage() {
           return;
         }
 
+        // Start every request at once so they load in parallel
+        setStockLoading(true);
+        const productsPromise = fetch("/api/products?active=true&fields=invoice");
+
         // Fetch Out-of-Stock setting
-        try {
-          const overrideRes = await fetch("/api/settings/portal-stock-override");
-          if (overrideRes.ok) {
-            const overrideData = await overrideRes.json();
-            setOutOfStockOverride(overrideData.retail ?? false);
-          }
-        } catch (err) {
-          console.error("Error loading portal stock overrides:", err);
-        }
+        const overridePromise = fetch("/api/settings/portal-stock-override")
+          .then(async (overrideRes) => {
+            if (overrideRes.ok) {
+              const overrideData = await overrideRes.json();
+              setOutOfStockOverride(overrideData.retail ?? false);
+            }
+          })
+          .catch((err) => {
+            console.error("Error loading portal stock overrides:", err);
+          });
 
         const resolvedBusinessName = BUSINESS_NAMES[BUSINESS_IDS.CHAMPIKA_RETAIL];
 
@@ -393,8 +398,7 @@ export default function CreateRetailInvoicePage() {
           }))
         );
 
-        setStockLoading(true);
-        const productsRes = await fetch("/api/products?active=true");
+        const [productsRes] = await Promise.all([productsPromise, overridePromise]);
 
         if (!productsRes.ok) {
           throw new Error("Failed to fetch products");

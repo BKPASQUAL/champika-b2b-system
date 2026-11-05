@@ -98,7 +98,8 @@ export async function GET(
     }
 
     // 2. Fetch Order Items with FULL Product Details
-    const { data: items, error: itemsError } = await supabaseAdmin
+    // (items, serials, payments and returns only need the invoice, so they load in parallel)
+    const itemsQuery = supabaseAdmin
       .from("order_items")
       .select(
         `
@@ -124,18 +125,14 @@ export async function GET(
       )
       .eq("order_id", invoice.order_id);
 
-    if (itemsError) throw itemsError;
-
-    const serialsByItem = await getSerialsByOrderItem(invoice.order_id);
+    const serialsPromise = getSerialsByOrderItem(invoice.order_id);
 
     // 3. Fetch Payments
-    const { data: payments, error: paymentsError } = await supabaseAdmin
+    const paymentsQuery = supabaseAdmin
       .from("payments")
       .select("*")
       .eq("invoice_id", id)
       .order("payment_date", { ascending: false });
-
-    if (paymentsError) throw paymentsError;
 
     // 4. Fetch Returns linked to this invoice (tagged via reason containing invoice_no or inter-branch)
     const invoiceNo = invoice.invoice_no || "";
@@ -143,6 +140,7 @@ export async function GET(
       invoice.orders?.is_inter_branch ||
       /^(OR-RE|OR-DI|RE|DI|SI-RE|SI-DI)-\d{4}-\d{2}$/i.test(invoiceNo);
 
+    const fetchReturns = async (): Promise<any[]> => {
     let returnsRaw: any[] = [];
     if (isInterBranch) {
       const match = invoiceNo.match(/^(OR-RE|OR-DI|RE|DI|SI-RE|SI-DI)-(\d{4})-(\d{2})$/i);
@@ -213,6 +211,18 @@ export async function GET(
         .ilike("reason", `%${invoiceNo}%`);
       returnsRaw = standardReturns || [];
     }
+    return returnsRaw;
+    };
+
+    const [
+      { data: items, error: itemsError },
+      serialsByItem,
+      { data: payments, error: paymentsError },
+      returnsRaw,
+    ] = await Promise.all([itemsQuery, serialsPromise, paymentsQuery, fetchReturns()]);
+
+    if (itemsError) throw itemsError;
+    if (paymentsError) throw paymentsError;
 
     const returns = returnsRaw.map((r: any) => {
       const unitPrice = isInterBranch
@@ -505,8 +515,9 @@ export async function PATCH(
       .select("*")
       .eq("order_id", currentInvoice.order_id);
 
-    // 3. Save Snapshot to History
-    if (val.userId) {
+    // 3. Save Snapshot to History (runs alongside the revert steps below)
+    const saveHistory = async () => {
+      if (!val.userId) return;
       const snapshotData = {
         ...currentInvoice,
         items: currentItems,
@@ -518,7 +529,7 @@ export async function PATCH(
         changed_by: val.userId,
         change_reason: val.changeReason || "Updated details",
       });
-    }
+    };
 
     // 4. Prepare Updates
     const newStatus = val.isDraft ? "Pending" : val.orderStatus;
@@ -526,22 +537,25 @@ export async function PATCH(
     // --- REVERT OLD STOCK & BALANCE ---
 
     // A. Revert Customer Balance
-    const { data: customer } = await supabaseAdmin
-      .from("customers")
-      .select("outstanding_balance")
-      .eq("id", currentInvoice.customer_id)
-      .single();
-
-    if (customer) {
-      const revertedBalance =
-        (customer.outstanding_balance || 0) - currentInvoice.total_amount;
-      await supabaseAdmin
+    const revertCustomerBalance = async () => {
+      const { data: customer } = await supabaseAdmin
         .from("customers")
-        .update({ outstanding_balance: revertedBalance })
-        .eq("id", currentInvoice.customer_id);
-    }
+        .select("outstanding_balance")
+        .eq("id", currentInvoice.customer_id)
+        .single();
+
+      if (customer) {
+        const revertedBalance =
+          (customer.outstanding_balance || 0) - currentInvoice.total_amount;
+        await supabaseAdmin
+          .from("customers")
+          .update({ outstanding_balance: revertedBalance })
+          .eq("id", currentInvoice.customer_id);
+      }
+    };
 
     // B. Revert Stock (Global + Location)
+    const revertStock = async () => {
     if (currentItems) {
       // Fetch the original rep's assigned locations so we can restore location stock
       const originalRepId = (currentInvoice.orders as any)?.sales_rep_id;
@@ -576,8 +590,14 @@ export async function PATCH(
         }
       }
 
-      for (const item of currentItems) {
-        const totalQty = item.quantity + (item.free_quantity || 0);
+      // One pass per product (quantities summed); different products run in parallel
+      const revertQty = new Map<string, number>();
+      for (const ci of currentItems) {
+        revertQty.set(ci.product_id, (revertQty.get(ci.product_id) || 0) + ci.quantity + (ci.free_quantity || 0));
+      }
+
+      await Promise.all(Array.from(revertQty.entries()).map(async ([product_id, totalQty]) => {
+        const item = { product_id };
 
         // Restore global stock
         const { data: prod } = await supabaseAdmin
@@ -619,7 +639,7 @@ export async function PATCH(
               });
           }
         }
-      }
+      }));
 
       // C. Delete Old Items
       await supabaseAdmin
@@ -627,6 +647,9 @@ export async function PATCH(
         .delete()
         .eq("order_id", currentInvoice.order_id);
     }
+    };
+
+    await Promise.all([saveHistory(), revertCustomerBalance(), revertStock()]);
 
     // --- APPLY NEW DATA ---
 
@@ -652,8 +675,8 @@ export async function PATCH(
       updatedNotes = `[PRINT_FORMAT:MRP]${updatedNotes}`;
     }
 
-    // Update Order
-    await supabaseAdmin
+    // Update Order (runs together with the invoice update below)
+    const orderUpdate = supabaseAdmin
       .from("orders")
       .update({
         customer_id: val.customerId,
@@ -682,10 +705,13 @@ export async function PATCH(
       invoiceUpdateFields.is_incorrect = false;
     }
 
-    await supabaseAdmin
-      .from("invoices")
-      .update(invoiceUpdateFields)
-      .eq("id", id);
+    await Promise.all([
+      orderUpdate,
+      supabaseAdmin
+        .from("invoices")
+        .update(invoiceUpdateFields)
+        .eq("id", id),
+    ]);
 
     // Consume One-Time Customer Unlock if update was made under authorization
     if (overdueStatus?.activeUnlock?.id && overdueStatus.activeUnlock.unlockType === "one_time") {
@@ -796,8 +822,14 @@ export async function PATCH(
       }
     }
 
-    for (const item of val.items) {
-      const totalQty = item.quantity + item.freeQuantity;
+    // One pass per product (quantities summed); different products run in parallel
+    const deductQty = new Map<string, number>();
+    for (const it of val.items) {
+      deductQty.set(it.productId, (deductQty.get(it.productId) || 0) + it.quantity + it.freeQuantity);
+    }
+
+    await Promise.all(Array.from(deductQty.entries()).map(async ([productId, totalQty]) => {
+      const item = { productId };
 
       // 2. Deduct Global Stock
       const { data: prod } = await supabaseAdmin
@@ -878,7 +910,7 @@ export async function PATCH(
           }
         }
       }
-    }
+    }));
 
     // Update Customer Balance (Add new total)
     const { data: currentCustomer } = await supabaseAdmin

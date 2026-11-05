@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
 import { BUSINESS_IDS, BUSINESS_NAMES } from "@/app/config/business-constants";
@@ -740,8 +740,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // These steps touch different tables, so run them at the same time.
+    const activeUserId = val.userId || val.salesRepId || null;
+
     // If invoice was created from an active Rep Invoice Book in Distribution, update the current_number
-    if (isDistribution && usedRepBookId) {
+    const updateInvoiceBook = async () => {
+      if (!(isDistribution && usedRepBookId)) return;
       const { data: bData } = await supabaseAdmin
         .from("invoice_books")
         .select("current_number, end_number")
@@ -763,23 +767,25 @@ export async function POST(request: NextRequest) {
           console.error("Error updating invoice_book counter:", e.message);
         }
       }
-    }
+    };
 
     // Log initial creation to invoice_history
-    const activeUserId = val.userId || val.salesRepId || null;
-    await supabaseAdmin.from("invoice_history").insert({
-      invoice_id: invoiceData.id,
-      previous_data: {
-        status: null,
-        new_status: val.orderStatus,
-      },
-      changed_by: activeUserId,
-      change_reason: `Order Placed & Awaiting Approval`,
-      changed_at: new Date().toISOString(),
-    });
+    const logHistory = async () => {
+      await supabaseAdmin.from("invoice_history").insert({
+        invoice_id: invoiceData.id,
+        previous_data: {
+          status: null,
+          new_status: val.orderStatus,
+        },
+        changed_by: activeUserId,
+        change_reason: `Order Placed & Awaiting Approval`,
+        changed_at: new Date().toISOString(),
+      });
+    };
 
     // 7. Record Payment
-    if (val.paidAmount > 0) {
+    const recordPayment = async () => {
+      if (!(val.paidAmount > 0)) return;
       await supabaseAdmin.from("payments").insert({
         invoice_id: invoiceData.id,
         customer_id: val.customerId,
@@ -802,47 +808,58 @@ export async function POST(request: NextRequest) {
           .single();
 
         if (retailCashAccount) {
-          await supabaseAdmin.from("account_transactions").insert({
-            transaction_no: `TXN-${Date.now()}`,
-            transaction_type: "Sales",
-            from_account_id: null,
-            to_account_id: retailCashAccount.id,
-            amount: val.paidAmount,
-            description: `Walk-in Sale - ${invoiceNo}`,
-            transaction_date: invoiceDate,
-          });
-
           const newBalance =
             (retailCashAccount.current_balance || 0) + val.paidAmount;
 
-          await supabaseAdmin
-            .from("bank_accounts")
-            .update({ current_balance: newBalance })
-            .eq("id", retailCashAccount.id);
+          await Promise.all([
+            supabaseAdmin.from("account_transactions").insert({
+              transaction_no: `TXN-${Date.now()}`,
+              transaction_type: "Sales",
+              from_account_id: null,
+              to_account_id: retailCashAccount.id,
+              amount: val.paidAmount,
+              description: `Walk-in Sale - ${invoiceNo}`,
+              transaction_date: invoiceDate,
+            }),
+            supabaseAdmin
+              .from("bank_accounts")
+              .update({ current_balance: newBalance })
+              .eq("id", retailCashAccount.id),
+          ]);
         }
       }
-    }
+    };
 
     // 8. Update Customer Balance
-    const { data: customer } = await supabaseAdmin
-      .from("customers")
-      .select("outstanding_balance, shop_name")
-      .eq("id", val.customerId)
-      .single();
+    const updateCustomerBalance = async () => {
+      const { data: cust } = await supabaseAdmin
+        .from("customers")
+        .select("outstanding_balance, shop_name")
+        .eq("id", val.customerId)
+        .single();
 
-    if (customer) {
-      const isFullyPaid = (val.grandTotal - val.paidAmount) < 100;
-      const pendingAmount = isFullyPaid ? 0 : (val.grandTotal - val.paidAmount);
-      if (pendingAmount !== 0) {
-        await supabaseAdmin
-          .from("customers")
-          .update({
-            outstanding_balance:
-              (customer.outstanding_balance || 0) + pendingAmount,
-          })
-          .eq("id", val.customerId);
+      if (cust) {
+        const isFullyPaid = (val.grandTotal - val.paidAmount) < 100;
+        const pendingAmount = isFullyPaid ? 0 : (val.grandTotal - val.paidAmount);
+        if (pendingAmount !== 0) {
+          await supabaseAdmin
+            .from("customers")
+            .update({
+              outstanding_balance:
+                (cust.outstanding_balance || 0) + pendingAmount,
+            })
+            .eq("id", val.customerId);
+        }
       }
-    }
+      return cust;
+    };
+
+    const [, , , customer] = await Promise.all([
+      updateInvoiceBook(),
+      logHistory(),
+      recordPayment(),
+      updateCustomerBalance(),
+    ]);
 
     // 9. Deduct Stock
     //
@@ -859,19 +876,20 @@ export async function POST(request: NextRequest) {
 
     if (isRetailInvoice) {
       // Fetch all locations owned by the Retail business (primary pool)
-      const { data: retailLocs } = await supabaseAdmin
-        .from("locations")
-        .select("id")
-        .eq("business_id", BUSINESS_IDS.CHAMPIKA_RETAIL);
-      retailLocationIds = (retailLocs ?? []).map((l: any) => l.id);
-
       // Main Warehouse is the overflow fallback
-      const { data: mainLoc } = await supabaseAdmin
-        .from("locations")
-        .select("id")
-        .is("business_id", null)
-        .eq("name", "Main Warehouse")
-        .maybeSingle();
+      const [{ data: retailLocs }, { data: mainLoc }] = await Promise.all([
+        supabaseAdmin
+          .from("locations")
+          .select("id")
+          .eq("business_id", BUSINESS_IDS.CHAMPIKA_RETAIL),
+        supabaseAdmin
+          .from("locations")
+          .select("id")
+          .is("business_id", null)
+          .eq("name", "Main Warehouse")
+          .maybeSingle(),
+      ]);
+      retailLocationIds = (retailLocs ?? []).map((l: any) => l.id);
       mainWarehouseId = mainLoc?.id || null;
     } else {
       // Non-retail: use rep's assigned locations
@@ -900,8 +918,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    for (const item of val.items) {
-      const totalQty = item.quantity + item.freeQuantity;
+    // Sum quantities per product so each product is handled once, then run
+    // different products in parallel (each product's own steps stay in order).
+    const qtyByProduct = new Map<string, number>();
+    for (const it of val.items) {
+      qtyByProduct.set(it.productId, (qtyByProduct.get(it.productId) || 0) + it.quantity + it.freeQuantity);
+    }
+
+    await Promise.all(Array.from(qtyByProduct.entries()).map(async ([productId, totalQty]) => {
+      const item = { productId };
 
       // Global product stock (always deducted)
       const { data: product } = await supabaseAdmin
@@ -1031,7 +1056,7 @@ export async function POST(request: NextRequest) {
           }
         }
       }
-    }
+    }));
 
     // 9.5 Process Returns if provided
     const returnLocationId = isRetailInvoice
@@ -1276,14 +1301,19 @@ export async function POST(request: NextRequest) {
       (resolvedBusinessId === BUSINESS_IDS.CHAMPIKA_RETAIL ||
         resolvedBusinessId === BUSINESS_IDS.CHAMPIKA_DISTRIBUTION)
     ) {
-      try {
-        const invoiceProductIds = val.items.map((i) => i.productId);
-        const returnProductIds = [...(val.returnItems || []), ...(val.goodReturns || [])].map((r: any) => r.productId).filter(Boolean);
-        const allProductIds = [...new Set([...invoiceProductIds, ...returnProductIds])];
-        await triggerAgencyBillsForInvoice(resolvedBusinessId, allProductIds);
-      } catch (err) {
-        console.error("[InterBranch] trigger failed (non-critical):", err);
-      }
+      const invoiceProductIds = val.items.map((i) => i.productId);
+      const returnProductIds = [...(val.returnItems || []), ...(val.goodReturns || [])].map((r: any) => r.productId).filter(Boolean);
+      const allProductIds = [...new Set([...invoiceProductIds, ...returnProductIds])];
+      const triggerBusinessId = resolvedBusinessId;
+      // Rebuilding the monthly agency bill is slow and the user doesn't need to wait for it,
+      // so run it after the response is sent.
+      after(async () => {
+        try {
+          await triggerAgencyBillsForInvoice(triggerBusinessId, allProductIds);
+        } catch (err) {
+          console.error("[InterBranch] trigger failed (non-critical):", err);
+        }
+      });
     }
 
     return NextResponse.json(

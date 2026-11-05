@@ -15,11 +15,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "User ID required" }, { status: 400 });
     }
 
-    // 1. Get assigned location(s) for this user
-    const { data: assignments, error: assignError } = await supabaseAdmin
-      .from("location_assignments")
-      .select("location_id")
-      .eq("user_id", userId);
+    // 1. Get assigned location(s) and the profile together
+    const [{ data: assignments, error: assignError }, { data: repProfile }] = await Promise.all([
+      supabaseAdmin
+        .from("location_assignments")
+        .select("location_id")
+        .eq("user_id", userId),
+      supabaseAdmin
+        .from("profiles")
+        .select("business_id")
+        .eq("id", userId)
+        .maybeSingle(),
+    ]);
 
     if (assignError) throw assignError;
 
@@ -32,11 +39,6 @@ export async function GET(request: NextRequest) {
 
     // Agency reps (Orange / Sierra) only sell their own agency's products.
     // Their stock sits in the shared Main Warehouse, so filter by supplier.
-    const { data: repProfile } = await supabaseAdmin
-      .from("profiles")
-      .select("business_id")
-      .eq("id", userId)
-      .maybeSingle();
     const agencySupplier = getAgencySupplierKeyword(repProfile?.business_id);
 
     // 2. Build the Query & Aggregate Data

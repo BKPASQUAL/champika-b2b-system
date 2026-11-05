@@ -215,25 +215,34 @@ export default function EditRetailInvoicePage({
         setBusinessName(user.businessName ?? BUSINESS_NAMES[BUSINESS_IDS.CHAMPIKA_RETAIL]);
         setUserId(user.id);
 
-        // Out-of-stock override setting
-        let isOverrideEnabled = false;
-        try {
-          const overrideRes = await fetch("/api/settings/portal-stock-override").catch(() => null);
-          if (overrideRes?.ok) {
-            const overrideData = await overrideRes.json();
-            isOverrideEnabled = overrideData.retail ?? false;
-            setRetailOutOfStockOverride(isOverrideEnabled);
+        // Start the requests that don't depend on anything right away
+        const invPromise = fetch(`/api/invoices/${id}`);
+        const custPromise = fetch(`/api/customers?businessId=${BUSINESS_IDS.CHAMPIKA_RETAIL}&status=Active`);
+        const suppliersPromise = fetch("/api/suppliers").catch(() => null);
+        const settingSuppliersPromise = fetch("/api/settings/categories?type=supplier").catch(() => null);
+
+        // Out-of-stock override setting (decides which product list to load)
+        const prodPromise = (async () => {
+          let isOverrideEnabled = false;
+          try {
+            const overrideRes = await fetch("/api/settings/portal-stock-override").catch(() => null);
+            if (overrideRes?.ok) {
+              const overrideData = await overrideRes.json();
+              isOverrideEnabled = overrideData.retail ?? false;
+              setRetailOutOfStockOverride(isOverrideEnabled);
+            }
+          } catch (err) {
+            console.error("Error fetching retail invoice override setting:", err);
           }
-        } catch (err) {
-          console.error("Error fetching retail invoice override setting:", err);
-        }
+          return fetch(`/api/rep/stock?userId=${user.id}${isOverrideEnabled ? "&includeOutOfStock=true" : ""}`);
+        })();
 
         const [invRes, custRes, prodRes, suppliersRes, settingSuppliersRes] = await Promise.all([
-          fetch(`/api/invoices/${id}`),
-          fetch(`/api/customers?businessId=${BUSINESS_IDS.CHAMPIKA_RETAIL}&status=Active`),
-          fetch(`/api/rep/stock?userId=${user.id}${isOverrideEnabled ? "&includeOutOfStock=true" : ""}`),
-          fetch("/api/suppliers").catch(() => null),
-          fetch("/api/settings/categories?type=supplier").catch(() => null),
+          invPromise,
+          custPromise,
+          prodPromise,
+          suppliersPromise,
+          settingSuppliersPromise,
         ]);
 
         if (!invRes.ok) throw new Error("Failed to load invoice");
