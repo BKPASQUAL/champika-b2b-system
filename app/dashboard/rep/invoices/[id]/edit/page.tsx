@@ -372,9 +372,21 @@ export default function EditOrderPage({
           return;
         }
 
-        // 2. Fetch Settings, Routes, Suppliers in Parallel
+        // 2. Start everything at once. Stock starts as soon as the override
+        //    setting is known; customers don't wait for anything.
+        const overridePromise = fetch("/api/settings/invoice-override").then((r) => r.json()).catch(() => ({ enabled: false }));
+        const stockPromise = overridePromise.then((od: any) =>
+          fetch((od?.enabled ?? false)
+            ? `/api/rep/stock?userId=${userId}&includeOutOfStock=true`
+            : `/api/rep/stock?userId=${userId}`)
+        );
+        const customersPromise = fetch(bizId ? `/api/customers?businessId=${bizId}` : "/api/customers");
+        // Avoid "unhandled rejection" warnings if we bail out before awaiting these
+        stockPromise.catch(() => null);
+        customersPromise.catch(() => null);
+
         const [overrideData, customerCreateData, distRetailData, routesData, suppliersData, settingSuppliersData, invoiceRes] = await Promise.all([
-          fetch("/api/settings/invoice-override").then((r) => r.json()).catch(() => ({ enabled: false })),
+          overridePromise,
           fetch("/api/settings/rep-customer-creation").then((r) => r.json()).catch(() => ({ enabled: false })),
           fetch("/api/settings/distribution-retail-items").then((r) => r.json()).catch(() => ({ enabled: false })),
           fetch("/api/settings/categories?type=route").then((r) => r.json()).catch(() => []),
@@ -458,10 +470,7 @@ export default function EditOrderPage({
         setSuppliers([...suppliersData, ...settingSuppliersData]);
 
         // 3. Fetch Products (Specific to Rep's Location)
-        const stockUrl = overrideEnabled
-          ? `/api/rep/stock?userId=${userId}&includeOutOfStock=true`
-          : `/api/rep/stock?userId=${userId}`;
-        const productsRes = await fetch(stockUrl);
+        const productsRes = await stockPromise;
         if (!productsRes.ok) throw new Error("Failed to load rep stock");
         const productsData = await productsRes.json();
 
@@ -481,10 +490,7 @@ export default function EditOrderPage({
         );
 
         // 4. Fetch Customers — filtered to rep's own business
-        const customersUrl = bizId
-          ? `/api/customers?businessId=${bizId}`
-          : "/api/customers";
-        const customersRes = await fetch(customersUrl);
+        const customersRes = await customersPromise;
         const customersData = await customersRes.json();
         setCustomers(
           customersData.map((c: any) => ({ id: c.id, name: c.shopName, phone: c.phone || "", ownerName: c.ownerName || "" }))

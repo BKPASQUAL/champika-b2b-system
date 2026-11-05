@@ -248,10 +248,14 @@ export default function CreateInvoiceForm({ printFormat = "STANDARD" }: { printF
     const fetchInitialData = async () => {
       setLoading(true);
       try {
+        // Customers, reps and the stock setting load in parallel
+        const [customersRes, usersRes, overrideRes] = await Promise.all([
+          fetch(`/api/customers?businessId=${distributionBusinessId}`),
+          fetch("/api/users?role=rep"),
+          fetch("/api/settings/portal-stock-override").catch(() => null),
+        ]);
+
         // Fetch Customers (Locked to Distribution Business)
-        const customersRes = await fetch(
-          `/api/customers?businessId=${distributionBusinessId}`
-        );
         const customersData = await customersRes.json();
         setCustomers(
           customersData.map((c: any) => ({
@@ -260,7 +264,6 @@ export default function CreateInvoiceForm({ printFormat = "STANDARD" }: { printF
         );
 
         // Fetch Sales Reps
-        const usersRes = await fetch("/api/users");
         const usersData = await usersRes.json();
         const salesReps = usersData
           .filter((u: any) => u.role === "rep")
@@ -271,7 +274,6 @@ export default function CreateInvoiceForm({ printFormat = "STANDARD" }: { printF
         setReps(salesReps);
 
         // Fetch out-of-stock override setting
-        const overrideRes = await fetch("/api/settings/portal-stock-override").catch(() => null);
         if (overrideRes?.ok) {
           const overrideData = await overrideRes.json();
           setOutOfStockOverride(overrideData.distribution ?? false);
@@ -291,17 +293,21 @@ export default function CreateInvoiceForm({ printFormat = "STANDARD" }: { printF
   useEffect(() => {
     const fetchProducts = async () => {
       // Check if distribution retail items setting is enabled
-      const allowRetailRes = await fetch("/api/settings/distribution-retail-items").catch(() => null);
+      // Load this setting alongside the product list instead of before it
+      const allowRetailPromise: Promise<boolean> = fetch("/api/settings/distribution-retail-items")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((rd) => rd?.enabled ?? false)
+        .catch(() => false);
       let allowRetail = false;
-      if (allowRetailRes?.ok) {
-        const rd = await allowRetailRes.json();
-        allowRetail = rd.enabled ?? false;
-      }
 
       if (outOfStockOverride) {
         setStockLoading(true);
         try {
-          const res = await fetch("/api/products?active=true");
+          const [res, allowRetailValue] = await Promise.all([
+            fetch("/api/products?active=true&fields=invoice"),
+            allowRetailPromise,
+          ]);
+          allowRetail = allowRetailValue;
           if (!res.ok) throw new Error("Failed to load products");
           const data = await res.json();
           setProducts(
@@ -335,7 +341,11 @@ export default function CreateInvoiceForm({ printFormat = "STANDARD" }: { printF
 
       setStockLoading(true);
       try {
-        const res = await fetch(`/api/rep/stock?userId=${salesRepId}&businessId=${distributionBusinessId}`);
+        const [res, allowRetailValue] = await Promise.all([
+          fetch(`/api/rep/stock?userId=${salesRepId}&businessId=${distributionBusinessId}`),
+          allowRetailPromise,
+        ]);
+        allowRetail = allowRetailValue;
         if (!res.ok) throw new Error("Failed to load stock");
         const data = await res.json();
         setProducts(

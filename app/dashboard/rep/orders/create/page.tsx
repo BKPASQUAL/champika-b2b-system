@@ -622,9 +622,22 @@ export default function CreateOrderPage() {
           return;
         }
 
-        // 2. Check settings and fetch suppliers in parallel
+        // 2. Start everything at once. Stock lists start as soon as the
+        //    override setting is known; customers don't wait for anything.
+        const overridePromise = fetch("/api/settings/invoice-override").then((r) => r.json()).catch(() => ({ enabled: false }));
+        // Full list (incl. out-of-stock) is needed either way: for returns, or as the main list when override is on
+        const allStockPromise = fetch(`/api/rep/stock?userId=${userId}&includeOutOfStock=true`);
+        const inStockPromise = overridePromise.then((od: any) =>
+          (od?.enabled ?? false) ? null : fetch(`/api/rep/stock?userId=${userId}`)
+        );
+        const customersPromise = fetch(bizId ? `/api/customers?businessId=${bizId}` : "/api/customers");
+        // Avoid "unhandled rejection" warnings if we bail out before awaiting these
+        allStockPromise.catch(() => null);
+        inStockPromise.catch(() => null);
+        customersPromise.catch(() => null);
+
         const [overrideData, customerCreateData, distRetailData, routesData, suppliersData, settingSuppliersData] = await Promise.all([
-          fetch("/api/settings/invoice-override").then((r) => r.json()).catch(() => ({ enabled: false })),
+          overridePromise,
           fetch("/api/settings/rep-customer-creation").then((r) => r.json()).catch(() => ({ enabled: false })),
           fetch("/api/settings/distribution-retail-items").then((r) => r.json()).catch(() => ({ enabled: false })),
           fetch("/api/settings/categories?type=route").then((r) => r.json()).catch(() => []),
@@ -645,10 +658,7 @@ export default function CreateOrderPage() {
         setSuppliers([...suppliersArr, ...settingSuppliersArr]);
 
         // 3. Fetch Products (Specific to Rep's Location)
-        const stockUrl = overrideEnabled
-          ? `/api/rep/stock?userId=${userId}&includeOutOfStock=true`
-          : `/api/rep/stock?userId=${userId}`;
-        const productsRes = await fetch(stockUrl);
+        const productsRes = overrideEnabled ? await allStockPromise : (await inStockPromise)!;
         if (!productsRes.ok) throw new Error("Failed to load rep stock");
         const productsData = await productsRes.json();
         const productsList = Array.isArray(productsData) ? productsData : [];
@@ -672,16 +682,13 @@ export default function CreateOrderPage() {
         if (overrideEnabled) {
           setReturnProducts(toProducts(productsList));
         } else {
-          const allRes = await fetch(`/api/rep/stock?userId=${userId}&includeOutOfStock=true`);
-          const allData = allRes.ok ? await allRes.json() : productsList;
+          const allRes = await allStockPromise.catch(() => null);
+          const allData = allRes?.ok ? await allRes.json() : productsList;
           setReturnProducts(toProducts(Array.isArray(allData) ? allData : productsList));
         }
 
         // 4. Fetch Customers — filtered to rep's own business
-        const customersUrl = bizId
-          ? `/api/customers?businessId=${bizId}`
-          : "/api/customers";
-        const customersRes = await fetch(customersUrl);
+        const customersRes = await customersPromise;
         const customersData = await customersRes.json();
         const customersList = Array.isArray(customersData) ? customersData : [];
 

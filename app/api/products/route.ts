@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     const selectCols = invoiceFields
       ? `
           id, sku, name, selling_price, mrp, stock_quantity,
-          unit_of_measure, supplier_name, retail_only, retail_price, created_at,
+          unit_of_measure, supplier_name, retail_only, retail_price, sub_category, created_at,
           product_stocks ( quantity )
         `
       : `
@@ -95,6 +95,7 @@ export async function GET(request: NextRequest) {
           sku: p.sku,
           name: p.name,
           supplier: p.supplier_name,
+          subCategory: p.sub_category,
           stock:
             p.product_stocks && p.product_stocks.length > 0
               ? p.product_stocks.reduce((sum: number, s: any) => sum + (Number(s.quantity) || 0), 0)

@@ -465,7 +465,7 @@ export default function DistributionEditInvoicePage({
 
         const [custRes, usersRes, invRes, retRes, overrideRes] = await Promise.all([
           fetch(`/api/customers?businessId=${distributionBusinessId}`),
-          fetch("/api/users"),
+          fetch("/api/users?role=rep"),
           fetch(`/api/invoices/${id}`),
           fetch(`/api/invoices/${id}/returns`),
           fetch("/api/settings/portal-stock-override").catch(() => null),
@@ -543,17 +543,21 @@ export default function DistributionEditInvoicePage({
   // --- 2. Fetch Products: all items when override ON, rep stock when override OFF ---
   useEffect(() => {
     const fetchProducts = async () => {
-      const allowRetailRes = await fetch("/api/settings/distribution-retail-items").catch(() => null);
+      // Load this setting alongside the product list instead of before it
+      const allowRetailPromise: Promise<boolean> = fetch("/api/settings/distribution-retail-items")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((rd) => rd?.enabled ?? false)
+        .catch(() => false);
       let allowRetail = false;
-      if (allowRetailRes?.ok) {
-        const rd = await allowRetailRes.json();
-        allowRetail = rd.enabled ?? false;
-      }
 
       if (outOfStockOverride) {
         setStockLoading(true);
         try {
-          const res = await fetch("/api/products?active=true");
+          const [res, allowRetailValue] = await Promise.all([
+            fetch("/api/products?active=true&fields=invoice"),
+            allowRetailPromise,
+          ]);
+          allowRetail = allowRetailValue;
           if (!res.ok) throw new Error("Failed to load products");
           const data = await res.json();
           setProducts(
@@ -587,7 +591,11 @@ export default function DistributionEditInvoicePage({
 
       setStockLoading(true);
       try {
-        const res = await fetch(`/api/rep/stock?userId=${salesRepId}&businessId=${distributionBusinessId}`);
+        const [res, allowRetailValue] = await Promise.all([
+          fetch(`/api/rep/stock?userId=${salesRepId}&businessId=${distributionBusinessId}`),
+          allowRetailPromise,
+        ]);
+        allowRetail = allowRetailValue;
         if (!res.ok) throw new Error("Failed to load stock");
         const data = await res.json();
         setProducts(

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { z } from "zod";
 
@@ -146,13 +146,23 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const val = customerSchema.parse(body);
 
-    // Duplicate shop name check within the same business
-    const { data: existingShops } = await supabaseAdmin
-      .from("customers")
-      .select("id")
-      .ilike("shop_name", val.shopName.trim())
-      .eq("business_id", val.businessId)
-      .limit(1);
+    // Duplicate shop name and phone checks (same business) run together
+    const [{ data: existingShops }, phoneCheck] = await Promise.all([
+      supabaseAdmin
+        .from("customers")
+        .select("id")
+        .ilike("shop_name", val.shopName.trim())
+        .eq("business_id", val.businessId)
+        .limit(1),
+      val.phone
+        ? supabaseAdmin
+            .from("customers")
+            .select("id")
+            .eq("phone", val.phone)
+            .eq("business_id", val.businessId)
+            .limit(1)
+        : Promise.resolve({ data: [] as { id: string }[] }),
+    ]);
 
     if (existingShops && existingShops.length > 0) {
       return NextResponse.json(
@@ -163,12 +173,7 @@ export async function POST(request: NextRequest) {
 
     // Duplicate phone check within the same business (only when phone is provided)
     if (val.phone) {
-      const { data: existingPhones } = await supabaseAdmin
-        .from("customers")
-        .select("id")
-        .eq("phone", val.phone)
-        .eq("business_id", val.businessId)
-        .limit(1);
+      const existingPhones = phoneCheck.data;
 
       if (existingPhones && existingPhones.length > 0) {
         return NextResponse.json(
@@ -201,25 +206,33 @@ export async function POST(request: NextRequest) {
 
     if (error) throw error;
 
-    // Log activity record for customer creation
+    // Log activity record for customer creation — done after the reply is sent
+    // so the user doesn't wait for it
     if (data && val.assignedRepId) {
-      const { data: profile } = await supabaseAdmin
-        .from("profiles")
-        .select("full_name, email")
-        .eq("id", val.assignedRepId)
-        .single();
+      const repId = val.assignedRepId;
+      after(async () => {
+        try {
+          const { data: profile } = await supabaseAdmin
+            .from("profiles")
+            .select("full_name, email")
+            .eq("id", repId)
+            .single();
 
-      await supabaseAdmin.from("activity_records").insert({
-        portal: "rep",
-        business_id: val.businessId,
-        action_type: "Created",
-        record_type: "Customer",
-        entity_type: "Customer",
-        entity_id: data.id,
-        entity_no: data.shop_name,
-        performed_by_id: val.assignedRepId,
-        performed_by_name: profile?.full_name || null,
-        performed_by_email: profile?.email || null,
+          await supabaseAdmin.from("activity_records").insert({
+            portal: "rep",
+            business_id: val.businessId,
+            action_type: "Created",
+            record_type: "Customer",
+            entity_type: "Customer",
+            entity_id: data.id,
+            entity_no: data.shop_name,
+            performed_by_id: repId,
+            performed_by_name: profile?.full_name || null,
+            performed_by_email: profile?.email || null,
+          });
+        } catch (err) {
+          console.error("Customer activity record failed (non-critical):", err);
+        }
       });
     }
 
