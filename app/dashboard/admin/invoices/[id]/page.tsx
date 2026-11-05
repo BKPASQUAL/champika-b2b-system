@@ -61,6 +61,8 @@ import { CancelInvoiceButton } from "@/components/ui/CancelInvoiceButton";
 import { WhatsAppShareDialog } from "@/components/ui/WhatsAppShareDialog";
 import { DocumentAttachments } from "@/components/ui/DocumentAttachments";
 import { InvoicePdfPreviewCard } from "@/components/ui/InvoicePdfPreviewCard";
+import { getUserBusinessContext } from "@/app/middleware/businessAuth";
+import { InvoiceProfitCard } from "./_components/InvoiceProfitCard";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -121,6 +123,15 @@ export default function ViewInvoicePage({
   const searchParams = useSearchParams();
   const fromProduct = searchParams?.get("fromProduct");
 
+  // Profit by item: admin only, and only when opened from Business Analytics
+  const fromAnalytics = searchParams?.get("from") === "/dashboard/admin/reports/business";
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    setIsAdmin(getUserBusinessContext()?.role === "admin");
+  }, []);
+  const showProfit = fromAnalytics && isAdmin;
+  const invoiceApiUrl = `/api/invoices/${id}`;
+
   const [loading, setLoading] = useState(true);
   const [invoice, setInvoice] = useState<any>(null);
 
@@ -167,7 +178,7 @@ export default function ViewInvoicePage({
   useEffect(() => {
     const fetchInvoice = async () => {
       try {
-        const res = await fetch(`/api/invoices/${id}`);
+        const res = await fetch(invoiceApiUrl);
         if (!res.ok) throw new Error("Failed to load invoice");
         const data = await res.json();
         setInvoice(data);
@@ -385,7 +396,7 @@ Thank you for your business! 🙏`;
               onSuccess={async () => {
                 invalidatePaymentCaches();
                 invalidateFinanceCaches();
-                const res = await fetch(`/api/invoices/${id}`);
+                const res = await fetch(invoiceApiUrl);
                 if (res.ok) setInvoice(await res.json());
               }}
             />
@@ -696,6 +707,9 @@ Thank you for your business! 🙏`;
                 </Table>
               </CardContent>
             </Card>
+
+            {/* Profit by item (admin, from Business Analytics) */}
+            {showProfit && <InvoiceProfitCard invoiceId={id} hasReturns={returns.length > 0} />}
 
             {/* Supplier Summary */}
             {(() => {

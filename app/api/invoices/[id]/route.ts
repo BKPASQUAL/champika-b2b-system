@@ -49,6 +49,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  const withCost = new URL(request.url).searchParams.get("withCost") === "1";
 
   try {
     // 1. Fetch Invoice & Customer Details
@@ -344,6 +345,11 @@ export async function GET(
         discountAmount: item.discount_amount || 0,
 
         total: item.total_price,
+
+        // Saved FIFO cost — only for the admin profit view (?withCost=1)
+        ...(withCost && {
+          actualUnitCost: item.actual_unit_cost != null ? Number(item.actual_unit_cost) : null,
+        }),
 
         // Stock Context (Current)
         stockAvailable:
