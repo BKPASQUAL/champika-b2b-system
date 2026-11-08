@@ -54,7 +54,8 @@ export default async function ShopHome() {
   const picks = (featured.length ? featured : deals.length ? deals : newest).slice(0, 10);
   // Categories with products first, so the hero tiles lead with things to buy.
   const subs = tree.flatMap((c) => c.children).sort((a, b) => Number(b.productCount > 0) - Number(a.productCount > 0));
-  const quoteHref = `${base}/quote`;
+  const wa = whatsappLink(store.whatsapp, "Hi, I need a quotation for wiring my house.");
+  const quoteHref = wa || (store.phone ? `tel:${store.phone}` : null);
 
   return (
     <div className="space-y-14 md:space-y-18">
@@ -114,9 +115,28 @@ export default async function ShopHome() {
               <Stat value={String(brands.length)} label={brands.length === 1 ? "Brand" : "Brands"} />
               <Stat value="Galle Area" label="Doorstep Delivery" highlight />
             </dl>
+
+            {brands.length > 0 && (
+              <div className="mt-5 flex flex-wrap items-center gap-2">
+                <span className="mr-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">Main Brands:</span>
+                {brands.slice(0, 6).map((b) => (
+                  <Link
+                    key={b.id}
+                    href={`${base}/b/${b.slug}`}
+                    className="inline-flex items-center gap-2 rounded-full border border-slate-700/80 bg-slate-900/80 px-3.5 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-blue-500 hover:bg-blue-600/20 hover:text-white"
+                  >
+                    {b.logoUrl && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={b.logoUrl} alt="" className="h-4 max-w-10 rounded-xs bg-white px-1 object-contain" />
+                    )}
+                    {b.name}
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Category quick tiles: compact, balanced 2x2 grid with icons when no photo is set */}
+          {/* Category quick tiles: compact, balanced 2x2 grid with full-bleed photo or icons */}
           <div className="hidden grid-cols-2 gap-3.5 md:grid">
             {subs.slice(0, 4).map((c, i) => {
               const Icon = getCategoryIcon(c.name);
@@ -125,35 +145,45 @@ export default async function ShopHome() {
                 <Link
                   key={c.id}
                   href={`${base}/c/${c.slug}`}
-                  className={`group relative flex min-h-[164px] flex-col justify-between overflow-hidden rounded-3xl p-5 transition duration-300 hover:-translate-y-1 ${
-                    active
-                      ? "bg-gradient-to-br from-blue-600 via-blue-600 to-indigo-700 text-white shadow-[0_12px_32px_-8px_rgba(37,99,235,0.55)] ring-1 ring-white/15"
-                      : "bg-slate-900/90 text-white ring-1 ring-slate-800 hover:bg-slate-800/90 hover:ring-blue-500/40"
-                  }`}
-                >
-                  {/* Decorative background icon watermark */}
-                  <Icon
-                    className={`pointer-events-none absolute -bottom-4 -right-4 h-28 w-28 transition duration-500 group-hover:scale-110 ${
-                      active ? "text-white/10" : "text-blue-500/[0.07]"
+                  className={`group relative flex min-h-[164px] flex-col justify-between overflow-hidden rounded-3xl p-5 transition duration-300 hover:-translate-y-1 ${active
+                    ? "bg-gradient-to-br from-blue-600 via-blue-600 to-indigo-700 text-white shadow-[0_12px_32px_-8px_rgba(37,99,235,0.55)] ring-1 ring-white/15"
+                    : "bg-slate-900/90 text-white ring-1 ring-slate-800 hover:bg-slate-800/90 hover:ring-blue-500/40"
                     }`}
-                  />
+                >
+                  {c.imageUrl ? (
+                    <>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={c.imageUrl}
+                        alt=""
+                        className="pointer-events-none absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                      />
+                      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/45 to-slate-950/25" />
+                    </>
+                  ) : (
+                    /* Decorative background icon watermark */
+                    <Icon
+                      className={`pointer-events-none absolute -bottom-4 -right-4 h-28 w-28 transition duration-500 group-hover:scale-110 ${active ? "text-white/10" : "text-blue-500/[0.07]"
+                        }`}
+                    />
+                  )}
 
                   <div className="relative flex items-center justify-between gap-2">
                     <span
-                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold ${
-                        active
-                          ? "bg-white/20 text-white backdrop-blur-xs"
+                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold backdrop-blur-xs ${c.imageUrl || active
+                          ? "bg-black/45 text-white ring-1 ring-white/20"
                           : c.productCount > 0
                             ? "bg-blue-500/15 text-blue-300 ring-1 ring-blue-500/30"
                             : "bg-slate-800 text-slate-400"
-                      }`}
+                        }`}
                     >
                       {c.productCount ? `${c.productCount} ${c.productCount === 1 ? "item" : "items"}` : "Coming soon"}
                     </span>
                     <span
-                      className={`flex h-8 w-8 items-center justify-center rounded-full transition ${
-                        active ? "bg-white/20 text-white group-hover:bg-white group-hover:text-blue-600" : "bg-slate-800 text-slate-300 group-hover:bg-blue-600 group-hover:text-white"
-                      }`}
+                      className={`flex h-8 w-8 items-center justify-center rounded-full backdrop-blur-xs transition ${c.imageUrl || active
+                          ? "bg-black/45 text-white ring-1 ring-white/20 group-hover:bg-blue-600"
+                          : "bg-slate-800 text-slate-300 group-hover:bg-blue-600 group-hover:text-white"
+                        }`}
                     >
                       <ArrowUpRight className="h-4 w-4 transition group-hover:rotate-45" />
                     </span>
@@ -161,19 +191,15 @@ export default async function ShopHome() {
 
                   <div className="relative mt-4 flex items-end justify-between gap-3">
                     <div className="min-w-0">
-                      <div
-                        className={`mb-2.5 flex h-11 w-11 items-center justify-center rounded-2xl ${
-                          active ? "bg-white/15 text-white ring-1 ring-white/20" : "bg-blue-500/10 text-blue-400 ring-1 ring-blue-500/20"
-                        }`}
-                      >
-                        {c.imageUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={c.imageUrl} alt="" className="h-7 w-7 object-contain" />
-                        ) : (
+                      {!c.imageUrl && (
+                        <div
+                          className={`mb-2.5 flex h-11 w-11 items-center justify-center rounded-2xl ${active ? "bg-white/15 text-white ring-1 ring-white/20" : "bg-blue-500/10 text-blue-400 ring-1 ring-blue-500/20"
+                            }`}
+                        >
                           <Icon className="h-5 w-5" />
-                        )}
-                      </div>
-                      <span className="line-clamp-2 text-base font-bold leading-snug tracking-tight lg:text-[17px]">{c.name}</span>
+                        </div>
+                      )}
+                      <span className="line-clamp-2 text-base font-bold leading-snug tracking-tight drop-shadow-xs lg:text-[17px]">{c.name}</span>
                     </div>
                   </div>
                 </Link>
@@ -186,6 +212,35 @@ export default async function ShopHome() {
       {/* ---------- Banners ---------- */}
       {banners.length > 0 && (
         <BannerSlider banners={banners.map((b) => ({ ...b, link: b.link ? (b.link.startsWith("/") ? `${base}${b.link}` : b.link) : null }))} />
+      )}
+
+      {/* ---------- Main Brands ---------- */}
+      {brands.length > 0 && (
+        <section className="mx-auto max-w-[1800px] px-4 md:px-6 xl:px-10">
+          <SectionTitle kicker="Trusted makers" title="Our main brands" />
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+            {brands.map((b) => (
+              <Link
+                key={b.id}
+                href={`${base}/b/${b.slug}`}
+                title={b.name}
+                className="group flex h-28 items-center justify-center overflow-hidden rounded-2xl border border-(--s-line) bg-white p-3 shadow-[0_4px_20px_-6px_rgba(15,23,42,0.06)] transition duration-300 hover:-translate-y-1 hover:border-blue-500/60 hover:shadow-[0_18px_36px_-14px_rgba(37,99,235,0.16)]"
+              >
+                {b.logoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={b.logoUrl}
+                    alt={b.name}
+                    loading="lazy"
+                    className="h-full w-full object-contain transition duration-300 group-hover:scale-105"
+                  />
+                ) : (
+                  <span className="text-xl font-black tracking-tight text-slate-900 group-hover:text-blue-600">{b.name}</span>
+                )}
+              </Link>
+            ))}
+          </div>
+        </section>
       )}
 
       {/* ---------- All categories ---------- */}
@@ -219,35 +274,19 @@ export default async function ShopHome() {
             <p className="mt-3 text-white/80">
               Tell us the rooms and the number of lights, plugs and fans. We will send a complete item list with our best discount.
             </p>
-            <Link href={quoteHref} className="mt-6 inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-bold text-slate-900 hover:bg-slate-100">
-              <ClipboardList className="h-4 w-4" /> Ask for a quotation
-            </Link>
+            {quoteHref && (
+              <a
+                href={quoteHref}
+                target={wa ? "_blank" : undefined}
+                rel="noopener noreferrer"
+                className="mt-6 inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-bold text-slate-900 hover:bg-slate-100"
+              >
+                {wa ? <ClipboardList className="h-4 w-4" /> : <Phone className="h-4 w-4" />} Ask for a quotation
+              </a>
+            )}
           </div>
         </div>
       </section>
-
-      {/* ---------- Brands ---------- */}
-      {brands.length > 0 && (
-        <section className="mx-auto max-w-[1800px] px-4 md:px-6 xl:px-10">
-          <SectionTitle kicker="Trusted makers" title="Shop by brand" />
-          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6 2xl:grid-cols-8">
-            {brands.map((b) => (
-              <Link
-                key={b.id}
-                href={`${base}/b/${b.slug}`}
-                className="flex h-24 items-center justify-center rounded-2xl border border-(--s-line) bg-(--s-surface) p-4 transition hover:border-(--s-ink)"
-              >
-                {b.logoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={b.logoUrl} alt={b.name} loading="lazy" className="max-h-full max-w-full object-contain" />
-                ) : (
-                  <span className="text-lg font-bold">{b.name}</span>
-                )}
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
 
       {/* ---------- New arrivals ---------- */}
       {picks !== newest && newest.length > 0 && (featured.length > 0 || deals.length > 0) && (

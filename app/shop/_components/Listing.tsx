@@ -327,7 +327,7 @@ function CategoryTile({
       >
         {image ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={image} alt="" className="h-full w-full object-contain p-1" />
+          <img src={image} alt="" className="h-full w-full object-cover" />
         ) : (
           <LayoutGrid className="h-4 w-4 opacity-75" />
         )}

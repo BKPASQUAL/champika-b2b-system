@@ -26,6 +26,11 @@ export function activeTab(pathname: string, base: string) {
 
 export function Header({ categories }: { categories: NavCategory[] }) {
   const { href, base, cartCount, ready, store, dark, toggleTheme, customer } = useShop();
+  // This bar hydrates inside <Suspense>, after the cart has already loaded from the
+  // browser. Show the count only once this component is mounted, so the first
+  // render matches the server HTML.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -153,7 +158,7 @@ export function Header({ categories }: { categories: NavCategory[] }) {
             }`}
           >
             <ShoppingBag className="h-4 w-4" /> Cart
-            {ready && cartCount > 0 && (
+            {mounted && ready && cartCount > 0 && (
               <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1 text-[11px] font-bold text-white">
                 {cartCount > 99 ? "99+" : cartCount}
               </span>
@@ -193,7 +198,7 @@ export function Header({ categories }: { categories: NavCategory[] }) {
                       <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400">
                         {s.imageUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={s.imageUrl} alt="" className="h-full w-full object-contain p-1" />
+                          <img src={s.imageUrl} alt="" className="h-full w-full object-cover" />
                         ) : (
                           <LayoutGrid className="h-5 w-5" />
                         )}

@@ -29,7 +29,7 @@ export type ShopCategory = {
   families: { id: string; name: string; imageUrl: string | null; productCount: number }[];
 };
 
-export type ShopBrand = { id: string; name: string; slug: string; logoUrl: string | null; parentId: string | null };
+export type ShopBrand = { id: string; name: string; slug: string; logoUrl: string | null; parentId: string | null; productCount?: number };
 
 export type ShopProductCard = {
   id: string;
@@ -219,23 +219,33 @@ export const getBrands = cache(async (): Promise<ShopBrand[]> => {
   return (data || []).map((b: any) => ({ id: b.id, name: b.name, slug: b.slug, logoUrl: b.logo_url, parentId: b.parent_id }));
 });
 
-/** Brands that have published products, for "Shop by brand" on the home page. */
+/** Main brands for "Shop by brand" on the home page. */
 export async function getFeaturedBrands(): Promise<ShopBrand[]> {
   const [{ data: brands }, { data: prods }] = await Promise.all([
     supabaseAdmin
       .from("web_brands")
-      .select("id, name, slug, logo_url, parent_id, sort_order")
+      .select("id, name, slug, logo_url, parent_id, is_featured, sort_order")
       .eq("is_active", true)
-      .eq("is_featured", true)
       .is("parent_id", null)
       .order("sort_order")
       .order("name"),
-    supabaseAdmin.from("web_products").select("web_brand_id").eq("is_published", true),
+    supabaseAdmin.from("web_products").select("web_brand_id, web_sub_brand_id").eq("is_published", true),
   ]);
-  const used = new Set((prods || []).map((p: any) => p.web_brand_id).filter(Boolean));
-  return (brands || [])
-    .filter((b: any) => used.has(b.id))
-    .map((b: any) => ({ id: b.id, name: b.name, slug: b.slug, logoUrl: b.logo_url, parentId: b.parent_id }));
+  const counts: Record<string, number> = {};
+  for (const p of prods || []) {
+    if (p.web_brand_id) counts[p.web_brand_id] = (counts[p.web_brand_id] || 0) + 1;
+  }
+  const all = (brands || []).map((b: any) => ({
+    id: b.id,
+    name: b.name,
+    slug: b.slug,
+    logoUrl: b.logo_url,
+    parentId: b.parent_id,
+    isFeatured: Boolean(b.is_featured),
+    productCount: counts[b.id] || 0,
+  }));
+  const featured = all.filter((b) => b.isFeatured);
+  return featured.length > 0 ? featured : all;
 }
 
 export async function getBanners() {

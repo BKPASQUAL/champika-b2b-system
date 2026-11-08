@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, LayoutGrid, ShoppingBag, Store, UserRound } from "lucide-react";
@@ -9,6 +10,9 @@ import { activeTab } from "./Header";
 /** App-style bottom bar on phones: Home · Shop · Categories · Cart · Account. */
 export function MobileTabBar() {
   const { href, base, cartCount, ready, customer } = useShop();
+  // Show the cart count only after mount, so the first render matches the server HTML.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const tab = activeTab(usePathname(), base);
   const items = [
     { key: "home", label: "Home", to: "/", icon: Home },
@@ -27,7 +31,7 @@ export function MobileTabBar() {
               {on && <span className="absolute top-0 h-0.5 w-8 rounded-full bg-(--s-accent)" />}
               <span className="relative">
                 <it.icon className="h-5 w-5" />
-                {it.key === "cart" && ready && cartCount > 0 && (
+                {it.key === "cart" && mounted && ready && cartCount > 0 && (
                   <span className="absolute -right-2.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-(--s-accent) px-1 text-[10px] font-bold text-(--s-accent-ink)">
                     {cartCount > 99 ? "99+" : cartCount}
                   </span>

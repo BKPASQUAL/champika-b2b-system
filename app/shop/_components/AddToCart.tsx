@@ -20,7 +20,7 @@ export function AddToCartButton({ id, name, available }: { id: string; name: str
         toast.success("Added to cart", { description: name });
         setTimeout(() => setDone(false), 1200);
       }}
-      className={`flex w-full cursor-pointer items-center justify-center gap-2 rounded-full py-2.5 text-[13px] font-bold transition duration-200 active:scale-[0.98] ${
+      className={`flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-xl text-[13px] font-semibold transition duration-200 active:scale-[0.98] ${
         done
           ? "bg-emerald-600 text-white shadow-[0_3px_12px_-2px_rgba(22,163,74,0.45)]"
           : "bg-(--s-btn) text-(--s-btn-ink) shadow-[0_3px_10px_-2px_rgba(15,23,42,0.25)] hover:bg-gradient-to-r hover:from-blue-600 hover:to-blue-500 hover:text-white hover:shadow-[0_4px_14px_-2px_rgba(37,99,235,0.45)]"

@@ -37,11 +37,16 @@ export function AllCategories({ tree, base, showEmpty = true }: { tree: ShopCate
                   >
                     <Link
                       href={`${base}/c/${s.slug}`}
-                      className="relative m-2.5 mb-0 flex h-36 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100 ring-1 ring-inset ring-(--s-line) dark:from-slate-800/80 dark:to-slate-900"
+                      className="relative m-2.5 mb-0 flex aspect-[16/10] items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100 ring-1 ring-inset ring-(--s-line) dark:from-slate-800/80 dark:to-slate-900"
                     >
                       {s.imageUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={s.imageUrl} alt={s.name} loading="lazy" className="h-full w-full object-contain p-4 transition duration-500 group-hover:scale-105" />
+                        <img
+                          src={s.imageUrl}
+                          alt={s.name}
+                          loading="lazy"
+                          className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                        />
                       ) : (
                         <>
                           <Icon className="pointer-events-none absolute -bottom-4 -right-4 h-28 w-28 text-blue-500/[0.06] transition duration-500 group-hover:scale-110" />

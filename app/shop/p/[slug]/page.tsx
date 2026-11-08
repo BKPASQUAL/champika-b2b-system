@@ -5,10 +5,9 @@ import { ChevronRight, MessageCircle, ShieldCheck, Truck, Wallet } from "lucide-
 import { getProductBySlug, getRelatedProducts, getShopBase, getStoreInfo } from "@/lib/shop-data";
 import { SHOP_URL } from "@/lib/shop-host";
 import { Gallery } from "../../_components/Gallery";
-import { Price } from "../../_components/Price";
 import { ProductBuyBox } from "../../_components/AddToCart";
 import { ProductGrid } from "../../_components/ProductCard";
-import { whatsappLink } from "../../_components/format";
+import { rs, whatsappLink } from "../../_components/format";
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -30,6 +29,7 @@ export default async function ProductPage({ params }: Props) {
   if (!p) notFound();
   const related = await getRelatedProducts(p);
   const wa = whatsappLink(store.whatsapp, `Hi, I'm interested in: ${p.name}\n${SHOP_URL}/p/${p.slug}`);
+  const off = p.discountPct > 0 && p.mrp > p.price;
 
   // Google product details (price, stock, brand) for search results.
   const jsonLd = {
@@ -55,97 +55,151 @@ export default async function ProductPage({ params }: Props) {
     p.subCategory && { label: p.subCategory.name, href: `${base}/c/${p.subCategory.slug}` },
   ].filter(Boolean) as { label: string; href: string }[];
 
+  // Specifications entered by the office; otherwise the basics we already know.
+  const specs = p.specs.length
+    ? p.specs
+    : ([
+        p.brandInfo && { label: "Brand", value: p.subBrandInfo ? `${p.brandInfo.name} · ${p.subBrandInfo.name}` : p.brandInfo.name },
+        p.subCategory && { label: "Category", value: p.subCategory.name },
+        p.family && { label: "Type", value: p.family.name },
+      ].filter(Boolean) as { label: string; value: string }[]);
+
+  const trust = [
+    { icon: ShieldCheck, title: "Genuine product", text: "Original stock from authorised dealers" },
+    { icon: Truck, title: "Galle area delivery", text: "Fast doorstep delivery across Galle & suburbs" },
+    { icon: Wallet, title: "Cash on delivery", text: "Or pay by bank transfer" },
+  ];
+
   return (
-    <div className="mx-auto max-w-[1800px] px-4 md:px-6 xl:px-10 py-8">
+    <div className="mx-auto max-w-[1800px] px-4 py-6 md:px-6 md:py-8 xl:px-10">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
 
-      <nav className="mb-4 flex flex-wrap items-center gap-1 text-xs text-(--s-muted)">
-        <Link href={base || "/"} className="hover:text-(--s-ink)">Home</Link>
+      <nav className="mb-5 flex flex-wrap items-center gap-1 text-xs text-(--s-muted)">
+        <Link href={base || "/"} className="hover:text-(--s-ink)">
+          Home
+        </Link>
         {crumbs.map((c) => (
           <span key={c.href} className="flex items-center gap-1">
             <ChevronRight className="h-3 w-3" />
-            <Link href={c.href} className="hover:text-(--s-ink)">{c.label}</Link>
+            <Link href={c.href} className="hover:text-(--s-ink)">
+              {c.label}
+            </Link>
           </span>
         ))}
+        <ChevronRight className="h-3 w-3" />
+        <span className="max-w-60 truncate text-(--s-ink-2)">{p.name}</span>
       </nav>
 
-      <div className="grid gap-8 md:grid-cols-[minmax(0,380px)_1fr] lg:grid-cols-[minmax(0,440px)_1fr] lg:gap-12">
-        <div className="mx-auto w-full max-w-[440px] md:mx-0 md:sticky md:top-24 md:self-start">
+      {/* Photo + buying panel */}
+      <section className="grid gap-6 rounded-3xl border border-(--s-line) bg-(--s-surface) p-4 shadow-[0_8px_30px_-14px_rgba(15,23,42,0.10)] sm:p-6 md:grid-cols-2 lg:gap-12 lg:p-10 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+        <div className="md:sticky md:top-24 md:self-start">
           <Gallery images={p.images} name={p.name} />
         </div>
 
-        <div className="space-y-5">
-          <div>
-            <div className="flex flex-wrap items-center gap-2 text-sm">
-              {p.brandInfo && (
-                <Link href={`${base}/b/${p.brandInfo.slug}`} className="text-sm font-semibold text-(--s-muted) hover:text-(--s-ink)">
-                  {p.brandInfo.name}
-                </Link>
-              )}
-              {p.subBrandInfo && (
-                <Link href={`${base}/b/${p.subBrandInfo.slug}`} className="rounded-full bg-(--s-soft) px-2 py-0.5 text-xs font-medium text-(--s-ink-2) hover:underline">
-                  {p.subBrandInfo.name}
-                </Link>
-              )}
-            </div>
-            <h1 className="mt-1 text-xl font-bold leading-snug text-(--s-ink) md:text-[26px]">{p.name}</h1>
-            {p.shortDescription && <p className="mt-2 text-(--s-ink-2)">{p.shortDescription}</p>}
-          </div>
-
-          <div className="rounded-3xl border border-(--s-line) bg-(--s-surface) p-5">
-            <Price price={p.price} mrp={p.mrp} discountPct={p.discountPct} size="lg" />
-            {p.discountPct > 0 && p.mrp > p.price && (
-              <p className="mt-1 text-sm font-medium text-(--s-good)">You save Rs {(p.mrp - p.price).toLocaleString("en-LK")}</p>
+        <div className="flex flex-col">
+          <div className="flex flex-wrap items-center gap-2">
+            {p.brandInfo && (
+              <Link
+                href={`${base}/b/${p.brandInfo.slug}`}
+                className="rounded-md bg-(--s-accent-soft) px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-(--s-accent) transition hover:bg-(--s-accent) hover:text-(--s-accent-ink)"
+              >
+                {p.brandInfo.name}
+              </Link>
+            )}
+            {p.subBrandInfo && (
+              <Link href={`${base}/b/${p.subBrandInfo.slug}`} className="rounded-md bg-(--s-soft) px-2.5 py-1 text-[11px] font-semibold text-(--s-ink-2) hover:underline">
+                {p.subBrandInfo.name}
+              </Link>
+            )}
+            {p.subCategory && (
+              <Link href={`${base}/c/${p.subCategory.slug}`} className="text-xs text-(--s-muted) hover:text-(--s-ink)">
+                in {p.subCategory.name}
+              </Link>
             )}
           </div>
 
-          <ProductBuyBox id={p.id} name={p.name} available={p.available} />
+          <h1 className="mt-3 text-xl font-bold leading-snug text-(--s-ink) md:text-2xl xl:text-[28px]">{p.name}</h1>
+          {p.shortDescription && <p className="mt-3 max-w-3xl text-sm leading-6 text-(--s-ink-2) xl:text-[15px]">{p.shortDescription}</p>}
+
+          {/* Price */}
+          <div className="mt-5 border-t border-(--s-line) pt-5">
+            {p.price ? (
+              <>
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <span className="text-3xl font-bold tracking-tight text-(--s-ink)">{rs(p.price)}</span>
+                  {off && <span className="text-base text-(--s-muted) line-through">{rs(p.mrp)}</span>}
+                  {off && <span className="rounded-md bg-rose-600 px-2 py-0.5 text-xs font-bold text-white">{p.discountPct}% OFF</span>}
+                </div>
+                {off && <p className="mt-1 text-sm font-medium text-emerald-600">You save {rs(p.mrp - p.price)}</p>}
+                <p className="mt-1 text-xs text-(--s-muted)">Price includes all taxes.</p>
+              </>
+            ) : (
+              <p className="text-lg font-semibold text-(--s-muted)">Ask us for the price</p>
+            )}
+          </div>
+
+          <div className="mt-5">
+            <ProductBuyBox id={p.id} name={p.name} available={p.available} />
+          </div>
 
           {wa && (
-            <a href={wa} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm font-medium text-(--s-good) hover:underline">
+            <a
+              href={wa}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 inline-flex w-fit items-center gap-2 rounded-full px-1 py-1 text-sm font-semibold text-emerald-600 hover:underline"
+            >
               <MessageCircle className="h-4 w-4" /> Ask about this item on WhatsApp
             </a>
           )}
 
-          <ul className="grid gap-2 border-t border-(--s-line) pt-4 text-sm text-(--s-ink-2) sm:grid-cols-3">
-            <li className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-(--s-ink)" /> Genuine product</li>
-            <li className="flex items-center gap-2"><Truck className="h-4 w-4 text-emerald-600" /> Galle area delivery</li>
-            <li className="flex items-center gap-2"><Wallet className="h-4 w-4 text-(--s-ink)" /> Cash on delivery</li>
+          {/* Why buy here */}
+          <ul className="mt-6 grid divide-y divide-(--s-line) rounded-2xl border border-(--s-line) bg-(--s-bg) 2xl:grid-cols-3 2xl:divide-x 2xl:divide-y-0">
+            {trust.map((t) => (
+              <li key={t.title} className="flex items-center gap-3 px-4 py-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-(--s-surface) text-(--s-accent) ring-1 ring-(--s-line)">
+                  <t.icon className="h-4 w-4" />
+                </span>
+                <span>
+                  <span className="block text-sm font-semibold text-(--s-ink)">{t.title}</span>
+                  <span className="block text-xs text-(--s-muted)">{t.text}</span>
+                </span>
+              </li>
+            ))}
           </ul>
         </div>
-      </div>
+      </section>
 
-      {(p.specs.length > 0 || p.description) && (
-        <div className="mt-14 grid gap-8 lg:grid-cols-5">
-          {p.specs.length > 0 && (
-            <section className="lg:col-span-2">
-              <h2 className="mb-3 text-lg font-bold text-(--s-ink)">Specifications</h2>
-              <table className="w-full overflow-hidden rounded-2xl border border-(--s-line) bg-(--s-surface) text-sm">
-                <tbody>
-                  {p.specs.map((s, i) => (
-                    <tr key={i} className="border-b border-(--s-line) last:border-0">
-                      <th className="w-2/5 bg-(--s-soft) px-4 py-2.5 text-left font-medium text-(--s-ink-2)">{s.label}</th>
-                      <td className="px-4 py-2.5 text-(--s-ink)">{s.value}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </section>
-          )}
+      {/* Details */}
+      {(p.description || specs.length > 0) && (
+        <section className={`mt-8 grid gap-6 ${p.description && specs.length ? "lg:grid-cols-[1fr_380px] xl:grid-cols-[1fr_440px]" : ""}`}>
           {p.description && (
-            <section className={p.specs.length ? "lg:col-span-3" : "lg:col-span-5"}>
-              <h2 className="mb-3 text-lg font-bold text-(--s-ink)">Description</h2>
-              <div className="rounded-2xl border border-(--s-line) bg-(--s-surface) p-6">
+            <div className="rounded-3xl border border-(--s-line) bg-(--s-surface) p-5 sm:p-7">
+              <h2 className="text-lg font-bold text-(--s-ink)">Description</h2>
+              <div className="mt-4 max-w-5xl">
                 <Description text={p.description} />
               </div>
-            </section>
+            </div>
           )}
-        </div>
+          {specs.length > 0 && (
+            <div className="h-fit overflow-hidden rounded-3xl border border-(--s-line) bg-(--s-surface)">
+              <h2 className="px-5 pt-5 text-lg font-bold text-(--s-ink) sm:px-6">Specifications</h2>
+              <dl className="mt-3 divide-y divide-(--s-line) border-t border-(--s-line) text-sm">
+                {specs.map((s, i) => (
+                  <div key={i} className="grid grid-cols-[40%_1fr] gap-3 px-5 py-3 sm:px-6">
+                    <dt className="text-(--s-muted)">{s.label}</dt>
+                    <dd className="font-medium text-(--s-ink)">{s.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          )}
+        </section>
       )}
 
       {related.length > 0 && (
-        <section className="mt-16">
-          <h2 className="mb-5 text-xl font-bold text-(--s-ink) md:text-2xl">You may also need</h2>
+        <section className="mt-12">
+          <h2 className="mb-5 text-xl font-bold text-(--s-ink)">You may also need</h2>
           <ProductGrid products={related} base={base} wide />
         </section>
       )}
@@ -169,13 +223,15 @@ function Description({ text }: { text: string }) {
     else blocks.push({ type, lines: [bullet ? bullet[1] : line] });
   }
   return (
-    <div className="space-y-3 text-sm leading-6 text-(--s-ink-2)">
+    <div className="space-y-3 text-[15px] leading-7 text-(--s-ink-2)">
       {blocks
         .filter((b) => b.lines.length)
         .map((b, i) =>
           b.type === "ul" ? (
-            <ul key={i} className="list-disc space-y-1 pl-5">
-              {b.lines.map((l, j) => <li key={j}>{l}</li>)}
+            <ul key={i} className="list-disc space-y-1 pl-5 marker:text-(--s-accent)">
+              {b.lines.map((l, j) => (
+                <li key={j}>{l}</li>
+              ))}
             </ul>
           ) : (
             <p key={i}>{b.lines.join(" ")}</p>
