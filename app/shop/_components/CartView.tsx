@@ -1,0 +1,228 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { ImageOff, Loader2, Lock, MessageCircle, Minus, Phone, Plus, ShoppingBag, Trash2 } from "lucide-react";
+import { useShop } from "./ShopContext";
+import { QuoteFromCart } from "./QuoteFromCart";
+import { rs, whatsappLink } from "./format";
+
+type Line = {
+  id: string;
+  slug: string;
+  name: string;
+  image: string | null;
+  brand: string | null;
+  mrp: number;
+  price: number;
+  discountPct: number;
+  available: boolean;
+  qty: number;
+  lineTotal: number;
+};
+type Priced = {
+  lines: Line[];
+  missing: string[];
+  subtotal: number;
+  savings: number;
+  deliveryFee: number;
+  freeDeliveryOver: number;
+  total: number;
+};
+
+export function CartView() {
+  const { cart, ready, href, setQty, remove, store } = useShop();
+  const [data, setData] = useState<Priced | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Re-price from the server whenever the cart changes (debounced for +/- clicks).
+  useEffect(() => {
+    if (!ready) return;
+    if (!cart.length) {
+      setData({ lines: [], missing: [], subtotal: 0, savings: 0, deliveryFee: 0, freeDeliveryOver: 0, total: 0 });
+      return;
+    }
+    const ctrl = new AbortController();
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/storefront/cart", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: cart }),
+          signal: ctrl.signal,
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Could not load the cart");
+        setData(json);
+        setError(null);
+        // Drop items that are no longer sold online.
+        for (const id of json.missing as string[]) remove(id);
+      } catch (e: any) {
+        if (e.name !== "AbortError") setError(e.message);
+      }
+    }, 250);
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cart, ready]);
+
+  if (!ready || (!data && !error))
+    return (
+      <div className="flex justify-center py-24 text-(--s-muted)">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
+
+  if (data && !data.lines.length)
+    return (
+      <div className="mx-auto flex max-w-md flex-col items-center px-4 py-20 text-center">
+        <ShoppingBag className="h-14 w-14 text-neutral-300" />
+        <h1 className="mt-4 text-xl font-bold text-(--s-ink)">Your cart is empty</h1>
+        <p className="mt-1 text-(--s-muted)">Find cables, switches and everything else for your wiring job.</p>
+        <Link href={href("/search")} className="mt-6 rounded-full bg-(--s-btn) px-6 py-3 font-semibold text-(--s-btn-ink) hover:opacity-85">
+          Start shopping
+        </Link>
+      </div>
+    );
+
+  const lines = data?.lines || [];
+  const unavailable = lines.filter((l) => !l.available);
+  const orderText = [
+    "Hi, I would like to order:",
+    ...lines.filter((l) => l.available).map((l) => `• ${l.name} × ${l.qty} = ${rs(l.lineTotal)}`),
+    `Total: ${rs(data?.total)}${data?.deliveryFee ? ` (incl. delivery ${rs(data.deliveryFee)})` : ""}`,
+  ].join("\n");
+  const wa = whatsappLink(store.whatsapp, orderText);
+  const toFree = data && data.freeDeliveryOver > 0 && data.deliveryFee > 0 ? data.freeDeliveryOver - data.subtotal : 0;
+
+  return (
+    <div className="mx-auto max-w-[1800px] px-4 md:px-6 xl:px-10 py-8">
+      <h1 className="mb-5 text-2xl font-bold text-(--s-ink) md:text-[28px]">Your cart</h1>
+      {error && <div className="mb-4 rounded-lg border border-(--s-bad) px-4 py-3 text-sm text-(--s-bad)">{error}</div>}
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="space-y-3 lg:col-span-2">
+          {unavailable.length > 0 && (
+            <div className="rounded-lg border border-(--s-line) bg-(--s-soft) px-4 py-3 text-sm text-(--s-ink-2)">
+              {unavailable.length === 1 ? "1 item is" : `${unavailable.length} items are`} not available online right now and not counted in the total. Please contact us for these.
+            </div>
+          )}
+          {lines.map((l) => { const q = cart.find((c) => c.id === l.id)?.qty ?? l.qty; return (
+            <div key={l.id} className={`flex gap-3 rounded-2xl border border-(--s-line) bg-(--s-surface) p-3 sm:gap-4 sm:p-4 ${l.available ? "" : "opacity-60"}`}>
+              <Link href={href(`/p/${l.slug}`)} className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-(--s-img) sm:h-24 sm:w-24">
+                {l.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={l.image} alt={l.name} className="h-full w-full object-contain p-1" />
+                ) : (
+                  <ImageOff className="h-6 w-6 text-neutral-300" />
+                )}
+              </Link>
+              <div className="flex min-w-0 flex-1 flex-col">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    {l.brand && <div className="text-xs text-(--s-muted)">{l.brand}</div>}
+                    <Link href={href(`/p/${l.slug}`)} className="line-clamp-2 text-sm font-medium text-(--s-ink) hover:text-(--s-ink)">
+                      {l.name}
+                    </Link>
+                  </div>
+                  <button onClick={() => remove(l.id)} aria-label="Remove" className="rounded p-1 text-(--s-muted) hover:bg-(--s-soft) hover:text-(--s-bad)">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="mt-auto flex flex-wrap items-end justify-between gap-2 pt-2">
+                  {l.available ? (
+                    <div className="flex h-9 items-center rounded-full border border-(--s-line)">
+                      <button aria-label="Less" onClick={() => setQty(l.id, q - 1)} className="flex h-full w-8 items-center justify-center rounded-full hover:bg-(--s-soft)">
+                        <Minus className="h-3.5 w-3.5" />
+                      </button>
+                      <input
+                        aria-label="Quantity"
+                        inputMode="numeric"
+                        value={q}
+                        onChange={(e) => setQty(l.id, Number(e.target.value.replace(/\D/g, "")))}
+                        className="h-full w-10 bg-transparent text-center text-sm font-bold text-(--s-ink) outline-none"
+                      />
+                      <button aria-label="More" onClick={() => setQty(l.id, q + 1)} className="flex h-full w-8 items-center justify-center rounded-full hover:bg-(--s-soft)">
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-sm font-medium text-(--s-muted)">Contact us</span>
+                  )}
+                  <div className="text-right">
+                    <div className="font-bold text-(--s-ink)">{rs(l.lineTotal)}</div>
+                    <div className="text-xs text-(--s-muted)">
+                      {rs(l.price)} each
+                      {l.discountPct > 0 && <span className="ml-1 text-(--s-muted) line-through">{rs(l.mrp)}</span>}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ); })}
+        </div>
+
+        <aside className="h-fit space-y-4 rounded-3xl border border-(--s-line) bg-(--s-surface) p-6 lg:sticky lg:top-24">
+          <h2 className="font-bold text-(--s-ink)">Order summary</h2>
+          <dl className="space-y-2 text-sm">
+            <Row label="Subtotal" value={rs(data?.subtotal)} />
+            {!!data?.savings && <Row label="You save" value={`− ${rs(data.savings)}`} className="text-(--s-good)" />}
+            <Row label="Delivery (Galle area)" value={data?.deliveryFee ? rs(data.deliveryFee) : "Free"} />
+          </dl>
+          <p className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+            Doorstep delivery is currently available across the <strong>Galle area</strong>.
+          </p>
+          {toFree > 0 && (
+            <p className="rounded-lg bg-(--s-soft) px-3 py-2 text-xs text-(--s-ink)">Add {rs(toFree)} more for free delivery in Galle.</p>
+          )}
+          <div className="flex items-baseline justify-between border-t border-(--s-line) pt-3">
+            <span className="font-semibold">Total</span>
+            <span className="text-2xl font-bold text-(--s-ink)">{rs(data?.total)}</span>
+          </div>
+
+          <div className="space-y-2">
+            <Link
+              href={href("/checkout")}
+              aria-disabled={!data?.total}
+              className={`flex w-full items-center justify-center gap-2 rounded-full bg-(--s-accent) py-3.5 font-bold text-(--s-accent-ink) transition hover:bg-(--s-accent-hover) ${data?.total ? "" : "pointer-events-none opacity-50"}`}
+            >
+              <Lock className="h-4 w-4" /> Checkout
+            </Link>
+            <p className="text-center text-xs text-(--s-muted)">Cash on delivery or bank transfer</p>
+            <QuoteFromCart disabled={!data?.total} />
+            {(wa || store.phone) && (
+              <div className="flex gap-2 pt-2">
+                {wa && (
+                  <a
+                    href={wa}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-(--s-line) py-2.5 text-sm font-medium text-(--s-ink-2) hover:bg-(--s-soft)"
+                  >
+                    <MessageCircle className="h-4 w-4" /> WhatsApp order
+                  </a>
+                )}
+                {store.phone && (
+                  <a href={`tel:${store.phone}`} className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-(--s-line) py-2.5 text-sm font-medium text-(--s-ink-2) hover:bg-(--s-soft)">
+                    <Phone className="h-4 w-4" /> Call us
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function Row({ label, value, className = "" }: { label: string; value: string; className?: string }) {
+  return (
+    <div className={`flex justify-between ${className}`}>
+      <dt className="text-(--s-ink-2)">{label}</dt>
+      <dd className="font-medium">{value}</dd>
+    </div>
+  );
+}

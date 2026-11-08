@@ -892,12 +892,15 @@ export async function POST(request: NextRequest) {
       retailLocationIds = (retailLocs ?? []).map((l: any) => l.id);
       mainWarehouseId = mainLoc?.id || null;
     } else {
-      // Non-retail: use rep's assigned locations
-      const { data: assignments } = await supabaseAdmin
-        .from("location_assignments")
-        .select("location_id")
-        .eq("user_id", val.salesRepId);
-      assignedLocationIds = (assignments ?? []).map((a: any) => a.location_id);
+      // Non-retail: use rep's assigned locations.
+      // Website (online shop) orders always ship from the Main Warehouse.
+      if (resolvedBusinessId !== BUSINESS_IDS.WEBSITE && val.salesRepId) {
+        const { data: assignments } = await supabaseAdmin
+          .from("location_assignments")
+          .select("location_id")
+          .eq("user_id", val.salesRepId);
+        assignedLocationIds = (assignments ?? []).map((a: any) => a.location_id);
+      }
 
       if (assignedLocationIds.length === 0) {
         const { data: mainLoc } = await supabaseAdmin

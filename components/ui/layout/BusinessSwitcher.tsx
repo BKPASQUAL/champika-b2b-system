@@ -49,6 +49,11 @@ const BUSINESS_COLORS: Record<
     badge: "bg-purple-100 text-purple-700",
     text: "text-purple-700",
   },
+  [BUSINESS_IDS.WEBSITE]: {
+    dot: "bg-teal-500",
+    badge: "bg-teal-100 text-teal-700",
+    text: "text-teal-700",
+  },
 };
 
 const DEFAULT_COLOR = {

@@ -6,8 +6,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Menu, Store, Warehouse, Globe, Zap, Mountain,
-  LogOut, Settings, ChevronDown, Check, LayoutDashboard, X,
+  LogOut, Settings, ChevronDown, Check, LayoutDashboard, X, ShoppingBag,
 } from "lucide-react";
+import { websiteNavItems } from "@/app/config/website-nav-config";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,7 @@ interface MobileNavProps {
   isOrange?: boolean;
   isWireman?: boolean;
   isSierra?: boolean;
+  isWebsite?: boolean;
 }
 
 export function MobileNav({
@@ -55,6 +57,7 @@ export function MobileNav({
   isOrange = false,
   isWireman = false,
   isSierra = false,
+  isWebsite = false,
 }: MobileNavProps) {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
@@ -84,7 +87,8 @@ export function MobileNav({
   }, []);
 
   let navSections;
-  if (isWireman)           navSections = wiremanOfficeNavItems;
+  if (isWebsite)           navSections = websiteNavItems;
+  else if (isWireman)      navSections = wiremanOfficeNavItems;
   else if (isSierra)       navSections = sierraOfficeNavItems;
   else if (isOrange)       navSections = orangeOfficeNavItems;
   else if (isRetail)       navSections = retailOfficeNavItems;
@@ -115,9 +119,10 @@ export function MobileNav({
   }, []);
 
   const isAdmin = user.role === "admin";
-  const isOfficePortal = isOrange || isRetail || isDistribution || isWireman || isSierra;
+  const isOfficePortal = isOrange || isRetail || isDistribution || isWireman || isSierra || isWebsite;
 
-  const currentBusinessId = isOrange ? BUSINESS_IDS.ORANGE_AGENCY
+  const currentBusinessId = isWebsite ? BUSINESS_IDS.WEBSITE
+    : isOrange ? BUSINESS_IDS.ORANGE_AGENCY
     : isRetail       ? BUSINESS_IDS.CHAMPIKA_RETAIL
     : isDistribution ? BUSINESS_IDS.CHAMPIKA_DISTRIBUTION
     : isWireman      ? BUSINESS_IDS.WIREMAN_AGENCY
@@ -127,15 +132,15 @@ export function MobileNav({
   const switcherIds = isAdmin ? Object.values(BUSINESS_IDS) : user.accessibleBusinessIds;
   const canSwitch   = isAdmin || (isOfficePortal && switcherIds.length > 1);
 
-  const CurrentIcon   = isWireman ? Zap : isSierra ? Mountain : isOrange ? Globe
+  const CurrentIcon   = isWebsite ? ShoppingBag : isWireman ? Zap : isSierra ? Mountain : isOrange ? Globe
     : isRetail ? Store : isDistribution ? Warehouse : LayoutDashboard;
-  const currentLabel  = isWireman ? "Wireman Agency" : isSierra ? "Sierra Agency"
+  const currentLabel  = isWebsite ? "BK Wiring Website" : isWireman ? "Wireman Agency" : isSierra ? "Sierra Agency"
     : isOrange ? "Orange Agency" : isRetail ? "Champika Retail"
     : isDistribution ? "Distribution" : "Admin Dashboard";
-  const currentIconBg = isWireman ? "bg-red-100" : isSierra ? "bg-purple-100"
+  const currentIconBg = isWebsite ? "bg-teal-100" : isWireman ? "bg-red-100" : isSierra ? "bg-purple-100"
     : isOrange ? "bg-orange-100" : isRetail ? "bg-green-100"
     : isDistribution ? "bg-blue-100" : "bg-gray-100";
-  const currentIconColor = isWireman ? "text-red-600" : isSierra ? "text-purple-600"
+  const currentIconColor = isWebsite ? "text-teal-600" : isWireman ? "text-red-600" : isSierra ? "text-purple-600"
     : isOrange ? "text-orange-600" : isRetail ? "text-green-600"
     : isDistribution ? "text-blue-600" : "text-gray-700";
 
@@ -225,6 +230,7 @@ export function MobileNav({
                       id === BUSINESS_IDS.CHAMPIKA_DISTRIBUTION ? "bg-blue-500"   :
                       id === BUSINESS_IDS.WIREMAN_AGENCY        ? "bg-red-500"    :
                       id === BUSINESS_IDS.SIERRA_AGENCY         ? "bg-purple-500" :
+                      id === BUSINESS_IDS.WEBSITE               ? "bg-teal-500"   :
                       "bg-gray-400";
 
                     return (
@@ -291,7 +297,8 @@ export function MobileNav({
                           <div className={cn(
                             "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors",
                             isActive
-                              ? isWireman      ? "bg-red-100    text-red-700"
+                              ? isWebsite      ? "bg-teal-100   text-teal-700"
+                                : isWireman    ? "bg-red-100    text-red-700"
                                 : isSierra     ? "bg-purple-100 text-purple-700"
                                 : isOrange     ? "bg-orange-100 text-orange-700"
                                 : isRetail     ? "bg-green-100  text-green-700"
@@ -331,7 +338,8 @@ export function MobileNav({
             <div className="flex items-center gap-3 px-2 py-2 mb-1 rounded-xl">
               <div className={cn(
                 "h-9 w-9 rounded-full flex items-center justify-center font-bold text-xs shrink-0",
-                isWireman      ? "bg-red-100    text-red-700"
+                isWebsite      ? "bg-teal-100   text-teal-700"
+                  : isWireman  ? "bg-red-100    text-red-700"
                   : isSierra   ? "bg-purple-100 text-purple-700"
                   : isOrange   ? "bg-orange-100 text-orange-700"
                   : isRetail   ? "bg-green-100  text-green-700"

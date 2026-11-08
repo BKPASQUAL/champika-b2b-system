@@ -1,13 +1,13 @@
 // Called by Vercel cron on the 1st of every month at 01:00 UTC.
 // Generates inter-branch bills for the PREVIOUS month for all agencies (Orange, Wireman, Sierra)
-// for both Champika Retail and Champika Distribution.
+// for Champika Retail, Distribution and the Website.
 import { NextRequest, NextResponse } from "next/server";
 import {
   AGENCY_CONFIGS,
+  BILLING_TARGETS,
   ensureCustomerInAgency,
   generateInterBranchBill,
 } from "@/app/lib/inter-branch-billing";
-import { BUSINESS_IDS } from "@/app/config/business-constants";
 
 export async function GET(request: NextRequest) {
   // Verify cron secret to prevent unauthorized public triggers
@@ -27,27 +27,14 @@ export async function GET(request: NextRequest) {
     year = year - 1;
   }
 
-  const targets = [
-    {
-      id: BUSINESS_IDS.CHAMPIKA_RETAIL,
-      label: "Champika Hardware - Retail",
-      isRetail: true,
-    },
-    {
-      id: BUSINESS_IDS.CHAMPIKA_DISTRIBUTION,
-      label: "Champika Hardware - Distribution",
-      isRetail: false,
-    },
-  ];
+  const targets = BILLING_TARGETS;
 
   const results: string[] = [];
 
   for (const target of targets) {
     for (const agency of AGENCY_CONFIGS) {
       try {
-        const prefix = target.isRetail
-          ? agency.retailPrefix
-          : agency.distributionPrefix;
+        const prefix = agency[target.prefixKey];
 
         const customerId = await ensureCustomerInAgency(
           agency.agencyBusinessId,

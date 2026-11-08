@@ -1,0 +1,67 @@
+/*
+ * Online shop colours. Black & white by default; ".shop-dark" switches the
+ * whole shop to dark mode (set by the ☀/🌙 button, remembered per browser).
+ * Use them in Tailwind as e.g. bg-(--s-surface) text-(--s-ink).
+ */
+.shop-root {
+  --s-bg: #f4f7fb;        /* crisp cool slate-blue page background */
+  --s-surface: #ffffff;   /* pure white cards & panels */
+  --s-soft: #eef2f8;      /* soft cool slate chips & hover */
+  --s-img: #f8fafc;       /* clean studio backdrop behind product photos */
+  --s-ink: #0f172a;       /* deep slate-900 main text */
+  --s-ink-2: #334155;     /* slate-700 body text */
+  --s-muted: #64748b;     /* slate-500 muted text */
+  --s-line: #e2e8f0;      /* crisp slate-200 borders */
+  --s-btn: #0f172a;       /* deep slate primary button */
+  --s-btn-ink: #ffffff;
+  --s-accent: #2563eb;    /* modern electric royal blue */
+  --s-accent-hover: #1d4ed8;
+  --s-accent-soft: #dbeafe;
+  --s-accent-ink: #ffffff;
+  --s-bar: #0b1120;       /* rich deep midnight-navy top bar & footer */
+  --s-bar-line: #1e293b;
+  --s-good: #16a34a;
+  --s-bad: #e11d48;
+  color-scheme: light;
+}
+
+.shop-root.shop-dark {
+  --s-bg: #090d16;
+  --s-surface: #111827;
+  --s-soft: #1e293b;
+  --s-img: #f1f5f9;
+  --s-ink: #f8fafc;
+  --s-ink-2: #cbd5e1;
+  --s-muted: #94a3b8;
+  --s-line: #1e293b;
+  --s-btn: #2563eb;
+  --s-btn-ink: #ffffff;
+  --s-accent: #3b82f6;
+  --s-accent-hover: #2563eb;
+  --s-accent-soft: rgba(59, 130, 246, 0.15);
+  --s-accent-ink: #ffffff;
+  --s-bar: #060911;
+  --s-bar-line: #1e293b;
+  --s-good: #4ade80;
+  --s-bad: #fb7185;
+  color-scheme: dark;
+}
+
+.shop-root {
+  background: var(--s-bg);
+  color: var(--s-ink);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Hide scrollbars on sideways-scrolling chip rows. */
+.shop-noscroll {
+  scrollbar-width: none;
+}
+.shop-noscroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Fine diagonal stripes for the hero (like cable sheathing). */
+.shop-stripes {
+  background-image: repeating-linear-gradient(-45deg, rgba(59, 130, 246, 0.08) 0 2px, transparent 2px 14px);
+}

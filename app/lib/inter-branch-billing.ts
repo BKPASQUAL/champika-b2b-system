@@ -340,6 +340,7 @@ interface AgencyConfig {
   agencyName: string;
   retailPrefix: string;
   distributionPrefix: string;
+  websitePrefix: string;
 }
 
 export const AGENCY_CONFIGS: AgencyConfig[] = [
@@ -348,19 +349,32 @@ export const AGENCY_CONFIGS: AgencyConfig[] = [
     agencyName: "Orange",
     retailPrefix: "OR-RE",
     distributionPrefix: "OR-DI",
+    websitePrefix: "OR-WE",
   },
   {
     agencyBusinessId: BUSINESS_IDS.WIREMAN_AGENCY,
     agencyName: "Wireman",
     retailPrefix: "RE",
     distributionPrefix: "DI",
+    websitePrefix: "WE",
   },
   {
     agencyBusinessId: BUSINESS_IDS.SIERRA_AGENCY,
     agencyName: "Sierra",
     retailPrefix: "SI-RE",
     distributionPrefix: "SI-DI",
+    websitePrefix: "SI-WE",
   },
+];
+
+/**
+ * Champika businesses that get monthly agency bills, the customer name used in
+ * the agency portals, and which AGENCY_CONFIGS prefix they use.
+ */
+export const BILLING_TARGETS: { id: string; label: string; prefixKey: "retailPrefix" | "distributionPrefix" | "websitePrefix" }[] = [
+  { id: BUSINESS_IDS.CHAMPIKA_RETAIL, label: "Champika Hardware - Retail", prefixKey: "retailPrefix" },
+  { id: BUSINESS_IDS.CHAMPIKA_DISTRIBUTION, label: "Champika Hardware - Distribution", prefixKey: "distributionPrefix" },
+  { id: BUSINESS_IDS.WEBSITE, label: "Champika Hardware - Website", prefixKey: "websitePrefix" },
 ];
 
 /**
@@ -392,10 +406,14 @@ export async function triggerAgencyBillsForInvoice(
   const supplierNames = products.map((p) => (p.supplier_name || "").toLowerCase());
   console.log(`[InterBranch] supplier names found:`, supplierNames);
 
-  const isRetail = targetBusinessId === BUSINESS_IDS.CHAMPIKA_RETAIL;
-  const customerName = isRetail
-    ? "Champika Hardware - Retail"
-    : "Champika Hardware - Distribution";
+  // Each Champika business has its own monthly bill. Anything else is ignored,
+  // so one business can never overwrite another business's bill.
+  const target = BILLING_TARGETS.find((t) => t.id === targetBusinessId);
+  if (!target) {
+    console.warn(`[InterBranch] skipped: ${targetBusinessId} is not a billed Champika business`);
+    return;
+  }
+  const customerName = target.label;
 
   for (const agency of AGENCY_CONFIGS) {
     const hasAgencyItems = supplierNames.some((s) =>
@@ -405,7 +423,7 @@ export async function triggerAgencyBillsForInvoice(
     console.log(`[InterBranch] ${agency.agencyName}: hasItems=${hasAgencyItems}`);
     if (!hasAgencyItems) continue;
 
-    const invoicePrefix = isRetail ? agency.retailPrefix : agency.distributionPrefix;
+    const invoicePrefix = agency[target.prefixKey];
 
     const customerId = await ensureCustomerInAgency(agency.agencyBusinessId, customerName);
     if (!customerId) continue;

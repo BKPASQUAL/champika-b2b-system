@@ -1,0 +1,91 @@
+import Link from "next/link";
+import { Mail, MapPin, MessageCircle, Phone, ShieldCheck, Truck, Wallet, Zap } from "lucide-react";
+import type { NavCategory } from "./Header";
+import type { StoreInfo } from "@/lib/shop-data";
+import { whatsappLink } from "./format";
+
+export function Footer({ store, categories, base }: { store: StoreInfo; categories: NavCategory[]; base: string }) {
+  const subs = categories.flatMap((c) => c.children).slice(0, 8);
+  const wa = whatsappLink(store.whatsapp, "Hi, I have a question about an item on your website.");
+  return (
+    <footer className="mt-20 bg-(--s-bar) text-slate-400">
+      <div className="border-b border-(--s-bar-line)">
+        <div className="mx-auto grid max-w-[1800px] grid-cols-1 gap-6 px-4 md:px-6 xl:px-10 py-8 sm:grid-cols-3">
+          {[
+            { icon: ShieldCheck, title: "Genuine brands", text: "Only original products from trusted makers" },
+            { icon: Truck, title: "Galle area delivery", text: "Fast doorstep delivery across Galle & suburbs" },
+            { icon: Wallet, title: "Easy payment", text: "Cash on delivery or bank transfer" },
+          ].map((f) => (
+            <div key={f.title} className="flex items-center gap-4">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-400 shadow-[0_0_16px_-4px_rgba(59,130,246,0.3)]">
+                <f.icon className="h-5 w-5" />
+              </span>
+              <div>
+                <div className="text-sm font-semibold tracking-tight text-white">{f.title}</div>
+                <div className="mt-0.5 text-xs text-slate-400">{f.text}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mx-auto grid max-w-[1800px] grid-cols-1 gap-10 px-4 md:px-6 xl:px-10 py-12 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="lg:col-span-2">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-[0_2px_10px_rgba(37,99,235,0.4)]">
+              <Zap className="h-5 w-5 fill-white" />
+            </span>
+            <span className="text-lg font-black uppercase tracking-tight text-white">{store.name}</span>
+          </div>
+          <p className="mt-4 max-w-sm text-sm leading-6">
+            Everything you need to wire a house — cables, switches, sockets, breakers and boards — at fair prices, from one place.
+          </p>
+        </div>
+        <div>
+          <div className="mb-4 text-xs font-bold uppercase tracking-[0.15em] text-white">Shop</div>
+          <ul className="space-y-2 text-sm">
+            <li><Link href={`${base}/products`} className="hover:text-white">All products</Link></li>
+            {subs.map((c) => (
+              <li key={c.slug}>
+                <Link href={`${base}/c/${c.slug}`} className="hover:text-white">{c.name}</Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <div className="mb-4 text-xs font-bold uppercase tracking-[0.15em] text-white">Contact</div>
+          <ul className="space-y-3 text-sm">
+            {store.phone && (
+              <li className="flex items-center gap-2.5">
+                <Phone className="h-4 w-4 text-(--s-accent)" />
+                <a href={`tel:${store.phone}`} className="hover:text-white">{store.phone}</a>
+              </li>
+            )}
+            {wa && (
+              <li className="flex items-center gap-2.5">
+                <MessageCircle className="h-4 w-4 text-(--s-accent)" />
+                <a href={wa} target="_blank" rel="noopener noreferrer" className="hover:text-white">WhatsApp {store.whatsapp}</a>
+              </li>
+            )}
+            {store.email && (
+              <li className="flex items-center gap-2.5">
+                <Mail className="h-4 w-4 text-(--s-accent)" />
+                <a href={`mailto:${store.email}`} className="hover:text-white">{store.email}</a>
+              </li>
+            )}
+            {store.address && (
+              <li className="flex items-start gap-2.5">
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-(--s-accent)" />
+                <span>{store.address}</span>
+              </li>
+            )}
+            {!store.phone && !wa && !store.email && !store.address && <li>Contact details coming soon.</li>}
+          </ul>
+        </div>
+      </div>
+      <div className="border-t border-(--s-bar-line) py-5 text-center text-xs text-neutral-500">
+        © {new Date().getFullYear()} {store.name}. All rights reserved.
+      </div>
+    </footer>
+  );
+}

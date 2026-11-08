@@ -9,6 +9,7 @@ export const BUSINESS_IDS = {
   CHAMPIKA_DISTRIBUTION: "e770d62c-d4bd-4bbc-ba9e-ccb07d7aa9bb",
   WIREMAN_AGENCY: "094b649e-be59-4e2b-b709-7e36ad1ef280",
   SIERRA_AGENCY: "41b55e39-2edb-43ac-9877-dabd23902335",
+  WEBSITE: "e7825b22-fa7a-4a82-bbe9-f0ad89386e2f", // BK Wiring online shop
 } as const;
 
 export const BUSINESS_NAMES = {
@@ -17,12 +18,14 @@ export const BUSINESS_NAMES = {
   [BUSINESS_IDS.CHAMPIKA_DISTRIBUTION]: "Champika Hardware - Distribution",
   [BUSINESS_IDS.WIREMAN_AGENCY]: "Wireman Agency",
   [BUSINESS_IDS.SIERRA_AGENCY]: "Sierra Agency",
+  [BUSINESS_IDS.WEBSITE]: "BK Wiring Website",
 } as const;
 
 // ✅ ADDED: Internal Customer Names for Pinning
 export const INTERNAL_CUSTOMERS = [
   "Champika Hardware - Retail",
   "Champika Hardware - Distribution",
+  "Champika Hardware - Website",
 ];
 
 export const BUSINESS_ROUTES = {
@@ -31,6 +34,7 @@ export const BUSINESS_ROUTES = {
   [BUSINESS_IDS.CHAMPIKA_DISTRIBUTION]: "/dashboard/office/distribution",
   [BUSINESS_IDS.WIREMAN_AGENCY]: "/dashboard/office/wireman",
   [BUSINESS_IDS.SIERRA_AGENCY]: "/dashboard/office/sierra",
+  [BUSINESS_IDS.WEBSITE]: "/dashboard/office/website",
 } as const;
 
 export const BUSINESS_PO_PREFIXES: Record<string, string> = {
@@ -39,6 +43,7 @@ export const BUSINESS_PO_PREFIXES: Record<string, string> = {
   [BUSINESS_IDS.CHAMPIKA_DISTRIBUTION]: "D",
   [BUSINESS_IDS.WIREMAN_AGENCY]: "W",
   [BUSINESS_IDS.SIERRA_AGENCY]: "S",
+  [BUSINESS_IDS.WEBSITE]: "WB",
 };
 
 export const BUSINESS_THEMES = {
@@ -72,7 +77,16 @@ export const BUSINESS_THEMES = {
     textClass: "text-purple-600",
     borderClass: "border-purple-600",
   },
+  [BUSINESS_IDS.WEBSITE]: {
+    primary: "teal",
+    bgClass: "bg-teal-100",
+    textClass: "text-teal-600",
+    borderClass: "border-teal-600",
+  },
 } as const;
+
+/** Hostnames that serve the public online shop (rewritten to /shop). */
+export const SHOP_HOSTS = ["bkwiringbadukade.lk", "www.bkwiringbadukade.lk"];
 
 /**
  * Agency reps (Orange / Sierra) only see their own agency's products.

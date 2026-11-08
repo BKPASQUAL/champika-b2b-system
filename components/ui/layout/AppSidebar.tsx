@@ -5,7 +5,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { LogOut, Settings, Store, Warehouse, Globe, Zap, Mountain, ChevronDown, Check, LayoutDashboard } from "lucide-react";
+import { LogOut, Settings, Store, Warehouse, Globe, Zap, Mountain, ChevronDown, Check, LayoutDashboard, ShoppingBag } from "lucide-react";
+import { websiteNavItems } from "@/app/config/website-nav-config";
 import { roleNavItems, UserRole } from "@/app/config/nav-config";
 import { retailOfficeNavItems } from "@/app/config/retail-nav-config";
 import { distributionNavItems } from "@/app/config/distribution-nav-config";
@@ -44,6 +45,7 @@ interface AppSidebarProps {
   isOrange?: boolean;
   isWireman?: boolean;
   isSierra?: boolean;
+  isWebsite?: boolean;
 }
 
 export function AppSidebar({
@@ -53,13 +55,16 @@ export function AppSidebar({
   isOrange = false,
   isWireman = false,
   isSierra = false,
+  isWebsite = false,
 }: AppSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
 
   // --- NAVIGATION SELECTION LOGIC ---
   let navSections;
-  if (isWireman) {
+  if (isWebsite) {
+    navSections = websiteNavItems;
+  } else if (isWireman) {
     navSections = wiremanOfficeNavItems;
   } else if (isSierra) {
     navSections = sierraOfficeNavItems;
@@ -117,9 +122,11 @@ export function AppSidebar({
     ? BUSINESS_IDS.WIREMAN_AGENCY
     : isSierra
     ? BUSINESS_IDS.SIERRA_AGENCY
+    : isWebsite
+    ? BUSINESS_IDS.WEBSITE
     : null;
 
-  const isOfficePortal = isOrange || isRetail || isDistribution || isWireman || isSierra;
+  const isOfficePortal = isOrange || isRetail || isDistribution || isWireman || isSierra || isWebsite;
 
   // Admins see all portals; office users see their assigned portals (2+)
   const switcherIds = isAdmin
@@ -166,6 +173,7 @@ export function AppSidebar({
                 {/* Icon */}
                 <div className={cn(
                   "h-8 w-8 rounded-lg flex items-center justify-center shrink-0 overflow-hidden",
+                  isWebsite ? "bg-teal-100" :
                   isWireman ? "bg-red-100" :
                   isSierra ? "bg-purple-100" :
                   isOrange ? "bg-orange-100" :
@@ -173,7 +181,8 @@ export function AppSidebar({
                   isDistribution ? "bg-blue-100" :
                   "bg-white ring-1 ring-border"
                 )}>
-                  {isWireman ? <Zap className="h-4 w-4 text-red-600" /> :
+                  {isWebsite ? <ShoppingBag className="h-4 w-4 text-teal-600" /> :
+                   isWireman ? <Zap className="h-4 w-4 text-red-600" /> :
                    isSierra ? <Mountain className="h-4 w-4 text-purple-600" /> :
                    isOrange ? <Globe className="h-4 w-4 text-orange-600" /> :
                    isRetail ? <Store className="h-4 w-4 text-green-600" /> :
@@ -183,7 +192,8 @@ export function AppSidebar({
                 {/* Name */}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold truncate leading-tight">
-                    {isWireman ? "Wireman Agency" :
+                    {isWebsite ? "BK Wiring Website" :
+                     isWireman ? "Wireman Agency" :
                      isSierra ? "Sierra Agency" :
                      isOrange ? "Orange Agency" :
                      isRetail ? "Champika Retail" :
@@ -229,6 +239,7 @@ export function AppSidebar({
                   id === BUSINESS_IDS.CHAMPIKA_DISTRIBUTION ? "bg-blue-500" :
                   id === BUSINESS_IDS.WIREMAN_AGENCY ? "bg-red-500" :
                   id === BUSINESS_IDS.SIERRA_AGENCY ? "bg-purple-500" :
+                  id === BUSINESS_IDS.WEBSITE ? "bg-teal-500" :
                   "bg-gray-400";
 
                 return (
@@ -254,6 +265,11 @@ export function AppSidebar({
             </DropdownMenuContent>
           </DropdownMenu>
 
+        ) : isWebsite ? (
+          <div className="flex items-center gap-2 px-2">
+            <ShoppingBag className="h-6 w-6 text-teal-600 shrink-0" />
+            <span className="text-lg font-semibold truncate">Website Portal</span>
+          </div>
         ) : isWireman ? (
           <div className="flex items-center gap-2 px-2">
             <Zap className="h-6 w-6 text-red-600 shrink-0" />
@@ -315,7 +331,9 @@ export function AppSidebar({
                         className={cn(
                           "w-full justify-start gap-3 h-10 px-3",
                           isActive
-                            ? isWireman
+                            ? isWebsite
+                              ? "bg-teal-100 text-teal-700 hover:bg-teal-200"
+                              : isWireman
                               ? "bg-red-100 text-red-700 hover:bg-red-200"
                               : isSierra
                               ? "bg-purple-100 text-purple-700 hover:bg-purple-200"
@@ -366,12 +384,13 @@ export function AppSidebar({
           <div
             className={cn(
               "h-9 w-9 rounded-full flex items-center justify-center font-bold text-xs",
+              isWebsite && "bg-teal-100 text-teal-700",
               isWireman && "bg-red-100 text-red-700",
               isSierra && "bg-purple-100 text-purple-700",
               isOrange && "bg-orange-100 text-orange-700",
               isRetail && "bg-green-100 text-green-700",
               isDistribution && "bg-blue-100 text-blue-700",
-              !isOrange && !isRetail && !isDistribution && !isWireman && !isSierra && "bg-primary/10 text-primary"
+              !isOfficePortal && "bg-primary/10 text-primary"
             )}
           >
             {user.initials}
@@ -391,6 +410,7 @@ export function AppSidebar({
           disabled={isLoggingOut}
           className={cn(
             "w-full justify-start gap-2",
+            isWebsite && "hover:bg-teal-50 hover:text-teal-600",
             isWireman && "hover:bg-red-50 hover:text-red-600",
             isSierra && "hover:bg-purple-50 hover:text-purple-600",
             isOrange && "hover:bg-orange-50 hover:text-orange-600",
