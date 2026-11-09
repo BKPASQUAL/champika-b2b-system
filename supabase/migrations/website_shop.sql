@@ -522,3 +522,33 @@ UPDATE web_products p SET search_key = lower(regexp_replace(translate(
 WHERE p.search_key IS NULL;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE INDEX IF NOT EXISTS idx_web_products_search_key ON web_products USING gin (search_key gin_trgm_ops);
+
+-- 13. Home page promotion strip (the black row under the menu) ---------
+-- Each item links to a category, brand, product or any URL and can show a
+-- badge: typed text (e.g. "27% OFF"), or "auto" = the biggest discount found.
+CREATE TABLE IF NOT EXISTS web_promo_strip (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title       TEXT NOT NULL,
+  image_url   TEXT,
+  link_type   TEXT NOT NULL DEFAULT 'category',
+  link_value  TEXT,
+  badge_mode  TEXT NOT NULL DEFAULT 'none',
+  badge_text  TEXT,
+  badge_color TEXT NOT NULL DEFAULT 'red',
+  sort_order  INT DEFAULT 0,
+  is_active   BOOLEAN DEFAULT TRUE,
+  ends_at     TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE web_promo_strip ADD COLUMN IF NOT EXISTS image_url   TEXT;
+ALTER TABLE web_promo_strip ADD COLUMN IF NOT EXISTS link_type   TEXT DEFAULT 'category';
+ALTER TABLE web_promo_strip ADD COLUMN IF NOT EXISTS link_value  TEXT;
+ALTER TABLE web_promo_strip ADD COLUMN IF NOT EXISTS badge_mode  TEXT DEFAULT 'none';
+ALTER TABLE web_promo_strip ADD COLUMN IF NOT EXISTS badge_text  TEXT;
+ALTER TABLE web_promo_strip ADD COLUMN IF NOT EXISTS badge_color TEXT DEFAULT 'red';
+ALTER TABLE web_promo_strip ADD COLUMN IF NOT EXISTS sort_order  INT DEFAULT 0;
+ALTER TABLE web_promo_strip ADD COLUMN IF NOT EXISTS is_active   BOOLEAN DEFAULT TRUE;
+ALTER TABLE web_promo_strip ADD COLUMN IF NOT EXISTS ends_at     TIMESTAMPTZ;
+ALTER TABLE web_promo_strip ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS web_promo_strip_public ON web_promo_strip;
+CREATE POLICY web_promo_strip_public ON web_promo_strip FOR SELECT USING (is_active);

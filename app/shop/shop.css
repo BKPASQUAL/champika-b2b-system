@@ -65,3 +65,13 @@
 .shop-stripes {
   background-image: repeating-linear-gradient(-45deg, rgba(59, 130, 246, 0.08) 0 2px, transparent 2px 14px);
 }
+
+/* Big, bold, slanted section headings (home page). */
+.shop-display {
+  font-size: clamp(1.6rem, 1.2rem + 1.6vw, 2.5rem);
+  font-weight: 900;
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}

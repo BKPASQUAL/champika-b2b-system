@@ -420,3 +420,76 @@ export function applyListingFilters(
   const sort = (SORT_OPTIONS.find((o) => o.key === sp.sort)?.key || "popular") as SortKey;
   return { products: sortProducts(out, sort), sort, brandSlugs, familyIds, inStockOnly: sp.stock === "1" };
 }
+
+// ---------------------------------------------------------------- promo strip
+
+export type PromoStripItem = {
+  id: string;
+  title: string;
+  /** "/c/slug", "/b/slug", "/p/slug" or a full URL (shop base not added yet). */
+  link: string;
+  imageUrl: string | null;
+  linkType: "category" | "brand" | "product" | "url";
+  /** web_categories / web_brands id for "category" / "brand", product slug for "product". */
+  targetId: string | null;
+  badgeMode: "none" | "auto" | "text";
+  badgeText: string | null;
+  badgeColor: "red" | "orange" | "green" | "blue";
+};
+
+/**
+ * Active items for the black promotion strip on the home page, in order.
+ * Items past their end date are left out. Returns [] when the table is not there yet.
+ */
+export async function getPromoStrip(): Promise<PromoStripItem[]> {
+  const { data, error } = await supabaseAdmin
+    .from("web_promo_strip")
+    .select("id, title, image_url, link_type, link_value, badge_mode, badge_text, badge_color, ends_at")
+    .eq("is_active", true)
+    .order("sort_order");
+  if (error || !data?.length) return [];
+  const now = Date.now();
+  const rows = data.filter((r: any) => !r.ends_at || new Date(r.ends_at).getTime() >= now);
+
+  const slugsOf = (t: string) => rows.filter((r: any) => r.link_type === t && r.link_value).map((r: any) => r.link_value as string);
+  const [cats, brands] = await Promise.all([
+    slugsOf("category").length
+      ? supabaseAdmin.from("web_categories").select("id, slug, image_url").in("slug", slugsOf("category"))
+      : Promise.resolve({ data: [] as any[] }),
+    slugsOf("brand").length
+      ? supabaseAdmin.from("web_brands").select("id, slug, logo_url").in("slug", slugsOf("brand"))
+      : Promise.resolve({ data: [] as any[] }),
+  ]);
+  const catBy = new Map((cats.data || []).map((c: any) => [c.slug, c]));
+  const brandBy = new Map((brands.data || []).map((b: any) => [b.slug, b]));
+
+  return rows.map((r: any) => {
+    const v = (r.link_value || "") as string;
+    let link = v;
+    let targetId: string | null = null;
+    let fallbackImage: string | null = null;
+    if (r.link_type === "category") {
+      link = `/c/${v}`;
+      targetId = catBy.get(v)?.id ?? null;
+      fallbackImage = catBy.get(v)?.image_url ?? null;
+    } else if (r.link_type === "brand") {
+      link = `/b/${v}`;
+      targetId = brandBy.get(v)?.id ?? null;
+      fallbackImage = brandBy.get(v)?.logo_url ?? null;
+    } else if (r.link_type === "product") {
+      link = `/p/${v}`;
+      targetId = v;
+    }
+    return {
+      id: r.id,
+      title: r.title,
+      link: link || "/products",
+      imageUrl: r.image_url || fallbackImage,
+      linkType: r.link_type,
+      targetId,
+      badgeMode: r.badge_mode || "none",
+      badgeText: r.badge_text,
+      badgeColor: r.badge_color || "red",
+    };
+  });
+}

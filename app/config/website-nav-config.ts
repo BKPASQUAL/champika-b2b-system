@@ -11,6 +11,7 @@ import {
   BarChart3,
   Settings,
   ExternalLink,
+  Megaphone,
   Tags,
   Layers,
   Truck,
@@ -48,6 +49,7 @@ export const websiteNavItems: WebsiteNavSection[] = [
       { name: "Brands", href: `${BASE}/brands`, icon: Tags },
       { name: "Suppliers", href: `${BASE}/suppliers`, icon: Truck },
       { name: "Banners", href: `${BASE}/banners`, icon: ImageIcon },
+      { name: "Home Promo Strip", href: `${BASE}/promo-strip`, icon: Megaphone },
     ],
   },
   {

@@ -19,12 +19,30 @@ type ShopCtx = {
   add: (id: string, qty?: number) => void;
   setQty: (id: string, qty: number) => void;
   remove: (id: string) => void;
+  /** Swap one item for another (e.g. the same item from another brand), keeping the quantity. */
+  replace: (fromId: string, toId: string) => void;
+  /** Several swaps in one go (e.g. "use Sierra for everything"). */
+  replaceMany: (pairs: [fromId: string, toId: string][]) => void;
   clear: () => void;
   dark: boolean;
   toggleTheme: () => void;
 };
 
 export type ShopCustomer = { name: string | null; email: string | null };
+
+/** Swap cart items for others, keeping quantities (merges when the new item is already in the cart). */
+function swap(cart: CartLine[], pairs: [string, string][], clamp: (n: number) => number): CartLine[] {
+  let out = cart;
+  for (const [fromId, toId] of pairs) {
+    const from = out.find((l) => l.id === fromId);
+    if (!from || fromId === toId) continue;
+    const to = out.find((l) => l.id === toId);
+    out = to
+      ? out.filter((l) => l.id !== fromId).map((l) => (l.id === toId ? { ...l, qty: clamp(l.qty + from.qty) } : l))
+      : out.map((l) => (l.id === fromId ? { id: toId, qty: from.qty } : l));
+  }
+  return out;
+}
 
 const Ctx = createContext<ShopCtx | null>(null);
 const KEY = "bkw_cart_v1";
@@ -102,6 +120,8 @@ export function ShopProvider({
       },
       setQty: (id, qty) => save(cart.map((l) => (l.id === id ? { ...l, qty: clamp(qty) } : l))),
       remove: (id) => save(cart.filter((l) => l.id !== id)),
+      replace: (fromId, toId) => save(swap(cart, [[fromId, toId]], clamp)),
+      replaceMany: (pairs) => save(swap(cart, pairs, clamp)),
       clear: () => save([]),
       dark,
       toggleTheme,

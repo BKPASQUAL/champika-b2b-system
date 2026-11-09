@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { deliveryFee, getDeliveryInfo, getProducts } from "@/lib/shop-data";
+import { getAlternatives } from "@/lib/web-compare";
 
 const schema = z.object({
   items: z
@@ -21,8 +22,11 @@ export async function POST(request: NextRequest) {
   }
   try {
     const ids = [...new Set(body.items.map((i) => i.id))];
-    const [products, delivery] = await Promise.all([getProducts({ ids }), getDeliveryInfo()]);
+    // All products once: prices the cart and finds the same item from other brands.
+    const [all, delivery] = await Promise.all([getProducts(), getDeliveryInfo()]);
+    const products = all.filter((p) => ids.includes(p.id));
     const byId = new Map(products.map((p) => [p.id, p]));
+    const others = await getAlternatives(products.map((p) => p.id), all).catch(() => ({}) as Awaited<ReturnType<typeof getAlternatives>>);
 
     const lines = body.items
       .filter((i) => byId.has(i.id))
@@ -40,6 +44,8 @@ export async function POST(request: NextRequest) {
           available: p.available,
           qty: i.qty,
           lineTotal: p.available ? p.price * i.qty : 0,
+          /** Same item from other brands, cheapest first. */
+          others: others[p.id] || [],
         };
       });
     const subtotal = lines.reduce((s, l) => s + l.lineTotal, 0);

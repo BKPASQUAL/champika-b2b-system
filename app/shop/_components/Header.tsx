@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, LayoutGrid, Moon, Phone, Search, ShoppingBag, Sun, UserRound, X, Zap } from "lucide-react";
+import { ChevronDown, LayoutGrid, Moon, Phone, Search, ShoppingBag, Sun, Truck, UserRound, X, Zap } from "lucide-react";
 import { useShop } from "./ShopContext";
 
 export type NavCategory = {
@@ -18,6 +18,7 @@ export function activeTab(pathname: string, base: string) {
   const p = pathname.slice(base.length) || "/";
   if (p === "/") return "home";
   if (p.startsWith("/quick-order")) return "quick";
+  if (p.startsWith("/quote")) return "quote";
   if (p.startsWith("/cart") || p.startsWith("/checkout")) return "cart";
   if (p.startsWith("/account") || p.startsWith("/login") || p.startsWith("/reset-password")) return "account";
   if (p.startsWith("/categories") || p.startsWith("/c/")) return "categories";
@@ -63,12 +64,12 @@ export function Header({ categories }: { categories: NavCategory[] }) {
   const navLink = (key: string, label: string, to: string) => (
     <Link
       href={href(to)}
-      className={`relative px-1 py-5 text-sm font-semibold tracking-wide transition ${
-        tab === key ? "text-white" : "text-slate-300/80 hover:text-white"
+      className={`relative flex h-full items-center px-4 text-[16px] font-semibold tracking-tight transition xl:px-5 xl:text-[17px] ${
+        tab === key ? "text-white" : "text-slate-300 hover:text-white"
       }`}
     >
       {label}
-      {tab === key && <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.7)]" />}
+      {tab === key && <span className="absolute inset-x-3 bottom-0 h-[3px] rounded-t-full bg-(--s-accent)" />}
     </Link>
   );
 
@@ -80,92 +81,145 @@ export function Header({ categories }: { categories: NavCategory[] }) {
         onChange={(e) => setQ(e.target.value)}
         type="search"
         placeholder="Search wires, switches… e.g. 1/113"
-        className="h-10 w-full rounded-full border border-slate-700/80 bg-slate-800/75 pl-10 pr-4 text-sm text-white placeholder:text-slate-400 outline-none transition focus:border-blue-500 focus:bg-slate-900 focus:ring-2 focus:ring-blue-500/25"
+        className="h-10 w-full rounded-full border border-white/10 bg-white/[0.07] pl-10 pr-4 text-sm text-white placeholder:text-slate-400 outline-none transition focus:border-(--s-accent) focus:bg-slate-950 focus:ring-2 focus:ring-blue-500/25"
       />
     </form>
   );
 
+  const topLink = (label: string, to: string, active = false) => (
+    <Link href={href(to)} className={`transition hover:text-white ${active ? "text-white" : "text-slate-300"}`}>
+      {label}
+    </Link>
+  );
+
   return (
     <header className="sticky top-0 z-40 bg-(--s-bar) text-white shadow-[0_1px_0_var(--s-bar-line),0_4px_20px_-4px_rgba(15,23,42,0.3)]">
-      <div className="mx-auto flex h-16 max-w-[1800px] items-center gap-4 px-4 md:px-6 xl:px-10">
-        {/* Logo */}
-        <Link href={href("/")} className="group flex shrink-0 items-center gap-2.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-[0_2px_10px_rgba(37,99,235,0.45)] transition group-hover:scale-105">
-            <Zap className="h-5 w-5 fill-white" />
+      {/* Thin top bar (desktop): categories on the left, quick links on the right */}
+      <div className="hidden border-b border-white/[0.06] bg-black/30 md:block">
+        <div className="mx-auto flex h-9 max-w-[1800px] items-center gap-6 px-4 text-[12px] font-bold uppercase tracking-wide md:px-6 xl:px-10">
+          <button
+            onClick={() => setMegaOpen((o) => !o)}
+            onMouseEnter={openMega}
+            onMouseLeave={closeMega}
+            className="flex items-center gap-1 text-[13px] normal-case text-slate-200 transition hover:text-white"
+          >
+            All categories <ChevronDown className={`h-3.5 w-3.5 transition ${megaOpen ? "rotate-180" : ""}`} />
+          </button>
+          <span className="hidden items-center gap-1.5 font-semibold normal-case text-slate-400 lg:flex">
+            <Truck className="h-3.5 w-3.5 text-emerald-400" /> Fast delivery in the Galle area
           </span>
-          <span className="leading-none">
-            <span className="block text-[15px] font-black uppercase tracking-tight text-white">{store.name}</span>
-            <span className="mt-0.5 block text-[9px] font-bold uppercase tracking-[0.2em] text-blue-400">Wiring Store</span>
-          </span>
-        </Link>
-
-        {/* Main navigation (desktop) */}
-        <nav className="ml-6 hidden items-center gap-7 md:flex">
-          {navLink("home", "Home", "/")}
-          {navLink("shop", "Shop", "/products")}
-          {navLink("quick", "Quick Order", "/quick-order")}
-          <div className="relative" onMouseEnter={openMega} onMouseLeave={closeMega}>
+          <nav className="ml-auto flex items-center gap-5">
+            {topLink("Quick order", "/quick-order", tab === "quick")}
+            {topLink("House quotation", "/quote", tab === "quote")}
+            {topLink("My orders", customer ? "/account/orders" : "/login")}
+            {store.phone && (
+              <a href={`tel:${store.phone}`} className="hidden items-center gap-1.5 text-slate-300 transition hover:text-white lg:flex">
+                <Phone className="h-3.5 w-3.5" /> {store.phone}
+              </a>
+            )}
+            <span className="h-4 w-px bg-white/15" />
             <button
-              onClick={() => setMegaOpen((o) => !o)}
-              className={`relative flex items-center gap-1 px-1 py-5 text-sm font-semibold tracking-wide transition ${
-                tab === "categories" || megaOpen ? "text-white" : "text-slate-300/80 hover:text-white"
+              onClick={toggleTheme}
+              className="text-slate-300 transition hover:text-white"
+              aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+              title={dark ? "Light mode" : "Dark mode"}
+            >
+              {dark ? <Sun className="h-4 w-4 text-sky-400" /> : <Moon className="h-4 w-4" />}
+            </button>
+            <Link
+              href={href(customer ? "/account" : "/login")}
+              className={`flex items-center gap-1.5 text-[13px] normal-case transition hover:text-white ${tab === "account" ? "text-white" : "text-slate-300"}`}
+              title={customer ? "My account" : "Log in"}
+            >
+              {customer ? (
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-(--s-accent) text-[10px] font-bold text-(--s-accent-ink)">
+                  {(customer.name || customer.email || "?").trim().charAt(0).toUpperCase()}
+                </span>
+              ) : (
+                <UserRound className="h-4 w-4" />
+              )}
+              <span className="max-w-28 truncate">{customer ? (customer.name || "Account").split(" ")[0] : "Log in"}</span>
+            </Link>
+          </nav>
+        </div>
+      </div>
+
+      {/* Main bar */}
+      <div className="relative overflow-hidden">
+        {/* Slanted stripes in the background */}
+        <div aria-hidden className="pointer-events-none absolute inset-0 hidden md:block">
+          {["left-[13%]", "left-[16.5%]", "left-[42%]", "left-[45.5%]", "left-[70%]", "left-[73.5%]", "left-[92%]"].map((pos, i) => (
+            <span
+              key={pos}
+              className={`absolute top-0 h-full -skew-x-[35deg] bg-gradient-to-b from-white/[0.07] to-white/[0.01] ${pos} ${i % 2 ? "w-10" : "w-20"}`}
+            />
+          ))}
+        </div>
+
+        <div className="relative mx-auto flex h-16 max-w-[1800px] items-center gap-2 px-4 md:h-[72px] md:px-6 xl:px-10">
+          {/* Logo */}
+          <Link href={href("/")} className="group mr-2 flex shrink-0 items-center gap-2.5 xl:mr-6">
+            <span className="flex h-9 w-11 -skew-x-12 items-center justify-center rounded-md bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-[0_2px_12px_rgba(37,99,235,0.5)] transition group-hover:scale-105">
+              <Zap className="h-5 w-5 skew-x-12 fill-white" />
+            </span>
+            <span className="leading-none">
+              <span className="block text-[16px] font-black uppercase italic tracking-tight text-white">{store.name}</span>
+              <span className="mt-0.5 block text-[9px] font-bold uppercase tracking-[0.22em] text-blue-400">Wiring Store</span>
+            </span>
+          </Link>
+
+          {/* Main navigation (desktop) */}
+          <nav className="hidden h-full items-stretch md:flex">
+            {navLink("home", "Home", "/")}
+            {navLink("shop", "Shop", "/products")}
+            <div className="relative flex" onMouseEnter={openMega} onMouseLeave={closeMega}>
+              <button
+                onClick={() => setMegaOpen((o) => !o)}
+                className={`relative flex h-full items-center gap-1 px-4 text-[16px] font-semibold tracking-tight transition xl:px-5 xl:text-[17px] ${
+                  tab === "categories" || megaOpen ? "text-white" : "text-slate-300 hover:text-white"
+                }`}
+              >
+                Categories <ChevronDown className={`h-4 w-4 transition ${megaOpen ? "rotate-180 text-blue-400" : ""}`} />
+                {tab === "categories" && <span className="absolute inset-x-3 bottom-0 h-[3px] rounded-t-full bg-(--s-accent)" />}
+              </button>
+            </div>
+            {navLink("quick", "Quick Order", "/quick-order")}
+            <span className="hidden xl:flex">{navLink("quote", "Quotation", "/quote")}</span>
+          </nav>
+
+          <div className="ml-auto hidden w-full max-w-xs lg:block xl:max-w-sm">{searchBox}</div>
+
+          <div className="ml-auto flex items-center gap-1.5 lg:ml-2">
+            <button
+              onClick={() => setSearchOpen((o) => !o)}
+              className="rounded-full p-2.5 text-slate-300 transition hover:bg-white/10 hover:text-white lg:hidden"
+              aria-label="Search"
+            >
+              {searchOpen ? <X className="h-5 w-5" /> : <Search className="h-5 w-5" />}
+            </button>
+            <button
+              onClick={toggleTheme}
+              className="rounded-full p-2.5 text-slate-300 transition hover:bg-white/10 hover:text-white md:hidden"
+              aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {dark ? <Sun className="h-5 w-5 text-sky-400" /> : <Moon className="h-5 w-5" />}
+            </button>
+            <Link
+              href={href("/cart")}
+              className={`relative hidden items-center gap-2 rounded-full px-4 py-2 text-sm font-bold transition md:flex ${
+                tab === "cart"
+                  ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-[0_2px_12px_rgba(37,99,235,0.45)]"
+                  : "bg-white text-slate-900 shadow-sm hover:bg-blue-600 hover:text-white"
               }`}
             >
-              Categories <ChevronDown className={`h-3.5 w-3.5 transition ${megaOpen ? "rotate-180 text-blue-400" : ""}`} />
-              {tab === "categories" && <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.7)]" />}
-            </button>
+              <ShoppingBag className="h-4 w-4" /> Cart
+              {mounted && ready && cartCount > 0 && (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1 text-[11px] font-bold text-white">
+                  {cartCount > 99 ? "99+" : cartCount}
+                </span>
+              )}
+            </Link>
           </div>
-        </nav>
-
-        <div className="ml-auto hidden max-w-sm flex-1 lg:block">{searchBox}</div>
-
-        <div className="ml-auto flex items-center gap-1.5 lg:ml-0">
-          <button
-            onClick={() => setSearchOpen((o) => !o)}
-            className="rounded-full p-2.5 text-slate-300 transition hover:bg-white/10 hover:text-white lg:hidden"
-            aria-label="Search"
-          >
-            {searchOpen ? <X className="h-5 w-5" /> : <Search className="h-5 w-5" />}
-          </button>
-          <button
-            onClick={toggleTheme}
-            className="rounded-full p-2.5 text-slate-300 transition hover:bg-white/10 hover:text-white"
-            aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
-            title={dark ? "Light mode" : "Dark mode"}
-          >
-            {dark ? <Sun className="h-5 w-5 text-sky-400" /> : <Moon className="h-5 w-5" />}
-          </button>
-          <Link
-            href={href(customer ? "/account" : "/login")}
-            className={`hidden items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold transition md:flex ${
-              tab === "account" ? "text-white" : "text-neutral-300 hover:bg-white/10 hover:text-white"
-            }`}
-            title={customer ? "My account" : "Log in"}
-          >
-            {customer ? (
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-(--s-accent) text-xs font-bold text-(--s-accent-ink)">
-                {(customer.name || customer.email || "?").trim().charAt(0).toUpperCase()}
-              </span>
-            ) : (
-              <UserRound className="h-5 w-5" />
-            )}
-            <span className="max-w-28 truncate">{customer ? (customer.name || "Account").split(" ")[0] : "Log in"}</span>
-          </Link>
-          <Link
-            href={href("/cart")}
-            className={`relative ml-1 hidden items-center gap-2 rounded-full px-4 py-2 text-sm font-bold transition md:flex ${
-              tab === "cart"
-                ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-[0_2px_12px_rgba(37,99,235,0.45)]"
-                : "bg-white text-slate-900 shadow-sm hover:bg-blue-600 hover:text-white"
-            }`}
-          >
-            <ShoppingBag className="h-4 w-4" /> Cart
-            {mounted && ready && cartCount > 0 && (
-              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1 text-[11px] font-bold text-white">
-                {cartCount > 99 ? "99+" : cartCount}
-              </span>
-            )}
-          </Link>
         </div>
       </div>
 

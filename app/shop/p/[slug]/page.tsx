@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronRight, MessageCircle, ShieldCheck, Truck, Wallet } from "lucide-react";
+import { ArrowLeftRight, ChevronRight, MessageCircle, ShieldCheck, Truck, Wallet } from "lucide-react";
 import { getProductBySlug, getRelatedProducts, getShopBase, getStoreInfo } from "@/lib/shop-data";
+import { brandLabelFor, getAlternatives } from "@/lib/web-compare";
 import { SHOP_URL } from "@/lib/shop-host";
 import { Gallery } from "../../_components/Gallery";
-import { ProductBuyBox } from "../../_components/AddToCart";
+import { AddToCartButton, ProductBuyBox } from "../../_components/AddToCart";
 import { ProductGrid } from "../../_components/ProductCard";
 import { rs, whatsappLink } from "../../_components/format";
 
@@ -27,7 +28,16 @@ export default async function ProductPage({ params }: Props) {
   const [{ slug }, base, store] = await Promise.all([params, getShopBase(), getStoreInfo()]);
   const p = await getProductBySlug(slug);
   if (!p) notFound();
-  const related = await getRelatedProducts(p);
+  const [related, others, myBrand] = await Promise.all([
+    getRelatedProducts(p),
+    getAlternatives([p.id]).then((r) => r[p.id] || []).catch(() => []),
+    brandLabelFor(p).catch(() => p.brand || ""),
+  ]);
+  // This item + the same item from other brands, cheapest first.
+  const compare = others.length
+    ? [{ ...p, brand: myBrand, isThis: true }, ...others.map((o) => ({ ...o, isThis: false }))].sort((a, b) => a.price - b.price)
+    : [];
+  const cheapestId = compare.filter((c) => c.available)[0]?.id;
   const wa = whatsappLink(store.whatsapp, `Hi, I'm interested in: ${p.name}\n${SHOP_URL}/p/${p.slug}`);
   const off = p.discountPct > 0 && p.mrp > p.price;
 
@@ -169,6 +179,65 @@ export default async function ProductPage({ params }: Props) {
           </ul>
         </div>
       </section>
+
+      {/* Same item, other brands */}
+      {compare.length > 0 && (
+        <section className="mt-8 overflow-hidden rounded-2xl border border-(--s-line) bg-(--s-surface)">
+          <div className="flex flex-wrap items-center gap-2 px-5 pt-5 sm:px-6">
+            <ArrowLeftRight className="h-5 w-5 text-(--s-accent)" />
+            <h2 className="text-lg font-bold text-(--s-ink)">Compare with other brands</h2>
+            <span className="text-sm text-(--s-muted)">Same item · {compare.length} brands</span>
+          </div>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full min-w-[560px] text-sm">
+              <thead>
+                <tr className="border-y border-(--s-line) bg-(--s-soft) text-left text-xs text-(--s-muted)">
+                  <th className="px-5 py-2.5 font-semibold sm:px-6">Brand</th>
+                  <th className="px-3 py-2.5 font-semibold">Item</th>
+                  <th className="px-3 py-2.5 text-right font-semibold">MRP</th>
+                  <th className="px-3 py-2.5 text-right font-semibold">Our price</th>
+                  <th className="w-40 px-5 py-2.5 sm:px-6" />
+                </tr>
+              </thead>
+              <tbody>
+                {compare.map((c) => (
+                  <tr key={c.id} className={`border-b border-(--s-line) last:border-0 ${c.isThis ? "bg-(--s-accent-soft)" : ""}`}>
+                    <td className="px-5 py-3 font-bold sm:px-6">
+                      {c.brand}
+                      {c.id === cheapestId && (
+                        <span className="ml-2 rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-extrabold uppercase text-white">Lowest price</span>
+                      )}
+                    </td>
+                    <td className="max-w-[340px] px-3 py-3">
+                      {c.isThis ? (
+                        <span className="line-clamp-1 text-(--s-ink-2)">
+                          {c.name} <span className="font-semibold text-(--s-accent)">· This item</span>
+                        </span>
+                      ) : (
+                        <Link href={`${base}/p/${c.slug}`} className="line-clamp-1 text-(--s-ink-2) hover:underline">
+                          {c.name}
+                        </Link>
+                      )}
+                    </td>
+                    <td className="px-3 py-3 text-right text-(--s-muted)">{c.mrp > c.price ? <span className="line-through">{rs(c.mrp)}</span> : "—"}</td>
+                    <td className="px-3 py-3 text-right">
+                      <span className="font-bold text-(--s-ink)">{rs(c.price)}</span>
+                      {!c.isThis && c.price !== p.price && (
+                        <span className={`block text-[11px] font-semibold ${c.price < p.price ? "text-emerald-600 dark:text-emerald-400" : "text-(--s-muted)"}`}>
+                          {c.price < p.price ? `${rs(p.price - c.price)} less` : `${rs(c.price - p.price)} more`}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-5 py-2.5 sm:px-6">
+                      <AddToCartButton id={c.id} name={c.name} available={c.available} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       {/* Details */}
       {(p.description || specs.length > 0) && (
