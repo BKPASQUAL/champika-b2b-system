@@ -17,6 +17,7 @@ export type NavCategory = {
 export function activeTab(pathname: string, base: string) {
   const p = pathname.slice(base.length) || "/";
   if (p === "/") return "home";
+  if (p.startsWith("/quick-order")) return "quick";
   if (p.startsWith("/cart") || p.startsWith("/checkout")) return "cart";
   if (p.startsWith("/account") || p.startsWith("/login") || p.startsWith("/reset-password")) return "account";
   if (p.startsWith("/categories") || p.startsWith("/c/")) return "categories";
@@ -102,6 +103,7 @@ export function Header({ categories }: { categories: NavCategory[] }) {
         <nav className="ml-6 hidden items-center gap-7 md:flex">
           {navLink("home", "Home", "/")}
           {navLink("shop", "Shop", "/products")}
+          {navLink("quick", "Quick Order", "/quick-order")}
           <div className="relative" onMouseEnter={openMega} onMouseLeave={closeMega}>
             <button
               onClick={() => setMegaOpen((o) => !o)}

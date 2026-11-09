@@ -8,7 +8,8 @@ import {
   type ShopProductCard,
 } from "@/lib/shop-data";
 import { ProductGrid } from "./ProductCard";
-import { PriceRange } from "./PriceRange";
+import { ListingSearch } from "./ListingSearch";
+import { buildSearchKey, searchWords, suggestSizeTags } from "@/lib/web-search";
 
 export type ListingParams = {
   brand?: string;
@@ -16,6 +17,8 @@ export type ListingParams = {
   sort?: string;
   q?: string;
   tab?: string;
+  /** In-page search words ("Search in these products"). */
+  find?: string;
   min?: string;
   max?: string;
 };
@@ -56,6 +59,14 @@ export async function Listing({
   const { products: filtered, sort, brandSlugs, familyIds } = applyListingFilters(all, facets, params);
 
   let list = filtered;
+  const find = (params.find || "").trim().slice(0, 80);
+  const words = searchWords(find);
+  if (words.length) {
+    list = list.filter((p) => {
+      const key = buildSearchKey([p.name, p.brand, ...suggestSizeTags(p.name)]);
+      return words.every((w) => key.includes(w));
+    });
+  }
 
   // Price range (slider bounds come from the items before the price filter).
   const prices = list.map((p) => p.price).filter((n) => n > 0);
@@ -79,7 +90,7 @@ export async function Listing({
     s.has(v) ? s.delete(v) : s.add(v);
     return [...s].join(",") || null;
   };
-  const activeCount = brandSlugs.length + familyIds.length + (min || max ? 1 : 0);
+  const activeCount = brandSlugs.length + familyIds.length + (min || max ? 1 : 0) + (find ? 1 : 0);
 
   // ---------- left: categories ----------
   const categoryLinks = tree.flatMap((main) => (tree.length === 1 ? main.children : [main, ...main.children]));
@@ -148,9 +159,14 @@ export async function Listing({
         <div className="min-w-0 flex-1">
           <h1 className="sr-only">{title}</h1>
           {all.length > 0 && (
-            <div className="flex flex-col gap-3.5 rounded-2xl border border-(--s-line) bg-(--s-surface) p-3.5 shadow-[0_2px_12px_-4px_rgba(15,23,42,0.04)] md:flex-row md:items-start md:justify-between md:gap-6 md:p-4">
-              {/* Count · clear · sort (top on phones, right on bigger screens) */}
-              <div className="flex items-center justify-between gap-3 md:order-last md:shrink-0 md:justify-end">
+            <div className="space-y-3.5 rounded-2xl border border-(--s-line) bg-(--s-surface) p-3.5 shadow-[0_2px_12px_-4px_rgba(15,23,42,0.04)] md:p-4">
+              {/* Top row: search in these products · count · clear · sort */}
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
+                <div className="min-w-0 flex-1">
+                  <ListingSearch placeholder={`Search in ${title}… e.g. 1/113, MCB`} />
+                </div>
+              {/* Count · clear · sort */}
+              <div className="flex items-center justify-between gap-3 md:shrink-0 md:justify-end">
                 <span className="rounded-full bg-(--s-soft) px-3 py-1 text-xs font-semibold text-(--s-ink-2)">
                   <strong className="font-bold text-(--s-ink)">{products.length}</strong>{" "}
                   {products.length === 1 ? "item" : "items"}
@@ -158,7 +174,7 @@ export async function Listing({
                 <div className="flex items-center gap-2">
                   {activeCount > 0 && (
                     <Link
-                      href={url({ brand: null, family: null, min: null, max: null })}
+                      href={url({ brand: null, family: null, min: null, max: null, find: null })}
                       className="rounded-full bg-rose-500/10 px-3 py-1.5 text-xs font-bold text-(--s-bad) transition hover:bg-rose-500/20"
                     >
                       Clear
@@ -188,9 +204,11 @@ export async function Listing({
                 </div>
               </div>
 
+              </div>
+
               {/* Line 1: product types · Line 2: brands */}
               {(showTypes || showBrands) && (
-                <div className="min-w-0 flex-1 space-y-2.5">
+                <div className="min-w-0 space-y-2.5 border-t border-(--s-line) pt-3.5">
                   {showTypes &&
                     chipLine(
                       <>
@@ -214,11 +232,6 @@ export async function Listing({
             </div>
           )}
           {description && <p className="mt-3 max-w-3xl text-sm text-(--s-ink-2)">{description}</p>}
-          {all.length > 0 && hi > lo && (
-            <div className="mt-4 w-full max-w-xs">
-              <PriceRange lo={lo} hi={hi} min={min || lo} max={max || hi} />
-            </div>
-          )}
 
           <div className="pt-6">
             {top}
@@ -234,7 +247,7 @@ export async function Listing({
                   {all.length ? "Try removing a filter or choosing another option." : "We are adding items to this category. Meanwhile, have a look at our other products."}
                 </p>
                 <Link
-                  href={all.length ? url({ brand: null, family: null, min: null, max: null, tab: null }) : `${base}/products`}
+                  href={all.length ? url({ brand: null, family: null, min: null, max: null, tab: null, find: null }) : `${base}/products`}
                   className="mt-5 rounded-full bg-(--s-btn) px-5 py-2.5 text-sm font-semibold text-(--s-btn-ink) hover:opacity-85"
                 >
                   {all.length ? "Clear filters" : "Browse all products"}

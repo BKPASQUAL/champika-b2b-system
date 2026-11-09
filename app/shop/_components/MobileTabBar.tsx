@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, LayoutGrid, ShoppingBag, Store, UserRound } from "lucide-react";
+import { Home, ListChecks, ShoppingBag, Store, UserRound } from "lucide-react";
 import { useShop } from "./ShopContext";
 import { activeTab } from "./Header";
 
@@ -17,7 +17,7 @@ export function MobileTabBar() {
   const items = [
     { key: "home", label: "Home", to: "/", icon: Home },
     { key: "shop", label: "Shop", to: "/products", icon: Store },
-    { key: "categories", label: "Categories", to: "/categories", icon: LayoutGrid },
+    { key: "quick", label: "Quick order", to: "/quick-order", icon: ListChecks },
     { key: "cart", label: "Cart", to: "/cart", icon: ShoppingBag },
     { key: "account", label: customer ? "Account" : "Log in", to: customer ? "/account" : "/login", icon: UserRound },
   ];

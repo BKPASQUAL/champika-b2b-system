@@ -13,8 +13,7 @@ import {
   ShieldCheck,
   ToggleRight,
   Truck,
-  Zap,
-} from "lucide-react";
+  Zap, ListChecks } from "lucide-react";
 import {
   getBanners,
   getCategoryTree,
@@ -101,6 +100,12 @@ export default async function ShopHome() {
                 className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-3 text-sm font-bold text-white shadow-[0_4px_16px_rgba(37,99,235,0.4)] transition hover:brightness-110"
               >
                 Shop now <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link
+                href={`${base}/quick-order`}
+                className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-bold text-slate-900 shadow transition hover:bg-slate-100"
+              >
+                <ListChecks className="h-4 w-4" /> Quick order
               </Link>
               <Link
                 href={`${base}/categories`}
