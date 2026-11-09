@@ -2,11 +2,16 @@
 //
 // Brands name the same item differently, e.g.
 //   "Orange 1/113 100m Blue Roll"  ≈  "Sierra 1/113mm Blue 100m Coil"
-//   "Orange 1/1.13mm Cu/PVC/PVC Wire – Brown (1/044) - 100m Coil"  ≈  "Sierra 1/113mm Brown 100m Coil"
-// So we build a "compare key" from the name: brand names and filler words are
-// removed, wire sizes are turned into one standard size (1/1.13 = 1/113 = 1/.044),
-// and what is left (size, colour, length, amps, gangs…) is sorted.
-// Products with the same key and a different brand are alternatives.
+//   "Orange Casablanca 13A S/Socket Outlet (Plug Base)"  ≈  "ACL Elegance 13A Switched Socket Black"
+// So we build a "compare key" from the name: brand / range names and filler words
+// are removed, wire sizes become one standard size (1/1.13 = 1/113 = 1/.044),
+// "plug base" = "socket", "2 gang 1 way" stays together, and what is left is sorted.
+//
+// Colour:
+//   • Wires: colour is part of the item (brown and blue wires are not the same).
+//   • Switches, sockets and other fittings: colour is a style choice, so it is
+//     not part of the key. It becomes part of the option name instead, e.g.
+//     "Akoya Black", "Akoya White", "Elegance Grey".
 
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getProducts, type ShopProductCard } from "@/lib/shop-data";
@@ -28,12 +33,17 @@ SIZE_GROUPS.forEach((g, i) => g.forEach((a) => SIZE_OF.set(searchKey(a), `size${
 /** Words that do not change what the item is. */
 const FILLER = new Set([
   "wire", "wires", "cable", "cables", "coil", "coils", "roll", "rolls", "cu", "pvc", "breaker", "mm", "sq",
-  "the", "and", "with", "of", "for", "type", "new", "pcs", "pc", "nos", "no", "unit",
+  "the", "and", "with", "of", "for", "type", "new", "pcs", "pc", "nos", "no", "unit", "outlet", "switched", "s",
+  "range", "series", "colour", "color",
 ]);
+
+/** Colour words. "gray" is shown as "Grey". */
+const COLOURS = ["black", "white", "grey", "gray", "silver", "gold", "brown", "blue", "red", "green", "yellow", "cream", "ivory", "beige", "champagne", "bronze"];
+const COLOUR_RE = new RegExp(`(^|[^a-z])(${COLOURS.join("|")})(?=[^a-z]|$)`, "g");
 
 export type BrandWords = string[];
 
-/** Brand + sub brand names, lower case, longest first (so "Orange Casablanca" goes before "Orange"). */
+/** Brand + sub brand (range) names, lower case, longest first. */
 export async function getBrandWords(): Promise<BrandWords> {
   const { data } = await supabaseAdmin.from("web_brands").select("name");
   const words = new Set<string>();
@@ -43,16 +53,22 @@ export async function getBrandWords(): Promise<BrandWords> {
     words.add(n);
     for (const w of n.split(/\s+/)) if (w.length > 2) words.add(w);
   }
-  // Common spellings of sub brands that are not always entered as brands.
+  // Common spellings of ranges that are not always entered as brands.
   ["casablanka", "casablanca"].forEach((w) => words.add(w));
   return [...words].sort((a, b) => b.length - a.length);
 }
 
-/** Compare key for a product name, or null when there is too little to match on. */
-export function compareKey(name: string, brandWords: BrandWords): string | null {
+const escapeRe = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const wordRe = (w: string, flags: string) => new RegExp(`(^|[^a-z0-9])${escapeRe(w)}(?=[^a-z0-9]|$)`, flags);
+
+type Parsed = { key: string | null; colour: string | null; isWire: boolean };
+
+/** Compare key + colour for a product name. */
+export function parseItem(name: string, brandWords: BrandWords): Parsed {
   let s = ` ${name.toLowerCase()} `;
-  // Wire sizes → standard token. "1/1.13mm", "1/113", "(1/044)", "7/0.53mm²"…
   const tokens: string[] = [];
+
+  // Wire sizes → standard token. "1/1.13mm", "1/113", "(1/044)", "7/0.53mm²"…
   s = s.replace(/(\d+)\s*\/\s*(\.?\d+(?:\.\d+)?)\s*(?:mm²|mm2|mm)?/g, (_m, a: string, b: string) => {
     const k = searchKey(`${a}/${b}`);
     tokens.push(SIZE_OF.get(k) || `size:${k}`);
@@ -63,7 +79,26 @@ export function compareKey(name: string, brandWords: BrandWords): string | null 
     tokens.push(`mm:${a}`);
     return " ";
   });
-  for (const w of brandWords) s = s.replace(new RegExp(`(^|[^a-z0-9])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=[^a-z0-9]|$)`, "g"), "$1 ");
+  const isWire = tokens.length > 0 || /\b(wire|cable|coil|flexible|twin|earth)\b/.test(s);
+
+  // Same item, different words.
+  s = s
+    .replace(/plug\s*base/g, " socket ")
+    .replace(/plug\s*top/g, " plugtop ")
+    .replace(/s\s*\/\s*socket/g, " socket ")
+    .replace(/sockets?/g, " socket ")
+    .replace(/(\d+)\s*(gang|way|pole|core|amp|a)(?![a-z])/g, " $1$2 ");
+
+  // Colour: part of the item for wires, an option for fittings.
+  let colour: string | null = null;
+  if (!isWire) {
+    s = s.replace(COLOUR_RE, (_m, pre: string, c: string) => {
+      colour ??= c === "gray" ? "grey" : c;
+      return `${pre} `;
+    });
+  }
+
+  for (const w of brandWords) s = s.replace(wordRe(w, "g"), "$1 ");
   for (const raw of s.split(/[^a-z0-9.]+/)) {
     const t = raw.replace(/^\.+|\.+$/g, "");
     if (!t || FILLER.has(t)) continue;
@@ -71,21 +106,44 @@ export function compareKey(name: string, brandWords: BrandWords): string | null 
   }
   const uniq = [...new Set(tokens)].sort();
   // Need at least two things to match on (e.g. size + length), so we never group everything.
-  if (uniq.length < 2) return null;
-  return uniq.join(" ");
+  return { key: uniq.length < 2 ? null : uniq.join(" "), colour, isWire };
 }
 
-/** Name to show for a product's brand: the sub brand (Ruhunu, Wireman…) when it has one. */
-async function brandLabels(): Promise<Map<string, string>> {
-  const { data } = await supabaseAdmin.from("web_brands").select("id, name");
-  return new Map((data || []).map((b: any) => [b.id as string, b.name as string]));
+/** Compare key only (kept for older callers). */
+export function compareKey(name: string, brandWords: BrandWords): string | null {
+  return parseItem(name, brandWords).key;
+}
+
+type BrandInfo = { name: string; parentId: string | null };
+async function brandInfo(): Promise<Map<string, BrandInfo>> {
+  const { data } = await supabaseAdmin.from("web_brands").select("id, name, parent_id");
+  return new Map((data || []).map((b: any) => [b.id as string, { name: b.name as string, parentId: b.parent_id as string | null }]));
+}
+
+const title = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/**
+ * How one option is named in comparisons:
+ *   label = range (sub brand) or brand, plus colour for fittings → "Akoya Black"
+ *   maker = the main brand → "Orange"
+ */
+function optionOf(p: ShopProductCard, brands: Map<string, BrandInfo>, parsed: Parsed) {
+  const sub = p.subBrandId ? brands.get(p.subBrandId) : undefined;
+  const main = p.brandId ? brands.get(p.brandId) : undefined;
+  const maker = main?.name || (sub?.parentId ? brands.get(sub.parentId)?.name : undefined) || p.brand || p.name.split(" ")[0];
+  const base = sub?.name || maker;
+  const label = parsed.colour ? `${base} ${title(parsed.colour)}` : base;
+  return { label, maker };
 }
 
 export type Alternative = {
   id: string;
   slug: string;
   name: string;
+  /** Option name, e.g. "Sierra" or "Akoya Black". */
   brand: string;
+  /** Main brand, e.g. "Orange". */
+  maker: string;
   image: string | null;
   mrp: number;
   price: number;
@@ -93,47 +151,47 @@ export type Alternative = {
   available: boolean;
 };
 
-const brandOf = (p: ShopProductCard, labels: Map<string, string>) =>
-  (p.subBrandId && labels.get(p.subBrandId)) || (p.brandId && labels.get(p.brandId)) || p.brand || p.name.split(" ")[0];
+type Ctx = { all: ShopProductCard[]; words: BrandWords; brands: Map<string, BrandInfo> };
+async function loadCtx(pool?: ShopProductCard[]): Promise<Ctx> {
+  const [all, words, brands] = await Promise.all([pool ? Promise.resolve(pool) : getProducts(), getBrandWords(), brandInfo()]);
+  return { all, words, brands };
+}
 
-/**
- * For each of `ids`, the same item from other brands (cheapest first).
- * Prices are the visitor's prices (normal or trade).
- */
-export async function getAlternatives(ids: string[], pool?: ShopProductCard[]): Promise<Record<string, Alternative[]>> {
-  if (!ids.length) return {};
-  const [all, words, labels] = await Promise.all([pool ? Promise.resolve(pool) : getProducts(), getBrandWords(), brandLabels()]);
+function alternativesWith(ctx: Ctx, ids: string[]): Record<string, Alternative[]> {
+  const parsed = new Map<string, Parsed>();
   const groups = new Map<string, ShopProductCard[]>();
-  const keyOf = new Map<string, string>();
-  for (const p of all) {
-    const k = compareKey(p.name, words);
-    if (!k) continue;
-    keyOf.set(p.id, k);
-    groups.set(k, [...(groups.get(k) || []), p]);
+  for (const p of ctx.all) {
+    const it = parseItem(p.name, ctx.words);
+    parsed.set(p.id, it);
+    if (!it.key) continue;
+    groups.set(it.key, [...(groups.get(it.key) || []), p]);
   }
   const out: Record<string, Alternative[]> = {};
   for (const id of ids) {
-    const k = keyOf.get(id);
-    const me = all.find((p) => p.id === id);
-    if (!k || !me) continue;
-    const myBrand = brandOf(me, labels).toLowerCase();
+    const me = ctx.all.find((p) => p.id === id);
+    const key = me && parsed.get(id)?.key;
+    if (!me || !key) continue;
+    const mine = optionOf(me, ctx.brands, parsed.get(id)!).label.toLowerCase();
     const seen = new Set<string>();
-    const others = (groups.get(k) || [])
-      .filter((p) => p.id !== id && brandOf(p, labels).toLowerCase() !== myBrand)
-      .sort((a, b) => Number(b.available) - Number(a.available) || a.price - b.price)
-      .filter((p) => {
-        // One option per brand (its cheapest).
-        const b = brandOf(p, labels).toLowerCase();
-        if (seen.has(b)) return false;
-        seen.add(b);
+    const others = (groups.get(key) || [])
+      .filter((p) => p.id !== id)
+      .map((p) => ({ p, opt: optionOf(p, ctx.brands, parsed.get(p.id)!) }))
+      .filter(({ opt }) => opt.label.toLowerCase() !== mine)
+      .sort((a, b) => Number(b.p.available) - Number(a.p.available) || a.p.price - b.p.price)
+      .filter(({ opt }) => {
+        // One product per option (its cheapest).
+        const k = opt.label.toLowerCase();
+        if (seen.has(k)) return false;
+        seen.add(k);
         return true;
       });
     if (others.length)
-      out[id] = others.map((p) => ({
+      out[id] = others.map(({ p, opt }) => ({
         id: p.id,
         slug: p.slug,
         name: p.name,
-        brand: brandOf(p, labels),
+        brand: opt.label,
+        maker: opt.maker,
         image: p.image,
         mrp: p.mrp,
         price: p.price,
@@ -144,14 +202,24 @@ export async function getAlternatives(ids: string[], pool?: ShopProductCard[]): 
   return out;
 }
 
-/** Brand label for one product (used to show "This item" in the compare table). */
+/**
+ * For each of `ids`, the same item from other brands / ranges / colours
+ * (cheapest first). Prices are the visitor's prices (normal or trade).
+ */
+export async function getAlternatives(ids: string[], pool?: ShopProductCard[]): Promise<Record<string, Alternative[]>> {
+  if (!ids.length) return {};
+  return alternativesWith(await loadCtx(pool), ids);
+}
+
+/** Option name for one product (shown as "This item" in the product page table). */
 export async function brandLabelFor(p: ShopProductCard) {
-  return brandOf(p, await brandLabels());
+  const [words, brands] = await Promise.all([getBrandWords(), brandInfo()]);
+  return optionOf(p, brands, parseItem(p.name, words)).label;
 }
 
 // ---------------------------------------------------------------- brand table
 
-export type CompareCell = { id: string; name: string; price: number; mrp: number; available: boolean };
+export type CompareCell = { id: string; name: string; maker: string; price: number; mrp: number; available: boolean };
 export type CompareRow = {
   /** Cart item this row is for. */
   cartId: string;
@@ -160,8 +228,10 @@ export type CompareRow = {
   /** Picture of the cart item. */
   image: string | null;
   qty: number;
+  /** Type of item (the sub category), e.g. "Cables & Wires" or "Switches & Sockets". */
+  group: string;
   cartBrand: string;
-  /** Brand name → that brand's version of this item (missing = brand does not have it). */
+  /** Option name → that option's version of this item (missing = it does not have it). */
   cells: Record<string, CompareCell>;
 };
 export type CompareTable = { brands: string[]; rows: CompareRow[] };
@@ -169,29 +239,32 @@ export type CompareTable = { brands: string[]; rows: CompareRow[] };
 /** Remove brand names from a product name and tidy it. */
 function withoutBrand(name: string, words: BrandWords) {
   let s = ` ${name} `;
-  for (const w of words) s = s.replace(new RegExp(`(^|[^a-z0-9])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=[^a-z0-9]|$)`, "gi"), "$1 ");
+  for (const w of words) s = s.replace(wordRe(w, "gi"), "$1 ");
   s = s.replace(/\s+/g, " ").replace(/^[\s\-–]+|[\s\-–]+$/g, "").trim();
   return s || name;
 }
 
 /**
- * Cart items as rows and brands as columns: each cell is that brand's price for
- * the same item. Brands with the most items come first.
+ * Cart items as rows and options (brand / range / colour) as columns: each cell
+ * is that option's price for the same item.
  */
 export async function getCompareTable(items: { id: string; qty: number }[]): Promise<CompareTable> {
-  const [all, words, labels] = await Promise.all([getProducts(), getBrandWords(), brandLabels()]);
-  const byId = new Map(all.map((p) => [p.id, p]));
+  const [ctx, cats] = await Promise.all([loadCtx(), supabaseAdmin.from("web_categories").select("id, name")]);
+  const catName = new Map((cats.data || []).map((c: any) => [c.id as string, c.name as string]));
+  const byId = new Map(ctx.all.map((p) => [p.id, p]));
   const cartItems = items.filter((i) => byId.has(i.id));
-  const alts = await getAlternatives(cartItems.map((i) => i.id), all);
+  const alts = alternativesWith(ctx, cartItems.map((i) => i.id));
 
   const rows: CompareRow[] = cartItems.map((i) => {
     const p = byId.get(i.id)!;
-    const myBrand = brandOf(p, labels);
+    const mine = optionOf(p, ctx.brands, parseItem(p.name, ctx.words));
     const cells: Record<string, CompareCell> = {
-      [myBrand]: { id: p.id, name: p.name, price: p.price, mrp: p.mrp, available: p.available },
+      [mine.label]: { id: p.id, name: p.name, maker: mine.maker, price: p.price, mrp: p.mrp, available: p.available },
     };
-    for (const o of alts[p.id] || []) cells[o.brand] ??= { id: o.id, name: o.name, price: o.price, mrp: o.mrp, available: o.available };
-    return { cartId: p.id, label: withoutBrand(p.name, words), image: p.image, qty: i.qty, cartBrand: myBrand, cells };
+    for (const o of alts[p.id] || [])
+      cells[o.brand] ??= { id: o.id, name: o.name, maker: o.maker, price: o.price, mrp: o.mrp, available: o.available };
+    const group = catName.get(p.categoryIds[1] || "") || catName.get(p.categoryIds[0] || "") || "Other items";
+    return { cartId: p.id, label: withoutBrand(p.name, ctx.words), image: p.image, qty: i.qty, group, cartBrand: mine.label, cells };
   });
 
   const count = new Map<string, number>();

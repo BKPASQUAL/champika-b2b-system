@@ -6,29 +6,81 @@ import { Check, Minus, Phone, Plus, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
 import { MAX_QTY, useShop } from "./ShopContext";
 
-/** Small "Add" button on product cards. */
-export function AddToCartButton({ id, name, available }: { id: string; name: string; available: boolean }) {
+/**
+ * "Add to cart" on product cards. With `withQty` it also has a − 1 + box, so the
+ * customer can pick how many before adding.
+ */
+export function AddToCartButton({ id, name, available, withQty }: { id: string; name: string; available: boolean; withQty?: boolean }) {
   const { add, store } = useShop();
   const [done, setDone] = useState(false);
+  const [qty, setQty] = useState(1);
+  const clamp = (n: number) => Math.max(1, Math.min(MAX_QTY, Math.floor(n) || 1));
   if (!available) return <ContactToOrder phone={store.phone} />;
-  return (
+  const button = (
     <button
       onClick={(e) => {
         e.preventDefault();
-        add(id, 1);
+        const n = withQty ? qty : 1;
+        add(id, n);
         setDone(true);
-        toast.success("Added to cart", { description: name });
-        setTimeout(() => setDone(false), 1200);
+        toast.success(n > 1 ? `${n} added to cart` : "Added to cart", { description: name });
+        setTimeout(() => {
+          setDone(false);
+          setQty(1);
+        }, 1200);
       }}
-      className={`flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-xl text-[13px] font-semibold transition duration-200 active:scale-[0.98] ${
+      className={`flex h-10 w-full min-w-0 cursor-pointer items-center justify-center gap-1.5 rounded-xl text-[13px] font-semibold transition duration-200 active:scale-[0.98] ${
         done
           ? "bg-emerald-600 text-white shadow-[0_3px_12px_-2px_rgba(22,163,74,0.45)]"
           : "bg-(--s-btn) text-(--s-btn-ink) shadow-[0_3px_10px_-2px_rgba(15,23,42,0.25)] hover:bg-gradient-to-r hover:from-blue-600 hover:to-blue-500 hover:text-white hover:shadow-[0_4px_14px_-2px_rgba(37,99,235,0.45)]"
       }`}
     >
-      {done ? <Check className="h-4 w-4 stroke-[2.5]" /> : <ShoppingCart className="h-3.5 w-3.5" />}
-      {done ? "Added" : "Add to cart"}
+      {done ? <Check className="h-4 w-4 shrink-0 stroke-[2.5]" /> : <ShoppingCart className="h-3.5 w-3.5 shrink-0" />}
+      {done ? (
+        "Added"
+      ) : withQty ? (
+        <span className="truncate">
+          Add<span className="hidden @[230px]:inline"> to cart</span>
+        </span>
+      ) : (
+        "Add to cart"
+      )}
     </button>
+  );
+  if (!withQty) return button;
+
+  // − qty + box and the Add button side by side (the text shortens to "Add" on narrow cards).
+  return (
+    <div className="@container flex items-center gap-2">
+      <div className="flex h-10 shrink-0 items-center rounded-xl border border-(--s-line) bg-(--s-surface)">
+        <button
+          type="button"
+          aria-label="Less"
+          onClick={() => setQty((q) => clamp(q - 1))}
+          disabled={qty <= 1}
+          className="flex h-full w-8 cursor-pointer items-center justify-center rounded-l-xl text-(--s-ink-2) hover:bg-(--s-soft) disabled:cursor-default disabled:opacity-35"
+        >
+          <Minus className="h-3.5 w-3.5" />
+        </button>
+        <input
+          aria-label="Quantity"
+          inputMode="numeric"
+          value={qty}
+          onFocus={(e) => e.target.select()}
+          onChange={(e) => setQty(clamp(Number(e.target.value.replace(/\D/g, ""))))}
+          className="h-full w-9 bg-transparent text-center text-sm font-bold text-(--s-ink) outline-none"
+        />
+        <button
+          type="button"
+          aria-label="More"
+          onClick={() => setQty((q) => clamp(q + 1))}
+          className="flex h-full w-8 cursor-pointer items-center justify-center rounded-r-xl text-(--s-ink-2) hover:bg-(--s-soft)"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      <div className="min-w-0 flex-1">{button}</div>
+    </div>
   );
 }
 

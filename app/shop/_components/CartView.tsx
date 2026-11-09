@@ -100,7 +100,7 @@ export function CartView() {
   const toFree = data && data.freeDeliveryOver > 0 && data.deliveryFee > 0 ? data.freeDeliveryOver - data.subtotal : 0;
 
   return (
-    <div className="mx-auto max-w-[1800px] px-4 md:px-6 xl:px-10 py-8">
+    <div className="mx-auto px-4 md:px-6 xl:px-10 py-8">
       <h1 className="mb-5 text-2xl font-bold text-(--s-ink) md:text-[28px]">Your cart</h1>
       {error && <div className="mb-4 rounded-lg border border-(--s-bad) px-4 py-3 text-sm text-(--s-bad)">{error}</div>}
 

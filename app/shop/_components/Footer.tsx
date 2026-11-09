@@ -10,7 +10,7 @@ export function Footer({ store, categories, base }: { store: StoreInfo; categori
   return (
     <footer className="mt-20 bg-(--s-bar) text-slate-400">
       <div className="border-b border-(--s-bar-line)">
-        <div className="mx-auto grid max-w-[1800px] grid-cols-1 gap-6 px-4 md:px-6 xl:px-10 py-8 sm:grid-cols-3">
+        <div className="mx-auto grid grid-cols-1 gap-6 px-4 md:px-6 xl:px-10 py-8 sm:grid-cols-3">
           {[
             { icon: ShieldCheck, title: "Genuine brands", text: "Only original products from trusted makers" },
             { icon: Truck, title: "Galle area delivery", text: "Fast doorstep delivery across Galle & suburbs" },
@@ -29,7 +29,7 @@ export function Footer({ store, categories, base }: { store: StoreInfo; categori
         </div>
       </div>
 
-      <div className="mx-auto grid max-w-[1800px] grid-cols-1 gap-10 px-4 md:px-6 xl:px-10 py-12 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mx-auto grid grid-cols-1 gap-10 px-4 md:px-6 xl:px-10 py-12 sm:grid-cols-2 lg:grid-cols-4">
         <div className="lg:col-span-2">
           <div className="flex items-center gap-2.5">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-[0_2px_10px_rgba(37,99,235,0.4)]">

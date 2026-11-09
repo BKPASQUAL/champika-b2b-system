@@ -111,7 +111,7 @@ export function LoginForm({ next, initialError, initialMode }: { next: string; i
   };
 
   return (
-    <div className="mx-auto flex max-w-[1800px] justify-center px-4 py-10 md:py-16">
+    <div className="mx-auto flex justify-center px-4 py-10 md:py-16">
       <div className={`w-full max-w-md p-6 sm:p-8 ${cardCls}`}>
         {sentTo ? (
           <div className="text-center">

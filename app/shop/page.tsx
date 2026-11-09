@@ -46,7 +46,7 @@ function getCategoryIcon(name: string) {
 const BADGE_BG = { red: "bg-red-600", orange: "bg-orange-500", green: "bg-emerald-600", blue: "bg-blue-600" } as const;
 const BADGE_RING = { red: "ring-red-500", orange: "ring-orange-400", green: "ring-emerald-500", blue: "ring-blue-500" } as const;
 
-const wrap = "mx-auto max-w-[1800px] px-4 md:px-6 xl:px-10";
+const wrap = "mx-auto px-4 md:px-6 xl:px-10";
 
 export default async function ShopHome() {
   const [base, tree, banners, all, brands, store, promos] = await Promise.all([

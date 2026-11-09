@@ -17,7 +17,7 @@ export function BannerSlider({ banners }: { banners: Banner[] }) {
   }, [n]);
 
   return (
-    <section className="relative mx-auto max-w-[1800px] overflow-hidden sm:px-6 xl:px-10">
+    <section className="relative mx-auto overflow-hidden sm:px-6 xl:px-10">
       <div className="relative aspect-[16/7] overflow-hidden bg-(--s-soft) sm:rounded-3xl md:aspect-[16/5]">
         {banners.map((b, idx) => {
           const img = (

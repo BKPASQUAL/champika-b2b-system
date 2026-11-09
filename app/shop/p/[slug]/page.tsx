@@ -81,7 +81,7 @@ export default async function ProductPage({ params }: Props) {
   ];
 
   return (
-    <div className="mx-auto max-w-[1800px] px-4 py-6 md:px-6 md:py-8 xl:px-10">
+    <div className="mx-auto px-4 py-6 md:px-6 md:py-8 xl:px-10">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
 
       <nav className="mb-5 flex flex-wrap items-center gap-1 text-xs text-(--s-muted)">

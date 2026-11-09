@@ -61,7 +61,7 @@ export function ProductCard({ p, base }: { p: ShopProductCard; base: string }) {
         </div>
 
         <div className="mt-auto pt-3">
-          <AddToCartButton id={p.id} name={p.name} available={p.available} />
+          <AddToCartButton id={p.id} name={p.name} available={p.available} withQty />
         </div>
       </div>
     </div>

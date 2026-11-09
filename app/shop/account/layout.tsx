@@ -12,7 +12,7 @@ export default async function AccountLayout({ children }: { children: React.Reac
   if (!customer) redirect(`${base}/login?next=${encodeURIComponent("/account")}`);
 
   return (
-    <div className="mx-auto max-w-[1800px] px-4 py-6 md:px-6 md:py-8 xl:px-10">
+    <div className="mx-auto px-4 py-6 md:px-6 md:py-8 xl:px-10">
       <div className="mb-6 flex items-center gap-4">
         <span className="flex h-12 w-12 items-center justify-center rounded-full bg-(--s-accent) text-lg font-bold text-(--s-accent-ink)">
           {(customer.full_name || customer.email || "?").trim().charAt(0).toUpperCase()}

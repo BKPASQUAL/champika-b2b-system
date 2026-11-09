@@ -130,7 +130,7 @@ export function CheckoutForm({ defaults, email, bankReady }: { defaults: Form; e
   ];
 
   return (
-    <div className="mx-auto max-w-[1800px] px-4 py-6 md:px-6 md:py-8 xl:px-10">
+    <div className="mx-auto px-4 py-6 md:px-6 md:py-8 xl:px-10">
       <Link href={href("/cart")} className="mb-4 inline-flex items-center gap-1 text-sm text-(--s-muted) hover:text-(--s-ink)">
         <ChevronLeft className="h-4 w-4" /> Back to cart
       </Link>

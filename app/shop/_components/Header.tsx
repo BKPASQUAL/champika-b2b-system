@@ -96,7 +96,7 @@ export function Header({ categories }: { categories: NavCategory[] }) {
     <header className="sticky top-0 z-40 bg-(--s-bar) text-white shadow-[0_1px_0_var(--s-bar-line),0_4px_20px_-4px_rgba(15,23,42,0.3)]">
       {/* Thin top bar (desktop): categories on the left, quick links on the right */}
       <div className="hidden border-b border-white/[0.06] bg-black/30 md:block">
-        <div className="mx-auto flex h-9 max-w-[1800px] items-center gap-6 px-4 text-[12px] font-bold uppercase tracking-wide md:px-6 xl:px-10">
+        <div className="mx-auto flex h-9 items-center gap-6 px-4 text-[12px] font-bold uppercase tracking-wide md:px-6 xl:px-10">
           <button
             onClick={() => setMegaOpen((o) => !o)}
             onMouseEnter={openMega}
@@ -156,7 +156,7 @@ export function Header({ categories }: { categories: NavCategory[] }) {
           ))}
         </div>
 
-        <div className="relative mx-auto flex h-16 max-w-[1800px] items-center gap-2 px-4 md:h-[72px] md:px-6 xl:px-10">
+        <div className="relative mx-auto flex h-16 items-center gap-2 px-4 md:h-[72px] md:px-6 xl:px-10">
           {/* Logo */}
           <Link href={href("/")} className="group mr-2 flex shrink-0 items-center gap-2.5 xl:mr-6">
             <span className="flex h-9 w-11 -skew-x-12 items-center justify-center rounded-md bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-[0_2px_12px_rgba(37,99,235,0.5)] transition group-hover:scale-105">
@@ -233,7 +233,7 @@ export function Header({ categories }: { categories: NavCategory[] }) {
           onMouseEnter={openMega}
           onMouseLeave={closeMega}
         >
-          <div className="mx-auto max-w-[1800px] px-4 md:px-6 xl:px-10 py-6">
+          <div className="mx-auto px-4 md:px-6 xl:px-10 py-6">
             {categories.map((c) => (
               <div key={c.slug} className="mb-4 last:mb-0">
                 <div className="mb-3 flex items-center justify-between">

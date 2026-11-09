@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { useShop } from "./ShopContext";
 
 /** "Buying a lot? Ask for a quotation" — sends the whole cart to the office for a better price. */
-export function QuoteFromCart({ disabled }: { disabled?: boolean }) {
+export function QuoteFromCart({ disabled, compact }: { disabled?: boolean; /** Short one-line button ("Ask for a quotation"). */ compact?: boolean }) {
   const { cart, customer, href, clear } = useShop();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -39,10 +39,12 @@ export function QuoteFromCart({ disabled }: { disabled?: boolean }) {
       type="button"
       onClick={send}
       disabled={busy || disabled}
-      className="flex w-full items-center justify-center gap-2 rounded-full border border-(--s-line) py-3 text-sm font-semibold text-(--s-ink) transition hover:border-(--s-ink) disabled:opacity-50"
+      className={`flex w-full items-center justify-center gap-2 rounded-full border border-(--s-line) text-sm font-semibold text-(--s-ink) transition hover:border-(--s-ink) disabled:opacity-50 ${
+        compact ? "h-11 whitespace-nowrap px-5" : "py-3"
+      }`}
     >
-      {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardList className="h-4 w-4" />}
-      Buying a lot? Ask for a quotation
+      {busy ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> : <ClipboardList className="h-4 w-4 shrink-0" />}
+      {compact ? "Ask for a quotation" : "Buying a lot? Ask for a quotation"}
     </button>
   );
 }

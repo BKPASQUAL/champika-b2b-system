@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 export default async function CategoriesPage() {
   const [tree, base] = await Promise.all([getCategoryTree(), getShopBase()]);
   return (
-    <div className="mx-auto max-w-[1800px] px-4 md:px-6 xl:px-10 py-8">
+    <div className="mx-auto px-4 md:px-6 xl:px-10 py-8">
       <nav className="mb-3 flex items-center gap-1 text-xs text-(--s-muted)">
         <Link href={base || "/"} className="hover:text-(--s-ink)">Home</Link>
         <ChevronRight className="h-3 w-3" />

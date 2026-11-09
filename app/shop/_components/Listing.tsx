@@ -119,7 +119,7 @@ export async function Listing({
   const sortLabel = SORT_OPTIONS.find((o) => o.key === sort)?.label;
 
   return (
-    <div className="mx-auto max-w-[1800px] px-4 md:px-6 xl:px-10 py-6 lg:py-8">
+    <div className="mx-auto px-4 md:px-6 xl:px-10 py-6 lg:py-8">
       <nav aria-label="Breadcrumb" className="mb-5 flex flex-wrap items-center gap-1.5 text-xs font-medium text-(--s-muted)">
         <Link href={base || "/"} className="transition hover:text-(--s-ink)">Home</Link>
         {crumbs.map((c) => (

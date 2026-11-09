@@ -7,6 +7,8 @@ import {
   ArrowUp,
   ArrowUpDown,
   Check,
+  ChevronLeft,
+  ChevronRight,
   ExternalLink,
   ImageOff,
   ListChecks,
@@ -144,6 +146,23 @@ export function QuickOrder({
     return copy;
   }, [items, q, cat, brandId, sort]);
 
+  // ---- Pages: 12 items at a time (customer can pick 24 / 48).
+  const [perPage, setPerPage] = useState(12);
+  const [page, setPage] = useState(1);
+  const tableBox = useRef<HTMLDivElement>(null);
+  const pages = Math.max(1, Math.ceil(filtered.length / perPage));
+  const current = Math.min(page, pages);
+  const pageItems = filtered.slice((current - 1) * perPage, current * perPage);
+  const from = filtered.length ? (current - 1) * perPage + 1 : 0;
+  const to = Math.min(current * perPage, filtered.length);
+  // New search / filter / sort → back to page 1.
+  useEffect(() => setPage(1), [q, cat, brandId, sort, perPage]);
+  const goTo = (p: number) => {
+    setPage(Math.min(Math.max(1, p), pages));
+    // Bring the top of the table into view.
+    tableBox.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  };
+
   // Price the list from the server whenever it changes.
   useEffect(() => {
     if (!ready) return;
@@ -204,7 +223,7 @@ export function QuickOrder({
   const lines = list?.lines || [];
 
   return (
-    <div className="mx-auto max-w-[1800px] px-4 py-6 md:px-6 md:py-8 xl:px-10">
+    <div className="mx-auto px-4 py-6 md:px-6 md:py-8 xl:px-10">
       {/* Header banner */}
       <div className="mb-6 flex flex-col justify-between gap-4 rounded-3xl border border-(--s-line) bg-(--s-surface) p-5 shadow-[0_4px_20px_-6px_rgba(15,23,42,0.05)] sm:flex-row sm:items-center md:px-6">
         <div>
@@ -388,7 +407,7 @@ export function QuickOrder({
           {/* Items Table */}
           <div className="overflow-hidden rounded-3xl border border-(--s-line) bg-(--s-surface) shadow-[0_4px_20px_-6px_rgba(15,23,42,0.06)]">
             {filtered.length > 0 ? (
-              <div className="overflow-x-auto">
+              <div ref={tableBox} className="scroll-mt-32 overflow-x-auto">
                 <table className="w-full border-collapse text-left">
                   <thead className="hidden border-b border-(--s-line) bg-(--s-soft)/60 text-[11px] font-extrabold uppercase tracking-wider text-(--s-muted) md:table-header-group">
                     <tr>
@@ -428,7 +447,7 @@ export function QuickOrder({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-(--s-line)">
-                    {filtered.map((h) => {
+                    {pageItems.map((h) => {
                       const have = inList(h.id);
                       return (
                         <tr
@@ -620,12 +639,79 @@ export function QuickOrder({
                 )}
               </div>
             )}
+
+            {/* Pager */}
+            {filtered.length > 0 && (
+              <div className="flex flex-col items-center gap-3 border-t border-(--s-line) bg-(--s-soft)/50 px-4 py-3 sm:flex-row sm:justify-between md:px-5">
+                <div className="text-xs text-(--s-ink-2)">
+                  Showing <strong className="text-(--s-ink)">{from}–{to}</strong> of <strong className="text-(--s-ink)">{filtered.length}</strong>{" "}
+                  {filtered.length === 1 ? "item" : "items"}
+                </div>
+
+                {pages > 1 && (
+                  <nav aria-label="Pages" className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => goTo(current - 1)}
+                      disabled={current === 1}
+                      className="inline-flex h-9 cursor-pointer items-center gap-1 rounded-lg border border-(--s-line) bg-(--s-surface) px-3 text-xs font-semibold text-(--s-ink) transition hover:border-(--s-accent) disabled:cursor-default disabled:opacity-40"
+                    >
+                      <ChevronLeft className="h-4 w-4" /> Prev
+                    </button>
+                    {pageNumbers(current, pages).map((p, i) =>
+                      p === 0 ? (
+                        <span key={`gap${i}`} className="px-1 text-xs text-(--s-muted)">
+                          …
+                        </span>
+                      ) : (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => goTo(p)}
+                          aria-current={p === current ? "page" : undefined}
+                          className={`h-9 min-w-9 cursor-pointer rounded-lg px-2 text-xs font-bold transition ${
+                            p === current
+                              ? "bg-blue-600 text-white shadow-[0_2px_8px_-2px_rgba(37,99,235,0.6)]"
+                              : "border border-(--s-line) bg-(--s-surface) text-(--s-ink) hover:border-(--s-accent)"
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      ),
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => goTo(current + 1)}
+                      disabled={current === pages}
+                      className="inline-flex h-9 cursor-pointer items-center gap-1 rounded-lg border border-(--s-line) bg-(--s-surface) px-3 text-xs font-semibold text-(--s-ink) transition hover:border-(--s-accent) disabled:cursor-default disabled:opacity-40"
+                    >
+                      Next <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </nav>
+                )}
+
+                <label className="flex items-center gap-2 text-xs text-(--s-ink-2)">
+                  Items per page
+                  <select
+                    value={perPage}
+                    onChange={(e) => setPerPage(Number(e.target.value))}
+                    className="h-9 cursor-pointer rounded-lg border border-(--s-line) bg-(--s-surface) px-2 text-xs font-semibold text-(--s-ink) outline-none focus:border-(--s-accent)"
+                  >
+                    {[12, 24, 48].map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            )}
           </div>
         </div>
 
         {/* ---------- Right: my list (hidden while empty) ---------- */}
         {hasList && (
-        <aside id="my-list" className="h-fit scroll-mt-24 lg:sticky lg:top-24">
+        <aside id="my-list" className="h-fit scroll-mt-24 lg:sticky lg:top-32">
           <div className="overflow-hidden rounded-3xl border border-(--s-line) bg-(--s-surface) shadow-[0_8px_30px_-10px_rgba(15,23,42,0.08)]">
             <div className="flex items-center justify-between border-b border-(--s-line) bg-(--s-soft)/50 px-5 py-4">
               <h2 className="flex items-center gap-2 text-base font-extrabold text-(--s-ink)">
@@ -817,4 +903,17 @@ export function QuickOrder({
 function SortIcon({ active, asc }: { active: boolean; asc: boolean }) {
   if (!active) return <ArrowUpDown className="h-3 w-3 opacity-45" />;
   return asc ? <ArrowUp className="h-3 w-3 text-blue-600" /> : <ArrowDown className="h-3 w-3 text-blue-600" />;
+}
+
+/** Page buttons to show: first, last and the ones around the current page (0 = "…"). */
+function pageNumbers(current: number, pages: number): number[] {
+  if (pages <= 7) return Array.from({ length: pages }, (_, i) => i + 1);
+  const set = new Set([1, pages, current - 1, current, current + 1].filter((p) => p >= 1 && p <= pages));
+  const sorted = [...set].sort((a, b) => a - b);
+  const out: number[] = [];
+  sorted.forEach((p, i) => {
+    if (i && p - sorted[i - 1] > 1) out.push(0);
+    out.push(p);
+  });
+  return out;
 }
