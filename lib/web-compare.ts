@@ -114,10 +114,33 @@ export function compareKey(name: string, brandWords: BrandWords): string | null 
   return parseItem(name, brandWords).key;
 }
 
-type BrandInfo = { name: string; parentId: string | null };
+type BrandInfo = {
+  name: string;
+  parentId: string | null;
+  logoUrl: string | null;
+  description: string | null;
+  sortOrder: number;
+  isActive: boolean;
+};
 async function brandInfo(): Promise<Map<string, BrandInfo>> {
-  const { data } = await supabaseAdmin.from("web_brands").select("id, name, parent_id");
-  return new Map((data || []).map((b: any) => [b.id as string, { name: b.name as string, parentId: b.parent_id as string | null }]));
+  const { data } = await supabaseAdmin
+    .from("web_brands")
+    .select("id, name, parent_id, logo_url, description, sort_order, is_active")
+    .order("sort_order")
+    .order("name");
+  return new Map(
+    (data || []).map((b: any) => [
+      b.id as string,
+      {
+        name: b.name as string,
+        parentId: (b.parent_id as string | null) ?? null,
+        logoUrl: (b.logo_url as string | null) ?? null,
+        description: (b.description as string | null) ?? null,
+        sortOrder: Number(b.sort_order ?? 0),
+        isActive: b.is_active !== false,
+      },
+    ]),
+  );
 }
 
 const title = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -219,7 +242,16 @@ export async function brandLabelFor(p: ShopProductCard) {
 
 // ---------------------------------------------------------------- brand table
 
-export type CompareCell = { id: string; name: string; maker: string; price: number; mrp: number; available: boolean };
+export type CompareCell = {
+  id: string;
+  slug: string;
+  name: string;
+  maker: string;
+  image: string | null;
+  price: number;
+  mrp: number;
+  available: boolean;
+};
 export type CompareRow = {
   /** Cart item this row is for. */
   cartId: string;
@@ -234,7 +266,18 @@ export type CompareRow = {
   /** Option name → that option's version of this item (missing = it does not have it). */
   cells: Record<string, CompareCell>;
 };
-export type CompareTable = { brands: string[]; rows: CompareRow[] };
+export type CompareBrandLogo = {
+  id: string;
+  name: string;
+  parentId?: string | null;
+  /** The brand or sub-brand's own uploaded image (`web_brands.logo_url`). */
+  imageUrl?: string | null;
+  /** Effective logo URL (own `logo_url`, or parent brand's `logo_url` for sub-brands). */
+  logoUrl: string | null;
+  /** Description entered on the Brands / Sub-brands admin page (`web_brands.description`). */
+  description?: string | null;
+};
+export type CompareTable = { brands: string[]; rows: CompareRow[]; brandLogos: CompareBrandLogo[] };
 
 /** Remove brand names from a product name and tidy it. */
 function withoutBrand(name: string, words: BrandWords) {
@@ -259,10 +302,28 @@ export async function getCompareTable(items: { id: string; qty: number }[]): Pro
     const p = byId.get(i.id)!;
     const mine = optionOf(p, ctx.brands, parseItem(p.name, ctx.words));
     const cells: Record<string, CompareCell> = {
-      [mine.label]: { id: p.id, name: p.name, maker: mine.maker, price: p.price, mrp: p.mrp, available: p.available },
+      [mine.label]: {
+        id: p.id,
+        slug: p.slug,
+        name: p.name,
+        maker: mine.maker,
+        image: p.image,
+        price: p.price,
+        mrp: p.mrp,
+        available: p.available,
+      },
     };
     for (const o of alts[p.id] || [])
-      cells[o.brand] ??= { id: o.id, name: o.name, maker: o.maker, price: o.price, mrp: o.mrp, available: o.available };
+      cells[o.brand] ??= {
+        id: o.id,
+        slug: o.slug,
+        name: o.name,
+        maker: o.maker,
+        image: o.image,
+        price: o.price,
+        mrp: o.mrp,
+        available: o.available,
+      };
     const group = catName.get(p.categoryIds[1] || "") || catName.get(p.categoryIds[0] || "") || "Other items";
     return { cartId: p.id, label: withoutBrand(p.name, ctx.words), image: p.image, qty: i.qty, group, cartBrand: mine.label, cells };
   });
@@ -274,6 +335,22 @@ export async function getCompareTable(items: { id: string; qty: number }[]): Pro
       count.set(b, (count.get(b) || 0) + 1);
       total.set(b, (total.get(b) || 0) + c.price * r.qty);
     }
-  const brands = [...count.keys()].sort((a, b) => count.get(b)! - count.get(a)! || total.get(a)! - total.get(b)!);
-  return { brands, rows };
+  const brands = [...count.keys()].sort(
+    (a, b) => count.get(b)! - count.get(a)! || total.get(a)! - total.get(b)! || a.localeCompare(b),
+  );
+  const brandLogos: CompareBrandLogo[] = [];
+  for (const [id, b] of ctx.brands.entries()) {
+    if (!b.isActive) continue;
+    const parent = b.parentId ? ctx.brands.get(b.parentId) : undefined;
+    const logoUrl = b.logoUrl || parent?.logoUrl || null;
+    brandLogos.push({
+      id,
+      name: b.name,
+      parentId: b.parentId,
+      imageUrl: b.logoUrl,
+      logoUrl,
+      description: b.description || null,
+    });
+  }
+  return { brands, rows, brandLogos };
 }

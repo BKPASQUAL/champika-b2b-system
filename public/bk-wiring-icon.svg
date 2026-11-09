@@ -1,0 +1,56 @@
+<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Deep Navy to Electric Royal Blue shield background -->
+    <linearGradient id="bkw-bg" x1="4" y1="2" x2="44" y2="46" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1e3a8a" />
+      <stop offset="48%" stop-color="#1d4ed8" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <!-- Cyan-Blue rim glow -->
+    <linearGradient id="bkw-rim" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.75" />
+      <stop offset="50%" stop-color="#60a5fa" stop-opacity="0.3" />
+      <stop offset="100%" stop-color="#f97316" stop-opacity="0.65" />
+    </linearGradient>
+    <!-- Copper-Orange to Live-Coral Electric Bolt -->
+    <linearGradient id="bkw-copper-bolt" x1="17" y1="13" x2="31" y2="39" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#fb923c" />
+      <stop offset="50%" stop-color="#f97316" />
+      <stop offset="100%" stop-color="#e11d48" />
+    </linearGradient>
+  </defs>
+
+  <!-- Squircle Badge Base -->
+  <rect x="1.5" y="1.5" width="45" height="45" rx="12" fill="url(#bkw-bg)" />
+  <rect x="2.2" y="2.2" width="43.6" height="43.6" rx="11.3" stroke="url(#bkw-rim)" stroke-width="1.4" />
+
+  <!-- Subtle Electric Circuit Halo behind house -->
+  <circle cx="24" cy="24" r="14.5" stroke="#38bdf8" stroke-opacity="0.16" stroke-width="1.2" stroke-dasharray="3 3" />
+
+  <!-- House Side Walls (Electric Sky Cyan) -->
+  <path
+    d="M13.5 20.5V33C13.5 34.3807 14.6193 35.5 16 35.5H18.8M34.5 20.5V33C34.5 34.3807 33.3807 35.5 32 35.5H29.2"
+    stroke="#38bdf8"
+    stroke-width="2.5"
+    stroke-linecap="round"
+  />
+
+  <!-- Crisp White House Roofline (/\) -->
+  <path
+    d="M9.5 21.2L24 9.2L38.5 21.2"
+    stroke="#ffffff"
+    stroke-width="3.6"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <!-- Vibrant Copper-Coral Lightning Bolt (Power & Copper Wiring) -->
+  <path
+    d="M25.8 15.2L16.8 26.5H23.2L20.8 37.2L31.2 24.8H24.6L25.8 15.2Z"
+    fill="url(#bkw-copper-bolt)"
+    stroke="#ffffff"
+    stroke-width="0.9"
+    stroke-linejoin="round"
+  />
+</svg>
+

@@ -121,10 +121,14 @@ export default function WebsiteBrandsPage() {
                   <button
                     key={s.id}
                     onClick={() => setForm(toForm(s))}
-                    className="text-[11px] rounded-full border px-2 py-0.5 hover:bg-muted"
-                    title="Edit sub brand"
+                    className="inline-flex items-center gap-1.5 text-[11px] rounded-full border px-2 py-0.5 hover:bg-muted"
+                    title={s.description ? `${s.name}: ${s.description}` : "Edit sub brand (image & description)"}
                   >
-                    {s.name} <span className="text-muted-foreground">{s.productCount}</span>
+                    {s.logoUrl && (
+                      <img src={s.logoUrl} alt="" className="h-3.5 w-3.5 rounded-full object-cover border" />
+                    )}
+                    <span>{s.name}</span>
+                    <span className="text-muted-foreground">{s.productCount}</span>
                   </button>
                 ))}
                 <button
@@ -175,12 +179,25 @@ export default function WebsiteBrandsPage() {
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label>Logo</Label>
+                <Label>{form.parentId ? "Sub-brand / Range Image (shown in Compare Brands)" : "Brand Logo / Image"}</Label>
                 <ImageUploader max={1} value={form.logoUrl ? [form.logoUrl] : []} onChange={(u) => setForm({ ...form, logoUrl: u[0] ?? null })} />
               </div>
               <div className="space-y-1">
-                <Label>About the brand (shown on brand page)</Label>
-                <Textarea rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+                <Label>
+                  {form.parentId
+                    ? "About this sub-brand / range (shown when viewing range details in Compare Brands)"
+                    : "About the brand (shown on brand page & Compare Brands details)"}
+                </Label>
+                <Textarea
+                  rows={3}
+                  placeholder={
+                    form.parentId
+                      ? "e.g. Premium frameless polycarbonate switches with fire-retardant housing and 10-year warranty…"
+                      : "e.g. Leading Sri Lankan manufacturer of SLS-certified cables and electrical accessories…"
+                  }
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                />
               </div>
               <div className="grid grid-cols-3 gap-4 items-end">
                 <div className="space-y-1">

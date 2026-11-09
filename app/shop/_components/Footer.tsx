@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { Mail, MapPin, MessageCircle, Phone, ShieldCheck, Truck, Wallet, Zap } from "lucide-react";
+import { Mail, MapPin, MessageCircle, Phone, ShieldCheck, Truck, Wallet } from "lucide-react";
 import type { NavCategory } from "./Header";
 import type { StoreInfo } from "@/lib/shop-data";
 import { whatsappLink } from "./format";
+import { BrandLogo } from "./BrandLogo";
 
 export function Footer({ store, categories, base }: { store: StoreInfo; categories: NavCategory[]; base: string }) {
   const subs = categories.flatMap((c) => c.children).slice(0, 8);
@@ -31,12 +32,9 @@ export function Footer({ store, categories, base }: { store: StoreInfo; categori
 
       <div className="mx-auto grid grid-cols-1 gap-10 px-4 md:px-6 xl:px-10 py-12 sm:grid-cols-2 lg:grid-cols-4">
         <div className="lg:col-span-2">
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-[0_2px_10px_rgba(37,99,235,0.4)]">
-              <Zap className="h-5 w-5 fill-white" />
-            </span>
-            <span className="text-lg font-black uppercase tracking-tight text-white">{store.name}</span>
-          </div>
+          <Link href={base || "/"} className="group inline-flex items-center">
+            <BrandLogo name={store.name} size="sm" />
+          </Link>
           <p className="mt-4 max-w-sm text-sm leading-6">
             Everything you need to wire a house — cables, switches, sockets, breakers and boards — at fair prices, from one place.
           </p>

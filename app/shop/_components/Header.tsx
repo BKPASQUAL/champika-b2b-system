@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, LayoutGrid, Moon, Phone, Search, ShoppingBag, Sun, Truck, UserRound, X, Zap } from "lucide-react";
+import { ChevronDown, LayoutGrid, Moon, Phone, Search, ShoppingBag, Sun, Truck, UserRound, X } from "lucide-react";
 import { useShop } from "./ShopContext";
+import { BrandLogo } from "./BrandLogo";
 
 export type NavCategory = {
   name: string;
@@ -158,14 +159,8 @@ export function Header({ categories }: { categories: NavCategory[] }) {
 
         <div className="relative mx-auto flex h-16 items-center gap-2 px-4 md:h-[72px] md:px-6 xl:px-10">
           {/* Logo */}
-          <Link href={href("/")} className="group mr-2 flex shrink-0 items-center gap-2.5 xl:mr-6">
-            <span className="flex h-9 w-11 -skew-x-12 items-center justify-center rounded-md bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-[0_2px_12px_rgba(37,99,235,0.5)] transition group-hover:scale-105">
-              <Zap className="h-5 w-5 skew-x-12 fill-white" />
-            </span>
-            <span className="leading-none">
-              <span className="block text-[16px] font-black uppercase italic tracking-tight text-white">{store.name}</span>
-              <span className="mt-0.5 block text-[9px] font-bold uppercase tracking-[0.22em] text-blue-400">Wiring Store</span>
-            </span>
+          <Link href={href("/")} className="group mr-2 flex shrink-0 items-center xl:mr-6">
+            <BrandLogo name={store.name} />
           </Link>
 
           {/* Main navigation (desktop) */}
