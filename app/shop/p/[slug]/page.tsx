@@ -111,13 +111,13 @@ export default async function ProductPage({ params }: Props) {
             {p.brandInfo && (
               <Link
                 href={`${base}/b/${p.brandInfo.slug}`}
-                className="rounded-md bg-(--s-accent-soft) px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-(--s-accent) transition hover:bg-(--s-accent) hover:text-(--s-accent-ink)"
+                className="rounded-md bg-(--s-accent-soft) px-2.5 py-1 text-[12.5px] font-bold uppercase tracking-wider text-(--s-accent) transition hover:bg-(--s-accent) hover:text-(--s-accent-ink)"
               >
                 {p.brandInfo.name}
               </Link>
             )}
             {p.subBrandInfo && (
-              <Link href={`${base}/b/${p.subBrandInfo.slug}`} className="rounded-md bg-(--s-soft) px-2.5 py-1 text-[11px] font-semibold text-(--s-ink-2) hover:underline">
+              <Link href={`${base}/b/${p.subBrandInfo.slug}`} className="rounded-md bg-(--s-soft) px-2.5 py-1 text-[12.5px] font-semibold text-(--s-ink-2) hover:underline">
                 {p.subBrandInfo.name}
               </Link>
             )}
@@ -205,7 +205,7 @@ export default async function ProductPage({ params }: Props) {
                     <td className="px-5 py-3 font-bold sm:px-6">
                       {c.brand}
                       {c.id === cheapestId && (
-                        <span className="ml-2 rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-extrabold uppercase text-white">Lowest price</span>
+                        <span className="ml-2 rounded bg-emerald-600 px-1.5 py-0.5 text-[12px] font-extrabold uppercase text-white">Lowest price</span>
                       )}
                     </td>
                     <td className="max-w-[340px] px-3 py-3">
@@ -223,7 +223,7 @@ export default async function ProductPage({ params }: Props) {
                     <td className="px-3 py-3 text-right">
                       <span className="font-bold text-(--s-ink)">{rs(c.price)}</span>
                       {!c.isThis && c.price !== p.price && (
-                        <span className={`block text-[11px] font-semibold ${c.price < p.price ? "text-emerald-600 dark:text-emerald-400" : "text-(--s-muted)"}`}>
+                        <span className={`block text-[12.5px] font-semibold ${c.price < p.price ? "text-emerald-600 dark:text-emerald-400" : "text-(--s-muted)"}`}>
                           {c.price < p.price ? `${rs(p.price - c.price)} less` : `${rs(c.price - p.price)} more`}
                         </span>
                       )}

@@ -28,7 +28,7 @@ export function activeTab(pathname: string, base: string) {
 }
 
 export function Header({ categories }: { categories: NavCategory[] }) {
-  const { href, base, cartCount, ready, store, dark, toggleTheme, customer } = useShop();
+  const { href, base, cartCount, ready, store, dark, toggleTheme, customer, lang, setLang, t } = useShop();
   // This bar hydrates inside <Suspense>, after the cart has already loaded from the
   // browser. Show the count only once this component is mounted, so the first
   // render matches the server HTML.
@@ -50,8 +50,8 @@ export function Header({ categories }: { categories: NavCategory[] }) {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    const t = q.trim();
-    router.push(t ? `${href("/search")}?q=${encodeURIComponent(t)}` : href("/products"));
+    const term = q.trim();
+    router.push(term ? `${href("/search")}?q=${encodeURIComponent(term)}` : href("/products"));
   };
 
   const openMega = () => {
@@ -65,7 +65,7 @@ export function Header({ categories }: { categories: NavCategory[] }) {
   const navLink = (key: string, label: string, to: string) => (
     <Link
       href={href(to)}
-      className={`relative flex h-full items-center px-4 text-[16px] font-semibold tracking-tight transition xl:px-5 xl:text-[17px] ${
+      className={`relative flex h-full items-center whitespace-nowrap px-4 text-[16px] font-semibold tracking-tight transition xl:px-5 xl:text-[17px] ${
         tab === key ? "text-white" : "text-slate-300 hover:text-white"
       }`}
     >
@@ -81,10 +81,23 @@ export function Header({ categories }: { categories: NavCategory[] }) {
         value={q}
         onChange={(e) => setQ(e.target.value)}
         type="search"
-        placeholder="Search wires, switches… e.g. 1/113"
+        placeholder={t("Search wires, switches… e.g. 1/113")}
         className="h-10 w-full rounded-full border border-white/10 bg-white/[0.07] pl-10 pr-4 text-sm text-white placeholder:text-slate-400 outline-none transition focus:border-(--s-accent) focus:bg-slate-950 focus:ring-2 focus:ring-blue-500/25"
       />
     </form>
+  );
+
+  /** English ⇄ සිංහල. Shows the language you would switch TO. */
+  const langButton = (cls: string, short = false) => (
+    <button
+      type="button"
+      onClick={() => setLang(lang === "si" ? "en" : "si")}
+      className={cls}
+      title={lang === "si" ? "Switch to English" : "සිංහලෙන් බලන්න"}
+      aria-label={t("Language")}
+    >
+      {lang === "si" ? (short ? "EN" : "English") : short ? "සිං" : "සිංහල"}
+    </button>
   );
 
   const topLink = (label: string, to: string, active = false) => (
@@ -97,49 +110,50 @@ export function Header({ categories }: { categories: NavCategory[] }) {
     <header className="sticky top-0 z-40 bg-(--s-bar) text-white shadow-[0_1px_0_var(--s-bar-line),0_4px_20px_-4px_rgba(15,23,42,0.3)]">
       {/* Thin top bar (desktop): categories on the left, quick links on the right */}
       <div className="hidden border-b border-white/[0.06] bg-black/30 md:block">
-        <div className="mx-auto flex h-9 items-center gap-6 px-4 text-[12px] font-bold uppercase tracking-wide md:px-6 xl:px-10">
+        <div className="mx-auto flex h-9 items-center gap-6 px-4 text-[13px] font-bold uppercase tracking-wide md:px-6 xl:px-10">
           <button
             onClick={() => setMegaOpen((o) => !o)}
             onMouseEnter={openMega}
             onMouseLeave={closeMega}
-            className="flex items-center gap-1 text-[13px] normal-case text-slate-200 transition hover:text-white"
+            className="flex items-center gap-1 text-[14px] normal-case text-slate-200 transition hover:text-white"
           >
-            All categories <ChevronDown className={`h-3.5 w-3.5 transition ${megaOpen ? "rotate-180" : ""}`} />
+            {t("All categories")} <ChevronDown className={`h-3.5 w-3.5 transition ${megaOpen ? "rotate-180" : ""}`} />
           </button>
           <span className="hidden items-center gap-1.5 font-semibold normal-case text-slate-400 lg:flex">
-            <Truck className="h-3.5 w-3.5 text-emerald-400" /> Fast delivery in the Galle area
+            <Truck className="h-3.5 w-3.5 text-emerald-400" /> {t("Fast delivery in the Galle area")}
           </span>
           <nav className="ml-auto flex items-center gap-5">
-            {topLink("Quick order", "/quick-order", tab === "quick")}
-            {topLink("House quotation", "/quote", tab === "quote")}
-            {topLink("My orders", customer ? "/account/orders" : "/login")}
+            {topLink(t("Quick order"), "/quick-order", tab === "quick")}
+            {topLink(t("House quotation"), "/quote", tab === "quote")}
+            {topLink(t("My orders"), customer ? "/account/orders" : "/login")}
             {store.phone && (
               <a href={`tel:${store.phone}`} className="hidden items-center gap-1.5 text-slate-300 transition hover:text-white lg:flex">
                 <Phone className="h-3.5 w-3.5" /> {store.phone}
               </a>
             )}
             <span className="h-4 w-px bg-white/15" />
+            {langButton("rounded-full bg-white/10 px-3 py-0.5 text-[14px] font-bold normal-case tracking-normal text-white ring-1 ring-white/15 transition hover:bg-(--s-accent)")}
             <button
               onClick={toggleTheme}
               className="text-slate-300 transition hover:text-white"
               aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
-              title={dark ? "Light mode" : "Dark mode"}
+              title={dark ? t("Light mode") : t("Dark mode")}
             >
               {dark ? <Sun className="h-4 w-4 text-sky-400" /> : <Moon className="h-4 w-4" />}
             </button>
             <Link
               href={href(customer ? "/account" : "/login")}
-              className={`flex items-center gap-1.5 text-[13px] normal-case transition hover:text-white ${tab === "account" ? "text-white" : "text-slate-300"}`}
-              title={customer ? "My account" : "Log in"}
+              className={`flex items-center gap-1.5 text-[14px] normal-case transition hover:text-white ${tab === "account" ? "text-white" : "text-slate-300"}`}
+              title={customer ? t("Account") : t("Log in")}
             >
               {customer ? (
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-(--s-accent) text-[10px] font-bold text-(--s-accent-ink)">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-(--s-accent) text-[12px] font-bold text-(--s-accent-ink)">
                   {(customer.name || customer.email || "?").trim().charAt(0).toUpperCase()}
                 </span>
               ) : (
                 <UserRound className="h-4 w-4" />
               )}
-              <span className="max-w-28 truncate">{customer ? (customer.name || "Account").split(" ")[0] : "Log in"}</span>
+              <span className="max-w-28 truncate">{customer ? (customer.name || t("Account")).split(" ")[0] : t("Log in")}</span>
             </Link>
           </nav>
         </div>
@@ -165,21 +179,21 @@ export function Header({ categories }: { categories: NavCategory[] }) {
 
           {/* Main navigation (desktop) */}
           <nav className="hidden h-full items-stretch md:flex">
-            {navLink("home", "Home", "/")}
-            {navLink("shop", "Shop", "/products")}
+            {navLink("home", t("Home"), "/")}
+            {navLink("shop", t("Shop"), "/products")}
             <div className="relative flex" onMouseEnter={openMega} onMouseLeave={closeMega}>
               <button
                 onClick={() => setMegaOpen((o) => !o)}
-                className={`relative flex h-full items-center gap-1 px-4 text-[16px] font-semibold tracking-tight transition xl:px-5 xl:text-[17px] ${
+                className={`relative flex h-full items-center gap-1 whitespace-nowrap px-4 text-[16px] font-semibold tracking-tight transition xl:px-5 xl:text-[17px] ${
                   tab === "categories" || megaOpen ? "text-white" : "text-slate-300 hover:text-white"
                 }`}
               >
-                Categories <ChevronDown className={`h-4 w-4 transition ${megaOpen ? "rotate-180 text-blue-400" : ""}`} />
+                {t("Categories")} <ChevronDown className={`h-4 w-4 transition ${megaOpen ? "rotate-180 text-blue-400" : ""}`} />
                 {tab === "categories" && <span className="absolute inset-x-3 bottom-0 h-[3px] rounded-t-full bg-(--s-accent)" />}
               </button>
             </div>
-            {navLink("quick", "Quick Order", "/quick-order")}
-            <span className="hidden xl:flex">{navLink("quote", "Quotation", "/quote")}</span>
+            {navLink("quick", t("Quick Order"), "/quick-order")}
+            <span className="hidden xl:flex">{navLink("quote", t("Quotation"), "/quote")}</span>
           </nav>
 
           <div className="ml-auto hidden w-full max-w-xs lg:block xl:max-w-sm">{searchBox}</div>
@@ -192,6 +206,7 @@ export function Header({ categories }: { categories: NavCategory[] }) {
             >
               {searchOpen ? <X className="h-5 w-5" /> : <Search className="h-5 w-5" />}
             </button>
+            {langButton("rounded-full bg-white/10 px-2.5 py-1.5 text-[13px] font-bold text-white ring-1 ring-white/15 md:hidden", true)}
             <button
               onClick={toggleTheme}
               className="rounded-full p-2.5 text-slate-300 transition hover:bg-white/10 hover:text-white md:hidden"
@@ -207,9 +222,9 @@ export function Header({ categories }: { categories: NavCategory[] }) {
                   : "bg-white text-slate-900 shadow-sm hover:bg-blue-600 hover:text-white"
               }`}
             >
-              <ShoppingBag className="h-4 w-4" /> Cart
+              <ShoppingBag className="h-4 w-4" /> {t("Cart")}
               {mounted && ready && cartCount > 0 && (
-                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1 text-[11px] font-bold text-white">
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1 text-[12.5px] font-bold text-white">
                   {cartCount > 99 ? "99+" : cartCount}
                 </span>
               )}
@@ -236,7 +251,7 @@ export function Header({ categories }: { categories: NavCategory[] }) {
                     {c.name}
                   </Link>
                   <Link href={href("/categories")} className="text-xs font-semibold underline-offset-4 hover:underline">
-                    View all categories →
+                    {t("View all categories →")}
                   </Link>
                 </div>
                 <div className="grid grid-cols-3 gap-2 lg:grid-cols-6">
@@ -255,8 +270,8 @@ export function Header({ categories }: { categories: NavCategory[] }) {
                         )}
                       </span>
                       <span className="min-w-0">
-                        <span className="line-clamp-2 text-[13px] font-semibold leading-tight group-hover:text-blue-600 dark:group-hover:text-blue-400">{s.name}</span>
-                        <span className="text-[11px] text-(--s-muted)">{s.count ? `${s.count} ${s.count === 1 ? "item" : "items"}` : "Coming soon"}</span>
+                        <span className="line-clamp-2 text-[14px] font-semibold leading-tight group-hover:text-blue-600 dark:group-hover:text-blue-400">{s.name}</span>
+                        <span className="text-[12.5px] text-(--s-muted)">{s.count ? (s.count === 1 ? t("1 item") : t("{n} items", { n: s.count })) : t("Coming soon")}</span>
                       </span>
                     </Link>
                   ))}
@@ -265,7 +280,7 @@ export function Header({ categories }: { categories: NavCategory[] }) {
             ))}
             {store.phone && (
               <div className="mt-5 flex items-center gap-2 border-t border-(--s-line) pt-4 text-sm text-(--s-muted)">
-                <Phone className="h-4 w-4" /> Not sure what you need? Call{" "}
+                <Phone className="h-4 w-4" /> {t("Not sure what you need? Call")}{" "}
                 <a href={`tel:${store.phone}`} className="font-semibold text-(--s-ink) hover:underline">{store.phone}</a>
               </div>
             )}

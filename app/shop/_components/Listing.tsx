@@ -148,7 +148,7 @@ export async function Listing({
           <div className="sticky top-24 flex max-h-[calc(100vh-7rem)] flex-col overflow-hidden rounded-2xl border border-(--s-line) bg-(--s-surface) shadow-[0_4px_20px_-6px_rgba(15,23,42,0.06)]">
             <div className="flex items-center justify-between border-b border-(--s-line) bg-(--s-soft)/50 px-4 py-3.5">
               <span className="text-xs font-bold uppercase tracking-wider text-(--s-ink-2)">Categories</span>
-              <span className="rounded-full bg-(--s-surface) px-2 py-0.5 text-[11px] font-bold text-(--s-muted) ring-1 ring-(--s-line)">
+              <span className="rounded-full bg-(--s-surface) px-2 py-0.5 text-[12.5px] font-bold text-(--s-muted) ring-1 ring-(--s-line)">
                 {categoryLinks.length + 1}
               </span>
             </div>
@@ -181,7 +181,7 @@ export async function Listing({
                     </Link>
                   )}
                   <details className="group relative">
-                    <summary className="flex cursor-pointer list-none items-center gap-2 rounded-full border border-(--s-line) bg-(--s-bg) px-4 py-2 text-[13px] font-semibold text-(--s-ink) transition hover:border-blue-500/40 hover:bg-(--s-soft)">
+                    <summary className="flex cursor-pointer list-none items-center gap-2 rounded-full border border-(--s-line) bg-(--s-bg) px-4 py-2 text-[14px] font-semibold text-(--s-ink) transition hover:border-blue-500/40 hover:bg-(--s-soft)">
                       <ArrowUpDown className="h-3.5 w-3.5 text-blue-600 transition group-hover:text-(--s-ink)" />
                       <span>{sortLabel}</span>
                     </summary>
@@ -267,7 +267,7 @@ function TypeChip({ href, on, label, count }: { href: string; on: boolean; label
     <Link
       href={href}
       scroll={false}
-      className={`inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-[13px] font-semibold transition ${
+      className={`inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-[14px] font-semibold transition ${
         on
           ? "bg-(--s-ink) text-(--s-bg) shadow-[0_3px_10px_-2px_rgba(15,23,42,0.3)]"
           : "bg-(--s-bg) text-(--s-ink-2) ring-1 ring-inset ring-(--s-line) hover:bg-(--s-soft) hover:text-(--s-ink) hover:ring-(--s-ink)/30"
@@ -276,7 +276,7 @@ function TypeChip({ href, on, label, count }: { href: string; on: boolean; label
       <span>{label}</span>
       {count !== undefined && (
         <span
-          className={`inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1.5 text-[11px] font-bold leading-none ${
+          className={`inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1.5 text-[12.5px] font-bold leading-none ${
             on ? "bg-blue-500 text-white" : "bg-(--s-surface) text-(--s-muted) ring-1 ring-(--s-line)"
           }`}
         >
@@ -293,7 +293,7 @@ function BrandChip({ href, on, label, logo }: { href: string; on: boolean; label
     <Link
       href={href}
       scroll={false}
-      className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-xl px-3.5 text-[13px] font-semibold transition ${
+      className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-xl px-3.5 text-[14px] font-semibold transition ${
         on
           ? "bg-gradient-to-r from-blue-600 to-blue-500 font-bold text-white shadow-[0_3px_12px_-2px_rgba(37,99,235,0.45)] ring-1 ring-inset ring-blue-400/30"
           : "bg-(--s-bg) text-(--s-ink-2) ring-1 ring-inset ring-(--s-line) hover:bg-(--s-soft) hover:text-(--s-ink) hover:ring-(--s-ink)/30"
@@ -345,10 +345,10 @@ function CategoryTile({
           <LayoutGrid className="h-4 w-4 opacity-75" />
         )}
       </span>
-      <span className={`min-w-0 flex-1 text-[13.5px] leading-snug ${on ? "font-bold text-white" : "font-semibold"}`}>{label}</span>
+      <span className={`min-w-0 flex-1 text-[14.5px] leading-snug ${on ? "font-bold text-white" : "font-semibold"}`}>{label}</span>
       {count !== undefined && count > 0 && (
         <span
-          className={`shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-bold leading-none ${
+          className={`shrink-0 rounded-full px-1.5 py-0.5 text-[12.5px] font-bold leading-none ${
             on ? "bg-white/20 text-white" : "bg-(--s-soft) text-(--s-muted) group-hover:bg-(--s-surface)"
           }`}
         >
@@ -363,7 +363,7 @@ function MiniCategory({ href, label, on }: { href: string; label: string; on: bo
   return (
     <Link
       href={href}
-      className={`shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[13px] font-semibold transition ${
+      className={`shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[14px] font-semibold transition ${
         on
           ? "bg-gradient-to-r from-blue-600 to-blue-500 font-bold text-white shadow-[0_2px_8px_-2px_rgba(37,99,235,0.4)]"
           : "bg-(--s-surface) text-(--s-ink-2) ring-1 ring-(--s-line)"

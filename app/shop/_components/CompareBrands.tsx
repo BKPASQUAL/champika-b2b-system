@@ -409,7 +409,7 @@ export function CompareBrands() {
                     <Fragment key={r.cartId}>
                       {r.group !== list[i - 1]?.group && (
                         <tr className="border-b border-(--s-line) bg-(--s-soft)">
-                          <td colSpan={5} className="px-5 py-2 text-[11px] font-bold uppercase tracking-wide text-(--s-muted)">
+                          <td colSpan={5} className="px-5 py-2 text-[12.5px] font-bold uppercase tracking-wide text-(--s-muted)">
                             {r.group}
                           </td>
                         </tr>
@@ -418,15 +418,15 @@ export function CompareBrands() {
                         <ItemCell r={r} />
                         <td className="px-4 py-3">
                           {c?.maker && c.maker !== r.cartBrand && (
-                            <div className="text-[10px] font-bold uppercase tracking-wider text-(--s-muted)">{c.maker}</div>
+                            <div className="text-[12px] font-bold uppercase tracking-wider text-(--s-muted)">{c.maker}</div>
                           )}
                           <div className="font-semibold">{r.cartBrand}</div>
                           {hasChoice ? (
-                            <a href={`#${sectionId(r.group)}`} className="text-[11px] font-semibold text-(--s-accent) hover:underline">
+                            <a href={`#${sectionId(r.group)}`} className="text-[12.5px] font-semibold text-(--s-accent) hover:underline">
                               Change
                             </a>
                           ) : (
-                            <div className="text-[11px] text-(--s-muted)">Only brand</div>
+                            <div className="text-[12.5px] text-(--s-muted)">Only brand</div>
                           )}
                         </td>
                         <td className="px-3 py-3 text-center font-semibold">{r.qty}</td>
@@ -441,7 +441,7 @@ export function CompareBrands() {
                 <tr className="bg-(--s-soft)">
                   <td colSpan={4} className="px-5 py-4">
                     <div className="text-base font-extrabold">Total</div>
-                    <div className="text-[11px] text-(--s-muted)">{itemsWord(n)} · delivery not included</div>
+                    <div className="text-[12.5px] text-(--s-muted)">{itemsWord(n)} · delivery not included</div>
                   </td>
                   <td className="px-5 py-4 text-right text-xl font-extrabold">{rs(view.cartTotal)}</td>
                 </tr>
@@ -576,7 +576,7 @@ function SectionBlock({
                 <OptionName b={b} m={m} brandLogos={brandLogos} onViewDetails={() => onViewDetails(b.name)} />
 
                 {/* Range & colour pills, with the Details button on the right */}
-                <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
+                <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[12.5px]">
                   {info.isSubBrand && (
                     <span className="rounded bg-(--s-soft) px-1.5 py-0.5 font-semibold text-(--s-ink-2)">
                       Range: <strong className="text-(--s-ink)">{info.subBrand}</strong>
@@ -595,7 +595,7 @@ function SectionBlock({
                     type="button"
                     onClick={() => onViewDetails(b.name)}
                     title={`View ${b.name} items and prices`}
-                    className="ml-auto inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-700 transition hover:bg-blue-600 hover:text-white"
+                    className="ml-auto inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[12px] font-bold text-slate-700 transition hover:bg-blue-600 hover:text-white"
                   >
                     <Eye className="h-3 w-3" /> Details
                   </button>
@@ -603,7 +603,7 @@ function SectionBlock({
 
                 {/* Brand / Sub-brand description snippet from Admin panel */}
                 {info.summaryDescription && (
-                  <p className="mt-1.5 line-clamp-2 text-[11px] leading-snug text-(--s-muted)">
+                  <p className="mt-1.5 line-clamp-2 text-[12.5px] leading-snug text-(--s-muted)">
                     {info.summaryDescription}
                   </p>
                 )}
@@ -615,14 +615,14 @@ function SectionBlock({
                   {!b.isCart && <DiffChip diff={b.total - sum.cartTotal} />}
                 </div>
                 {b.isCart ? (
-                  <span className="mt-2.5 inline-flex h-8 w-full items-center justify-center gap-1 rounded-lg bg-(--s-accent) text-[11px] font-bold text-(--s-accent-ink)">
+                  <span className="mt-2.5 inline-flex h-8 w-full items-center justify-center gap-1 rounded-lg bg-(--s-accent) text-[12.5px] font-bold text-(--s-accent-ink)">
                     <Check className="h-3.5 w-3.5" /> Selected · in your cart
                   </span>
                 ) : (
                   <button
                     onClick={() => onSwitch(b.name)}
                     title={`Switch to ${b.name}`}
-                    className="mt-2.5 h-8 w-full truncate rounded-lg bg-(--s-btn) px-2.5 text-[11px] font-semibold text-(--s-btn-ink) transition hover:bg-(--s-accent) hover:text-(--s-accent-ink)"
+                    className="mt-2.5 h-8 w-full truncate rounded-lg bg-(--s-btn) px-2.5 text-[12.5px] font-semibold text-(--s-btn-ink) transition hover:bg-(--s-accent) hover:text-(--s-accent-ink)"
                   >
                     Switch to {b.name}
                   </button>
@@ -670,7 +670,7 @@ function SectionBlock({
                 const meta = parseOptionMeta(b.name, b.maker);
                 return (
                   <th key={b.name} className="w-[190px] px-5 py-3.5 text-right">
-                    {b.maker !== b.name && <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{b.maker}</div>}
+                    {b.maker !== b.name && <div className="text-[12px] font-semibold uppercase tracking-wider text-slate-400">{b.maker}</div>}
                     <div className="flex items-center justify-end gap-1.5 text-[15px] font-bold">
                       {meta.swatch && (
                         <span
@@ -680,7 +680,7 @@ function SectionBlock({
                       )}
                       {b.name}
                     </div>
-                    <div className="mt-0.5 flex items-center justify-end gap-2 text-[11px] font-medium text-slate-400">
+                    <div className="mt-0.5 flex items-center justify-end gap-2 text-[12.5px] font-medium text-slate-400">
                       <span>{b.covered} of {itemsWord(m)}</span>
                       <button
                         type="button"
@@ -717,7 +717,7 @@ function SectionBlock({
                           {cheapest && <Check className="h-4 w-4 text-emerald-600" />}
                           {rs(cell.price * r.qty)}
                         </div>
-                        <div className="mt-0.5 flex items-center justify-end gap-1.5 text-[11px] text-(--s-muted)">
+                        <div className="mt-0.5 flex items-center justify-end gap-1.5 text-[12.5px] text-(--s-muted)">
                           {r.qty > 1 && <span>{rs(cell.price)} each</span>}
                           {r.cartBrand === b.name && <span className="rounded bg-(--s-accent-soft) px-1.5 py-px font-semibold text-(--s-accent)">in cart</span>}
                         </div>
@@ -732,7 +732,7 @@ function SectionBlock({
             <tr className="bg-(--s-soft)">
               <td className="sticky left-0 z-10 bg-(--s-soft) px-5 py-4">
                 <div className="text-base font-extrabold">Total</div>
-                <div className="text-[11px] text-(--s-muted)">{m === 1 ? "This item" : `These ${itemsWord(m)}`}</div>
+                <div className="text-[12.5px] text-(--s-muted)">{m === 1 ? "This item" : `These ${itemsWord(m)}`}</div>
               </td>
               <td />
               {tableBrands.map((b) => (
@@ -769,7 +769,7 @@ function OptionName({
           type="button"
           onClick={() => setBrandOpen(true)}
           title={`About ${b.maker}`}
-          className="inline-flex min-w-0 items-center gap-1.5 rounded-md py-0.5 pr-1 text-[10px] font-extrabold uppercase tracking-wider text-(--s-accent) hover:bg-blue-500/10"
+          className="inline-flex min-w-0 items-center gap-1.5 rounded-md py-0.5 pr-1 text-[12px] font-extrabold uppercase tracking-wider text-(--s-accent) hover:bg-blue-500/10"
         >
           {logoItem?.logoUrl && (
             // eslint-disable-next-line @next/next/no-img-element
@@ -784,7 +784,7 @@ function OptionName({
             // Inside the shop root so the shop colours apply.
             document.querySelector(".shop-root") ?? document.body,
           )}
-        <span className="shrink-0 text-[10px] font-medium text-(--s-muted)">
+        <span className="shrink-0 text-[12px] font-medium text-(--s-muted)">
           {b.covered === m ? (m === 1 ? "1/1 item" : `All ${m} items`) : `${b.covered}/${m} items`}
         </span>
       </div>
@@ -841,12 +841,12 @@ function BrandInfoPopup({ b, brandLogos, onClose }: { b: BrandSum; brandLogos: B
           </div>
           <div className="mt-1 flex flex-wrap justify-center gap-1.5">
             {info.isSubBrand && (
-              <span className="rounded-full bg-(--s-soft) px-2.5 py-0.5 text-[11px] font-bold text-(--s-ink-2) ring-1 ring-(--s-line)">
+              <span className="rounded-full bg-(--s-soft) px-2.5 py-0.5 text-[12.5px] font-bold text-(--s-ink-2) ring-1 ring-(--s-line)">
                 {info.subBrand} range
               </span>
             )}
             {info.swatch && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-(--s-soft) px-2.5 py-0.5 text-[11px] font-bold text-(--s-ink-2) ring-1 ring-(--s-line)">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-(--s-soft) px-2.5 py-0.5 text-[12.5px] font-bold text-(--s-ink-2) ring-1 ring-(--s-line)">
                 <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: info.swatch.bg, boxShadow: `0 0 0 1px ${info.swatch.ring}` }} />
                 {info.swatch.label}
               </span>
@@ -935,16 +935,16 @@ function OptionDetailModal({
           <div className="flex items-center gap-3.5">
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-md bg-blue-600/10 px-2 py-0.5 text-[11px] font-extrabold uppercase tracking-wider text-(--s-accent)">
+                <span className="rounded-md bg-blue-600/10 px-2 py-0.5 text-[12.5px] font-extrabold uppercase tracking-wider text-(--s-accent)">
                   Brand: {option.maker}
                 </span>
                 {info.isSubBrand && (
-                  <span className="rounded-md bg-(--s-surface) px-2 py-0.5 text-[11px] font-bold text-(--s-ink-2) ring-1 ring-(--s-line)">
+                  <span className="rounded-md bg-(--s-surface) px-2 py-0.5 text-[12.5px] font-bold text-(--s-ink-2) ring-1 ring-(--s-line)">
                     Sub-brand / Range: <strong className="text-(--s-ink)">{info.subBrand}</strong>
                   </span>
                 )}
                 {info.swatch && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-(--s-surface) px-2.5 py-0.5 text-[11px] font-bold text-(--s-ink) ring-1 ring-(--s-line)">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-(--s-surface) px-2.5 py-0.5 text-[12.5px] font-bold text-(--s-ink) ring-1 ring-(--s-line)">
                     <span
                       className="h-3 w-3 rounded-full"
                       style={{ backgroundColor: info.swatch.bg, boxShadow: `0 0 0 1px ${info.swatch.ring}` }}
@@ -1022,7 +1022,7 @@ function OptionDetailModal({
               )}
                 {info.rangeDescription && (
                   <div>
-                    <div className="text-[11px] font-extrabold uppercase tracking-wider text-(--s-accent)">
+                    <div className="text-[12.5px] font-extrabold uppercase tracking-wider text-(--s-accent)">
                       About {info.subBrand} Range
                     </div>
                     <p className="mt-0.5 text-sm leading-relaxed text-(--s-ink)">
@@ -1032,7 +1032,7 @@ function OptionDetailModal({
                 )}
                 {info.brandDescription && info.brandDescription !== info.rangeDescription && (
                   <div>
-                    <div className="text-[11px] font-bold uppercase tracking-wider text-(--s-muted)">
+                    <div className="text-[12.5px] font-bold uppercase tracking-wider text-(--s-muted)">
                       About {option.maker}
                     </div>
                     <p className="mt-0.5 text-xs leading-relaxed text-(--s-ink-2)">
@@ -1101,7 +1101,7 @@ function OptionDetailModal({
 
                 {/* Item details */}
                 <div className="min-w-0 flex-1">
-                  <div className="text-[11px] font-semibold uppercase tracking-wide text-(--s-muted)">
+                  <div className="text-[12.5px] font-semibold uppercase tracking-wide text-(--s-muted)">
                     Requirement: {r.label} × {r.qty}
                   </div>
                   {cell ? (
@@ -1109,7 +1109,7 @@ function OptionDetailModal({
                       <div className="mt-0.5 font-bold text-(--s-ink)">{cell.name}</div>
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
                         {discPct > 0 && (
-                          <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
+                          <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[12.5px] font-bold text-emerald-700 dark:text-emerald-300">
                             -{discPct}% OFF
                           </span>
                         )}
@@ -1223,11 +1223,11 @@ function OptionDetailModal({
 /** "Save Rs 36" / "+Rs 36" / "Same as cart" compared with the cart. */
 function DiffChip({ diff }: { diff: number }) {
   if (Math.round(diff) === 0)
-    return <span className="rounded-full bg-(--s-soft) px-2 py-0.5 text-[10px] font-semibold text-(--s-muted)">Same as cart</span>;
+    return <span className="rounded-full bg-(--s-soft) px-2 py-0.5 text-[12px] font-semibold text-(--s-muted)">Same as cart</span>;
   return diff < 0 ? (
-    <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">Save {rs(-diff)}</span>
+    <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[12px] font-bold text-emerald-700 dark:text-emerald-300">Save {rs(-diff)}</span>
   ) : (
-    <span className="rounded-full bg-(--s-soft) px-2 py-0.5 text-[10px] font-semibold text-(--s-ink-2)">+{rs(diff)}</span>
+    <span className="rounded-full bg-(--s-soft) px-2 py-0.5 text-[12px] font-semibold text-(--s-ink-2)">+{rs(diff)}</span>
   );
 }
 

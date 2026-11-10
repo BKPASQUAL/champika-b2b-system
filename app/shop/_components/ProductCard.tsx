@@ -3,6 +3,7 @@ import { ImageOff } from "lucide-react";
 import type { ShopProductCard } from "@/lib/shop-data";
 import { AddToCartButton } from "./AddToCart";
 import { rs } from "./format";
+import { Tr } from "./Tr";
 
 /**
  * Product card, read top to bottom: picture → brand → name → price & saving → button.
@@ -30,7 +31,7 @@ export function ProductCard({ p, base }: { p: ShopProductCard; base: string }) {
           </div>
         )}
         {off && (
-          <span className="absolute right-2.5 top-2.5 rounded-md bg-rose-600 px-1.5 py-0.5 text-[11px] font-bold leading-none text-white shadow-sm">
+          <span className="absolute right-2.5 top-2.5 rounded-md bg-rose-600 px-1.5 py-0.5 text-[12.5px] font-bold leading-none text-white shadow-sm">
             -{p.discountPct}%
           </span>
         )}
@@ -38,11 +39,11 @@ export function ProductCard({ p, base }: { p: ShopProductCard; base: string }) {
 
       {/* Details */}
       <div className="flex flex-1 flex-col border-t border-(--s-line) p-3.5">
-        <span className="h-4 truncate text-[11px] font-semibold uppercase tracking-wider text-(--s-muted)">{p.brand || ""}</span>
+        <span className="h-4 truncate text-[12.5px] font-semibold uppercase tracking-wider text-(--s-muted)">{p.brand || ""}</span>
         <Link
           href={href}
           title={p.name}
-          className="mt-1 line-clamp-2 min-h-10 text-[13.5px] font-medium leading-5 text-(--s-ink) transition-colors group-hover:text-(--s-accent)"
+          className="mt-1 line-clamp-2 min-h-10 text-[14.5px] font-medium leading-5 text-(--s-ink) transition-colors group-hover:text-(--s-accent)"
         >
           {p.name}
         </Link>
@@ -54,10 +55,10 @@ export function ProductCard({ p, base }: { p: ShopProductCard; base: string }) {
               {off && <span className="text-xs text-(--s-muted) line-through">{rs(p.mrp)}</span>}
             </div>
           ) : (
-            <span className="text-sm font-medium text-(--s-muted)">Ask for price</span>
+            <span className="text-sm font-medium text-(--s-muted)"><Tr k="Ask for price" /></span>
           )}
           {/* Reserved line keeps every card the same height. */}
-          <div className="h-4 text-[11.5px] font-medium text-emerald-600">{off ? `Save ${rs(p.mrp - p.price)}` : ""}</div>
+          <div className="h-4 text-[13px] font-medium text-emerald-600">{off ? <Tr k="Save {amount}" vars={{ amount: rs(p.mrp - p.price) }} /> : ""}</div>
         </div>
 
         <div className="mt-auto pt-3">

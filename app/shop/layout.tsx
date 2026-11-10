@@ -9,6 +9,8 @@ import { MobileTabBar } from "./_components/MobileTabBar";
 import { Footer } from "./_components/Footer";
 import { cookies } from "next/headers";
 import { THEME_COOKIE } from "./_components/format";
+import { LANG_COOKIE } from "./_components/i18n";
+import { WhatsAppButton } from "./_components/WhatsAppButton";
 import "./shop.css";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +40,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
     getWebCustomer().catch(() => null),
   ]);
   const dark = jar.get(THEME_COOKIE)?.value === "dark";
+  const lang = jar.get(LANG_COOKIE)?.value === "si" ? "si" : "en";
   const nav: NavCategory[] = tree.map((c) => ({
     name: c.name,
     slug: c.slug,
@@ -46,15 +49,16 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
   }));
 
   return (
-    <ShopProvider base={base} initialDark={dark} customer={me ? { name: me.full_name, email: me.email } : null} store={{ name: store.name, phone: store.phone, whatsapp: store.whatsapp }}>
+    <ShopProvider base={base} initialDark={dark} initialLang={lang} customer={me ? { name: me.full_name, email: me.email } : null} store={{ name: store.name, phone: store.phone, whatsapp: store.whatsapp }}>
       {/* "shop-dark" switches every shop colour to dark mode (see shop.css). */}
-      <div className={`shop-root flex min-h-screen flex-col pb-16 md:pb-0 ${dark ? "shop-dark" : ""}`} suppressHydrationWarning>
+      <div lang={lang} className={`shop-root flex min-h-screen flex-col pb-16 md:pb-0 ${dark ? "shop-dark" : ""} ${lang === "si" ? "shop-si" : ""}`} suppressHydrationWarning>
         <Suspense fallback={<div className="h-16 bg-(--s-bar)" />}>
           <Header categories={nav} />
         </Suspense>
         <main className="flex-1">{children}</main>
-        <Footer store={store} categories={nav} base={base} />
+        <Footer store={store} categories={nav} base={base} lang={lang} />
         <MobileTabBar />
+        <WhatsAppButton />
       </div>
     </ShopProvider>
   );

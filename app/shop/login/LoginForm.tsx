@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Eye, EyeOff, Loader2, MailCheck } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, Loader2, MailCheck, Smartphone } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 import { useShop } from "../_components/ShopContext";
 import { Field, GoogleIcon, Notice, btnDark, btnOutline, cardCls, inputCls } from "../_components/ui";
@@ -18,18 +18,19 @@ function friendly(msg: string): string {
   if (m.includes("password should be")) return "Password must be at least 6 characters.";
   if (m.includes("rate limit") || m.includes("too many")) return "Too many tries. Please wait a minute and try again.";
   if (m.includes("provider is not enabled")) return "Google login is not switched on yet. Please use email for now.";
+  if (m.includes("anonymous sign-ins are disabled")) return "Ordering without an account is not switched on yet. Please create an account, or call / WhatsApp us to order.";
   return msg;
 }
 
 export function LoginForm({ next, initialError, initialMode }: { next: string; initialError: string | null; initialMode: "login" | "signup" }) {
-  const { href, store } = useShop();
+  const { href, store, t } = useShop();
   const router = useRouter();
   const [mode, setMode] = useState<Mode>(initialMode);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
-  const [busy, setBusy] = useState<"" | "google" | "form">("");
+  const [busy, setBusy] = useState<"" | "google" | "form" | "guest">("");
   const [error, setError] = useState<string | null>(initialError);
   const [sentTo, setSentTo] = useState<{ kind: "confirm" | "reset"; email: string } | null>(null);
 
@@ -53,6 +54,22 @@ export function LoginForm({ next, initialError, initialMode }: { next: string; i
       setError(friendly(error.message));
       setBusy("");
     }
+  };
+
+  /**
+   * No email or password: a guest session for this browser. Checkout then asks
+   * for name, phone and address only. (Needs "Allow anonymous sign-ins" in Supabase.)
+   */
+  const guest = async () => {
+    setError(null);
+    setBusy("guest");
+    const { error } = await supabaseBrowser().auth.signInAnonymously();
+    if (error) {
+      setError(friendly(error.message));
+      setBusy("");
+      return;
+    }
+    await finish();
   };
 
   const submit = async (e: React.FormEvent) => {
@@ -105,9 +122,9 @@ export function LoginForm({ next, initialError, initialMode }: { next: string; i
   };
 
   const titles: Record<Mode, { title: string; sub: string }> = {
-    login: { title: "Welcome back", sub: `Log in to order from ${store.name}.` },
-    signup: { title: "Create your account", sub: "Order online and track your deliveries." },
-    forgot: { title: "Reset your password", sub: "We will email you a link to set a new password." },
+    login: { title: t("Welcome back"), sub: t("Log in to order from {name}.", { name: store.name }) },
+    signup: { title: t("Create your account"), sub: t("Order online and track your deliveries.") },
+    forgot: { title: t("Reset your password"), sub: t("We will email you a link to set a new password.") },
   };
 
   return (
@@ -139,6 +156,22 @@ export function LoginForm({ next, initialError, initialMode }: { next: string; i
             <p className="mt-1 text-sm text-(--s-muted)">{titles[mode].sub}</p>
 
             {mode !== "forgot" && (
+              <div className="mt-6 rounded-2xl border-2 border-(--s-accent)/30 bg-(--s-accent-soft)/50 p-4">
+                <div className="flex items-start gap-3">
+                  <Smartphone className="mt-0.5 h-6 w-6 shrink-0 text-(--s-accent)" />
+                  <div>
+                    <div className="font-bold text-(--s-ink)">{t("No account? Order with your phone number")}</div>
+                    <p className="mt-0.5 text-sm text-(--s-ink-2)">{t("You only need your name, phone number and address.")}</p>
+                  </div>
+                </div>
+                <button type="button" onClick={guest} disabled={!!busy} className={`mt-3 w-full ${btnDark}`}>
+                  {busy === "guest" && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {t("Continue without an account")}
+                </button>
+              </div>
+            )}
+
+            {mode !== "forgot" && (
               <>
                 {/* Log in / Create account switch */}
                 <div className="mt-6 grid grid-cols-2 rounded-full bg-(--s-soft) p-1 text-sm font-semibold">
@@ -149,18 +182,18 @@ export function LoginForm({ next, initialError, initialMode }: { next: string; i
                       onClick={() => switchMode(m)}
                       className={`rounded-full py-2 transition ${mode === m ? "bg-(--s-surface) text-(--s-ink) shadow-sm" : "text-(--s-muted) hover:text-(--s-ink)"}`}
                     >
-                      {m === "login" ? "Log in" : "Create account"}
+                      {m === "login" ? t("Log in") : t("Create account")}
                     </button>
                   ))}
                 </div>
 
                 <button type="button" onClick={google} disabled={!!busy} className={`mt-5 w-full ${btnOutline}`}>
                   {busy === "google" ? <Loader2 className="h-5 w-5 animate-spin" /> : <GoogleIcon />}
-                  Continue with Google
+                  {t("Continue with Google")}
                 </button>
 
                 <div className="my-5 flex items-center gap-3 text-xs text-(--s-muted)">
-                  <span className="h-px flex-1 bg-(--s-line)" /> or with email <span className="h-px flex-1 bg-(--s-line)" />
+                  <span className="h-px flex-1 bg-(--s-line)" /> {t("or with email")} <span className="h-px flex-1 bg-(--s-line)" />
                 </div>
               </>
             )}
@@ -173,11 +206,11 @@ export function LoginForm({ next, initialError, initialMode }: { next: string; i
 
             <form onSubmit={submit} className={`space-y-4 ${mode === "forgot" ? "mt-5" : ""}`} noValidate>
               {mode === "signup" && (
-                <Field label="Your name">
+                <Field label={t("Your name")}>
                   <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" placeholder="Kamal Perera" />
                 </Field>
               )}
-              <Field label="Email">
+              <Field label={t("Email")}>
                 <input
                   className={inputCls}
                   type="email"
@@ -189,7 +222,7 @@ export function LoginForm({ next, initialError, initialMode }: { next: string; i
                 />
               </Field>
               {mode !== "forgot" && (
-                <Field label="Password" hint={mode === "signup" ? "At least 6 characters." : undefined}>
+                <Field label={t("Password")} hint={mode === "signup" ? t("At least 6 characters.") : undefined}>
                   <div className="relative">
                     <input
                       className={`${inputCls} pr-11`}
@@ -212,13 +245,13 @@ export function LoginForm({ next, initialError, initialMode }: { next: string; i
               {mode === "login" && (
                 <div className="-mt-1 text-right">
                   <button type="button" onClick={() => switchMode("forgot")} className="text-xs font-medium text-(--s-muted) hover:text-(--s-ink)">
-                    Forgot password?
+                    {t("Forgot password?")}
                   </button>
                 </div>
               )}
               <button type="submit" disabled={!!busy} className={`w-full ${btnDark}`}>
                 {busy === "form" && <Loader2 className="h-4 w-4 animate-spin" />}
-                {mode === "login" ? "Log in" : mode === "signup" ? "Create account" : "Send reset link"}
+                {mode === "login" ? t("Log in") : mode === "signup" ? t("Create account") : t("Send reset link")}
               </button>
             </form>
           </>

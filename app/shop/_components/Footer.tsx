@@ -1,11 +1,13 @@
 import Link from "next/link";
-import { Mail, MapPin, MessageCircle, Phone, ShieldCheck, Truck, Wallet } from "lucide-react";
+import { Clock, Mail, MapPin, MessageCircle, Phone, ShieldCheck, Truck, Wallet } from "lucide-react";
 import type { NavCategory } from "./Header";
 import type { StoreInfo } from "@/lib/shop-data";
 import { whatsappLink } from "./format";
 import { BrandLogo } from "./BrandLogo";
+import { makeT, type Lang } from "./i18n";
 
-export function Footer({ store, categories, base }: { store: StoreInfo; categories: NavCategory[]; base: string }) {
+export function Footer({ store, categories, base, lang = "en" }: { store: StoreInfo; categories: NavCategory[]; base: string; lang?: Lang }) {
+  const t = makeT(lang);
   const subs = categories.flatMap((c) => c.children).slice(0, 8);
   const wa = whatsappLink(store.whatsapp, "Hi, I have a question about an item on your website.");
   return (
@@ -13,9 +15,9 @@ export function Footer({ store, categories, base }: { store: StoreInfo; categori
       <div className="border-b border-(--s-bar-line)">
         <div className="mx-auto grid grid-cols-1 gap-6 px-4 md:px-6 xl:px-10 py-8 sm:grid-cols-3">
           {[
-            { icon: ShieldCheck, title: "Genuine brands", text: "Only original products from trusted makers" },
-            { icon: Truck, title: "Galle area delivery", text: "Fast doorstep delivery across Galle & suburbs" },
-            { icon: Wallet, title: "Easy payment", text: "Cash on delivery or bank transfer" },
+            { icon: ShieldCheck, title: t("Genuine brands"), text: t("Only original products from trusted makers") },
+            { icon: Truck, title: t("Galle area delivery"), text: t("Fast doorstep delivery across Galle & suburbs") },
+            { icon: Wallet, title: t("Easy payment"), text: t("Cash on delivery or bank transfer") },
           ].map((f) => (
             <div key={f.title} className="flex items-center gap-4">
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-400 shadow-[0_0_16px_-4px_rgba(59,130,246,0.3)]">
@@ -36,13 +38,13 @@ export function Footer({ store, categories, base }: { store: StoreInfo; categori
             <BrandLogo name={store.name} size="sm" />
           </Link>
           <p className="mt-4 max-w-sm text-sm leading-6">
-            Everything you need to wire a house — cables, switches, sockets, breakers and boards — at fair prices, from one place.
+            {t("Everything you need to wire a house — cables, switches, sockets, breakers and boards — at fair prices, from one place.")}
           </p>
         </div>
         <div>
-          <div className="mb-4 text-xs font-bold uppercase tracking-[0.15em] text-white">Shop</div>
+          <div className="mb-4 text-xs font-bold uppercase tracking-[0.15em] text-white">{t("Shop")}</div>
           <ul className="space-y-2 text-sm">
-            <li><Link href={`${base}/products`} className="hover:text-white">All products</Link></li>
+            <li><Link href={`${base}/products`} className="hover:text-white">{t("All products")}</Link></li>
             {subs.map((c) => (
               <li key={c.slug}>
                 <Link href={`${base}/c/${c.slug}`} className="hover:text-white">{c.name}</Link>
@@ -51,7 +53,7 @@ export function Footer({ store, categories, base }: { store: StoreInfo; categori
           </ul>
         </div>
         <div>
-          <div className="mb-4 text-xs font-bold uppercase tracking-[0.15em] text-white">Contact</div>
+          <div className="mb-4 text-xs font-bold uppercase tracking-[0.15em] text-white">{t("Contact")}</div>
           <ul className="space-y-3 text-sm">
             {store.phone && (
               <li className="flex items-center gap-2.5">
@@ -77,12 +79,18 @@ export function Footer({ store, categories, base }: { store: StoreInfo; categori
                 <span>{store.address}</span>
               </li>
             )}
-            {!store.phone && !wa && !store.email && !store.address && <li>Contact details coming soon.</li>}
+            {store.hours && (
+              <li className="flex items-start gap-2.5">
+                <Clock className="mt-0.5 h-4 w-4 shrink-0 text-(--s-accent)" />
+                <span>{store.hours}</span>
+              </li>
+            )}
+            {!store.phone && !wa && !store.email && !store.address && <li>{t("Contact details coming soon.")}</li>}
           </ul>
         </div>
       </div>
       <div className="border-t border-(--s-bar-line) py-5 text-center text-xs text-neutral-500">
-        © {new Date().getFullYear()} {store.name}. All rights reserved.
+        © {new Date().getFullYear()} {store.name}. {t("All rights reserved.")}
       </div>
     </footer>
   );

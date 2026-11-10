@@ -5,9 +5,17 @@ import { requireWebsiteStaff } from "@/lib/web-auth";
 import { apiError, getAllowedMainCategories } from "@/lib/web-utils";
 
 const schema = z.object({
-  delivery: z.object({ flat_fee: z.coerce.number().min(0), free_over: z.coerce.number().min(0) }),
+  delivery: z.object({ flat_fee: z.coerce.number().min(0), free_over: z.coerce.number().min(0), areas: z.string().default("") }),
   bank: z.object({ bank: z.string(), branch: z.string(), account_name: z.string(), account_no: z.string() }),
-  store: z.object({ name: z.string(), phone: z.string(), whatsapp: z.string(), address: z.string(), email: z.string() }),
+  store: z.object({
+    name: z.string(),
+    phone: z.string(),
+    whatsapp: z.string(),
+    address: z.string(),
+    email: z.string(),
+    hours: z.string().default(""),
+    map_url: z.string().default(""),
+  }),
   catalog: z.object({ allowed_categories: z.array(z.string()) }),
 });
 

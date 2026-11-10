@@ -25,7 +25,7 @@ export type MyOrder = MyOrderSummary & {
   deliveryFee: number;
   note: string | null;
   hasSlip: boolean;
-  items: { name: string; slug: string | null; image: string | null; qty: number; unitPrice: number; mrp: number | null; lineTotal: number }[];
+  items: { id: string | null; name: string; slug: string | null; image: string | null; qty: number; unitPrice: number; mrp: number | null; lineTotal: number }[];
 };
 
 const n = (v: unknown) => Number(v) || 0;
@@ -53,12 +53,13 @@ export async function getMyOrders(customerId: string, limit = 50): Promise<MyOrd
 export async function getMyOrder(customerId: string, no: string): Promise<MyOrder | null> {
   const { data: o } = await supabaseAdmin
     .from("web_orders")
-    .select("*, web_order_items(name, qty, unit_price, mrp, line_total, web_products(slug, images))")
+    .select("*, web_order_items(web_product_id, name, qty, unit_price, mrp, line_total, web_products(slug, images))")
     .eq("web_order_no", no)
     .eq("web_customer_id", customerId)
     .maybeSingle();
   if (!o) return null;
   const items = (o.web_order_items || []).map((i: any) => ({
+    id: (i.web_product_id as string | null) ?? null,
     name: i.name,
     slug: i.web_products?.slug ?? null,
     image: i.web_products?.images?.[0] ?? null,

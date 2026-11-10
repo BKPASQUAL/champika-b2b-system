@@ -10,9 +10,13 @@ const cartSchema = z.object({
   note: z.string().trim().max(1000).optional().default(""),
 });
 
+/** A photo of the electrician's paper item list: the office reads it and prices every line. */
+const LIST_PHOTO = "Item list (photo)";
+const MAX_FILES = 5;
+
 const POINT_KEYS = ["lights", "switches", "sockets", "fans", "ac", "waterHeater", "gate", "outdoorLights"] as const;
 const jobSchema = z.object({
-  houseType: z.enum(["New house", "Renovation / rewiring", "Extension", "Shop / office", "Other"]),
+  houseType: z.enum(["New house", "Renovation / rewiring", "Extension", "Shop / office", "Other", LIST_PHOTO]),
   rooms: z.coerce.number().int().min(0).max(100).nullable(),
   floors: z.coerce.number().int().min(1).max(20).nullable(),
   note: z.string().trim().max(2000).optional().default(""),
@@ -24,7 +28,8 @@ const FILE_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "
 /**
  * Customer asks for a quotation:
  *  - JSON { type: "cart", items, note } — prices are filled in automatically.
- *  - multipart form (house job) with houseType, rooms, floors, points.*, note and up to 3 plan photos.
+ *  - multipart form (house job) with houseType, rooms, floors, points.*, note and up to 5 plan photos.
+ *    houseType "Item list (photo)" = just photos of a paper item list (at least one photo).
  */
 export async function POST(request: NextRequest) {
   const customer = await ensureWebCustomer().catch(() => null);
@@ -47,11 +52,13 @@ export async function POST(request: NextRequest) {
         points,
       });
       if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message || "Check the form" }, { status: 400 });
-      if (!Object.keys(parsed.data.points).length && !parsed.data.note)
+      const files = form.getAll("files").filter((f): f is File => f instanceof File && f.size > 0).slice(0, MAX_FILES);
+      const isList = parsed.data.houseType === LIST_PHOTO;
+      if (isList && !files.length) return NextResponse.json({ error: "Add a photo of your item list." }, { status: 400 });
+      if (!isList && !Object.keys(parsed.data.points).length && !parsed.data.note)
         return NextResponse.json({ error: "Tell us the number of points, or describe the job in the note." }, { status: 400 });
 
-      // Plan photos → private storage.
-      const files = form.getAll("files").filter((f): f is File => f instanceof File && f.size > 0).slice(0, 3);
+      // Plan / list photos → private storage.
       const paths: string[] = [];
       for (const file of files) {
         const ext = FILE_TYPES[file.type];

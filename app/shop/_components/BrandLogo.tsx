@@ -112,7 +112,7 @@ export function BrandLogo({
             බඩු කඩේ
           </span>
         </span>
-        <span className="mt-1 flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.2em] text-slate-300">
+        <span className="mt-1 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-300">
           <span className="h-1.5 w-1.5 rounded-full bg-orange-500" />
           House Wiring Store
         </span>

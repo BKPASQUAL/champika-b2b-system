@@ -65,7 +65,7 @@ export function AllCategories({ tree, base, showEmpty = true }: { tree: ShopCate
                           {s.name}
                         </Link>
                         <span
-                          className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                          className={`shrink-0 rounded-full px-2.5 py-0.5 text-[12.5px] font-bold ${
                             s.productCount > 0 ? "bg-blue-500/10 text-blue-600 dark:text-blue-400" : "bg-(--s-soft) text-(--s-muted)"
                           }`}
                         >
@@ -78,13 +78,13 @@ export function AllCategories({ tree, base, showEmpty = true }: { tree: ShopCate
                             <Link
                               key={f.id}
                               href={`${base}/c/${s.slug}?family=${f.id}`}
-                              className="rounded-full bg-(--s-soft) px-2.5 py-1 text-[11px] font-semibold text-(--s-ink-2) transition hover:bg-blue-600 hover:text-white"
+                              className="rounded-full bg-(--s-soft) px-2.5 py-1 text-[12.5px] font-semibold text-(--s-ink-2) transition hover:bg-blue-600 hover:text-white"
                             >
                               {f.name}
                             </Link>
                           ))}
                           {s.families.length > 5 && (
-                            <Link href={`${base}/c/${s.slug}`} className="px-1 py-1 text-[11px] font-semibold text-(--s-muted) hover:text-(--s-ink)">
+                            <Link href={`${base}/c/${s.slug}`} className="px-1 py-1 text-[12.5px] font-semibold text-(--s-muted) hover:text-(--s-ink)">
                               +{s.families.length - 5} more
                             </Link>
                           )}

@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Abhaya+Libre:wght@700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Abhaya+Libre:wght@700;800&family=Noto+Sans+Sinhala:wght@400;500;600;700;800&display=swap");
 
 /*
  * Online shop colours. Black & white by default; ".shop-dark" switches the
@@ -53,6 +53,21 @@
   background: var(--s-bg);
   color: var(--s-ink);
   transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/*
+ * Easier reading for older customers: the small Tailwind sizes are a little
+ * bigger inside the shop (text-xs 12→13px, text-sm 14→15px). Variables, so
+ * md:text-xs and friends follow too.
+ */
+.shop-root {
+  --text-xs: 0.8125rem;
+  --text-sm: 0.9375rem;
+}
+
+/* Sinhala: a clear Sinhala font next to the normal one (Latin letters keep Inter). */
+.shop-root.shop-si {
+  font-family: var(--font-geist-sans), "Noto Sans Sinhala", "Iskoola Pota", sans-serif;
 }
 
 /* Hide scrollbars on sideways-scrolling chip rows. */

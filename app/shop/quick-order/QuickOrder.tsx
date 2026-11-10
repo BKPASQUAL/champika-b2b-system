@@ -229,14 +229,14 @@ export function QuickOrder({
         <div>
           <div className="flex flex-wrap items-center gap-2.5">
             <h1 className="text-xl font-extrabold tracking-tight text-(--s-ink) md:text-2xl">Quick order</h1>
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[12.5px] font-bold text-emerald-600 dark:text-emerald-400">
               <MapPin className="h-3 w-3" /> Galle area delivery
             </span>
           </div>
           <ol className="mt-2.5 flex flex-wrap gap-2 text-xs font-medium text-(--s-ink-2)">
             {["Search or filter items", "Set quantity", "Press Add to build your list"].map((s, i) => (
               <li key={s} className="inline-flex items-center gap-1.5 rounded-full bg-(--s-soft) py-1 pl-1.5 pr-3">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-blue-500 text-[11px] font-bold text-white shadow-xs">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-blue-500 text-[12.5px] font-bold text-white shadow-xs">
                   {i + 1}
                 </span>
                 {s}
@@ -291,7 +291,7 @@ export function QuickOrder({
                     aria-label="Sort items"
                     value={sort}
                     onChange={(e) => setSort(e.target.value as SortKey)}
-                    className="h-11 w-full cursor-pointer appearance-none rounded-2xl border border-(--s-line) bg-(--s-bg) pl-9 pr-8 text-[13px] font-bold text-(--s-ink) outline-none transition hover:border-blue-500/40 focus:border-blue-600 sm:w-auto"
+                    className="h-11 w-full cursor-pointer appearance-none rounded-2xl border border-(--s-line) bg-(--s-bg) pl-9 pr-8 text-[14px] font-bold text-(--s-ink) outline-none transition hover:border-blue-500/40 focus:border-blue-600 sm:w-auto"
                   >
                     {SORT_OPTIONS.map((o) => (
                       <option key={o.key} value={o.key}>
@@ -321,7 +321,7 @@ export function QuickOrder({
             {/* Category filter chips */}
             {categories.length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5">
-                <span className="mr-1 text-[11px] font-bold uppercase tracking-wider text-(--s-muted)">Category:</span>
+                <span className="mr-1 text-[12.5px] font-bold uppercase tracking-wider text-(--s-muted)">Category:</span>
                 <button
                   type="button"
                   onClick={() => setCat(null)}
@@ -332,7 +332,7 @@ export function QuickOrder({
                   }`}
                 >
                   All
-                  <span className={`rounded-full px-1.5 text-[10px] font-bold ${!cat ? "bg-blue-500 text-white" : "bg-(--s-surface) text-(--s-muted)"}`}>
+                  <span className={`rounded-full px-1.5 text-[12px] font-bold ${!cat ? "bg-blue-500 text-white" : "bg-(--s-surface) text-(--s-muted)"}`}>
                     {items.length}
                   </span>
                 </button>
@@ -351,7 +351,7 @@ export function QuickOrder({
                     >
                       {c.name}
                       {c.count !== undefined && (
-                        <span className={`rounded-full px-1.5 text-[10px] font-bold ${on ? "bg-white/20 text-white" : "bg-(--s-surface) text-(--s-muted)"}`}>
+                        <span className={`rounded-full px-1.5 text-[12px] font-bold ${on ? "bg-white/20 text-white" : "bg-(--s-surface) text-(--s-muted)"}`}>
                           {c.count}
                         </span>
                       )}
@@ -364,7 +364,7 @@ export function QuickOrder({
             {/* Brand filter chips */}
             {brands.length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5 border-t border-(--s-line) pt-3">
-                <span className="mr-1 text-[11px] font-bold uppercase tracking-wider text-(--s-muted)">Brand:</span>
+                <span className="mr-1 text-[12.5px] font-bold uppercase tracking-wider text-(--s-muted)">Brand:</span>
                 <button
                   type="button"
                   onClick={() => setBrandId(null)}
@@ -394,7 +394,7 @@ export function QuickOrder({
                         <img src={b.logoUrl} alt="" className="h-4 max-w-12 rounded-xs bg-white px-0.5 object-contain" />
                       )}
                       <span>{b.name}</span>
-                      <span className={`rounded-full px-1.5 text-[10px] font-bold ${on ? "bg-white/20 text-white" : "bg-(--s-surface) text-(--s-muted)"}`}>
+                      <span className={`rounded-full px-1.5 text-[12px] font-bold ${on ? "bg-white/20 text-white" : "bg-(--s-surface) text-(--s-muted)"}`}>
                         {b.count}
                       </span>
                     </button>
@@ -409,7 +409,7 @@ export function QuickOrder({
             {filtered.length > 0 ? (
               <div ref={tableBox} className="scroll-mt-32 overflow-x-auto">
                 <table className="w-full border-collapse text-left">
-                  <thead className="hidden border-b border-(--s-line) bg-(--s-soft)/60 text-[11px] font-extrabold uppercase tracking-wider text-(--s-muted) md:table-header-group">
+                  <thead className="hidden border-b border-(--s-line) bg-(--s-soft)/60 text-[12.5px] font-extrabold uppercase tracking-wider text-(--s-muted) md:table-header-group">
                     <tr>
                       <th className="w-20 py-3.5 pl-5 pr-2">Image</th>
                       <th className="px-3 py-3.5">
@@ -478,7 +478,7 @@ export function QuickOrder({
                                 <ImageOff className="h-5 w-5 text-slate-300" />
                               )}
                               {h.discountPct > 0 && (
-                                <span className="absolute left-1 top-1 rounded-full bg-rose-600 px-1.5 py-0.2 text-[9px] font-extrabold text-white shadow-xs">
+                                <span className="absolute left-1 top-1 rounded-full bg-rose-600 px-1.5 py-0.2 text-[11px] font-extrabold text-white shadow-xs">
                                   -{h.discountPct}%
                                 </span>
                               )}
@@ -501,7 +501,7 @@ export function QuickOrder({
                                   <ImageOff className="h-5 w-5 text-slate-300" />
                                 )}
                                 {h.discountPct > 0 && (
-                                  <span className="absolute left-1 top-1 rounded-full bg-rose-600 px-1.5 text-[9px] font-extrabold text-white">
+                                  <span className="absolute left-1 top-1 rounded-full bg-rose-600 px-1.5 text-[11px] font-extrabold text-white">
                                     -{h.discountPct}%
                                   </span>
                                 )}
@@ -510,12 +510,12 @@ export function QuickOrder({
                               <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-1.5 md:mb-0.5">
                                   {h.brand && (
-                                    <span className="rounded-md bg-(--s-soft) px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-(--s-muted) md:hidden">
+                                    <span className="rounded-md bg-(--s-soft) px-1.5 py-0.5 text-[12px] font-bold uppercase tracking-wider text-(--s-muted) md:hidden">
                                       {h.brand}
                                     </span>
                                   )}
                                   {have > 0 && (
-                                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[12.5px] font-bold text-emerald-600 dark:text-emerald-400">
                                       <Check className="h-3 w-3 stroke-[2.5]" /> {have} in your list
                                     </span>
                                   )}
@@ -546,7 +546,7 @@ export function QuickOrder({
                               <button
                                 type="button"
                                 onClick={() => h.brandId && setBrandId(brandId === h.brandId ? null : h.brandId)}
-                                className="inline-flex cursor-pointer items-center rounded-lg bg-(--s-soft) px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-(--s-ink-2) transition hover:bg-blue-600 hover:text-white"
+                                className="inline-flex cursor-pointer items-center rounded-lg bg-(--s-soft) px-2.5 py-1 text-[12.5px] font-bold uppercase tracking-wider text-(--s-ink-2) transition hover:bg-blue-600 hover:text-white"
                               >
                                 {h.brand}
                               </button>
@@ -600,7 +600,7 @@ export function QuickOrder({
                               <button
                                 type="button"
                                 onClick={() => addHit(h)}
-                                className="inline-flex h-9 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 px-4 text-xs font-bold text-white shadow-[0_3px_10px_-2px_rgba(37,99,235,0.4)] transition hover:brightness-110 active:scale-[0.98] md:min-w-[108px] md:text-[13px]"
+                                className="inline-flex h-9 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 px-4 text-xs font-bold text-white shadow-[0_3px_10px_-2px_rgba(37,99,235,0.4)] transition hover:brightness-110 active:scale-[0.98] md:min-w-[108px] md:text-[14px]"
                               >
                                 <Plus className="h-3.5 w-3.5 stroke-[2.5]" /> {have ? "Add more" : "Add"}
                               </button>
@@ -765,8 +765,8 @@ export function QuickOrder({
                           )}
                         </Link>
                         <div className="min-w-0 flex-1">
-                          <p className="line-clamp-2 text-[13px] font-bold leading-snug text-(--s-ink)">{l.name}</p>
-                          {l.price > 0 && <p className="mt-0.5 text-[11px] font-medium text-(--s-muted)">{rs(l.price)} each</p>}
+                          <p className="line-clamp-2 text-[14px] font-bold leading-snug text-(--s-ink)">{l.name}</p>
+                          {l.price > 0 && <p className="mt-0.5 text-[12.5px] font-medium text-(--s-muted)">{rs(l.price)} each</p>}
                         </div>
                         <button
                           type="button"
@@ -881,7 +881,7 @@ export function QuickOrder({
             </div>
             <div className="mt-3.5 flex items-center justify-between gap-3 px-1">
               <div className="min-w-0">
-                {preview.brand && <span className="text-[11px] font-bold uppercase tracking-wider text-blue-600">{preview.brand}</span>}
+                {preview.brand && <span className="text-[12.5px] font-bold uppercase tracking-wider text-blue-600">{preview.brand}</span>}
                 <p className="truncate text-sm font-bold text-(--s-ink)">{preview.name}</p>
                 <p className="text-sm font-extrabold text-(--s-ink)">{preview.price ? rs(preview.price) : "Ask for price"}</p>
               </div>

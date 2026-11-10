@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   Box,
   Cable,
+  Camera,
   ChevronRight,
   ClipboardList,
   Flame,
@@ -19,6 +20,7 @@ import {
 import {
   getBanners,
   getCategoryTree,
+  getDeliveryInfo,
   getFeaturedBrands,
   getProducts,
   getPromoStrip,
@@ -33,6 +35,9 @@ import { HeroFeature } from "./_components/HeroFeature";
 import { ScrollRow } from "./_components/ScrollRow";
 import { AllCategories } from "./_components/AllCategories";
 import { rs, whatsappLink } from "./_components/format";
+import { getT } from "./_components/lang-server";
+import { VisitShop } from "./_components/VisitShop";
+import { WhatsAppIcon } from "./_components/WhatsAppButton";
 
 function getCategoryIcon(name: string) {
   const n = name.toLowerCase();
@@ -49,7 +54,7 @@ const BADGE_RING = { red: "ring-red-500", orange: "ring-orange-400", green: "rin
 const wrap = "mx-auto px-4 md:px-6 xl:px-10";
 
 export default async function ShopHome() {
-  const [base, tree, banners, all, brands, store, promos] = await Promise.all([
+  const [base, tree, banners, all, brands, store, promos, delivery, t] = await Promise.all([
     getShopBase(),
     getCategoryTree(),
     getBanners(),
@@ -57,6 +62,8 @@ export default async function ShopHome() {
     getFeaturedBrands(),
     getStoreInfo(),
     getPromoStrip(),
+    getDeliveryInfo(),
+    getT(),
   ]);
 
   const featured = sortProducts(all.filter((p) => p.isFeatured), "popular");
@@ -67,19 +74,21 @@ export default async function ShopHome() {
   const tiles = (featured.length ? featured : deals.length ? deals : newest).slice(0, 4);
   const used = new Set(tiles.map((p) => p.id));
   const sideList = [...deals, ...newest].filter((p, idx, arr) => !used.has(p.id) && arr.findIndex((x) => x.id === p.id) === idx).slice(0, 4);
-  const sideTitle = deals.some((p) => sideList.includes(p)) ? "Best deals" : "Just in";
+  const sideTitle = deals.some((p) => sideList.includes(p)) ? t("Best deals") : t("Just in");
 
   const strip = buildStrip(promos, all);
   const wa = whatsappLink(store.whatsapp, "Hi, I need a quotation for wiring my house.");
+  const waList = whatsappLink(store.whatsapp, "Hi, I am sending a photo of my wiring item list. Please send me a quotation.");
   const heroBanners = banners.map((b) => ({ ...b, link: b.link ? (b.link.startsWith("/") ? `${base}${b.link}` : b.link) : null }));
 
   const pills = [
-    { label: "Shop all", to: `${base}/products`, icon: LayoutGrid },
-    { label: "Best deals", to: `${base}/products?sort=popular`, icon: Flame },
-    { label: "New arrivals", to: `${base}/products?sort=newest`, icon: Sparkles },
-    { label: "Quick order", to: `${base}/quick-order`, icon: ListChecks },
-    { label: "House quotation", to: `${base}/quote`, icon: ClipboardList },
-    { label: "Brands", to: "#brands", icon: Tag },
+    { label: t("Shop all"), to: `${base}/products`, icon: LayoutGrid },
+    { label: t("Best deals"), to: `${base}/products?sort=popular`, icon: Flame },
+    { label: t("New arrivals"), to: `${base}/products?sort=newest`, icon: Sparkles },
+    { label: t("Quick order"), to: `${base}/quick-order`, icon: ListChecks },
+    { label: t("Send a photo of your list"), to: `${base}/quote?mode=list`, icon: Camera },
+    { label: t("House quotation"), to: `${base}/quote`, icon: ClipboardList },
+    { label: t("Brands"), to: "#brands", icon: Tag },
   ];
 
   return (
@@ -93,10 +102,10 @@ export default async function ShopHome() {
               className="mr-3 flex shrink-0 flex-col justify-center gap-0.5 rounded-lg bg-white/[0.08] px-4 py-2 ring-1 ring-white/10 transition hover:bg-white/[0.14]"
             >
               <span className="flex items-center gap-1.5 text-[15px] font-bold leading-tight">
-                <span className="h-2 w-2 rounded-full bg-red-500 shadow-[0_0_6px_#ef4444]" /> Special
+                <span className="h-2 w-2 rounded-full bg-red-500 shadow-[0_0_6px_#ef4444]" /> {t("Special")}
                 <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
               </span>
-              <span className="text-[13px] font-semibold leading-tight text-slate-300">Offers</span>
+              <span className="text-[14px] font-semibold leading-tight text-slate-300">{t("Offers")}</span>
             </Link>
             {strip.map((c) => (
               <Link
@@ -119,13 +128,13 @@ export default async function ShopHome() {
                   </span>
                   {c.badge && (
                     <span
-                      className={`absolute -bottom-1.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded px-1.5 py-px text-[9px] font-extrabold uppercase tracking-wide text-white shadow ${BADGE_BG[c.color]}`}
+                      className={`absolute -bottom-1.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded px-1.5 py-px text-[11px] font-extrabold uppercase tracking-wide text-white shadow ${BADGE_BG[c.color]}`}
                     >
                       {c.badge}
                     </span>
                   )}
                 </span>
-                <span className="mt-0.5 line-clamp-2 text-[11px] font-bold leading-tight text-slate-200 group-hover:text-white">{c.title}</span>
+                <span className="mt-0.5 line-clamp-2 text-[12.5px] font-bold leading-tight text-slate-200 group-hover:text-white">{c.title}</span>
               </Link>
             ))}
           </div>
@@ -138,7 +147,7 @@ export default async function ShopHome() {
           <Link
             key={label}
             href={to}
-            className="flex shrink-0 items-center gap-1.5 rounded-full bg-(--s-soft) px-4 py-2 text-[13px] font-bold text-(--s-ink) ring-1 ring-(--s-line) transition hover:bg-(--s-accent) hover:text-(--s-accent-ink) hover:ring-(--s-accent)"
+            className="flex shrink-0 items-center gap-1.5 rounded-full bg-(--s-soft) px-4 py-2 text-[14px] font-bold text-(--s-ink) ring-1 ring-(--s-line) transition hover:bg-(--s-accent) hover:text-(--s-accent-ink) hover:ring-(--s-accent)"
           >
             <Icon className="h-4 w-4" /> {label}
           </Link>
@@ -148,9 +157,9 @@ export default async function ShopHome() {
             href={wa}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex shrink-0 items-center gap-1.5 rounded-full bg-(--s-soft) px-4 py-2 text-[13px] font-bold text-(--s-ink) ring-1 ring-(--s-line) transition hover:bg-emerald-600 hover:text-white hover:ring-emerald-600"
+            className="flex shrink-0 items-center gap-1.5 rounded-full bg-(--s-soft) px-4 py-2 text-[14px] font-bold text-(--s-ink) ring-1 ring-(--s-line) transition hover:bg-emerald-600 hover:text-white hover:ring-emerald-600"
           >
-            <MessageCircle className="h-4 w-4" /> WhatsApp us
+            <MessageCircle className="h-4 w-4" /> {t("Chat on WhatsApp")}
           </a>
         )}
       </div>
@@ -181,7 +190,7 @@ export default async function ShopHome() {
               <div className="mb-1 flex items-center justify-between">
                 <span className="text-xs font-bold uppercase tracking-wider text-(--s-muted)">{sideTitle}</span>
                 <Link href={`${base}/products`} className="text-xs font-bold hover:underline">
-                  See all
+                  {t("View all")}
                 </Link>
               </div>
               <div className="grid sm:grid-cols-2 sm:gap-x-8 2xl:grid-cols-1">
@@ -195,24 +204,11 @@ export default async function ShopHome() {
       </section>
 
       <div className="space-y-14 pt-14 md:space-y-20 md:pt-20">
-        {/* ---------- Best deals / top picks ---------- */}
-        {(deals.length > 0 || featured.length > 0) && (
-          <section className={wrap}>
-            <ScrollRow title={deals.length ? "Best deals" : "Top picks"} href={`${base}/products`}>
-              {(deals.length ? deals : featured).slice(0, 16).map((p) => (
-                <div key={p.id} className="w-[46%] shrink-0 snap-start sm:w-[220px] xl:w-[240px]">
-                  <ProductCard p={p} base={base} />
-                </div>
-              ))}
-            </ScrollRow>
-          </section>
-        )}
-
         {/* ---------- Brands ---------- */}
         {brands.length > 0 && (
           <section id="brands" className={`${wrap} scroll-mt-32`}>
             <div className="mb-5 flex items-end justify-between gap-4">
-              <h2 className="shop-display">Our brands</h2>
+              <h2 className="shop-display">{t("Brands")}</h2>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 sm:gap-4">
               {brands.map((b) => (
@@ -238,9 +234,9 @@ export default async function ShopHome() {
         {tree.length > 0 && (
           <section className={wrap}>
             <div className="mb-5 flex items-end justify-between gap-4">
-              <h2 className="shop-display">All categories</h2>
+              <h2 className="shop-display">{t("All categories")}</h2>
               <Link href={`${base}/categories`} className="shrink-0 text-sm font-bold hover:underline md:text-base">
-                View all
+                {t("View all")}
               </Link>
             </div>
             <AllCategories tree={tree} base={base} />
@@ -248,18 +244,18 @@ export default async function ShopHome() {
         )}
 
         {/* ---------- House quotation ---------- */}
-        <section className={wrap}>
+        <section className={`${wrap} grid gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]`}>
           <div className="shop-stripes relative overflow-hidden rounded-xl bg-(--s-bar) p-8 text-white md:p-12">
             <ClipboardList className="absolute -bottom-6 -right-6 h-48 w-48 text-white/10" />
             <div className="relative max-w-xl">
-              <span className="text-xs font-bold uppercase tracking-[0.18em] text-blue-300">Building or renovating?</span>
-              <h2 className="mt-2 text-2xl font-extrabold italic uppercase leading-tight tracking-tight md:text-4xl">One price for your whole house.</h2>
+              <span className="text-xs font-bold uppercase tracking-[0.18em] text-blue-300">{t("Building or renovating?")}</span>
+              <h2 className="mt-2 text-2xl font-extrabold italic uppercase leading-tight tracking-tight md:text-4xl">{t("One price for your whole house.")}</h2>
               <p className="mt-3 text-slate-300">
-                Tell us the rooms and the number of lights, plugs and fans. We will send a complete item list with our best discount.
+                {t("Tell us the rooms and the number of lights, plugs and fans. We will send a complete item list with our best discount.")}
               </p>
               <div className="mt-6 flex flex-wrap gap-3">
                 <Link href={`${base}/quote`} className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-bold text-slate-900 hover:bg-blue-50">
-                  <ClipboardList className="h-4 w-4" /> Ask for a quotation
+                  <ClipboardList className="h-4 w-4" /> {t("Ask for a quotation")}
                 </Link>
                 {store.phone && (
                   <a href={`tel:${store.phone}`} className="inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-bold text-white ring-1 ring-white/25 hover:bg-white/10">
@@ -269,12 +265,41 @@ export default async function ShopHome() {
               </div>
             </div>
           </div>
+
+          {/* Send a photo of the electrician's paper list */}
+          <div className="flex flex-col justify-center rounded-xl border-2 border-dashed border-(--s-accent)/40 bg-(--s-accent-soft)/50 p-8 md:p-10">
+            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-(--s-accent) text-white shadow-lg">
+              <Camera className="h-7 w-7" />
+            </span>
+            <h2 className="mt-4 text-2xl font-extrabold tracking-tight text-(--s-ink)">{t("Have a list from your electrician?")}</h2>
+            <p className="mt-2 text-(--s-ink-2)">
+              {t("Take a photo of the paper list and send it. We will price every item and send you one quotation.")}
+            </p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Link
+                href={`${base}/quote?mode=list`}
+                className="inline-flex h-12 items-center gap-2 rounded-full bg-(--s-accent) px-6 text-[15px] font-bold text-white transition hover:bg-(--s-accent-hover)"
+              >
+                <Camera className="h-4 w-4" /> {t("Upload photo")}
+              </Link>
+              {waList && (
+                <a
+                  href={waList}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex h-12 items-center gap-2 rounded-full bg-[#25D366] px-6 text-[15px] font-bold text-white transition hover:bg-[#1ebe5a]"
+                >
+                  <WhatsAppIcon className="h-5 w-5" /> {t("Send on WhatsApp")}
+                </a>
+              )}
+            </div>
+          </div>
         </section>
 
         {/* ---------- New arrivals ---------- */}
         {newest.length > 0 && (
           <section className={wrap}>
-            <ScrollRow title="New arrivals" href={`${base}/products?sort=newest`}>
+            <ScrollRow title={t("New arrivals")} href={`${base}/products?sort=newest`}>
               {newest.slice(0, 16).map((p) => (
                 <div key={p.id} className="w-[46%] shrink-0 snap-start sm:w-[220px] xl:w-[240px]">
                   <ProductCard p={p} base={base} />
@@ -284,10 +309,15 @@ export default async function ShopHome() {
           </section>
         )}
 
+        {/* ---------- Visit our shop (address, map, hours, delivery) ---------- */}
+        <section className={wrap}>
+          <VisitShop store={store} delivery={delivery} t={t} />
+        </section>
+
         {!all.length && !tree.length && (
           <div className={`${wrap} py-16 text-center text-(--s-muted)`}>
             <ImageOff className="mx-auto h-10 w-10" />
-            <p className="mt-3">Our online shop is opening soon. Please check back shortly.</p>
+            <p className="mt-3">{t("Our online shop is opening soon. Please check back shortly.")}</p>
           </div>
         )}
       </div>
@@ -312,7 +342,7 @@ function HeroTile({ p, base }: { p: ShopProductCard; base: string }) {
         <span className="text-sm font-bold">{rs(p.price)}</span>
         {p.discountPct > 0 && p.mrp > p.price && <span className="text-xs text-(--s-muted) line-through">{rs(p.mrp)}</span>}
         {p.discountPct > 0 && (
-          <span className="rounded-sm bg-red-600 px-1.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-white">Save {Math.round(p.discountPct)}%</span>
+          <span className="rounded-sm bg-red-600 px-1.5 py-0.5 text-[12px] font-extrabold uppercase tracking-wide text-white">Save {Math.round(p.discountPct)}%</span>
         )}
       </div>
     </Link>

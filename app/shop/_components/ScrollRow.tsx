@@ -3,6 +3,7 @@
 import { useRef } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useShop } from "./ShopContext";
 
 /**
  * A section with a big heading, "View all" and ‹ › arrows, and one row of
@@ -19,6 +20,7 @@ export function ScrollRow({
   linkLabel?: string;
   children: React.ReactNode;
 }) {
+  const { t } = useShop();
   const row = useRef<HTMLDivElement>(null);
   const move = (dir: 1 | -1) => {
     const el = row.current;
@@ -32,7 +34,7 @@ export function ScrollRow({
         <div className="flex shrink-0 items-center gap-1">
           {href && (
             <Link href={href} className="mr-2 text-sm font-bold hover:underline md:text-base">
-              {linkLabel}
+              {t(linkLabel)}
             </Link>
           )}
           <button

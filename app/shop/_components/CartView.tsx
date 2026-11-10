@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeftRight, ChevronDown, Table2, ImageOff, Loader2, Lock, MessageCircle, Minus, Phone, Plus, ShoppingBag, Trash2 } from "lucide-react";
+import { ArrowLeftRight, ChevronDown, Table2, ImageOff, Loader2, Lock, Minus, Phone, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { useShop } from "./ShopContext";
 import { QuoteFromCart } from "./QuoteFromCart";
 import { rs, whatsappLink } from "./format";
+import { WhatsAppIcon } from "./WhatsAppButton";
 
 type Line = {
   id: string;
@@ -33,7 +34,7 @@ type Priced = {
 };
 
 export function CartView() {
-  const { cart, ready, href, setQty, remove, replace, store } = useShop();
+  const { cart, ready, href, setQty, remove, replace, store, t } = useShop();
   const [data, setData] = useState<Priced | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -81,10 +82,10 @@ export function CartView() {
     return (
       <div className="mx-auto flex max-w-md flex-col items-center px-4 py-20 text-center">
         <ShoppingBag className="h-14 w-14 text-neutral-300" />
-        <h1 className="mt-4 text-xl font-bold text-(--s-ink)">Your cart is empty</h1>
-        <p className="mt-1 text-(--s-muted)">Find cables, switches and everything else for your wiring job.</p>
+        <h1 className="mt-4 text-xl font-bold text-(--s-ink)">{t("Your cart is empty")}</h1>
+        <p className="mt-1 text-(--s-muted)">{t("Find cables, switches and everything else for your wiring job.")}</p>
         <Link href={href("/search")} className="mt-6 rounded-full bg-(--s-btn) px-6 py-3 font-semibold text-(--s-btn-ink) hover:opacity-85">
-          Start shopping
+          {t("Start shopping")}
         </Link>
       </div>
     );
@@ -101,7 +102,7 @@ export function CartView() {
 
   return (
     <div className="mx-auto px-4 md:px-6 xl:px-10 py-8">
-      <h1 className="mb-5 text-2xl font-bold text-(--s-ink) md:text-[28px]">Your cart</h1>
+      <h1 className="mb-5 text-2xl font-bold text-(--s-ink) md:text-[28px]">{t("Your cart")}</h1>
       {error && <div className="mb-4 rounded-lg border border-(--s-bad) px-4 py-3 text-sm text-(--s-bad)">{error}</div>}
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -180,11 +181,11 @@ export function CartView() {
         </div>
 
         <aside className="h-fit space-y-4 rounded-3xl border border-(--s-line) bg-(--s-surface) p-6 lg:sticky lg:top-24">
-          <h2 className="font-bold text-(--s-ink)">Order summary</h2>
+          <h2 className="font-bold text-(--s-ink)">{t("Order summary")}</h2>
           <dl className="space-y-2 text-sm">
-            <Row label="Subtotal" value={rs(data?.subtotal)} />
+            <Row label={t("Subtotal")} value={rs(data?.subtotal)} />
             {!!data?.savings && <Row label="You save" value={`− ${rs(data.savings)}`} className="text-(--s-good)" />}
-            <Row label="Delivery (Galle area)" value={data?.deliveryFee ? rs(data.deliveryFee) : "Free"} />
+            <Row label={t("Delivery")} value={data?.deliveryFee ? rs(data.deliveryFee) : t("Free")} />
           </dl>
           <p className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-700 dark:text-emerald-300">
             Doorstep delivery is currently available across the <strong>Galle area</strong>.
@@ -193,7 +194,7 @@ export function CartView() {
             <p className="rounded-lg bg-(--s-soft) px-3 py-2 text-xs text-(--s-ink)">Add {rs(toFree)} more for free delivery in Galle.</p>
           )}
           <div className="flex items-baseline justify-between border-t border-(--s-line) pt-3">
-            <span className="font-semibold">Total</span>
+            <span className="font-semibold">{t("Total")}</span>
             <span className="text-2xl font-bold text-(--s-ink)">{rs(data?.total)}</span>
           </div>
 
@@ -203,9 +204,20 @@ export function CartView() {
               aria-disabled={!data?.total}
               className={`flex w-full items-center justify-center gap-2 rounded-full bg-(--s-accent) py-3.5 font-bold text-(--s-accent-ink) transition hover:bg-(--s-accent-hover) ${data?.total ? "" : "pointer-events-none opacity-50"}`}
             >
-              <Lock className="h-4 w-4" /> Checkout
+              <Lock className="h-4 w-4" /> {t("Checkout")}
             </Link>
-            <p className="text-center text-xs text-(--s-muted)">Cash on delivery or bank transfer</p>
+            <p className="text-center text-xs text-(--s-muted)">{t("Cash on delivery or bank transfer")}</p>
+            {wa && (
+              <a
+                href={wa}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-disabled={!data?.total}
+                className={`flex w-full items-center justify-center gap-2 rounded-full bg-[#25D366] py-3.5 font-bold text-white transition hover:bg-[#1ebe5a] ${data?.total ? "" : "pointer-events-none opacity-50"}`}
+              >
+                <WhatsAppIcon className="h-5 w-5" /> {t("Order on WhatsApp")}
+              </a>
+            )}
             <QuoteFromCart disabled={!data?.total} />
             {lines.length > 0 && (
               <Link
@@ -215,21 +227,11 @@ export function CartView() {
                 <Table2 className="h-4 w-4" /> Compare brands · PDF
               </Link>
             )}
-            {(wa || store.phone) && (
+            {store.phone && (
               <div className="flex gap-2 pt-2">
-                {wa && (
-                  <a
-                    href={wa}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-(--s-line) py-2.5 text-sm font-medium text-(--s-ink-2) hover:bg-(--s-soft)"
-                  >
-                    <MessageCircle className="h-4 w-4" /> WhatsApp order
-                  </a>
-                )}
                 {store.phone && (
                   <a href={`tel:${store.phone}`} className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-(--s-line) py-2.5 text-sm font-medium text-(--s-ink-2) hover:bg-(--s-soft)">
-                    <Phone className="h-4 w-4" /> Call us
+                    <Phone className="h-4 w-4" /> {t("Or order by phone")}
                   </a>
                 )}
               </div>
@@ -257,15 +259,15 @@ function BrandCompare({ line, qty, onSwitch, href }: { line: Line; qty: number; 
   const saving = cheapest && cheapest.price < line.price ? (line.price - cheapest.price) * qty : 0;
   return (
     <div className="basis-full border-t border-(--s-line) pt-2.5">
-      <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-2 text-left text-[13px] font-semibold text-(--s-accent)">
+      <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-2 text-left text-[14px] font-semibold text-(--s-accent)">
         <ArrowLeftRight className="h-4 w-4" />
         Compare {line.others.length} other {line.others.length === 1 ? "brand" : "brands"}
-        {saving > 0 && <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-300">save up to {rs(saving)}</span>}
+        {saving > 0 && <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[12.5px] font-bold text-emerald-700 dark:text-emerald-300">save up to {rs(saving)}</span>}
         <ChevronDown className={`ml-auto h-4 w-4 transition ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
         <div className="mt-2 overflow-hidden rounded-xl border border-(--s-line)">
-          <div className="flex items-center gap-3 bg-(--s-soft) px-3 py-2 text-[13px]">
+          <div className="flex items-center gap-3 bg-(--s-soft) px-3 py-2 text-[14px]">
             <span className="w-24 shrink-0 truncate font-bold">{line.brand || "This item"}</span>
             <span className="min-w-0 flex-1 truncate text-(--s-muted)">In your cart</span>
             <span className="font-bold">{rs(line.price)}</span>
@@ -274,7 +276,7 @@ function BrandCompare({ line, qty, onSwitch, href }: { line: Line; qty: number; 
           {line.others.map((o) => {
             const diff = o.price - line.price;
             return (
-              <div key={o.id} className="flex items-center gap-3 border-t border-(--s-line) px-3 py-2 text-[13px]">
+              <div key={o.id} className="flex items-center gap-3 border-t border-(--s-line) px-3 py-2 text-[14px]">
                 <span className="w-24 shrink-0 truncate font-bold">{o.brand}</span>
                 <a href={href(`/p/${o.slug}`)} className="min-w-0 flex-1 truncate text-(--s-ink-2) hover:underline" title={o.name}>
                   {o.name}
@@ -282,7 +284,7 @@ function BrandCompare({ line, qty, onSwitch, href }: { line: Line; qty: number; 
                 <span className="text-right">
                   <span className="block font-bold">{rs(o.price)}</span>
                   {diff !== 0 && (
-                    <span className={`block text-[11px] font-semibold ${diff < 0 ? "text-emerald-600 dark:text-emerald-400" : "text-(--s-muted)"}`}>
+                    <span className={`block text-[12.5px] font-semibold ${diff < 0 ? "text-emerald-600 dark:text-emerald-400" : "text-(--s-muted)"}`}>
                       {diff < 0 ? `${rs(-diff)} less` : `${rs(diff)} more`}
                     </span>
                   )}
@@ -295,7 +297,7 @@ function BrandCompare({ line, qty, onSwitch, href }: { line: Line; qty: number; 
                     Switch
                   </button>
                 ) : (
-                  <span className="w-[76px] shrink-0 text-center text-[11px] text-(--s-muted)">Not available</span>
+                  <span className="w-[76px] shrink-0 text-center text-[12.5px] text-(--s-muted)">Not available</span>
                 )}
               </div>
             );

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, ListChecks, MapPin, Search, Zap } from "lucide-react";
+import { useShop } from "./ShopContext";
 
 type Banner = { id: string; title: string | null; imageUrl: string; link: string | null };
 
@@ -13,12 +14,13 @@ type Banner = { id: string; title: string | null; imageUrl: string; link: string
  */
 export function HeroFeature({ banners, base }: { banners: Banner[]; base: string }) {
   const [i, setI] = useState(0);
+  const { t } = useShop();
   const n = banners.length;
 
   useEffect(() => {
     if (n < 2) return;
-    const t = setInterval(() => setI((x) => (x + 1) % n), 6000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setI((x) => (x + 1) % n), 6000);
+    return () => clearInterval(timer);
   }, [n]);
 
   if (!n) {
@@ -28,36 +30,36 @@ export function HeroFeature({ banners, base }: { banners: Banner[]; base: string
         <div className="pointer-events-none absolute -right-16 -top-16 h-80 w-80 rounded-full bg-sky-400/25 blur-3xl" />
         <Zap className="pointer-events-none absolute -right-6 top-6 h-64 w-64 -rotate-12 fill-white/[0.06] text-white/10 md:h-80 md:w-80" />
         <div className="relative max-w-xl">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold text-sky-200 ring-1 ring-white/15 backdrop-blur-xs">
-            <MapPin className="h-3.5 w-3.5" /> House wiring store · Galle area
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-[12.5px] font-bold text-sky-200 ring-1 ring-white/15 backdrop-blur-xs">
+            <MapPin className="h-3.5 w-3.5" /> {t("House wiring store · Galle area")}
           </span>
           <h1 className="mt-4 text-3xl font-extrabold leading-[1.08] tracking-tight md:text-[44px]">
-            Wire your home with confidence.
+            {t("Wire your home with confidence.")}
           </h1>
           <p className="mt-3 max-w-md text-sm leading-6 text-blue-100/80 md:text-base">
-            Genuine cables, switches, sockets and breakers at discount prices — delivered to your door.
+            {t("Genuine cables, switches, sockets and breakers at discount prices — delivered to your door.")}
           </p>
           <form action={`${base}/search`} className="mt-5 flex max-w-md items-center gap-2 rounded-full bg-white p-1.5 pl-4 shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
             <Search className="h-4 w-4 shrink-0 text-slate-400" />
             <input
               name="q"
               type="search"
-              placeholder="What do you need? e.g. 1/113 wire"
+              placeholder={t("What do you need? e.g. 1/113 wire")}
               className="h-9 min-w-0 flex-1 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
             />
             <button className="h-9 shrink-0 cursor-pointer rounded-full bg-slate-900 px-5 text-sm font-bold text-white transition hover:bg-blue-600">
-              Search
+              {t("Search")}
             </button>
           </form>
           <div className="mt-4 flex flex-wrap gap-2.5">
             <Link href={`${base}/products`} className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-bold text-slate-900 transition hover:bg-blue-50">
-              Shop now <ArrowRight className="h-4 w-4" />
+              {t("Shop now")} <ArrowRight className="h-4 w-4" />
             </Link>
             <Link
               href={`${base}/quick-order`}
               className="inline-flex items-center gap-2 rounded-full bg-white/10 px-5 py-2.5 text-sm font-bold text-white ring-1 ring-white/25 transition hover:bg-white/20"
             >
-              <ListChecks className="h-4 w-4" /> Quick order
+              <ListChecks className="h-4 w-4" /> {t("Quick order")}
             </Link>
           </div>
         </div>

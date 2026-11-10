@@ -23,6 +23,52 @@ export function searchWords(query: string): string[] {
     .filter(Boolean);
 }
 
+/**
+ * How Sri Lankan customers type things: Singlish, common misspellings and Sinhala.
+ * Each group lists words that mean the same; typing any of them finds all of them.
+ * (Words are simplified with searchKey, so "plug base" = "plugbase".)
+ */
+const SYNONYMS: string[][] = [
+  ["wire", "wires", "wayar", "wayer", "wyre", "kambi", "kamba", "වයර්", "වයර", "කම්බි"],
+  ["cable", "cables", "kebal", "kebala", "kebalaya", "cabel", "කේබල්", "කේබල"],
+  ["switch", "swich", "swicth", "swith", "switc", "switchu", "සුවිච්", "ස්විච්", "ස්විච"],
+  ["socket", "sockets", "soket", "sokat", "plugbase", "plagbase", "plugpoint", "සොකට්", "ප්ලග්"],
+  ["plug", "plag", "plugtop", "ප්ලග්"],
+  ["bulb", "bulbs", "balb", "bulbu", "lamp", "බල්බ්", "බල්බ"],
+  ["light", "lights", "lite", "lait", "lamp", "ලයිට්", "ලයිට"],
+  ["holder", "holdar", "holda", "හෝල්ඩර්"],
+  ["breaker", "breakers", "braker", "brekar", "mcb", "trip", "බ්රේකර්", "බ්‍රේකර්"],
+  ["rccb", "rcb", "elcb", "trip"],
+  ["board", "dbbox", "db", "distributionboard", "බෝඩ්"],
+  ["fan", "fans", "fanu", "ෆෑන්", "ෆෑන"],
+  ["conduit", "pipe", "pvcpipe", "conduct", "පයිප්"],
+  ["tape", "insulationtape", "ටේප්"],
+  ["casablanca", "casablanka", "casablank"],
+  ["orange", "orenge", "oranj", "oraange"],
+  ["sierra", "siera", "sirra"],
+];
+const SYN_INDEX = new Map<string, string[]>();
+for (const group of SYNONYMS) {
+  const keys = group.map(searchKey);
+  for (const k of keys) SYN_INDEX.set(k, Array.from(new Set([...(SYN_INDEX.get(k) || []), ...keys])));
+}
+/** Singlish filler words that are not part of an item name ("switch eka", "wire ekak ona"). */
+const FILLER = new Set(["eka", "ekak", "ek", "ona", "oni", "onae", "ganna", "denna", "එක", "එකක්", "ඕන", "ඕනේ"]);
+
+/**
+ * Typed search → one group of alternatives per word (match any word in a group,
+ * every group must match). Used by the shop search; staff search uses searchWords.
+ */
+export function searchGroups(query: string): string[][] {
+  const words = searchWords(query);
+  const kept = words.length > 1 ? words.filter((w) => !FILLER.has(w)) : words;
+  return kept.map((w) => {
+    // "switcheka" → "switch"
+    const base = w.length > 5 && w.endsWith("eka") ? w.slice(0, -3) : w;
+    return Array.from(new Set([w, base, ...(SYN_INDEX.get(base) || []), ...(SYN_INDEX.get(w) || [])]));
+  });
+}
+
 /** Text saved in web_products.search_key. */
 export function buildSearchKey(parts: (string | null | undefined)[]): string {
   return parts.filter(Boolean).map((p) => searchKey(p as string)).join(" ");

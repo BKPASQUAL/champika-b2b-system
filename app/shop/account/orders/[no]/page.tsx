@@ -9,6 +9,7 @@ import { rs, whatsappLink } from "../../../_components/format";
 import { cardCls } from "../../../_components/ui";
 import { StatusBadge } from "../StatusBadge";
 import { SlipUpload } from "./SlipUpload";
+import { OrderAgain } from "./OrderAgain";
 
 type Props = { params: Promise<{ no: string }>; searchParams: Promise<{ placed?: string }> };
 
@@ -63,6 +64,11 @@ export default async function OrderPage({ params, searchParams }: Props) {
             </div>
           </div>
         </div>
+        {!sp.placed && (
+          <div className="mt-4">
+            <OrderAgain items={o.items.filter((i) => i.id).map((i) => ({ id: i.id!, qty: i.qty }))} />
+          </div>
+        )}
 
         {cancelled ? (
           <p className="mt-5 rounded-xl bg-(--s-soft) px-4 py-3 text-sm text-(--s-ink-2)">{STATUS_TEXT.Cancelled.text}</p>
@@ -84,7 +90,7 @@ export default async function OrderPage({ params, searchParams }: Props) {
                       </span>
                       <span className={`h-0.5 flex-1 ${i === STEPS.length - 1 ? "opacity-0" : i < stepIndex ? "bg-(--s-accent)" : "bg-(--s-line)"}`} />
                     </div>
-                    <span className={`mt-2 text-[11px] leading-tight sm:text-xs ${done ? "font-semibold" : "text-(--s-muted)"}`}>{STATUS_TEXT[s].label}</span>
+                    <span className={`mt-2 text-[12.5px] leading-tight sm:text-xs ${done ? "font-semibold" : "text-(--s-muted)"}`}>{STATUS_TEXT[s].label}</span>
                   </li>
                 );
               })}

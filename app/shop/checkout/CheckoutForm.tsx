@@ -228,7 +228,7 @@ export function CheckoutForm({ defaults, email, bankReady }: { defaults: Form; e
                   ) : (
                     <ImageOff className="h-5 w-5 text-(--s-muted)" />
                   )}
-                  <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-(--s-btn) px-1 text-[11px] font-bold text-(--s-btn-ink)">
+                  <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-(--s-btn) px-1 text-[12.5px] font-bold text-(--s-btn-ink)">
                     {l.qty}
                   </span>
                 </span>

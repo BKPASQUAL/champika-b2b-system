@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getVisitorTier } from "@/lib/web-auth";
 import { loadPriceRules, resolveVariantPrice, type PriceTier } from "@/lib/web-pricing";
-import { searchWords } from "@/lib/web-search";
+import { searchGroups } from "@/lib/web-search";
 import { shopBaseFor } from "@/lib/shop-host";
 
 /**
@@ -63,8 +63,18 @@ export type ShopProduct = ShopProductCard & {
   subBrandInfo: { name: string; slug: string } | null;
 };
 
-export type StoreInfo = { name: string; phone: string; whatsapp: string; address: string; email: string };
-export type DeliveryInfo = { flatFee: number; freeOver: number };
+export type StoreInfo = {
+  name: string;
+  phone: string;
+  whatsapp: string;
+  address: string;
+  email: string;
+  /** Opening hours, e.g. "Mon–Sat 8.00am – 7.00pm". */
+  hours: string;
+  /** Google Maps link to the shop (optional; the address is used when empty). */
+  mapUrl: string;
+};
+export type DeliveryInfo = { flatFee: number; freeOver: number; /** Areas we deliver to, e.g. "Galle, Matara, Hikkaduwa". */ areas: string };
 
 // ---------------------------------------------------------------- helpers
 
@@ -130,6 +140,8 @@ export const getStoreInfo = cache(async (): Promise<StoreInfo> => {
     whatsapp: s.whatsapp || "",
     address: s.address || "",
     email: s.email || "",
+    hours: s.hours || "",
+    mapUrl: s.map_url || "",
   };
 });
 
@@ -143,7 +155,7 @@ export const getBankInfo = cache(async (): Promise<BankInfo> => {
 
 export const getDeliveryInfo = cache(async (): Promise<DeliveryInfo> => {
   const s = (await getSetting<any>("delivery")) || {};
-  return { flatFee: Number(s.flat_fee) || 0, freeOver: Number(s.free_over) || 0 };
+  return { flatFee: Number(s.flat_fee) || 0, freeOver: Number(s.free_over) || 0, areas: String(s.areas || "") };
 });
 
 export function deliveryFee(subtotal: number, d: DeliveryInfo): number {
@@ -281,8 +293,9 @@ export async function getProducts(q: ProductQuery = {}): Promise<ShopProductCard
     if (q.brandId) query = query.or(`web_brand_id.eq.${q.brandId},web_sub_brand_id.eq.${q.brandId}`);
     if (q.featured) query = query.eq("is_featured", true);
     if (q.ids) query = query.in("id", q.ids.length ? q.ids : ["00000000-0000-0000-0000-000000000000"]);
-    for (const w of searchWords(q.search || ""))
-      query = useSearchKey ? query.or(`name.ilike.%${w}%,search_key.ilike.%${w}%`) : query.ilike("name", `%${w}%`);
+    // Every typed word must match; each word also matches its Singlish / Sinhala / misspelt forms.
+    for (const alts of searchGroups(q.search || ""))
+      query = query.or(alts.flatMap((w) => (useSearchKey ? [`name.ilike.%${w}%`, `search_key.ilike.%${w}%`] : [`name.ilike.%${w}%`])).join(","));
     query = query.order("sort_order").order("name");
     if (q.limit) query = query.limit(q.limit);
     return query;

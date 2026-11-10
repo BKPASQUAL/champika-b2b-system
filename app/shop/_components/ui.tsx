@@ -29,7 +29,7 @@ export function Field({
 }) {
   return (
     <label className={`block space-y-1.5 ${className}`}>
-      <span className="text-[13px] font-medium text-(--s-ink-2)">{label}</span>
+      <span className="text-[14px] font-medium text-(--s-ink-2)">{label}</span>
       {children}
       {error ? <span className="block text-xs text-(--s-bad)">{error}</span> : hint ? <span className="block text-xs text-(--s-muted)">{hint}</span> : null}
     </label>

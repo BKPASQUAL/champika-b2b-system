@@ -11,16 +11,16 @@ import { webApi } from "../_components/api";
 import { Checkbox } from "@/components/ui/checkbox";
 
 type Settings = {
-  delivery: { flat_fee: number; free_over: number };
+  delivery: { flat_fee: number; free_over: number; areas: string };
   bank: { bank: string; branch: string; account_name: string; account_no: string };
-  store: { name: string; phone: string; whatsapp: string; address: string; email: string };
+  store: { name: string; phone: string; whatsapp: string; address: string; email: string; hours: string; map_url: string };
   catalog: { allowed_categories: string[] };
 };
 
 const defaults: Settings = {
-  delivery: { flat_fee: 0, free_over: 0 },
+  delivery: { flat_fee: 0, free_over: 0, areas: "" },
   bank: { bank: "", branch: "", account_name: "", account_no: "" },
-  store: { name: "BK Wiring", phone: "", whatsapp: "", address: "", email: "" },
+  store: { name: "BK Wiring", phone: "", whatsapp: "", address: "", email: "", hours: "", map_url: "" },
   catalog: { allowed_categories: ["Wiring Accessories"] },
 };
 
@@ -110,13 +110,20 @@ export default function ShopSettingsPage() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Store details (shown in shop footer)</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle className="text-base">Store details (shown on the shop)</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Customers trust a shop they can call and visit. Fill these in: they show on the home page, footer and the green WhatsApp button.
+          </p>
+        </CardHeader>
         <CardContent className="grid sm:grid-cols-2 gap-4">
           {field("store", "name", "Store name")}
           {field("store", "phone", "Phone")}
           {field("store", "whatsapp", "WhatsApp number")}
           {field("store", "email", "Email")}
           <div className="sm:col-span-2">{field("store", "address", "Address")}</div>
+          {field("store", "hours", "Opening hours (e.g. Mon–Sat 8.00am – 7.00pm)")}
+          {field("store", "map_url", "Google Maps link (optional)")}
         </CardContent>
       </Card>
 
@@ -125,6 +132,7 @@ export default function ShopSettingsPage() {
         <CardContent className="grid sm:grid-cols-2 gap-4">
           {field("delivery", "flat_fee", "Delivery fee (Rs)", "number")}
           {field("delivery", "free_over", "Free delivery for orders over (Rs, 0 = never)", "number")}
+          <div className="sm:col-span-2">{field("delivery", "areas", "Areas we deliver to (e.g. Galle, Matara, Hikkaduwa)")}</div>
         </CardContent>
       </Card>
 
