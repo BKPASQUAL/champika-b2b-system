@@ -35,6 +35,9 @@ export async function GET(request: NextRequest) {
         purchases!inner (
           id,
           purchase_id,
+          invoice_no,
+          purchase_date,
+          total_amount,
           business_id
         ),
         suppliers ( name ),
@@ -59,6 +62,8 @@ export async function GET(request: NextRequest) {
       cheque_date: p.cheque_date,
       cheque_status: p.cheque_status,
       notes: p.notes,
+      supplier_id: p.supplier_id,
+      voucher_id: p.voucher_id ?? null,
       company_account_id: p.company_account_id,
       company_accounts: p.bank_accounts
         ? {
@@ -69,6 +74,9 @@ export async function GET(request: NextRequest) {
       purchases: {
         id: p.purchases?.id,
         purchase_id: p.purchases?.purchase_id,
+        invoice_no: p.purchases?.invoice_no ?? null,
+        purchase_date: p.purchases?.purchase_date ?? null,
+        total_amount: p.purchases?.total_amount ?? 0,
         suppliers: { name: p.suppliers?.name },
       },
     }));

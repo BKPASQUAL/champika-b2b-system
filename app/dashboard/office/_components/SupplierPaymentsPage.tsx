@@ -6,7 +6,10 @@ import { useRouter } from "next/navigation";
 import {
   DollarSign, Clock, Search, AlertCircle, CreditCard, Banknote,
   Building2, FileText, Printer, CheckSquare, CheckCircle2, AlertTriangle, ArrowUpDown,
+  FileSignature,
 } from "lucide-react";
+import PaymentVoucherDialog from "@/components/payment-voucher-dialog";
+import { printPaymentVoucher, type PaymentVoucher } from "@/app/lib/payment-voucher-print";
 import { cn } from "@/lib/utils";
 import WriteChequeDialog from "@/components/write-cheque-dialog";
 import WriteMultiChequeDialog from "@/components/write-multi-cheque-dialog";
@@ -66,11 +69,16 @@ interface SupplierPayment {
   cheque_date: string | null;
   cheque_status: string | null;
   notes: string | null;
+  supplier_id?: string;
+  voucher_id?: string | null;
   company_account_id: string;
   company_accounts: { id: string; account_name: string } | null;
   purchases: {
     id: string;
     purchase_id: string;
+    invoice_no?: string | null;
+    purchase_date?: string | null;
+    total_amount?: number;
     suppliers: { name: string } | null;
   } | null;
 }
@@ -162,6 +170,35 @@ export function SupplierPaymentsPage({ defaultBusinessId, routePrefix }: Supplie
   const { data: companyAccounts = [], loading: l3, refetch: refetchAccounts } =
     useCachedFetch<CompanyAccount[]>(`/api/finance/accounts${bq}`, []);
 
+  const { data: vouchers = [], refetch: refetchVouchers } =
+    useCachedFetch<PaymentVoucher[]>(`/api/suppliers/vouchers${bq}`, []);
+
+  const voucherList = useMemo(() => (Array.isArray(vouchers) ? vouchers : []), [vouchers]);
+
+  const voucherById = useMemo(() => {
+    const m = new Map<string, PaymentVoucher>();
+    voucherList.forEach((v) => m.set(v.id, v));
+    return m;
+  }, [voucherList]);
+
+  const [isVoucherDialogOpen, setIsVoucherDialogOpen] = useState(false);
+  const [voucherPayments,     setVoucherPayments]     = useState<SupplierPayment[]>([]);
+  const [voucherSearch,       setVoucherSearch]       = useState("");
+
+  const openVoucherDialog = (payments: SupplierPayment[]) => {
+    const suppliers = new Set(payments.map((p) => p.supplier_id ?? p.purchases?.suppliers?.name));
+    if (suppliers.size > 1) {
+      toast.error("A voucher can only cover cheques for one supplier");
+      return;
+    }
+    if (payments.some((p) => p.voucher_id)) {
+      toast.error("Some selected cheques are already on a voucher");
+      return;
+    }
+    setVoucherPayments(payments);
+    setIsVoucherDialogOpen(true);
+  };
+
   const loading = l1 || l2 || l3;
 
   const unpaidPurchases = useMemo(
@@ -169,7 +206,7 @@ export function SupplierPaymentsPage({ defaultBusinessId, routePrefix }: Supplie
     [allPurchasesRaw],
   );
 
-  const fetchData = () => { refetchPurchases(); refetchPayments(); refetchAccounts(); };
+  const fetchData = () => { refetchPurchases(); refetchPayments(); refetchAccounts(); refetchVouchers(); };
 
   // ─── Unpaid bill selection helpers ───────────────────────────────────────────
 
@@ -457,6 +494,7 @@ export function SupplierPaymentsPage({ defaultBusinessId, routePrefix }: Supplie
           <TabsTrigger value="unpaid">Unpaid Bills ({filteredPurchases.length})</TabsTrigger>
           <TabsTrigger value="pending_cheques">Pending Cheques ({pendingCheques.length})</TabsTrigger>
           <TabsTrigger value="history">Payment History ({filteredHistory.length})</TabsTrigger>
+          <TabsTrigger value="vouchers">Vouchers ({voucherList.length})</TabsTrigger>
         </TabsList>
 
         {/* ── Unpaid Bills ─────────────────────────────────────────────────────── */}
@@ -593,6 +631,14 @@ export function SupplierPaymentsPage({ defaultBusinessId, routePrefix }: Supplie
                 </Button>
               {selectedChequeGroupIds.size > 0 && (
                 <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => openVoucherDialog(bulkChequePayments)}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5"
+                  >
+                    <FileSignature className="w-4 h-4" />
+                    Create Voucher ({selectedChequeGroupIds.size})
+                  </Button>
                   <Button
                     size="sm"
                     onClick={() => openBulkChequeAction("passed")}
@@ -736,7 +782,33 @@ export function SupplierPaymentsPage({ defaultBusinessId, routePrefix }: Supplie
                         <TableCell className="text-right font-semibold">
                           {formatCurrency(group.amount)}
                         </TableCell>
-                        <TableCell className="text-right space-x-2">
+                        <TableCell className="text-right space-x-2 whitespace-nowrap">
+                          {(() => {
+                            const vId = group.payments.find((p) => p.voucher_id)?.voucher_id;
+                            const v = vId ? voucherById.get(vId) : undefined;
+                            return v ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-indigo-700 border-indigo-200 bg-indigo-50 hover:bg-indigo-100"
+                                title={`Taken by ${v.receiver_name || "(handwritten)"} — click to reprint`}
+                                onClick={() => printPaymentVoucher(v)}
+                              >
+                                <FileSignature className="w-3 h-3 mr-1" />
+                                {v.voucher_number}
+                              </Button>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-indigo-700 border-indigo-200 hover:bg-indigo-50"
+                                onClick={() => openVoucherDialog(group.payments)}
+                              >
+                                <FileSignature className="w-3 h-3 mr-1" />
+                                Voucher
+                              </Button>
+                            );
+                          })()}
                           <Button
                             size="sm"
                             variant="outline"
@@ -884,7 +956,119 @@ export function SupplierPaymentsPage({ defaultBusinessId, routePrefix }: Supplie
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* ── Vouchers ──────────────────────────────────────────────────────────── */}
+        <TabsContent value="vouchers" className="mt-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-4">
+              <div>
+                <CardTitle>Payment Vouchers</CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Cheques handed over, with who took them. Create a voucher from the Pending Cheques tab.
+                </p>
+              </div>
+              <Input
+                placeholder="Search voucher, supplier, cheque, receiver..."
+                value={voucherSearch}
+                onChange={(e) => setVoucherSearch(e.target.value)}
+                className="w-full md:w-[300px]"
+              />
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50/50">
+                    <TableHead className="pl-4">Voucher No</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Supplier</TableHead>
+                    <TableHead>Cheque Nos</TableHead>
+                    <TableHead>Invoices</TableHead>
+                    <TableHead>Taken By</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead className="text-right pr-4">Print</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(() => {
+                    const q = voucherSearch.trim().toLowerCase();
+                    const list = voucherList.filter((v) =>
+                      !q ||
+                      [
+                        v.voucher_number, v.supplier_name, v.receiver_name, v.receiver_nic,
+                        ...(v.cheques ?? []).map((c) => c.cheque_number),
+                        ...(v.invoices ?? []).flatMap((i) => [i.invoice_no, i.purchase_id]),
+                      ].some((s) => s && String(s).toLowerCase().includes(q)),
+                    );
+                    if (list.length === 0) {
+                      return (
+                        <TableRow>
+                          <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                            No vouchers yet.
+                          </TableCell>
+                        </TableRow>
+                      );
+                    }
+                    return list.map((v) => (
+                      <TableRow key={v.id} className="hover:bg-muted/30">
+                        <TableCell className="pl-4 font-mono text-sm font-semibold text-indigo-700">
+                          {v.voucher_number}
+                        </TableCell>
+                        <TableCell className="text-sm">{new Date(v.voucher_date).toLocaleDateString()}</TableCell>
+                        <TableCell className="text-sm font-medium">{v.supplier_name ?? "-"}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1 max-w-[180px]">
+                            {(v.cheques ?? []).map((c, i) => (
+                              <span key={i} className="font-mono text-[10px] bg-amber-50 text-amber-800 border border-amber-200 px-1.5 py-0.5 rounded">
+                                {c.cheque_number ?? "—"}
+                              </span>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1 max-w-[200px]">
+                            {(v.invoices ?? []).map((inv, i) => (
+                              <span key={i} className="font-mono text-[10px] bg-blue-50 text-blue-700 border border-blue-100 px-1.5 py-0.5 rounded">
+                                {inv.invoice_no || inv.purchase_id}
+                              </span>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          <div className="font-medium">
+                            {v.receiver_name || <span className="text-muted-foreground italic">Written by hand</span>}
+                          </div>
+                          {(v.receiver_nic || v.receiver_designation) && (
+                            <div className="text-[11px] text-muted-foreground">
+                              {[v.receiver_designation, v.receiver_nic].filter(Boolean).join(" · ")}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right font-mono font-medium">
+                          {formatCurrency(Number(v.total_amount) || 0)}
+                        </TableCell>
+                        <TableCell className="text-right pr-4">
+                          <Button size="sm" variant="outline" onClick={() => printPaymentVoucher(v)}>
+                            <Printer className="w-3 h-3 mr-1" />
+                            Print
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ));
+                  })()}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+
+      <PaymentVoucherDialog
+        open={isVoucherDialogOpen}
+        onClose={() => setIsVoucherDialogOpen(false)}
+        payments={voucherPayments}
+        pastVouchers={voucherList}
+        onSuccess={() => { fetchData(); setSelectedChequeGroupIds(new Set()); }}
+      />
 
       {/* ── Payment Dialog ────────────────────────────────────────────────────── */}
       <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
