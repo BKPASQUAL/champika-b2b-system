@@ -65,6 +65,8 @@ export type WebProduct = {
   isPublished: boolean;
   isFeatured: boolean;
   sortOrder: number;
+  orderType?: "normal" | "special" | "cut";
+  leadTime?: string | null;
   options: { name: string; values: string[] }[];
   variants: WebVariant[];
   summary: {

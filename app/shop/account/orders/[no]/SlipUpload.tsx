@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Notice, btnDark, btnOutline } from "../../../_components/ui";
 
 /** Upload a photo or PDF of the bank transfer slip. */
-export function SlipUpload({ orderNo, hasSlip }: { orderNo: string; hasSlip: boolean }) {
+export function SlipUpload({ orderNo, hasSlip, advance }: { orderNo: string; hasSlip: boolean; advance?: boolean }) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -19,7 +19,7 @@ export function SlipUpload({ orderNo, hasSlip }: { orderNo: string; hasSlip: boo
     setBusy(true);
     const body = new FormData();
     body.append("file", file);
-    const res = await fetch(`/api/storefront/orders/${encodeURIComponent(orderNo)}/slip`, { method: "POST", body });
+    const res = await fetch(`/api/storefront/orders/${encodeURIComponent(orderNo)}/${advance ? "advance-slip" : "slip"}`, { method: "POST", body });
     const json = await res.json().catch(() => ({}));
     setBusy(false);
     if (input.current) input.current.value = "";
@@ -45,7 +45,7 @@ export function SlipUpload({ orderNo, hasSlip }: { orderNo: string; hasSlip: boo
       />
       <button type="button" disabled={busy} onClick={() => input.current?.click()} className={hasSlip ? btnOutline : btnDark}>
         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-        {busy ? "Uploading…" : hasSlip ? "Upload a different slip" : "Upload payment slip"}
+        {busy ? "Uploading…" : hasSlip ? "Upload a different slip" : advance ? "Upload advance slip" : "Upload payment slip"}
       </button>
       <p className="text-xs text-(--s-muted)">Photo or PDF, up to 5 MB.</p>
     </div>

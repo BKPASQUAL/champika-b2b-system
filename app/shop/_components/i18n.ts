@@ -144,6 +144,24 @@ const SI: Record<string, string> = {
   "Order summary": "ඇණවුමේ සාරාංශය",
   "Or order by phone": "නැත්නම් දුරකථනයෙන් ඇණවුම් කරන්න",
 
+  // Special order / cut pieces / advance
+  "Special order": "විශේෂ ඇණවුම",
+  "Special order item": "විශේෂ ඇණවුම් භාණ්ඩයක්",
+  "about {time}": "දළ වශයෙන් {time}",
+  "Cut to length": "අවශ්‍ය දිගට කපා",
+  "We cut this to the length you order. Cut pieces can't be returned.": "ඔබ ඇණවුම් කරන දිගට අපි මෙය කපනවා. කපපු කෑලි ආපසු ගන්න බෑ.",
+  "We order this from the supplier for you. After you place the order, we will contact you about an advance payment before we confirm it.":
+    "අපි මෙය ඔබ වෙනුවෙන් සැපයුම්කරුගෙන් ගෙන්වනවා. ඇණවුම දැම්මට පස්සේ, තහවුරු කරන්න කලින් අත්තිකාරම් මුදලක් ගැන අපි ඔබව සම්බන්ධ කරගන්නවා.",
+  "Ask on WhatsApp": "WhatsApp එකෙන් අහන්න",
+  "Your order has special order items": "ඔබේ ඇණවුමේ විශේෂ ඇණවුම් භාණ්ඩ තියෙනවා",
+  "We will contact you about an advance payment before we confirm the order.": "ඇණවුම තහවුරු කරන්න කලින් අත්තිකාරම් මුදලක් ගැන අපි ඔබව සම්බන්ධ කරගන්නවා.",
+  "Advance payment": "අත්තිකාරම් මුදල",
+  "Please pay an advance of {amount} so we can order your items.": "ඔබේ භාණ්ඩ ගෙන්වන්න {amount}ක අත්තිකාරම් මුදලක් ගෙවන්න.",
+  "Advance received. Thank you!": "අත්තිකාරම ලැබුණා. ස්තූතියි!",
+  "Slip received. We are checking it.": "ස්ලිප් එක ලැබුණා. අපි පරීක්ෂා කරනවා.",
+  "Upload advance slip": "අත්තිකාරම් ස්ලිප් එක දාන්න",
+  "Or pay at our shop.": "නැත්නම් අපේ කඩයට ඇවිත් ගෙවන්න.",
+
   // Orders
   "Order again": "ආයෙත් ඇණවුම් කරන්න",
   "Items added to your cart": "භාණ්ඩ කරත්තයට දැම්මා",

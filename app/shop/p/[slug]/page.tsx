@@ -7,6 +7,7 @@ import { brandLabelFor, getAlternatives } from "@/lib/web-compare";
 import { SHOP_URL } from "@/lib/shop-host";
 import { Gallery } from "../../_components/Gallery";
 import { AddToCartButton, ProductBuyBox } from "../../_components/AddToCart";
+import { ItemKindNote } from "../../_components/ItemKindNote";
 import { ProductGrid } from "../../_components/ProductCard";
 import { rs, whatsappLink } from "../../_components/format";
 
@@ -151,6 +152,11 @@ export default async function ProductPage({ params }: Props) {
           <div className="mt-5">
             <ProductBuyBox id={p.id} name={p.name} available={p.available} />
           </div>
+          {p.kind !== "normal" && (
+            <div className="mt-4">
+              <ItemKindNote kind={p.kind} leadTime={p.leadTime} itemName={p.name} />
+            </div>
+          )}
 
           {wa && (
             <a

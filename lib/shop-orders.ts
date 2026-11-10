@@ -25,6 +25,8 @@ export type MyOrder = MyOrderSummary & {
   deliveryFee: number;
   note: string | null;
   hasSlip: boolean;
+  /** Advance the office asked for (special-order items). status: none · requested · slip_uploaded · paid */
+  advance: { amount: number; status: string; note: string | null };
   items: { id: string | null; name: string; slug: string | null; image: string | null; qty: number; unitPrice: number; mrp: number | null; lineTotal: number }[];
 };
 
@@ -85,6 +87,7 @@ export async function getMyOrder(customerId: string, no: string): Promise<MyOrde
     deliveryFee: n(o.delivery_fee),
     note: o.customer_note,
     hasSlip: !!o.slip_path,
+    advance: { amount: n(o.advance_amount), status: (o.advance_status as string) || "none", note: (o.advance_note as string | null) ?? null },
     items,
   };
 }

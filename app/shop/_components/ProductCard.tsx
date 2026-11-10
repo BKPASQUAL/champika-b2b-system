@@ -4,6 +4,7 @@ import type { ShopProductCard } from "@/lib/shop-data";
 import { AddToCartButton } from "./AddToCart";
 import { rs } from "./format";
 import { Tr } from "./Tr";
+import { ItemKindTag } from "./ItemKindNote";
 
 /**
  * Product card, read top to bottom: picture → brand → name → price & saving → button.
@@ -47,6 +48,11 @@ export function ProductCard({ p, base }: { p: ShopProductCard; base: string }) {
         >
           {p.name}
         </Link>
+        {p.kind !== "normal" && (
+          <div className="mt-1.5">
+            <ItemKindTag kind={p.kind} leadTime={p.leadTime} />
+          </div>
+        )}
 
         <div className="mt-3">
           {p.price ? (

@@ -42,6 +42,8 @@ export async function POST(request: NextRequest) {
           price: p.price,
           discountPct: p.discountPct,
           available: p.available,
+          kind: p.kind,
+          leadTime: p.leadTime,
           qty: i.qty,
           lineTotal: p.available ? p.price * i.qty : 0,
           /** Same item from other brands, cheapest first. */

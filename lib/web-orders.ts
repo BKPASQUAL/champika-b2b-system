@@ -123,10 +123,18 @@ export async function stockCheck(order: any) {
 }
 
 /** New → Confirmed: create the invoice (stock out, FIFO cost) and link it. */
-export async function confirmOrder(orderId: string, staff: Staff, opts: { force?: boolean } = {}) {
+export async function confirmOrder(orderId: string, staff: Staff, opts: { force?: boolean; skipAdvance?: boolean } = {}) {
   const order = await loadOrder(orderId);
   if (order.status !== "New") throw new WebOrderError(`This order is already ${order.status}.`);
   if (order.order_id) throw new WebOrderError("This order already has an invoice.");
+  const advanceWaiting = order.advance_status === "requested" || order.advance_status === "slip_uploaded";
+  if (advanceWaiting && !opts.skipAdvance) {
+    throw new WebOrderError(
+      `The advance of Rs ${Number(order.advance_amount).toLocaleString("en-LK")} is not received yet.`,
+      409,
+      { advance: true },
+    );
+  }
 
   const stock = await stockCheck(order);
   const short = stock.filter((s) => s.short);
@@ -201,12 +209,15 @@ export async function confirmOrder(orderId: string, staff: Staff, opts: { force?
 
   // A slip that was already checked counts as paid on the new invoice.
   if (paidAlready) await payInvoice(orderId, staff, "bank");
+  // An advance taken before the invoice existed goes on the invoice now.
+  else if (order.advance_status === "paid" && Number(order.advance_amount) > 0)
+    await payInvoice(orderId, staff, order.advance_method === "cash" ? "cash" : "bank", Number(order.advance_amount), "advance");
 
   return { invoiceNo: result.invoiceNo as string };
 }
 
 /** Record the money on the invoice (once), via the normal payments code. */
-async function payInvoice(orderId: string, staff: Staff, method: "cash" | "bank") {
+async function payInvoice(orderId: string, staff: Staff, method: "cash" | "bank", amount?: number, label?: string) {
   const order = await loadOrder(orderId);
   if (!order.order_id) return;
   const { data: inv } = await supabaseAdmin
@@ -217,12 +228,14 @@ async function payInvoice(orderId: string, staff: Staff, method: "cash" | "bank"
   if (!inv) return;
   const due = Number(inv.total_amount) - Number(inv.paid_amount || 0);
   if (due <= 0.009) return;
+  const pay = amount == null ? due : Math.min(amount, due);
+  if (pay <= 0.009) return;
   await callHandler(recordPayment, "/api/payments", {
     orderId: order.order_id,
-    amount: Math.round(due * 100) / 100,
+    amount: Math.round(pay * 100) / 100,
     method,
     date: new Date().toISOString().split("T")[0],
-    notes: `Website order ${order.web_order_no}`,
+    notes: `Website order ${order.web_order_no}${label ? ` (${label})` : ""}`,
     performedById: staff.id,
     performedByName: staff.name,
     performedByEmail: staff.email,
@@ -271,6 +284,55 @@ export async function verifyPayment(orderId: string, staff: Staff, ok: boolean) 
   await logNote(orderId, staff, ok ? "Bank payment confirmed" : "Bank slip rejected");
   if (ok) await payInvoice(orderId, staff, "bank");
   return { paymentStatus: ok ? "verified" : "failed" };
+}
+
+/**
+ * Special orders: after talking to the customer, staff set the advance they
+ * agreed. The customer then sees it on their order page (bank details + slip).
+ * Amount 0 clears it.
+ */
+export async function requestAdvance(orderId: string, staff: Staff, amount: number, note: string) {
+  const order = await loadOrder(orderId);
+  if (order.status === "Cancelled" || order.status === "Delivered") throw new WebOrderError(`This order is ${order.status}.`);
+  if (order.advance_status === "paid") throw new WebOrderError("The advance is already received.");
+  const amt = Math.round(Math.max(0, amount) * 100) / 100;
+  if (amt > Number(order.total)) throw new WebOrderError("The advance can't be more than the order total.");
+  const { error } = await supabaseAdmin
+    .from("web_orders")
+    .update({
+      advance_amount: amt,
+      advance_status: amt > 0 ? "requested" : "none",
+      advance_note: note || null,
+      advance_method: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", orderId);
+  if (error) throw new WebOrderError(/advance_/.test(error.message) ? "Run the latest website_shop.sql in Supabase first (advance columns)." : error.message, 500);
+  await logNote(orderId, staff, amt > 0 ? `Advance asked: Rs ${amt.toLocaleString("en-LK")}${note ? ` (${note})` : ""}` : "Advance removed");
+  return { advanceStatus: amt > 0 ? "requested" : "none" };
+}
+
+/** Advance received: by bank (slip checked) or cash at the shop. Goes on the invoice if there is one. */
+export async function markAdvancePaid(orderId: string, staff: Staff, method: "bank" | "cash") {
+  const order = await loadOrder(orderId);
+  if (!(Number(order.advance_amount) > 0) || order.advance_status === "none") throw new WebOrderError("No advance was asked for this order.");
+  if (order.advance_status === "paid") throw new WebOrderError("The advance is already received.");
+  await supabaseAdmin
+    .from("web_orders")
+    .update({ advance_status: "paid", advance_method: method, updated_at: new Date().toISOString() })
+    .eq("id", orderId);
+  await logNote(orderId, staff, `Advance received (${method === "cash" ? "cash at shop" : "bank"}): Rs ${Number(order.advance_amount).toLocaleString("en-LK")}`);
+  if (order.order_id) await payInvoice(orderId, staff, method, Number(order.advance_amount), "advance");
+  return { advanceStatus: "paid" };
+}
+
+/** Advance slip was wrong: ask again (the customer can upload a new one). */
+export async function rejectAdvanceSlip(orderId: string, staff: Staff) {
+  const order = await loadOrder(orderId);
+  if (order.advance_status !== "slip_uploaded") throw new WebOrderError("There is no advance slip to reject.");
+  await supabaseAdmin.from("web_orders").update({ advance_status: "requested", updated_at: new Date().toISOString() }).eq("id", orderId);
+  await logNote(orderId, staff, "Advance slip rejected");
+  return { advanceStatus: "requested" };
 }
 
 /**

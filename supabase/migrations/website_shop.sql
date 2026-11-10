@@ -552,3 +552,28 @@ ALTER TABLE web_promo_strip ADD COLUMN IF NOT EXISTS ends_at     TIMESTAMPTZ;
 ALTER TABLE web_promo_strip ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS web_promo_strip_public ON web_promo_strip;
 CREATE POLICY web_promo_strip_public ON web_promo_strip FOR SELECT USING (is_active);
+
+-- ============================================================================
+-- 14. Special-order items, cut pieces and advance payments
+--   order_type: normal · special (we buy it from the supplier for this customer) · cut (cut to length)
+--   Special orders: after the order, staff agree an advance with the customer and
+--   set advance_amount; the customer pays it (slip) or pays at the shop.
+-- ============================================================================
+ALTER TABLE web_products ADD COLUMN IF NOT EXISTS order_type TEXT NOT NULL DEFAULT 'normal';
+ALTER TABLE web_products ADD COLUMN IF NOT EXISTS lead_time  TEXT;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'web_products_order_type_check') THEN
+    ALTER TABLE web_products ADD CONSTRAINT web_products_order_type_check CHECK (order_type IN ('normal','special','cut'));
+  END IF;
+END $$;
+
+ALTER TABLE web_orders ADD COLUMN IF NOT EXISTS advance_amount    NUMERIC(12,2) NOT NULL DEFAULT 0;
+ALTER TABLE web_orders ADD COLUMN IF NOT EXISTS advance_status    TEXT NOT NULL DEFAULT 'none';  -- none · requested · slip_uploaded · paid
+ALTER TABLE web_orders ADD COLUMN IF NOT EXISTS advance_method    TEXT;                          -- bank · cash
+ALTER TABLE web_orders ADD COLUMN IF NOT EXISTS advance_slip_path TEXT;
+ALTER TABLE web_orders ADD COLUMN IF NOT EXISTS advance_note      TEXT;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'web_orders_advance_status_check') THEN
+    ALTER TABLE web_orders ADD CONSTRAINT web_orders_advance_status_check CHECK (advance_status IN ('none','requested','slip_uploaded','paid'));
+  END IF;
+END $$;

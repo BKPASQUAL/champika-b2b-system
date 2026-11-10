@@ -124,6 +124,43 @@ export default async function OrderPage({ params, searchParams }: Props) {
         </section>
       )}
 
+      {/* Advance for special-order items (asked by the office after talking to the customer) */}
+      {!cancelled && o.advance.status !== "none" && o.advance.amount > 0 && (
+        <section className={`p-5 sm:p-6 ${cardCls} ${o.advance.status === "paid" ? "" : "border-2 border-amber-500/50"}`}>
+          <h3 className="flex items-center gap-2 font-bold">
+            <Building2 className="h-5 w-5" /> Advance payment: {rs(o.advance.amount)}
+          </h3>
+          {o.advance.status === "paid" ? (
+            <p className="mt-2 flex items-center gap-2 font-semibold text-(--s-good)">
+              <Check className="h-4 w-4" /> Advance received. Thank you!
+            </p>
+          ) : (
+            <>
+              <p className="mt-1 text-sm text-(--s-ink-2)">
+                Please pay an advance of <b>{rs(o.advance.amount)}</b> so we can order your items.
+                {o.advance.note ? ` ${o.advance.note}` : ""}
+              </p>
+              {bank.bank && bank.accountNo ? (
+                <dl className="mt-4 grid gap-x-6 gap-y-2 rounded-2xl bg-(--s-soft) p-4 text-sm sm:grid-cols-2">
+                  <BankRow label="Bank" value={bank.bank} />
+                  {bank.branch && <BankRow label="Branch" value={bank.branch} />}
+                  {bank.accountName && <BankRow label="Account name" value={bank.accountName} />}
+                  <BankRow label="Account number" value={bank.accountNo} strong />
+                  <BankRow label="Amount" value={rs(o.advance.amount)} strong />
+                  <BankRow label="Reference" value={o.no} strong />
+                </dl>
+              ) : (
+                <p className="mt-3 text-sm text-(--s-ink-2)">We will send you our bank details by phone or WhatsApp.</p>
+              )}
+              <p className="mt-2 text-sm text-(--s-muted)">Or pay at our shop.</p>
+              <div className="mt-4">
+                <SlipUpload orderNo={o.no} hasSlip={o.advance.status === "slip_uploaded"} advance />
+              </div>
+            </>
+          )}
+        </section>
+      )}
+
       <div className="grid gap-5 xl:grid-cols-[1fr_340px]">
         {/* Items */}
         <section className={`p-5 sm:p-6 ${cardCls}`}>

@@ -49,7 +49,13 @@ export type ShopProductCard = {
   brandId: string | null;
   subBrandId: string | null;
   familyId: string | null;
+  /** normal · special (we order it from the supplier for you) · cut (cut to length). */
+  kind: ItemKind;
+  /** Special orders: how long it takes, e.g. "3–5 days". */
+  leadTime: string | null;
 };
+
+export type ItemKind = "normal" | "special" | "cut";
 
 export type ShopProduct = ShopProductCard & {
   shortDescription: string | null;
@@ -91,13 +97,28 @@ const getTier = cache(async (): Promise<PriceTier> => {
 
 const getRules = cache(() => loadPriceRules().catch(() => []));
 
+/**
+ * Special-order / cut-piece flags (web_products.order_type, lead_time). Read on
+ * their own so the shop keeps working before the SQL that adds them is run.
+ */
+export const getItemKinds = cache(async (): Promise<Map<string, { kind: ItemKind; leadTime: string | null }>> => {
+  const { data, error } = await supabaseAdmin.from("web_products").select("id, order_type, lead_time").neq("order_type", "normal");
+  if (error) return new Map();
+  return new Map(
+    (data || []).map((r: any) => [
+      r.id as string,
+      { kind: (r.order_type === "special" || r.order_type === "cut" ? r.order_type : "normal") as ItemKind, leadTime: r.lead_time || null },
+    ]),
+  );
+});
+
 const CARD_SELECT =
   "id, slug, name, images, is_featured, sort_order, created_at, web_category_id, web_sub_category_id, extra_category_ids, web_family_id, web_brand_id, web_sub_brand_id, brand_text, " +
   "brand:web_brands!web_products_web_brand_id_fkey(name), " +
   "web_product_variants(id, mrp, web_price, trade_price, qty_multiplier, image_url, is_available, sort_order, products(mrp, cost_price, brand, category))";
 
 async function toCards(rows: any[], tierOverride?: PriceTier): Promise<ShopProductCard[]> {
-  const [tier, rules] = await Promise.all([tierOverride ? Promise.resolve(tierOverride) : getTier(), getRules()]);
+  const [tier, rules, kinds] = await Promise.all([tierOverride ? Promise.resolve(tierOverride) : getTier(), getRules(), getItemKinds()]);
   const out: ShopProductCard[] = [];
   for (const p of rows) {
     const v = [...(p.web_product_variants || [])].sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))[0];
@@ -120,6 +141,8 @@ async function toCards(rows: any[], tierOverride?: PriceTier): Promise<ShopProdu
       brandId: p.web_brand_id,
       subBrandId: p.web_sub_brand_id,
       familyId: p.web_family_id,
+      kind: kinds.get(p.id)?.kind ?? "normal",
+      leadTime: kinds.get(p.id)?.leadTime ?? null,
     });
   }
   return out;

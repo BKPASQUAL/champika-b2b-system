@@ -7,6 +7,7 @@ import { useShop } from "./ShopContext";
 import { QuoteFromCart } from "./QuoteFromCart";
 import { rs, whatsappLink } from "./format";
 import { WhatsAppIcon } from "./WhatsAppButton";
+import { ItemKindNote, ItemKindTag, type ItemKind } from "./ItemKindNote";
 
 type Line = {
   id: string;
@@ -18,6 +19,8 @@ type Line = {
   price: number;
   discountPct: number;
   available: boolean;
+  kind?: ItemKind;
+  leadTime?: string | null;
   qty: number;
   lineTotal: number;
   others: Other[];
@@ -141,6 +144,11 @@ export function CartView() {
                     <Link href={href(`/p/${l.slug}`)} className="line-clamp-2 text-sm font-medium text-(--s-ink) hover:text-(--s-ink)">
                       {l.name}
                     </Link>
+                    {l.kind && l.kind !== "normal" && (
+                      <div className="mt-1">
+                        <ItemKindTag kind={l.kind} leadTime={l.leadTime} />
+                      </div>
+                    )}
                   </div>
                   <button onClick={() => remove(l.id)} aria-label="Remove" className="rounded p-1 text-(--s-muted) hover:bg-(--s-soft) hover:text-(--s-bad)">
                     <Trash2 className="h-4 w-4" />
@@ -182,6 +190,7 @@ export function CartView() {
 
         <aside className="h-fit space-y-4 rounded-3xl border border-(--s-line) bg-(--s-surface) p-6 lg:sticky lg:top-24">
           <h2 className="font-bold text-(--s-ink)">{t("Order summary")}</h2>
+          {lines.some((l) => l.kind === "special") && <ItemKindNote kind="special" />}
           <dl className="space-y-2 text-sm">
             <Row label={t("Subtotal")} value={rs(data?.subtotal)} />
             {!!data?.savings && <Row label="You save" value={`− ${rs(data.savings)}`} className="text-(--s-good)" />}

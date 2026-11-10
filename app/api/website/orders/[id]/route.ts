@@ -3,11 +3,15 @@ import { z } from "zod";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getStaff, requireWebsiteStaff } from "@/lib/web-auth";
 import { apiError } from "@/lib/web-utils";
+import { getItemKinds } from "@/lib/shop-data";
 import {
   WebOrderError,
   allowedNextStatuses,
   cancelOrder,
   confirmOrder,
+  markAdvancePaid,
+  rejectAdvanceSlip,
+  requestAdvance,
   setStatus,
   slipUrl,
   stockCheck,
@@ -25,16 +29,18 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     const { data: o, error } = await supabaseAdmin
       .from("web_orders")
       .select(
-        "*, web_customers(id, full_name, email, phone, tier, trade_status, created_at), web_order_items(id, product_id, name, qty, unit_price, mrp, line_total, web_products(slug, images), products(sku, cost_price, actual_cost_price))",
+        "*, web_customers(id, full_name, email, phone, tier, trade_status, created_at), web_order_items(id, web_product_id, product_id, name, qty, unit_price, mrp, line_total, web_products(slug, images), products(sku, cost_price, actual_cost_price))",
       )
       .eq("id", id)
       .maybeSingle();
     if (error) throw error;
     if (!o) return NextResponse.json({ error: "Order not found" }, { status: 404 });
 
-    const [stock, slip, invoice, customerOrders] = await Promise.all([
+    const [stock, slip, advanceSlip, kinds, invoice, customerOrders] = await Promise.all([
       o.status === "New" ? stockCheck(o) : Promise.resolve(null),
       slipUrl(o.slip_path),
+      slipUrl(o.advance_slip_path ?? null),
+      getItemKinds(),
       o.order_id
         ? supabaseAdmin.from("invoices").select("id, invoice_no, total_amount, paid_amount, status").eq("order_id", o.order_id).maybeSingle()
         : Promise.resolve({ data: null }),
@@ -64,6 +70,14 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
       paymentStatus: o.payment_status,
       slipUrl: slip,
       slipIsPdf: (o.slip_path || "").toLowerCase().endsWith(".pdf"),
+      advance: {
+        amount: Number(o.advance_amount) || 0,
+        status: (o.advance_status as string) || "none",
+        method: (o.advance_method as string | null) ?? null,
+        note: (o.advance_note as string | null) ?? null,
+        slipUrl: advanceSlip,
+        slipIsPdf: (o.advance_slip_path || "").toLowerCase().endsWith(".pdf"),
+      },
       subtotal: Number(o.subtotal),
       discount: Number(o.discount_amount),
       deliveryFee: Number(o.delivery_fee),
@@ -104,6 +118,8 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
         unitPrice: Number(i.unit_price),
         mrp: i.mrp == null ? null : Number(i.mrp),
         lineTotal: Number(i.line_total),
+        kind: kinds.get(i.web_product_id)?.kind ?? "normal",
+        leadTime: kinds.get(i.web_product_id)?.leadTime ?? null,
       })),
     });
   } catch (e) {
@@ -112,7 +128,10 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
 }
 
 const actionSchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("confirm"), force: z.boolean().optional() }),
+  z.object({ action: z.literal("confirm"), force: z.boolean().optional(), skipAdvance: z.boolean().optional() }),
+  z.object({ action: z.literal("advance"), amount: z.coerce.number().min(0).max(100000000), note: z.string().trim().max(300).optional().default("") }),
+  z.object({ action: z.literal("advance-paid"), method: z.enum(["bank", "cash"]) }),
+  z.object({ action: z.literal("advance-reject") }),
   z.object({ action: z.literal("status"), status: z.enum(["Packed", "Dispatched", "Delivered"]) }),
   z.object({ action: z.literal("verify"), ok: z.boolean() }),
   z.object({ action: z.literal("cancel"), reason: z.string().trim().max(300).optional().default("") }),
@@ -131,7 +150,13 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     const staff = await getStaff(auth.userId);
     switch (v.action) {
       case "confirm":
-        return NextResponse.json(await confirmOrder(id, staff, { force: v.force }));
+        return NextResponse.json(await confirmOrder(id, staff, { force: v.force, skipAdvance: v.skipAdvance }));
+      case "advance":
+        return NextResponse.json(await requestAdvance(id, staff, v.amount, v.note));
+      case "advance-paid":
+        return NextResponse.json(await markAdvancePaid(id, staff, v.method));
+      case "advance-reject":
+        return NextResponse.json(await rejectAdvanceSlip(id, staff));
       case "status":
         return NextResponse.json(await setStatus(id, staff, v.status));
       case "verify":

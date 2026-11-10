@@ -44,6 +44,8 @@ type Draft = {
   isPublished: boolean;
   isFeatured: boolean;
   sortOrder: number;
+  orderType: "normal" | "special" | "cut";
+  leadTime: string;
   // sale info
   productId: string;
   linked: MainProduct | null;
@@ -56,7 +58,7 @@ type Draft = {
 const emptyDraft: Draft = {
   name: "", shortDescription: "", description: "", specs: [], webCategoryId: null, webSubCategoryId: null, webFamilyId: null,
   extraCategoryIds: [], tags: [], brandText: "", webBrandId: null, webSubBrandId: null, webSupplierId: null,
-  images: [], isPublished: false, isFeatured: false, sortOrder: 0,
+  images: [], isPublished: false, isFeatured: false, sortOrder: 0, orderType: "normal", leadTime: "",
   productId: "", linked: null, mrp: "", webPrice: "", tradePrice: "", isAvailable: true,
 };
 
@@ -112,6 +114,8 @@ export default function WebsiteProductEditor() {
             isPublished: p.isPublished,
             isFeatured: p.isFeatured,
             sortOrder: p.sortOrder,
+            orderType: p.orderType || "normal",
+            leadTime: p.leadTime || "",
             productId: v?.productId || "",
             linked: v
               ? {
@@ -221,6 +225,8 @@ export default function WebsiteProductEditor() {
         isPublished: d.isPublished,
         isFeatured: d.isFeatured,
         sortOrder: d.sortOrder,
+        orderType: d.orderType,
+        leadTime: d.leadTime,
         productId: d.productId,
         variantId: d.variantId,
         mrp: d.mrp,
@@ -348,6 +354,42 @@ export default function WebsiteProductEditor() {
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">Leave Shop / Trade price empty to use Price Rules. Cost: {rs(cost)}</p>
+            </CardContent>
+          </Card>
+
+          {/* ── How this item is sold ── */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">How this item is sold</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Special order: you buy it from the supplier for this customer. The shop tells the customer you will contact them about an
+                advance, and you set the advance on the order. Cut piece: cut to the length ordered (paid like a normal item).
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid sm:grid-cols-3 gap-2">
+                {([
+                  ["normal", "Normal", "In stock, sold as usual"],
+                  ["special", "Special order", "Ordered from the supplier · advance agreed later"],
+                  ["cut", "Cut piece", "Cut to length · not returnable"],
+                ] as const).map(([key, title, sub]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => set({ orderType: key })}
+                    className={`rounded-lg border p-3 text-left transition ${d.orderType === key ? "border-teal-500 bg-teal-50 ring-1 ring-teal-500" : "hover:border-teal-300"}`}
+                  >
+                    <div className="text-sm font-semibold">{title}</div>
+                    <div className="text-xs text-muted-foreground">{sub}</div>
+                  </button>
+                ))}
+              </div>
+              {d.orderType === "special" && (
+                <div className="space-y-1 max-w-xs">
+                  <Label>Delivery time (shown to customers)</Label>
+                  <Input value={d.leadTime} maxLength={60} placeholder="e.g. 3–5 days" onChange={(e) => set({ leadTime: e.target.value })} />
+                </div>
+              )}
             </CardContent>
           </Card>
 

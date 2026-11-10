@@ -32,6 +32,9 @@ const productSchema = z.object({
   images: z.array(z.string()).max(10).default([]),
   isPublished: z.boolean().default(false),
   isFeatured: z.boolean().default(false),
+  /** normal · special (ordered from the supplier for the customer) · cut (cut to length). */
+  orderType: z.enum(["normal", "special", "cut"]).default("normal"),
+  leadTime: z.string().trim().max(60).nullish(),
   sortOrder: z.coerce.number().int().default(0),
   productId: z.string().uuid({ message: "Link a main product" }),
   mrp: numOrNull,
@@ -164,6 +167,8 @@ export async function GET(request: NextRequest) {
         isPublished: p.is_published,
         isFeatured: p.is_featured,
         sortOrder: p.sort_order,
+        orderType: (p.order_type as string) || "normal",
+        leadTime: (p.lead_time as string | null) ?? null,
         options: opts.map((o: any) => ({ name: o.name, values: o.values || [] })),
         variants: vs,
         summary: {
@@ -246,8 +251,10 @@ export async function POST(request: NextRequest) {
       )
         .select()
         .single();
-    let { data: saved, error } = await write({ ...row, search_key: searchText });
-    // search_key column not added yet (SQL not run) → save without it.
+    const kind = { order_type: v.orderType, lead_time: v.orderType === "special" ? v.leadTime || null : null };
+    let { data: saved, error } = await write({ ...row, ...kind, search_key: searchText });
+    // Newer columns not added yet (SQL not run) → save without them.
+    if (error && /order_type|lead_time/.test(error.message || "")) ({ data: saved, error } = await write({ ...row, search_key: searchText }));
     if (error && /search_key/.test(error.message || "")) ({ data: saved, error } = await write(row));
     if (error) throw error;
     const productId = saved.id as string;

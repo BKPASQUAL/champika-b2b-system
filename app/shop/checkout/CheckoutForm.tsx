@@ -6,10 +6,11 @@ import { useRouter } from "next/navigation";
 import { Banknote, Building2, ChevronLeft, ImageOff, Loader2, Lock, ShieldCheck, Truck } from "lucide-react";
 import { useShop } from "../_components/ShopContext";
 import { rs } from "../_components/format";
+import { ItemKindNote } from "../_components/ItemKindNote";
 import { Field, Notice, btnPrimary, cardCls, inputCls } from "../_components/ui";
 import { SL_DISTRICTS, normalisePhone } from "@/lib/shop-address";
 
-type Line = { id: string; slug: string; name: string; image: string | null; price: number; qty: number; lineTotal: number; available: boolean };
+type Line = { id: string; slug: string; name: string; image: string | null; price: number; qty: number; lineTotal: number; available: boolean; kind?: "normal" | "special" | "cut" };
 type Priced = { lines: Line[]; missing: string[]; subtotal: number; savings: number; deliveryFee: number; total: number };
 type Form = { name: string; phone: string; line1: string; line2: string; city: string; district: string };
 
@@ -135,6 +136,11 @@ export function CheckoutForm({ defaults, email, bankReady }: { defaults: Form; e
         <ChevronLeft className="h-4 w-4" /> Back to cart
       </Link>
       <h1 className="mb-6 text-2xl font-bold md:text-[28px]">Checkout</h1>
+      {lines.some((l) => l.kind === "special") && (
+        <div className="mb-6">
+          <ItemKindNote kind="special" />
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_400px] xl:gap-8">
         <div className="space-y-6">

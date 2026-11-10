@@ -24,6 +24,7 @@ import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { webApi, rs } from "../../_components/api";
 import { OrderStatusBadge, PaymentBadge } from "../badges";
+import { AdvanceCard, type Advance } from "./AdvanceCard";
 
 type Detail = {
   id: string;
@@ -35,6 +36,8 @@ type Detail = {
   paymentStatus: string;
   slipUrl: string | null;
   slipIsPdf: boolean;
+  /** Missing until the latest website_shop.sql is run. */
+  advance?: Advance;
   subtotal: number;
   discount: number;
   deliveryFee: number;
@@ -46,7 +49,7 @@ type Detail = {
   customer: { id: string; name: string | null; email: string | null; phone: string | null; tier: string; since: string; orderCount: number } | null;
   invoice: { id: string; no: string; total: number; paid: number; status: string } | null;
   stock: { productId: string; name: string; need: number; inStock: number; short: boolean }[] | null;
-  items: { id: string; sku: string | null; name: string; slug: string | null; image: string | null; qty: number; unitPrice: number; mrp: number | null; lineTotal: number }[];
+  items: { id: string; sku: string | null; name: string; slug: string | null; image: string | null; qty: number; unitPrice: number; mrp: number | null; lineTotal: number; kind?: "normal" | "special" | "cut"; leadTime?: string | null }[];
 };
 
 const STEP_LABEL: Record<string, string> = { Packed: "Mark packed", Dispatched: "Mark on the way", Delivered: "Mark delivered" };
@@ -85,6 +88,9 @@ export default function WebsiteOrderPage() {
   const short = o.stock?.filter((s) => s.short) || [];
   const profit = o.costTotal != null ? o.subtotal - o.discount - o.costTotal : null;
   const a = o.delivery.address || {};
+  const specialItems = o.items.filter((i) => i.kind === "special");
+  const advance: Advance = o.advance || { amount: 0, status: "none", method: null, note: null, slipUrl: null, slipIsPdf: false };
+  const advanceWaiting = advance.status === "requested" || advance.status === "slip_uploaded";
 
   return (
     <div className="space-y-5 pb-16">
@@ -118,7 +124,7 @@ export default function WebsiteOrderPage() {
         <div className="mt-5 flex flex-wrap gap-2 border-t pt-4">
           {o.status === "New" && (
             <Button
-              disabled={!!busy || short.length > 0}
+              disabled={!!busy || short.length > 0 || advanceWaiting}
               onClick={() => act("confirm", { action: "confirm" }, "Order confirmed and invoice created")}
               className="bg-teal-600 hover:bg-teal-700"
             >
@@ -126,13 +132,17 @@ export default function WebsiteOrderPage() {
               Confirm & create invoice
             </Button>
           )}
-          {o.status === "New" && short.length > 0 && (
+          {o.status === "New" && (short.length > 0 || advanceWaiting) && (
             <Button
               variant="outline"
               disabled={!!busy}
               onClick={() => {
-                if (confirm("Some items are short in the Main Warehouse. Stock will go below zero. Confirm anyway?"))
-                  act("confirm", { action: "confirm", force: true }, "Order confirmed and invoice created");
+                const why = [
+                  short.length ? "Some items are short in the Main Warehouse (stock will go below zero)." : "",
+                  advanceWaiting ? `The advance of ${rs(advance.amount)} is not received yet.` : "",
+                ].filter(Boolean).join("\n");
+                if (confirm(`${why}\n\nConfirm anyway?`))
+                  act("confirm", { action: "confirm", force: true, skipAdvance: true }, "Order confirmed and invoice created");
               }}
             >
               Confirm anyway
@@ -179,6 +189,20 @@ export default function WebsiteOrderPage() {
           </p>
         )}
       </Card>
+
+      {/* Special order items: agree and take an advance before confirming */}
+      {(specialItems.length > 0 || advance.status !== "none") && o.status !== "Cancelled" && (
+        <AdvanceCard
+          orderNo={o.no}
+          total={o.total}
+          phone={o.delivery.phone}
+          customerName={o.delivery.name}
+          specialItems={specialItems.map((i) => `${i.name}${i.leadTime ? ` (${i.leadTime})` : ""}`)}
+          advance={advance}
+          busy={busy}
+          act={act}
+        />
+      )}
 
       {/* Stock check before confirming */}
       {o.stock && (
@@ -265,6 +289,14 @@ export default function WebsiteOrderPage() {
                       <div>
                         <div className="font-medium">{i.name}</div>
                         {i.sku && <div className="text-xs text-muted-foreground">{i.sku}</div>}
+                        {i.kind === "special" && (
+                          <span className="mt-0.5 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800">
+                            Special order{i.leadTime ? ` · ${i.leadTime}` : ""}
+                          </span>
+                        )}
+                        {i.kind === "cut" && (
+                          <span className="mt-0.5 inline-block rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-700">Cut piece</span>
+                        )}
                       </div>
                     </div>
                   </td>
