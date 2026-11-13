@@ -1,14 +1,94 @@
 import Link from "next/link";
-import { ArrowUpRight, Box, Cable, Layers, ShieldCheck, ToggleRight } from "lucide-react";
+import { ArrowUpRight, Box, Cable, ChevronRight, Layers, ShieldCheck, ToggleRight } from "lucide-react";
 import type { ShopCategory } from "@/lib/shop-data";
 
-function getCategoryIcon(name: string) {
+function CategoryIcon({ name, className, strokeWidth }: { name: string; className?: string; strokeWidth?: number }) {
   const n = name.toLowerCase();
-  if (n.includes("cable") || n.includes("wire")) return Cable;
-  if (n.includes("protect") || n.includes("control") || n.includes("breaker") || n.includes("mcb")) return ShieldCheck;
-  if (n.includes("enclos") || n.includes("board") || n.includes("box")) return Box;
-  if (n.includes("switch") || n.includes("socket")) return ToggleRight;
-  return Layers;
+  const props = { className, strokeWidth };
+  if (n.includes("cable") || n.includes("wire")) return <Cable {...props} />;
+  if (n.includes("protect") || n.includes("control") || n.includes("breaker") || n.includes("mcb")) return <ShieldCheck {...props} />;
+  if (n.includes("enclos") || n.includes("board") || n.includes("box")) return <Box {...props} />;
+  if (n.includes("switch") || n.includes("socket")) return <ToggleRight {...props} />;
+  return <Layers {...props} />;
+}
+
+/** One sub category as a picture card with its product families as quick links. */
+function CategoryCard({ s, base }: { s: ShopCategory; base: string }) {
+  const href = `${base}/c/${s.slug}`;
+  return (
+    <article className="group flex flex-col overflow-hidden rounded-3xl border border-(--s-line) bg-(--s-surface) shadow-[0_4px_20px_-6px_rgba(15,23,42,0.06)] transition duration-300 hover:-translate-y-1 hover:border-blue-500/45 hover:shadow-[0_18px_36px_-14px_rgba(37,99,235,0.22)]">
+      <Link
+        href={href}
+        aria-label={s.name}
+        className={`relative m-2.5 mb-0 flex aspect-[16/11] items-center justify-center overflow-hidden rounded-2xl ${
+          s.imageUrl ? "bg-(--s-img)" : "shop-stripes bg-slate-100 dark:bg-slate-800/80"
+        }`}
+      >
+        {s.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={s.imageUrl}
+            alt={s.name}
+            loading="lazy"
+            className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+          />
+        ) : (
+          <>
+            <CategoryIcon name={s.name} className="pointer-events-none absolute -bottom-5 -right-5 h-36 w-36 text-blue-600/[0.08] transition duration-500 group-hover:scale-110" strokeWidth={1.5} />
+            <span className="flex h-[72px] w-[72px] items-center justify-center rounded-[20px] bg-blue-600/10 text-blue-600 ring-1 ring-inset ring-blue-600/20 transition duration-300 group-hover:bg-blue-600 group-hover:text-white dark:text-blue-400">
+              <CategoryIcon name={s.name} className="h-[34px] w-[34px]" />
+            </span>
+          </>
+        )}
+        <span className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wider text-slate-900 shadow-sm backdrop-blur">
+          {s.productCount > 0 ? `${s.productCount} ${s.productCount === 1 ? "item" : "items"}` : "Soon"}
+        </span>
+        <span className="absolute right-3 top-3 flex h-[34px] w-[34px] items-center justify-center rounded-full bg-(--s-accent) text-white opacity-0 shadow-sm transition group-hover:opacity-100">
+          <ArrowUpRight className="h-4 w-4" strokeWidth={2.5} />
+        </span>
+      </Link>
+      <div className="flex flex-1 flex-col gap-3 px-[18px] pb-[18px] pt-4">
+        <Link href={href} className="text-[17px] font-bold leading-snug text-(--s-ink)">
+          {s.name}
+        </Link>
+        {s.families.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {s.families.slice(0, 5).map((f) => (
+              <Link
+                key={f.id}
+                href={`${href}?family=${f.id}`}
+                className="rounded-full bg-(--s-soft) px-2 py-0.5 text-[11px] font-medium text-(--s-ink-2) transition hover:bg-blue-600 hover:text-white"
+              >
+                {f.name}
+              </Link>
+            ))}
+            {s.families.length > 5 && (
+              <Link href={href} className="px-1 py-0.5 text-[11px] font-medium text-(--s-muted) hover:text-(--s-ink)">
+                +{s.families.length - 5} more
+              </Link>
+            )}
+          </div>
+        )}
+        {s.families.length === 0 && (
+          <p className="text-[13.5px] leading-relaxed text-(--s-muted)">
+            {s.description ||
+              (s.productCount > 0
+                ? `Browse ${s.productCount} ${s.productCount === 1 ? "product" : "products"} in ${s.name.toLowerCase()}.`
+                : "New products arriving soon.")}
+          </p>
+        )}
+        <Link
+          href={href}
+          className="mt-auto flex min-h-11 items-center justify-between border-t border-(--s-line) pt-3.5 text-sm font-semibold text-(--s-ink)"
+        >
+          Shop now
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-(--s-btn) text-(--s-btn-ink) transition duration-300 group-hover:translate-x-0.5 group-hover:bg-(--s-accent)">
+            <ChevronRight className="h-4 w-4" strokeWidth={2.5} />
+          </span>
+        </Link>
+      </div>
+    </article>
+  );
 }
 
 /**
@@ -27,73 +107,10 @@ export function AllCategories({ tree, base, showEmpty = true }: { tree: ShopCate
                 {main.name} <span className="text-sm font-medium text-(--s-muted)">({main.productCount})</span>
               </Link>
             ) : null}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {subs.map((s) => {
-                const Icon = getCategoryIcon(s.name);
-                return (
-                  <div
-                    key={s.id}
-                    className="group flex flex-col overflow-hidden rounded-3xl border border-(--s-line) bg-(--s-surface) shadow-[0_4px_20px_-6px_rgba(15,23,42,0.06)] transition duration-300 hover:-translate-y-1 hover:border-blue-500/50 hover:shadow-[0_18px_36px_-14px_rgba(37,99,235,0.16)]"
-                  >
-                    <Link
-                      href={`${base}/c/${s.slug}`}
-                      className="relative m-2.5 mb-0 flex aspect-[16/10] items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100 ring-1 ring-inset ring-(--s-line) dark:from-slate-800/80 dark:to-slate-900"
-                    >
-                      {s.imageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={s.imageUrl}
-                          alt={s.name}
-                          loading="lazy"
-                          className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                        />
-                      ) : (
-                        <>
-                          <Icon className="pointer-events-none absolute -bottom-4 -right-4 h-28 w-28 text-blue-500/[0.06] transition duration-500 group-hover:scale-110" />
-                          <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-600/10 text-blue-600 ring-1 ring-blue-500/20 transition duration-300 group-hover:scale-105 group-hover:bg-blue-600 group-hover:text-white dark:text-blue-400">
-                            <Icon className="h-8 w-8" />
-                          </span>
-                        </>
-                      )}
-                      <span className="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-white opacity-0 shadow-sm transition group-hover:opacity-100">
-                        <ArrowUpRight className="h-4 w-4" />
-                      </span>
-                    </Link>
-                    <div className="flex flex-1 flex-col p-4 pt-3.5">
-                      <div className="flex items-start justify-between gap-2">
-                        <Link href={`${base}/c/${s.slug}`} className="text-[15px] font-bold leading-snug text-(--s-ink) transition group-hover:text-blue-600 dark:group-hover:text-blue-400">
-                          {s.name}
-                        </Link>
-                        <span
-                          className={`shrink-0 rounded-full px-2.5 py-0.5 text-[12.5px] font-bold ${
-                            s.productCount > 0 ? "bg-blue-500/10 text-blue-600 dark:text-blue-400" : "bg-(--s-soft) text-(--s-muted)"
-                          }`}
-                        >
-                          {s.productCount ? `${s.productCount} ${s.productCount === 1 ? "item" : "items"}` : "Soon"}
-                        </span>
-                      </div>
-                      {s.families.length > 0 && (
-                        <div className="mt-3 flex flex-wrap gap-1.5">
-                          {s.families.slice(0, 5).map((f) => (
-                            <Link
-                              key={f.id}
-                              href={`${base}/c/${s.slug}?family=${f.id}`}
-                              className="rounded-full bg-(--s-soft) px-2.5 py-1 text-[12.5px] font-semibold text-(--s-ink-2) transition hover:bg-blue-600 hover:text-white"
-                            >
-                              {f.name}
-                            </Link>
-                          ))}
-                          {s.families.length > 5 && (
-                            <Link href={`${base}/c/${s.slug}`} className="px-1 py-1 text-[12.5px] font-semibold text-(--s-muted) hover:text-(--s-ink)">
-                              +{s.families.length - 5} more
-                            </Link>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-5">
+              {subs.map((s) => (
+                <CategoryCard key={s.id} s={s} base={base} />
+              ))}
               {subs.length === 0 && main.productCount === 0 && (
                 <p className="col-span-full text-sm text-(--s-muted)">Products coming soon.</p>
               )}
