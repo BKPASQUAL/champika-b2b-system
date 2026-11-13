@@ -54,7 +54,8 @@ export async function POST(request: NextRequest) {
       if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message || "Check the form" }, { status: 400 });
       const files = form.getAll("files").filter((f): f is File => f instanceof File && f.size > 0).slice(0, MAX_FILES);
       const isList = parsed.data.houseType === LIST_PHOTO;
-      if (isList && !files.length) return NextResponse.json({ error: "Add a photo of your item list." }, { status: 400 });
+      if (isList && !files.length && !parsed.data.note)
+        return NextResponse.json({ error: "Add a photo of your item list, or type the items." }, { status: 400 });
       if (!isList && !Object.keys(parsed.data.points).length && !parsed.data.note)
         return NextResponse.json({ error: "Tell us the number of points, or describe the job in the note." }, { status: 400 });
 

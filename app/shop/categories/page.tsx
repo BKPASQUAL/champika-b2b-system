@@ -32,7 +32,7 @@ export default async function CategoriesPage() {
       <section className="relative mt-10 flex flex-wrap items-center justify-between gap-6 overflow-hidden rounded-3xl bg-(--s-bar) p-8 text-slate-50">
         <div className="shop-stripes pointer-events-none absolute inset-0" />
         <div className="relative max-w-[620px]">
-          <h2 className="text-[28px] font-black uppercase italic leading-[1.05] tracking-tight">Wiring a whole job?</h2>
+          <h2 className="text-[28px] font-black uppercase leading-[1.05] tracking-tight">Wiring a whole job?</h2>
           <p className="mt-2.5 text-[15px] text-slate-300">
             Send us your material list and we will put together one quote for everything.
           </p>

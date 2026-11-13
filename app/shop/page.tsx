@@ -12,8 +12,9 @@ import {
   ListChecks,
   MessageCircle,
   Phone,
+  Send,
   ShieldCheck,
-  Sparkles,
+  PackagePlus,
   Tag,
   ToggleRight,
 } from "lucide-react";
@@ -84,7 +85,7 @@ export default async function ShopHome() {
   const pills = [
     { label: t("Shop all"), to: `${base}/products`, icon: LayoutGrid },
     { label: t("Best deals"), to: `${base}/products?sort=popular`, icon: Flame },
-    { label: t("New arrivals"), to: `${base}/products?sort=newest`, icon: Sparkles },
+    { label: t("New arrivals"), to: `${base}/products?sort=newest`, icon: PackagePlus },
     { label: t("Quick order"), to: `${base}/quick-order`, icon: ListChecks },
     { label: t("Send a photo of your list"), to: `${base}/quote?mode=list`, icon: Camera },
     { label: t("House quotation"), to: `${base}/quote`, icon: ClipboardList },
@@ -203,6 +204,67 @@ export default async function ShopHome() {
         </div>
       </section>
 
+      {/* ---------- Photo list → quotation (marketing band, top of page) ---------- */}
+      <section className={`${wrap} pt-6`}>
+        <div className="relative overflow-hidden rounded-2xl bg-(--s-bar) text-white ring-1 ring-white/5">
+          <div className="shop-stripes pointer-events-none absolute inset-0" />
+          <Camera className="pointer-events-none absolute -right-6 -top-8 h-48 w-48 text-blue-500/10" strokeWidth={1.25} />
+          <div className="relative grid items-center gap-8 p-6 md:p-8 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)_auto]">
+            <div>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/15 px-3 py-1 text-xs font-bold text-blue-200 ring-1 ring-blue-400/30">
+                {t("Free quotation service")}
+              </span>
+              <h2 className="mt-3 text-2xl font-extrabold leading-tight tracking-tight md:text-[28px]">
+                {t("Have a list from your electrician?")}
+              </h2>
+              <p className="mt-2 text-[15px] text-slate-300">
+                {t("Send us a photo of it. We price every item and send the quotation back to you.")}
+              </p>
+            </div>
+
+            <ol className="grid gap-3 sm:grid-cols-3">
+              {[
+                { Icon: Camera, title: t("Upload a photo"), text: t("Snap the paper list and upload it") },
+                { Icon: ClipboardList, title: t("We price it"), text: t("Every item at our best discount") },
+                { Icon: Send, title: t("Get your quotation"), text: t("We send it back on WhatsApp or SMS") },
+              ].map(({ Icon, title, text }, i) => (
+                <li key={title} className="relative flex gap-3 rounded-xl bg-white/[0.05] p-4 ring-1 ring-white/10 sm:flex-col">
+                  <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-(--s-accent) text-white shadow-lg shadow-blue-900/40">
+                    <Icon className="h-5 w-5" />
+                    <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-white text-[11px] font-extrabold text-slate-900">
+                      {i + 1}
+                    </span>
+                  </span>
+                  <span>
+                    <span className="block text-[15px] font-bold">{title}</span>
+                    <span className="mt-0.5 block text-[13px] leading-snug text-slate-400">{text}</span>
+                  </span>
+                </li>
+              ))}
+            </ol>
+
+            <div className="flex flex-wrap gap-3 xl:flex-col">
+              <Link
+                href={`${base}/quote?mode=list`}
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-white px-6 text-[15px] font-bold text-slate-900 transition hover:bg-blue-50"
+              >
+                <Camera className="h-4 w-4" /> {t("Upload photo")}
+              </Link>
+              {waList && (
+                <a
+                  href={waList}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[#25D366] px-6 text-[15px] font-bold text-white transition hover:bg-[#1ebe5a]"
+                >
+                  <WhatsAppIcon className="h-5 w-5" /> {t("Send on WhatsApp")}
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
       <div className="space-y-14 pt-14 md:space-y-20 md:pt-20">
         {/* ---------- Brands ---------- */}
         {brands.length > 0 && (
@@ -222,7 +284,7 @@ export default async function ShopHome() {
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={b.logoUrl} alt={b.name} loading="lazy" className="h-full w-full object-contain transition duration-300 group-hover:scale-105" />
                   ) : (
-                    <span className="text-xl font-black italic tracking-tight text-slate-900 group-hover:text-blue-600">{b.name}</span>
+                    <span className="text-xl font-black tracking-tight text-slate-900 group-hover:text-blue-600">{b.name}</span>
                   )}
                 </Link>
               ))}
@@ -249,7 +311,7 @@ export default async function ShopHome() {
             <ClipboardList className="absolute -bottom-6 -right-6 h-48 w-48 text-white/10" />
             <div className="relative max-w-xl">
               <span className="text-xs font-bold uppercase tracking-[0.18em] text-blue-300">{t("Building or renovating?")}</span>
-              <h2 className="mt-2 text-2xl font-extrabold italic uppercase leading-tight tracking-tight md:text-4xl">{t("One price for your whole house.")}</h2>
+              <h2 className="mt-2 text-2xl font-extrabold uppercase leading-tight tracking-tight md:text-4xl">{t("One price for your whole house.")}</h2>
               <p className="mt-3 text-slate-300">
                 {t("Tell us the rooms and the number of lights, plugs and fans. We will send a complete item list with our best discount.")}
               </p>

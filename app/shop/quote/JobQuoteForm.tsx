@@ -37,6 +37,7 @@ export function JobQuoteForm({ initialMode = "house" }: { initialMode?: QuoteMod
   const [floors, setFloors] = useState("1");
   const [points, setPoints] = useState<Record<string, number>>({ lights: 10, switches: 8, sockets: 10, fans: 3 });
   const [note, setNote] = useState("");
+  const [listText, setListText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,11 +47,12 @@ export function JobQuoteForm({ initialMode = "house" }: { initialMode?: QuoteMod
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (isList && !files.length) return setError(t("Add a photo of your item list."));
+    const typed = listText.trim();
+    if (isList && !files.length && !typed) return setError(t("Add a photo of your item list, or type the items."));
     setBusy(true);
     const form = new FormData();
     form.append("houseType", isList ? LIST_PHOTO : houseType);
-    form.append("note", note);
+    form.append("note", isList && typed ? `Item list:\n${typed}${note.trim() ? `\n\nNotes: ${note.trim()}` : ""}` : note);
     if (!isList) {
       form.append("rooms", rooms);
       form.append("floors", floors);
@@ -108,8 +110,8 @@ export function JobQuoteForm({ initialMode = "house" }: { initialMode?: QuoteMod
       <form onSubmit={submit} className="space-y-5">
         {isList && (
           <section className={`space-y-4 p-5 sm:p-6 ${cardCls}`}>
-            <h2 className="font-bold">{t("Photos of your list")}</h2>
-            <p className="text-sm text-(--s-muted)">{t("Clear photos of every page. You can add up to 5.")}</p>
+            <h2 className="font-bold">{t("Your item list")}</h2>
+            <p className="text-sm text-(--s-muted)">{t("Add clear photos of every page (up to 5), or type the items below — no photo needed.")}</p>
             <div className="flex flex-wrap gap-2">
               {files.map((f, i) => (
                 <span key={i} className="flex items-center gap-2 rounded-xl bg-(--s-soft) px-3 py-2 text-sm">
@@ -131,6 +133,18 @@ export function JobQuoteForm({ initialMode = "house" }: { initialMode?: QuoteMod
                 <span className="text-base font-bold">{files.length ? t("Add another photo") : t("Take or choose a photo")}</span>
               </button>
             )}
+            <div className="flex items-center gap-3 text-xs font-bold uppercase tracking-wider text-(--s-muted)">
+              <span className="h-px flex-1 bg-(--s-line)" /> {t("or type your list")} <span className="h-px flex-1 bg-(--s-line)" />
+            </div>
+            <Field label={t("Items and quantities")} hint={t("One item per line, e.g. 1/1.13 wire – 2 coils, 13A socket – 10")}>
+              <textarea
+                className={`${inputCls} h-40 resize-y py-3`}
+                value={listText}
+                maxLength={1200}
+                placeholder={"7/0.67 earth wire – 1 coil\n1 gang 1 way switch – 12\n13A socket – 8\nMCB 32A – 2"}
+                onChange={(e) => setListText(e.target.value)}
+              />
+            </Field>
             {waList && (
               <p className="flex flex-wrap items-center gap-2 text-sm text-(--s-muted)">
                 {t("Easier on WhatsApp?")}
@@ -206,7 +220,7 @@ export function JobQuoteForm({ initialMode = "house" }: { initialMode?: QuoteMod
         <section className={`space-y-4 p-5 sm:p-6 ${cardCls}`}>
           <h2 className="font-bold">{t("Anything else?")}</h2>
           <Field label="Notes (optional)" hint="Preferred brands, budget, distribution board, special needs…">
-            <textarea className={`${inputCls} h-28 resize-none py-3`} value={note} maxLength={2000} onChange={(e) => setNote(e.target.value)} />
+            <textarea className={`${inputCls} h-28 resize-none py-3`} value={note} maxLength={isList ? 700 : 2000} onChange={(e) => setNote(e.target.value)} />
           </Field>
           {!isList && (
           <div>

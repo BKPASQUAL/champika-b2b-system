@@ -87,7 +87,7 @@
 .shop-display {
   font-size: clamp(1.6rem, 1.2rem + 1.6vw, 2.5rem);
   font-weight: 900;
-  font-style: italic;
+  font-style: normal;
   text-transform: uppercase;
   letter-spacing: -0.03em;
   line-height: 1;

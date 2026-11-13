@@ -18,7 +18,7 @@ import {
   Minus,
   Plus,
   Search,
-  Sparkles,
+  ClipboardList,
   Trash2,
   X,
   ZoomIn,
@@ -740,7 +740,7 @@ export function QuickOrder({
             ) : !lines.length ? (
               <div className="px-6 py-12 text-center">
                 <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-(--s-soft) text-(--s-muted)">
-                  <Sparkles className="h-5 w-5" />
+                  <ClipboardList className="h-5 w-5" />
                 </span>
                 <p className="mt-3 text-sm font-semibold text-(--s-ink)">Your list is empty</p>
                 <p className="mt-1 text-xs text-(--s-muted)">Pick items from the table and press Add.</p>
