@@ -154,6 +154,8 @@ export default function OrangePaymentEntryPage() {
   const [customerOpen, setCustomerOpen] = useState(false);
   const [bankOpen, setBankOpen] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
+  // Bumped after a payment is saved: reloads the same customer's invoices without clearing the selection
+  const [customerReloadKey, setCustomerReloadKey] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
   const [totalAmount, setTotalAmount] = useState<number>(0);
@@ -315,7 +317,7 @@ export default function OrangePaymentEntryPage() {
       setStatementInvoices([]);
       setSettlements({});
     }
-  }, [selectedCustomerId, fetchPendingInvoices]);
+  }, [selectedCustomerId, fetchPendingInvoices, customerReloadKey]);
   useEffect(() => { setSelectedAccountId(""); }, [paymentMethod]);
 
   // Recalculate totalAmount whenever goods items change
@@ -344,8 +346,8 @@ export default function OrangePaymentEntryPage() {
     setSettlements((prev) => ({ ...prev, [invoiceId]: { ...prev[invoiceId], settleAmount: Math.min(Math.max(0, value), max) } }));
   };
 
-  const resetForm = () => {
-    setSelectedCustomerId(""); setPaymentMethod("cash"); setPaymentDate(new Date().toISOString().split("T")[0]);
+  const resetForm = (keepCustomer = false) => {
+    if (keepCustomer) setCustomerReloadKey((k) => k + 1); else setSelectedCustomerId(""); setPaymentMethod("cash"); setPaymentDate(new Date().toISOString().split("T")[0]);
     setTotalAmount(0); setNotes(""); setChequeNumber(""); setChequeDate(""); setSelectedBankId(""); setBranchCode(""); setSelectedAccountId("");
     setReceiptNumber(""); setReceiptBookId(undefined);
     setGoodsItems([]);
@@ -450,7 +452,7 @@ export default function OrangePaymentEntryPage() {
           failCount++;
         }
       }
-      if (successCount > 0) { toast.success(`Payment recorded successfully!`); resetForm(); invalidatePaymentCaches(); }
+      if (successCount > 0) { toast.success(`Payment recorded successfully!`); resetForm(true); invalidatePaymentCaches(); }
       if (failCount > 0) toast.error(`${failCount} payment(s) failed.`);
     } catch { toast.error("An unexpected error occurred"); } finally { setIsSubmitting(false); }
   };
@@ -910,7 +912,7 @@ export default function OrangePaymentEntryPage() {
                 </div>
               </div>
               <div className="flex gap-2 w-full sm:w-auto">
-                <Button variant="outline" onClick={resetForm} disabled={isSubmitting} className="flex-1 sm:flex-none">Clear</Button>
+                <Button variant="outline" onClick={() => resetForm()} disabled={isSubmitting} className="flex-1 sm:flex-none">Clear</Button>
                 <Button onClick={handleSubmit} disabled={isSubmitting || remaining < 0 || Object.values(settlements).filter((s) => s.selected && s.settleAmount > 0).length === 0} className="flex-1 sm:flex-none gap-2 bg-orange-500 hover:bg-orange-600">
                   {isSubmitting ? <><Loader2 className="h-4 w-4 animate-spin" />Saving…</> : <><BanknoteIcon className="h-4 w-4" />Settle Invoices</>}
                 </Button>

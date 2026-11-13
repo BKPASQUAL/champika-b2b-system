@@ -53,6 +53,20 @@ export const DEFAULT_STATEMENT_OPTIONS: StatementReportOptions = {
   includeClearedCheques: false,
 };
 
+/** Local calendar-day key (YYYY-MM-DD) for comparing cheque dates against today. */
+export const toDayKey = (value?: string | null): string => {
+  if (!value) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return "";
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+const todayKey = () => toDayKey(new Date().toISOString());
+
+/** Pending cheques are shown only when dated today or later (past-dated ones are hidden). */
+export const isTodayOrUpcoming =(dayKey: string) => !dayKey || dayKey >= todayKey();
+
 const fmt = (amount: number) =>
   amount.toLocaleString("en-LK", {
     minimumFractionDigits: 2,
@@ -802,7 +816,18 @@ export function buildDoc(
     chequeNo: string;
     amount: number;
     status: string;
+    dayKey: string;
+    /** Bill date (day key) for each entry in invoiceNos, same order */
+    invoiceDayKeys: string[];
   }
+
+  /** Days between bill date and cheque date (e.g. bill 11/01 → cheque 12/02 = 32 days) */
+  const daysBetween = (fromKey: string, toKey: string): number | null => {
+    if (!fromKey || !toKey) return null;
+    const [fy, fm, fd] = fromKey.split("-").map(Number);
+    const [ty, tm, td] = toKey.split("-").map(Number);
+    return Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(fy, fm - 1, fd)) / 86400000);
+  };
 
   const chequeMap = new Map<string, GroupedCheque>();
 
@@ -824,6 +849,7 @@ export function buildDoc(
             const existing = chequeMap.get(chequeKey)!;
             if (invDisplay && !existing.invoiceNos.includes(invDisplay)) {
               existing.invoiceNos.push(invDisplay);
+              existing.invoiceDayKeys.push(toDayKey(inv.date));
             }
             if (!existing.chequeNo.includes("(") && bankDetail) {
               existing.chequeNo = `${existing.chequeNo}${bankDetail}`;
@@ -841,6 +867,8 @@ export function buildDoc(
               chequeNo: chequeNoStr,
               amount: p.amount,
               status,
+              dayKey: toDayKey(dateToUse),
+              invoiceDayKeys: invDisplay ? [toDayKey(inv.date)] : [],
             });
           }
         }
@@ -859,10 +887,12 @@ export function buildDoc(
       returnedCheques.push(chq);
     } else if (s === "CLEARED") {
       clearedCheques.push(chq);
-    } else {
+    } else if (isTodayOrUpcoming(chq.dayKey)) {
       pendingCheques.push(chq);
     }
   });
+  // Nearest upcoming cheque first
+  pendingCheques.sort((a, b) => a.dayKey.localeCompare(b.dayKey));
 
   const totalPendingAmount = pendingCheques.reduce((sum, c) => sum + c.amount, 0);
   const totalReturnedAmount = returnedCheques.reduce((sum, c) => sum + c.amount, 0);
@@ -898,17 +928,24 @@ export function buildDoc(
     doc.text(pSubtitle, pageWidth - M, currentY, { align: "right" });
 
     const pendingTableBody = [
-      ...pendingCheques.map((c) => [
-        c.invoiceNos.join(", ") || "—",
-        c.date,
-        c.chequeNo,
-        fmt(c.amount),
-        c.status,
-      ]),
+      ...pendingCheques.map((c) => {
+        const creditDays = c.invoiceDayKeys.map((k) => {
+          const d = daysBetween(k, c.dayKey);
+          return d === null ? "—" : `${d} days`;
+        });
+        return [
+          c.invoiceNos.join("\n") || "—",
+          c.date,
+          creditDays.join("\n") || "—",
+          c.chequeNo,
+          fmt(c.amount),
+          c.status,
+        ];
+      }),
       [
         {
           content: `TOTAL PENDING CHEQUES: ${pendingCheques.length}`,
-          colSpan: 3,
+          colSpan: 4,
           styles: {
             fontStyle: "bold",
             halign: "right",
@@ -937,7 +974,7 @@ export function buildDoc(
     autoTable(doc, {
       startY: currentY + 3.5,
       margin: { left: M, right: M },
-      head: [["Invoice / Manual Ref", "Date", "Cheque No & Branch", "Amount (LKR)", "Cheque Status"]],
+      head: [["Invoice / Manual Ref", "Cheque Date", "Bill to Cheque Days", "Cheque No & Branch", "Amount (LKR)", "Cheque Status"]],
       body: pendingTableBody as any,
       theme: "plain",
       headStyles: {
@@ -957,19 +994,20 @@ export function buildDoc(
         overflow: "linebreak",
       },
       columnStyles: {
-        0: { halign: "center", cellWidth: 28 },
-        1: { halign: "center", cellWidth: 24 },
-        2: { halign: "left",   cellWidth: 64 },
-        3: { halign: "right",  cellWidth: 34, fontStyle: "bold" },
-        4: { halign: "center", cellWidth: 30 },
+        0: { halign: "center", cellWidth: 26 },
+        1: { halign: "center", cellWidth: 22 },
+        2: { halign: "center", cellWidth: 22, fontStyle: "bold", textColor: [146, 64, 14] },
+        3: { halign: "left",   cellWidth: 52 },
+        4: { halign: "right",  cellWidth: 32, fontStyle: "bold" },
+        5: { halign: "center", cellWidth: 26 },
       },
       didParseCell(data) {
         if (data.section !== "body") return;
         const raw = data.row.raw as any[];
-        if (!raw || raw.length !== 5 || typeof raw[0] !== "string") return;
+        if (!raw || raw.length !== 6 || typeof raw[0] !== "string") return;
 
-        const status = String(raw[4]).toUpperCase();
-        if (data.column.index === 4) {
+        const status = String(raw[5]).toUpperCase();
+        if (data.column.index === 5) {
           if (status === "PENDING") {
             data.cell.styles.textColor = [180, 83, 9];
             data.cell.styles.fontStyle = "bold";
@@ -1305,7 +1343,7 @@ export async function shareCustomerStatement(
     });
   }
 
-  const groupedChequesMap = new Map<string, { invoiceNos: string[]; date: string; chequeNo: string; amount: number; status: string }>();
+  const groupedChequesMap = new Map<string, { invoiceNos: string[]; date: string; chequeNo: string; amount: number; status: string; dayKey: string }>();
 
   rawInvoices.forEach((inv) => {
     if (inv.payments && inv.payments.length > 0) {
@@ -1337,6 +1375,7 @@ export async function shareCustomerStatement(
               chequeNo: chequeDisplay,
               amount: p.amount,
               status,
+              dayKey: toDayKey(dateToUse),
             });
           }
         }
@@ -1348,7 +1387,11 @@ export async function shareCustomerStatement(
   const returnedWaCheques: string[] = [];
   const clearedWaCheques: string[] = [];
 
-  groupedChequesMap.forEach((chq) => {
+  const sortedWaCheques = Array.from(groupedChequesMap.values()).sort((a, b) =>
+    a.dayKey.localeCompare(b.dayKey),
+  );
+
+  sortedWaCheques.forEach((chq) => {
     const s = chq.status.toUpperCase();
     const invList = chq.invoiceNos.join(", ") || "—";
     const line = `• Cheque #${chq.chequeNo} (Invoices: ${invList}): LKR ${fmt(chq.amount)} (${chq.date}) [${s}]`;
@@ -1356,7 +1399,7 @@ export async function shareCustomerStatement(
       returnedWaCheques.push(line);
     } else if (s === "CLEARED") {
       clearedWaCheques.push(line);
-    } else {
+    } else if (isTodayOrUpcoming(chq.dayKey)) {
       pendingWaCheques.push(line);
     }
   });

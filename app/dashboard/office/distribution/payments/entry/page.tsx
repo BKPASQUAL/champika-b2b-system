@@ -153,6 +153,8 @@ export default function DistributionPaymentEntryPage() {
   const [customerOpen, setCustomerOpen] = useState(false);
   const [bankOpen, setBankOpen] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
+  // Bumped after a payment is saved: reloads the same customer's invoices without clearing the selection
+  const [customerReloadKey, setCustomerReloadKey] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
   const [totalAmount, setTotalAmount] = useState<number>(0);
@@ -332,7 +334,7 @@ export default function DistributionPaymentEntryPage() {
       setSettlements({});
       setAvailableReturnCredits([]);
     }
-  }, [selectedCustomerId, fetchPendingInvoices]);
+  }, [selectedCustomerId, fetchPendingInvoices, customerReloadKey]);
   useEffect(() => { setSelectedAccountId(""); }, [paymentMethod]);
 
   // Recalculate totalAmount whenever goods items change
@@ -360,8 +362,8 @@ export default function DistributionPaymentEntryPage() {
   const updateSettleAmount = (invoiceId: string, value: number, max: number) =>
     setSettlements((prev) => ({ ...prev, [invoiceId]: { ...prev[invoiceId], settleAmount: Math.min(Math.max(0, value), max) } }));
 
-  const resetForm = () => {
-    setSelectedCustomerId(""); setPaymentMethod("cash"); setPaymentDate(new Date().toISOString().split("T")[0]);
+  const resetForm = (keepCustomer = false) => {
+    if (keepCustomer) setCustomerReloadKey((k) => k + 1); else setSelectedCustomerId(""); setPaymentMethod("cash"); setPaymentDate(new Date().toISOString().split("T")[0]);
     setTotalAmount(0); setNotes(""); setChequeNumber(""); setChequeDate(""); setSelectedBankId(""); setBranchCode(""); setSelectedAccountId("");
     setReceiptNumber(""); setReceiptBookId(undefined);
     setGoodsItems([]);
@@ -626,7 +628,7 @@ export default function DistributionPaymentEntryPage() {
           }
         }
         toast.success(`Payment recorded successfully!`);
-        resetForm();
+        resetForm(true);
         invalidatePaymentCaches();
       }
       if (failCount > 0) toast.error(`${failCount} payment(s) failed.`);
@@ -1322,7 +1324,7 @@ export default function DistributionPaymentEntryPage() {
                 </div>
               </div>
               <div className="flex gap-2 w-full sm:w-auto">
-                <Button variant="outline" onClick={resetForm} disabled={isSubmitting} className="flex-1 sm:flex-none">Clear</Button>
+                <Button variant="outline" onClick={() => resetForm()} disabled={isSubmitting} className="flex-1 sm:flex-none">Clear</Button>
                 <Button onClick={handleSubmit} disabled={isSubmitting || remaining < 0 || Object.values(settlements).filter((s) => s.selected && s.settleAmount > 0).length === 0} className="flex-1 sm:flex-none gap-2">
                   {isSubmitting ? <><Loader2 className="h-4 w-4 animate-spin" />Saving…</> : <><BanknoteIcon className="h-4 w-4" />Settle Invoices</>}
                 </Button>

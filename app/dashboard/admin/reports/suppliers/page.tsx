@@ -1222,26 +1222,62 @@ export default function SupplierAnalyticsPage() {
                   </>
                 )}
 
-                {/* Months Tab */}
-                {detailTab === "months" && (
+                {/* Months Tab — month by month for the selected period */}
+                {detailTab === "months" && (() => {
+                  const months: any[] = current.months || [];
+                  const t = months.reduce(
+                    (acc, m) => ({
+                      invoiceCount: acc.invoiceCount + (m.invoiceCount || 0),
+                      salesQty: acc.salesQty + (m.salesQty || 0),
+                      salesAmount: acc.salesAmount + (m.salesAmount || 0),
+                      cost: acc.cost + (m.cost || 0),
+                      profit: acc.profit + (m.profit || 0),
+                      purchaseQty: acc.purchaseQty + (m.purchaseQty || 0),
+                      purchaseAmount: acc.purchaseAmount + (m.purchaseAmount || 0),
+                    }),
+                    { invoiceCount: 0, salesQty: 0, salesAmount: 0, cost: 0, profit: 0, purchaseQty: 0, purchaseAmount: 0 }
+                  );
+                  const totalMargin = t.salesAmount > 0 ? (t.profit / t.salesAmount) * 100 : 0;
+                  const totalDiff = t.salesAmount - t.purchaseAmount;
+                  const th = "text-right font-semibold text-slate-800 text-xs py-3 px-3 whitespace-nowrap";
+                  const td = "text-right font-mono py-3 px-3 whitespace-nowrap";
+                  const cards = [
+                    { label: "Total Sales", value: `LKR ${fmt(t.salesAmount)}`, sub: `${t.salesQty.toLocaleString()} units sold`, cls: "text-blue-600" },
+                    { label: "Total Profit", value: `LKR ${fmt(t.profit)}`, sub: `${totalMargin.toFixed(1)}% margin`, cls: t.profit >= 0 ? "text-green-600" : "text-rose-600" },
+                    { label: "Total Purchases", value: `LKR ${fmt(t.purchaseAmount)}`, sub: `${t.purchaseQty.toLocaleString()} units bought`, cls: "text-emerald-600" },
+                    { label: "Months", value: String(months.length), sub: `${t.invoiceCount} invoices`, cls: "text-slate-800" },
+                  ];
+                  return (
                   <div className="p-4 space-y-6">
+                    {/* Period totals */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {cards.map((c) => (
+                        <div key={c.label} className="bg-white border border-gray-100 rounded-xl p-3 shadow-sm">
+                          <p className="text-[11px] text-slate-500">{c.label}</p>
+                          <p className={`text-sm font-bold font-mono ${c.cls}`}>{c.value}</p>
+                          <p className="text-[10px] text-slate-400">{c.sub}</p>
+                        </div>
+                      ))}
+                    </div>
+
                     {/* Visual Chart Comparison */}
                     <div className="h-72 bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
                       <h3 className="text-xs font-semibold text-slate-500 mb-4 flex items-center gap-1.5">
-                        <TrendingUp className="h-4 w-4 text-blue-500" /> Rolling 12-Month Sales vs Purchases (LKR)
+                        <TrendingUp className="h-4 w-4 text-blue-500" /> Month by Month — {dateFilter.label} (LKR)
                       </h3>
                       <ResponsiveContainer width="100%" height="90%">
-                        <BarChart data={current.months || []}>
+                        <BarChart data={months}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                           <XAxis dataKey="monthLabel" tick={{ fontSize: 9, fill: "#64748b" }} tickLine={false} />
                           <YAxis tick={{ fontSize: 9, fill: "#64748b" }} tickLine={false} tickFormatter={(v) => `LKR ${(v / 1000).toFixed(0)}k`} />
-                          <Tooltip 
+                          <Tooltip
                             formatter={(v: any) => `LKR ${fmt(v)}`}
                             contentStyle={{ backgroundColor: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "11px" }}
                           />
                           <Legend wrapperStyle={{ fontSize: 9, paddingTop: "10px" }} />
-                          <Bar dataKey="salesAmount" fill="#3b82f6" name="Sales Amount" radius={[4, 4, 0, 0]} />
-                          <Bar dataKey="purchaseAmount" fill="#10b981" name="Purchase Amount" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="salesAmount" fill="#3b82f6" name="Sales" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="profit" fill="#f59e0b" name="Profit" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="purchaseAmount" fill="#10b981" name="Purchases" radius={[4, 4, 0, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
@@ -1251,39 +1287,68 @@ export default function SupplierAnalyticsPage() {
                       <Table>
                         <TableHeader className="bg-slate-50/50">
                           <TableRow>
-                            <TableHead className="font-semibold text-slate-800 text-xs py-3 px-4">Month</TableHead>
-                            <TableHead className="text-right font-semibold text-slate-800 text-xs py-3 px-4">Sales Amount</TableHead>
-                            <TableHead className="text-right font-semibold text-slate-800 text-xs py-3 px-4">Purchase Amount</TableHead>
-                            <TableHead className="text-right font-semibold text-slate-800 text-xs py-3 px-4">Difference</TableHead>
+                            <TableHead className="font-semibold text-slate-800 text-xs py-3 px-3">Month</TableHead>
+                            <TableHead className={th}>Invoices</TableHead>
+                            <TableHead className={th}>Qty Sold</TableHead>
+                            <TableHead className={th}>Sales</TableHead>
+                            <TableHead className={th}>Cost</TableHead>
+                            <TableHead className={th}>Profit</TableHead>
+                            <TableHead className={th}>Margin</TableHead>
+                            <TableHead className={th}>Purchase Qty</TableHead>
+                            <TableHead className={th}>Purchases</TableHead>
+                            <TableHead className={th}>Sales − Purchases</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {(current.months || []).length === 0 ? (
+                          {months.length === 0 ? (
                             <TableRow>
-                              <TableCell colSpan={4} className="text-center py-10 text-xs text-muted-foreground">
-                                No monthly trend data found.
+                              <TableCell colSpan={10} className="text-center py-10 text-xs text-muted-foreground">
+                                No monthly data for this period.
                               </TableCell>
                             </TableRow>
                           ) : (
-                            current.months.map((m: any) => {
+                            months.map((m: any) => {
                               const diff = m.salesAmount - m.purchaseAmount;
                               return (
-                                <TableRow key={m.month} className="hover:bg-slate-50/30 text-xs border-b border-slate-100 last:border-0">
-                                  <TableCell className="font-semibold text-slate-700 py-3 px-4">{m.monthLabel}</TableCell>
-                                  <TableCell className="text-right font-mono text-blue-600 font-bold py-3 px-4">LKR {fmt(m.salesAmount)}</TableCell>
-                                  <TableCell className="text-right font-mono text-emerald-600 font-bold py-3 px-4">LKR {fmt(m.purchaseAmount)}</TableCell>
-                                  <TableCell className={`text-right font-mono font-bold py-3 px-4 ${diff >= 0 ? "text-green-600" : "text-rose-600"}`}>
+                                <TableRow key={m.month} className="hover:bg-slate-50/30 text-xs border-b border-slate-100">
+                                  <TableCell className="font-semibold text-slate-700 py-3 px-3 whitespace-nowrap">{m.monthLabel}</TableCell>
+                                  <TableCell className={`${td} text-slate-600`}>{m.invoiceCount || 0}</TableCell>
+                                  <TableCell className={`${td} text-slate-600`}>{(m.salesQty || 0).toLocaleString()}</TableCell>
+                                  <TableCell className={`${td} text-blue-600 font-bold`}>LKR {fmt(m.salesAmount)}</TableCell>
+                                  <TableCell className={`${td} text-slate-600`}>LKR {fmt(m.cost || 0)}</TableCell>
+                                  <TableCell className={`${td} font-bold ${(m.profit || 0) >= 0 ? "text-green-600" : "text-rose-600"}`}>LKR {fmt(m.profit || 0)}</TableCell>
+                                  <TableCell className={`${td} text-slate-600`}>{(m.margin || 0).toFixed(1)}%</TableCell>
+                                  <TableCell className={`${td} text-slate-600`}>{(m.purchaseQty || 0).toLocaleString()}</TableCell>
+                                  <TableCell className={`${td} text-emerald-600 font-bold`}>LKR {fmt(m.purchaseAmount)}</TableCell>
+                                  <TableCell className={`${td} font-bold ${diff >= 0 ? "text-green-600" : "text-rose-600"}`}>
                                     {diff < 0 ? "-" : "+"}LKR {fmt(Math.abs(diff))}
                                   </TableCell>
                                 </TableRow>
                               );
                             })
                           )}
+                          {months.length > 0 && (
+                            <TableRow className="bg-slate-100 text-xs font-bold border-t-2 border-slate-300">
+                              <TableCell className="py-3 px-3 text-slate-800 whitespace-nowrap">Total ({months.length} months)</TableCell>
+                              <TableCell className={`${td} text-slate-800`}>{t.invoiceCount}</TableCell>
+                              <TableCell className={`${td} text-slate-800`}>{t.salesQty.toLocaleString()}</TableCell>
+                              <TableCell className={`${td} text-blue-700`}>LKR {fmt(t.salesAmount)}</TableCell>
+                              <TableCell className={`${td} text-slate-800`}>LKR {fmt(t.cost)}</TableCell>
+                              <TableCell className={`${td} ${t.profit >= 0 ? "text-green-700" : "text-rose-700"}`}>LKR {fmt(t.profit)}</TableCell>
+                              <TableCell className={`${td} text-slate-800`}>{totalMargin.toFixed(1)}%</TableCell>
+                              <TableCell className={`${td} text-slate-800`}>{t.purchaseQty.toLocaleString()}</TableCell>
+                              <TableCell className={`${td} text-emerald-700`}>LKR {fmt(t.purchaseAmount)}</TableCell>
+                              <TableCell className={`${td} ${totalDiff >= 0 ? "text-green-700" : "text-rose-700"}`}>
+                                {totalDiff < 0 ? "-" : "+"}LKR {fmt(Math.abs(totalDiff))}
+                              </TableCell>
+                            </TableRow>
+                          )}
                         </TableBody>
                       </Table>
                     </div>
                   </div>
-                )}
+                  );
+                })()}
               </CardContent>
             </Card>
           </>

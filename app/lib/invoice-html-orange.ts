@@ -120,6 +120,7 @@ export const generateOrangeInvoiceHTML = (invoice: any): string => {
     return s + Math.max(0, gross - (Number(it.total) || 0));
   }, 0);
   const cashDiscount = Number(invoice.cashDiscountAmount || tag("CASH_DISCOUNT_AMOUNT") || 0);
+  // Returns are not printed on the Orange bill; only used to derive a missing extra discount
   const returnsTotal = Number(invoice.returnsTotal || invoice.totalRefunded) || 0;
   const invoiceValue = Number(invoice.grandTotal ?? invoice.totalAmount) || 0;
   // Same fallback as the standard layout: whatever is left after item/cash discounts and returns
@@ -197,7 +198,6 @@ export const generateOrangeInvoiceHTML = (invoice: any): string => {
       ${itemDiscount > 0.009 ? totalLine("Item Discount", itemDiscount, true) : ""}
       ${extraDiscount > 0.009 ? totalLine(`Extra Discount${invoice.extraDiscountPercent ? ` (${invoice.extraDiscountPercent}%)` : ""}`, extraDiscount, true) : ""}
       ${cashDiscount > 0.009 ? totalLine(`Cash Discount${cashDiscountPercent ? ` (${cashDiscountPercent}%)` : ""}`, cashDiscount, true) : ""}
-      ${returnsTotal > 0.009 ? totalLine("Returns", returnsTotal, true) : ""}
       <tr>
         <td style="padding:12px 8px 4px;text-align:left;">Invoice Value</td>
         <td style="padding:12px 0 4px;text-align:right;">

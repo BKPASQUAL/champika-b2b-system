@@ -1,7 +1,7 @@
 /**
  * payment-voucher-print.ts
  * Prints a supplier payment voucher — signed by whoever takes the cheques.
- * Two copies on one A4 (Office Copy on top, Receiver Copy below, cut line between).
+ * One copy only, on the top half of an A4 sheet (full page if there are many rows).
  */
 
 import { amountToWords } from "@/app/lib/cheque-print";
@@ -63,10 +63,10 @@ const date = (d: string | null | undefined) => {
 };
 
 // Half of A4 holds the voucher only up to this many table rows (invoices + cheques).
-// Above that, each copy gets its own full A4 page.
-const HALF_PAGE_MAX_ROWS = 15;
+// Above that, the voucher uses a full A4 page.
+const HALF_PAGE_MAX_ROWS = 7;
 
-function copyHTML(v: PaymentVoucher, copyLabel: string): string {
+function copyHTML(v: PaymentVoucher): string {
   const businessName =
     (v.business_id && (BUSINESS_NAMES as Record<string, string>)[v.business_id]) ||
     "Champika Hardware";
@@ -75,12 +75,12 @@ function copyHTML(v: PaymentVoucher, copyLabel: string): string {
     .map(
       (i, idx) => `
       <tr>
-        <td class="c">${idx + 1}</td>
+        <td class="c n">${idx + 1}</td>
         <td>${esc(i.invoice_no || "—")}</td>
         <td>${esc(i.purchase_id || "—")}</td>
         <td class="c">${date(i.invoice_date)}</td>
         <td class="r">${money(i.invoice_total)}</td>
-        <td class="mono c">${esc(i.cheque_number || "—")}</td>
+        <td class="c mono">${esc(i.cheque_number || "—")}</td>
         <td class="r b">${money(i.paid_amount)}</td>
       </tr>`
     )
@@ -90,67 +90,96 @@ function copyHTML(v: PaymentVoucher, copyLabel: string): string {
     .map(
       (c, idx) => `
       <tr>
-        <td class="c">${idx + 1}</td>
+        <td class="c n">${idx + 1}</td>
         <td class="mono b">${esc(c.cheque_number || "—")}</td>
         <td class="c">${date(c.cheque_date)}</td>
-        <td>${esc(c.account_name || "—")}${c.account_number ? ` <span class="muted">(${esc(c.account_number)})</span>` : ""}</td>
+        <td>${esc(c.account_name || "—")}${c.account_number ? ` <span class="muted">· ${esc(c.account_number)}</span>` : ""}</td>
         <td class="r b">${money(c.amount)}</td>
       </tr>`
     )
     .join("");
 
   const chequeCount = v.cheques?.length ?? 0;
+  const invoiceCount = v.invoices?.length ?? 0;
+  const branch = businessName !== "Champika Hardware" ? businessName : "";
 
   return `
-  <div class="head">
-    <div>
-      <div class="biz">Champika Hardware</div>
-      <div class="muted">${businessName !== "Champika Hardware" ? `${esc(businessName)} · ` : ""}Supplier Payment</div>
+  <header class="head">
+    <div class="brand">
+      <div class="biz">CHAMPIKA HARDWARE</div>
+      <div class="sub">${branch ? `${esc(branch)} &nbsp;|&nbsp; ` : ""}Supplier Payments</div>
     </div>
-    <div class="copy-tag">${esc(copyLabel)}</div>
-    <div>
-      <div class="title">PAYMENT VOUCHER</div>
-      <div class="vno">${esc(v.voucher_number)}</div>
+    <div class="docbox">
+      <div class="doctitle">PAYMENT VOUCHER</div>
+      <table class="meta">
+        <tr><td>Voucher No</td><td class="mono b">${esc(v.voucher_number)}</td></tr>
+        <tr><td>Date</td><td class="b">${date(v.voucher_date)}</td></tr>
+      </table>
     </div>
-  </div>
+  </header>
 
-  <div class="info">
-    <div><span>Paid To:</span> <b>${esc(v.supplier_name || "—")}</b></div>
-    <div><span>Date:</span> <b>${date(v.voucher_date)}</b></div>
-    <div><span>Cheques:</span> ${chequeCount} &nbsp; <span>Invoices:</span> ${v.invoices?.length ?? 0}</div>
-  </div>
+  <section class="party">
+    <div class="pcell grow">
+      <div class="lbl">Paid To</div>
+      <div class="pval">${esc(v.supplier_name || "—")}</div>
+    </div>
+    <div class="pcell">
+      <div class="lbl">Payment Mode</div>
+      <div class="pval sm">Cheque</div>
+    </div>
+    <div class="pcell">
+      <div class="lbl">Cheques / Invoices</div>
+      <div class="pval sm">${chequeCount} / ${invoiceCount}</div>
+    </div>
+  </section>
 
-  <h3>Invoice Details</h3>
-  <table>
+  <div class="sec">Invoice Details</div>
+  <table class="grid">
     <thead><tr>
-      <th class="c" style="width:18px">#</th><th>Supplier Invoice No</th><th>Our Bill ID</th>
+      <th class="c n">#</th><th>Supplier Invoice No</th><th>Our Bill ID</th>
       <th class="c">Invoice Date</th><th class="r">Invoice Amount</th><th class="c">Cheque No</th><th class="r">Paid Amount</th>
     </tr></thead>
     <tbody>${invoiceRows}</tbody>
-    <tfoot><tr><td colspan="6" class="r">TOTAL</td><td class="r">${money(v.total_amount)}</td></tr></tfoot>
   </table>
 
-  <h3>Cheque Details</h3>
-  <table>
+  <div class="sec">Cheque Details</div>
+  <table class="grid">
     <thead><tr>
-      <th class="c" style="width:18px">#</th><th>Cheque No</th><th class="c">Cheque Date</th><th>Drawn From (Account)</th><th class="r">Amount (Rs.)</th>
+      <th class="c n">#</th><th>Cheque No</th><th class="c">Cheque Date</th><th>Drawn From (Account)</th><th class="r">Amount (Rs.)</th>
     </tr></thead>
     <tbody>${chequeRows}</tbody>
   </table>
 
-  <div class="words"><b>Amount in words:</b> Rupees ${esc(amountToWords(Number(v.total_amount) || 0))}
-    &nbsp;<b>(Rs. ${money(v.total_amount)})</b>${v.notes ? ` &nbsp;·&nbsp; <b>Notes:</b> ${esc(v.notes)}` : ""}</div>
+  <section class="sum">
+    <div class="words">
+      <div class="lbl">Amount in Words</div>
+      <div>Rupees ${esc(amountToWords(Number(v.total_amount) || 0))}</div>
+      ${v.notes ? `<div class="note"><span class="lbl">Notes:</span> ${esc(v.notes)}</div>` : ""}
+    </div>
+    <div class="total">
+      <div class="lbl">Total Amount</div>
+      <div class="tval">Rs. ${money(v.total_amount)}</div>
+    </div>
+  </section>
 
-  <div class="recv">
-    <p><b>RECEIVED BY (AUTHORIZED PERSON)</b> — I acknowledge receipt of the above ${chequeCount} cheque(s) totalling
+  <section class="recv">
+    <div class="recv-h">RECEIVED BY &nbsp;<span>(Authorized Person)</span></div>
+    <p class="decl">I acknowledge receipt of the above ${chequeCount} cheque(s) totalling
       <b>Rs. ${money(v.total_amount)}</b> on behalf of <b>${esc(v.supplier_name || "")}</b>.</p>
-    <div class="line"><span>Name:</span><div class="fill">${esc(v.receiver_name || "")}</div>
-      <span>NIC / ID No:</span><div class="fill w35">${esc(v.receiver_nic || "")}</div></div>
-    <div class="line"><span>Designation:</span><div class="fill">${esc(v.receiver_designation || "")}</div>
-      <span>Mobile No:</span><div class="fill w35">${esc(v.receiver_phone || "")}</div></div>
-    <div class="line"><span>Signature:</span><div class="fill sign"></div>
-      <span>Date:</span><div class="fill w35"></div></div>
-  </div>`;
+    <div class="recv-body">
+      <div class="fields">
+        <div class="f wide"><span>Name</span><div class="fill">${esc(v.receiver_name || "")}</div></div>
+        <div class="f"><span>NIC / ID No</span><div class="fill">${esc(v.receiver_nic || "")}</div></div>
+        <div class="f"><span>Mobile No</span><div class="fill">${esc(v.receiver_phone || "")}</div></div>
+        <div class="f"><span>Designation</span><div class="fill">${esc(v.receiver_designation || "")}</div></div>
+        <div class="f"><span>Date</span><div class="fill"></div></div>
+      </div>
+      <div class="signbox">
+        <div class="signarea"></div>
+        <div class="signlbl">Signature</div>
+      </div>
+    </div>
+  </section>`;
 }
 
 export function buildVoucherHTML(v: PaymentVoucher): string {
@@ -165,40 +194,74 @@ export function buildVoucherHTML(v: PaymentVoucher): string {
   @page { size: A4; margin: 0; }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
-  body { font-family: Arial, Helvetica, sans-serif; font-size: 9.5px; color: #111; background: #fff; }
-  .copy { width: 210mm; padding: 7mm 11mm 5mm; overflow: hidden; }
-  .copy.half { height: 148.4mm; }
-  .copy.half.top { border-bottom: 1px dashed #888; position: relative; }
-  .copy.half.top::after { content: "✂  cut here"; position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%);
-    background: #fff; padding: 0 6px; font-size: 8px; color: #888; }
-  .copy.full { min-height: 297mm; page-break-after: always; break-after: page; }
-  .copy.full:last-child { page-break-after: auto; break-after: auto; }
-  .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1.5px solid #111; padding-bottom: 4px; }
-  .biz { font-size: 15px; font-weight: 700; }
-  .copy-tag { align-self: center; border: 1px solid #111; padding: 2px 8px; font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
-  .title { font-size: 13px; font-weight: 700; letter-spacing: 2px; text-align: right; }
-  .vno { font-family: monospace; font-size: 12px; text-align: right; margin-top: 2px; }
-  .info { display: flex; justify-content: space-between; gap: 12px; margin: 5px 0 2px; }
-  .info span { color: #555; }
-  h3 { font-size: 9.5px; margin: 6px 0 2px; text-transform: uppercase; letter-spacing: 1px; }
-  table { width: 100%; border-collapse: collapse; }
-  th, td { border: 1px solid #444; padding: 1.5px 5px; }
-  th { background: #eee; font-size: 8.5px; text-align: left; }
+  body { font-family: "Segoe UI", Arial, Helvetica, sans-serif; font-size: 9.5px; color: #1a1a1a; background: #fff;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .copy { width: 210mm; padding: 9mm 12mm 8mm; display: flex; flex-direction: column; }
+  .copy.half { height: 148.4mm; overflow: hidden; }
+  .copy.full { min-height: 297mm; }
+
   .c { text-align: center; } .r { text-align: right; } .b { font-weight: 700; }
-  .mono { font-family: monospace; } .muted { color: #666; font-size: 8.5px; }
-  tfoot td { font-weight: 700; background: #f6f6f6; }
-  .words { margin-top: 5px; padding: 3px 6px; border: 1px dashed #444; }
-  .recv { margin-top: 6px; border: 1.2px solid #111; padding: 5px 8px 6px; }
-  .recv p { margin: 0; }
-  .line { display: flex; gap: 6px; margin-top: 9px; align-items: flex-end; }
-  .line span { white-space: nowrap; }
-  .line .fill { flex: 1; border-bottom: 1px dotted #111; min-height: 13px; padding-left: 4px; font-weight: 700; }
-  .line .fill.w35 { flex: 0 0 35%; }
-  .line .sign { min-height: 22px; }
+  .mono { font-family: Consolas, "Courier New", monospace; letter-spacing: .3px; }
+  .muted { color: #777; }
+  .lbl { font-size: 7.5px; font-weight: 700; color: #666; text-transform: uppercase; letter-spacing: .8px; }
+
+  /* Header */
+  .head { display: flex; justify-content: space-between; align-items: stretch; padding-bottom: 6px; border-bottom: 2px solid #1a1a1a; }
+  .brand { display: flex; flex-direction: column; justify-content: center; }
+  .biz { font-size: 17px; font-weight: 800; letter-spacing: 1.2px; }
+  .sub { font-size: 8.5px; color: #555; margin-top: 2px; letter-spacing: .3px; }
+  .docbox { border: 1px solid #1a1a1a; min-width: 62mm; }
+  .doctitle { background: #1a1a1a; color: #fff; text-align: center; font-weight: 700; font-size: 10.5px; letter-spacing: 2.5px; padding: 3px 8px; }
+  .meta { width: 100%; border-collapse: collapse; }
+  .meta td { padding: 2px 8px; font-size: 9px; }
+  .meta tr + tr td { border-top: 1px solid #ddd; }
+  .meta td:first-child { color: #666; width: 42%; }
+  .meta td:last-child { text-align: right; }
+
+  /* Paid-to strip */
+  .party { display: flex; margin-top: 7px; border: 1px solid #cfcfcf; }
+  .pcell { padding: 4px 9px; min-width: 32mm; }
+  .pcell + .pcell { border-left: 1px solid #cfcfcf; }
+  .pcell.grow { flex: 1; }
+  .pval { font-size: 12px; font-weight: 700; margin-top: 1px; }
+  .pval.sm { font-size: 10px; }
+
+  /* Tables */
+  .sec { margin: 8px 0 3px; font-size: 8.5px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: #333; }
+  .grid { width: 100%; border-collapse: collapse; }
+  .grid th { background: #efefef; font-size: 8px; font-weight: 700; color: #333; text-transform: uppercase; letter-spacing: .3px;
+    padding: 3.5px 6px; border-top: 1px solid #1a1a1a; border-bottom: 1px solid #1a1a1a; text-align: left; }
+  .grid th.c { text-align: center; } .grid th.r { text-align: right; }
+  .grid td { padding: 3.5px 6px; border-bottom: 1px solid #e2e2e2; }
+  .grid tbody tr:last-child td { border-bottom: 1px solid #1a1a1a; }
+  .grid .n { width: 22px; color: #777; }
+
+  /* Totals */
+  .sum { display: flex; gap: 8px; margin: 8px 0 8px; align-items: stretch; }
+  .words { flex: 1; border: 1px solid #cfcfcf; padding: 4px 9px; font-size: 9px; }
+  .words .lbl { margin-bottom: 1px; }
+  .note { margin-top: 3px; }
+  .total { min-width: 62mm; border: 1.5px solid #1a1a1a; padding: 4px 9px; text-align: right; background: #f4f4f4; }
+  .tval { font-size: 14px; font-weight: 800; margin-top: 1px; }
+
+  /* Received by — pushed to the bottom of the half page */
+  .recv { margin-top: auto; border: 1px solid #1a1a1a; }
+  .copy.full .recv { margin-top: 14px; }
+  .recv-h { background: #efefef; border-bottom: 1px solid #1a1a1a; padding: 3px 9px; font-weight: 700; font-size: 9px; letter-spacing: 1.2px; }
+  .recv-h span { font-weight: 400; color: #555; letter-spacing: .3px; }
+  .decl { margin: 4px 9px 0; font-size: 8.5px; color: #333; }
+  .recv-body { display: flex; gap: 10px; padding: 2px 9px 7px; }
+  .fields { flex: 1; display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; }
+  .f { display: flex; align-items: flex-end; gap: 6px; margin-top: 9px; }
+  .f.wide { grid-column: 1 / -1; }
+  .f span { white-space: nowrap; color: #555; font-size: 8.5px; min-width: 52px; }
+  .fill { flex: 1; border-bottom: 1px dotted #1a1a1a; min-height: 13px; padding: 0 3px 1px; font-weight: 700; font-size: 10px; }
+  .signbox { width: 52mm; display: flex; flex-direction: column; justify-content: flex-end; margin-top: 9px; }
+  .signarea { flex: 1; min-height: 32px; border: 1px dashed #aaa; border-bottom: 1px solid #1a1a1a; }
+  .signlbl { text-align: center; font-size: 8px; color: #555; text-transform: uppercase; letter-spacing: 1px; padding-top: 2px; }
 </style></head>
 <body>
-  <div class="copy ${half ? "half top" : "full"}">${copyHTML(v, "Office Copy")}</div>
-  <div class="copy ${half ? "half" : "full"}">${copyHTML(v, "Receiver Copy")}</div>
+  <div class="copy ${half ? "half" : "full"}">${copyHTML(v)}</div>
 </body></html>`;
 }
 

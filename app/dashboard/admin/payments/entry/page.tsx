@@ -201,6 +201,8 @@ export default function AdminPaymentEntryPage() {
 
   // Form – header
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
+  // Bumped after a payment is saved: reloads the same customer's invoices without clearing the selection
+  const [customerReloadKey, setCustomerReloadKey] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [paymentDate, setPaymentDate] = useState(
     new Date().toISOString().split("T")[0]
@@ -498,7 +500,7 @@ export default function AdminPaymentEntryPage() {
       setPendingInvoices([]);
       setSettlements({});
     }
-  }, [selectedCustomerId, fetchPendingInvoices]);
+  }, [selectedCustomerId, fetchPendingInvoices, customerReloadKey]);
 
   // Reset account when method changes
   useEffect(() => {
@@ -563,8 +565,8 @@ export default function AdminPaymentEntryPage() {
 
   // ── Reset ─────────────────────────────────────────────────────────────────────
 
-  const resetForm = () => {
-    setSelectedCustomerId("");
+  const resetForm = (keepCustomer = false) => {
+    if (keepCustomer) setCustomerReloadKey((k) => k + 1); else setSelectedCustomerId("");
     setPaymentMethod("cash");
     setPaymentDate(new Date().toISOString().split("T")[0]);
     setTotalAmount(0); setNotes(""); setChequeNumber(""); setChequeDate(""); setSelectedBankId(""); setSelectedAccountId("");
@@ -746,7 +748,7 @@ export default function AdminPaymentEntryPage() {
         toast.success(
           `${successCount} invoice${successCount > 1 ? "s" : ""} settled successfully!`
         );
-        resetForm();
+        resetForm(true);
         invalidatePaymentCaches();
       }
       if (failCount > 0) {
@@ -1628,7 +1630,7 @@ export default function AdminPaymentEntryPage() {
               <div className="flex gap-2 w-full sm:w-auto">
                 <Button
                   variant="outline"
-                  onClick={resetForm}
+                  onClick={() => resetForm()}
                   disabled={isSubmitting}
                   className="flex-1 sm:flex-none"
                 >

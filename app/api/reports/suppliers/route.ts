@@ -8,150 +8,6 @@ export const dynamic = "force-dynamic";
 const _serverReportCache = new Map<string, { data: any; timestamp: number }>();
 const SERVER_CACHE_TTL_MS = 60_000; // 60 seconds
 
-interface MonthStat {
-  salesQty: number;
-  salesAmount: number;
-  purchaseQty: number;
-  purchaseAmount: number;
-}
-
-// Module-level cache for historical rolling 12 months totals
-let _rolling12MonthCache: {
-  timestamp: number;
-  data: Record<string, Record<string, MonthStat>>;
-} | null = null;
-const ROLLING_CACHE_TTL_MS = 15 * 60_000; // 15 minutes
-
-async function getRolling12MonthSummary(rollingStartStr: string, toDateStr: string) {
-  if (_rolling12MonthCache && Date.now() - _rolling12MonthCache.timestamp < ROLLING_CACHE_TTL_MS) {
-    return _rolling12MonthCache.data;
-  }
-
-  const result: Record<string, Record<string, MonthStat>> = {};
-
-  const ensureEntry = (supplier: string, month: string) => {
-    if (!result[supplier]) result[supplier] = {};
-    if (!result[supplier][month]) {
-      result[supplier][month] = { salesQty: 0, salesAmount: 0, purchaseQty: 0, purchaseAmount: 0 };
-    }
-  };
-
-  // Pre-fetch inter-branch customer IDs once to avoid joining customer table on 14,000+ rows
-  const getInterBranchCustomerIds = async (): Promise<Set<string>> => {
-    try {
-      const { data } = await supabaseAdmin
-        .from("customers")
-        .select("id")
-        .ilike("shop_name", "%champika hardware%");
-      return new Set((data || []).map((c: any) => c.id));
-    } catch {
-      return new Set();
-    }
-  };
-
-  const fetchSales = async (interBranchIds: Set<string>) => {
-    const PAGE_SIZE = 1000;
-    const BATCH_SIZE = 8;
-    let pageOffset = 0;
-
-    while (true) {
-      const pageIndices = Array.from({ length: BATCH_SIZE }, (_, i) => pageOffset + i);
-      const batchResults = await Promise.all(
-        pageIndices.map(pageIdx =>
-          supabaseAdmin
-            .from("order_items")
-            .select("quantity, total_price, product:products!inner(supplier_name), order:orders!inner(order_date, is_inter_branch, customer_id)")
-            .gte("order.order_date", rollingStartStr)
-            .lte("order.order_date", toDateStr)
-            .eq("order.status", "Delivered")
-            .range(pageIdx * PAGE_SIZE, (pageIdx + 1) * PAGE_SIZE - 1)
-        )
-      );
-
-      let reachedEnd = false;
-      for (const res of batchResults) {
-        if (res.error) {
-          console.error("fetchSales rolling error:", res.error);
-          break;
-        }
-        const data = res.data || [];
-        data.forEach((item: any) => {
-          if (item.order?.is_inter_branch === true) return;
-          if (item.order?.customer_id && interBranchIds.has(item.order.customer_id)) return;
-          const supplier = item.product?.supplier_name || "Unknown Supplier";
-          const dateStr = (item.order?.order_date || "").split("T")[0];
-          const monthKey = dateStr.slice(0, 7);
-          if (!monthKey) return;
-          ensureEntry(supplier, monthKey);
-          result[supplier][monthKey].salesQty += Number(item.quantity) || 0;
-          result[supplier][monthKey].salesAmount += Number(item.total_price) || 0;
-        });
-
-        if (data.length < PAGE_SIZE) {
-          reachedEnd = true;
-          break;
-        }
-      }
-
-      if (reachedEnd) break;
-      pageOffset += BATCH_SIZE;
-    }
-  };
-
-  const fetchPurchases = async () => {
-    const PAGE_SIZE = 1000;
-    const BATCH_SIZE = 4;
-    let pageOffset = 0;
-
-    while (true) {
-      const pageIndices = Array.from({ length: BATCH_SIZE }, (_, i) => pageOffset + i);
-      const batchResults = await Promise.all(
-        pageIndices.map(pageIdx =>
-          supabaseAdmin
-            .from("purchase_items")
-            .select("quantity, free_quantity, total_cost, product:products(supplier_name), purchase:purchases!inner(purchase_date, status)")
-            .gte("purchase.purchase_date", rollingStartStr)
-            .lte("purchase.purchase_date", toDateStr)
-            .neq("purchase.status", "Draft")
-            .range(pageIdx * PAGE_SIZE, (pageIdx + 1) * PAGE_SIZE - 1)
-        )
-      );
-
-      let reachedEnd = false;
-      for (const res of batchResults) {
-        if (res.error) {
-          console.error("fetchPurchases rolling error:", res.error);
-          break;
-        }
-        const data = res.data || [];
-        data.forEach((item: any) => {
-          const supplier = item.product?.supplier_name || "Unknown Supplier";
-          const dateStr = (item.purchase?.purchase_date || "").split("T")[0];
-          const monthKey = dateStr.slice(0, 7);
-          if (!monthKey) return;
-          ensureEntry(supplier, monthKey);
-          result[supplier][monthKey].purchaseQty += (Number(item.quantity) || 0) + (Number(item.free_quantity) || 0);
-          result[supplier][monthKey].purchaseAmount += Number(item.total_cost) || 0;
-        });
-
-        if (data.length < PAGE_SIZE) {
-          reachedEnd = true;
-          break;
-        }
-      }
-
-      if (reachedEnd) break;
-      pageOffset += BATCH_SIZE;
-    }
-  };
-
-  const interBranchIds = await getInterBranchCustomerIds();
-  await Promise.all([fetchSales(interBranchIds), fetchPurchases()]);
-
-  _rolling12MonthCache = { timestamp: Date.now(), data: result };
-  return result;
-}
-
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -170,19 +26,21 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(cached.data);
     }
 
-    // Calculate rolling 12 months start date
-    const rollingStart = new Date(now.getFullYear(), now.getMonth() - 11, 1);
-    const rollingStartStr = rollingStart.toISOString().split("T")[0]; // YYYY-MM-DD
     const toDateStr = toDate.split("T")[0];
 
-    // Generate rolling 12 month keys in chronological order
-    const rollingMonths: string[] = [];
-    const tempDate = new Date(rollingStart);
-    while (tempDate <= now) {
-      const y = tempDate.getFullYear();
-      const m = String(tempDate.getMonth() + 1).padStart(2, '0');
-      rollingMonths.push(`${y}-${m}`);
-      tempDate.setMonth(tempDate.getMonth() + 1);
+    // Every month inside the selected period, in order (YYYY-MM)
+    const periodMonths: string[] = [];
+    {
+      // from/to arrive as UTC timestamps of local (Sri Lanka) midnight, so read them in local time
+      const localYM = (d: string) =>
+        d.includes("T") ? new Date(d).toLocaleDateString("en-CA", { timeZone: "Asia/Colombo" }).slice(0, 7) : d.slice(0, 7);
+      let [y, m] = localYM(fromDate).split("-").map(Number);
+      const [ey, em] = localYM(toDate).split("-").map(Number);
+      while (y < ey || (y === ey && m <= em)) {
+        periodMonths.push(`${y}-${String(m).padStart(2, "0")}`);
+        m++;
+        if (m > 12) { m = 1; y++; }
+      }
     }
 
     // 1. All products with current stock — parallel batch pagination
@@ -317,12 +175,11 @@ export async function GET(request: NextRequest) {
       return purchaseItems;
     };
 
-    // Execute product catalog, sales order items, purchase records, and rolling summary in parallel
-    const [products, orderItems, purchaseItems, rollingSummary] = await Promise.all([
+    // Execute product catalog, sales order items and purchase records in parallel
+    const [products, orderItems, purchaseItems] = await Promise.all([
       fetchProducts(),
       fetchOrderItems(),
       fetchPurchaseItems(),
-      getRolling12MonthSummary(rollingStartStr, toDateStr),
     ]);
 
     // 3. Supplier → products stock map
@@ -341,25 +198,26 @@ export async function GET(request: NextRequest) {
       businessId?: string | null; businessName?: string | null;
       revenue: number; cost: number; profit: number; margin: number;
     };
+    type MonthEntry = {
+      month: string; salesQty: number; salesAmount: number; cost: number; profit: number;
+      purchaseQty: number; purchaseAmount: number; invoiceIds: Set<string>;
+    };
     type SupplierEntry = {
       products: Record<string, ProductEntry>;
       customers: Record<string, CustomerEntry>;
       invoices: Record<string, InvoiceEntry>;
-      months: Record<string, { month: string; salesQty: number; salesAmount: number; purchaseQty: number; purchaseAmount: number }>;
+      months: Record<string, MonthEntry>;
     };
 
     const supplierMap: Record<string, SupplierEntry> = {};
 
     const ensureSupplier = (name: string) => {
       if (!supplierMap[name]) {
-        const months: Record<string, any> = {};
-        rollingMonths.forEach(m => {
+        const months: Record<string, MonthEntry> = {};
+        periodMonths.forEach(m => {
           months[m] = {
-            month: m,
-            salesQty: 0,
-            salesAmount: 0,
-            purchaseQty: 0,
-            purchaseAmount: 0
+            month: m, salesQty: 0, salesAmount: 0, cost: 0, profit: 0,
+            purchaseQty: 0, purchaseAmount: 0, invoiceIds: new Set(),
           };
         });
         supplierMap[name] = { products: {}, customers: {}, invoices: {}, months };
@@ -385,17 +243,15 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    // Populate 12-month rolling summary (sales & purchases) from rollingSummary
-    Object.entries(rollingSummary).forEach(([supplier, monthsData]) => {
+    // Purchases in the selected period, per supplier per month
+    (purchaseItems || []).forEach((item: any) => {
+      const supplier = item.product?.supplier_name || "Unknown Supplier";
+      const monthKey = (item.purchase?.purchase_date || "").slice(0, 7);
       ensureSupplier(supplier);
-      Object.entries(monthsData).forEach(([mKey, agg]) => {
-        if (supplierMap[supplier].months[mKey]) {
-          supplierMap[supplier].months[mKey].salesQty = agg.salesQty;
-          supplierMap[supplier].months[mKey].salesAmount = agg.salesAmount;
-          supplierMap[supplier].months[mKey].purchaseQty = agg.purchaseQty;
-          supplierMap[supplier].months[mKey].purchaseAmount = agg.purchaseAmount;
-        }
-      });
+      const mEntry = supplierMap[supplier].months[monthKey];
+      if (!mEntry) return;
+      mEntry.purchaseQty += (Number(item.quantity) || 0) + (Number(item.free_quantity) || 0);
+      mEntry.purchaseAmount += Number(item.total_cost) || 0;
     });
 
     // 4. Aggregate sales → products + customers + invoices for selected period
@@ -439,6 +295,16 @@ export async function GET(request: NextRequest) {
           pendingClaimQty: 0, pendingClaimCost: 0,
         };
       }
+      // Month aggregation (same rows as the invoice totals, so months add up to the period total)
+      const mEntry = supplierMap[supplier].months[dateStr.slice(0, 7)];
+      if (mEntry) {
+        mEntry.salesQty += qty;
+        mEntry.salesAmount += revenue;
+        mEntry.cost += cost;
+        mEntry.profit += profit;
+        mEntry.invoiceIds.add(order.order_id);
+      }
+
       const prod = supplierMap[supplier].products[pid];
       prod.unitsSold += qty; prod.freeQty += freeQty;
       prod.revenue += revenue; prod.cost += cost; prod.profit += profit;
@@ -590,13 +456,14 @@ export async function GET(request: NextRequest) {
       const netProfit = totalProfit - pendingClaimCost;
       const netMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
 
-      const monthList = Object.values(data.months).map((m: any) => {
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const monthList = Object.values(data.months).map(({ invoiceIds, ...m }) => {
         const [year, month] = m.month.split("-");
-        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-        const label = `${monthNames[parseInt(month) - 1]} ${year}`;
         return {
           ...m,
-          monthLabel: label
+          invoiceCount: invoiceIds.size,
+          margin: m.salesAmount > 0 ? (m.profit / m.salesAmount) * 100 : 0,
+          monthLabel: `${monthNames[parseInt(month) - 1]} ${year}`,
         };
       });
 

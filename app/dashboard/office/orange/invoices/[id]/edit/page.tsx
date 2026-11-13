@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, use } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { invalidatePaymentCaches } from "@/hooks/useCachedFetch";
 import {
   ArrowLeft,
@@ -18,7 +18,27 @@ import {
   Undo2,
   Edit,
   X,
+  KeyRound,
+  Lock,
+  ShieldCheck,
+  Clock,
+  Send,
+  QrCode,
+  Smartphone,
+  Copy,
+  ExternalLink,
+  TruckIcon,
 } from "lucide-react";
+import QRCode from "qrcode";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -99,8 +119,16 @@ interface InvoiceHistory {
 interface ReturnRecord {
   id: string;
   quantity: number;
+  return_type?: "Good" | "Damage" | "Exchange";
   products: { selling_price: number };
 }
+
+/** Same rule as Distribution: Exchange returns are swapped goods and do NOT reduce the bill. */
+const calcRefundTotal = (rets: ReturnRecord[]) =>
+  rets.reduce((acc, r) => {
+    if ((r.return_type || "Exchange") === "Exchange") return acc;
+    return acc + r.quantity * (r.products?.selling_price || 0);
+  }, 0);
 
 export default function OrangeEditInvoicePage({
   params,
@@ -109,6 +137,9 @@ export default function OrangeEditInvoicePage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnTo = searchParams.get("returnTo");
+  const isFromReconciliation = !!returnTo;
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -170,9 +201,138 @@ export default function OrangeEditInvoicePage({
     stockAvailable: 0,
   });
 
+  // Unlock state (same rules as Distribution edit)
+  const [unlockedToken, setUnlockedToken] = useState<string | null>(null);
+  const [unlockModalOpen, setUnlockModalOpen] = useState(false);
+  const [pinInput, setPinInput] = useState("");
+  const [unlockReason, setUnlockReason] = useState("");
+  const [unlocking, setUnlocking] = useState(false);
+  const [pendingRequestId, setPendingRequestId] = useState<string | null>(null);
+  const [requestStatus, setRequestStatus] = useState<"none" | "pending" | "approved" | "rejected">("none");
+  const [activeTab, setActiveTab] = useState<"pin" | "request" | "qr">("pin");
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [qrUnlockUrl, setQrUnlockUrl] = useState<string>("");
+  const [generatingQr, setGeneratingQr] = useState(false);
+
   const lockedStatuses = ["Loading", "In Transit", "Delivered", "Completed", "Cancelled"];
+  const isStatusLocked = lockedStatuses.includes(orderStatus);
   const isAdmin = currentUser?.role === "admin";
-  const isReadOnly = !isAdmin && lockedStatuses.includes(orderStatus);
+  const isUnlockedByToken = !!unlockedToken;
+  const isReadOnly = isStatusLocked && !isFromReconciliation && !isAdmin && !isUnlockedByToken;
+
+  const handleBack = () => {
+    router.push(returnTo || "/dashboard/office/orange/invoices");
+  };
+
+  const getStoredUser = () => {
+    if (typeof window === "undefined") return { userId: "", userName: "" };
+    try {
+      const parsed = JSON.parse(localStorage.getItem("currentUser") || "{}");
+      return { userId: parsed.id || "", userName: parsed.fullName || parsed.name || "" };
+    } catch {
+      return { userId: "", userName: "" };
+    }
+  };
+
+  // Auto-poll approval request if pending
+  useEffect(() => {
+    if (!pendingRequestId || requestStatus !== "pending") return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/invoices/${id}/unlock?requestId=${pendingRequestId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.status === "approved" && data.unlockToken) {
+            setUnlockedToken(data.unlockToken);
+            setRequestStatus("approved");
+            setUnlockModalOpen(false);
+            toast.success("Admin approved your unlock request! Bill is now editable.");
+          } else if (data.status === "rejected") {
+            setRequestStatus("rejected");
+            toast.error("Admin rejected your unlock request.");
+          }
+        }
+      } catch (err) {
+        console.error("Polling error:", err);
+      }
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [pendingRequestId, requestStatus, id]);
+
+  const handleVerifyPin = async () => {
+    if (!pinInput.trim()) { toast.error("Please enter the Admin Passcode / PIN"); return; }
+    if (!unlockReason.trim()) { toast.error("Please provide a reason for editing"); return; }
+    setUnlocking(true);
+    try {
+      const { userId, userName } = getStoredUser();
+      const res = await fetch(`/api/invoices/${id}/unlock`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "verify_pin", pin: pinInput, reason: unlockReason, userId, userName }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to verify PIN");
+      setUnlockedToken(data.unlockToken);
+      setUnlockModalOpen(false);
+      setPinInput("");
+      if (!editReason) setEditReason(unlockReason);
+      toast.success("One-Time Edit Access Granted!");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to unlock bill");
+    } finally {
+      setUnlocking(false);
+    }
+  };
+
+  const handleSendUnlockRequest = async () => {
+    if (!unlockReason.trim()) { toast.error("Please enter a reason for requesting edit access"); return; }
+    setUnlocking(true);
+    try {
+      const { userId, userName } = getStoredUser();
+      const res = await fetch(`/api/invoices/${id}/unlock`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "request_approval", reason: unlockReason, userId, userName }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to submit request");
+      setPendingRequestId(data.requestId);
+      setRequestStatus("pending");
+      if (!editReason) setEditReason(unlockReason);
+      toast.success("Unlock request sent to Admin! Auto-checking approval status...");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to submit request");
+    } finally {
+      setUnlocking(false);
+    }
+  };
+
+  const handleGenerateQrCode = async () => {
+    if (!unlockReason.trim()) { toast.error("Please enter a reason for editing before generating QR Code"); return; }
+    setGeneratingQr(true);
+    try {
+      const { userId, userName } = getStoredUser();
+      const res = await fetch(`/api/invoices/${id}/unlock`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "request_approval", reason: unlockReason.trim(), userId, userName }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to create QR session");
+      const unlockUrl = `${window.location.origin}/unlock-invoice/${data.requestId}`;
+      const qrData = await QRCode.toDataURL(unlockUrl, { margin: 1, width: 220 });
+      setQrUnlockUrl(unlockUrl);
+      setQrDataUrl(qrData);
+      setPendingRequestId(data.requestId);
+      setRequestStatus("pending");
+      if (!editReason) setEditReason(unlockReason);
+      toast.success("QR Code generated! Scan with phone camera to authorize.");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to generate QR Code");
+    } finally {
+      setGeneratingQr(false);
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -206,7 +366,7 @@ export default function OrangeEditInvoicePage({
         }
 
         setCustomers(custData.map((c: any) => ({ id: c.id, name: c.shopName, phone: c.phone || "", ownerName: c.ownerName || "" })));
-        setReturns(retData);
+        setReturns(Array.isArray(retData) ? retData : []);
 
         setCustomerId(invoice.customerId || null);
         setInvoiceDate(invoice.date || new Date().toISOString().split("T")[0]);
@@ -232,13 +392,17 @@ export default function OrangeEditInvoicePage({
         }));
         setItems(mappedItems);
 
-        const itemsTotal = mappedItems.reduce((s: number, i: any) => s + i.total, 0);
-        const currentRefunds = retData.reduce(
-          (acc: number, r: any) => acc + r.quantity * (r.products?.selling_price || 0), 0
-        );
-        const diff = itemsTotal - currentRefunds - invoice.grandTotal;
-        if (diff > 0.01 && itemsTotal > 0) {
-          setExtraDiscount(parseFloat(((diff / itemsTotal) * 100).toFixed(2)));
+        const savedExtraPercent = Number(invoice.extraDiscountPercent) || 0;
+        if (savedExtraPercent > 0) {
+          setExtraDiscount(parseFloat(savedExtraPercent.toFixed(2)));
+        } else {
+          // Legacy bills without a stored % — derive it (exchange returns excluded)
+          const itemsTotal = mappedItems.reduce((s: number, i: any) => s + i.total, 0);
+          const currentRefunds = calcRefundTotal(Array.isArray(retData) ? retData : []);
+          const diff = itemsTotal - currentRefunds - invoice.grandTotal;
+          if (diff > 0.01 && itemsTotal > 0) {
+            setExtraDiscount(parseFloat(((diff / itemsTotal) * 100).toFixed(2)));
+          }
         }
 
         setStockLoading(true);
@@ -257,7 +421,7 @@ export default function OrangeEditInvoicePage({
       } catch (error) {
         console.error("Error loading invoice:", error);
         toast.error("Failed to load invoice");
-        router.push("/dashboard/office/orange/invoices");
+        handleBack();
       } finally {
         setLoading(false);
         setStockLoading(false);
@@ -402,6 +566,7 @@ export default function OrangeEditInvoicePage({
           extraDiscountPercent: extraDiscount, extraDiscountAmount,
           userId, changeReason: editReason || "Updated Invoice",
           manual_invoice_no: manualInvoiceNo,
+          unlockToken: unlockedToken || undefined,
         }),
       });
       if (!res.ok) {
@@ -410,7 +575,7 @@ export default function OrangeEditInvoicePage({
       }
       toast.success("Invoice Updated Successfully!");
       invalidatePaymentCaches();
-      router.push("/dashboard/office/orange/invoices");
+      handleBack();
     } catch (error: any) {
       toast.error(error.message || "Failed to update invoice");
     } finally {
@@ -421,7 +586,7 @@ export default function OrangeEditInvoicePage({
   const subtotal = items.reduce((sum, item) => sum + item.total, 0);
   const totalItemDiscount = items.reduce((sum, item) => sum + item.discountAmount, 0);
   const grossTotal = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-  const refundTotal = returns.reduce((acc, r) => acc + r.quantity * (r.products?.selling_price || 0), 0);
+  const refundTotal = calcRefundTotal(returns);
   const extraDiscountAmount = (subtotal * extraDiscount) / 100;
   const grandTotal = subtotal - extraDiscountAmount - refundTotal;
 
@@ -443,14 +608,24 @@ export default function OrangeEditInvoicePage({
   return (
     <div className="space-y-4 mx-auto">
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => router.push("/dashboard/office/orange/invoices")}>
+        <Button variant="ghost" size="icon" onClick={handleBack}>
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <div className="flex-1">
           <h1 className="text-3xl font-bold tracking-tight">Edit Customer Bill</h1>
           <div className="flex items-center gap-2 mt-1">
             <p className="text-muted-foreground text-sm font-mono">{invoiceNumber}</p>
+            {isFromReconciliation && (
+              <Badge variant="outline" className="bg-blue-50 text-blue-700">
+                <TruckIcon className="w-3 h-3 mr-1" /> From Reconciliation
+              </Badge>
+            )}
             <Badge variant={isReadOnly ? "destructive" : "secondary"}>{orderStatus}</Badge>
+            {isUnlockedByToken && (
+              <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 shadow-sm">
+                <ShieldCheck className="w-3.5 h-3.5" /> One-Time Edit Access Active
+              </Badge>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -495,11 +670,33 @@ export default function OrangeEditInvoicePage({
       </div>
 
       {isReadOnly && (
-        <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-md flex items-center gap-3">
-          <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
-          <div>
-            <p className="font-bold text-sm">View Only Mode</p>
-            <p className="text-xs">This invoice has a locked status and cannot be edited.</p>
+        <div className="bg-amber-50 border border-amber-300 text-amber-900 p-4 rounded-lg flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="bg-amber-200/80 p-2 rounded-full text-amber-800 shrink-0">
+              <Lock className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="font-bold text-sm text-amber-950">Bill Locked ({orderStatus})</p>
+              <p className="text-xs text-amber-800">
+                This bill is in {orderStatus} status and cannot be edited directly. Authorize a one-time edit using Admin Passcode or Request Admin Approval.
+              </p>
+            </div>
+          </div>
+          <Button
+            onClick={() => setUnlockModalOpen(true)}
+            className="bg-amber-700 hover:bg-amber-800 text-white font-medium shrink-0 flex items-center gap-2 shadow-xs"
+          >
+            <KeyRound className="w-4 h-4" />
+            Unlock for One-Time Edit
+          </Button>
+        </div>
+      )}
+
+      {isUnlockedByToken && (
+        <div className="bg-emerald-50 border border-emerald-300 text-emerald-900 p-3.5 rounded-lg flex items-center gap-3 shadow-xs">
+          <ShieldCheck className="h-5 w-5 text-emerald-600 shrink-0" />
+          <div className="text-xs">
+            <strong className="text-emerald-950">One-Time Edit Mode Granted:</strong> You have temporary edit permission for this session. Changes will be locked again upon saving.
           </div>
         </div>
       )}
@@ -813,6 +1010,178 @@ export default function OrangeEditInvoicePage({
           </Card>
         </div>
       </div>
+
+      {/* One-Time Bill Unlock Modal (same as Distribution) */}
+      <Dialog open={unlockModalOpen} onOpenChange={setUnlockModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl font-bold text-slate-900">
+              <KeyRound className="w-5 h-5 text-amber-600" />
+              One-Time Bill Edit Authorization
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              This bill is currently locked in <strong className="text-slate-700">{orderStatus}</strong> status. Choose a method below to authorize a one-time edit session.
+            </DialogDescription>
+          </DialogHeader>
+
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "pin" | "request" | "qr")} className="w-full mt-2">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="pin" className="flex items-center gap-1 text-[11px] px-1">
+                <KeyRound className="w-3 h-3" /> Instant PIN
+              </TabsTrigger>
+              <TabsTrigger value="request" className="flex items-center gap-1 text-[11px] px-1">
+                <Send className="w-3 h-3" /> Request
+              </TabsTrigger>
+              <TabsTrigger value="qr" className="flex items-center gap-1 text-[11px] px-1">
+                <QrCode className="w-3 h-3" /> Scan QR
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="pin" className="space-y-4 pt-3">
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold">Admin Passcode / OTP Code</Label>
+                <Input
+                  type="password"
+                  placeholder="Enter Admin Passcode"
+                  value={pinInput}
+                  onChange={(e) => setPinInput(e.target.value)}
+                  className="font-mono text-center tracking-widest text-lg"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold">Reason for Editing <span className="text-red-500">*</span></Label>
+                <Input
+                  placeholder="e.g. Customer returned 2 damaged items"
+                  value={unlockReason}
+                  onChange={(e) => setUnlockReason(e.target.value)}
+                />
+              </div>
+              <DialogFooter className="pt-2">
+                <Button variant="outline" onClick={() => setUnlockModalOpen(false)} disabled={unlocking}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleVerifyPin}
+                  disabled={unlocking || !pinInput || !unlockReason}
+                  className="bg-amber-600 hover:bg-amber-700 text-white"
+                >
+                  {unlocking ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <ShieldCheck className="w-4 h-4 mr-1" />}
+                  Verify & Unlock
+                </Button>
+              </DialogFooter>
+            </TabsContent>
+
+            <TabsContent value="request" className="space-y-4 pt-3">
+              {requestStatus === "pending" ? (
+                <div className="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-lg text-center space-y-3">
+                  <div className="flex justify-center">
+                    <Loader2 className="w-8 h-8 animate-spin text-amber-600" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm">Request Pending Approval</p>
+                    <p className="text-xs text-amber-700 mt-1">
+                      Your unlock request has been submitted to the Admin dashboard. The page is auto-checking approval status...
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="bg-white text-amber-800 border-amber-300">
+                    <Clock className="w-3 h-3 mr-1" /> Checking status...
+                  </Badge>
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold">Reason for Request <span className="text-red-500">*</span></Label>
+                    <Input
+                      placeholder="e.g. Quantity adjustment after delivery"
+                      value={unlockReason}
+                      onChange={(e) => setUnlockReason(e.target.value)}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground bg-slate-50 p-2.5 rounded border">
+                    💡 Submitting this request sends a notification to Admin. Once approved, this bill will automatically unlock for editing.
+                  </p>
+                  <DialogFooter className="pt-2">
+                    <Button variant="outline" onClick={() => setUnlockModalOpen(false)} disabled={unlocking}>
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleSendUnlockRequest}
+                      disabled={unlocking || !unlockReason}
+                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      {unlocking ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Send className="w-4 h-4 mr-1" />}
+                      Send Request to Admin
+                    </Button>
+                  </DialogFooter>
+                </>
+              )}
+            </TabsContent>
+
+            <TabsContent value="qr" className="space-y-4 pt-3">
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold">Reason for Edit <span className="text-red-500">*</span></Label>
+                <Input
+                  placeholder="e.g. Adjusting quantity at the shop"
+                  value={unlockReason}
+                  onChange={(e) => setUnlockReason(e.target.value)}
+                  disabled={!!qrDataUrl}
+                />
+              </div>
+              {!qrDataUrl ? (
+                <div className="text-center py-4 space-y-3">
+                  <div className="mx-auto w-12 h-12 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center">
+                    <Smartphone className="w-6 h-6" />
+                  </div>
+                  <p className="text-xs text-muted-foreground max-w-xs mx-auto">
+                    Generate a QR code. Scan with Admin&apos;s mobile phone camera, enter Admin PIN on mobile, and this screen will auto-unlock!
+                  </p>
+                  <Button
+                    onClick={handleGenerateQrCode}
+                    disabled={generatingQr || !unlockReason}
+                    className="bg-purple-600 hover:bg-purple-700 text-white gap-2"
+                  >
+                    {generatingQr ? <Loader2 className="w-4 h-4 animate-spin" /> : <QrCode className="w-4 h-4" />}
+                    Generate Mobile QR Code
+                  </Button>
+                </div>
+              ) : (
+                <div className="text-center space-y-3 pt-1">
+                  <div className="bg-slate-900 p-3 rounded-xl inline-block shadow-md border border-slate-800">
+                    <img src={qrDataUrl} alt="Unlock Bill QR Code" className="w-44 h-44 mx-auto rounded bg-white p-1" />
+                  </div>
+                  <div className="space-y-1">
+                    <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-300 animate-pulse text-xs">
+                      <Clock className="w-3 h-3 mr-1" /> Waiting for Mobile Phone Scan & PIN...
+                    </Badge>
+                    <p className="text-[11px] text-muted-foreground">Scan QR code with Admin phone camera to approve.</p>
+                  </div>
+                  <div className="flex justify-center items-center gap-2 pt-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs gap-1 h-8"
+                      onClick={() => {
+                        navigator.clipboard.writeText(qrUnlockUrl);
+                        toast.success("Mobile Link copied to clipboard!");
+                      }}
+                    >
+                      <Copy className="w-3 h-3" /> Copy Mobile Link
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs gap-1 h-8 text-purple-600"
+                      onClick={() => window.open(qrUnlockUrl, "_blank")}
+                    >
+                      <ExternalLink className="w-3 h-3" /> Open Link
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

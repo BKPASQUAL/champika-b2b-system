@@ -37,7 +37,7 @@ interface PurchaseReportDialogProps {
 // Remember the last layout the user picked (per browser)
 const STORAGE_KEY = "purchase-report-options";
 
-type SavedLayout = Pick<ReportOptions, "title" | "showBoxes" | "showSummary" | "showDetails" | "columns">;
+type SavedLayout = Pick<ReportOptions, "title" | "showBoxes" | "showSummary" | "showMonthly" | "showDetails" | "columns">;
 
 function loadLayout(): Partial<SavedLayout> {
   try {
@@ -103,8 +103,8 @@ export function PurchaseReportDialog({
     const base = defaultReportOptions(opt.mode);
     set(
       preset === "summary"
-        ? { showBoxes: true, showSummary: true, showDetails: false, columns: base.columns }
-        : { showBoxes: true, showSummary: true, showDetails: true, columns: base.columns }
+        ? { showBoxes: true, showSummary: true, showMonthly: true, showDetails: false, columns: base.columns }
+        : { showBoxes: true, showSummary: true, showMonthly: true, showDetails: true, columns: base.columns }
     );
   };
 
@@ -113,6 +113,7 @@ export function PurchaseReportDialog({
       title: opt.title,
       showBoxes: opt.showBoxes,
       showSummary: opt.showSummary,
+      showMonthly: opt.showMonthly,
       showDetails: opt.showDetails,
       columns: opt.columns,
     });
@@ -175,6 +176,7 @@ export function PurchaseReportDialog({
               {[
                 { key: "showBoxes" as const, label: "Total boxes at the top" },
                 { key: "showSummary" as const, label: `Summary table by ${opt.mode}` },
+                { key: "showMonthly" as const, label: "Month by month (when 2+ months)" },
                 { key: "showDetails" as const, label: "Bill details (every bill)" },
               ].map((s) => (
                 <label key={s.key} className="flex items-center gap-2 text-sm cursor-pointer">

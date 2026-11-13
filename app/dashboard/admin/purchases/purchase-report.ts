@@ -42,6 +42,8 @@ export type ReportOptions = {
   title: string;
   showBoxes: boolean;
   showSummary: boolean;
+  /** Month-by-month table. Only printed when the bills cover more than one month. */
+  showMonthly: boolean;
   showDetails: boolean;
   columns: ReportColumns;
   /** Supplier/business names to include. null = all. */
@@ -53,6 +55,7 @@ export const defaultReportOptions = (mode: GroupMode = "supplier"): ReportOption
   title: "Purchase Report",
   showBoxes: true,
   showSummary: true,
+  showMonthly: true,
   showDetails: true,
   columns: { bills: true, amount: true, paid: true, unpaid: true, share: true },
   selectedNames: null,
@@ -92,6 +95,46 @@ function groupPurchases(purchases: Purchase[], mode: GroupMode): Group[] {
     g.bills.sort((a, b) => (a.purchaseDate || "").localeCompare(b.purchaseDate || ""))
   );
   return groups;
+}
+
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const monthName = (key: string) => {
+  const [y, m] = key.split("-");
+  return `${MONTH_NAMES[Number(m) - 1]} ${y}`;
+};
+
+type MonthRow = Omit<Group, "name"> & { key: string; groups: Group[] };
+
+/** Bills split by month (YYYY-MM), oldest first, with empty months in between filled in. */
+export function monthlyBreakdown(purchases: Purchase[], mode: GroupMode): MonthRow[] {
+  const byMonth = new Map<string, Purchase[]>();
+  for (const p of purchases) {
+    const key = (p.purchaseDate || "").slice(0, 7);
+    if (!key) continue;
+    byMonth.set(key, [...(byMonth.get(key) || []), p]);
+  }
+  const keys = [...byMonth.keys()].sort();
+  if (keys.length === 0) return [];
+
+  const all: string[] = [];
+  let [y, m] = keys[0].split("-").map(Number);
+  const [ey, em] = keys[keys.length - 1].split("-").map(Number);
+  while (y < ey || (y === ey && m <= em)) {
+    all.push(`${y}-${String(m).padStart(2, "0")}`);
+    if (++m > 12) { m = 1; y++; }
+  }
+
+  return all.map((key) => {
+    const groups = groupPurchases(byMonth.get(key) || [], mode);
+    return {
+      key,
+      groups,
+      bills: groups.flatMap((g) => g.bills),
+      total: groups.reduce((s, g) => s + g.total, 0),
+      paid: groups.reduce((s, g) => s + g.paid, 0),
+      unpaid: groups.reduce((s, g) => s + g.unpaid, 0),
+    };
+  });
 }
 
 function buildDoc(purchases: Purchase[], monthLabel: string, opt: ReportOptions): jsPDF {
@@ -210,6 +253,57 @@ function buildDoc(purchases: Purchase[], monthLabel: string, opt: ReportOptions)
     y = (doc as any).lastAutoTable.finalY + 10;
   }
 
+  // ── Month by month (only when the period covers 2+ months) ───────
+  const months = monthlyBreakdown(purchases, opt.mode);
+  if (opt.showMonthly && months.length > 1) {
+    sectionTitle("Month by Month");
+
+    // With several suppliers/businesses, list each one under its month
+    const showSubRows = groups.length > 1;
+    const cols: { head: string; get: (r: Omit<Group, "name">) => string; foot: string; style?: any }[] = [];
+    if (col.bills) cols.push({ head: "Bills", get: (r) => String(r.bills.length), foot: String(grand.count), style: { halign: "center", cellWidth: 14 } });
+    if (col.amount) cols.push({ head: "Amount", get: (r) => fmt(r.total), foot: fmt(grand.total), style: { halign: "right" } });
+    if (col.paid) cols.push({ head: "Paid", get: (r) => fmt(r.paid), foot: fmt(grand.paid), style: { halign: "right", textColor: COLOR.paid } });
+    if (col.unpaid) cols.push({ head: "Unpaid", get: (r) => fmt(r.unpaid), foot: fmt(grand.unpaid), style: { halign: "right", textColor: COLOR.unpaid } });
+    if (col.share) cols.push({
+      head: "Share",
+      get: (r) => (grand.total > 0 ? ((r.total / grand.total) * 100).toFixed(1) + "%" : "-"),
+      foot: "100%",
+      style: { halign: "right", cellWidth: 16 },
+    });
+
+    const body: any[] = [];
+    months.forEach((mo) => {
+      const monthStyle = showSubRows ? { fillColor: COLOR.groupBg, fontStyle: "bold" } : {};
+      body.push([
+        { content: monthName(mo.key), styles: { ...monthStyle, fontStyle: "bold" } },
+        ...cols.map((c) => ({ content: c.get(mo), styles: { ...monthStyle, halign: c.style?.halign } })),
+      ]);
+      if (showSubRows) {
+        mo.groups.forEach((g) => {
+          body.push([
+            { content: `    ${g.name}`, styles: { textColor: COLOR.muted } },
+            ...cols.map((c) => c.get(g)),
+          ]);
+        });
+      }
+    });
+
+    const monthStyles: Record<number, any> = { 0: {} };
+    cols.forEach((c, i) => (monthStyles[i + 1] = c.style || {}));
+    autoTable(doc, {
+      ...tableBase,
+      startY: y,
+      head: [[showSubRows ? `Month / ${groupLabel}` : "Month", ...cols.map((c) => c.head)]],
+      body,
+      foot: [[`TOTAL (${months.length} months)`, ...cols.map((c) => c.foot)]],
+      styles: { fontSize: 8.5, cellPadding: 2, textColor: COLOR.body },
+      columnStyles: monthStyles,
+      didParseCell: alignHeadFoot(monthStyles),
+    });
+    y = (doc as any).lastAutoTable.finalY + 10;
+  }
+
   // ── Bill details grouped ──────────────────────────────────────────
   if (opt.showDetails) {
     sectionTitle(`Bill Details by ${groupLabel}`);
@@ -298,7 +392,7 @@ function prepare(purchases: Purchase[], opt: ReportOptions) {
     toast.info("No purchases to show in the report");
     return null;
   }
-  if (!opt.showBoxes && !opt.showSummary && !opt.showDetails) {
+  if (!opt.showBoxes && !opt.showSummary && !opt.showMonthly && !opt.showDetails) {
     toast.info("Pick at least one section for the report");
     return null;
   }
@@ -371,6 +465,14 @@ export async function sharePurchaseReport(
     if (col.bills) parts.push(`${g.bills.length} bills`);
     msg += `• ${g.name}${parts.length ? ": " + parts.join(", ") : ""}\n`;
   });
+
+  const months = monthlyBreakdown(active, opt.mode);
+  if (opt.showMonthly && months.length > 1) {
+    msg += `\n*Month by Month:*\n`;
+    months.forEach((mo) => {
+      msg += `• ${monthName(mo.key)}: LKR ${fmt(mo.total)}${col.bills ? `, ${mo.bills.length} bills` : ""}\n`;
+    });
+  }
 
   const doc = buildDoc(active, monthLabel, opt);
   const name = fileName(monthLabel, opt);

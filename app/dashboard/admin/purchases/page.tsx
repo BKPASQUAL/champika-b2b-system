@@ -21,10 +21,20 @@ export default function PurchasesPage() {
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  // Month filter: "YYYY-MM" or "" for all time. Defaults to this month.
+  // Period filter: a single month, a custom date range, or all time. Defaults to this month.
+  const [periodMode, setPeriodMode] = useState<"month" | "range" | "all">("month");
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
+  // Date range ("YYYY-MM-DD"), both ends inclusive. Defaults to the 1st of this month → today.
+  const [rangeFrom, setRangeFrom] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+  });
+  const [rangeTo, setRangeTo] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   });
 
   // Sort & Pagination
@@ -63,23 +73,47 @@ export default function PurchasesPage() {
     [rawPurchases]
   );
 
-  // --- 1b. Month Filter ---
-  const monthPurchases = useMemo(
-    () =>
-      selectedMonth
-        ? purchases.filter(
-            (p) => (p.purchaseDate || "").slice(0, 7) === selectedMonth
-          )
-        : purchases,
-    [purchases, selectedMonth]
-  );
+  // --- 1b. Period Filter (month / date range / all time) ---
+  const monthPurchases = useMemo(() => {
+    if (periodMode === "month" && selectedMonth) {
+      return purchases.filter(
+        (p) => (p.purchaseDate || "").slice(0, 7) === selectedMonth
+      );
+    }
+    if (periodMode === "range") {
+      return purchases.filter((p) => {
+        const d = (p.purchaseDate || "").slice(0, 10);
+        if (!d) return false;
+        if (rangeFrom && d < rangeFrom) return false;
+        if (rangeTo && d > rangeTo) return false;
+        return true;
+      });
+    }
+    return purchases;
+  }, [purchases, periodMode, selectedMonth, rangeFrom, rangeTo]);
 
-  const monthLabel = selectedMonth
-    ? new Date(`${selectedMonth}-01T00:00:00`).toLocaleDateString("en-US", {
-        month: "long",
-        year: "numeric",
-      })
-    : "All Time";
+  const fmtDay = (d: string) =>
+    new Date(`${d}T00:00:00`).toLocaleDateString("en-US", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+
+  const monthLabel =
+    periodMode === "month" && selectedMonth
+      ? new Date(`${selectedMonth}-01T00:00:00`).toLocaleDateString("en-US", {
+          month: "long",
+          year: "numeric",
+        })
+      : periodMode === "range"
+        ? rangeFrom && rangeTo
+          ? `${fmtDay(rangeFrom)} – ${fmtDay(rangeTo)}`
+          : rangeFrom
+            ? `From ${fmtDay(rangeFrom)}`
+            : rangeTo
+              ? `Up to ${fmtDay(rangeTo)}`
+              : "All Time"
+        : "All Time";
 
   // --- 2. Filter Logic ---
   const filteredPurchases = monthPurchases.filter((p) => {
@@ -114,7 +148,7 @@ export default function PurchasesPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, statusFilter, selectedMonth]);
+  }, [searchQuery, statusFilter, periodMode, selectedMonth, rangeFrom, rangeTo]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) setSortOrder(sortOrder === "asc" ? "desc" : "asc");
@@ -139,25 +173,60 @@ export default function PurchasesPage() {
         onExportPDF={() => downloadPurchaseReport(monthPurchases, monthLabel)}
       />
 
-      {/* Month selector */}
+      {/* Period selector: Month / Date Range / All Time */}
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-medium">Month:</span>
-        <Input
-          type="month"
-          value={selectedMonth}
-          onChange={(e) => setSelectedMonth(e.target.value)}
-          className="w-[180px]"
-        />
-        <Button
-          variant={selectedMonth ? "outline" : "default"}
-          size="sm"
-          onClick={() => setSelectedMonth("")}
-        >
-          All Time
-        </Button>
+        <span className="text-sm font-medium">Period:</span>
+        <div className="flex gap-1">
+          {(
+            [
+              { key: "month", label: "Month" },
+              { key: "range", label: "Date Range" },
+              { key: "all", label: "All Time" },
+            ] as const
+          ).map((opt) => (
+            <Button
+              key={opt.key}
+              variant={periodMode === opt.key ? "default" : "outline"}
+              size="sm"
+              onClick={() => setPeriodMode(opt.key)}
+            >
+              {opt.label}
+            </Button>
+          ))}
+        </div>
+
+        {periodMode === "month" && (
+          <Input
+            type="month"
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="w-[180px]"
+          />
+        )}
+
+        {periodMode === "range" && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-muted-foreground">From</span>
+            <Input
+              type="date"
+              value={rangeFrom}
+              max={rangeTo || undefined}
+              onChange={(e) => setRangeFrom(e.target.value)}
+              className="w-[160px]"
+            />
+            <span className="text-sm text-muted-foreground">To</span>
+            <Input
+              type="date"
+              value={rangeTo}
+              min={rangeFrom || undefined}
+              onChange={(e) => setRangeTo(e.target.value)}
+              className="w-[160px]"
+            />
+          </div>
+        )}
       </div>
 
-      {/* Stats for the selected month */}
+      {/* Stats for the selected period */}
       <PurchaseStats purchases={monthPurchases} />
 
       <MonthlyPurchaseSummary

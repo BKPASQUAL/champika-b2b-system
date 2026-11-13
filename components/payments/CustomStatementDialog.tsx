@@ -38,6 +38,8 @@ import {
   shareCustomerStatement,
   filterStatementInvoices,
   DEFAULT_STATEMENT_OPTIONS,
+  toDayKey,
+  isTodayOrUpcoming,
 } from "@/lib/customer-statement-report";
 
 interface CustomStatementDialogProps {
@@ -108,7 +110,7 @@ export function CustomStatementDialog({
               chequeStatusCounts.returned++;
             } else if (status === "CLEARED") {
               chequeStatusCounts.cleared++;
-            } else {
+            } else if (isTodayOrUpcoming(toDayKey(p.chequeDate || p.paymentDate))) {
               chequeStatusCounts.pending++;
             }
           }
