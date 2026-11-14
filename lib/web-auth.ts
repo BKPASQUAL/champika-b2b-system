@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { NextResponse } from "next/server";
 import type { User } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/lib/supabase-admin";
@@ -16,17 +17,23 @@ export type WebCustomer = {
   is_blocked: boolean;
 };
 
-/** Logged-in auth user id from the request cookies, or null. */
-export async function getSessionUserId(): Promise<string | null> {
+/**
+ * Logged-in auth user from the request cookies, or null.
+ * getUser() is a network call to Supabase Auth, so it is done once per
+ * request (React cache) even though layout, header and pricing all need it.
+ */
+const getAuthUser = cache(async (): Promise<User | null> => {
   const supabase = await createSupabaseServerClient();
   const { data } = await supabase.auth.getUser();
-  return data.user?.id ?? null;
+  return data.user ?? null;
+});
+
+/** Logged-in auth user id from the request cookies, or null. */
+export async function getSessionUserId(): Promise<string | null> {
+  return (await getAuthUser())?.id ?? null;
 }
 
-/** The logged-in website customer, or null (not logged in / not a customer). */
-export async function getWebCustomer(): Promise<WebCustomer | null> {
-  const userId = await getSessionUserId();
-  if (!userId) return null;
+async function loadWebCustomer(userId: string): Promise<WebCustomer | null> {
   const { data } = await supabaseAdmin
     .from("web_customers")
     .select("id, full_name, email, phone, tier, trade_status, customer_id, default_address, is_blocked")
@@ -35,6 +42,12 @@ export async function getWebCustomer(): Promise<WebCustomer | null> {
   if (!data || data.is_blocked) return null;
   return data as WebCustomer;
 }
+
+/** The logged-in website customer, or null (not logged in / not a customer). Once per request. */
+export const getWebCustomer = cache(async (): Promise<WebCustomer | null> => {
+  const userId = await getSessionUserId();
+  return userId ? loadWebCustomer(userId) : null;
+});
 
 /**
  * Make sure a web_customers row exists for this auth user (first Google or
@@ -60,11 +73,11 @@ export async function createWebCustomerFor(user: User): Promise<boolean> {
 
 /** The logged-in website customer, creating their row on first use. Null when logged out or blocked. */
 export async function ensureWebCustomer(): Promise<WebCustomer | null> {
-  const supabase = await createSupabaseServerClient();
-  const { data } = await supabase.auth.getUser();
-  if (!data.user) return null;
-  if (!(await createWebCustomerFor(data.user))) return null;
-  return getWebCustomer();
+  const user = await getAuthUser();
+  if (!user) return null;
+  if (!(await createWebCustomerFor(user))) return null;
+  // Read fresh: a cached getWebCustomer() from earlier in this request may predate the new row.
+  return loadWebCustomer(user.id);
 }
 
 /** Pricing tier for the current visitor (guests are "normal"). */

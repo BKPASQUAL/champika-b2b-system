@@ -38,7 +38,7 @@ export function isExpired(q: { status: string; valid_until: string | null }) {
 /** Priced lines for web products at a customer's tier. Unknown / unpriced products are left out. */
 export async function priceItems(items: { webProductId: string; qty: number; finalPrice?: number | null }[], tier: PriceTier) {
   const ids = [...new Set(items.map((i) => i.webProductId))];
-  const [products, sales] = await Promise.all([getProducts({ ids, tier }), saleRowsFor(ids)]);
+  const [products, sales] = await Promise.all([getProducts({ ids, tier, fresh: true }), saleRowsFor(ids)]);
   const byId = new Map(products.map((p) => [p.id, p]));
   return items
     .map((i) => {

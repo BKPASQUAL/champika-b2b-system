@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
   const ids = [...qtyById.keys()];
 
   try {
-    const [products, delivery, sales] = await Promise.all([getProducts({ ids }), getDeliveryInfo(), saleRowsFor(ids)]);
+    const [products, delivery, sales] = await Promise.all([getProducts({ ids, fresh: true }), getDeliveryInfo(), saleRowsFor(ids)]);
     const byId = new Map(products.map((p) => [p.id, p]));
 
     const lines: OrderLine[] = [];

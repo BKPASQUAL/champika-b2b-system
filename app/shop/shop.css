@@ -83,6 +83,54 @@
   background-image: repeating-linear-gradient(-45deg, rgba(59, 130, 246, 0.08) 0 2px, transparent 2px 14px);
 }
 
+/* Home hero: brighter photo with a slow zoom, a light sweep, and text that slides in. */
+.shop-hero-bg {
+  filter: brightness(1.35) saturate(1.15) contrast(1.05);
+  transform-origin: 80% 55%;
+  animation: shop-hero-zoom 22s ease-in-out infinite alternate;
+}
+@keyframes shop-hero-zoom {
+  from { transform: scale(1); }
+  to { transform: scale(1.08); }
+}
+.shop-hero-sweep {
+  background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.12) 50%, transparent 60%);
+  background-size: 250% 100%;
+  animation: shop-hero-sweep 7s ease-in-out infinite;
+}
+@keyframes shop-hero-sweep {
+  0% { background-position: 120% 0; }
+  45%, 100% { background-position: -40% 0; }
+}
+.shop-hero-in > * {
+  animation: shop-hero-up 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.shop-hero-in > *:nth-child(2) { animation-delay: 0.08s; }
+.shop-hero-in > *:nth-child(3) { animation-delay: 0.16s; }
+.shop-hero-in > *:nth-child(4) { animation-delay: 0.24s; }
+.shop-hero-in > *:nth-child(5) { animation-delay: 0.32s; }
+@keyframes shop-hero-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shop-hero-bg, .shop-hero-sweep, .shop-hero-in > * { animation: none; }
+}
+
+/* Whole-house wiring picture: soft edges blend into the dark card, gentle float. */
+.shop-house-img {
+  -webkit-mask-image: radial-gradient(ellipse 75% 72% at 55% 50%, #000 60%, transparent 100%);
+  mask-image: radial-gradient(ellipse 75% 72% at 55% 50%, #000 60%, transparent 100%);
+  animation: shop-house-float 6s ease-in-out infinite alternate;
+}
+@keyframes shop-house-float {
+  from { transform: translateY(0) scale(1); }
+  to { transform: translateY(-8px) scale(1.02); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shop-house-img { animation: none; }
+}
+
 /* Big, bold, slanted section headings (home page). */
 .shop-display {
   font-size: clamp(1.6rem, 1.2rem + 1.6vw, 2.5rem);
@@ -91,4 +139,27 @@
   text-transform: uppercase;
   letter-spacing: -0.03em;
   line-height: 1;
+}
+
+/* ---------------------------------------------------------------- loading skeletons */
+.shop-skel {
+  background: linear-gradient(90deg, var(--s-soft) 25%, color-mix(in srgb, var(--s-soft) 55%, var(--s-surface)) 50%, var(--s-soft) 75%);
+  background-size: 200% 100%;
+  animation: shop-skel-shimmer 1.3s ease-in-out infinite;
+}
+@keyframes shop-skel-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+/* Fade in after a beat so fast (cached) navigations don't flash a skeleton. */
+.shop-skel-in {
+  opacity: 0;
+  animation: shop-skel-fade 0.2s ease-out 0.12s forwards;
+}
+@keyframes shop-skel-fade {
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shop-skel { animation: none; }
+  .shop-skel-in { animation-duration: 0s; }
 }

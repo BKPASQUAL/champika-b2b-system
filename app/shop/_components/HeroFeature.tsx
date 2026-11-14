@@ -2,10 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, ListChecks, MapPin, Search, Zap } from "lucide-react";
+import { ArrowRight, ListChecks, MapPin, Search } from "lucide-react";
 import { useShop } from "./ShopContext";
 
 type Banner = { id: string; title: string | null; imageUrl: string; link: string | null };
+
+/** Background photo for the welcome hero. Put the file in /public with this name. */
+const HERO_BG = "/hero-bg.jpg";
 
 /**
  * The big panel at the top-left of the home page. Shows the offer banners
@@ -25,11 +28,23 @@ export function HeroFeature({ banners, base }: { banners: Banner[]; base: string
 
   if (!n) {
     return (
-      <div className="relative flex h-full min-h-[340px] flex-col justify-end overflow-hidden rounded-xl bg-gradient-to-br from-blue-700 via-blue-900 to-slate-950 p-6 text-white md:min-h-[460px] md:p-8">
-        <div className="shop-stripes pointer-events-none absolute inset-0" />
-        <div className="pointer-events-none absolute -right-16 -top-16 h-80 w-80 rounded-full bg-sky-400/25 blur-3xl" />
-        <Zap className="pointer-events-none absolute -right-6 top-6 h-64 w-64 -rotate-12 fill-white/[0.06] text-white/10 md:h-80 md:w-80" />
-        <div className="relative max-w-xl">
+      <div className="relative flex h-full min-h-[340px] flex-col justify-end overflow-hidden rounded-xl bg-slate-900 p-6 text-white md:min-h-[460px] md:p-8">
+        {/* Wiring photo (public/hero-bg.jpg), brightened, with a slow zoom. */}
+        <div
+          className="shop-hero-bg pointer-events-none absolute inset-0 bg-cover bg-right"
+          style={{ backgroundImage: `url(${HERO_BG})` }}
+        />
+        {/* Light blue shade on the left only, so the text stays readable and the board stays bright. */}
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(100deg, rgba(29,78,216,0.82) 0%, rgba(30,64,175,0.5) 32%, rgba(30,64,175,0.06) 56%, transparent 100%)",
+          }}
+        />
+        {/* Light sweep across the board every few seconds. */}
+        <div className="shop-hero-sweep pointer-events-none absolute inset-0" />
+        <div className="shop-hero-in relative max-w-xl">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-[12.5px] font-bold text-sky-200 ring-1 ring-white/15 backdrop-blur-xs">
             <MapPin className="h-3.5 w-3.5" /> {t("House wiring store · Galle area")}
           </span>

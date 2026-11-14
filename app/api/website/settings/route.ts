@@ -3,6 +3,7 @@ import { z } from "zod";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireWebsiteStaff } from "@/lib/web-auth";
 import { apiError, getAllowedMainCategories } from "@/lib/web-utils";
+import { refreshShop } from "@/lib/shop-cache";
 
 const schema = z.object({
   delivery: z.object({ flat_fee: z.coerce.number().min(0), free_over: z.coerce.number().min(0), areas: z.string().default("") }),
@@ -50,6 +51,7 @@ export async function POST(request: NextRequest) {
       Object.entries(v).map(([key, value]) => ({ key, value, updated_at: now })),
     );
     if (error) throw error;
+    refreshShop();
     return NextResponse.json({ success: true });
   } catch (e) {
     return apiError(e);

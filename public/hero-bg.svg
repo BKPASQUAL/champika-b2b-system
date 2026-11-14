@@ -1,0 +1,274 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" preserveAspectRatio="xMaxYMid slice">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#16326b"/>
+      <stop offset="1" stop-color="#060d20"/>
+    </linearGradient>
+    <radialGradient id="room" cx=".72" cy=".3" r=".6">
+      <stop offset="0" stop-color="#93c5fd" stop-opacity=".16"/>
+      <stop offset="1" stop-color="#93c5fd" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="vignette" cx=".6" cy=".45" r=".75">
+      <stop offset=".6" stop-color="#000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000" stop-opacity=".45"/>
+    </radialGradient>
+    <filter id="plaster" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .045 0"/>
+    </filter>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="12" stdDeviation="12" flood-color="#000" flood-opacity=".45"/>
+    </filter>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000" flood-opacity=".35"/>
+    </filter>
+
+    <!-- PVC conduit -->
+    <linearGradient id="pipeH" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f8fafc"/>
+      <stop offset=".5" stop-color="#cfd8e3"/>
+      <stop offset="1" stop-color="#7c8aa0"/>
+    </linearGradient>
+    <linearGradient id="pipeV" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7c8aa0"/>
+      <stop offset=".42" stop-color="#f1f5f9"/>
+      <stop offset="1" stop-color="#8794a8"/>
+    </linearGradient>
+    <!-- White plastic -->
+    <linearGradient id="plate" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#d9e1eb"/>
+    </linearGradient>
+    <linearGradient id="box" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f1f5f9"/>
+      <stop offset="1" stop-color="#b9c5d4"/>
+    </linearGradient>
+    <linearGradient id="dev" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#dfe6ef"/>
+    </linearGradient>
+    <linearGradient id="rocker" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e5eaf1"/>
+      <stop offset=".5" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#f1f5f9"/>
+    </linearGradient>
+
+    <!-- Lamp -->
+    <linearGradient id="screw" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8a96a8"/>
+      <stop offset=".4" stop-color="#f1f5f9"/>
+      <stop offset="1" stop-color="#7b8799"/>
+    </linearGradient>
+    <radialGradient id="glass" cx=".42" cy=".6" r=".65">
+      <stop offset="0" stop-color="#fffdf2"/>
+      <stop offset=".5" stop-color="#fef3c7" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#fbbf24" stop-opacity=".85"/>
+    </radialGradient>
+    <radialGradient id="glow" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#fde68a" stop-opacity=".55"/>
+      <stop offset=".35" stop-color="#fbbf24" stop-opacity=".18"/>
+      <stop offset="1" stop-color="#fbbf24" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Round PVC junction box -->
+    <g id="jbox">
+      <circle r="27" fill="url(#plate)" stroke="#7c8aa0" stroke-width="2"/>
+      <circle r="19" fill="none" stroke="#cbd5e1" stroke-width="2"/>
+      <circle r="4" fill="url(#screw)" stroke="#64748b" stroke-width="1"/>
+      <path d="M-3 0H3" stroke="#475569" stroke-width="1.4"/>
+    </g>
+    <!-- Conduit saddles (clips) -->
+    <g id="saddleH">
+      <rect x="-7" y="-20" width="14" height="40" rx="3" fill="#cbd5e1" stroke="#64748b" stroke-width="1.5"/>
+      <circle cy="-15" r="2.4" fill="#64748b"/><circle cy="15" r="2.4" fill="#64748b"/>
+    </g>
+    <g id="saddleV">
+      <rect x="-20" y="-7" width="40" height="14" rx="3" fill="#cbd5e1" stroke="#64748b" stroke-width="1.5"/>
+      <circle cx="-15" r="2.4" fill="#64748b"/><circle cx="15" r="2.4" fill="#64748b"/>
+    </g>
+
+    <!-- Pendant lamp (E27, A60 bulb) hanging from a junction box -->
+    <g id="lamp">
+      <path d="M-1.6 96H1.6V150H-1.6Z" fill="#0b1226"/>
+      <rect x="-22" y="148" width="44" height="42" rx="8" fill="#1e293b"/>
+      <rect x="-26" y="182" width="52" height="10" rx="3" fill="#334155"/>
+      <rect x="-19" y="192" width="38" height="34" rx="3" fill="url(#screw)"/>
+      <path d="M-19 199L19 203M-19 207L19 211M-19 215L19 219" stroke="#64748b" stroke-width="2.4"/>
+      <path d="M-19 226C-19 248 -64 256 -64 314A64 64 0 0 0 64 314C64 256 19 248 19 226Z" fill="url(#glass)"/>
+      <path d="M-7 228V296M7 228V296" stroke="#b45309" stroke-width="2" fill="none"/>
+      <path d="M-16 296l4-7 4 7 4-7 4 7 4-7 4 7 4-7 4 7" stroke="#f59e0b" stroke-width="7" stroke-opacity=".35" fill="none"/>
+      <path d="M-16 296l4-7 4 7 4-7 4 7 4-7 4 7 4-7 4 7" stroke="#fff" stroke-width="3" fill="none" stroke-linejoin="round"/>
+      <ellipse cx="-32" cy="302" rx="8" ry="22" fill="#fff" opacity=".5"/>
+    </g>
+
+    <!-- 1-pole MCB face (w 32) -->
+    <g id="mcb">
+      <rect width="32" height="138" rx="3" fill="url(#dev)" stroke="#94a3b8"/>
+      <rect x="8" y="42" width="16" height="58" rx="3" fill="#94a3b8"/>
+      <rect x="10" y="44" width="12" height="26" rx="2" fill="#1e293b"/>
+      <rect x="10" y="44" width="12" height="4" rx="1.5" fill="#475569"/>
+      <rect x="10" y="106" width="12" height="6" rx="1.5" fill="#dc2626"/>
+    </g>
+  </defs>
+
+  <!-- Wall -->
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <rect width="1600" height="900" fill="url(#room)"/>
+  <rect width="1600" height="900" filter="url(#plaster)"/>
+  <!-- Ceiling line -->
+  <rect width="1600" height="22" fill="#020617" opacity=".35"/>
+  <path d="M0 22H1600" stroke="#fff" stroke-opacity=".06" stroke-width="2"/>
+
+  <!-- Lamp glows -->
+  <circle cx="660" cy="310" r="270" fill="url(#glow)"/>
+  <circle cx="1530" cy="310" r="270" fill="url(#glow)"/>
+
+  <!-- ===== Conduit run along the top of the wall ===== -->
+  <g filter="url(#soft)">
+    <rect x="660" y="60" width="870" height="24" fill="url(#pipeH)"/>
+    <!-- drops: DB (x840, x1100), switch (x1370) -->
+    <rect x="828" y="72" width="24" height="340" fill="url(#pipeV)"/>
+    <rect x="1088" y="72" width="24" height="340" fill="url(#pipeV)"/>
+    <rect x="1358" y="72" width="24" height="236" fill="url(#pipeV)"/>
+    <!-- switch box down to socket -->
+    <rect x="1358" y="432" width="24" height="196" fill="url(#pipeV)"/>
+  </g>
+  <use href="#saddleH" x="760" y="72"/>
+  <use href="#saddleH" x="970" y="72"/>
+  <use href="#saddleH" x="1235" y="72"/>
+  <use href="#saddleH" x="1452" y="72"/>
+  <use href="#saddleV" x="840" y="250"/>
+  <use href="#saddleV" x="1100" y="250"/>
+  <use href="#saddleV" x="1370" y="196"/>
+  <use href="#saddleV" x="1370" y="532"/>
+  <g filter="url(#soft)">
+    <use href="#jbox" x="660" y="72"/>
+    <use href="#jbox" x="840" y="72"/>
+    <use href="#jbox" x="1100" y="72"/>
+    <use href="#jbox" x="1370" y="72"/>
+    <use href="#jbox" x="1530" y="72"/>
+  </g>
+
+  <!-- Pendant bulbs -->
+  <use href="#lamp" x="660"/>
+  <use href="#lamp" x="1530"/>
+
+  <!-- ===== 2-gang switch (rockers ON, neon indicators lit) ===== -->
+  <g filter="url(#shadow)">
+    <rect x="1300" y="300" width="140" height="140" rx="16" fill="url(#plate)"/>
+  </g>
+  <rect x="1300.5" y="300.5" width="139" height="139" rx="16" fill="none" stroke="#fff" stroke-opacity=".7"/>
+  <rect x="1318" y="318" width="50" height="104" rx="8" fill="url(#rocker)" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="1372" y="318" width="50" height="104" rx="8" fill="url(#rocker)" stroke="#cbd5e1" stroke-width="2"/>
+  <path d="M1320 370H1366M1374 370H1420" stroke="#cbd5e1" stroke-width="1.5"/>
+  <circle cx="1343" cy="406" r="3.5" fill="#fb923c"/>
+  <circle cx="1397" cy="406" r="3.5" fill="#fb923c"/>
+  <circle cx="1343" cy="406" r="8" fill="#fb923c" opacity=".25"/>
+  <circle cx="1397" cy="406" r="8" fill="#fb923c" opacity=".25"/>
+
+  <!-- ===== 13A switched socket (BS 1363) ===== -->
+  <g filter="url(#shadow)">
+    <rect x="1300" y="620" width="140" height="140" rx="16" fill="url(#plate)"/>
+  </g>
+  <rect x="1300.5" y="620.5" width="139" height="139" rx="16" fill="none" stroke="#fff" stroke-opacity=".7"/>
+  <rect x="1316" y="638" width="76" height="104" rx="10" fill="#f8fafc" stroke="#e2e8f0" stroke-width="2"/>
+  <!-- E (top), N (left), L (right) -->
+  <rect x="1349" y="656" width="10" height="26" rx="2" fill="#1e293b"/>
+  <rect x="1324" y="708" width="24" height="10" rx="2" fill="#1e293b"/>
+  <rect x="1360" y="708" width="24" height="10" rx="2" fill="#1e293b"/>
+  <!-- rocker + red ON indicator -->
+  <rect x="1402" y="652" width="24" height="44" rx="5" fill="url(#rocker)" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="1407" y="656" width="14" height="6" rx="2" fill="#dc2626"/>
+  <text x="1414" y="716" fill="#94a3b8" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">13A</text>
+
+  <!-- ===== Distribution board (cover on) ===== -->
+  <!-- conduit adaptors -->
+  <g fill="#cbd5e1" stroke="#64748b" stroke-width="1.5">
+    <rect x="822" y="404" width="36" height="20" rx="4"/>
+    <rect x="1082" y="404" width="36" height="20" rx="4"/>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="760" y="420" width="420" height="400" rx="16" fill="url(#box)"/>
+  </g>
+  <rect x="772" y="432" width="396" height="376" rx="10" fill="url(#plate)"/>
+  <text x="970" y="478" fill="#64748b" font-family="Arial, sans-serif" font-size="12" font-weight="700" letter-spacing="3" text-anchor="middle">DISTRIBUTION BOARD</text>
+
+  <!-- cover screws -->
+  <g fill="url(#screw)" stroke="#64748b" stroke-width="1">
+    <circle cx="790" cy="450" r="5"/><circle cx="1150" cy="450" r="5"/>
+    <circle cx="790" cy="790" r="5"/><circle cx="1150" cy="790" r="5"/>
+  </g>
+  <g stroke="#475569" stroke-width="1.3">
+    <path d="M787 450H793M1147 450H1153M787 790H793M1147 790H1153"/>
+  </g>
+
+  <!-- device aperture -->
+  <rect x="796" y="500" width="348" height="150" rx="6" fill="#0f172a"/>
+
+  <!-- Main switch 63A 2-pole -->
+  <rect x="802" y="506" width="64" height="138" rx="3" fill="url(#dev)" stroke="#94a3b8"/>
+  <rect x="814" y="548" width="40" height="58" rx="3" fill="#94a3b8"/>
+  <rect x="816" y="550" width="36" height="26" rx="2" fill="#dc2626"/>
+  <rect x="816" y="550" width="36" height="4" rx="1.5" fill="#f87171"/>
+
+  <!-- RCCB 40A 30mA 2-pole -->
+  <rect x="868" y="506" width="64" height="138" rx="3" fill="url(#dev)" stroke="#94a3b8"/>
+  <rect x="876" y="548" width="22" height="58" rx="3" fill="#94a3b8"/>
+  <rect x="878" y="550" width="18" height="26" rx="2" fill="#1e293b"/>
+  <rect x="878" y="550" width="18" height="4" rx="1.5" fill="#475569"/>
+  <rect x="906" y="552" width="18" height="16" rx="3" fill="#facc15" stroke="#a16207"/>
+  <text x="915" y="564" fill="#713f12" font-family="Arial, sans-serif" font-size="10" font-weight="800" text-anchor="middle">T</text>
+  <rect x="906" y="580" width="18" height="7" rx="1.5" fill="#dc2626"/>
+
+  <!-- MCBs -->
+  <use href="#mcb" x="934" y="506"/>
+  <use href="#mcb" x="968" y="506"/>
+  <use href="#mcb" x="1002" y="506"/>
+  <use href="#mcb" x="1036" y="506"/>
+  <use href="#mcb" x="1070" y="506"/>
+  <!-- blanking plate (spare way) -->
+  <rect x="1104" y="506" width="34" height="138" rx="3" fill="#e2e8f0" stroke="#94a3b8"/>
+  <path d="M1110 575H1132" stroke="#cbd5e1" stroke-width="2"/>
+
+  <!-- ratings -->
+  <g fill="#334155" font-family="Arial, sans-serif" font-size="11" font-weight="800" text-anchor="middle">
+    <text x="834" y="530">63A</text>
+    <text x="900" y="530">40A</text>
+    <text x="950" y="530">B32</text>
+    <text x="984" y="530">B20</text>
+    <text x="1018" y="530">B16</text>
+    <text x="1052" y="530">B10</text>
+    <text x="1086" y="530">B6</text>
+  </g>
+  <g fill="#64748b" font-family="Arial, sans-serif" font-size="8" font-weight="700" text-anchor="middle">
+    <text x="834" y="634">MAIN</text>
+    <text x="900" y="634">30mA</text>
+    <text x="950" y="634">6kA</text>
+    <text x="984" y="634">6kA</text>
+    <text x="1018" y="634">6kA</text>
+    <text x="1052" y="634">6kA</text>
+    <text x="1086" y="634">6kA</text>
+  </g>
+
+  <!-- circuit label strip -->
+  <rect x="796" y="660" width="348" height="26" rx="3" fill="#f8fafc" stroke="#cbd5e1"/>
+  <path d="M867 663V683M933 663V683M967 663V683M1001 663V683M1035 663V683M1069 663V683M1103 663V683" stroke="#cbd5e1"/>
+  <g fill="#475569" font-family="Arial, sans-serif" font-size="7.5" font-weight="700" text-anchor="middle">
+    <text x="834" y="676">MAIN</text>
+    <text x="900" y="676">RCD</text>
+    <text x="950" y="676">SOCKET</text>
+    <text x="984" y="676">A/C</text>
+    <text x="1018" y="676">HEATER</text>
+    <text x="1052" y="676">LIGHTS</text>
+    <text x="1086" y="676">FANS</text>
+    <text x="1121" y="676">SPARE</text>
+  </g>
+
+  <!-- danger sticker -->
+  <path d="M970 712L1000 762H940Z" fill="#facc15" stroke="#111827" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M973 726L961 745H970L966 757L980 737H971Z" fill="#111827"/>
+  <text x="970" y="782" fill="#64748b" font-family="Arial, sans-serif" font-size="10" font-weight="800" letter-spacing="1.5" text-anchor="middle">230V AC</text>
+
+  <!-- Vignette -->
+  <rect width="1600" height="900" fill="url(#vignette)"/>
+</svg>

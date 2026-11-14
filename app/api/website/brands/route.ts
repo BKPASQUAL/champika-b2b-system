@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireWebsiteStaff } from "@/lib/web-auth";
 import { apiError } from "@/lib/web-utils";
 import { brandSlug } from "@/lib/web-brands";
+import { refreshShop } from "@/lib/shop-cache";
 
 const schema = z.object({
   id: z.string().uuid().optional(),
@@ -86,6 +87,7 @@ export async function POST(request: NextRequest) {
     }
     // Keep the brand text shown on product pages in step with the brand name.
     if (v.id && !v.parentId) await supabaseAdmin.from("web_products").update({ brand_text: v.name }).eq("web_brand_id", v.id);
+    refreshShop();
     return NextResponse.json(
       { id: data.id, name: data.name, slug: data.slug, parentId: data.parent_id },
       { status: v.id ? 200 : 201 },
@@ -104,6 +106,7 @@ export async function DELETE(request: NextRequest) {
     // Sub brands are removed with their brand (ON DELETE CASCADE); products keep existing.
     const { error } = await supabaseAdmin.from("web_brands").delete().eq("id", id);
     if (error) throw error;
+    refreshShop();
     return NextResponse.json({ success: true });
   } catch (e) {
     return apiError(e);

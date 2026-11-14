@@ -3,6 +3,7 @@ import { z } from "zod";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireWebsiteStaff } from "@/lib/web-auth";
 import { apiError, slugify } from "@/lib/web-utils";
+import { refreshShop } from "@/lib/shop-cache";
 
 const schema = z.object({
   id: z.string().uuid().optional(),
@@ -72,6 +73,7 @@ export async function POST(request: NextRequest) {
       .select()
       .single();
     if (error) throw error;
+    refreshShop();
     return NextResponse.json({ id: data.id, name: data.name, webCategoryId: data.web_category_id }, { status: v.id ? 200 : 201 });
   } catch (e) {
     return apiError(e);
@@ -86,6 +88,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const { error } = await supabaseAdmin.from("web_product_families").delete().eq("id", id);
     if (error) throw error;
+    refreshShop();
     return NextResponse.json({ success: true });
   } catch (e) {
     return apiError(e);

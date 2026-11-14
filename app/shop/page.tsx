@@ -307,11 +307,11 @@ export default async function ShopHome() {
 
         {/* ---------- House quotation ---------- */}
         <section className={`${wrap} grid gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]`}>
-          <div className="shop-stripes relative overflow-hidden rounded-xl bg-(--s-bar) p-8 text-white md:p-12">
-            <ClipboardList className="absolute -bottom-6 -right-6 h-48 w-48 text-white/10" />
-            <div className="relative max-w-xl">
+          <div className="relative grid items-center overflow-hidden rounded-xl bg-(--s-bar) text-white md:grid-cols-2 lg:grid-cols-1 2xl:grid-cols-2">
+            <div className="shop-stripes pointer-events-none absolute inset-0" />
+            <div className="relative max-w-xl p-8 md:p-10 xl:p-12">
               <span className="text-xs font-bold uppercase tracking-[0.18em] text-blue-300">{t("Building or renovating?")}</span>
-              <h2 className="mt-2 text-2xl font-extrabold uppercase leading-tight tracking-tight md:text-4xl">{t("One price for your whole house.")}</h2>
+              <h2 className="mt-2 text-2xl font-extrabold uppercase leading-tight tracking-tight md:text-3xl xl:text-4xl">{t("One price for your whole house.")}</h2>
               <p className="mt-3 text-slate-300">
                 {t("Tell us the rooms and the number of lights, plugs and fans. We will send a complete item list with our best discount.")}
               </p>
@@ -325,6 +325,16 @@ export default async function ShopHome() {
                   </a>
                 )}
               </div>
+            </div>
+            {/* Whole-house wiring picture (public/house-wiring.jpg) */}
+            <div className="relative h-64 sm:h-80 md:h-full md:min-h-[340px] lg:h-80 2xl:h-full">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/house-wiring.jpg"
+                alt={t("Whole-house wiring plan")}
+                loading="lazy"
+                className="shop-house-img absolute inset-0 h-full w-full object-cover object-center"
+              />
             </div>
           </div>
 

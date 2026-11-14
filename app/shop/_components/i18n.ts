@@ -57,6 +57,7 @@ const SI: Record<string, string> = {
   "View all": "සියල්ල බලන්න",
   "Building or renovating?": "ගෙයක් හදනවද? අලුත්වැඩියා කරනවද?",
   "One price for your whole house.": "මුළු ගෙදරටම එක මිලක්.",
+  "Whole-house wiring plan": "මුළු ගෙදරම වයරින් සැලැස්ම",
   "Tell us the rooms and the number of lights, plugs and fans. We will send a complete item list with our best discount.":
     "කාමර ගණන සහ ලයිට්, ප්ලග්, ෆෑන් ගණන අපට කියන්න. අපේ හොඳම වට්ටමත් එක්ක සම්පූර්ණ භාණ්ඩ ලැයිස්තුවක් අපි එවන්නම්.",
   "Ask for a quotation": "කොටේෂන් එකක් ඉල්ලන්න",

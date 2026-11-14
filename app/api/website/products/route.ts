@@ -6,6 +6,7 @@ import { apiError, getMainWarehouseStock, uniqueSlug } from "@/lib/web-utils";
 import { loadPriceRules, resolveVariantPrice, variantLabel } from "@/lib/web-pricing";
 import { buildSearchKey, searchWords } from "@/lib/web-search";
 import { ensureSuppliers } from "@/lib/web-brands";
+import { refreshShop } from "@/lib/shop-cache";
 
 const numOrNull = z.preprocess(
   (v) => (v === "" || v === undefined || v === null ? null : Number(v)),
@@ -283,6 +284,7 @@ export async function POST(request: NextRequest) {
       : await supabaseAdmin.from("web_product_variants").insert(sale);
     if (sErr) throw sErr;
 
+    refreshShop();
     return NextResponse.json({ id: productId, slug: saved.slug }, { status: v.id ? 200 : 201 });
   } catch (e) {
     return apiError(e);
@@ -330,6 +332,7 @@ export async function PATCH(request: NextRequest) {
         .in("id", v.ids);
       if (error) throw error;
     }
+    refreshShop();
     return NextResponse.json({ success: true });
   } catch (e) {
     return apiError(e);
@@ -354,6 +357,7 @@ export async function DELETE(request: NextRequest) {
     }
     const { error } = await supabaseAdmin.from("web_products").delete().eq("id", id);
     if (error) throw error;
+    refreshShop();
     return NextResponse.json({ success: true });
   } catch (e) {
     return apiError(e);

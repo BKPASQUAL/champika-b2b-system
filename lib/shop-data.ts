@@ -5,6 +5,7 @@ import { getVisitorTier } from "@/lib/web-auth";
 import { loadPriceRules, resolveVariantPrice, type PriceTier } from "@/lib/web-pricing";
 import { searchGroups } from "@/lib/web-search";
 import { shopBaseFor } from "@/lib/shop-host";
+import { shopCached } from "@/lib/shop-cache";
 
 /**
  * Data for the public shop pages.
@@ -95,17 +96,25 @@ const getTier = cache(async (): Promise<PriceTier> => {
   }
 });
 
-const getRules = cache(() => loadPriceRules().catch(() => []));
+const cachedPriceRules = shopCached(() => loadPriceRules(), "price-rules");
+const getRules = cache(() => cachedPriceRules().catch(() => []));
+
+/** Raw rows (cacheable JSON); a missing column throws so the error is not cached. */
+const cachedItemKindRows = shopCached(async () => {
+  const { data, error } = await supabaseAdmin.from("web_products").select("id, order_type, lead_time").neq("order_type", "normal");
+  if (error) throw new Error(error.message);
+  return (data || []) as any[];
+}, "item-kinds");
 
 /**
  * Special-order / cut-piece flags (web_products.order_type, lead_time). Read on
  * their own so the shop keeps working before the SQL that adds them is run.
  */
 export const getItemKinds = cache(async (): Promise<Map<string, { kind: ItemKind; leadTime: string | null }>> => {
-  const { data, error } = await supabaseAdmin.from("web_products").select("id, order_type, lead_time").neq("order_type", "normal");
-  if (error) return new Map();
+  const data = await cachedItemKindRows().catch(() => null);
+  if (!data) return new Map();
   return new Map(
-    (data || []).map((r: any) => [
+    data.map((r: any) => [
       r.id as string,
       { kind: (r.order_type === "special" || r.order_type === "cut" ? r.order_type : "normal") as ItemKind, leadTime: r.lead_time || null },
     ]),
@@ -150,9 +159,13 @@ async function toCards(rows: any[], tierOverride?: PriceTier): Promise<ShopProdu
 
 // ---------------------------------------------------------------- settings
 
-async function getSetting<T>(key: string): Promise<T | null> {
+const cachedSetting = shopCached(async (key: string) => {
   const { data } = await supabaseAdmin.from("web_settings").select("value").eq("key", key).maybeSingle();
-  return (data?.value as T) ?? null;
+  return data?.value ?? null;
+}, "setting");
+
+async function getSetting<T>(key: string): Promise<T | null> {
+  return ((await cachedSetting(key)) as T) ?? null;
 }
 
 export const getStoreInfo = cache(async (): Promise<StoreInfo> => {
@@ -190,7 +203,7 @@ export function deliveryFee(subtotal: number, d: DeliveryInfo): number {
 // ---------------------------------------------------------------- categories & brands
 
 /** Active categories as a tree (main → sub), with published product counts. */
-export const getCategoryTree = cache(async (): Promise<ShopCategory[]> => {
+export const getCategoryTree = cache(shopCached(async (): Promise<ShopCategory[]> => {
   const [{ data: cats }, { data: prods }, { data: fams }] = await Promise.all([
     supabaseAdmin
       .from("web_categories")
@@ -232,7 +245,7 @@ export const getCategoryTree = cache(async (): Promise<ShopCategory[]> => {
     else roots.push(c);
   }
   return roots;
-});
+}, "category-tree"));
 
 export async function getCategoryBySlug(slug: string) {
   const tree = await getCategoryTree();
@@ -244,7 +257,7 @@ export async function getCategoryBySlug(slug: string) {
   return null;
 }
 
-export const getBrands = cache(async (): Promise<ShopBrand[]> => {
+export const getBrands = cache(shopCached(async (): Promise<ShopBrand[]> => {
   const { data } = await supabaseAdmin
     .from("web_brands")
     .select("id, name, slug, logo_url, parent_id, sort_order")
@@ -252,10 +265,10 @@ export const getBrands = cache(async (): Promise<ShopBrand[]> => {
     .order("sort_order")
     .order("name");
   return (data || []).map((b: any) => ({ id: b.id, name: b.name, slug: b.slug, logoUrl: b.logo_url, parentId: b.parent_id }));
-});
+}, "brands"));
 
 /** Main brands for "Shop by brand" on the home page. */
-export async function getFeaturedBrands(): Promise<ShopBrand[]> {
+export const getFeaturedBrands = shopCached(async (): Promise<ShopBrand[]> => {
   const [{ data: brands }, { data: prods }] = await Promise.all([
     supabaseAdmin
       .from("web_brands")
@@ -281,16 +294,16 @@ export async function getFeaturedBrands(): Promise<ShopBrand[]> {
   }));
   const featured = all.filter((b) => b.isFeatured);
   return featured.length > 0 ? featured : all;
-}
+}, "featured-brands");
 
-export async function getBanners() {
+export const getBanners = shopCached(async () => {
   const { data } = await supabaseAdmin
     .from("web_banners")
     .select("id, title, image_url, link")
     .eq("is_active", true)
     .order("sort_order");
   return (data || []).map((b: any) => ({ id: b.id as string, title: b.title as string | null, imageUrl: b.image_url as string, link: b.link as string | null }));
-}
+}, "banners");
 
 // ---------------------------------------------------------------- products
 
@@ -303,10 +316,17 @@ export type ProductQuery = {
   limit?: number;
   /** Price for this tier instead of the visitor's (staff pricing a quote for a customer). */
   tier?: PriceTier;
+  /** Skip the shared cache (placing orders / quotes must use live prices). */
+  fresh?: boolean;
 };
 
 /** Published products as cards. Filters run in the database; prices on the server. */
 export async function getProducts(q: ProductQuery = {}): Promise<ShopProductCard[]> {
+  const { tier, fresh, ...filters } = q;
+  return toCards(await (fresh ? loadProductRows(filters) : cachedProductRows(filters)), tier);
+}
+
+async function loadProductRows(q: Omit<ProductQuery, "tier" | "fresh">): Promise<any[]> {
   const build = (useSearchKey: boolean) => {
     let query = supabaseAdmin.from("web_products").select(CARD_SELECT).eq("is_published", true);
     if (q.categoryId)
@@ -327,29 +347,19 @@ export async function getProducts(q: ProductQuery = {}): Promise<ShopProductCard
   // search_key column not added yet → search names only.
   if (error && /search_key/.test(error.message || "")) ({ data, error } = await build(false));
   if (error) throw new Error(error.message);
-  return toCards(data || [], q.tier);
+  return (data || []) as any[];
 }
+
+/** Raw product rows for a query, shared by all visitors (prices are applied per visitor in toCards). */
+const cachedProductRows = shopCached(loadProductRows, "product-rows");
 
 export async function getNewestProducts(limit = 8) {
   const all = await getProducts();
   return all.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
 }
 
-export async function getProductBySlug(slug: string): Promise<ShopProduct | null> {
-  const { data: p } = await supabaseAdmin
-    .from("web_products")
-    .select(
-      CARD_SELECT +
-        ", short_description, description, specs, " +
-        "category:web_categories!web_products_web_category_id_fkey(name, slug), " +
-        "sub_category:web_categories!web_products_web_sub_category_id_fkey(name, slug), " +
-        "family:web_product_families(id, name), " +
-        "brand_info:web_brands!web_products_web_brand_id_fkey(name, slug), " +
-        "sub_brand_info:web_brands!web_products_web_sub_brand_id_fkey(name, slug)",
-    )
-    .eq("slug", slug)
-    .eq("is_published", true)
-    .maybeSingle();
+export const getProductBySlug = cache(async (slug: string): Promise<ShopProduct | null> => {
+  const p = await cachedProductBySlug(slug);
   if (!p) return null;
   const [card] = await toCards([p]);
   if (!card) return null;
@@ -368,7 +378,25 @@ export async function getProductBySlug(slug: string): Promise<ShopProduct | null
     brandInfo: row.brand_info,
     subBrandInfo: row.sub_brand_info,
   };
-}
+});
+
+const cachedProductBySlug = shopCached(async (slug: string): Promise<any | null> => {
+  const { data: p } = await supabaseAdmin
+    .from("web_products")
+    .select(
+      CARD_SELECT +
+        ", short_description, description, specs, " +
+        "category:web_categories!web_products_web_category_id_fkey(name, slug), " +
+        "sub_category:web_categories!web_products_web_sub_category_id_fkey(name, slug), " +
+        "family:web_product_families(id, name), " +
+        "brand_info:web_brands!web_products_web_brand_id_fkey(name, slug), " +
+        "sub_brand_info:web_brands!web_products_web_sub_brand_id_fkey(name, slug)",
+    )
+    .eq("slug", slug)
+    .eq("is_published", true)
+    .maybeSingle();
+  return p ?? null;
+}, "product-by-slug");
 
 /** Same family first, then same sub category. */
 export async function getRelatedProducts(p: ShopProduct, limit = 8) {
@@ -416,6 +444,17 @@ export function sortProducts(list: ShopProductCard[], sort: SortKey) {
   }
 }
 
+const cachedFamilies = shopCached(async (ids: string[]) => {
+  const { data } = await supabaseAdmin
+    .from("web_product_families")
+    .select("id, name, sort_order")
+    .in("id", ids)
+    .eq("is_active", true)
+    .order("sort_order")
+    .order("name");
+  return (data || []) as any[];
+}, "families");
+
 /** Brand / family counts for the filter sidebar (from the unfiltered list). */
 export async function getFacets(list: ShopProductCard[]) {
   const brandCount: Record<string, number> = {};
@@ -424,13 +463,8 @@ export async function getFacets(list: ShopProductCard[]) {
     if (p.brandId) brandCount[p.brandId] = (brandCount[p.brandId] || 0) + 1;
     if (p.familyId) familyCount[p.familyId] = (familyCount[p.familyId] || 0) + 1;
   }
-  const familyIds = Object.keys(familyCount);
-  const [brands, { data: fams }] = await Promise.all([
-    getBrands(),
-    familyIds.length
-      ? supabaseAdmin.from("web_product_families").select("id, name, sort_order").in("id", familyIds).eq("is_active", true).order("sort_order").order("name")
-      : Promise.resolve({ data: [] as any[] }),
-  ]);
+  const familyIds = Object.keys(familyCount).sort();
+  const [brands, fams] = await Promise.all([getBrands(), familyIds.length ? cachedFamilies(familyIds) : Promise.resolve([] as any[])]);
   return {
     brands: brands
       .filter((b) => brandCount[b.id])
@@ -477,7 +511,7 @@ export type PromoStripItem = {
  * Active items for the black promotion strip on the home page, in order.
  * Items past their end date are left out. Returns [] when the table is not there yet.
  */
-export async function getPromoStrip(): Promise<PromoStripItem[]> {
+export const getPromoStrip = shopCached(async (): Promise<PromoStripItem[]> => {
   const { data, error } = await supabaseAdmin
     .from("web_promo_strip")
     .select("id, title, image_url, link_type, link_value, badge_mode, badge_text, badge_color, ends_at")
@@ -528,4 +562,4 @@ export async function getPromoStrip(): Promise<PromoStripItem[]> {
       badgeColor: r.badge_color || "red",
     };
   });
-}
+}, "promo-strip");

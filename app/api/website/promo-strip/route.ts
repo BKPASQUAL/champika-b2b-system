@@ -3,6 +3,7 @@ import { z } from "zod";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireWebsiteStaff } from "@/lib/web-auth";
 import { apiError } from "@/lib/web-utils";
+import { refreshShop } from "@/lib/shop-cache";
 
 // Items for the black promotion strip on the shop home page.
 const schema = z.object({
@@ -76,6 +77,7 @@ export async function POST(request: NextRequest) {
       : supabaseAdmin.from("web_promo_strip").insert(row);
     const { data, error } = await q.select().single();
     if (error) throw error;
+    refreshShop();
     return NextResponse.json(toApi(data), { status: v.id ? 200 : 201 });
   } catch (e) {
     return apiError(e);
@@ -90,6 +92,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const { error } = await supabaseAdmin.from("web_promo_strip").delete().eq("id", id);
     if (error) throw error;
+    refreshShop();
     return NextResponse.json({ success: true });
   } catch (e) {
     return apiError(e);

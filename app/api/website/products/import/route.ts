@@ -5,6 +5,7 @@ import { requireWebsiteStaff } from "@/lib/web-auth";
 import { apiError, getAllowedMainCategories, uniqueSlug } from "@/lib/web-utils";
 import { detectBrand, normaliseBrand } from "@/lib/web-brand-detect";
 import { ensureBrands, ensureSuppliers } from "@/lib/web-brands";
+import { refreshShop } from "@/lib/shop-cache";
 
 /**
  * Create website products from main products (as drafts).
@@ -86,6 +87,7 @@ export async function POST(request: NextRequest) {
       if (vErr) throw vErr;
       created++;
     }
+    refreshShop();
     return NextResponse.json({ created });
   } catch (e) {
     return apiError(e);

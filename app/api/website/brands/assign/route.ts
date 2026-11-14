@@ -5,6 +5,7 @@ import { requireWebsiteStaff } from "@/lib/web-auth";
 import { apiError } from "@/lib/web-utils";
 import { detectBrand, normaliseBrand } from "@/lib/web-brand-detect";
 import { ensureBrands } from "@/lib/web-brands";
+import { refreshShop } from "@/lib/shop-cache";
 
 /**
  * GET: suggested brand for every website product (from the linked main
@@ -65,6 +66,7 @@ export async function POST(request: NextRequest) {
         .in("id", productIds);
       if (error) throw error;
     }
+    refreshShop();
     return NextResponse.json({ updated: assignments.length });
   } catch (e) {
     return apiError(e);
