@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowUpDown, Check, ChevronRight, LayoutGrid, PackageOpen, SearchX } from "lucide-react";
+import { ArrowUpDown, Check, ChevronRight, LayoutGrid, PackageOpen, SearchX, X } from "lucide-react";
 import {
   applyListingFilters,
   getCategoryTree,
@@ -9,6 +9,7 @@ import {
 } from "@/lib/shop-data";
 import { ProductGrid } from "./ProductCard";
 import { ListingSearch } from "./ListingSearch";
+import { rs } from "./format";
 import { buildSearchKey, searchWords, suggestSizeTags } from "@/lib/web-search";
 
 export type ListingParams = {
@@ -90,7 +91,19 @@ export async function Listing({
     s.has(v) ? s.delete(v) : s.add(v);
     return [...s].join(",") || null;
   };
-  const activeCount = brandSlugs.length + familyIds.length + (min || max ? 1 : 0) + (find ? 1 : 0);
+  // Applied filters as removable chips (shoppers should always see what is narrowing the list).
+  const applied: { key: string; label: string; href: string }[] = [
+    ...facets.families
+      .filter((f) => familyIds.includes(f.id))
+      .map((f) => ({ key: `f-${f.id}`, label: f.name, href: url({ family: toggle(familyIds, f.id) }) })),
+    ...facets.brands
+      .filter((b) => brandSlugs.includes(b.slug))
+      .map((b) => ({ key: `b-${b.id}`, label: b.name, href: url({ brand: toggle(brandSlugs, b.slug) }) })),
+    ...(min || max
+      ? [{ key: "price", label: min && max ? `${rs(min)} – ${rs(max)}` : min ? `From ${rs(min)}` : `Up to ${rs(max)}`, href: url({ min: null, max: null }) }]
+      : []),
+    ...(find ? [{ key: "find", label: `“${find}”`, href: url({ find: null }) }] : []),
+  ];
 
   // ---------- left: categories ----------
   const categoryLinks = tree.flatMap((main) => (tree.length === 1 ? main.children : [main, ...main.children]));
@@ -157,33 +170,42 @@ export async function Listing({
         </aside>
 
         <div className="min-w-0 flex-1">
-          <h1 className="sr-only">{title}</h1>
+          {/* Title · description · result count (always visible: tells shoppers where they are and how much is here) */}
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-x-6 gap-y-1">
+            <div className="min-w-0">
+              <h1 className="text-[22px] font-bold leading-tight tracking-tight text-(--s-ink) md:text-[26px]">{title}</h1>
+              {description && <p className="mt-1 max-w-3xl text-sm text-(--s-ink-2)">{description}</p>}
+            </div>
+            {all.length > 0 && (
+              <p className="text-sm text-(--s-muted)" aria-live="polite">
+                {products.length === all.length ? (
+                  <>
+                    <strong className="font-semibold text-(--s-ink)">{all.length}</strong> {all.length === 1 ? "product" : "products"}
+                  </>
+                ) : (
+                  <>
+                    Showing <strong className="font-semibold text-(--s-ink)">{products.length}</strong> of {all.length}
+                  </>
+                )}
+              </p>
+            )}
+          </div>
           {all.length > 0 && (
             <div className="space-y-3.5 rounded-2xl border border-(--s-line) bg-(--s-surface) p-3.5 shadow-[0_2px_12px_-4px_rgba(15,23,42,0.04)] md:p-4">
               {/* Top row: search in these products · count · clear · sort */}
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
+              <div className="flex items-center gap-2 md:gap-4">
                 <div className="min-w-0 flex-1">
                   <ListingSearch placeholder={`Search in ${title}… e.g. 1/113, MCB`} />
                 </div>
-              {/* Count · clear · sort */}
-              <div className="flex items-center justify-between gap-3 md:shrink-0 md:justify-end">
-                <span className="rounded-full bg-(--s-soft) px-3 py-1 text-xs font-semibold text-(--s-ink-2)">
-                  <strong className="font-bold text-(--s-ink)">{products.length}</strong>{" "}
-                  {products.length === 1 ? "item" : "items"}
-                </span>
+              {/* Sort */}
+              <div className="flex shrink-0 items-center justify-end">
                 <div className="flex items-center gap-2">
-                  {activeCount > 0 && (
-                    <Link
-                      href={url({ brand: null, family: null, min: null, max: null, find: null })}
-                      className="rounded-full bg-rose-500/10 px-3 py-1.5 text-xs font-bold text-(--s-bad) transition hover:bg-rose-500/20"
-                    >
-                      Clear
-                    </Link>
-                  )}
                   <details className="group relative">
-                    <summary className="flex cursor-pointer list-none items-center gap-2 rounded-full border border-(--s-line) bg-(--s-bg) px-4 py-2 text-[14px] font-semibold text-(--s-ink) transition hover:border-blue-500/40 hover:bg-(--s-soft)">
-                      <ArrowUpDown className="h-3.5 w-3.5 text-blue-600 transition group-hover:text-(--s-ink)" />
-                      <span>{sortLabel}</span>
+                    <summary className="flex h-11 cursor-pointer list-none items-center gap-2 rounded-xl border border-(--s-line) bg-(--s-surface) px-4 text-[14px] text-(--s-ink) transition hover:border-(--s-accent)/50 hover:bg-(--s-soft)">
+                      <ArrowUpDown className="h-4 w-4 text-(--s-muted)" />
+                      <span className="hidden text-(--s-muted) sm:inline">Sort:</span>
+                      <span className="hidden font-semibold sm:inline">{sortLabel}</span>
+                      <span className="font-semibold sm:hidden">Sort</span>
                     </summary>
                     <div className="absolute right-0 z-30 mt-2 w-56 overflow-hidden rounded-2xl border border-(--s-line) bg-(--s-surface) p-1.5 shadow-2xl">
                       {SORT_OPTIONS.map((o) => (
@@ -196,7 +218,7 @@ export async function Listing({
                           }`}
                         >
                           {o.label}
-                          {o.key === sort && <span className="h-2 w-2 rounded-full bg-blue-600 ring-2 ring-blue-500/30" />}
+                          {o.key === sort && <Check className="h-4 w-4 text-(--s-accent)" />}
                         </Link>
                       ))}
                     </div>
@@ -212,6 +234,7 @@ export async function Listing({
                   {showTypes &&
                     chipLine(
                       <>
+                        <RowLabel>Type</RowLabel>
                         <TypeChip href={url({ family: null })} on={!familyIds.length} label="All" />
                         {facets.families.map((f) => (
                           <TypeChip key={f.id} href={url({ family: toggle(familyIds, f.id) })} on={familyIds.includes(f.id)} label={f.name} count={f.count} />
@@ -221,6 +244,7 @@ export async function Listing({
                   {showBrands &&
                     chipLine(
                       <>
+                        <RowLabel>Brand</RowLabel>
                         <BrandChip href={url({ brand: null })} on={!brandSlugs.length} label="All brands" />
                         {facets.brands.map((b) => (
                           <BrandChip key={b.id} href={url({ brand: toggle(brandSlugs, b.slug) })} on={brandSlugs.includes(b.slug)} label={b.name} logo={b.logoUrl} />
@@ -229,11 +253,36 @@ export async function Listing({
                     )}
                 </div>
               )}
+
+              {/* Applied filters: each one removable on its own, plus "Clear all" */}
+              {applied.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 border-t border-(--s-line) pt-3.5">
+                  <RowLabel>Applied</RowLabel>
+                  {applied.map((a) => (
+                    <Link
+                      key={a.key}
+                      href={a.href}
+                      scroll={false}
+                      aria-label={`Remove filter ${a.label}`}
+                      className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-(--s-accent-soft) pl-3 pr-2 text-[13.5px] font-semibold text-(--s-accent) transition hover:bg-(--s-accent)/15"
+                    >
+                      {a.label}
+                      <X className="h-3.5 w-3.5" />
+                    </Link>
+                  ))}
+                  <Link
+                    href={url({ brand: null, family: null, min: null, max: null, find: null })}
+                    scroll={false}
+                    className="ml-1 text-[13.5px] font-semibold text-(--s-muted) underline-offset-4 transition hover:text-(--s-ink) hover:underline"
+                  >
+                    Clear all
+                  </Link>
+                </div>
+              )}
             </div>
           )}
-          {description && <p className="mt-3 max-w-3xl text-sm text-(--s-ink-2)">{description}</p>}
 
-          <div className="pt-6">
+          <div className="pt-5">
             {top}
             {products.length ? (
               <ProductGrid products={products} base={base} />
@@ -267,9 +316,9 @@ function TypeChip({ href, on, label, count }: { href: string; on: boolean; label
     <Link
       href={href}
       scroll={false}
-      className={`inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-[14px] font-semibold transition ${
+      className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-full px-4 text-[14px] font-semibold transition ${
         on
-          ? "bg-(--s-ink) text-(--s-bg) shadow-[0_3px_10px_-2px_rgba(15,23,42,0.3)]"
+          ? "bg-(--s-accent) text-white shadow-[0_2px_8px_-2px_rgba(37,99,235,0.45)]"
           : "bg-(--s-bg) text-(--s-ink-2) ring-1 ring-inset ring-(--s-line) hover:bg-(--s-soft) hover:text-(--s-ink) hover:ring-(--s-ink)/30"
       }`}
     >
@@ -277,7 +326,7 @@ function TypeChip({ href, on, label, count }: { href: string; on: boolean; label
       {count !== undefined && (
         <span
           className={`inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1.5 text-[12.5px] font-bold leading-none ${
-            on ? "bg-blue-500 text-white" : "bg-(--s-surface) text-(--s-muted) ring-1 ring-(--s-line)"
+            on ? "bg-white/20 text-white" : "bg-(--s-surface) text-(--s-muted) ring-1 ring-(--s-line)"
           }`}
         >
           {count}
@@ -293,9 +342,9 @@ function BrandChip({ href, on, label, logo }: { href: string; on: boolean; label
     <Link
       href={href}
       scroll={false}
-      className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-xl px-3.5 text-[14px] font-semibold transition ${
+      className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-full px-4 text-[14px] font-semibold transition ${
         on
-          ? "bg-gradient-to-r from-blue-600 to-blue-500 font-bold text-white shadow-[0_3px_12px_-2px_rgba(37,99,235,0.45)] ring-1 ring-inset ring-blue-400/30"
+          ? "bg-(--s-accent) text-white shadow-[0_2px_8px_-2px_rgba(37,99,235,0.45)]"
           : "bg-(--s-bg) text-(--s-ink-2) ring-1 ring-inset ring-(--s-line) hover:bg-(--s-soft) hover:text-(--s-ink) hover:ring-(--s-ink)/30"
       }`}
     >
@@ -327,7 +376,7 @@ function CategoryTile({
       href={href}
       className={`group flex min-h-11 items-center gap-3 rounded-xl px-2.5 py-2 transition ${
         on
-          ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-[0_3px_12px_-2px_rgba(37,99,235,0.4)] ring-1 ring-inset ring-blue-400/30"
+          ? "bg-(--s-accent) text-white shadow-[0_2px_8px_-2px_rgba(37,99,235,0.4)]"
           : "text-(--s-ink-2) hover:bg-(--s-soft) hover:text-(--s-ink)"
       }`}
     >
@@ -365,11 +414,16 @@ function MiniCategory({ href, label, on }: { href: string; label: string; on: bo
       href={href}
       className={`shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[14px] font-semibold transition ${
         on
-          ? "bg-gradient-to-r from-blue-600 to-blue-500 font-bold text-white shadow-[0_2px_8px_-2px_rgba(37,99,235,0.4)]"
+          ? "bg-(--s-accent) font-bold text-white shadow-[0_2px_8px_-2px_rgba(37,99,235,0.4)]"
           : "bg-(--s-surface) text-(--s-ink-2) ring-1 ring-(--s-line)"
       }`}
     >
       {label}
     </Link>
   );
+}
+
+/** Small label in front of a chip row ("Type", "Brand", "Applied"). */
+function RowLabel({ children }: { children: React.ReactNode }) {
+  return <span className="w-16 shrink-0 text-[12px] font-bold uppercase tracking-wider text-(--s-muted)">{children}</span>;
 }

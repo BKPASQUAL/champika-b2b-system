@@ -28,7 +28,7 @@ export function HeroFeature({ banners, base }: { banners: Banner[]; base: string
 
   if (!n) {
     return (
-      <div className="relative flex h-full min-h-[340px] flex-col justify-end overflow-hidden rounded-xl bg-slate-900 p-6 text-white md:min-h-[460px] md:p-8">
+      <div className="relative flex h-full min-h-[340px] flex-col justify-center overflow-hidden rounded-xl bg-slate-900 p-6 text-white md:min-h-[460px] md:p-8">
         {/* Wiring photo (public/hero-bg.jpg), brightened, with a slow zoom. */}
         <div
           className="shop-hero-bg pointer-events-none absolute inset-0 bg-cover bg-right"
@@ -39,19 +39,21 @@ export function HeroFeature({ banners, base }: { banners: Banner[]; base: string
           className="pointer-events-none absolute inset-0"
           style={{
             background:
-              "linear-gradient(100deg, rgba(29,78,216,0.82) 0%, rgba(30,64,175,0.5) 32%, rgba(30,64,175,0.06) 56%, transparent 100%)",
+              "linear-gradient(100deg, rgba(29,78,216,0.92) 0%, rgba(30,64,175,0.8) 34%, rgba(30,64,175,0.25) 50%, transparent 62%)",
           }}
         />
         {/* Light sweep across the board every few seconds. */}
         <div className="shop-hero-sweep pointer-events-none absolute inset-0" />
-        <div className="shop-hero-in relative max-w-xl">
+        {/* Phones: the text covers the photo, so darken it from the bottom. */}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/90 via-blue-950/55 to-blue-950/20 md:hidden" />
+        <div className="shop-hero-in relative max-w-xl md:max-w-[48%]">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-[12.5px] font-bold text-sky-200 ring-1 ring-white/15 backdrop-blur-xs">
             <MapPin className="h-3.5 w-3.5" /> {t("House wiring store · Galle area")}
           </span>
-          <h1 className="mt-4 text-3xl font-extrabold leading-[1.08] tracking-tight md:text-[44px]">
+          <h1 className="mt-4 text-3xl font-extrabold leading-[1.08] tracking-tight md:text-[clamp(28px,2.6vw,44px)]">
             {t("Wire your home with confidence.")}
           </h1>
-          <p className="mt-3 max-w-md text-sm leading-6 text-blue-100/80 md:text-base">
+          <p className="mt-3 max-w-md text-sm leading-6 text-blue-100/85 md:text-[15px]">
             {t("Genuine cables, switches, sockets and breakers at discount prices — delivered to your door.")}
           </p>
           <form action={`${base}/search`} className="mt-5 flex max-w-md items-center gap-2 rounded-full bg-white p-1.5 pl-4 shadow-[0_8px_30px_rgba(0,0,0,0.3)]">

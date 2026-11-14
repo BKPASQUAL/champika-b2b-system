@@ -51,8 +51,10 @@ export function AddToCartButton({ id, name, available, withQty }: { id: string; 
 
   // − qty + box and the Add button side by side (the text shortens to "Add" on narrow cards).
   return (
-    <div className="@container flex items-center gap-2">
-      <div className="flex h-10 shrink-0 items-center rounded-xl border border-(--s-line) bg-(--s-surface)">
+    <div className="@container">
+    {/* Narrow cards (phones): qty box on top, full-width Add below, so the button is never cut off. */}
+    <div className="flex flex-col gap-2 @[200px]:flex-row @[200px]:items-center">
+      <div className="flex h-10 w-full shrink-0 items-center justify-between rounded-xl border border-(--s-line) bg-(--s-surface) @[200px]:w-auto @[200px]:justify-start">
         <button
           type="button"
           aria-label="Less"
@@ -80,6 +82,7 @@ export function AddToCartButton({ id, name, available, withQty }: { id: string; 
         </button>
       </div>
       <div className="min-w-0 flex-1">{button}</div>
+    </div>
     </div>
   );
 }
