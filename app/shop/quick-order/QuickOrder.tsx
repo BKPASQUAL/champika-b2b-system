@@ -7,10 +7,12 @@ import {
   ArrowUp,
   ArrowUpDown,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
   ImageOff,
+  LayoutGrid,
   ListChecks,
   Loader2,
   Lock,
@@ -18,6 +20,7 @@ import {
   Minus,
   Plus,
   Search,
+  Tag,
   ClipboardList,
   Trash2,
   X,
@@ -28,6 +31,7 @@ import { searchWords } from "@/lib/web-search";
 import { MAX_QTY, useShop } from "../_components/ShopContext";
 import { QuoteFromCart } from "../_components/QuoteFromCart";
 import { rs } from "../_components/format";
+import { BrandCompare, type CompareOther } from "../_components/BrandCompare";
 
 export type QuickOrderItem = {
   id: string;
@@ -58,10 +62,13 @@ type Line = {
   slug: string;
   name: string;
   image: string | null;
+  brand: string | null;
   price: number;
   qty: number;
   lineTotal: number;
   available: boolean;
+  /** Same item from other brands (cheapest first). */
+  others?: CompareOther[];
 };
 
 type SortKey = "popular" | "name_asc" | "name_desc" | "brand_asc" | "price_asc" | "price_desc" | "discount_desc";
@@ -93,7 +100,7 @@ export function QuickOrder({
   brands?: QuickOrderBrand[];
   items?: QuickOrderItem[];
 }) {
-  const { cart, ready, add, setQty, remove, clear, href } = useShop();
+  const { cart, ready, add, setQty, remove, clear, replace, href } = useShop();
   const input = useRef<HTMLInputElement>(null);
 
   const [q, setQ] = useState("");
@@ -102,6 +109,15 @@ export function QuickOrder({
   const [sort, setSort] = useState<SortKey>("popular");
   const [qtys, setQtys] = useState<Record<string, number>>({});
   const [preview, setPreview] = useState<QuickOrderItem | null>(null);
+  // Phones: show items as a list (default) or a 2-column grid. Remembered on this device.
+  // Phones: switch between the items and "My list" (items shown by default).
+  const [tab, setTab] = useState<"items" | "list">("items");
+  const tabsBox = useRef<HTMLDivElement>(null);
+  const showTab = (t: "items" | "list") => {
+    setTab(t);
+    const top = tabsBox.current?.getBoundingClientRect().top ?? 0;
+    if (top < 0) tabsBox.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  };
   const [list, setList] = useState<{ lines: Line[]; total: number; deliveryFee: number; subtotal: number; savings?: number } | null>(null);
 
   // Instant client-side filter + sort across all items.
@@ -223,9 +239,9 @@ export function QuickOrder({
   const lines = list?.lines || [];
 
   return (
-    <div className="mx-auto px-4 py-6 md:px-6 md:py-8 xl:px-10">
+    <div className="mx-auto px-3 pt-4 pb-32 sm:px-4 md:px-6 md:py-8 lg:pb-8 xl:px-10">
       {/* Header banner */}
-      <div className="mb-6 flex flex-col justify-between gap-4 rounded-3xl border border-(--s-line) bg-(--s-surface) p-5 shadow-[0_4px_20px_-6px_rgba(15,23,42,0.05)] sm:flex-row sm:items-center md:px-6">
+      <div className="mb-4 flex flex-col justify-between gap-2 rounded-2xl border border-(--s-line) bg-(--s-surface) p-4 shadow-[0_4px_20px_-6px_rgba(15,23,42,0.05)] sm:flex-row sm:items-center sm:gap-4 md:mb-6 md:rounded-3xl md:p-5 md:px-6">
         <div>
           <div className="flex flex-wrap items-center gap-2.5">
             <h1 className="text-xl font-extrabold tracking-tight text-(--s-ink) md:text-2xl">Quick order</h1>
@@ -233,7 +249,7 @@ export function QuickOrder({
               <MapPin className="h-3 w-3" /> Galle area delivery
             </span>
           </div>
-          <ol className="mt-2.5 flex flex-wrap gap-2 text-xs font-medium text-(--s-ink-2)">
+          <ol className="mt-2.5 hidden flex-wrap sm:flex gap-2 text-xs font-medium text-(--s-ink-2)">
             {["Search or filter items", "Set quantity", "Press Add to build your list"].map((s, i) => (
               <li key={s} className="inline-flex items-center gap-1.5 rounded-full bg-(--s-soft) py-1 pl-1.5 pr-3">
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-blue-500 text-[12.5px] font-bold text-white shadow-xs">
@@ -245,19 +261,55 @@ export function QuickOrder({
           </ol>
         </div>
         <div className="text-xs font-medium text-(--s-muted) sm:text-right">
+          <span className="sm:hidden">Search, set quantity, press Add · </span>
           Showing <strong className="font-extrabold text-(--s-ink)">{filtered.length}</strong> of{" "}
           <strong className="font-bold text-(--s-ink-2)">{items.length}</strong> {items.length === 1 ? "item" : "items"}
+        </div>
+      </div>
+
+      {/* Phones & tablets: switch between the items and My list */}
+      <div ref={tabsBox} className="mb-4 scroll-mt-28 lg:hidden">
+        <div role="tablist" aria-label="Show" className="grid grid-cols-2 gap-1 rounded-2xl bg-(--s-soft) p-1 ring-1 ring-(--s-line)">
+          {(
+            [
+              ["items", "Items", LayoutGrid, filtered.length],
+              ["list", "My list", ListChecks, count],
+            ] as const
+          ).map(([key, lbl, Icon, n]) => {
+            const on = tab === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={on}
+                onClick={() => showTab(key)}
+                className={`flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl text-[14px] font-bold transition ${
+                  on ? "bg-(--s-surface) text-blue-600 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.15)]" : "text-(--s-muted) hover:text-(--s-ink)"
+                }`}
+              >
+                <Icon className="h-4 w-4" /> {lbl}
+                <span
+                  className={`rounded-full px-2 text-[12px] font-extrabold ${
+                    on ? "bg-blue-600 text-white" : "bg-(--s-surface) text-(--s-muted) ring-1 ring-(--s-line)"
+                  }`}
+                >
+                  {n}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* The list column only appears once something has been added. */}
       <div className={`grid gap-6 xl:gap-8 ${hasList ? "lg:grid-cols-[minmax(0,1fr)_370px] xl:grid-cols-[minmax(0,1fr)_400px]" : ""}`}>
         {/* ---------- Left: search, filters, sort & items table ---------- */}
-        <div className="min-w-0 space-y-4">
+        <div className={`min-w-0 space-y-4 ${tab === "list" ? "hidden lg:block" : ""}`}>
           {/* Controls card */}
-          <div className="space-y-3.5 rounded-3xl border border-(--s-line) bg-(--s-surface) p-4 shadow-[0_4px_20px_-6px_rgba(15,23,42,0.05)]">
+          <div className="space-y-3 rounded-2xl border border-(--s-line) bg-(--s-surface) p-3 sm:p-4 md:space-y-3.5 md:rounded-3xl shadow-[0_4px_20px_-6px_rgba(15,23,42,0.05)]">
             {/* Search + Sort row */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
               <div className="relative flex-1">
                 <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-blue-600" />
                 <input
@@ -266,7 +318,7 @@ export function QuickOrder({
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                   type="text"
-                  placeholder="Quick search by name, brand, or size… e.g. 1/113, 2.5mm, Orange, switch"
+                  placeholder="Search name, brand or size… e.g. 1/113"
                   className="h-11 w-full rounded-2xl border border-(--s-line) bg-(--s-bg) pl-11 pr-10 text-sm font-medium text-(--s-ink) outline-none transition placeholder:font-normal placeholder:text-(--s-muted) focus:border-blue-600 focus:bg-(--s-surface) focus:ring-4 focus:ring-blue-500/15"
                 />
                 {q && (
@@ -285,21 +337,7 @@ export function QuickOrder({
               </div>
 
               <div className="flex items-center gap-2 sm:shrink-0">
-                <div className="relative flex-1 sm:flex-none">
-                  <ArrowUpDown className="pointer-events-none absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-blue-600" />
-                  <select
-                    aria-label="Sort items"
-                    value={sort}
-                    onChange={(e) => setSort(e.target.value as SortKey)}
-                    className="h-11 w-full cursor-pointer appearance-none rounded-2xl border border-(--s-line) bg-(--s-bg) pl-9 pr-8 text-[14px] font-bold text-(--s-ink) outline-none transition hover:border-blue-500/40 focus:border-blue-600 sm:w-auto"
-                  >
-                    {SORT_OPTIONS.map((o) => (
-                      <option key={o.key} value={o.key}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <SortMenu value={sort} onChange={setSort} />
 
                 {hasFilters && (
                   <button
@@ -318,9 +356,43 @@ export function QuickOrder({
               </div>
             </div>
 
-            {/* Category filter chips */}
+            {/* Phones: category & brand as two dropdowns side by side */}
+            {(categories.length > 0 || brands.length > 0) && (
+              <div className="grid grid-cols-2 gap-2 sm:hidden">
+                {categories.length > 0 && (
+                  <PickMenu
+                    label="Category"
+                    icon={<LayoutGrid className="h-3.5 w-3.5 shrink-0 text-blue-600" />}
+                    value={cat ?? ""}
+                    options={[
+                      { key: "", label: "All categories", count: items.length },
+                      ...categories.map((c) => ({ key: c.id, label: c.name, count: c.count })),
+                    ]}
+                    onChange={(k) => setCat(k || null)}
+                    className={brands.length ? "" : "col-span-2"}
+                    menuClass={brands.length ? "right-auto w-[calc(200%+0.5rem)]" : ""}
+                  />
+                )}
+                {brands.length > 0 && (
+                  <PickMenu
+                    label="Brand"
+                    icon={<Tag className="h-3.5 w-3.5 shrink-0 text-blue-600" />}
+                    value={brandId ?? ""}
+                    options={[
+                      { key: "", label: "All brands" },
+                      ...brands.map((b) => ({ key: b.id, label: b.name, count: b.count, logo: b.logoUrl })),
+                    ]}
+                    onChange={(k) => setBrandId(k || null)}
+                    className={categories.length ? "" : "col-span-2"}
+                    menuClass={categories.length ? "left-auto w-[calc(200%+0.5rem)]" : ""}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* Category filter chips (tablet & desktop) */}
             {categories.length > 0 && (
-              <div className="flex flex-wrap items-center gap-1.5">
+              <div className="hidden flex-wrap items-center gap-1.5 sm:flex">
                 <span className="mr-1 text-[12.5px] font-bold uppercase tracking-wider text-(--s-muted)">Category:</span>
                 <button
                   type="button"
@@ -361,9 +433,9 @@ export function QuickOrder({
               </div>
             )}
 
-            {/* Brand filter chips */}
+            {/* Brand filter chips (tablet & desktop) */}
             {brands.length > 0 && (
-              <div className="flex flex-wrap items-center gap-1.5 border-t border-(--s-line) pt-3">
+              <div className="hidden flex-wrap items-center gap-1.5 border-t border-(--s-line) pt-3 sm:flex">
                 <span className="mr-1 text-[12.5px] font-bold uppercase tracking-wider text-(--s-muted)">Brand:</span>
                 <button
                   type="button"
@@ -405,7 +477,7 @@ export function QuickOrder({
           </div>
 
           {/* Items Table */}
-          <div className="overflow-hidden rounded-3xl border border-(--s-line) bg-(--s-surface) shadow-[0_4px_20px_-6px_rgba(15,23,42,0.06)]">
+          <div className="overflow-hidden rounded-2xl border border-(--s-line) bg-(--s-surface) shadow-[0_4px_20px_-6px_rgba(15,23,42,0.06)] md:rounded-3xl">
             {filtered.length > 0 ? (
               <div ref={tableBox} className="scroll-mt-32 overflow-x-auto">
                 <table className="w-full border-collapse text-left">
@@ -452,7 +524,7 @@ export function QuickOrder({
                       return (
                         <tr
                           key={h.id}
-                          className={`block transition md:table-row ${
+                          className={`grid grid-cols-[1fr_auto] items-center transition md:table-row ${
                             have > 0 ? "bg-blue-500/[0.04]" : "hover:bg-(--s-soft)/40"
                           }`}
                         >
@@ -486,7 +558,7 @@ export function QuickOrder({
                           </td>
 
                           {/* Item Description (plus mobile compact header) */}
-                          <td className="block px-4 pt-3.5 pb-2 align-middle md:table-cell md:px-3 md:py-3.5">
+                          <td className="col-span-2 block px-3 pt-3 pb-2 align-middle sm:px-4 md:table-cell md:px-3 md:py-3.5">
                             <div className="flex items-center gap-3 md:block">
                               {/* Mobile thumbnail */}
                               <button
@@ -564,14 +636,14 @@ export function QuickOrder({
                           </td>
 
                           {/* Quantity cell */}
-                          <td className="inline-block pl-4 pb-3.5 align-middle md:table-cell md:px-3 md:py-3.5 md:text-center">
+                          <td className="block pb-3 pl-[80px] align-middle sm:pl-[84px] md:table-cell md:px-3 md:py-3.5 md:text-center">
                             {h.available && h.price ? (
-                              <div className="inline-flex h-9 items-center rounded-xl border border-(--s-line) bg-(--s-bg)">
+                              <div className="inline-flex h-10 items-center rounded-xl border border-(--s-line) bg-(--s-bg) md:h-9">
                                 <button
                                   type="button"
                                   aria-label="Less"
                                   onClick={() => setQtys((x) => ({ ...x, [h.id]: clamp(qtyFor(h.id) - 1) }))}
-                                  className="flex h-full w-8 cursor-pointer items-center justify-center rounded-l-xl text-(--s-ink-2) transition hover:bg-(--s-soft) hover:text-(--s-ink)"
+                                  className="flex h-full w-9 cursor-pointer items-center justify-center rounded-l-xl md:w-8 text-(--s-ink-2) transition hover:bg-(--s-soft) hover:text-(--s-ink)"
                                 >
                                   <Minus className="h-3.5 w-3.5" />
                                 </button>
@@ -586,7 +658,7 @@ export function QuickOrder({
                                   type="button"
                                   aria-label="More"
                                   onClick={() => setQtys((x) => ({ ...x, [h.id]: clamp(qtyFor(h.id) + 1) }))}
-                                  className="flex h-full w-8 cursor-pointer items-center justify-center rounded-r-xl text-(--s-ink-2) transition hover:bg-(--s-soft) hover:text-(--s-ink)"
+                                  className="flex h-full w-9 cursor-pointer items-center justify-center rounded-r-xl md:w-8 text-(--s-ink-2) transition hover:bg-(--s-soft) hover:text-(--s-ink)"
                                 >
                                   <Plus className="h-3.5 w-3.5" />
                                 </button>
@@ -595,12 +667,12 @@ export function QuickOrder({
                           </td>
 
                           {/* Action cell */}
-                          <td className="inline-block pl-2 pr-4 pb-3.5 text-right align-middle md:table-cell md:py-3.5 md:pl-2 md:pr-5">
+                          <td className="block pb-3 pl-2 pr-3 text-right sm:pr-4 align-middle md:table-cell md:py-3.5 md:pl-2 md:pr-5">
                             {h.available && h.price ? (
                               <button
                                 type="button"
                                 onClick={() => addHit(h)}
-                                className="inline-flex h-9 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 px-4 text-xs font-bold text-white shadow-[0_3px_10px_-2px_rgba(37,99,235,0.4)] transition hover:brightness-110 active:scale-[0.98] md:min-w-[108px] md:text-[14px]"
+                                className="inline-flex h-10 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 px-4 text-[13px] md:h-9 font-bold text-white shadow-[0_3px_10px_-2px_rgba(37,99,235,0.4)] transition hover:brightness-110 active:scale-[0.98] md:min-w-[108px] md:text-[14px]"
                               >
                                 <Plus className="h-3.5 w-3.5 stroke-[2.5]" /> {have ? "Add more" : "Add"}
                               </button>
@@ -709,9 +781,12 @@ export function QuickOrder({
           </div>
         </div>
 
-        {/* ---------- Right: my list (hidden while empty) ---------- */}
-        {hasList && (
-        <aside id="my-list" className="h-fit scroll-mt-24 lg:sticky lg:top-32">
+        {/* ---------- Right: my list (desktop: hidden while empty; phones: its own tab) ---------- */}
+        {(hasList || tab === "list") && (
+        <aside
+          id="my-list"
+          className={`h-fit scroll-mt-24 lg:sticky lg:top-32 ${tab === "list" ? "" : "hidden"} ${hasList ? "lg:block" : "lg:hidden"}`}
+        >
           <div className="overflow-hidden rounded-3xl border border-(--s-line) bg-(--s-surface) shadow-[0_8px_30px_-10px_rgba(15,23,42,0.08)]">
             <div className="flex items-center justify-between border-b border-(--s-line) bg-(--s-soft)/50 px-5 py-4">
               <h2 className="flex items-center gap-2 text-base font-extrabold text-(--s-ink)">
@@ -744,6 +819,13 @@ export function QuickOrder({
                 </span>
                 <p className="mt-3 text-sm font-semibold text-(--s-ink)">Your list is empty</p>
                 <p className="mt-1 text-xs text-(--s-muted)">Pick items from the table and press Add.</p>
+                <button
+                  type="button"
+                  onClick={() => showTab("items")}
+                  className="mt-4 cursor-pointer rounded-full bg-blue-600 px-5 py-2 text-xs font-bold text-white hover:bg-blue-700 lg:hidden"
+                >
+                  Browse items
+                </button>
               </div>
             ) : (
               <ul className="max-h-[48vh] divide-y divide-(--s-line) overflow-y-auto">
@@ -805,6 +887,17 @@ export function QuickOrder({
                         </div>
                         <span className="text-sm font-extrabold text-(--s-ink)">{l.available ? rs(l.lineTotal) : "Call us"}</span>
                       </div>
+                      {(l.others?.length ?? 0) > 0 && (
+                        <div className="mt-3">
+                          <BrandCompare
+                            line={{ brand: l.brand, price: l.price, others: l.others! }}
+                            qty={qty}
+                            onSwitch={(id) => replace(l.id, id)}
+                            href={href}
+                            where="In your list"
+                          />
+                        </div>
+                      )}
                     </li>
                   );
                 })}
@@ -845,16 +938,17 @@ export function QuickOrder({
       </div>
 
       {/* Phones: list summary always visible above the bottom bar */}
-      {count > 0 && (
-        <a
-          href="#my-list"
-          className="fixed inset-x-3 bottom-[4.5rem] z-30 flex items-center justify-between rounded-2xl bg-gradient-to-r from-blue-600 to-blue-500 px-4 py-3 text-sm text-white shadow-xl lg:hidden"
+      {count > 0 && tab === "items" && (
+        <button
+          type="button"
+          onClick={() => showTab("list")}
+          className="fixed cursor-pointer inset-x-3 bottom-[4.5rem] z-30 flex items-center justify-between rounded-2xl bg-gradient-to-r from-blue-600 to-blue-500 px-4 py-3 text-sm text-white shadow-xl lg:hidden"
         >
           <span className="flex items-center gap-2 font-bold">
             <ListChecks className="h-4 w-4" /> My list · {count} item{count === 1 ? "" : "s"}
           </span>
-          <span className="font-extrabold">{rs(list?.subtotal || 0)} ↓</span>
-        </a>
+          <span className="font-extrabold">{rs(list?.subtotal || 0)} →</span>
+        </button>
       )}
 
       {/* Easy Full-Image Lightbox Preview when clicking any item photo */}
@@ -895,6 +989,132 @@ export function QuickOrder({
             </div>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+type PickOption = { key: string; label: string; count?: number; logo?: string | null };
+
+/** Sort picker: a styled menu instead of the browser's plain dropdown (full width on phones). */
+function SortMenu({ value, onChange }: { value: SortKey; onChange: (k: SortKey) => void }) {
+  return (
+    <PickMenu
+      label="Sort items"
+      icon={<ArrowUpDown className="h-3.5 w-3.5 shrink-0 text-blue-600" />}
+      value={value}
+      options={SORT_OPTIONS}
+      onChange={(k) => onChange(k as SortKey)}
+      className="flex-1 sm:flex-none"
+      buttonClass="sm:w-auto sm:min-w-[200px]"
+      menuClass="sm:left-auto sm:right-0 sm:w-60"
+      highlightActive={false}
+    />
+  );
+}
+
+/** A styled pick-one menu (used for sort, and for category / brand on phones). */
+function PickMenu({
+  label,
+  icon,
+  value,
+  options,
+  onChange,
+  className = "",
+  buttonClass = "",
+  menuClass = "",
+  highlightActive = true,
+}: {
+  label: string;
+  icon?: React.ReactNode;
+  value: string;
+  options: PickOption[];
+  onChange: (key: string) => void;
+  className?: string;
+  buttonClass?: string;
+  menuClass?: string;
+  highlightActive?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const current = options.find((o) => o.key === value) ?? options[0];
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent | TouchEvent) => {
+      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", close);
+    document.addEventListener("touchstart", close);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("touchstart", close);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  // A filter that is set (not "All") shows in blue so people see it is on.
+  const active = highlightActive && value !== options[0]?.key;
+
+  return (
+    <div ref={box} className={`relative min-w-0 ${className}`}>
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={label}
+        onClick={() => setOpen((o) => !o)}
+        className={`flex h-11 w-full cursor-pointer items-center gap-2 rounded-2xl border pl-3.5 pr-3 text-[14px] font-bold outline-none transition ${
+          open
+            ? "border-blue-600 bg-(--s-bg) text-(--s-ink) ring-4 ring-blue-500/15"
+            : active
+              ? "border-blue-500/40 bg-blue-500/10 text-blue-600"
+              : "border-(--s-line) bg-(--s-bg) text-(--s-ink) hover:border-blue-500/40"
+        } ${buttonClass}`}
+      >
+        {icon}
+        <span className="truncate">{current?.label}</span>
+        <ChevronDown className={`ml-auto h-4 w-4 shrink-0 text-(--s-muted) transition ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <ul
+          role="listbox"
+          className={`absolute inset-x-0 top-full z-40 mt-1.5 max-h-[60vh] overflow-y-auto rounded-2xl border border-(--s-line) bg-(--s-surface) p-1.5 shadow-[0_12px_40px_-8px_rgba(15,23,42,0.25)] ${menuClass}`}
+        >
+          {options.map((o) => {
+            const on = o.key === value;
+            return (
+              <li key={o.key}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={on}
+                  onClick={() => {
+                    onChange(o.key);
+                    setOpen(false);
+                  }}
+                  className={`flex w-full cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-[14px] transition ${
+                    on ? "bg-blue-500/10 font-bold text-blue-600" : "font-medium text-(--s-ink-2) hover:bg-(--s-soft) hover:text-(--s-ink)"
+                  }`}
+                >
+                  {o.logo && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={o.logo} alt="" className="h-4 max-w-12 shrink-0 rounded-xs bg-white px-0.5 object-contain" />
+                  )}
+                  <span className="min-w-0 flex-1 truncate">{o.label}</span>
+                  {o.count !== undefined && (
+                    <span className={`shrink-0 rounded-full px-1.5 text-[12px] font-bold ${on ? "bg-blue-600 text-white" : "bg-(--s-soft) text-(--s-muted)"}`}>
+                      {o.count}
+                    </span>
+                  )}
+                  {on && <Check className="h-4 w-4 shrink-0 stroke-[2.5]" />}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );
