@@ -25,6 +25,8 @@ type Line = {
   qty: number;
   lineTotal: number;
   others: Other[];
+  option?: string | null;
+  group?: string | null;
 };
 type Other = CompareOther;
 type Priced = {
@@ -38,7 +40,7 @@ type Priced = {
 };
 
 export function CartView() {
-  const { cart, ready, href, setQty, remove, replace, store, t } = useShop();
+  const { cart, ready, href, setQty, remove, replaceMany, store, t } = useShop();
   const [data, setData] = useState<Priced | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -184,7 +186,7 @@ export function CartView() {
                   </div>
                 </div>
               </div>
-              {l.others?.length > 0 && <BrandCompare line={l} qty={q} onSwitch={(id) => replace(l.id, id)} href={href} />}
+              {l.others?.length > 0 && <BrandCompare line={{ ...l, qty: q }} lines={lines} onSwitch={(pairs) => replaceMany(pairs)} href={href} />}
             </div>
           ); })}
         </div>

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { deliveryFee, getDeliveryInfo, getProducts } from "@/lib/shop-data";
-import { getAlternatives } from "@/lib/web-compare";
+import { getAlternatives, getLineMeta } from "@/lib/web-compare";
 
 const schema = z.object({
   items: z
@@ -26,7 +26,11 @@ export async function POST(request: NextRequest) {
     const [all, delivery] = await Promise.all([getProducts(), getDeliveryInfo()]);
     const products = all.filter((p) => ids.includes(p.id));
     const byId = new Map(products.map((p) => [p.id, p]));
-    const others = await getAlternatives(products.map((p) => p.id), all).catch(() => ({}) as Awaited<ReturnType<typeof getAlternatives>>);
+    const pIds = products.map((p) => p.id);
+    const [others, meta] = await Promise.all([
+      getAlternatives(pIds, all).catch(() => ({}) as Awaited<ReturnType<typeof getAlternatives>>),
+      getLineMeta(pIds, all).catch(() => ({}) as Awaited<ReturnType<typeof getLineMeta>>),
+    ]);
 
     const lines = body.items
       .filter((i) => byId.has(i.id))
@@ -48,6 +52,9 @@ export async function POST(request: NextRequest) {
           lineTotal: p.available ? p.price * i.qty : 0,
           /** Same item from other brands, cheapest first. */
           others: others[p.id] || [],
+          /** Range / brand option ("Akoya Black") and type of item ("Switches & Sockets"). */
+          option: meta[p.id]?.option ?? null,
+          group: meta[p.id]?.group ?? null,
         };
       });
     const subtotal = lines.reduce((s, l) => s + l.lineTotal, 0);

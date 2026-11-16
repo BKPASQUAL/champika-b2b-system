@@ -69,6 +69,8 @@ type Line = {
   available: boolean;
   /** Same item from other brands (cheapest first). */
   others?: CompareOther[];
+  option?: string | null;
+  group?: string | null;
 };
 
 type SortKey = "popular" | "name_asc" | "name_desc" | "brand_asc" | "price_asc" | "price_desc" | "discount_desc";
@@ -100,7 +102,7 @@ export function QuickOrder({
   brands?: QuickOrderBrand[];
   items?: QuickOrderItem[];
 }) {
-  const { cart, ready, add, setQty, remove, clear, replace, href } = useShop();
+  const { cart, ready, add, setQty, remove, clear, replaceMany, href } = useShop();
   const input = useRef<HTMLInputElement>(null);
 
   const [q, setQ] = useState("");
@@ -237,6 +239,7 @@ export function QuickOrder({
   const count = cart.reduce((s, l) => s + l.qty, 0);
   const hasList = ready && count > 0;
   const lines = list?.lines || [];
+  const compareLines = lines.map((l) => ({ ...l, others: l.others || [] }));
 
   return (
     <div className="mx-auto px-3 pt-4 pb-32 sm:px-4 md:px-6 md:py-8 lg:pb-8 xl:px-10">
@@ -890,9 +893,9 @@ export function QuickOrder({
                       {(l.others?.length ?? 0) > 0 && (
                         <div className="mt-3">
                           <BrandCompare
-                            line={{ brand: l.brand, price: l.price, others: l.others! }}
-                            qty={qty}
-                            onSwitch={(id) => replace(l.id, id)}
+                            line={{ ...l, qty, others: l.others! }}
+                            lines={compareLines}
+                            onSwitch={(pairs) => replaceMany(pairs)}
                             href={href}
                             where="In your list"
                           />

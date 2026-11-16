@@ -228,18 +228,32 @@ export function CompareBrands() {
 
   /** Switch a section's items to one option (or the cheapest for each item). */
   const switchTo = (sec: Section, option: string) => {
+    const { pairs, nextByOldId } = switchPlan([{ sec, option }]);
+    if (!pairs.length) return toast.info("Your cart already uses these items");
+    applySwitch(pairs, nextByOldId);
+    toast.success(option === BEST ? `${sec.name}: switched to the best price for each item` : `${sec.name}: switched to ${option}`, {
+      description: `${itemsWord(pairs.length)} changed`,
+    });
+  };
+
+  /** Cart swaps for moving each section to an option (one list, so the cart is saved once). */
+  const switchPlan = (moves: { sec: Section; option: string }[]) => {
     const pairs: [string, string][] = [];
     const nextByOldId = new Map<string, { id: string; brand: string }>();
-    for (const r of sec.sum.rows) {
-      const best = option === BEST ? bestOf(r) : undefined;
-      const targetBrand = option === BEST ? best?.[0] : option;
-      const target = option === BEST ? best?.[1] : r.cells[option];
-      if (target?.available && targetBrand && target.id !== r.cartId) {
-        pairs.push([r.cartId, target.id]);
-        nextByOldId.set(r.cartId, { id: target.id, brand: targetBrand });
+    for (const { sec, option } of moves)
+      for (const r of sec.sum.rows) {
+        const best = option === BEST ? bestOf(r) : undefined;
+        const targetBrand = option === BEST ? best?.[0] : option;
+        const target = option === BEST ? best?.[1] : r.cells[option];
+        if (target?.available && targetBrand && target.id !== r.cartId) {
+          pairs.push([r.cartId, target.id]);
+          nextByOldId.set(r.cartId, { id: target.id, brand: targetBrand });
+        }
       }
-    }
-    if (!pairs.length) return toast.info("Your cart already uses these items");
+    return { pairs, nextByOldId };
+  };
+
+  const applySwitch = (pairs: [string, string][], nextByOldId: Map<string, { id: string; brand: string }>) => {
     setData((prev) =>
       prev
         ? {
@@ -252,10 +266,31 @@ export function CompareBrands() {
         : prev,
     );
     replaceMany(pairs);
-    toast.success(option === BEST ? `${sec.name}: switched to the best price for each item` : `${sec.name}: switched to ${option}`, {
-      description: `${itemsWord(pairs.length)} changed`,
-    });
   };
+
+  /** Shop header height (the summary bar docks right under it) and whether the bar is docked now. */
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const [headerH, setHeaderH] = useState(72);
+  const [stuck, setStuck] = useState(false);
+  const hasBar = Boolean(view && view.sections.length);
+  useEffect(() => {
+    const header = document.querySelector<HTMLElement>(".shop-root header");
+    if (!header) return;
+    const measure = () => setHeaderH(header.offsetHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(header);
+    return () => ro.disconnect();
+  }, []);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => setStuck(!e.isIntersecting && e.boundingClientRect.top <= headerH + 1), {
+      rootMargin: `-${headerH + 1}px 0px 0px 0px`,
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [headerH, hasBar]);
 
   /** Quotation PDF of the final list: download it, or share it (WhatsApp, email…) where the phone allows. */
   const quotePdf = async (mode: "download" | "share") => {
@@ -331,6 +366,22 @@ export function CompareBrands() {
 
   return (
     <div className="mx-auto px-4 py-8 md:px-6 xl:px-10">
+      {/* Phones: one type at a time, total + Checkout at the bottom */}
+      {view && (
+        <MobileCompare
+          view={view}
+          headerH={headerH}
+          error={error}
+          pdfBusy={pdfBusy}
+          href={href}
+          onSwitch={switchTo}
+          onDetails={(sec, opt) => setDetailTarget({ secName: sec.name, optionName: opt })}
+          onPdf={() => setPdfOpen(true)}
+        />
+      )}
+
+      {/* Tablets and computers */}
+      <div className="hidden md:block">
       {/* Title row */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -339,20 +390,78 @@ export function CompareBrands() {
           </Link>
           <h1 className="mt-2 text-2xl font-bold md:text-[30px]">Compare brands</h1>
           <p className="mt-1 max-w-2xl text-sm text-(--s-ink-2)">
-            Your list of {itemsWord(n)}, priced in each brand, range and colour. Each type of item is a separate choice — for example one brand for wires
-            and another range for switches.
+            Your list of {itemsWord(n)}, priced in each brand, range and colour. Pick one option for each type of item — so your switches and sockets
+            always match.
           </p>
         </div>
         <button
           onClick={() => setPdfOpen(true)}
           disabled={pdfBusy || !n}
-          className="inline-flex items-center gap-2 rounded-full bg-(--s-accent) px-6 py-3 text-sm font-bold text-(--s-accent-ink) shadow-[0_6px_18px_-6px_rgba(37,99,235,0.6)] transition hover:bg-(--s-accent-hover) disabled:opacity-50"
+          className="inline-flex h-11 items-center gap-2 rounded-xl border border-(--s-line) bg-(--s-surface) px-5 text-sm font-bold text-(--s-ink) transition hover:border-(--s-accent) hover:text-(--s-accent) disabled:opacity-50"
         >
           {pdfBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Download PDF
         </button>
       </div>
 
       {error && <div className="mt-4 rounded-lg border border-(--s-bad) px-4 py-3 text-sm text-(--s-bad)">{error}</div>}
+
+      {/* Summary bar: the customer's own picks and total. When scrolled it docks under the shop header as a slim strip. */}
+      {view && view.sections.length > 0 && (
+        <>
+          <div ref={sentinelRef} aria-hidden className="mt-6 h-0" />
+          <div
+            style={{ top: headerH }}
+            className={`sticky z-30 flex flex-wrap items-center gap-x-5 gap-y-2 border-(--s-line) transition-[padding,box-shadow,border-radius] duration-200 ${
+              stuck
+                ? "-mx-4 rounded-none border-b bg-(--s-surface)/95 px-4 py-2 shadow-[0_10px_24px_-18px_rgba(15,23,42,0.55)] backdrop-blur-md md:-mx-6 md:px-6 xl:-mx-10 xl:px-10"
+                : "rounded-2xl border bg-(--s-surface) px-4 py-3 sm:px-5"
+            }`}
+          >
+            {/* Your total (updates as you switch) */}
+            <div className="flex shrink-0 items-baseline gap-2">
+              <span className="text-[12px] font-semibold text-(--s-muted)">Your total</span>
+              <span className={`font-extrabold text-(--s-ink) ${stuck ? "text-[16px]" : "text-lg"}`}>{rs(view.cartTotal)}</span>
+            </div>
+
+            {/* What you picked for each type of item — tap to jump to it */}
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+              {view.sections.map((sec) => {
+                const picked = sec.sum.brands.find((b) => b.isCart);
+                return (
+                  <a
+                    key={sec.name}
+                    href={`#${sectionId(sec.name)}`}
+                    title={`Change ${sec.name}`}
+                    className="inline-flex h-7 max-w-full items-center gap-1 truncate rounded-full border border-(--s-line) bg-(--s-soft) px-2.5 text-[12.5px] text-(--s-ink-2) transition hover:border-(--s-accent) hover:text-(--s-accent)"
+                  >
+                    <span className="truncate">{sec.name}:</span>
+                    <strong className="truncate text-(--s-ink)">{picked ? picked.name : "Mixed"}</strong>
+                  </a>
+                );
+              })}
+            </div>
+
+            <div className="ml-auto flex items-center gap-2">
+              <Link
+                href={href("/cart")}
+                className={`items-center rounded-lg border border-(--s-line) px-3.5 text-sm font-semibold text-(--s-ink-2) transition hover:border-(--s-accent) hover:text-(--s-accent) ${
+                  stuck ? "hidden h-9 sm:inline-flex" : "inline-flex h-10"
+                }`}
+              >
+                Back to cart
+              </Link>
+              <Link
+                href={href("/checkout")}
+                className={`inline-flex items-center gap-1.5 rounded-lg bg-(--s-accent) px-4 text-sm font-bold text-(--s-accent-ink) transition hover:bg-(--s-accent-hover) ${
+                  stuck ? "h-9" : "h-10"
+                }`}
+              >
+                <Lock className="h-3.5 w-3.5" /> Checkout
+              </Link>
+            </div>
+          </div>
+        </>
+      )}
 
       {view && !view.sections.length && (
         <div className="mt-5 rounded-xl border border-(--s-line) bg-(--s-soft) px-4 py-3 text-sm text-(--s-ink-2)">
@@ -376,7 +485,7 @@ export function CompareBrands() {
 
       {/* Final list: everything as it is in the cart now */}
       {view && n > 0 && (
-        <section id="final-list" className="mt-12 scroll-mt-28">
+        <section id="final-list" className="mt-12 scroll-mt-48">
           <div className="flex flex-wrap items-end justify-between gap-3 border-b border-(--s-line) pb-3">
             <div className="flex items-center gap-3">
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-600 text-white">
@@ -493,6 +602,8 @@ export function CompareBrands() {
         <span>Prices include taxes. Delivery not included. Prices are for today.</span>
       </div>
 
+      </div>
+
       {pdfOpen && view && (
         <PdfDialog view={view} busy={pdfBusy} onClose={() => setPdfOpen(false)} onDownload={downloadPdf} />
       )}
@@ -512,6 +623,265 @@ export function CompareBrands() {
           />
         );
       })()}
+    </div>
+  );
+}
+
+/**
+ * Phone layout (below md): one type of item at a time, options as a tap-to-pick
+ * list, the picked option's item prices under it, and the total + Checkout
+ * pinned above the tab bar where the thumb is.
+ */
+function MobileCompare({
+  view,
+  headerH,
+  error,
+  pdfBusy,
+  href,
+  onSwitch,
+  onDetails,
+  onPdf,
+}: {
+  view: View;
+  headerH: number;
+  error: string | null;
+  pdfBusy: boolean;
+  href: (p: string) => string;
+  onSwitch: (sec: Section, option: string) => void;
+  onDetails: (sec: Section, option: string) => void;
+  onPdf: () => void;
+}) {
+  const [active, setActive] = useState(0);
+  const [navH, setNavH] = useState(60);
+  const listTop = useRef<HTMLDivElement>(null);
+
+  // The shop's bottom tab bar: the action bar sits right on top of it.
+  useEffect(() => {
+    const nav = document.querySelector<HTMLElement>(".shop-root nav.fixed.bottom-0");
+    if (!nav) return;
+    const measure = () => setNavH(nav.offsetHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(nav);
+    return () => ro.disconnect();
+  }, []);
+
+  const secs = view.sections;
+  const idx = Math.min(active, Math.max(0, secs.length - 1));
+  const sec = secs[idx];
+  const m = sec?.sum.rows.length ?? 0;
+  const picked = sec?.sum.brands.find((b) => b.isCart);
+  const next = secs[idx + 1];
+
+  const open = (i: number) => {
+    setActive(i);
+    listTop.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  return (
+    <div className="-mx-4 -mt-8 md:hidden">
+      {/* Top bar: back · title · PDF */}
+      <div className="flex items-center gap-1 border-b border-(--s-line) bg-(--s-surface) px-1.5 py-1.5">
+        <Link href={href("/cart")} aria-label="Back to cart" className="flex h-11 w-11 items-center justify-center rounded-xl text-(--s-ink) hover:bg-(--s-soft)">
+          <ArrowLeft className="h-5 w-5" />
+        </Link>
+        <div className="min-w-0 flex-1">
+          <h1 className="text-[17px] font-extrabold leading-tight">Compare brands</h1>
+          <p className="truncate text-[12px] text-(--s-muted)">Pick one brand for each type of item</p>
+        </div>
+        <button
+          type="button"
+          onClick={onPdf}
+          disabled={pdfBusy}
+          aria-label="Download PDF"
+          className="flex h-11 w-11 items-center justify-center rounded-xl text-(--s-ink-2) hover:bg-(--s-soft) disabled:opacity-50"
+        >
+          {pdfBusy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}
+        </button>
+      </div>
+
+      {/* Steps: one type of item at a time; each shows what is picked. Sticks under the shop header. */}
+      {secs.length > 0 && (
+        <div
+          ref={listTop}
+          style={{ top: headerH, scrollMarginTop: headerH }}
+          className="sticky z-20 flex gap-2 overflow-x-auto border-b border-(--s-line) bg-(--s-surface) px-3 py-2.5 [scrollbar-width:none]"
+        >
+          {secs.map((s, i) => {
+            const on = i === idx;
+            const p = s.sum.brands.find((b) => b.isCart);
+            return (
+              <button
+                key={s.name}
+                type="button"
+                onClick={() => open(i)}
+                aria-pressed={on}
+                className={`flex min-h-12 min-w-0 shrink-0 items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-left ${
+                  secs.length <= 2 ? "flex-1 basis-0" : "basis-[62%]"
+                } ${on ? "border-[1.5px] border-(--s-accent) bg-(--s-accent-soft)" : "border border-(--s-line) bg-(--s-soft)"}`}
+              >
+                <span
+                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[12px] font-extrabold ${
+                    on ? "bg-(--s-accent) text-(--s-accent-ink)" : "bg-(--s-line) text-(--s-ink-2)"
+                  }`}
+                >
+                  {i + 1}
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-[11.5px] font-semibold text-(--s-muted)">{s.name}</span>
+                  <span className="block truncate text-[13.5px] font-extrabold text-(--s-ink)">{p ? p.name : "Mixed"}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="space-y-3 px-3 pt-4" style={{ paddingBottom: navH + 96 }}>
+        {error && <div className="rounded-lg border border-(--s-bad) px-4 py-3 text-sm text-(--s-bad)">{error}</div>}
+
+        {!sec && (
+          <div className="rounded-xl border border-(--s-line) bg-(--s-soft) px-4 py-3 text-sm text-(--s-ink-2)">
+            We could not find these items in other brands yet. You can still download your list as a PDF.
+          </div>
+        )}
+
+        {sec && (
+          <>
+            <div className="px-1">
+              <h2 className="text-xl font-extrabold">{sec.name}</h2>
+              <p className="mt-0.5 text-[13.5px] leading-snug text-(--s-muted)">
+                {m === 1
+                  ? "1 item in your cart. Tap a brand to switch — prices are for your quantity."
+                  : `Your ${m} ${sec.name.toLowerCase()} change together, so they always match.`}
+              </p>
+              {!picked && (
+                <p className="mt-2 rounded-lg bg-amber-500/10 px-3 py-2 text-[13px] font-semibold text-amber-800 dark:text-amber-200">
+                  Your items are in different ranges. Pick one below to make them match.
+                </p>
+              )}
+            </div>
+
+            {/* Options: tap a row to pick it */}
+            <div className="overflow-hidden rounded-2xl border border-(--s-line) bg-(--s-surface)">
+              {sec.sum.brands.map((b, i) => {
+                const meta = parseOptionMeta(b.name, b.maker);
+                const diff = b.total - sec.sum.cartTotal;
+                return (
+                  <div key={b.name} className={`${i ? "border-t border-(--s-line)" : ""} ${b.isCart ? "bg-(--s-accent-soft)" : ""}`}>
+                    <button
+                      type="button"
+                      onClick={() => !b.isCart && onSwitch(sec, b.name)}
+                      aria-pressed={b.isCart}
+                      className="flex min-h-[68px] w-full items-center gap-3 px-3.5 py-3 text-left"
+                    >
+                      <span
+                        className={`flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border-2 bg-(--s-surface) ${
+                          b.isCart ? "border-(--s-accent)" : "border-slate-400"
+                        }`}
+                      >
+                        {b.isCart && <span className="h-2.5 w-2.5 rounded-full bg-(--s-accent)" />}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[11px] font-bold uppercase tracking-wider text-(--s-muted)">
+                          {meta.isSubBrand ? `${b.maker} · ${meta.subBrand} range` : "Brand"}
+                        </span>
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          {meta.swatch && (
+                            <span
+                              className="h-[11px] w-[11px] shrink-0 rounded-full"
+                              style={{ backgroundColor: meta.swatch.bg, boxShadow: `0 0 0 1px ${meta.swatch.ring}` }}
+                            />
+                          )}
+                          <span className="truncate text-base font-extrabold text-(--s-ink)">{b.name}</span>
+                        </span>
+                        {b.covered < m && (
+                          <span className="block text-[12px] font-semibold text-amber-700 dark:text-amber-300">
+                            Has {b.covered} of {itemsWord(m)}
+                          </span>
+                        )}
+                      </span>
+                      <span className="flex shrink-0 flex-col items-end">
+                        <span className="text-base font-extrabold text-(--s-ink)">{rs(b.total)}</span>
+                        <span
+                          className={`text-[12.5px] font-bold ${
+                            b.isCart ? "text-(--s-accent)" : diff < 0 ? "text-emerald-700 dark:text-emerald-300" : "text-(--s-muted)"
+                          }`}
+                        >
+                          {b.isCart ? "Selected" : Math.round(diff) === 0 ? "Same price" : diff < 0 ? `${rs(-diff)} less` : `${rs(diff)} more`}
+                        </span>
+                      </span>
+                    </button>
+
+                    {/* What you get with the picked option */}
+                    {b.isCart && (
+                      <div className="mb-3.5 ml-12 mr-3.5 space-y-2 rounded-xl border border-(--s-accent)/20 bg-(--s-surface) px-3 py-2.5">
+                        {sec.sum.rows.map((r) => {
+                          const c = r.cells[b.name];
+                          return (
+                            <div key={r.cartId} className="flex items-baseline justify-between gap-2.5 text-[13px]">
+                              <span className="min-w-0 text-(--s-ink-2)">
+                                {r.label} <span className="text-(--s-muted)">× {r.qty}</span>
+                              </span>
+                              <span className="shrink-0 font-bold">
+                                {c?.available ? rs(c.price * r.qty) : <span className="text-[12px] font-medium text-(--s-muted)">Not in range</span>}
+                              </span>
+                            </div>
+                          );
+                        })}
+                        <button
+                          type="button"
+                          onClick={() => onDetails(sec, b.name)}
+                          className="inline-flex min-h-9 items-center gap-1.5 text-[13px] font-semibold text-(--s-accent)"
+                        >
+                          <Eye className="h-4 w-4" /> See photos &amp; brand details
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {next && (
+              <button
+                type="button"
+                onClick={() => open(idx + 1)}
+                className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-(--s-line) bg-(--s-surface) text-[15px] font-bold text-(--s-ink)"
+              >
+                Next: {next.name} <ArrowRight className="h-4 w-4" />
+              </button>
+            )}
+          </>
+        )}
+
+        {view.others.length > 0 && (
+          <div className="flex items-center justify-between gap-3 rounded-2xl bg-(--s-soft) px-3.5 py-3 text-[13px] text-(--s-ink-2)">
+            <span>Other items in your cart ({view.others.length}) · one brand only</span>
+            <span className="shrink-0 font-bold text-(--s-ink)">{rs(view.othersTotal)}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Total + Checkout, pinned right above the tab bar */}
+      <div
+        style={{ bottom: navH }}
+        className="fixed inset-x-0 z-30 flex items-center gap-3 border-t border-(--s-line) bg-(--s-surface) px-3.5 py-3 shadow-[0_-8px_20px_-16px_rgba(15,23,42,0.45)] md:hidden"
+      >
+        <div>
+          <div className="text-[12px] font-semibold text-(--s-muted)">Your total</div>
+          <div className="text-xl font-extrabold leading-tight">{rs(view.cartTotal)}</div>
+        </div>
+        <Link
+          href={href("/checkout")}
+          aria-disabled={!view.cartTotal}
+          className={`flex h-[52px] flex-1 items-center justify-center gap-2 rounded-2xl bg-(--s-accent) text-base font-extrabold text-(--s-accent-ink) ${
+            view.cartTotal ? "" : "pointer-events-none opacity-50"
+          }`}
+        >
+          <Lock className="h-4 w-4" /> Checkout
+        </Link>
+      </div>
     </div>
   );
 }
@@ -537,9 +907,10 @@ function SectionBlock({
   const { sum } = sec;
   const m = sum.rows.length;
   const tableBrands = sum.brands.filter((b) => shown.includes(b.name));
+  const picked = sum.brands.find((b) => b.isCart);
 
   return (
-    <section id={sectionId(sec.name)} className="mt-10 scroll-mt-28">
+    <section id={sectionId(sec.name)} className="mt-10 scroll-mt-48">
       {/* Section title */}
       <div className="flex flex-wrap items-end justify-between gap-3 border-b border-(--s-line) pb-3">
         <div className="flex items-center gap-3">
@@ -554,52 +925,43 @@ function SectionBlock({
           </div>
         </div>
         <div className="text-right">
-          <div className="text-xs text-(--s-muted)">In your cart now</div>
+          <div className="text-xs text-(--s-muted)">
+            Picked: <strong className="text-(--s-ink)">{picked ? (picked.maker !== picked.name ? `${picked.maker} ${picked.name}` : picked.name) : "Mixed ranges"}</strong>
+          </div>
           <div className="text-lg font-bold">{rs(sum.cartTotal)}</div>
         </div>
       </div>
 
-      {/* Option cards: brand, sub-brand/range, colour swatch, item thumbnails & View Details */}
+      {/* Option cards: brand, sub-brand/range, colour swatch & price */}
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         {sum.brands.map((b) => {
           const info = resolveBrandAndRangeInfo(b.name, b.maker, brandLogos);
           return (
             <div
               key={b.name}
-              className={`group/card flex flex-col justify-between rounded-xl border p-3 transition ${
+              className={`group/card flex flex-col justify-between rounded-2xl border p-3.5 transition ${
                 b.isCart
-                  ? "border-(--s-accent) bg-(--s-accent-soft) shadow-[0_8px_22px_-10px_rgba(37,99,235,0.55)] ring-1 ring-(--s-accent)"
+                  ? "border-(--s-accent) bg-(--s-accent-soft) shadow-[0_10px_24px_-14px_rgba(37,99,235,0.7)] ring-1 ring-(--s-accent)"
                   : "border-(--s-line) bg-(--s-surface) hover:border-blue-500/40 hover:shadow-md"
               }`}
             >
               <div>
-                <OptionName b={b} m={m} brandLogos={brandLogos} onViewDetails={() => onViewDetails(b.name)} />
+                <OptionName b={b} brandLogos={brandLogos} onViewDetails={() => onViewDetails(b.name)} />
 
-                {/* Range & colour pills, with the Details button on the right */}
-                <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[12.5px]">
-                  {info.isSubBrand && (
-                    <span className="rounded bg-(--s-soft) px-1.5 py-0.5 font-semibold text-(--s-ink-2)">
-                      Range: <strong className="text-(--s-ink)">{info.subBrand}</strong>
-                    </span>
-                  )}
-                  {info.swatch && (
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-(--s-line) bg-(--s-surface) px-2 py-0.5 font-semibold text-(--s-ink)">
-                      <span
-                        className="h-2.5 w-2.5 rounded-full shadow-xs"
-                        style={{ backgroundColor: info.swatch.bg, boxShadow: `0 0 0 1px ${info.swatch.ring}` }}
-                      />
-                      {info.swatch.label}
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => onViewDetails(b.name)}
-                    title={`View ${b.name} items and prices`}
-                    className="ml-auto inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[12px] font-bold text-slate-700 transition hover:bg-blue-600 hover:text-white"
-                  >
-                    <Eye className="h-3 w-3" /> Details
-                  </button>
-                </div>
+                {/* Range & colour pills (only when there is a range or colour) */}
+                {(info.isSubBrand || info.swatch) && (
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[12px]">
+                    {info.isSubBrand && (
+                      <span className="rounded-full bg-(--s-soft) px-2 py-0.5 font-semibold text-(--s-ink-2)">{info.subBrand} range</span>
+                    )}
+                    {info.swatch && (
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-(--s-line) bg-(--s-surface) px-2 py-0.5 font-semibold text-(--s-ink)">
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: info.swatch.bg, boxShadow: `0 0 0 1px ${info.swatch.ring}` }} />
+                        {info.swatch.label}
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 {/* Brand / Sub-brand description snippet from Admin panel */}
                 {info.summaryDescription && (
@@ -609,24 +971,41 @@ function SectionBlock({
                 )}
               </div>
 
-              <div className="mt-3 pt-2 border-t border-(--s-line)/60">
-                <div className="flex flex-wrap items-center justify-between gap-x-1.5 gap-y-1">
-                  <span className="text-[16px] font-extrabold leading-none">{rs(b.total)}</span>
+              {/* Price, then Switch + Details on one line (same place on every card) */}
+              <div className="mt-3 border-t border-(--s-line)/60 pt-2.5">
+                <div className="flex items-end justify-between gap-1.5">
+                  <div className="min-w-0">
+                    <div className={`text-[11.5px] font-medium ${b.covered === m ? "text-(--s-muted)" : "text-amber-700 dark:text-amber-300"}`}>
+                      {b.covered === m ? (m === 1 ? "Has this item" : `Has all ${m} items`) : `Has ${b.covered} of ${m} items`}
+                    </div>
+                    <div className="text-[17px] font-extrabold leading-tight">{rs(b.total)}</div>
+                  </div>
                   {!b.isCart && <DiffChip diff={b.total - sum.cartTotal} />}
                 </div>
-                {b.isCart ? (
-                  <span className="mt-2.5 inline-flex h-8 w-full items-center justify-center gap-1 rounded-lg bg-(--s-accent) text-[12.5px] font-bold text-(--s-accent-ink)">
-                    <Check className="h-3.5 w-3.5" /> Selected · in your cart
-                  </span>
-                ) : (
+                <div className="mt-2.5 flex gap-1.5">
+                  {b.isCart ? (
+                    <span className="inline-flex h-9 min-w-0 flex-1 items-center justify-center gap-1 truncate rounded-lg bg-(--s-accent) px-2 text-[13px] font-bold text-(--s-accent-ink)">
+                      <Check className="h-3.5 w-3.5 shrink-0" /> In your cart
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => onSwitch(b.name)}
+                      title={`Switch to ${b.name}`}
+                      className="h-9 min-w-0 flex-1 truncate rounded-lg bg-(--s-btn) px-2.5 text-[13px] font-bold text-(--s-btn-ink) transition hover:bg-(--s-accent) hover:text-(--s-accent-ink)"
+                    >
+                      Switch to this
+                    </button>
+                  )}
                   <button
-                    onClick={() => onSwitch(b.name)}
-                    title={`Switch to ${b.name}`}
-                    className="mt-2.5 h-8 w-full truncate rounded-lg bg-(--s-btn) px-2.5 text-[12.5px] font-semibold text-(--s-btn-ink) transition hover:bg-(--s-accent) hover:text-(--s-accent-ink)"
+                    type="button"
+                    onClick={() => onViewDetails(b.name)}
+                    title={`View ${b.name} items and prices`}
+                    aria-label={`${b.name} details`}
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-(--s-line) bg-(--s-surface) text-(--s-ink-2) transition hover:border-(--s-accent) hover:text-(--s-accent)"
                   >
-                    Switch to {b.name}
+                    <Eye className="h-4 w-4" />
                   </button>
-                )}
+                </div>
               </div>
             </div>
           );
@@ -660,18 +1039,21 @@ function SectionBlock({
       )}
 
       {/* Price table */}
-      <div className="mt-3 overflow-x-auto rounded-2xl border border-(--s-line) bg-(--s-surface) shadow-[0_8px_30px_-18px_rgba(15,23,42,0.25)]">
+      <div className="mt-3 overflow-x-auto rounded-2xl border border-(--s-line) bg-(--s-surface)">
         <table className="w-full min-w-[640px] border-collapse text-sm [&_td:not(:first-child)]:whitespace-nowrap [&_th:not(:first-child)]:whitespace-nowrap">
           <thead>
-            <tr className="bg-(--s-bar) text-white">
-              <th className="sticky left-0 z-10 bg-(--s-bar) px-5 py-3.5 text-left font-semibold">Item</th>
-              <th className="w-16 px-3 py-3.5 text-center font-semibold">Qty</th>
+            <tr className="border-b border-(--s-line) bg-(--s-soft)">
+              <th className="sticky left-0 z-10 bg-(--s-soft) px-5 py-3 text-left text-[12px] font-bold uppercase tracking-wider text-(--s-muted)">Item</th>
+              <th className="w-16 px-3 py-3 text-center text-[12px] font-bold uppercase tracking-wider text-(--s-muted)">Qty</th>
               {tableBrands.map((b) => {
                 const meta = parseOptionMeta(b.name, b.maker);
                 return (
-                  <th key={b.name} className="w-[190px] px-5 py-3.5 text-right">
-                    {b.maker !== b.name && <div className="text-[12px] font-semibold uppercase tracking-wider text-slate-400">{b.maker}</div>}
-                    <div className="flex items-center justify-end gap-1.5 text-[15px] font-bold">
+                  <th
+                    key={b.name}
+                    className={`w-[190px] px-5 py-3 text-right ${b.isCart ? "bg-(--s-accent-soft) shadow-[inset_0_3px_0_var(--s-accent)]" : ""}`}
+                  >
+                    {b.maker !== b.name && <div className="text-[11px] font-bold uppercase tracking-wider text-(--s-muted)">{b.maker}</div>}
+                    <div className="flex items-center justify-end gap-1.5 text-[14.5px] font-extrabold text-(--s-ink)">
                       {meta.swatch && (
                         <span
                           className="inline-block h-2.5 w-2.5 rounded-full"
@@ -680,12 +1062,12 @@ function SectionBlock({
                       )}
                       {b.name}
                     </div>
-                    <div className="mt-0.5 flex items-center justify-end gap-2 text-[12.5px] font-medium text-slate-400">
-                      <span>{b.covered} of {itemsWord(m)}</span>
+                    <div className="mt-0.5 flex items-center justify-end gap-2 text-[12px] font-medium text-(--s-muted)">
+                      <span>{b.isCart ? "In your cart" : `${b.covered} of ${itemsWord(m)}`}</span>
                       <button
                         type="button"
                         onClick={() => onViewDetails(b.name)}
-                        className="inline-flex items-center gap-1 text-sky-300 underline-offset-2 hover:text-white hover:underline"
+                        className="inline-flex items-center gap-1 font-semibold text-(--s-accent) underline-offset-2 hover:underline"
                       >
                         <Eye className="h-3 w-3" /> View
                       </button>
@@ -706,13 +1088,13 @@ function SectionBlock({
                     const cell = r.cells[b.name];
                     if (!cell || !cell.available)
                       return (
-                        <td key={b.name} className="px-5 py-3 text-right text-xs text-(--s-muted)">
-                          {cell ? "Out of stock" : "Not available"}
+                        <td key={b.name} className={`px-5 py-3 text-right text-xs text-(--s-muted) ${b.isCart ? "bg-(--s-accent-soft)" : ""}`}>
+                          {cell ? "Out of stock" : "Not in range"}
                         </td>
                       );
                     const cheapest = best === b.name;
                     return (
-                      <td key={b.name} className={`px-5 py-3 text-right ${cheapest ? "bg-emerald-500/10" : ""}`}>
+                      <td key={b.name} className={`px-5 py-3 text-right ${b.isCart ? "bg-(--s-accent-soft)" : cheapest ? "bg-emerald-500/10" : ""}`}>
                         <div className="flex items-center justify-end gap-1.5 text-[15px] font-bold">
                           {cheapest && <Check className="h-4 w-4 text-emerald-600" />}
                           {rs(cell.price * r.qty)}
@@ -736,7 +1118,7 @@ function SectionBlock({
               </td>
               <td />
               {tableBrands.map((b) => (
-                <td key={b.name} className="px-5 py-4 text-right">
+                <td key={b.name} className={`px-5 py-4 text-right ${b.isCart ? "bg-(--s-accent-soft) text-(--s-accent)" : ""}`}>
                   <div className="text-lg font-extrabold">{rs(b.total)}</div>
                 </td>
               ))}
@@ -751,51 +1133,61 @@ function SectionBlock({
 /** Brand badge + option name + coverage status. */
 function OptionName({
   b,
-  m,
   brandLogos,
   onViewDetails,
 }: {
   b: BrandSum;
-  m: number;
   brandLogos: BrandLogoItem[];
   onViewDetails: () => void;
 }) {
   const logoItem = brandLogos.find((x) => x.name.trim().toLowerCase() === b.maker.trim().toLowerCase() && x.logoUrl);
   const [brandOpen, setBrandOpen] = useState(false);
+  const [logoOk, setLogoOk] = useState(true);
+  // "Orange" / "Sierra": brand and option are the same → show the name once.
+  const sameName = b.name.trim().toLowerCase() === b.maker.trim().toLowerCase();
   return (
-    <div className="min-w-0">
-      <div className="flex items-center justify-between gap-1.5">
-        <button
-          type="button"
-          onClick={() => setBrandOpen(true)}
-          title={`About ${b.maker}`}
-          className="inline-flex min-w-0 items-center gap-1.5 rounded-md py-0.5 pr-1 text-[12px] font-extrabold uppercase tracking-wider text-(--s-accent) hover:bg-blue-500/10"
-        >
-          {logoItem?.logoUrl && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={logoItem.logoUrl} alt={b.maker} className="h-3.5 w-auto max-w-[44px] rounded-xs bg-white object-contain px-0.5" />
-          )}
-          <span className="truncate">{b.maker}</span>
-          <Info className="h-3 w-3 shrink-0" />
-        </button>
-        {brandOpen &&
-          createPortal(
-            <BrandInfoPopup b={b} brandLogos={brandLogos} onClose={() => setBrandOpen(false)} />,
-            // Inside the shop root so the shop colours apply.
-            document.querySelector(".shop-root") ?? document.body,
-          )}
-        <span className="shrink-0 text-[12px] font-medium text-(--s-muted)">
-          {b.covered === m ? (m === 1 ? "1/1 item" : `All ${m} items`) : `${b.covered}/${m} items`}
-        </span>
-      </div>
+    <div className="flex min-w-0 items-center gap-2.5">
+      {/* Small logo tile (brand's first letter when there is no logo) */}
       <button
         type="button"
-        onClick={onViewDetails}
-        className="mt-0.5 block w-full truncate text-left text-[15px] font-extrabold leading-tight text-(--s-ink) hover:text-(--s-accent)"
-        title={`View ${b.name} details`}
+        onClick={() => setBrandOpen(true)}
+        title={`About ${b.maker}`}
+        className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-(--s-line) bg-white transition hover:border-(--s-accent)"
       >
-        {b.name}
+        {logoItem?.logoUrl && logoOk ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={logoItem.logoUrl} alt={b.maker} onError={() => setLogoOk(false)} className="h-full w-full object-contain p-1" />
+        ) : (
+          <span className="text-[15px] font-extrabold text-slate-700">{b.maker.trim().charAt(0).toUpperCase()}</span>
+        )}
       </button>
+      {brandOpen &&
+        createPortal(
+          <BrandInfoPopup b={b} brandLogos={brandLogos} onClose={() => setBrandOpen(false)} />,
+          // Inside the shop root so the shop colours apply.
+          document.querySelector(".shop-root") ?? document.body,
+        )}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-1.5">
+          <button
+            type="button"
+            onClick={() => setBrandOpen(true)}
+            title={`About ${b.maker}`}
+            className="inline-flex min-w-0 items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-(--s-accent) hover:underline"
+          >
+            <span className="truncate">{sameName ? "Brand" : b.maker}</span>
+            <Info className="h-3 w-3 shrink-0" />
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={onViewDetails}
+          className="block w-full truncate text-left text-[15px] font-extrabold leading-tight text-(--s-ink) hover:text-(--s-accent)"
+          title={`View ${b.name} details`}
+        >
+          {b.name}
+        </button>
+      </div>
     </div>
   );
 }

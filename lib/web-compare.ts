@@ -240,6 +240,34 @@ export async function brandLabelFor(p: ShopProductCard) {
   return optionOf(p, brands, parseItem(p.name, words)).label;
 }
 
+/** Type of item (the sub category), e.g. "Switches & Sockets". Items of one type should share a range. */
+function groupOf(p: ShopProductCard, catName: Map<string, string>) {
+  return catName.get(p.categoryIds[1] || "") || catName.get(p.categoryIds[0] || "") || "Other items";
+}
+async function categoryNames() {
+  const { data } = await supabaseAdmin.from("web_categories").select("id, name");
+  return new Map((data || []).map((c: any) => [c.id as string, c.name as string]));
+}
+
+export type LineMeta = { option: string; group: string };
+
+/**
+ * Per cart item: its option name ("Akoya Black", "Sierra") and type of item.
+ * The cart uses these so "Switch" moves every item of that type to the same
+ * range together (no Akoya socket left next to a Casablanca switch).
+ */
+export async function getLineMeta(ids: string[], pool?: ShopProductCard[]): Promise<Record<string, LineMeta>> {
+  if (!ids.length) return {};
+  const [ctx, catName] = await Promise.all([loadCtx(pool), categoryNames()]);
+  const byId = new Map(ctx.all.map((p) => [p.id, p]));
+  const out: Record<string, LineMeta> = {};
+  for (const id of ids) {
+    const p = byId.get(id);
+    if (p) out[id] = { option: optionOf(p, ctx.brands, parseItem(p.name, ctx.words)).label, group: groupOf(p, catName) };
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------- brand table
 
 export type CompareCell = {
@@ -292,8 +320,7 @@ function withoutBrand(name: string, words: BrandWords) {
  * is that option's price for the same item.
  */
 export async function getCompareTable(items: { id: string; qty: number }[]): Promise<CompareTable> {
-  const [ctx, cats] = await Promise.all([loadCtx(), supabaseAdmin.from("web_categories").select("id, name")]);
-  const catName = new Map((cats.data || []).map((c: any) => [c.id as string, c.name as string]));
+  const [ctx, catName] = await Promise.all([loadCtx(), categoryNames()]);
   const byId = new Map(ctx.all.map((p) => [p.id, p]));
   const cartItems = items.filter((i) => byId.has(i.id));
   const alts = alternativesWith(ctx, cartItems.map((i) => i.id));
@@ -324,7 +351,7 @@ export async function getCompareTable(items: { id: string; qty: number }[]): Pro
         mrp: o.mrp,
         available: o.available,
       };
-    const group = catName.get(p.categoryIds[1] || "") || catName.get(p.categoryIds[0] || "") || "Other items";
+    const group = groupOf(p, catName);
     return { cartId: p.id, label: withoutBrand(p.name, ctx.words), image: p.image, qty: i.qty, group, cartBrand: mine.label, cells };
   });
 
