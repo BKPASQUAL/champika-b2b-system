@@ -133,6 +133,7 @@ export async function GET(request: NextRequest) {
               productFamily: main.product_family ?? null,
               unit: main.unit_of_measure,
               mrp: Number(main.mrp) || 0,
+              sellingPrice: Number(main.selling_price) || 0,
               costPrice: Number(main.cost_price) || 0,
               stock: stock[v.product_id] || 0,
             },

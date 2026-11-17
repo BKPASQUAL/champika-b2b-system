@@ -278,11 +278,13 @@ export default async function ShopHome() {
                   key={b.id}
                   href={`${base}/b/${b.slug}`}
                   title={b.name}
-                  className="group flex h-24 items-center justify-center overflow-hidden rounded-xl border border-(--s-line) bg-white p-3 transition duration-300 hover:-translate-y-0.5 hover:border-blue-500/60 hover:shadow-[0_14px_30px_-14px_rgba(37,99,235,0.25)] md:h-28"
+                  className="group flex h-24 items-center justify-center rounded-xl p-1 transition duration-300 hover:-translate-y-0.5 md:h-28 [.shop-dark_&]:bg-white"
                 >
                   {b.logoUrl ? (
+                    // Logo only: no card. multiply makes a white logo background
+                    // disappear into the page (dark mode keeps a white tile so it stays readable).
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={b.logoUrl} alt={b.name} loading="lazy" className="h-full w-full object-contain transition duration-300 group-hover:scale-105" />
+                    <img src={b.logoUrl} alt={b.name} loading="lazy" className="h-full w-full object-contain mix-blend-multiply transition duration-300 group-hover:scale-110" />
                   ) : (
                     <span className="text-xl font-black tracking-tight text-slate-900 group-hover:text-blue-600">{b.name}</span>
                   )}

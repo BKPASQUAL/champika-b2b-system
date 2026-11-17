@@ -21,6 +21,7 @@ import type { WebBrand, WebCategory, WebFamily, WebProduct, WebSupplier } from "
 import { TaxonomyField } from "../../_components/TaxonomyField";
 import { suggestSizeTags } from "@/lib/web-search";
 import { detectBrand } from "@/lib/web-brand-detect";
+import { suggestSpecs } from "@/lib/web-specs";
 
 const LIST = "/dashboard/office/website/products";
 
@@ -121,7 +122,7 @@ export default function WebsiteProductEditor() {
               ? {
                   id: v.productId, sku: v.main.sku, name: v.main.name, brand: v.main.brand, category: v.main.category,
                   subCategory: v.main.subCategory ?? null, productFamily: v.main.productFamily ?? null, subBrand: v.main.subBrand ?? null,
-                  supplierName: v.main.supplierName, mrp: v.main.mrp, sellingPrice: 0, costPrice: v.main.costPrice, images: [],
+                  supplierName: v.main.supplierName, mrp: v.main.mrp, sellingPrice: v.main.sellingPrice ?? 0, costPrice: v.main.costPrice, images: [],
                   unit: v.main.unit ?? null, mainStock: v.main.stock, alreadyOnWebsite: true,
                 }
               : null,
@@ -204,6 +205,7 @@ export default function WebsiteProductEditor() {
 
   const save = async () => {
     if (!d.productId) return toast.error("Link a main product first");
+    if (d.webPrice === "" || !(Number(d.webPrice) > 0)) return toast.error("Enter the Shop price");
     setSaving(true);
     try {
       const body = {
@@ -253,6 +255,11 @@ export default function WebsiteProductEditor() {
   // Size spellings found in the name (1/1.13mm → 1/113, 1/044, 1mm²…) not yet added.
   const tagSuggestions = suggestSizeTags(d.name).filter(
     (t) => !d.tags.some((x) => x.toLowerCase() === t.toLowerCase()),
+  );
+
+  // Spec rows read from the name / main item that are not filled in yet.
+  const specSuggestions = suggestSpecs(d.name || d.linked?.name || "", d.linked).filter(
+    (s) => !d.specs.some((x) => x.label.trim().toLowerCase() === s.label.toLowerCase()),
   );
 
   return (
@@ -335,13 +342,33 @@ export default function WebsiteProductEditor() {
                   ) : null}
                 </div>
                 <div className="space-y-1">
-                  <Label>Shop price</Label>
-                  <Input type="number" placeholder={normal ? String(normal.price) : "auto"} value={d.webPrice} onChange={(e) => set({ webPrice: e.target.value })} />
-                  {normal && (
+                  <Label>Shop price <span className="text-red-600">*</span></Label>
+                  <Input
+                    type="number"
+                    placeholder="Required"
+                    value={d.webPrice}
+                    onChange={(e) => set({ webPrice: e.target.value })}
+                    className={d.webPrice === "" ? "border-red-300" : ""}
+                  />
+                  {d.webPrice !== "" && normal && (
                     <span className={`text-[11px] block ${normal.price < cost ? "text-red-600" : "text-muted-foreground"}`}>
-                      = {rs(normal.price)} · margin {rs(normal.price - cost)}
+                      margin {rs(normal.price - cost)}
                     </span>
                   )}
+                  {d.linked?.sellingPrice ? (
+                    Number(d.webPrice) === Number(d.linked.sellingPrice) ? (
+                      <span className="text-[11px] block text-muted-foreground">= B2B price</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => set({ webPrice: String(d.linked!.sellingPrice) })}
+                        className="text-[11px] block text-amber-700 hover:underline text-left"
+                        title="Use the normal B2B selling price of the main item"
+                      >
+                        B2B price {rs(d.linked.sellingPrice)} · use it
+                      </button>
+                    )
+                  ) : null}
                 </div>
                 <div className="space-y-1">
                   <Label>Trade price</Label>
@@ -353,7 +380,11 @@ export default function WebsiteProductEditor() {
                   <div className="h-9 flex items-center"><Switch checked={d.isAvailable} onCheckedChange={(v) => set({ isAvailable: v })} /></div>
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground">Leave Shop / Trade price empty to use Price Rules. Cost: {rs(cost)}</p>
+              <p className="text-xs text-muted-foreground">
+                Shop price = what website customers pay (required). Trade price = price for approved trade customers
+                (electricians / shops) when logged in — leave empty to use Price Rules. B2B price:{" "}
+                {rs(d.linked?.sellingPrice ?? 0)} · Cost: {rs(cost)}
+              </p>
             </CardContent>
           </Card>
 
@@ -423,6 +454,34 @@ export default function WebsiteProductEditor() {
               </Button>
             </CardHeader>
             <CardContent className="space-y-2">
+              {specSuggestions.length > 0 && (
+                <div className="rounded-md border border-dashed border-teal-300 bg-teal-50/50 p-2 space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] text-teal-800 flex items-center gap-1">
+                      <Sparkles className="h-3 w-3" /> Suggested from the product name — click to add
+                    </span>
+                    <button
+                      type="button"
+                      className="text-[11px] font-medium text-teal-700 hover:underline"
+                      onClick={() => set({ specs: [...d.specs.filter((s) => s.label.trim() || s.value.trim()), ...specSuggestions] })}
+                    >
+                      + Add all
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {specSuggestions.map((s) => (
+                      <button
+                        key={s.label}
+                        type="button"
+                        onClick={() => set({ specs: [...d.specs.filter((x) => x.label.trim() || x.value.trim()), s] })}
+                        className="text-xs rounded px-2 py-0.5 border border-teal-200 bg-white text-teal-800 hover:bg-teal-100"
+                      >
+                        + <b className="font-medium">{s.label}:</b> {s.value}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               {d.specs.length === 0 && <p className="text-xs text-muted-foreground">e.g. Conductor Area → 1mm² · Voltage → 300/500V</p>}
               {d.specs.map((s, i) => (
                 <div key={i} className="flex gap-2">

@@ -62,7 +62,7 @@ export function MainProductPicker({
         <div className="rounded-md border border-teal-300 bg-teal-50 p-2 text-sm">
           <p className="font-medium">{selected.name}</p>
           <p className="text-xs text-muted-foreground">
-            {selected.sku} · {selected.brand || "No brand"} · MRP {rs(selected.mrp)} · Cost {rs(selected.costPrice)} · Main stock{" "}
+            {selected.sku} · {selected.brand || "No brand"} · MRP {rs(selected.mrp)} · B2B price <b className="text-foreground">{rs(selected.sellingPrice)}</b> · Cost {rs(selected.costPrice)} · Main stock{" "}
             <b>{selected.mainStock}</b>
           </p>
         </div>

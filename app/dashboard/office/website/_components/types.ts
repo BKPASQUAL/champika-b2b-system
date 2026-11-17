@@ -17,6 +17,7 @@ export type VariantMain = {
   productFamily?: string | null;
   unit?: string | null;
   mrp: number;
+  sellingPrice?: number;
   costPrice: number;
   stock: number;
 };
